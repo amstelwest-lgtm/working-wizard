@@ -70,9 +70,10 @@ assert(ai.includes("VAT"), "AI notice: VAT stripped");
 assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 
 assert(faq.includes('href="/ai"'), "FAQ links to the AI notice");
-assert(faq.includes("powered by Claude"), "FAQ names Claude");
+assert(faq.includes("the AI notice names the model provider") || faq.includes("publicFaqItems"), "FAQ points at the AI notice for the model provider");
+assert(!/claude/i.test(faq), "FAQ page source does not name the model vendor");
 assert(faq.includes("dollar sign glued on"), "FAQ has US invert of the SA-built line");
-assert(faq.includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
+assert(readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
 
 assert(landing.includes('href="/privacy"'), "landing footer links to privacy");
 assert(landing.includes('href="/terms"'), "landing footer links to terms");

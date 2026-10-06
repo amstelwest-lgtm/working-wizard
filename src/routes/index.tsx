@@ -67,7 +67,43 @@ import {
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
-import { FOUNDING_CALLOUT, HOMEPAGE_FAQ_ITEMS, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
+import { LiteYouTube } from "@/components/lite-youtube";
+import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { isSaPricingCountry } from "@/lib/geo-country";
+import {
+  ACCOUNTANT_TEASER,
+  AI_USE_LEAD,
+  BRIDGE_DRAFT_BODY,
+  BRIDGE_DRAFT_LABEL,
+  DASH_ARIA_LABEL,
+  HERO_BADGE,
+  HERO_CONTACT_EMAIL,
+  HERO_CONTACT_HREF,
+  HERO_CTA_LABEL,
+  HERO_CTA_NOTE,
+  HERO_H1_GOLD,
+  HERO_H1_LEAD,
+  HERO_LEDE,
+  HERO_OWNER_LINK,
+  HERO_OWNER_PREFIX,
+  HERO_POINTS,
+  HERO_WALKTHROUGH_LABEL,
+  HOW_STEP_03,
+  OWNER_TEASER,
+  OWNER_TEASER_LINK,
+  PRICING_H2_USD,
+  PRICING_H2_ZAR,
+  SA_FOUNDING_LINE,
+  SA_ZAR_LINE,
+  TRUST_AI_LINK,
+  TRUST_ITEMS,
+  WALKTHROUGH_URL,
+  WATCH_EYEBROW,
+  WATCH_SUB,
+  WATCH_TITLE,
+  homepageFaqItems,
+} from "@/lib/landing-copy";
+import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
@@ -76,18 +112,28 @@ import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 
 export const Route = createFileRoute("/")({
+  loader: async () => {
+    const geoCountry = await readRequestGeoCountry();
+    return { showSaPricing: isSaPricingCountry(geoCountry) };
+  },
   component: LandingPage,
-  head: () => ({
-    ...pageHead(SEO_PAGES.home),
-    styles: [{ children: landingCss }],
-    scripts: [
-      {
-        children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
-      },
-      { children: VISITOR_MARKET_BOOT_SCRIPT },
-      { type: "application/ld+json", children: faqPageJson(HOMEPAGE_FAQ_ITEMS) },
-    ],
-  }),
+  head: ({ loaderData }) => {
+    const showSaPricing = loaderData?.showSaPricing === true;
+    return {
+      ...pageHead(SEO_PAGES.home),
+      styles: [{ children: landingCss }],
+      scripts: [
+        {
+          children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
+        },
+        { children: VISITOR_MARKET_BOOT_SCRIPT },
+        {
+          type: "application/ld+json",
+          children: faqPageJson(homepageFaqItems(showSaPricing)),
+        },
+      ],
+    };
+  },
 });
 
 const LANDING_THEME_KEY = "milon.landing.theme";
@@ -136,7 +182,12 @@ function applyLandingTheme(theme: "light" | "dark") {
     wrap.style.color = "var(--ink)";
   }
   const tbtn = document.getElementById("themeToggle");
-  if (tbtn) tbtn.textContent = theme === "light" ? "☾" : "☀";
+  if (tbtn) {
+    tbtn.setAttribute(
+      "aria-label",
+      theme === "light" ? "Switch to dark theme" : "Switch to light theme",
+    );
+  }
   try {
     localStorage.setItem(LANDING_THEME_KEY, theme);
   } catch {
@@ -147,6 +198,8 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
+  const { showSaPricing } = Route.useLoaderData();
+  const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
@@ -239,6 +292,9 @@ function LandingPage() {
   /* ── mounted gate — form is client-only to prevent browser-extension
      (e.g. LastPass) DOM injections from causing a hydration mismatch crash ── */
   const [mounted, setMounted] = useState(false);
+  const [landingTheme, setLandingTheme] = useState<"light" | "dark">("dark");
+  const setLandingThemeRef = useRef(setLandingTheme);
+  setLandingThemeRef.current = setLandingTheme;
   // Declared before the persist effect: that effect's dependency array
   // reads draftMarket on every render. A later const is a TDZ crash
   // (ReferenceError: Cannot access 'draftMarket' before initialization)
@@ -447,6 +503,7 @@ function LandingPage() {
       /* ignore */
     }
     applyLandingTheme(initial);
+    setLandingThemeRef.current(initial);
     return () => {
       if (!hadDark) root.classList.remove("dark");
       else root.classList.add("dark");
@@ -581,6 +638,7 @@ function LandingPage() {
       tbtn.onclick = () => {
         const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
         applyLandingTheme(next);
+        setLandingThemeRef.current(next);
       };
     }
 
@@ -2187,11 +2245,19 @@ function LandingPage() {
             <a href="#pricing" onClick={() => setMobileNavOpen(false)}>
               Pricing
             </a>
-            <button id="themeToggle" title="Toggle light / dark">
-              ☀
+            <button
+              id="themeToggle"
+              type="button"
+              title="Toggle light / dark"
+              aria-label={
+                landingTheme === "light" ? "Switch to dark theme" : "Switch to light theme"
+              }
+            >
+              {landingTheme === "light" ? "☾" : "☀"}
             </button>
             <button
-              className="btn btn-gold"
+              type="button"
+              className="btn btn-ghost"
               style={{ padding: "10px 22px", fontSize: 13 }}
               onClick={() => {
                 setMobileNavOpen(false);
@@ -2208,60 +2274,66 @@ function LandingPage() {
       {/* ══════════════════════════ HERO ══════════════════════════ */}
       <section id="hero">
         <div className="wrap">
-          <div>
-            <span className="hero-badge h-anim d1">
+          <div className="hero-copy">
+            <span className="hero-badge">
               <span className="pulse" />
-              <span>AI finance function for firms</span>
+              <span>{HERO_BADGE}</span>
             </span>
-            <h1 className="h-anim d2">
-              MILŌN.
-              <br />
-              <span className="gold-text">A full finance function in your pocket.</span>
+            <h1>
+              {HERO_H1_LEAD} <span className="gold-text">{HERO_H1_GOLD}</span>
             </h1>
-            <p className="hero-lede h-anim d3">
-              MILŌN gives accountants an AI-powered finance function to run for their clients —
-              turning financial statements into a shared workspace with a financial health diagnosis
-              → cash forecasts → profitability waterfalls → a full-year budget → strategic
-              recommendations → tracked employee actions.
-            </p>
-            <p className="sub h-anim d3">
-              AI powers MILŌN&apos;s financial intelligence brain. Your accountant reviews and signs
-              off on the entire function. You see what matters, what comes next, and what needs to
-              get done.
-            </p>
-            <div className="integrations h-anim d4" id="integrations">
-              <h2 className="integrations-kicker">Integrations</h2>
-              <p className="integrations-line">
-                Works with QuickBooks Online and Xero. Connect QuickBooks Online or Xero, or upload
-                the statements you already have.
-              </p>
-              <ul className="integrations-chips" aria-label="QuickBooks Online and Xero">
-                <li>QuickBooks Online</li>
-                <li>Xero</li>
-              </ul>
-            </div>
-            <div className="hero-cta h-anim d4">
-              <a className="btn btn-gold" href="#persona">
-                Get my free health score
-              </a>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => goToFirmSignup({ scrollTo: "register" })}
+            <p className="hero-lede">{HERO_LEDE}</p>
+            <ul className="integrations-chips" id="integrations" aria-label="Works with">
+              <li>QuickBooks Online</li>
+              <li>Xero</li>
+            </ul>
+            <div className="hero-cta">
+              <a
+                className="btn btn-gold"
+                href="#register"
+                onClick={(e) => {
+                  e.preventDefault();
+                  goToFirmSignup({ scrollTo: "register" });
+                }}
               >
-                I&apos;m an accountant — see MILŌN for my clients
-              </button>
+                {HERO_CTA_LABEL}
+              </a>
+              {WALKTHROUGH_URL ? (
+                <a
+                  className="btn btn-ghost"
+                  href={WALKTHROUGH_URL}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  {HERO_WALKTHROUGH_LABEL}
+                </a>
+              ) : null}
             </div>
+            <p className="hero-cta-note">{HERO_CTA_NOTE}</p>
+            <p className="hero-contact">
+              Questions first? Email{" "}
+              <a href={HERO_CONTACT_HREF}>{HERO_CONTACT_EMAIL}</a>
+            </p>
+            <p className="hero-owner">
+              {HERO_OWNER_PREFIX}{" "}
+              <button type="button" onClick={goToOwnerSpark}>
+                {HERO_OWNER_LINK}
+              </button>
+            </p>
+            <ul className="hero-points">
+              {HERO_POINTS.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
           </div>
 
-          {/* dashboard mockup */}
-          <div className="dash-stage h-anim d3">
-            <div className="dash" id="dash">
+          <div className="dash-stage hero-mock-fade">
+            <div className="dash" id="dash" role="img" aria-label={DASH_ARIA_LABEL}>
               <div className="dash-top">
                 <span className="brand">MILŌN</span>
                 <span className="live-pill">
                   <i />
-                  Sample
+                  Sample client
                 </span>
               </div>
               <div className="dash-main">
@@ -2376,19 +2448,19 @@ function LandingPage() {
               </div>
             </div>
             <div className="float-card fc-1">
-              <span className="tag">Accountant note</span>
+              <span className="tag">Milōn Bot draft · awaiting sign-off</span>
               <p>
                 <RegionCopy
                   pack={copyMarket.copyPack}
                   za={
                     <>
                       Debtor days crept up to <b>52</b>. Chase your top 3 invoices this week —
-                      that's <b>R184k</b> unlocked.
+                      that&apos;s <b>R184k</b> unlocked.
                     </>
                   }
                   us={
                     <>
-                      DSO crept up to <b>52</b>. Chase your top 3 invoices this week — that's{" "}
+                      DSO crept up to <b>52</b>. Chase your top 3 invoices this week — that&apos;s{" "}
                       <b>$10k</b> unlocked.
                     </>
                   }
@@ -2400,118 +2472,87 @@ function LandingPage() {
               <span>Health score · this quarter</span>
             </div>
           </div>
-          <div className="hero-stats h-anim d5">
-            <div>
-              <b>1</b>
-              <span>Health score that tells the story</span>
-            </div>
-            <div>
-              <b>13&nbsp;wks</b>
-              <span>Cash forecast</span>
-            </div>
-            <div>
-              <b>4</b>
-              <span>Financial pillars</span>
-            </div>
-            <div>
-              <b>19</b>
-              <span>Ratios with the workings shown</span>
-            </div>
-          </div>
         </div>
       </section>
 
       {/* ══════════════════════════ TRUST STRIP ══════════════════════════ */}
       <div className="trust">
         <div className="wrap">
-          <div className="item">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: "var(--gold)" }}
-            >
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            <span>Your figures stay in your workspace</span>
-          </div>
-          <div className="item">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: "var(--gold)" }}
-            >
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span>Identifiers stripped before Claude — amounts stay</span>
-          </div>
-          <div className="item">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: "var(--gold)" }}
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span>
-              <span>19 ratios you can check</span>
-            </span>
-          </div>
-          <div className="item">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: "var(--gold)" }}
-            >
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span>{DUAL_MARKET_BUILT}</span>
-          </div>
-          <div className="item">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ color: "var(--gold)" }}
-            >
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-            <span>Powered by Claude AI</span>
-          </div>
+          {TRUST_ITEMS.map((item) => (
+            <div className="item" key={item}>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span>{item}</span>
+            </div>
+          ))}
+          <a className="trust-link" href="/ai">
+            {TRUST_AI_LINK}
+          </a>
         </div>
       </div>
+
+      <section id="watch">
+        <div className="wrap">
+          <div className="section-head center">
+            <span className="eyebrow">{WATCH_EYEBROW}</span>
+            <h2>{WATCH_TITLE}</h2>
+            <p className="sub">{WATCH_SUB}</p>
+          </div>
+          <div className="watch-grid">
+            <article className="watch-card">
+              <p className="watch-label">{ACCOUNTANT_TEASER.label}</p>
+              <h3>{ACCOUNTANT_TEASER.title}</h3>
+              <p className="watch-meta">{ACCOUNTANT_TEASER.meta}</p>
+              <LiteYouTube
+                videoId={ACCOUNTANT_TEASER.videoId}
+                title={ACCOUNTANT_TEASER.title}
+                accessibleName={ACCOUNTANT_TEASER.accessibleName}
+              />
+              <a
+                className="watch-cta"
+                href="#register"
+                onClick={(e) => {
+                  e.preventDefault();
+                  goToFirmSignup({ scrollTo: "register" });
+                }}
+              >
+                {HERO_CTA_LABEL} →
+              </a>
+            </article>
+            <article className="watch-card">
+              <p className="watch-label">{OWNER_TEASER.label}</p>
+              <h3>{OWNER_TEASER.title}</h3>
+              <p className="watch-meta">{OWNER_TEASER.meta}</p>
+              <LiteYouTube
+                videoId={OWNER_TEASER.videoId}
+                title={OWNER_TEASER.title}
+                accessibleName={OWNER_TEASER.accessibleName}
+              />
+              <a
+                className="watch-cta"
+                href="#register"
+                onClick={(e) => {
+                  e.preventDefault();
+                  goToOwnerSpark();
+                }}
+              >
+                {OWNER_TEASER_LINK}
+              </a>
+            </article>
+          </div>
+        </div>
+      </section>
 
       {/* ══════════════════════════ METHOD ══════════════════════════ */}
       <section id="method">
@@ -2693,8 +2734,7 @@ function LandingPage() {
               <span className="n">03</span>
               <h3>AI prepares the next move</h3>
               <p>
-                MILŌN uses Claude to turn the financial analysis and business context into clear
-                recommendations, a 13-week cash forecast, and an actionable plan.
+                {HOW_STEP_03}
               </p>
             </div>
             <div className="step-card">
@@ -2752,7 +2792,7 @@ function LandingPage() {
               </p>
               <ul>
                 <li>
-                  <b>AI-assisted</b> — Claude prepares the first version of the analysis.
+                  <b>{BRIDGE_DRAFT_LABEL}</b> — {BRIDGE_DRAFT_BODY}
                 </li>
                 <li>
                   <b>Accountant-controlled</b> — You review, edit and sign off before anything
@@ -2886,13 +2926,18 @@ function LandingPage() {
           <div className="section-head center reveal">
             <span className="eyebrow">Pricing for firms</span>
             <h2>
-              USD bands by client count. <span className="gold-text">ZAR at Checkout.</span>
+              {PRICING_H2_USD}
+              {showSaPricing ? <span className="gold-text"> {PRICING_H2_ZAR}</span> : null}
             </h2>
             <p className="sub">
               Accounting firms start with a {FIRM_TRIAL_SENTENCE}, card on file, then a paid USD
-              band by active client count. South African firms can pay ZAR at Checkout via Adaptive
-              Pricing. {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} AI prepares the analysis; the
-              accountant reviews and signs off.
+              band by active client count. {WATCHLIST_DEFINITION}{" "}
+              {showSaPricing ? (
+                <>
+                  {SA_ZAR_LINE} {SA_FOUNDING_LINE}{" "}
+                </>
+              ) : null}
+              AI prepares the analysis; the accountant reviews and signs off.
             </p>
           </div>
 
@@ -2900,13 +2945,14 @@ function LandingPage() {
             <div className="acc-pricing-kicker">Accountant / Advisory Firm Pricing</div>
             <p className="acc-pricing-lede">
               White-label the whole platform. Charge your clients a monthly advisory retainer. MILŌN
-              is your engine. Billed in USD (Solo from {LIST_PRICES.us.firmSolo}/mo); South African
-              firms can pay ZAR at Checkout.
+              is your engine. Billed in USD (Solo from {LIST_PRICES.us.firmSolo}/mo)
+              {showSaPricing ? `. ${SA_ZAR_LINE}` : "."}
             </p>
             <FirmBandPricingTable
               interval={firmInterval}
               onIntervalChange={setFirmInterval}
               onSelectBand={startFirmPlan}
+              showSaPricing={showSaPricing}
             />
           </div>
 
@@ -3153,14 +3199,13 @@ function LandingPage() {
                       <a href="/terms" style={{ color: "inherit" }}>
                         Terms
                       </a>
-                      . AI is powered by Claude; identifiers are stripped before model calls,
-                      amounts stay.{" "}
-                      <a href="/privacy" style={{ color: "inherit" }}>
-                        Privacy
-                      </a>
-                      {" · "}
+                      . {AI_USE_LEAD}{" "}
                       <a href="/ai" style={{ color: "inherit" }}>
                         AI notice
+                      </a>
+                      .{" "}
+                      <a href="/privacy" style={{ color: "inherit" }}>
+                        Privacy
                       </a>
                     </p>
                   </>
@@ -3456,14 +3501,13 @@ function LandingPage() {
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms
                           </a>
-                          . AI is powered by Claude; identifiers are stripped before model calls,
-                          amounts stay.{" "}
-                          <a href="/privacy" style={{ color: "inherit" }}>
-                            Privacy
-                          </a>
-                          {" · "}
+                          . {AI_USE_LEAD}{" "}
                           <a href="/ai" style={{ color: "inherit" }}>
                             AI notice
+                          </a>
+                          .{" "}
+                          <a href="/privacy" style={{ color: "inherit" }}>
+                            Privacy
                           </a>
                         </p>
                       </>
@@ -3486,7 +3530,7 @@ function LandingPage() {
             </h2>
           </div>
           <div className="home-faq">
-            {HOMEPAGE_FAQ_ITEMS.map((item) => (
+            {homeFaq.map((item) => (
               <article key={item.question}>
                 <h3>{item.question}</h3>
                 <p>{item.answer}</p>
@@ -3569,7 +3613,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              {DUAL_MARKET_BUILT} · Powered by Claude AI
+              {DUAL_MARKET_BUILT}
             </span>
           </div>
         </div>

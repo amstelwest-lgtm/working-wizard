@@ -1,5 +1,6 @@
 import { ENTERPRISE_CONTACT_HREF, firmSignupHref } from "@/lib/firm-signup-copy";
-import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
+import { SA_FOUNDING_LINE, SA_ZAR_LINE } from "@/lib/landing-copy";
+import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import {
   FIRM_BAND_TABLE,
   FIRM_TRIAL_SENTENCE,
@@ -15,6 +16,8 @@ type Props = {
   onSelectBand?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
   enterpriseHref?: string;
   compact?: boolean;
+  /** Server geo only. Defaults off so a missed prop cannot leak the SA discount. */
+  showSaPricing?: boolean;
 };
 
 export function FirmBandPricingTable({
@@ -23,6 +26,7 @@ export function FirmBandPricingTable({
   onSelectBand,
   enterpriseHref = ENTERPRISE_CONTACT_HREF,
   compact = false,
+  showSaPricing = false,
 }: Props) {
   return (
     <div className={compact ? "firm-bands firm-bands-compact" : "firm-bands"}>
@@ -47,11 +51,13 @@ export function FirmBandPricingTable({
       <p className="firm-bands-trial">
         {FIRM_TRIAL_SENTENCE}. Card required. After day 14, paid Solo+.
       </p>
-      <p className="firm-bands-founding">{FOUNDING_CALLOUT}</p>
-      <p className="firm-bands-note">
-        USD list prices. South African firms can pay in ZAR at Checkout (Adaptive Pricing).{" "}
-        {WATCHLIST_DEFINITION}
-      </p>
+      {showSaPricing ? (
+        <>
+          <p className="firm-bands-founding">{SA_ZAR_LINE}</p>
+          <p className="firm-bands-founding">{SA_FOUNDING_LINE}</p>
+        </>
+      ) : null}
+      <p className="firm-bands-note">USD list prices. {WATCHLIST_DEFINITION}</p>
       <div className="firm-bands-table-wrap">
         <table className="firm-bands-table">
           <thead>

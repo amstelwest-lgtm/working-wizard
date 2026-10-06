@@ -1,28 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
-import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { isSaPricingCountry } from "@/lib/geo-country";
+import { publicFaqItems } from "@/lib/landing-copy";
+import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
-  AI_IDENTIFIERS_LINE,
-  FOUNDING_CALLOUT,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
-  publicFaqUsItems,
-  WATCHLIST_DEFINITION,
+  SA_PRODUCT_ANSWER,
+  SA_PRODUCT_QUESTION,
 } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/faq")({
+  loader: async () => {
+    const geoCountry = await readRequestGeoCountry();
+    return { showSaPricing: isSaPricingCountry(geoCountry) };
+  },
   component: FaqPage,
-  head: () => ({
-    ...pageHead(SEO_PAGES.faq),
-    styles: [{ children: marketingCss }],
-    scripts: [
-      { children: VISITOR_MARKET_BOOT_SCRIPT },
-      { type: "application/ld+json", children: faqPageJson(publicFaqUsItems()) },
-    ],
-  }),
+  head: ({ loaderData }) => {
+    const showSaPricing = loaderData?.showSaPricing === true;
+    return {
+      ...pageHead(SEO_PAGES.faq),
+      styles: [{ children: marketingCss }],
+      scripts: [
+        { children: VISITOR_MARKET_BOOT_SCRIPT },
+        { type: "application/ld+json", children: faqPageJson(publicFaqItems(showSaPricing)) },
+      ],
+    };
+  },
 });
 
 function Qa({ q, children }: { q: string; children: React.ReactNode }) {
@@ -35,6 +43,9 @@ function Qa({ q, children }: { q: string; children: React.ReactNode }) {
 }
 
 function FaqPage() {
+  const { showSaPricing } = Route.useLoaderData();
+  const cost = publicFaqItems(showSaPricing).find((item) => item.question === "What does it cost?");
+  const ai = publicFaqItems(showSaPricing).find((item) => item.question === "What does the AI see?");
   return (
     <MarketingShell
       eyebrow="Straight answers"
@@ -61,22 +72,7 @@ function FaqPage() {
       <h2>Money</h2>
 
       <Qa q="What does it cost?">
-        <p className="mk-copy-za">
-          Spark is free during early access and does not ask for a card. Accounting firms start with
-          a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count
-          bands billed through Stripe Checkout — Solo starts at {LIST_PRICES.za.firmSolo} a month,
-          and Scale is {LIST_PRICES.za.firmScale} a month. Annual billing is about 20% off.{" "}
-          {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} Enterprise is a custom quote. South African
-          firms can pay ZAR at Checkout via Adaptive Pricing.
-        </p>
-        <p className="mk-copy-us">
-          Spark is free during early access and does not ask for a card. Accounting firms start with
-          a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count
-          bands billed through Stripe Checkout — Solo starts at {LIST_PRICES.us.firmSolo} a month,
-          and Scale is {LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off.{" "}
-          {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} Enterprise is a custom quote. South African
-          firms can pay ZAR at Checkout via Adaptive Pricing.
-        </p>
+        <p>{cost?.answer}</p>
       </Qa>
 
       <Qa q="So what is the catch with free?">
@@ -113,11 +109,7 @@ function FaqPage() {
       </Qa>
 
       <Qa q="What does the AI see?">
-        <p>
-          We use AI. It is powered by Claude. {AI_IDENTIFIERS_LINE} Where an AI drafts a report for
-          an accountant, a human reads and signs it before a client ever sees it. The{" "}
-          <a href="/ai">AI notice</a> is the public version of that sentence.
-        </p>
+        <p>{ai?.answer}</p>
       </Qa>
 
       <Qa q="Do you store card details?">
@@ -168,15 +160,11 @@ function FaqPage() {
         </p>
       </Qa>
 
-      <div className="mk-copy-za">
-        <Qa q="Is this built for South Africa or bolted on?">
-          <p>
-            Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in
-            the cost of doing business, and benchmarks drawn from South African context rather than
-            from a US template with the currency symbol swapped.
-          </p>
+      {showSaPricing ? (
+        <Qa q={SA_PRODUCT_QUESTION}>
+          <p>{SA_PRODUCT_ANSWER}</p>
         </Qa>
-      </div>
+      ) : null}
       <div className="mk-copy-us">
         <Qa q="Is this a South African product with a dollar sign glued on?">
           <p>

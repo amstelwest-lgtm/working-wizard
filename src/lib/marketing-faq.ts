@@ -26,6 +26,14 @@ export const WATCHLIST_DEFINITION =
 export const FOUNDING_CALLOUT =
   "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
+/**
+ * Visible only when the server sees x-vercel-ip-country === "ZA".
+ * Kept here so /faq copy and FAQPage JSON-LD share one string.
+ */
+export const SA_PRODUCT_QUESTION = "Is this built for South Africa or bolted on?";
+export const SA_PRODUCT_ANSWER =
+  "Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in the cost of doing business, and benchmarks drawn from South African context rather than from a US template with the currency symbol swapped.";
+
 /** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
 export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
@@ -50,7 +58,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I get started, and what does MILŌN cost?",
     answer:
-      "Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then a paid USD band by active client count (Solo through Scale; Enterprise is a custom quote) through Stripe Checkout. South African firms can pay ZAR at Checkout via Adaptive Pricing. Business owners can start free with Spark during early access, with no card required.",
+      "Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then a paid USD band by active client count (Solo through Scale; Enterprise is a custom quote) through Stripe Checkout. Business owners can start free with Spark during early access, with no card required.",
   },
 ];
 
@@ -61,7 +69,7 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} ${FOUNDING_CALLOUT} Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
+      answer: `Spark is free during early access and does not ask for a card. Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
       question: "So what is the catch with free?",
@@ -85,7 +93,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer: `We use AI. It is powered by Claude. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI, and the AI notice names the model provider. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

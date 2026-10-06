@@ -70,12 +70,38 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+const GEO_VARY_PATHS = new Set(["/", "/faq", "/for-accountants"]);
+
+/** Pricing HTML differs by country. Don't let a shared cache mix ZA and US. */
+function withGeoVary(request: Request, response: Response): Response {
+  const path = new URL(request.url).pathname.replace(/\/$/, "") || "/";
+  if (!GEO_VARY_PATHS.has(path)) return response;
+  const headers = new Headers(response.headers);
+  const name = "x-vercel-ip-country";
+  const existing = headers.get("vary");
+  const parts = (existing ?? "")
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  if (!parts.includes(name)) {
+    headers.set("Vary", existing ? `${existing}, ${name}` : name);
+  }
+  if (!headers.has("cache-control")) {
+    headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withGeoVary(request, await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
       await reportServerError(error, {

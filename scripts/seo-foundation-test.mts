@@ -18,13 +18,13 @@ import {
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
   AI_IDENTIFIERS_LINE,
-  FOUNDING_CALLOUT,
   HOMEPAGE_FAQ_ITEMS,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
   publicFaqUsItems,
   WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
+import { homepageFaqItems, publicFaqItems, SA_FOUNDING_LINE, SA_ZAR_LINE, TRUST_IDENTIFIERS } from "../src/lib/landing-copy";
 import { visitorCopyPack } from "../src/lib/market";
 
 function assert(cond: boolean, msg: string) {
@@ -180,7 +180,7 @@ assert(!landing.includes("certified"), "landing does not claim certification");
 assert(!landing.includes("Intuit"), "landing does not claim an Intuit relationship");
 assert(!landing.includes("marketplace"), "landing does not claim marketplace approval");
 assert(
-  landing.includes("HOMEPAGE_FAQ_ITEMS"),
+  landing.includes("homepageFaqItems"),
   "landing renders homepage FAQ from the shared copy list",
 );
 assert(!landing.includes("930+"), "landing does not claim 930+ playbook steps");
@@ -199,16 +199,20 @@ assert(landing.includes("Interest Burden"), "marquee lists Interest Burden");
 assert(landing.includes("Tax Burden"), "marquee lists Tax Burden");
 assert(landing.includes("Inventory Days"), "marquee lists Inventory Days");
 assert(landing.includes("Gross Profit / Labor"), "marquee lists Gross Profit / Labor");
-assert(landing.includes("Identifiers stripped before Claude"), "trust chip is identifier-only");
+assert(landing.includes("TRUST_ITEMS"), "trust strip uses the shared fact list");
+assert(TRUST_IDENTIFIERS.includes("amounts stay"), "trust line keeps amounts");
+assert(!/claude/i.test(TRUST_IDENTIFIERS), "trust line does not name a model vendor");
 assert(landing.includes("WATCHLIST_DEFINITION"), "landing pricing defines watchlist");
-assert(landing.includes("FOUNDING_CALLOUT"), "landing pricing surfaces FOUNDING");
+assert(landing.includes("showSaPricing"), "landing gates SA pricing on server geo");
+assert(landing.includes("SA_FOUNDING_LINE"), "landing can surface the ZA founding line");
+assert(!landing.includes("FOUNDING_CALLOUT"), "landing does not render the ungated founding callout");
 assert(!landing.includes("raw amounts removed"), "landing FAQ does not claim amounts are stripped");
 assert(!landing.includes("End-to-end encrypted"), "landing does not claim E2E encryption");
 assert(!landing.includes("Live sync"), "landing does not claim live ledger sync");
 assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
-assert(landing.includes("faqPageJson(HOMEPAGE_FAQ_ITEMS)"), "landing emits homepage FAQ schema");
+assert(landing.includes("faqPageJson(homepageFaqItems(showSaPricing))"), "landing emits homepage FAQ schema");
 assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
 assert(
   HOMEPAGE_FAQ_ITEMS[1].answer.includes("you do not need QuickBooks or Xero"),
@@ -344,9 +348,20 @@ assert(
   ),
   "public FAQ schema matches the visible QuickBooks and Xero answer",
 );
-assert(faq.includes("AI_IDENTIFIERS_LINE"), "faq uses the identifier-only anonymisation line");
-assert(faq.includes("WATCHLIST_DEFINITION"), "faq defines watchlist clients");
-assert(faq.includes("FOUNDING_CALLOUT"), "faq surfaces FOUNDING 50% off");
+assert(faq.includes("publicFaqItems"), "faq renders the shared answer list");
+assert(faq.includes("showSaPricing"), "faq gates SA pricing on server geo");
+assert(
+  publicFaqUsItems().some((item) => item.answer.includes(AI_IDENTIFIERS_LINE)),
+  "faq uses the identifier-only anonymisation line",
+);
+assert(
+  publicFaqUsItems().some((item) => item.answer.includes(WATCHLIST_DEFINITION)),
+  "faq defines watchlist clients",
+);
+assert(
+  !publicFaqUsItems().some((item) => /FOUNDING|ZAR|Adaptive Pricing/i.test(item.answer)),
+  "default public FAQ has no SA discount or ZAR",
+);
 assert(!faq.includes("raw amounts"), "faq does not claim raw amounts are stripped");
 assert(
   HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes(AI_IDENTIFIERS_LINE)),
@@ -361,8 +376,16 @@ assert(
   "public FAQ defines watchlist",
 );
 assert(
-  publicFaqUsItems().some((item) => item.answer.includes(FOUNDING_CALLOUT)),
-  "public FAQ mentions FOUNDING 50% off",
+  publicFaqItems(true).some((item) => item.answer.includes(SA_ZAR_LINE)),
+  "ZA public FAQ includes the ZAR checkout line",
+);
+assert(
+  publicFaqItems(true).some((item) => item.answer.includes(SA_FOUNDING_LINE)),
+  "ZA public FAQ includes the founding line",
+);
+assert(
+  !publicFaqItems(false).some((item) => /FOUNDING|50% off|ZAR|Adaptive Pricing/i.test(item.answer)),
+  "US public FAQ omits founding and ZAR",
 );
 assert(
   publicFaqUsItems().every((item) => !item.answer.includes("raw amounts")),
@@ -371,7 +394,8 @@ assert(
 
 const pricingTable = readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8");
 assert(pricingTable.includes("firm-bands-founding"), "firm pricing has a visible FOUNDING callout");
-assert(pricingTable.includes("FOUNDING_CALLOUT"), "firm pricing callout uses the live 50% copy");
+assert(pricingTable.includes("SA_FOUNDING_LINE"), "firm pricing callout uses the ZA founding line");
+assert(pricingTable.includes("showSaPricing = false"), "firm pricing hides the SA discount by default");
 assert(pricingTable.includes("WATCHLIST_DEFINITION"), "firm pricing defines watchlist");
 
 const marqueeBlock = landing.split('id="marquee"')[1]?.split("</div>")[0] ?? "";

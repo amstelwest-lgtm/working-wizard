@@ -45,10 +45,10 @@ export function practiceLocationHint(draft: {
 }
 
 /**
- * Enterprise quotes. Same mailbox Lighthouse replies already land in
- * (`LIGHTHOUSE_REPLY_TO` in lighthouse-reply-to.ts). Not a sign-in URL.
+ * Enterprise quotes. Public contact mailbox (hello@milonfinance.com).
+ * Not a sign-in URL. Cold Lighthouse From stays on its own constant.
  */
-export const ENTERPRISE_CONTACT_EMAIL = "team@trymilon.com";
+export const ENTERPRISE_CONTACT_EMAIL = "hello@milonfinance.com";
 export const ENTERPRISE_CONTACT_HREF = `mailto:${ENTERPRISE_CONTACT_EMAIL}?subject=${encodeURIComponent("Enterprise firm pricing")}`;
 
 export const PRACTICE_LOCATION_PROMPT = "Where is this practice?";
