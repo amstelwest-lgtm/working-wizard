@@ -14,6 +14,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
@@ -459,7 +460,7 @@ function SettingsPage() {
             Legal
           </span>
         }
-        description="AI is powered by Claude. Financial information sent to the model is anonymised."
+        description={AI_MODEL_DISCLOSURE}
       >
         <div className="flex flex-col gap-2">
           <a href="/privacy" className="settings-row">

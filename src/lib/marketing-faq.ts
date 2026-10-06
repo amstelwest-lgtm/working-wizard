@@ -18,6 +18,10 @@ export const LEDGER_CONNECT_ANSWER =
 export const AI_IDENTIFIERS_LINE =
   "Identifiers (company names, tax IDs, account numbers) are stripped before model calls; amounts stay so workings and accountant sign-off use real figures.";
 
+/** Approved disclosure. Visible /faq answer and FAQPage JSON-LD share this sentence. Not used on the homepage FAQ. */
+export const AI_MODEL_DISCLOSURE =
+  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
+
 /** Monitoring seat, not a billed advisory client. Stripe does not line-item these. */
 export const WATCHLIST_DEFINITION =
   "Watchlist clients stay on your radar at no charge — they don't count toward billed seats until you activate a full workspace.";
@@ -26,12 +30,20 @@ export const WATCHLIST_DEFINITION =
 export const FOUNDING_CALLOUT =
   "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
+/**
+ * Visible only when the server sees x-vercel-ip-country === "ZA".
+ * Kept here so /faq copy and FAQPage JSON-LD share one string.
+ */
+export const SA_PRODUCT_QUESTION = "Is this built for South Africa or bolted on?";
+export const SA_PRODUCT_ANSWER =
+  "Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in the cost of doing business, and benchmarks drawn from South African context rather than from a US template with the currency symbol swapped.";
+
 /** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
 export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Does MILŌN replace my accountant?",
     answer:
-      "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off before advice is shown to a client. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
+      "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off every advisory pack. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
   },
   {
     question: "Do I need QuickBooks or Xero to use MILŌN?",
@@ -50,7 +62,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I get started, and what does MILŌN cost?",
     answer:
-      "Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then a paid USD band by active client count (Solo through Scale; Enterprise is a custom quote) through Stripe Checkout. South African firms can pay ZAR at Checkout via Adaptive Pricing. Business owners can start free with Spark during early access, with no card required.",
+      "Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then a paid USD band by active client count (Solo through Scale; Enterprise is a custom quote) through Stripe Checkout. Business owners can start free with Spark during early access, with no card required.",
   },
 ];
 
@@ -61,7 +73,7 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} ${FOUNDING_CALLOUT} Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
+      answer: `Spark is free during early access and does not ask for a card. Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
       question: "So what is the catch with free?",
@@ -85,7 +97,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer: `We use AI. It is powered by Claude. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI. ${AI_MODEL_DISCLOSURE} ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs off every advisory pack. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

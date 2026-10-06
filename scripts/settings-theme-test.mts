@@ -44,7 +44,7 @@ for (const page of [
 
 const index = read("src/routes/_authenticated/settings.index.tsx");
 assert(index.includes('href="/privacy"'), "settings still links to privacy");
-assert(index.includes("anonymised"), "settings still restates anonymisation");
+assert(index.includes("AI_MODEL_DISCLOSURE"), "settings shows the approved AI disclosure");
 assert(index.includes("settings-row"), "nav rows use the new row language");
 
 const team = read("src/routes/_authenticated/settings.team.tsx");

@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
 import {
@@ -693,7 +694,7 @@ function AuthPage() {
                   <a href="/terms" className="auth-entry__link">
                     Terms
                   </a>
-                  . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                  . {AI_MODEL_DISCLOSURE}{" "}
                   <a href="/privacy" className="auth-entry__link">
                     Privacy
                   </a>

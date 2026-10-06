@@ -3,14 +3,21 @@ import { useState } from "react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { isSaPricingCountry } from "@/lib/geo-country";
+import { ACCOUNTANTS_DRAFT_BULLET, SA_FOUNDING_LINE, SA_ZAR_LINE } from "@/lib/landing-copy";
 import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
-import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
+import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-accountants")({
+  loader: async () => {
+    const geoCountry = await readRequestGeoCountry();
+    return { showSaPricing: isSaPricingCountry(geoCountry) };
+  },
   component: ForAccountantsPage,
   head: () => ({
     ...pageHead(SEO_PAGES.forAccountants),
@@ -20,6 +27,7 @@ export const Route = createFileRoute("/for-accountants")({
 });
 
 function ForAccountantsPage() {
+  const { showSaPricing } = Route.useLoaderData();
   const navigate = useNavigate();
   const [interval, setInterval] = useState<FirmInterval>("month");
 
@@ -89,8 +97,7 @@ function ForAccountantsPage() {
           me.&rdquo;
         </li>
         <li>
-          <strong>Drafted advisory reports.</strong> Claude writes the first draft from the client's
-          actual numbers. You correct, sign off, and send — the judgement stays yours.
+          <strong>Drafted advisory reports.</strong> {ACCOUNTANTS_DRAFT_BULLET}
         </li>
         <li>
           <strong>White-label output.</strong> Your logo, your colors, your name on the report.
@@ -167,8 +174,7 @@ function ForAccountantsPage() {
           <div>
             <h3>Draft, review, send</h3>
             <p>
-              The advisory report is drafted for you and waits for your sign-off. Nothing reaches a
-              client without a partner putting their name to it.
+              The advisory report is drafted for you. You review and sign off every advisory pack.
             </p>
           </div>
         </li>
@@ -176,21 +182,26 @@ function ForAccountantsPage() {
 
       <h2>Pricing for firms</h2>
       <p>
-        Flat USD monthly or annual bands by active client count. {WATCHLIST_DEFINITION} South
-        African firms can pay ZAR at Checkout via Adaptive Pricing — we do not publish a separate
-        rand catalog.
+        Flat USD monthly or annual bands by active client count. {WATCHLIST_DEFINITION}
+        {showSaPricing ? (
+          <>
+            {" "}
+            {SA_ZAR_LINE} {SA_FOUNDING_LINE} We do not publish a separate rand catalog.
+          </>
+        ) : null}
       </p>
       <FirmBandPricingTable
         interval={interval}
         onIntervalChange={setInterval}
         onSelectBand={startBand}
+        showSaPricing={showSaPricing}
       />
       <ul className="mk-list">
         <li>
           <strong>14-day free trial · up to 3 clients.</strong> Card on file at signup. After day
           14, paid Solo+ bills automatically.
         </li>
-        <li>{FOUNDING_CALLOUT}</li>
+        {showSaPricing ? <li>{SA_FOUNDING_LINE}</li> : null}
         <li>
           White-label onboarding support is included. Your branding on every report and portal.
         </li>

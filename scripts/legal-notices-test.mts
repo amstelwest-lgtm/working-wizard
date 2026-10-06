@@ -70,9 +70,17 @@ assert(ai.includes("VAT"), "AI notice: VAT stripped");
 assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 
 assert(faq.includes('href="/ai"'), "FAQ links to the AI notice");
-assert(faq.includes("powered by Claude"), "FAQ names Claude");
+assert(faq.includes("publicFaqItems"), "FAQ answers come from the shared list");
+const disclosure =
+  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
+const marketingFaq = readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").replace(/\s+/g, " ");
+const privacyText = privacy.replace(/\s+/g, " ");
+assert(marketingFaq.split(disclosure).length - 1 === 1, "FAQ copy defines the disclosure once");
+assert(privacyText.split(disclosure).length - 1 === 1, "privacy contains the disclosure once");
+assert(!/claude/i.test(landing), "landing source does not name Claude");
+assert(!/claude/i.test(readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8")), "for-accountants source does not name Claude");
 assert(faq.includes("dollar sign glued on"), "FAQ has US invert of the SA-built line");
-assert(faq.includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
+assert(readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
 
 assert(landing.includes('href="/privacy"'), "landing footer links to privacy");
 assert(landing.includes('href="/terms"'), "landing footer links to terms");
@@ -101,9 +109,9 @@ assert(shell.includes('href="/terms"'), "collateral footer links to terms");
 assert(shell.includes('href="/ai"'), "collateral footer links to AI notice");
 
 assert(settings.includes('href="/privacy"'), "settings links to privacy");
-assert(settings.includes("anonymised"), "settings restates anonymisation");
+assert(settings.includes("AI_MODEL_DISCLOSURE"), "settings shows the approved AI disclosure");
 assert(auth.includes('href="/terms"'), "firm signup links to terms");
-assert(auth.includes("anonymised"), "firm signup restates anonymisation");
+assert(auth.includes("AI_MODEL_DISCLOSURE"), "firm signup shows the approved AI disclosure");
 assert(!landing.includes("Access code"), "landing signup does not ask for an access code");
 assert(!landing.includes("SIGNUP_ACCESS_CODE"), "landing has no access-code gate");
 assert(!auth.includes("Access code"), "firm signup does not ask for an access code");
