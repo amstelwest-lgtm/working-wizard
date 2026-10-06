@@ -13,6 +13,38 @@ import { resolveSnapshotPeriodLabel } from "@/lib/statement-period";
 
 export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "pdf_upload";
 
+export type SnapshotRecency = {
+  created_at?: string | null;
+  period_date?: string | null;
+  /**
+   * Reserved. client_financial_snapshots has no pin column. If one appears
+   * later, a pinned row wins over created_at. Do not invent a migration.
+   */
+  pinned?: boolean | null;
+};
+
+/**
+ * The snapshot shown as "on file" / the data card. Newest upload wins by
+ * created_at, not by the period label. Period-date order stays the history
+ * used for prior-period movement.
+ */
+export function pickCurrentSnapshot<T extends SnapshotRecency>(rows: readonly T[] | null | undefined): T | null {
+  const list = (rows ?? []).filter((row): row is T => row != null);
+  if (!list.length) return null;
+  const pinned = list.find((row) => row.pinned === true);
+  if (pinned) return pinned;
+  return [...list].sort((a, b) => {
+    const created = Date.parse(b.created_at ?? "") - Date.parse(a.created_at ?? "");
+    if (Number.isFinite(created) && created !== 0) return created;
+    return (b.period_date ?? "").localeCompare(a.period_date ?? "");
+  })[0];
+}
+
+/** Statement uploads are stored as both "upload" and "pdf_upload". */
+export function isUploadSnapshot(source: string | null | undefined): boolean {
+  return source === "upload" || source === "pdf_upload" || source === "financial_statement";
+}
+
 /** Calendar period label used across Studio / score history / autosave. */
 export function currentPeriodLabel(now = new Date()): string {
   return now.toLocaleString("en-US", { month: "short", year: "numeric" });

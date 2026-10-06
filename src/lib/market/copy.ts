@@ -83,15 +83,29 @@ export function laborProductivityFileStem(
   return market?.copyPack === "us" ? "LaborProductivity" : "LabourProductivity";
 }
 
+/** US copy says Labor. SA, UK, and every other pack say Labour. */
+export function spellLabor(
+  text: string,
+  market: { copyPack?: string | null } | null | undefined,
+): string {
+  if (!text) return text;
+  if (market?.copyPack === "us") {
+    return text.replace(/\bLabour\b/g, "Labor").replace(/\blabour\b/g, "labor");
+  }
+  return text.replace(/\bLabor\b/g, "Labour").replace(/\blabor\b/g, "labour");
+}
+
 /**
- * Rewrite ZA-authored user copy for a US workspace. Safe no-op for ZA.
- * Longer phrases first so "Debtor Days" does not become "Receivable Days".
+ * Rewrite ZA-authored user copy for a US workspace.
+ * Non-US packs spell Labor as Labour. Longer phrases first so "Debtor Days"
+ * does not become "Receivable Days".
  */
+
 export function localizeCopy(
   text: string,
   market: Pick<ResolvedMarket, "copyPack" | "currency">,
 ): string {
-  if (market.copyPack !== "us") return text;
+  if (market.copyPack !== "us") return spellLabor(text, market);
   const sym = market.currency === "USD" ? "$" : "R";
   return text
     .replace(/\bR100\b/g, `${sym}100`)

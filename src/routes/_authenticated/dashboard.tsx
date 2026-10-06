@@ -121,6 +121,7 @@ type Client = {
   last_login_at: string | null;
   firm_id: string | null;
   financials: Record<string, string | number | null> | null;
+  financials_updated_at?: string | null;
   cashflow?: unknown;
   created_at?: string | null;
   // reports_issued_count may not exist until migration runs
@@ -1281,18 +1282,20 @@ function Dashboard() {
     // Compute per-client enriched rows
     const openQueriesMap = await countOpenQueriesByClient(rawClients.map((c) => c.id));
     const rows: ClientRow[] = rawClients.map((c) => {
+      const clientMarket = resolveMarket(
+        parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
+      );
       const assessed = assessClientMetrics({
         financials: c.financials,
         cashflow: c.cashflow,
+        financialsUpdatedAt: c.financials_updated_at ?? null,
+        timeZone: clientMarket.timezone,
       });
       const runwayWeeks =
         assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
           ? assessed.runway.weeks
           : null;
       const runwayLabel = runwayDisplayLabel(assessed.runway);
-      const clientMarket = resolveMarket(
-        parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
-      );
       const health = healthFromFlatFinancials(c.financials, runwayWeeks, clientMarket);
       const score = health.overall;
       const realHistory = historyMap[c.id] ?? [];

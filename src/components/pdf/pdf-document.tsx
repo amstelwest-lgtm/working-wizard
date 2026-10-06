@@ -1,4 +1,7 @@
-import { Document, Page, View } from "@react-pdf/renderer";
+import { Document, Font, Page, View } from "@react-pdf/renderer";
+
+// Helvetica has no soft hyphen. Default hyphenation clips "period" to "peri-od".
+Font.registerHyphenationCallback((word) => [word]);
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { ReportHeader } from "./report-header";

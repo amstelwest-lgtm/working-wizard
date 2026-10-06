@@ -41,6 +41,7 @@ const FIELD_LABEL: Record<string, string> = {
   priorRevenue: "Prior revenue",
   currentAssets: "Current assets",
   currentLiabilities: "Current liabilities",
+  totalLiabilities: "Total liabilities",
   capex: "Capex",
 };
 
@@ -334,9 +335,9 @@ export const RATIO_EXPLAIN: Record<string, Omit<RatioExplain, "name" | "key" | "
     steps: [],
   },
   "Debt-to-Equity": {
-    formula: "Total debt ÷ Equity",
-    hint: "How much of the book is funded by creditors versus owners.",
-    needed: ["totalAssets", "equity"],
+    formula: "Total liabilities ÷ Equity",
+    hint: "Creditors versus owners. This is extracted total liabilities, not the interest-bearing facility schedule.",
+    needed: ["totalLiabilities", "equity"],
     steps: [],
   },
   "Debt-to-Assets": {
@@ -434,7 +435,7 @@ function explainFor(name: string): RatioExplain {
  */
 export function ratioActualLine(
   name: string,
-  inputs: RatioInputs,
+  inputs: RatioInputs & { totalLiabilities?: string },
   formatMoney: (n: number) => string,
 ): RatioActualLine {
   name = canonicalRatioName(name);
@@ -488,10 +489,10 @@ export function ratioActualLine(
   } else if (name === "Creditor Days" && missing.length === 0) {
     calculation = `(${fmt(pay)} / ${fmt(cogs)}) × 365 = ${days((pay / cogs) * 365)}`;
   } else if (name === "Working Capital Days" && missing.length === 0) {
-    const dd = (rec / r) * 365;
-    const id = (inv / cogs) * 365;
-    const cd = (pay / cogs) * 365;
-    calculation = `${days(dd)} + ${days(id)} − ${days(cd)} = ${days(dd + id - cd)}`;
+    const dd = Math.round((rec / r) * 365);
+    const id = Math.round((inv / cogs) * 365);
+    const cd = Math.round((pay / cogs) * 365);
+    calculation = `${days(dd)} + ${days(id)} - ${days(cd)} = ${days(dd + id - cd)}`;
   } else if (name === "Fixed Cost Ratio" && missing.length === 0) {
     calculation = `${fmt(n.fixedCosts)} / ${fmt(r)} = ${pct(n.fixedCosts / r)}`;
   } else if (name === "Degree of Operating Leverage" && missing.length === 0) {
@@ -540,8 +541,11 @@ export function ratioActualLine(
         ? `${fmt(n.currentAssets)} / ${fmt(n.currentLiabilities)} = ${times(n.currentAssets / n.currentLiabilities)}`
         : "n/m — current liabilities are not positive";
   } else if (name === "Debt-to-Equity" && missing.length === 0) {
-    const debt = Math.max(0, assets - equity);
-    calculation = `${fmt(debt)} / ${fmt(equity)} = ${times(debt / equity)}`;
+    const liabilities = n.totalLiabilities;
+    calculation =
+      equity !== 0
+        ? `${fmt(liabilities)} / ${fmt(equity)} = ${times(liabilities / equity)}`
+        : "n/m — equity is not positive";
   } else if (name === "Debt-to-Assets" && missing.length === 0) {
     const debt = Math.max(0, assets - equity);
     calculation = `${fmt(debt)} / ${fmt(assets)} = ${pct(debt / assets)}`;

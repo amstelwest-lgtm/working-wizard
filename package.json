@@ -122,6 +122,7 @@
     "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",
     "test:report-direction": "vite-node --config scripts/vite-test.config.ts scripts/report-direction-test.mts",
     "test:report-coherence": "vite-node --config scripts/vite-test.config.ts scripts/report-coherence-test.mts",
+    "test:equity-coherence": "vite-node --config scripts/vite-test.config.ts scripts/equity-coherence-test.mts",
     "test:budget-qa-fixture": "vite-node --config scripts/vite-test.config.ts scripts/budget-qa-fixture-test.mts",
     "test:prod-retest-stored-paths": "vite-node --config scripts/vite-test.config.ts scripts/prod-retest-stored-paths-test.mts"
   },

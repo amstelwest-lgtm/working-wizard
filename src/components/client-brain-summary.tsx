@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { assertFirmCanGenerateDeliverable } from "@/lib/advisory-pack.functions";
+import { isUploadSnapshot, pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
@@ -276,8 +277,11 @@ export function ClientBrainSummary({
       void load();
     },
   });
-  const latestSnapshot = snapshots[0] ?? null;
-  const uploadSnaps = snapshots.filter((s) => s.source === "upload").slice(0, 3);
+  const latestSnapshot = pickCurrentSnapshot(snapshots);
+  const uploadSnaps = [...snapshots]
+    .filter((s) => isUploadSnapshot(s.source))
+    .sort((a, b) => Date.parse(b.created_at ?? "") - Date.parse(a.created_at ?? ""))
+    .slice(0, 3);
   // Files the owner chose to share. RLS already hides private ones; this
   // list only ever contains what the caller may open.
   const sharedDocs = artifacts.filter((a) => a.kind === "upload" && a.storage_path);

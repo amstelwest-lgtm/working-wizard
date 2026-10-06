@@ -15,7 +15,8 @@ export function formatMoneyUnit(
   if (!Number.isFinite(n)) return "—";
   const sign = n < 0 ? "-" : "";
   const body = String(Math.abs(n));
-  return `${sign}${currencySymbol(market)}${body}`;
+  const gap = market.currency === "USD" ? "" : "\u00a0";
+  return `${sign}${currencySymbol(market)}${gap}${body}`;
 }
 
 export function formatMoney(

@@ -3403,6 +3403,12 @@ function Index() {
       accumulatedDepreciation: num(av.accumulatedDepreciation),
       priorPpeGross: num(av.priorPpeGross),
       priorAccumDep: num(av.priorAccumDep),
+      totalLiabilities: (() => {
+        const raw = String((av as { totalLiabilities?: string }).totalLiabilities ?? "").trim();
+        if (!raw) return Number.NaN;
+        const parsed = parseFloat(raw);
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
+      })(),
     };
   }, [v]);
 
@@ -3469,7 +3475,9 @@ function Index() {
   const ppeMovement = isFinite(netPpe) && isFinite(priorNetPpe) ? netPpe - priorNetPpe : NaN;
   const impliedCapex = isFinite(ppeMovement) && depreciation > 0 ? ppeMovement + depreciation : NaN;
 
-  const totalDebt = Math.max(0, n.totalAssets - n.equity);
+  const totalDebt = Number.isFinite(n.totalLiabilities)
+    ? Math.max(0, n.totalLiabilities)
+    : Math.max(0, n.totalAssets - n.equity);
   const debtToEquity = safe(totalDebt, n.equity);
   const debtToAssets = safe(totalDebt, n.totalAssets);
 

@@ -47,6 +47,12 @@ import {
   interestBurdenRatio,
   taxBurdenRatio,
 } from "@/lib/ratios";
+import {
+  ASSET_REPORT_NEEDS,
+  cashFlowKnown,
+  LEVERAGE_REPORT_NEEDS,
+  reportScalarInputs,
+} from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
 import type { RatioInputs } from "@/lib/ratios";
 import {
@@ -1224,6 +1230,7 @@ function buildRatioResults(
     equity?: number | null;
     periodMonths?: number | null;
     partMonth?: boolean;
+    cashFlowKnown?: boolean;
   },
 ): RatioResult[] {
   const rows: RatioResult[] = [];
@@ -1235,6 +1242,7 @@ function buildRatioResults(
       currency: market.currency,
       periodMonths: context?.periodMonths,
       partMonth: context?.partMonth,
+      cashFlowKnown: context?.cashFlowKnown,
     });
     if (!presented.include) continue;
     const scoredValue = presented.scoredValue;
@@ -1362,19 +1370,25 @@ function buildBenchmarkRows(
   sector: Record<string, SectorBenchProps>,
 ): BenchmarkRow[] {
   return Object.entries(sector)
-    .filter(([name]) => Number.isFinite(rawRatios[name]))
+    .filter(([name]) => {
+      const rr = ratioResults.find((r) => r.ratio_name === name);
+      if (rr?.unscored) return true;
+      return Number.isFinite(rawRatios[name]);
+    })
     .map(([name, b]) => {
       const val = rawRatios[name];
       const rr = ratioResults.find((r) => r.ratio_name === name);
-      const score = rr?.health_score ?? Math.round(scoreForRatio(name, val));
+      const unscored = Boolean(rr?.unscored);
+      const score = unscored ? 0 : (rr?.health_score ?? Math.round(scoreForRatio(name, val)));
       return {
         ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
         ratio_name: name,
         pillar: b.pillar,
-        current_value: val,
-        formatted_current: fmtBenchVal(val, b.unit),
+        current_value: unscored ? Number.NaN : val,
+        formatted_current: unscored ? (rr?.formatted_value ?? "n/a") : fmtBenchVal(val, b.unit),
         health_score: score,
-        health_tier: scoreTier(score),
+        health_tier: unscored ? "at_risk" : scoreTier(score),
+        unscored,
         sector_median: b.median,
         sector_top_quartile: b.top,
         formatted_median: fmtBenchVal(b.median, b.unit),
@@ -1679,6 +1693,7 @@ function buildLeverageData(
         }))
     : [];
 
+  const liabilities = getNum(fin, "totalLiabilities");
   const d2a = debt_facilities_captured && totalAssets > 0 ? totalDebt / totalAssets : NaN;
   const d2e = debt_facilities_captured && equity > 0 ? totalDebt / equity : NaN;
   const em = rawRatios["Equity Multiplier"];
@@ -1698,6 +1713,7 @@ function buildLeverageData(
     total_debt: totalDebt,
     total_equity: equity,
     total_assets: totalAssets,
+    total_liabilities: Number.isFinite(liabilities) ? liabilities : null,
     debt_facilities_captured,
     net_profit: Number.isFinite(net) ? net : 0,
     drawings,
@@ -1949,7 +1965,7 @@ async function buildInterventions(
   const allSteps = (rawPlaybook.default ?? rawPlaybook) as Intervention[];
 
   const atRiskRatios = ratioResults.filter(
-    (r) => r.health_tier === "critical" || r.health_tier === "at_risk",
+    (r) => !r.unscored && (r.health_tier === "critical" || r.health_tier === "at_risk"),
   );
 
   const result: Intervention[] = [];
@@ -2156,11 +2172,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
 
   const rawFin = clientRow.financials as Record<string, string | number | null | object>;
   const debtRaw = (rawFin as Record<string, unknown>).debt_schedule;
-  const fin = Object.fromEntries(
-    Object.entries(rawFin)
-      .filter(([k]) => k !== "debt_schedule")
-      .map(([k, v]) => [k, v != null && typeof v !== "object" ? String(v) : ""]),
-  ) as Record<string, string>;
+  const fin = reportScalarInputs(rawFin as Record<string, unknown>);
   // Keep debt_schedule as a JSON string key so buildLeverageData can parse it
   if (debtRaw != null) {
     fin["debt_schedule"] = typeof debtRaw === "string" ? debtRaw : JSON.stringify(debtRaw);
@@ -2213,6 +2225,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     equity: equityNow,
     periodMonths,
     partMonth,
+    cashFlowKnown: cashFlowKnown(fin),
   });
   ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
 
@@ -2542,7 +2555,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const { LeverageSolvencyPDF } = await import("@/reports/leverage-solvency");
       const { isDemo, data } = liveOrDemo(
         cd?.leverage,
-        "Leverage report needs equity and total assets.",
+        LEVERAGE_REPORT_NEEDS,
       );
       return renderToBlob(LeverageSolvencyPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
@@ -2558,7 +2571,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const { AssetProductivityPDF } = await import("@/reports/asset-productivity");
       const { isDemo, data } = liveOrDemo(
         cd?.assets,
-        "Asset productivity needs asset turnover, equity multiplier, and net margin.",
+        ASSET_REPORT_NEEDS,
       );
       return renderToBlob(AssetProductivityPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
@@ -2880,6 +2893,7 @@ function ReportCard({
   isClient,
   dataLoading,
   blocked,
+  unavailableReason,
   highlight,
   onGenerate,
   onPreview,
@@ -2896,6 +2910,8 @@ function ReportCard({
   isClient: boolean;
   dataLoading: boolean;
   blocked: boolean;
+  /** Inputs are still missing after derived equity. Disable instead of failing on click. */
+  unavailableReason?: string | null;
   highlight?: boolean;
   onGenerate: () => void;
   onPreview: () => void;
@@ -2906,7 +2922,12 @@ function ReportCard({
   clientName?: string;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
 }) {
-  const disabled = !isClient || dataLoading || blocked;
+  const disabled = !isClient || dataLoading || blocked || Boolean(unavailableReason);
+  const blockedTitle = unavailableReason
+    ? unavailableReason
+    : blocked
+      ? "Upload financials before generating client reports"
+      : undefined;
   const scope = REPORT_SIGNOFF_SCOPE[report.key];
   const copy = reportCopy(report, market);
   return (
@@ -2942,6 +2963,11 @@ function ReportCard({
             <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
               {localizeCopy(report.description, market)}
             </p>
+            {unavailableReason ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+                {unavailableReason}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -2967,7 +2993,7 @@ function ReportCard({
           className="flex-1 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground text-xs gap-1.5"
           onClick={onPreview}
           disabled={disabled || isPreviewing}
-          title={blocked ? "Upload financials before generating client reports" : undefined}
+          title={blockedTitle}
         >
           {isPreviewing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2981,7 +3007,7 @@ function ReportCard({
           className="flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
           onClick={onGenerate}
           disabled={disabled || isGenerating}
-          title={blocked ? "Upload financials before generating client reports" : undefined}
+          title={blockedTitle}
         >
           {isGenerating ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3580,6 +3606,12 @@ export function ReportsStudio({
 
   /** Client-linked studio never ships mock figures — upload first. */
   const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
+  const unavailableFor = (key: string): string | null => {
+    if (!clientData?.hasData) return null;
+    if (key === "leverage" && !clientData.leverage) return LEVERAGE_REPORT_NEEDS;
+    if (key === "assets" && !clientData.assets) return ASSET_REPORT_NEEDS;
+    return null;
+  };
   const studioBusy = dataLoading || resolvingClient;
 
   const patchStudioSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
@@ -4137,6 +4169,7 @@ export function ReportsStudio({
                     isClient={isClient}
                     dataLoading={studioBusy}
                     blocked={blockedForClient}
+                    unavailableReason={unavailableFor(r.key)}
                     highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
@@ -4165,6 +4198,7 @@ export function ReportsStudio({
                     isClient={isClient}
                     dataLoading={studioBusy}
                     blocked={blockedForClient}
+                    unavailableReason={unavailableFor(r.key)}
                     highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}

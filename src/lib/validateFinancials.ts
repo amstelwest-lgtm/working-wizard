@@ -3,6 +3,7 @@
 // against a mis-read figure quietly poisoning the ratio engine. It does NOT trust
 // the model — it re-checks the arithmetic that must hold in any real statement.
 
+import { EQUITY_CROSSCHECK_WARNING } from "./equity-coherence";
 import type { FinancialFigures, Money } from "./financialSchema";
 import { balanceSheetCheck } from "./statement-balance";
 
@@ -68,6 +69,30 @@ export function validateFigures(figures: FinancialFigures): ValidationIssue[] {
       "error"
     )
   );
+
+  // Soft cross-check: equity lines + unclosed profit versus assets − liabilities.
+  // The reporting figure stays lines + profit when they disagree.
+  const reportingEquity =
+    num(bs.equity.total) != null ? (bs.equity.total as number) + unclosedProfit : null;
+  const equityPlug =
+    totalAssets != null && num(bs.total_liabilities) != null
+      ? totalAssets - (bs.total_liabilities as number)
+      : null;
+  if (
+    reportingEquity != null &&
+    equityPlug != null &&
+    bs.equity_derived !== true &&
+    Math.abs(reportingEquity - equityPlug) / Math.max(Math.abs(equityPlug), 1) > 0.01
+  ) {
+    issues.push({
+      check: "equity_cross_check",
+      message: EQUITY_CROSSCHECK_WARNING,
+      expected: Math.round(equityPlug * 100) / 100,
+      actual: Math.round(reportingEquity * 100) / 100,
+      difference: Math.round((reportingEquity - equityPlug) * 100) / 100,
+      severity: "warning",
+    });
+  }
 
   // 2. Non-current + current assets = total assets.
   const assetsSum =

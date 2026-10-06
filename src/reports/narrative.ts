@@ -5,7 +5,7 @@
 
 import { fmtPct, fmtRandCompact } from "@/components/pdf/theme";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { formatMoney, formatMoneyUnit, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMoney, formatMoneyUnit, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportProfileCoda, type ReportNarrativeKind } from "@/lib/profile-signals";
 import { scoreRatio } from "@/lib/health-score";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
@@ -283,7 +283,7 @@ export function laborNarrative(
       : d.realGrowth > 0
         ? ` Revenue is outpacing inflation by ${fmtPct(d.realGrowth)} in real terms.`
         : ` Revenue growth is trailing inflation by ${fmtPct(Math.abs(d.realGrowth))} — pricing needs attention.`;
-  return withCoda(`${rpeBit} ${gpBit}${growthBit}`, profile, "labor", market);
+  return spellLabor(withCoda(`${rpeBit} ${gpBit}${growthBit}`, profile, "labor", market), market);
 }
 
 export function movementNarrative(

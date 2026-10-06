@@ -63,6 +63,11 @@ export interface BalanceSheet {
    * because the sheet had no equity lines. Absent on reported or typed equity.
    */
   equity_derived?: boolean;
+  /**
+   * Current-period profit included in `equity.total` because the trial balance
+   * was pre-close. Not written into retained earnings.
+   */
+  period_profit_in_equity?: number;
 }
 
 export interface CashFlow {

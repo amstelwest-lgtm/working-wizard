@@ -23,6 +23,18 @@ export const NO_PRIOR_PERIOD = "No prior period";
 export const NO_HISTORY_YET = "No history yet";
 export const NOT_SCORED = "Not scored";
 export const ROE_TOO_SMALL = "n/a — equity too small to be meaningful";
+export const PERIOD_TOO_SHORT = "period too short to annualise";
+export const PERIOD_TOO_SHORT_LABEL = "n/a — period too short to annualise";
+
+/** ROE and ROA are not annualised from a part-month or from fewer than 3 months. */
+export function returnPeriodTooShort(input: {
+  periodMonths?: number | null;
+  partMonth?: boolean;
+}): boolean {
+  if (input.partMonth) return true;
+  const months = input.periodMonths;
+  return months != null && months > 0 && months < 3;
+}
 
 /** Pillar order used when two pillars share a score. Earlier wins. */
 export const PILLAR_TIE_ORDER = ["profit", "assets", "financing", "cash"] as const;
@@ -229,7 +241,8 @@ export type ReturnPresentation = {
 
 /**
  * Label a flow return that `computeRatios` has already annualised.
- * Tiny equity is not scored. A short or part month says so in the label.
+ * Under 3 months, or a part-month, ROE and ROA are n/a — not an unlabelled
+ * annualised percent. Tiny equity is not scored on a long enough period.
  */
 export function presentReturn(input: {
   ratioName: "Return on Equity" | "Return on Assets";
@@ -240,9 +253,17 @@ export function presentReturn(input: {
   periodMonths?: number | null;
   partMonth?: boolean;
 }): ReturnPresentation {
+  if (returnPeriodTooShort(input)) {
+    return {
+      text: PERIOD_TOO_SHORT_LABEL,
+      headline: "n/a",
+      scoredValue: null,
+      note: PERIOD_TOO_SHORT,
+      unscored: true,
+    };
+  }
   const months = input.periodMonths != null && input.periodMonths > 0 ? input.periodMonths : 12;
   const bits: string[] = [];
-  if (input.partMonth) bits.push("part-month");
   if (months < 12) bits.push("annualised");
   const note = bits.length ? bits.join(", ") : null;
 
@@ -342,7 +363,15 @@ export function presentScorecardRatio(input: {
   currency?: string | null;
   periodMonths?: number | null;
   partMonth?: boolean;
+  /** True only when a cash-flow statement supplied operating cash flow. */
+  cashFlowKnown?: boolean;
 }): ScorecardPresentation {
+  if (input.name === "OCF / EBITDA") {
+    const unstatedZero = input.cashFlowKnown !== true && input.value === 0;
+    if (!Number.isFinite(input.value) || unstatedZero) {
+      return { include: true, text: "—", headline: "—", scoredValue: null, note: null, unscored: true };
+    }
+  }
   if (input.name === "Return on Equity" || input.name === "Return on Assets") {
     const presented = presentReturn({
       ratioName: input.name,

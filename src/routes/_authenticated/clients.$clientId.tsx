@@ -42,12 +42,16 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
+import { coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
+import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
+import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
   DERIVED_EQUITY_LABEL,
   EQUITY_DERIVED_KEY,
   scalarsWithReadTimeEquity,
   periodFinancialsFromExtraction,
   preserveHandEnteredEquity,
+  type PeriodFinancials,
 } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -56,7 +60,6 @@ import {
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_KEY,
   healthBandLabel,
-  periodMonthsOf,
   scoreTier,
 } from "@/lib/ratios";
 import type { RatioInputs, HealthTier } from "@/lib/ratios";
@@ -260,7 +263,7 @@ async function recordReportIssued(clientId: string) {
   if (error) console.error("increment reports_issued_count error:", error);
 }
 
-function extractionToRatioInputs(r: ExtractionResult): RatioInputs & { cash: string } {
+function extractionToRatioInputs(r: ExtractionResult): PeriodFinancials {
   return periodFinancialsFromExtraction(r);
 }
 
@@ -1001,7 +1004,9 @@ function ClientView() {
   const [openQueriesCount, setOpenQueriesCount] = useState(0);
 
   // Computed ratios
-  const ratioInputs: RatioInputs = {
+  const coverageMonths = effectivePeriodMonths(financials);
+  const equityCheck = coherentEquity(financials);
+  const ratioInputs: RatioInputs & { totalLiabilities?: string } = {
     revenue: financials["revenue"] ?? "",
     cogs: financials["cogs"] ?? "",
     ebit: financials["ebit"] ?? "",
@@ -1020,9 +1025,10 @@ function ClientView() {
     laborCost: financials["laborCost"] ?? "",
     employees: financials["employees"] ?? "",
     founderHours: financials["founderHours"] ?? "",
-    periodMonths: financials[PERIOD_MONTHS_KEY] ?? "",
+    periodMonths: String(coverageMonths),
+    totalLiabilities: financials["totalLiabilities"] ?? "",
   };
-  const periodMonths = periodMonthsOf(financials);
+  const periodMonths = coverageMonths;
   /** True once any P&L / balance-sheet figure exists — gates the empty-state card and Ask AI note. */
   const hasFigures = useMemo(
     () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
@@ -1459,7 +1465,7 @@ function ClientView() {
     if (!clientId) return;
     supabase
       .from("client_financial_snapshots")
-      .select("id, period_label, period_date, financials, ratios, source")
+      .select("id, period_label, period_date, financials, ratios, source, created_at")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(24)
@@ -1472,6 +1478,7 @@ function ClientView() {
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
             source: (s.source as string | null) ?? null,
+            created_at: (s.created_at as string | null) ?? null,
           })),
         );
       });
@@ -1716,9 +1723,23 @@ function ClientView() {
       period?: { periodEnd: string; periodLabel: string },
     ) => {
       const extracted = extractionToRatioInputs(result);
-      const inputs = {
+      const keptEquity = preserveHandEnteredEquity(financialsRef.current, extracted);
+      const drafted = {
         ...extracted,
-        ...preserveHandEnteredEquity(financialsRef.current, extracted),
+        ...keptEquity,
+      };
+      const coverage = defaultPeriodCoverage({
+        periodEnd: period?.periodEnd,
+        preClose:
+          drafted.periodProfitInEquity != null &&
+          String(drafted.periodProfitInEquity).trim() !== "" &&
+          String(drafted.periodProfitInEquity) !== "0",
+      });
+      const inputs = {
+        ...drafted,
+        periodMonths: String(coverage.months),
+        periodEnd: period?.periodEnd ?? "",
+        ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
       };
       const ratiosOut = computeRatios(inputs);
       const periodDate = period?.periodEnd?.trim() ?? "";
@@ -1765,7 +1786,7 @@ function ClientView() {
         setUploadOpen(false);
         const { data } = await supabase
           .from("client_financial_snapshots")
-          .select("id, period_label, period_date, financials, ratios, source")
+          .select("id, period_label, period_date, financials, ratios, source, created_at")
           .eq("client_id", clientId)
           .order("period_date", { ascending: false })
           .limit(24);
@@ -1777,6 +1798,7 @@ function ClientView() {
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
             source: (s.source as string | null) ?? null,
+            created_at: (s.created_at as string | null) ?? null,
           })),
         );
         return;
@@ -1944,7 +1966,7 @@ function ClientView() {
           periodLabel: qboLink.periodLabel,
         }
       : null,
-    snapshotPeriod: snapshots[0]?.period_label ?? null,
+    snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
   });
   const coachPage = coachPageForTab(activeTab, search.focus);
 
@@ -2896,6 +2918,11 @@ function ClientView() {
                             title="P&L and cash-flow figures are scaled to a 12-month equivalent for ratios, the health score and the budget seed. Balance-sheet figures are never scaled."
                           >
                             <span>Figures cover</span>
+                            {equityCheck.warning ? (
+                              <span className="hint" style={{ marginLeft: 8 }}>
+                                {equityCheck.warning}
+                              </span>
+                            ) : null}
                             <select
                               value={String(periodMonths)}
                               onChange={(e) =>
@@ -2964,8 +2991,8 @@ function ClientView() {
                       <p className="sub">
                         All {Object.keys(ratios).length} computed ratios from the period figures.
                         Tap a row for the formula, the actuals that feed it, and the repair
-                        playbook. Current ratio and debt-to-equity need current assets / liabilities
-                        — those fields are not collected yet.
+                        playbook. Debt-to-equity uses extracted total liabilities. Current ratio
+                        still needs current assets and current liabilities.
                       </p>
                       {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
                         const names = PILLAR_RATIO_NAMES[pillarId];

@@ -222,7 +222,7 @@ const tinyRoe = presentReturn({
   value: 3.63,
   equity: 8_267,
   currency: "USD",
-  periodMonths: 1,
+  periodMonths: 12,
 });
 assert(tinyRoe.unscored && tinyRoe.text === ROE_TOO_SMALL, "equity below the floor is not a 363% ROE");
 const monthRoa = presentReturn({
@@ -231,7 +231,21 @@ const monthRoa = presentReturn({
   periodMonths: 1,
   partMonth: true,
 });
-assert(!monthRoa.unscored && monthRoa.text.includes("part-month, annualised"), "a part month is labelled annualised");
+assert(
+  monthRoa.unscored && monthRoa.text.includes("period too short to annualise"),
+  "a part month is not annualised",
+);
+const shortRoe = presentReturn({
+  ratioName: "Return on Equity",
+  value: 3.63,
+  equity: 150_000,
+  currency: "USD",
+  periodMonths: 1,
+});
+assert(
+  shortRoe.unscored && shortRoe.headline === "n/a" && shortRoe.text.includes("period too short to annualise"),
+  "ROE under 3 months is n/a before the tiny-equity floor",
+);
 
 assert(scoreTier(71) === "at_risk" && healthBandLabel("at_risk") === "Watch", "a score of 71 is Watch on the band table");
 const fixed = scorePlaybookCatalogue(

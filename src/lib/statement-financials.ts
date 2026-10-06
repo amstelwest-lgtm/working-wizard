@@ -8,62 +8,49 @@
  */
 
 import type { BalanceSheet, ExtractionResult, IncomeStatement, Money } from "./financialSchema.ts";
+import { coherentEquity } from "./equity-coherence.ts";
 import type { RatioInputs } from "./ratios.ts";
+import { currentPeriodProfit } from "./statement-balance.ts";
 
-export type PeriodFinancials = RatioInputs & { cash: string; equityDerived: string };
+export type PeriodFinancials = RatioInputs & {
+  cash: string;
+  equityDerived: string;
+  totalLiabilities: string;
+  currentLiabilities: string;
+  currentAssets: string;
+  nonCurrentLiabilities: string;
+  hasCashFlow: string;
+  periodProfitInEquity: string;
+};
 
 /** Shown wherever a plugged equity total appears, so it is not read as reported equity. */
 export const DERIVED_EQUITY_LABEL = "Derived (assets − liabilities)";
 
-function finiteField(raw: unknown): number | null {
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  if (typeof raw === "string" && raw.trim() !== "") {
-    const n = Number(raw.replace(/[,\s]/g, ""));
-    if (Number.isFinite(n)) return n;
-  }
-  return null;
-}
-
 /**
- * Liabilities on a stored financials blob. A printed total wins. Otherwise
- * current plus non-current. Payables are the only liability line on the grid,
- * so they are the liability side when nothing else was stored.
- */
-function liabilitySide(fields: Record<string, unknown>): number | null {
-  const total = finiteField(fields.totalLiabilities);
-  if (total != null) return total;
-  const current = finiteField(fields.currentLiabilities);
-  const nonCurrent = finiteField(fields.nonCurrentLiabilities);
-  if (current != null || nonCurrent != null) return (current ?? 0) + (nonCurrent ?? 0);
-  return finiteField(fields.payables);
-}
-
-/**
- * Equity at read time. Same plug as fillBalanceSheetTotals: assets minus
- * liabilities, flagged derived. That residual already includes unclosed
- * profit, so nothing here adds net income again. A hand-entered figure
- * (including zero) is left alone.
+ * Equity at read time. Blank equity plugs assets − liabilities (that residual
+ * already includes unclosed profit). A typed pre-close total is equity lines
+ * plus current-period net income when an explicit liability total is on the
+ * blob. A typed figure with no liability total, including zero, stays.
  */
 export function readTimeEquity(fields: Record<string, unknown> | null | undefined): {
   equity: string;
   derived: boolean;
 } {
-  const source = fields ?? {};
-  const equity = source.equity == null ? "" : String(source.equity).trim();
-  const alreadyDerived = String(source[EQUITY_DERIVED_KEY] ?? "") === "1";
-  if (equity !== "") return { equity, derived: alreadyDerived };
-  const assets = finiteField(source.totalAssets);
-  const liabilities = liabilitySide(source);
-  if (assets == null || liabilities == null) return { equity: "", derived: false };
-  const plugged = Math.round((assets - liabilities) * 100) / 100;
-  return { equity: String(plugged), derived: true };
+  const resolved = coherentEquity(fields);
+  return { equity: resolved.equity, derived: resolved.derived };
 }
 
-/** Grid scalars with blank equity filled. A typed equity, including zero, stays. */
+/** Grid scalars with coherent equity. A typed closed-sheet figure stays. */
 export function scalarsWithReadTimeEquity(scalars: Record<string, string>): Record<string, string> {
-  const resolved = readTimeEquity(scalars);
-  if (!resolved.derived) return scalars;
-  return { ...scalars, equity: resolved.equity, [EQUITY_DERIVED_KEY]: "1" };
+  const resolved = coherentEquity(scalars);
+  let next = scalars;
+  const current = String(scalars.equity ?? "").trim();
+  if (resolved.equity !== "" && (resolved.derived || resolved.preClose || resolved.equity !== current)) {
+    next = { ...next, equity: resolved.equity };
+    if (resolved.derived) next = { ...next, [EQUITY_DERIVED_KEY]: "1" };
+    if (resolved.preClose) next = { ...next, periodProfitInEquity: String(resolved.profitIncluded) };
+  }
+  return next;
 }
 
 /** Blob key. "1" means `equity` was plugged, not reported or typed. */
@@ -218,25 +205,70 @@ export function dropUncomputedTotalNotes(notes: string | null | undefined): stri
   return kept.join("\n");
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Pre-close trial balance: add current-period profit to total equity.
+ * Retained earnings is not rewritten. A derived plug and a closed sheet
+ * (adding profit would not move the sheet closer to balance) are unchanged.
+ */
+export function withUnclosedProfit(sheet: BalanceSheet, income: IncomeStatement): BalanceSheet {
+  if (sheet.equity_derived === true || sheet.period_profit_in_equity != null) return sheet;
+  const equity = finiteMoney(sheet.equity.total);
+  const assets = finiteMoney(sheet.total_assets);
+  const liab = finiteMoney(sheet.total_liabilities);
+  const profit = currentPeriodProfit(income);
+  if (equity == null || assets == null || liab == null || profit == null || Math.abs(profit) <= 0.005) {
+    return sheet;
+  }
+  const tol = Math.max(Math.abs(assets) * 0.005, 1);
+  const raw = equity + liab - assets;
+  const adjusted = raw + profit;
+  if (!(Math.abs(raw) > tol && Math.abs(adjusted) < Math.abs(raw))) return sheet;
+  const nextEquity = round2(equity + profit);
+  let tel = sheet.total_equity_and_liabilities;
+  const telNum = finiteMoney(tel);
+  if (telNum == null || Math.abs(telNum - (equity + liab)) <= tol) {
+    tel = round2(nextEquity + liab);
+  }
+  return {
+    ...sheet,
+    equity: { ...sheet.equity, total: nextEquity },
+    total_equity_and_liabilities: tel,
+    period_profit_in_equity: round2(profit),
+  };
+}
+
 /** Fill blank balance-sheet totals on an extraction. Does not invent a period end. */
 export function applyBalanceSheetTotals(result: ExtractionResult): ExtractionResult {
-  const current = fillBalanceSheetTotals(result.current_period.figures.balance_sheet);
-  const comparative = result.comparative_period
+  const currentFilled = fillBalanceSheetTotals(result.current_period.figures.balance_sheet);
+  const currentSheet = withUnclosedProfit(currentFilled.sheet, result.current_period.figures.income_statement);
+  const comparativeFilled = result.comparative_period
     ? fillBalanceSheetTotals(result.comparative_period.figures.balance_sheet)
     : null;
-  const filled = current.filled || comparative?.filled === true;
+  const comparativeSheet =
+    result.comparative_period && comparativeFilled
+      ? withUnclosedProfit(comparativeFilled.sheet, result.comparative_period.figures.income_statement)
+      : null;
+  const filled =
+    currentFilled.filled ||
+    comparativeFilled?.filled === true ||
+    currentSheet.equity.total !== currentFilled.sheet.equity.total ||
+    comparativeSheet?.equity.total !== comparativeFilled?.sheet.equity.total;
   return {
     ...result,
     extraction_notes: filled ? dropUncomputedTotalNotes(result.extraction_notes) : result.extraction_notes,
     current_period: {
       ...result.current_period,
-      figures: { ...result.current_period.figures, balance_sheet: current.sheet },
+      figures: { ...result.current_period.figures, balance_sheet: currentSheet },
     },
     comparative_period:
-      result.comparative_period && comparative
+      result.comparative_period && comparativeSheet
         ? {
             ...result.comparative_period,
-            figures: { ...result.comparative_period.figures, balance_sheet: comparative.sheet },
+            figures: { ...result.comparative_period.figures, balance_sheet: comparativeSheet },
           }
         : result.comparative_period,
   };
@@ -273,6 +305,8 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
   const labor = income.labor_cost ?? income.labour_cost ?? null;
   const cash =
     balance.current_assets.cash_and_cash_equivalents ?? cashFlow?.cash_at_end ?? null;
+  const operatingCash = cashFlow?.cash_from_operating;
+  const hasCashFlow = typeof operatingCash === "number" && Number.isFinite(operatingCash) ? "1" : "";
 
   return {
     revenue: money(revenue),
@@ -288,6 +322,13 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
     receivables: money(balance.current_assets.trade_and_other_receivables),
     inventory: money(balance.current_assets.inventories),
     payables: money(balance.current_liabilities.trade_and_other_payables),
+    totalLiabilities: money(balance.total_liabilities),
+    currentLiabilities: money(balance.current_liabilities.total),
+    currentAssets: money(balance.current_assets.total),
+    nonCurrentLiabilities: money(balance.non_current_liabilities.total),
+    hasCashFlow,
+    periodProfitInEquity:
+      balance.period_profit_in_equity != null ? String(balance.period_profit_in_equity) : "",
     fixedCosts: money(opex),
     variableCosts: "",
     top5Revenue: "",

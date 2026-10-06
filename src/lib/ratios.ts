@@ -327,12 +327,20 @@ export type RatioInputs = {
 /** Blob key under which the period length is stored alongside the figures. */
 export const PERIOD_MONTHS_KEY = "periodMonths";
 
-export const PERIOD_MONTH_OPTIONS: { months: number; label: string }[] = [
-  { months: 12, label: "12 months (annual)" },
-  { months: 6, label: "6 months" },
-  { months: 3, label: "3 months (quarter)" },
-  { months: 1, label: "1 month" },
-];
+const PERIOD_MONTH_LABEL: Record<number, string> = {
+  12: "12 months (annual)",
+  3: "3 months (quarter)",
+  1: "1 month",
+};
+
+/** Every length the health grid can store, so a 9-month YTD is not shown as annual. */
+export const PERIOD_MONTH_OPTIONS: { months: number; label: string }[] = Array.from(
+  { length: 12 },
+  (_, index) => {
+    const months = 12 - index;
+    return { months, label: PERIOD_MONTH_LABEL[months] ?? `${months} months` };
+  },
+);
 
 /** Flow fields that scale with the period length; stock fields do not. */
 export const FLOW_FIELD_KEYS = [
@@ -432,10 +440,14 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   // loss-making, negative-equity business showing a spectacular positive
   // ROE. Force these to NaN ("n/m" — not meaningful) instead.
   const roe = n.equity > 0 ? roa * equityMultiplier : NaN;
-  const debtorDays = safe(n.receivables, n.revenue) * 365;
-  const inventoryDays = safe(n.inventory, n.cogs) * 365;
-  const creditorDays = safe(n.payables, n.cogs) * 365;
-  const wcDays = debtorDays + inventoryDays - creditorDays;
+  const roundDay = (days: number) => (Number.isFinite(days) ? Math.round(days) : days);
+  const debtorDays = roundDay(safe(n.receivables, n.revenue) * 365);
+  const inventoryDays = roundDay(safe(n.inventory, n.cogs) * 365);
+  const creditorDays = roundDay(safe(n.payables, n.cogs) * 365);
+  const wcDays =
+    [debtorDays, inventoryDays, creditorDays].every((days) => Number.isFinite(days))
+      ? debtorDays + inventoryDays - creditorDays
+      : Number.NaN;
   const fcr = safe(n.fixedCosts, n.revenue);
   const cm = n.revenue - n.variableCosts;
   const dol = safe(cm, n.ebit);

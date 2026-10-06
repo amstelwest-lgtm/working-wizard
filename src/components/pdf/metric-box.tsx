@@ -70,7 +70,7 @@ export function MetricBox({
     <View style={styles.box}>
       <View style={[styles.tick, { backgroundColor: accentColor }]} />
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+      <Text style={[styles.value, value.length > 14 ? { fontSize: 9 } : { fontSize: 15 }]}>{value}</Text>
       {chip}
       {note ? <Text style={styles.note}>{note}</Text> : null}
     </View>
