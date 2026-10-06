@@ -26,12 +26,16 @@ import {
   replyIsGrounded,
   requireLighthouseChatAdmin,
   runLighthouseChatTurn,
+  formatContextBlock,
   snapshotFromBook,
   writeChatThread,
   type ChatLeadInput,
   type ChatSnapshot,
 } from "../src/lib/lighthouse-agent-chat";
-import { loadLighthouseChatSnapshot } from "../src/lib/lighthouse-agent-chat.functions";
+import {
+  isUndefinedTableError,
+  loadLighthouseChatSnapshot,
+} from "../src/lib/lighthouse-agent-chat.functions";
 import {
   pendingDraftPayload,
   persistPendingLighthouseDraft,
@@ -106,6 +110,9 @@ function scriptedAdmin(
         select() {
           return builder;
         },
+        order() {
+          return builder;
+        },
         limit() {
           return builder;
         },
@@ -121,7 +128,10 @@ function scriptedAdmin(
   };
 }
 
-const MISSING = { data: null, error: { message: 'relation "public.lighthouse_firms" does not exist' } };
+const MISSING = {
+  data: null,
+  error: { code: "42P01", message: 'relation "public.lighthouse_firms" does not exist' },
+};
 
 function touchAdmin(existing: { id: string; status?: string; sent_at?: string | null } | null = null) {
   const writes: Array<{ op: string; row?: Record<string, unknown>; patch?: Record<string, unknown> }> = [];
@@ -210,6 +220,14 @@ const uiSrc = readFileSync(resolve("src/components/lighthouse-agent-chat.tsx"), 
 const draftSrc = readFileSync(resolve("src/lib/lighthouse.functions.ts"), "utf8");
 
 assert(fnSrc.includes("assertOpsConsoleAccess"), "chat server fn uses the ops admin gate");
+assert(fnSrc.includes("loadLighthouseWorkbenchBook"), "chat reads leads through the workbench loader");
+assert(fnSrc.includes("isUndefinedTableError"), "chat classifies a missing table itself");
+assert(/code === "42P01"/.test(fnSrc), "only SQLSTATE 42P01 is a missing table");
+assert(!fnSrc.includes("country, region, timezone"), "chat does not select geo columns off milon_ops_leads");
+assert(!fnSrc.includes("missingRelation"), "chat does not treat every relation error as a missing table");
+assert(isUndefinedTableError({ code: "42P01" }), "42P01 is an undefined table");
+assert(!isUndefinedTableError({ code: "42703", message: "column country does not exist" } as { code: string }), "a missing column is not a missing table");
+assert(!isUndefinedTableError({ code: "42501" }), "an RLS denial is not a missing table");
 assert(fnSrc.includes("requireLighthouseChatAdmin"), "chat server fn turns a denial into 403");
 assert(fnSrc.includes("requireSupabaseAuth"), "chat server fn requires a session");
 assert(!fnSrc.includes("sendLighthouseTouch"), "chat server fn does not call send");
@@ -302,6 +320,197 @@ assert(!/status:\s*"sent"/.test(persistSrc), "shared draft write never sets sent
   assert(/lighthouse_firms/.test(answer.reply), "reply names the missing firms table");
   assert(/book is empty/i.test(answer.reply), "missing phase-1 tables with no leads stay empty");
   assert(/No replies are waiting|book is empty/i.test(answer.reply), "no invented replies");
+
+  const again = await runLighthouseChatTurn({
+    message: "How's the pipeline looking?",
+    history: [{ role: "assistant", content: answer.reply }],
+    snapshot,
+    createdBy: "theo",
+  });
+  assert(!/not in this database/i.test(again.reply), "a later turn does not repeat the missing-table blurb");
+}
+
+{
+  const admin = scriptedAdmin({
+    milon_ops_leads: {
+      data: [
+        {
+          id: usLead.id,
+          name: "Sam Lee",
+          email: "sam@example.com",
+          company: "Acme Plumbing",
+          city: "New York",
+          stage: "contacted",
+          do_not_contact: false,
+          next_touch_on: "2026-10-01",
+          last_touch_at: "2026-09-20T12:00:00Z",
+          sequence_step: 1,
+        },
+        {
+          id: saLead.id,
+          name: "Aneesa Naidoo",
+          email: "aneesa@capebooks.example",
+          company: "Cape Books",
+          city: "Cape Town",
+          stage: "replied",
+          do_not_contact: false,
+          next_touch_on: "2026-10-02",
+          sequence_step: 0,
+        },
+      ],
+      error: null,
+    },
+    lighthouse_firms: {
+      data: [
+        { legacy_lead_id: usLead.id, name: "Acme Plumbing", country: "US" },
+        { legacy_lead_id: saLead.id, name: "Cape Books", country: "SA" },
+      ],
+      error: null,
+    },
+    lighthouse_contacts: {
+      data: [
+        {
+          legacy_lead_id: usLead.id,
+          last_touch_at: "2026-09-20T12:00:00Z",
+          last_delivery_status: "delivered",
+          last_engagement: "opened",
+          next_follow_up_at: "2026-10-06T08:00:00Z",
+          suppress: false,
+        },
+      ],
+      error: null,
+    },
+    lighthouse_touches: {
+      data: [
+        {
+          id: "touch-acme",
+          lead_id: usLead.id,
+          step_no: 1,
+          angle: "observation",
+          subject: "Books",
+          body: "Hello",
+          status: "sent",
+          sent_at: "2026-09-20T12:00:00Z",
+        },
+      ],
+      error: null,
+    },
+    lighthouse_inbound: {
+      data: [
+        {
+          id: "in-1",
+          lead_id: saLead.id,
+          from_email: "aneesa@capebooks.example",
+          subject: "Send the one-pager",
+          body: "Please send it.",
+          received_at: "2026-10-05T15:00:00Z",
+        },
+      ],
+      error: null,
+    },
+  });
+  const snapshot = await loadLighthouseChatSnapshot(admin as never, NOW);
+  assert(!snapshot.leadTableMissing, "a populated lead book is present");
+  assert(!snapshot.bookUnreadable, "a populated lead book was readable");
+  assert(snapshot.firms.length === 2, "both lead rows become firms");
+  assert(snapshot.stageCounts.contacted === 1, "contacted stage count comes from the rows");
+  assert(snapshot.stageCounts.replied === 1, "replied stage count comes from the rows");
+  assert(snapshot.dueQueue.length === 2, "both firms are follow-ups due");
+  assert(snapshot.replies.length === 1, "the inbound row is a recent reply");
+  assert(snapshot.review.length === 0, "a sent touch is not sitting in the review inbox");
+  const context = formatContextBlock(snapshot);
+  assert(/STAGES:/.test(context) && /contacted 1/.test(context), "context has stage counts");
+  assert(/80\/20/.test(context), "context has the 80/20 mix target");
+  assert(/FOLLOW_UPS_DUE: 2/.test(context), "context counts follow-ups due");
+  assert(/E16_CADENCE:/.test(context) && /next follow-up/.test(context), "context includes E16 cadence");
+  assert(/INBOUND_REPLIES: 1/.test(context), "context counts recent inbound replies");
+  assert(/REVIEW_INBOX: 0/.test(context), "context counts the review inbox");
+  assert(!/not in this database/i.test(context), "a real lead book is not described as missing");
+  const pipeline = await runLighthouseChatTurn({
+    message: "How's the pipeline looking?",
+    snapshot,
+    createdBy: "theo",
+  });
+  assert(!/not in this database/i.test(pipeline.reply), "pipeline does not say the table is missing");
+  assert(!/lead book is missing/i.test(pipeline.reply), "pipeline does not say the lead book is missing");
+  assert(/2 firms/.test(pipeline.reply), "pipeline count comes from the rows");
+  assert(/80\/20/.test(pipeline.reply), "pipeline states the 80/20 target");
+
+  const draftAdmin = touchAdmin(null);
+  const drafted = await runLighthouseChatTurn({
+    message: "Draft a follow-up for Acme Plumbing",
+    snapshot,
+    createdBy: "theo",
+    persistDraft: async (write) =>
+      persistPendingLighthouseDraft(draftAdmin, write, NOW, { refuseLocked: true }),
+  });
+  assert(drafted.draft?.status === "draft", "a named firm becomes a pending draft");
+  assert(drafted.draft?.from === "Milōn <team@trymilon.com>", "loader draft keeps From");
+  assert(drafted.draft?.replyTo === "hello@milonfinance.com", "loader draft keeps Reply-To");
+  assert(drafted.draft?.signer === "The MILŌN Team", "loader draft keeps the signer");
+  const row = draftAdmin.writes.find((write) => write.op === "insert")?.row;
+  assert(row?.status === "draft", "saved touch stays draft");
+  const body = String(row?.body ?? "");
+  assert(/QuickBooks Online/i.test(body) && /Xero/i.test(body), "loader draft leads with QBO and Xero");
+  assert(body.includes("https://youtu.be/J4vJki7HcIs"), "loader draft includes the accountant teaser");
+  assert(body.includes("https://youtu.be/k3aRM4toTvU"), "loader draft includes the owner teaser");
+  assert(body.includes("The MILŌN Team"), "loader draft signs as the team");
+  assert(!/50\s*%|discount/i.test(body), "US firm from the loader gets no SA discount");
+}
+
+{
+  for (const error of [
+    { code: "42703", message: 'column milon_ops_leads.country does not exist' },
+    { code: "42501", message: "permission denied for relation milon_ops_leads" },
+  ]) {
+    const admin = scriptedAdmin({
+      milon_ops_leads: { data: null, error },
+    });
+    const snapshot = await loadLighthouseChatSnapshot(admin as never, NOW);
+    assert(!snapshot.leadTableMissing, `${error.code} is not a missing table`);
+    assert(snapshot.bookUnreadable, `${error.code} leaves the book unread`);
+    assert(!snapshot.missingTables.includes("milon_ops_leads"), `${error.code} does not name milon_ops_leads as missing`);
+    const first = await runLighthouseChatTurn({
+      message: "How's the pipeline looking?",
+      snapshot,
+      createdBy: "theo",
+    });
+    assert(!/not in this database/i.test(first.reply), `${error.code} does not use the missing-table copy`);
+    assert(!/lead book is missing/i.test(first.reply), `${error.code} does not say the lead book is missing`);
+    assert(/couldn.t read the lead book/i.test(first.reply), `${error.code} gets a short neutral reply`);
+    const second = await runLighthouseChatTurn({
+      message: "Who should I follow up with today?",
+      history: [
+        { role: "user", content: "How's the pipeline looking?" },
+        { role: "assistant", content: first.reply },
+      ],
+      snapshot,
+      createdBy: "theo",
+    });
+    assert(!/not in this database/i.test(second.reply), `${error.code} follow-up still avoids the missing-table copy`);
+    assert(!/couldn.t read the lead book/i.test(second.reply), `${error.code} does not repeat the unread blurb`);
+    assert(/won.t guess/i.test(second.reply), `${error.code} second turn stays neutral`);
+  }
+}
+
+{
+  const admin = scriptedAdmin({ milon_ops_leads: MISSING });
+  const snapshot = await loadLighthouseChatSnapshot(admin as never, NOW);
+  const first = await runLighthouseChatTurn({
+    message: "Who should I follow up with today?",
+    snapshot,
+    createdBy: "theo",
+  });
+  assert(/not in this database/i.test(first.reply), "a real 42P01 may say the table is missing once");
+  const second = await runLighthouseChatTurn({
+    message: "Draft a follow-up for Acme Plumbing",
+    history: [{ role: "assistant", content: first.reply }],
+    snapshot,
+    createdBy: "theo",
+  });
+  assert(second.draft === null, "a missing book does not draft");
+  assert(!/not in this database/i.test(second.reply), "42P01 does not repeat the missing-table blurb");
+  assert(!/lead book is missing/i.test(second.reply), "42P01 does not repeat the lead-book blurb");
 }
 
 // --- Grounded book: queue, replies, mix, windows ---------------------------
