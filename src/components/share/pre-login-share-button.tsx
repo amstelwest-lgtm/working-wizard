@@ -1,6 +1,6 @@
 import { Share2 } from "lucide-react";
 import { ShareModal } from "./share-modal";
-import { InstallInstructions } from "./install-instructions";
+import { LazyInstallOverlay } from "./lazy-install";
 import { useShare } from "@/hooks/use-share";
 
 export function PreLoginShareButton() {
@@ -24,7 +24,7 @@ export function PreLoginShareButton() {
         appUrl={appUrl}
       />
 
-      <InstallInstructions
+      <LazyInstallOverlay
         open={installOpen}
         onClose={() => setInstallOpen(false)}
         onShareAgain={() => {

@@ -8,6 +8,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { DUAL_MARKET_FOOTER } from "@/lib/firm-signup-copy";
+import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
 import {
   applyVisitorMarketToDocument,
   readVisitorDraft,
@@ -146,6 +147,9 @@ export function MarketingShell({
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
           <a href="/ai">AI notice</a>
+          <a href={PREFERRED_SOURCE_HREF} target="_blank" rel="noopener">
+            {PREFERRED_SOURCE_LABEL}
+          </a>
           <span className="mk-print-hide mk-market-switch">
             <button type="button" onClick={() => applyPack("ZA")}>
               South Africa

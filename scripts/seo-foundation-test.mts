@@ -214,12 +214,13 @@ assert(!existsSync(resolve("public/icon-512.png")), "old root icon-512.png is de
 assert(!existsSync(resolve("public/manifest.webmanifest")), "old webmanifest is deleted");
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+const landingQuiz = readFileSync(resolve("src/lib/landing-quiz.ts"), "utf8");
 assert(!landing.includes("linkedin.com/company/milonfinance"), "landing does not hardcode a dead LinkedIn URL");
 assert(!landing.includes("x.com/milonfinance"), "landing does not hardcode a dead X URL");
 assert(landing.includes("SEO_PAGES.home"), "landing uses spec meta");
 assert(!landing.includes("South African accounting"), "landing meta is not SA-first");
 assert(
-  landing.includes('country: "US" as const'),
+  landingQuiz.includes('country: "US" as const'),
   "quiz defaults to US when the visitor has no market pick",
 );
 assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
@@ -340,13 +341,35 @@ for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwner
 }
 
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
+const preferredAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");
+const preferredHref = "https://www.google.com/preferences/source?q=milonfinance.com";
 assert(shell.includes("Works with QuickBooks Online and Xero."), "collateral footer names both ledgers");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
-assert(!shell.includes("google.com/preferences"), "collateral footer has no Google preferences URL");
-assert(!landing.includes("google.com/preferences"), "home footer has no Google preferences URL");
-assert(!landing.includes("GooglePreferredSourceButton"), "home footer has no Preferred Source button");
-assert(!shell.includes("GooglePreferredSourceButton"), "collateral footer has no Preferred Source button");
-assert(!existsSync(resolve("src/components/google-preferred-source-button.tsx")), "Preferred Source button is removed");
+assert(preferredAssets.includes(preferredHref), "preferred source is a plain Google preferences deeplink");
+assert(
+  preferredAssets.includes("Add milonfinance.com as a Preferred Source in Google"),
+  "preferred source keeps the original label",
+);
+assert(landing.includes("PREFERRED_SOURCE_HREF"), "home footer renders the preferred source deeplink");
+assert(landing.includes("PREFERRED_SOURCE_LABEL"), "home footer uses the preferred source label");
+assert(landing.includes('target="_blank"'), "home preferred source opens in a new tab");
+assert(landing.includes('rel="noopener"'), "home preferred source uses noopener");
+assert(shell.includes("PREFERRED_SOURCE_HREF"), "collateral footer renders the preferred source deeplink");
+assert(shell.includes("PREFERRED_SOURCE_LABEL"), "collateral footer uses the preferred source label");
+assert(shell.includes('target="_blank"'), "collateral preferred source opens in a new tab");
+assert(shell.includes('rel="noopener"'), "collateral preferred source uses noopener");
+assert(!landing.includes("GooglePreferredSourceButton"), "home has no Preferred Source button component");
+assert(!shell.includes("GooglePreferredSourceButton"), "collateral has no Preferred Source button component");
+assert(!landing.includes("publisher.js"), "home does not load publisher.js");
+assert(!shell.includes("publisher.js"), "collateral does not load publisher.js");
+assert(!preferredAssets.includes("publisher.js"), "preferred source helper does not load publisher.js");
+assert(!landing.includes("news.google.com/swg"), "home does not load Subscribe with Google");
+assert(!shell.includes("news.google.com/swg"), "collateral does not load Subscribe with Google");
+assert(!landing.includes("gstatic.com"), "home does not load a gstatic script");
+assert(!landing.includes("/swg/"), "home does not load the swg bundle");
+assert(!shell.includes("gstatic.com"), "collateral does not load gstatic scripts");
+assert(!shell.includes("/swg/"), "collateral does not load the swg bundle");
+assert(!existsSync(resolve("src/components/google-preferred-source-button.tsx")), "Preferred Source button component stays removed");
 assert(!shell.includes(">milon.co.za<"), "collateral footer does not lead with milon.co.za");
 assert(!shell.includes("linkedin.com"), "collateral footer does not hardcode LinkedIn");
 assert(!shell.includes("x.com/milonfinance"), "collateral footer does not hardcode a dead X URL");

@@ -417,8 +417,13 @@ assert(indexSrc.includes("Opening your workspace"), "signed-in landing does not 
 assert(indexSrc.includes("doAcceptOwnerInvite"), "existing accounts redeem via acceptOwnerInvite");
 assert(indexSrc.includes("needsExistingAccept"), "already-registered emails attach after sign-in, not only createUser");
 assert(indexSrc.includes("pendingInvite"), "landing Sign in keeps a pending owner invite");
+const landingAuth = [
+  indexSrc,
+  readFileSync(resolve("src/components/landing/sign-in-modal.tsx"), "utf8"),
+  readFileSync(resolve("src/components/landing/register-form.tsx"), "utf8"),
+].join("\n");
 assert(
-  indexSrc.includes("ownerInvite=") && indexSrc.includes("Continue with Google"),
+  landingAuth.includes("ownerInvite=") && landingAuth.includes("Continue with Google"),
   "invite form and Sign in Google preserve the owner invite",
 );
 assert(

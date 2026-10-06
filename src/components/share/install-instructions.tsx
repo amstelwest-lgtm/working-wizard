@@ -73,6 +73,7 @@ interface Props {
 export function InstallInstructions({ open, onClose, onShareAgain }: Props) {
   const [tab, setTab] = useState<"ios" | "android">("ios");
   const steps = tab === "ios" ? IOS_STEPS : ANDROID_STEPS;
+  if (!open) return null;
 
   return (
     <div

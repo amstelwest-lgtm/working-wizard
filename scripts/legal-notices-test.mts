@@ -107,9 +107,13 @@ assert(
 assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
 assert(landingCss.includes(".milon-market-dd-btn"), "landing CSS styles the US state picker");
 assert(landingCss.includes(".milon-market-dd-list"), "landing state picker uses a custom list, not a native select");
+const skyAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");
 assert(landing.includes('id="landing-sky"'), "landing has a scrolling starfield band");
 assert(landing.includes("landing-sky-photo"), "landing starfield has a photo layer");
-assert(landing.includes("url(/landing-sky.jpg)"), "landing photo layer points at the starfield asset");
+assert(landing.includes("LANDING_SKY_CSS"), "landing injects the sky image-set");
+assert(skyAssets.includes("/landing-sky-2560-f9818ff0.avif"), "desktop sky is an avif image-set");
+assert(skyAssets.includes("/landing-sky-1080-62f576e9.webp"), "mobile sky has a webp fallback");
+assert(!landing.includes("landing-sky.jpg"), "landing no longer points at the jpeg sky");
 assert(landingCss.includes("#landing-sky"), "landing CSS scopes the starfield band");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");

@@ -221,7 +221,10 @@ assert(bandDocs.includes("Wilmington"), "band docs: tax head office");
 assert(bandDocs.includes("Do not") && bandDocs.includes("managed_payments"), "band docs: do not force-disable MP");
 assert(bandDocs.includes("Accountant product gate"), "band docs: firm product requires an active Stripe subscription");
 
-const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+const landing = [
+  readFileSync(resolve("src/routes/index.tsx"), "utf8"),
+  readFileSync(resolve("src/components/landing/register-form.tsx"), "utf8"),
+].join("\n");
 assert(landing.includes("FirmBandPricingTable"), "landing accountant path shows the band table");
 assert(landing.includes("startFirmPlan"), "landing firm CTAs share one checkout starter");
 assert(landing.includes("goToFirmSignup"), "landing has a direct firm signup helper");

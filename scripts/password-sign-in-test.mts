@@ -102,7 +102,10 @@ assert(
 
 const root = resolve(".");
 const auth = readFileSync(resolve(root, "src/routes/auth.tsx"), "utf8");
-const owner = readFileSync(resolve(root, "src/routes/index.tsx"), "utf8");
+const owner = [
+  readFileSync(resolve(root, "src/routes/index.tsx"), "utf8"),
+  readFileSync(resolve(root, "src/components/landing/sign-in-modal.tsx"), "utf8"),
+].join("\n");
 const overlay = readFileSync(
   resolve(root, "src/components/owner-invite-signin-overlay.tsx"),
   "utf8",

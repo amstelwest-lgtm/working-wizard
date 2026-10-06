@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,23 +9,14 @@ import { adminSignUp, acceptOwnerInvite } from "@/lib/auth.functions";
 import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
-import {
-  DUAL_MARKET_BUILT,
-  DUAL_MARKET_TAGLINE,
-  practiceLocationHint,
-} from "@/lib/firm-signup-copy";
-import { FirmSignupTerms } from "@/components/firm-signup-terms";
-import { MarketPicker } from "@/components/market-picker";
+import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE } from "@/lib/firm-signup-copy";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
   applyVisitorMarketToDocument,
   draftToSelection,
-  isDraftComplete,
   marketToJson,
   readVisitorDraft,
-  t,
   visitorCopyPack,
   VISITOR_MARKET_BOOT_SCRIPT,
   withMarketRpcFallback,
@@ -56,7 +47,6 @@ import {
   stashPendingCheckout,
   stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
-import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import {
@@ -70,7 +60,6 @@ import { readRequestGeoCountry } from "@/lib/geo-country.functions";
 import { isSaPricingCountry } from "@/lib/geo-country";
 import {
   ACCOUNTANT_TEASER,
-  AI_USE_LEAD,
   BRIDGE_DRAFT_BODY,
   BRIDGE_DRAFT_LABEL,
   DASH_ARIA_LABEL,
@@ -117,8 +106,26 @@ import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
 import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overlay";
-import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
+import {
+  BEBAS_LATIN_HREF,
+  LANDING_FONT_CSS,
+  LANDING_SKY_CSS,
+  NOTO_LATIN_HREF,
+  PREFERRED_SOURCE_HREF,
+  PREFERRED_SOURCE_LABEL,
+} from "@/lib/landing-assets";
+
+const LandingSignInModal = lazy(() =>
+  import("@/components/landing/sign-in-modal").then((mod) => ({
+    default: mod.LandingSignInModal,
+  })),
+);
+const LandingRegisterForm = lazy(() =>
+  import("@/components/landing/register-form").then((mod) => ({
+    default: mod.LandingRegisterForm,
+  })),
+);
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -135,13 +142,24 @@ export const Route = createFileRoute("/")({
         ...(homeHead.links ?? []),
         {
           rel: "preload",
-          href: "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7du3mhPy0.woff2",
+          href: BEBAS_LATIN_HREF,
+          as: "font",
+          type: "font/woff2",
+          crossOrigin: "anonymous",
+        },
+        {
+          rel: "preload",
+          href: NOTO_LATIN_HREF,
           as: "font",
           type: "font/woff2",
           crossOrigin: "anonymous",
         },
       ],
-      styles: [{ children: landingCss }],
+      styles: [
+        { children: LANDING_FONT_CSS },
+        { children: landingCss },
+        { children: LANDING_SKY_CSS },
+      ],
       scripts: [
         {
           children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
@@ -288,6 +306,8 @@ function LandingPage() {
 
   /* ── sign-in modal state ── */
   const [signinOpen, setSigninOpen] = useState(false);
+  const [registerReady, setRegisterReady] = useState(false);
+  const [marqueePaused, setMarqueePaused] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [trialBarOn, setTrialBarOn] = useState(false);
   const [siEmail, setSiEmail] = useState("");
@@ -661,295 +681,67 @@ function LandingPage() {
       };
     }
 
-    /* ── quiz engine ── */
-    const QUIZ: Record<
-      string,
-      Array<{ q: string; hint: string; opts: string[][]; key: string; reward: string }>
-    > = {
-      owner: [
-        {
-          q: "What does your business do?",
-          hint: "This places your first planet.",
-          opts: [
-            ["🛍", "Retail / E-commerce"],
-            ["🔧", "Services"],
-            ["🏗", "Construction"],
-            ["🍽", "Hospitality"],
-            ["🏭", "Manufacturing"],
-            ["🚚", "Transport / Logistics"],
-          ],
-          key: "industry",
-          reward: "✦ Industry mapped — your sun just ignited.",
-        },
-        {
-          q: "How do customers pay you?",
-          hint: "This shapes your cash orbit.",
-          opts: [
-            ["⚡", "Upfront / on the spot"],
-            ["📅", "On account — 30+ days"],
-            ["🔁", "Monthly retainers"],
-            ["🧩", "A mix of everything"],
-          ],
-          key: "cashcycle",
-          reward: "✦ Cash cycle charted — second planet in orbit.",
-        },
-        {
-          q: "What keeps you up at night?",
-          hint: "Be honest. We've heard it all.",
-          opts: [
-            ["💧", "Cash runs dry before month-end"],
-            ["❓", "I don't know if I'm actually profitable"],
-            ["⛓", "Debt is eating my margins"],
-            ["🐢", "Customers pay me late"],
-          ],
-          key: "pain",
-          reward: "✦ Pain point locked. Now we can aim.",
-        },
-        {
-          q: "Roughly, your annual turnover?",
-          hint: "This sets your peer group.",
-          opts: [
-            ["🌑", "Under R1m"],
-            ["🌓", "R1m – R5m"],
-            ["🌔", "R5m – R20m"],
-            ["🌕", "R20m+"],
-          ],
-          key: "size",
-          reward: "✦ Constellation complete.",
-        },
-      ],
-      accountant: [
-        {
-          q: "What does your practice mostly do today?",
-          hint: "This places your first star.",
-          opts: [
-            ["📋", "Compliance & tax"],
-            ["📊", "Bookkeeping & payroll"],
-            ["💼", "Some advisory already"],
-            ["🚀", "Full CFO services"],
-          ],
-          key: "industry",
-          reward: "✦ Practice profile started.",
-        },
-        {
-          q: "How many SME clients do you serve?",
-          hint: "This sizes your constellation.",
-          opts: [
-            ["✦", "1 – 10"],
-            ["✦✦", "11 – 50"],
-            ["✦✦✦", "51 – 150"],
-            ["🌌", "150+"],
-          ],
-          key: "cashcycle",
-          reward: "✦ Client universe mapped.",
-        },
-        {
-          q: "What's your biggest frustration?",
-          hint: "The thing that steals your margin.",
-          opts: [
-            ["⏳", "Clients only call in a crisis"],
-            ["💸", "Can't charge for the advice I give"],
-            ["🗂", "Data arrives late and messy"],
-            ["📉", "Compliance fees keep shrinking"],
-          ],
-          key: "pain",
-          reward: "✦ Pain point locked. This is fixable.",
-        },
-        {
-          q: "What would change your practice most?",
-          hint: "Your north star.",
-          opts: [
-            ["💰", "Recurring advisory revenue"],
-            ["🛰", "Live oversight of every client"],
-            ["🏷", "Reports with my brand on them"],
-            ["🤝", "Deeper client relationships"],
-          ],
-          key: "size",
-          reward: "✦ Constellation complete.",
-        },
-      ],
-    };
-    const REFLECT: Record<string, Record<string, string[]>> = {
-      owner: {
-        "💧": [
-          "cash flow",
-          "Cash is leaving faster than it arrives. <b>MILŌN's 13-week cash forecast shows where it is heading — and the accountant-reviewed actions that can change the picture.</b>",
-        ],
-        "❓": [
-          "profit clarity",
-          "You have the numbers, but not a finance function to interpret them. <b>MILŌN turns those figures into one health score, 19 ratios with the workings shown, and a clear view of what is driving profitability.</b>",
-        ],
-        "⛓": [
-          "debt pressure",
-          "Financing is creating pressure you can feel but not always name. <b>MILŌN scores how the business is funded — debt, interest cover, gearing and solvency — so the next move is specific.</b>",
-        ],
-        "🐢": [
-          "slow payers",
-          "Late payers are using you as a free bank. <b>MILŌN shows cash conversion, DSO and DPO, then turns the analysis into recommended actions your accountant can review and assign.</b>",
-        ],
-      },
-      accountant: {
-        "⏳": [
-          "crisis-only clients",
-          "Clients come to you after the damage is done. <b>MILŌN gives your firm an AI-powered finance function to run across clients — analysis, recommendations, and tracked actions in one workspace.</b>",
-        ],
-        "💸": [
-          "unbilled advice",
-          "Your clients already depend on you for their financial information. <b>MILŌN gives your firm a structured way to turn that information into ongoing financial analysis, recommendations, and action.</b>",
-        ],
-        "🗂": [
-          "messy data",
-          "Advice is only as good as the figures in front of you. <b>Upload the P&amp;L, balance sheet, or bank statement you already have — MILŌN prepares the analysis, and you review and sign off.</b>",
-        ],
-        "📉": [
-          "fee compression",
-          "Compliance work is not the same as a finance function. <b>MILŌN lets you give more clients access to that capability without building every analysis from scratch — you stay in control of the advice.</b>",
-        ],
-      },
-    };
-    let qRole = "owner",
-      step = 0,
-      answers: Record<string, { em: string; label: string }> = {};
-
-    function startQuiz(r: string) {
-      const raw = (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket;
-      const draft =
-        raw?.country === "ZA"
-          ? raw
-          : raw?.country === "US"
-            ? raw
-            : { country: "US" as const, regionCode: null };
-      qRole = r;
-      step = 0;
-      answers = {};
-      document.body.classList.remove("persona-owner", "persona-accountant");
-      document.body.classList.add("persona-" + r);
-      document.body.classList.toggle("market-us", draft.country === "US");
-      const ownerQuiz = QUIZ.owner as Array<{ key: string; q: string; opts: string[][] }>;
-      const sizeQ = ownerQuiz.find((s) => s.key === "size");
-      if (sizeQ) {
-        if (draft.country === "US") {
-          sizeQ.q = "Roughly, your annual revenue?";
-          sizeQ.opts = [
-            ["🌑", "Under $1m"],
-            ["🌓", "$1m – $5m"],
-            ["🌔", "$5m – $20m"],
-            ["🌕", "$20m+"],
-          ];
-        } else {
-          sizeQ.q = "Roughly, your annual turnover?";
-          sizeQ.opts = [
-            ["🌑", "Under R1m"],
-            ["🌓", "R1m – R5m"],
-            ["🌔", "R5m – R20m"],
-            ["🌕", "R20m+"],
-          ];
-        }
-      }
-      const quiz = document.getElementById("quiz");
-      if (quiz) {
-        quiz.classList.add("active");
-        quiz.scrollIntoView({ behavior: "smooth" });
-      }
-      renderStep();
-    }
-    function renderStep() {
-      const steps = QUIZ[qRole],
-        holder = document.getElementById("qsteps");
-      const qbar = document.getElementById("qbar");
-      if (qbar) qbar.style.width = (step / steps.length) * 100 + "%";
-      if (step >= steps.length) {
-        renderResult();
-        return;
-      }
-      const s = steps[step];
-      if (holder)
-        holder.innerHTML = `<div class="q-step on">
-        <h3>${s.q}</h3>
-        <p class="hint">${s.hint} <span style="color:var(--gold)">Question ${step + 1} of ${steps.length}</span></p>
-        <div class="opt-grid">${s.opts.map((o) => `<button class="opt" onclick="window.__mq_pick('${s.key}','${o[0]}','${o[1].replace(/'/g, "\\'")}',this)"><span class="em">${o[0]}</span>${o[1]}</button>`).join("")}</div>
-      </div>`;
-      const qreward = document.getElementById("qreward");
-      if (qreward) qreward.textContent = "";
-    }
-    function pick(key: string, em: string, label: string, el: Element) {
-      document.querySelectorAll(".opt").forEach((b) => b.classList.remove("picked"));
-      el.classList.add("picked");
-      answers[key] = { em, label };
-      const qreward = document.getElementById("qreward");
-      if (qreward) qreward.textContent = QUIZ[qRole][step].reward;
-      setTimeout(() => {
-        step++;
-        renderStep();
-      }, 850);
-    }
-    function renderResult() {
-      const qbar = document.getElementById("qbar");
-      if (qbar) qbar.style.width = "100%";
-      const a = answers;
-      const r = REFLECT[qRole][a.pain?.em] || Object.values(REFLECT[qRole])[0];
-      const lines =
-        qRole === "owner"
-          ? `<p>Industry: <b>${a.industry?.label}</b></p><p>Cash cycle: <b>${a.cashcycle?.label}</b></p><p>Size band: <b>${a.size?.label}</b></p>`
-          : `<p>Practice focus: <b>${a.industry?.label}</b></p><p>Client base: <b>${a.cashcycle?.label}</b></p><p>North star: <b>${a.size?.label}</b></p>`;
-      const cta =
-        qRole === "accountant"
-          ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
-          <button class="btn btn-gold" type="button" onclick="window.__mq_firmSignup()">Create firm account ✦</button>
-          <a class="btn btn-ghost" href="#pricing">See firm pricing</a>
-          <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
-        </div>`
-          : `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
-          <a class="btn btn-gold" href="#register">Unlock my full diagnostic ✦</a>
-          <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
-        </div>`;
-      const hint =
-        qRole === "accountant"
-          ? "Firm bands and a firm account are on this page — no extra quiz required."
-          : "Your health score, cash forecast, and recommended next actions are one step away.";
-      const holder = document.getElementById("qsteps");
-      if (holder)
-        holder.innerHTML = `<div class="q-step on">
-        <p class="eyebrow">Your business, sketched</p>
-        <h3>Here's what we see.</h3>
-        <div class="mini-biz">
-          <div class="mini-orrery">
-            <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
-            <div class="core"></div>
-            <div class="dot" style="top:6%;left:48%"></div>
-            <div class="dot" style="top:42%;left:84%"></div>
-            <div class="dot" style="top:74%;left:14%"></div>
-          </div>
-          <div class="profile-lines">${lines}<p>Biggest worry: <b>${a.pain?.label}</b></p></div>
-        </div>
-        <div class="reflect"><span class="serif gold-text">"${a.pain?.label}."</span><br>${r[1]}</div>
-        <p class="hint">${hint}</p>
-        ${cta}
-      </div>`;
-      const qreward = document.getElementById("qreward");
-      if (qreward) qreward.textContent = "";
-    }
-    function pickPlan(p: string) {
-      const sel = document.getElementById("regPlan") as HTMLSelectElement | null;
-      if (sel)
-        [...sel.options].forEach((o) => {
-          if (o.value.startsWith(p)) sel.value = o.value;
-        });
-    }
-
-    (window as any).__mq_start = startQuiz;
-    (window as any).__mq_pick = pick;
-    (window as any).__mq_plan = pickPlan;
-
     return () => {
       removeEventListener("scroll", onScroll);
       io.disconnect();
       cio.disconnect();
       clearTimeout(revealFailSafe);
-      delete (window as any).__mq_start;
-      delete (window as any).__mq_pick;
-      delete (window as any).__mq_plan;
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const boot = (role?: string) => {
+      void import("@/lib/landing-quiz").then(({ mountLandingQuiz }) => {
+        if (cancelled) return;
+        mountLandingQuiz(role);
+      });
+    };
+    const stub = (role?: string) => boot(role);
+    const w = window as unknown as { __mq_start?: (role?: string) => void };
+    w.__mq_start = stub;
+    const quiz = document.getElementById("quiz");
+    let io: IntersectionObserver | undefined;
+    if (quiz && "IntersectionObserver" in window) {
+      io = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            boot();
+            io?.disconnect();
+          }
+        },
+        { rootMargin: "500px" },
+      );
+      io.observe(quiz);
+    } else {
+      boot();
+    }
+    return () => {
+      cancelled = true;
+      io?.disconnect();
+      if (w.__mq_start === stub) delete w.__mq_start;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (window.location.hash === "#register") setRegisterReady(true);
+    const el = document.getElementById("register");
+    if (!el) return;
+    if (!("IntersectionObserver" in window)) {
+      setRegisterReady(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setRegisterReady(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   useEffect(() => {
@@ -1519,6 +1311,7 @@ function LandingPage() {
     setRegPlan(registerLabelForPlan(plan));
     setRegRole("Accountant / Advisory firm");
     setPortalIntent("accountant");
+    setRegisterReady(true);
     setMobileNavOpen(false);
     if (user) {
       void navigate({
@@ -1535,6 +1328,7 @@ function LandingPage() {
     clearPendingCheckout();
     setRegRole("Business owner");
     setRegPlan("Spark — Free early access");
+    setRegisterReady(true);
     setMobileNavOpen(false);
     document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1619,7 +1413,7 @@ function LandingPage() {
               fontWeight: 700,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
-              color: "#d4af37",
+              color: "var(--gold-ink)",
               margin: "0 0 8px",
             }}
           >
@@ -1629,10 +1423,10 @@ function LandingPage() {
             Confirm your email
           </h2>
           <p style={{ fontSize: 14, color: "#9b958a", lineHeight: 1.6 }}>
-            We sent a link to <span style={{ color: "#d4af37" }}>{regEmail}</span>. Open it and your
+            We sent a link to <span style={{ color: "var(--gold-ink)" }}>{regEmail}</span>. Open it and your
             board opens straight away — a 2-minute business profile, then your figures.
           </p>
-          <p style={{ fontSize: 12, color: "#6f6a60", lineHeight: 1.6, marginTop: 10 }}>
+          <p style={{ fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.6, marginTop: 10 }}>
             Opened the link on your phone instead? Come back here and sign in.
           </p>
           <button
@@ -1662,7 +1456,7 @@ function LandingPage() {
               disabled={resendBusy || resendCooldown > 0}
               onClick={handleResendConfirmation}
               style={{
-                color: resendCooldown > 0 ? "#6f6a60" : "#d4af37",
+                color: resendCooldown > 0 ? "var(--ink-dim)" : "var(--gold-ink)",
                 background: "none",
                 border: "none",
                 cursor: resendCooldown > 0 ? "default" : "pointer",
@@ -1797,6 +1591,9 @@ function LandingPage() {
       className={trialBarOn ? "has-trial-bar" : undefined}
       style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}
     >
+      <a className="skip-link" href="#main">
+        Skip to main content
+      </a>
       {/* ── secret operator unlock (not linked in nav) ── */}
       {opsGateOpen && (
         <div
@@ -1839,7 +1636,7 @@ function LandingPage() {
               </button>
             </div>
             <p style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}>
-              Platform console. Username is <b style={{ color: "var(--gold)" }}>lighthouse</b>.
+              Platform console. Username is <b style={{ color: "var(--gold-ink)" }}>lighthouse</b>.
             </p>
             <form onSubmit={handleOpsUnlock}>
               <label
@@ -1911,337 +1708,60 @@ function LandingPage() {
         </div>
       )}
 
-      {/* ── sign-in modal ── */}
       {signinOpen && (
-        <div
-          className="milon-signin-modal"
-          onClick={() => {
-            setSigninOpen(false);
-            setFpMode(false);
-            setFpDone(false);
-            setSiError("");
-          }}
-        >
-          <div className="milon-signin-box" onClick={(e) => e.stopPropagation()}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 24,
-              }}
-            >
-              <h2>
-                {fpMode
-                  ? fpDone
-                    ? "Check your email"
-                    : "Reset password"
-                  : peekPendingCheckout()
-                    ? "Sign in to finish firm billing"
-                    : "Sign in to MILŌN"}
-              </h2>
-              <button
-                onClick={() => {
-                  setSigninOpen(false);
-                  setFpMode(false);
-                  setFpDone(false);
-                  setSiError("");
-                }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  border: "1px solid var(--line)",
-                  background: "transparent",
-                  color: "var(--ink-dim)",
-                  cursor: "pointer",
-                  fontSize: 20,
-                  display: "grid",
-                  placeItems: "center",
-                }}
-              >
-                ×
-              </button>
-            </div>
-            {!fpMode && peekPendingCheckout() ? (
-              <p
-                style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}
-              >
-                Sign in with this email to resume Stripe Checkout for your firm. Abandoned Checkout
-                does not unlock the accountant workspace.
-              </p>
-            ) : null}
-
-            {/* ── forgot-password: done state ── */}
-            {fpMode && fpDone ? (
-              <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "50%",
-                    background: "rgba(212,175,55,.1)",
-                    display: "grid",
-                    placeItems: "center",
-                    margin: "0 auto 18px",
-                  }}
-                >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#d4af37"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                    <polyline points="22,6 12,13 2,6" />
-                  </svg>
-                </div>
-                <p style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.6 }}>
-                  We sent a reset link to <span style={{ color: "var(--gold)" }}>{fpEmail}</span>.
-                  Check your inbox and follow the link to set a new password.
-                </p>
-                <button
-                  onClick={() => {
-                    setFpMode(false);
-                    setFpDone(false);
-                    setSiError("");
-                  }}
-                  style={{
-                    marginTop: 22,
-                    fontSize: 12,
-                    color: "var(--ink-dim)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    textDecoration: "underline",
-                  }}
-                >
-                  Back to sign in
-                </button>
-              </div>
-            ) : /* ── forgot-password: email entry ── */
-            fpMode ? (
-              <form onSubmit={handleForgotPassword}>
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "var(--ink-dim)",
-                    marginBottom: 18,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Enter your email address and we'll send you a link to reset your password.
-                </p>
-                <div className="field">
-                  <label>Email</label>
-                  <input
-                    type="email"
-                    required
-                    autoFocus
-                    placeholder={t("emailExample", copyMarket)}
-                    value={fpEmail}
-                    onChange={(e) => setFpEmail(e.target.value)}
-                  />
-                </div>
-                {siError && (
-                  <p style={{ fontSize: 13, color: "var(--risk)", margin: "8px 0" }}>{siError}</p>
-                )}
-                <button
-                  type="submit"
-                  className="btn btn-gold"
-                  disabled={fpBusy}
-                  style={{ width: "100%", justifyContent: "center", marginTop: 18 }}
-                >
-                  {fpBusy ? "Sending…" : "Send reset link ✦"}
-                </button>
-                <p
-                  style={{
-                    marginTop: 14,
-                    fontSize: 12,
-                    color: "var(--ink-dim)",
-                    textAlign: "center",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFpMode(false);
-                      setSiError("");
-                    }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--gold)",
-                      cursor: "pointer",
-                      fontSize: 12,
-                      padding: 0,
-                    }}
-                  >
-                    Back to sign in
-                  </button>
-                </p>
-              </form>
-            ) : (
-              /* ── normal sign-in ── */
-              <>
-                <GoogleSignInButton
-                  intent="owner"
-                  tone="landing"
-                  disabled={siBusy}
-                  ownerInvite={
-                    inviteClientId
-                      ? { token: inviteClientId, clientCode: regClientCode.trim() || null }
-                      : undefined
-                  }
-                  next={
-                    inviteClientId
-                      ? `/?invite=${encodeURIComponent(inviteClientId)}&mode=signup`
-                      : peekPendingCheckout()
-                        ? billingStartPath(peekPendingCheckout()!)
-                        : undefined
-                  }
-                  onError={(msg) => setSiError(msg)}
-                />
-                <AuthDivider />
-                <form onSubmit={handleSignIn} noValidate>
-                  <div className="field">
-                    <label>Email</label>
-                    <input
-                      type="text"
-                      inputMode="email"
-                      autoComplete="username"
-                      required
-                      placeholder={t("emailExample", copyMarket)}
-                      value={siEmail}
-                      onChange={(e) => {
-                        setSiEmail(e.target.value);
-                        clearOwnerSignInError();
-                      }}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Password</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••"
-                      value={siPassword}
-                      onChange={(e) => {
-                        setSiPassword(e.target.value);
-                        clearOwnerSignInError();
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={openForgotPassword}
-                      style={{
-                        display: "block",
-                        marginTop: 6,
-                        fontSize: 12,
-                        color: "var(--ink-dim)",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        textAlign: "right",
-                        width: "100%",
-                        textDecoration: "underline",
-                      }}
-                    >
-                      Forgot password?
-                    </button>
-                  </div>
-                  <button
-                    type="submit"
-                    className="btn btn-gold"
-                    disabled={siBusy}
-                    aria-busy={siBusy}
-                    style={{ width: "100%", justifyContent: "center", marginTop: 18 }}
-                  >
-                    {siBusy ? "Signing in…" : "Sign in ✦"}
-                  </button>
-                  <PasswordSignInAlert
-                    message={siError}
-                    onForgotPassword={openForgotPassword}
-                    tone="landing"
-                  />
-                  {siUnconfirmed && (
-                    <button
-                      type="button"
-                      disabled={resendBusy || resendCooldown > 0}
-                      onClick={() => void resendConfirmationTo(siEmail)}
-                      style={{
-                        display: "block",
-                        fontSize: 12,
-                        color: resendCooldown > 0 ? "var(--ink-dim)" : "var(--gold)",
-                        background: "none",
-                        border: "none",
-                        cursor: resendCooldown > 0 ? "default" : "pointer",
-                        padding: 0,
-                        textDecoration: "underline",
-                        fontFamily: "inherit",
-                      }}
-                    >
-                      {resendBusy
-                        ? "Sending…"
-                        : resendCooldown > 0
-                          ? `Email sent · resend in ${resendCooldown}s`
-                          : "Resend confirmation email"}
-                    </button>
-                  )}
-                </form>
-                <p
-                  style={{
-                    marginTop: 18,
-                    fontSize: 12,
-                    color: "var(--ink-dim)",
-                    textAlign: "center",
-                  }}
-                >
-                  Accountant?{" "}
-                  <a href="/auth" style={{ color: "var(--gold)", textDecoration: "none" }}>
-                    Sign in to the accountant portal →
-                  </a>
-                </p>
-                <p
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: "var(--ink-dim)",
-                    textAlign: "center",
-                  }}
-                >
-                  New here?{" "}
-                  <button
-                    onClick={() => {
-                      setSigninOpen(false);
-                      document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
-                    }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--gold)",
-                      cursor: "pointer",
-                      fontSize: 12,
-                      padding: 0,
-                    }}
-                  >
-                    Get your free health score
-                  </button>
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+        <Suspense fallback={null}>
+          <LandingSignInModal
+            fpMode={fpMode}
+            fpDone={fpDone}
+            fpEmail={fpEmail}
+            fpBusy={fpBusy}
+            siEmail={siEmail}
+            siPassword={siPassword}
+            siBusy={siBusy}
+            siError={siError}
+            siUnconfirmed={siUnconfirmed}
+            resendBusy={resendBusy}
+            resendCooldown={resendCooldown}
+            inviteClientId={inviteClientId}
+            regClientCode={regClientCode}
+            copyMarket={copyMarket}
+            onClose={() => {
+              setSigninOpen(false);
+              setFpMode(false);
+              setFpDone(false);
+              setSiError("");
+            }}
+            onSiEmailChange={(value) => {
+              setSiEmail(value);
+              setSiError("");
+            }}
+            onSiPasswordChange={(value) => {
+              setSiPassword(value);
+              setSiError("");
+            }}
+            onSubmit={handleSignIn}
+            onGoogleError={(message) => setSiError(message)}
+            onForgotPassword={openForgotPassword}
+            onFpEmailChange={setFpEmail}
+            onForgotSubmit={handleForgotPassword}
+            onBackToSignIn={() => {
+              setFpMode(false);
+              setFpDone(false);
+              setSiError("");
+            }}
+            onResend={() => void resendConfirmationTo(siEmail)}
+            onCreateAccount={() => {
+              setSigninOpen(false);
+              setRegisterReady(true);
+              document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Night sky: scrolls through the opening sections, then fades to --bg. */}
       <div id="landing-sky" aria-hidden="true">
-        <div className="landing-sky-photo" style={{ backgroundImage: "url(/landing-sky.jpg)" }} />
+        <div className="landing-sky-photo" />
         <div className="landing-sky-veil" />
       </div>
       {/* ── atmosphere ── */}
@@ -2326,6 +1846,7 @@ function LandingPage() {
         </div>
       </nav>
 
+      <main id="main">
       {/* ══════════════════════════ HERO ══════════════════════════ */}
       <section id="hero">
         <div className="wrap">
@@ -2806,8 +2327,18 @@ function LandingPage() {
 
       {/* ══════════════════════════ MARQUEE ══════════════════════════ */}
       <div className="marquee-band">
-        <p className="cap">Calculated on every upload</p>
-        <div className="marquee" id="marquee">
+        <div className="marquee-head">
+          <p className="cap">Calculated on every upload</p>
+          <button
+            type="button"
+            className="marquee-toggle"
+            aria-pressed={marqueePaused}
+            onClick={() => setMarqueePaused((paused) => !paused)}
+          >
+            {marqueePaused ? "Play" : "Pause"}
+          </button>
+        </div>
+        <div className={marqueePaused ? "marquee is-paused" : "marquee"} id="marquee">
           <span>Net Margin</span>
           <span>Operating Margin</span>
           <span>Gross Margin</span>
@@ -3167,470 +2698,49 @@ function LandingPage() {
 
           {/* Client-only: prevents browser password-manager extensions (LastPass etc.)
               from injecting DOM nodes during SSR hydration and crashing React */}
-          {mounted && (
-            <div className="reg-shell">
-              <form onSubmit={handleRegister}>
-                {regError && (
-                  <p id="register-error" role="alert" className="reg-error">
-                    {regError}
-                  </p>
-                )}
-                {/* ── Invite flow: simplified form, no role/code/plan ── */}
-                {inviteClientId ? (
-                  <>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        color: "var(--gold)",
-                        marginBottom: 16,
-                        lineHeight: 1.5,
-                        fontWeight: 600,
-                      }}
-                    >
-                      You've been invited to your business workspace on MILŌN. Create your account
-                      or sign in to take ownership and see your numbers.
-                      {inviteBusiness ? ` This link is for ${inviteBusiness}.` : ""}
-                      {inviteNeedsCode
-                        ? " You'll need the client code from the email (MLN-XXXXXX)."
-                        : ""}
-                    </p>
-                    {user && (
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: "var(--ink-dim)",
-                          marginBottom: 16,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        You&apos;re signed in as {user.email}. Accepting this invite will open the
-                        owner workspace
-                        {user.email?.toLowerCase() !== regEmail.trim().toLowerCase() && regEmail
-                          ? ` as ${regEmail}`
-                          : ""}
-                        .
-                      </p>
-                    )}
-                    {inviteIsLegacyUuid && (
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: "var(--ink-dim)",
-                          marginBottom: 16,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Note: this is an older invite link format. It still works — for the most
-                        secure link, ask your accountant to copy a fresh invite from the dashboard.
-                      </p>
-                    )}
-
-                    {inviteNeedsCode && (
-                      <>
-                        <label htmlFor="regClientCodeField">Client code</label>
-                        <input
-                          id="regClientCodeField"
-                          type="text"
-                          required
-                          autoCapitalize="characters"
-                          placeholder="MLN-XXXXXX"
-                          value={regClientCode}
-                          onChange={(e) => setRegClientCode(e.target.value.toUpperCase())}
-                        />
-                        <p style={{ fontSize: 12, color: "var(--ink-dim)", marginTop: 6 }}>
-                          It&apos;s in the invite email, next to the claim link.
-                        </p>
-                      </>
-                    )}
-
-                    <div style={{ margin: "18px 0 8px" }}>
-                      <GoogleSignInButton
-                        intent="owner"
-                        tone="landing"
-                        label="Continue with Google"
-                        disabled={regBusy || (inviteNeedsCode && !regClientCode.trim())}
-                        ownerInvite={{
-                          token: inviteClientId,
-                          clientCode: regClientCode.trim() || null,
-                        }}
-                        next={`/?invite=${encodeURIComponent(inviteClientId)}&mode=signup`}
-                        onError={(msg) => showRegisterError(msg)}
-                      />
-                    </div>
-                    <AuthDivider />
-
-                    <label htmlFor="regNameField">Full name</label>
-                    <input
-                      id="regNameField"
-                      type="text"
-                      required={!user}
-                      placeholder={t("nameExample", copyMarket)}
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                    />
-
-                    <label htmlFor="regEmailField">Work email</label>
-                    <input
-                      id="regEmailField"
-                      type="email"
-                      required
-                      placeholder={t("emailExample", copyMarket)}
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                    />
-
-                    <label htmlFor="regPasswordField">Password</label>
-                    <input
-                      id="regPasswordField"
-                      type="password"
-                      required={!user}
-                      placeholder="At least 6 characters"
-                      minLength={user ? undefined : 6}
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                    />
-
-                    <button
-                      type="submit"
-                      className="btn btn-gold"
-                      disabled={regBusy}
-                      style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
-                    >
-                      {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
-                    </button>
-                    <p
-                      style={{
-                        textAlign: "center",
-                        fontSize: 11,
-                        color: "var(--ink-dim)",
-                        marginTop: 14,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      By joining you agree to the{" "}
-                      <a href="/terms" style={{ color: "inherit" }}>
-                        Terms
-                      </a>
-                      . {AI_USE_LEAD}{" "}
-                      <a href="/ai" style={{ color: "inherit" }}>
-                        AI notice
-                      </a>
-                      .{" "}
-                      <a href="/privacy" style={{ color: "inherit" }}>
-                        Privacy
-                      </a>
-                    </p>
-                  </>
-                ) : (
-                  /* ── Standard signup form ── */
-                  <>
-                    <label htmlFor="regRoleField">
-                      {regRole.startsWith("Accountant") ? "I am an" : "I am a"}
-                    </label>
-                    <select
-                      id="regRoleField"
-                      value={regRole}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setRegRole(value);
-                        if (value === "Accountant / Advisory firm") {
-                          goToFirmSignup({ plan: "solo", scrollTo: "register" });
-                        } else {
-                          clearPendingCheckout();
-                          setRegPlan("Spark — Free early access");
-                        }
-                      }}
-                    >
-                      <option>Accountant / Advisory firm</option>
-                      <option>Business owner</option>
-                    </select>
-
-                    {regRole === "Accountant / Advisory firm" ? (
-                      <>
-                        <FirmSignupTerms
-                          variant="landing"
-                          showRole={false}
-                          plan={paidPlanFromRegisterLabel(regPlan) ?? "solo"}
-                          interval={firmInterval}
-                          onPlanChange={(nextPlan) => {
-                            setRegPlan(registerLabelForPlan(nextPlan));
-                            stashPendingCheckout({
-                              plan: nextPlan,
-                              interval: firmInterval,
-                              market: visitorCopyPack(draftMarket),
-                            });
-                          }}
-                        />
-                        <div style={{ margin: "8px 0 18px" }}>
-                          <MarketPicker
-                            value={draftMarket}
-                            onChange={setDraftMarket}
-                            variant="landing"
-                            audience="practice"
-                          />
-                          {practiceLocationHint(draftMarket) ? (
-                            <p className="firm-signup-hint" role="status">
-                              {practiceLocationHint(draftMarket)}
-                            </p>
-                          ) : null}
-                        </div>
-                        <GoogleSignInButton
-                          intent="accountant"
-                          tone="landing"
-                          label="Continue with Google"
-                          disabled={regBusy || !isDraftComplete(draftMarket)}
-                          next={billingStartPath({
-                            plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
-                            interval: firmInterval,
-                            market: visitorCopyPack(draftMarket),
-                          })}
-                          onBeforeStart={() => {
-                            const market = draftToSelection(draftMarket);
-                            if (!market) {
-                              showRegisterError(
-                                "Pick South Africa or the United States (and a state) first.",
-                              );
-                              return false;
-                            }
-                            writeVisitorDraft(draftMarket);
-                            setPortalIntent("accountant");
-                            stashAccountantGoogleSignup({
-                              firmName: regFirmName.trim(),
-                              fullName: regName.trim() || undefined,
-                              marketCountry: market.country,
-                              marketRegion: market.regionCode,
-                            });
-                            stashPendingCheckout({
-                              plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
-                              interval: firmInterval,
-                              market: market.country === "ZA" ? "za" : "us",
-                            });
-                            return true;
-                          }}
-                          onError={(msg) => showRegisterError(msg)}
-                        />
-                        <AuthDivider />
-                        <label htmlFor="regNameField">Your name</label>
-                        <input
-                          id="regNameField"
-                          type="text"
-                          required
-                          placeholder={t("nameExample", copyMarket)}
-                          value={regName}
-                          onChange={(e) => setRegName(e.target.value)}
-                        />
-
-                        <label htmlFor="regFirmNameField">Firm name</label>
-                        <input
-                          id="regFirmNameField"
-                          type="text"
-                          required
-                          placeholder="Acme & Partners"
-                          value={regFirmName}
-                          onChange={(e) => setRegFirmName(e.target.value)}
-                        />
-
-                        <label htmlFor="regEmailField">Work email</label>
-                        <input
-                          id="regEmailField"
-                          type="email"
-                          required
-                          placeholder={t("emailExample", copyMarket)}
-                          value={regEmail}
-                          onChange={(e) => setRegEmail(e.target.value)}
-                        />
-
-                        <label htmlFor="regPasswordField">Password</label>
-                        <input
-                          id="regPasswordField"
-                          type="password"
-                          required
-                          placeholder="At least 6 characters"
-                          minLength={6}
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          aria-describedby="register-password-hint"
-                        />
-                        <p id="register-password-hint" className="firm-signup-hint">
-                          At least 6 characters.
-                        </p>
-
-                        {practiceLocationHint(draftMarket) ? (
-                          <p className="firm-signup-hint">
-                            Create firm account stays off until the practice location is filled in.
-                          </p>
-                        ) : null}
-
-                        <button
-                          type="submit"
-                          id="create-firm"
-                          className="btn btn-gold"
-                          disabled={regBusy || !isDraftComplete(draftMarket)}
-                          style={{ width: "100%", justifyContent: "center", marginTop: 20 }}
-                        >
-                          {regBusy ? "Creating your firm account…" : "Create firm account ✦"}
-                        </button>
-                        <p
-                          style={{
-                            textAlign: "center",
-                            fontSize: 11,
-                            color: "var(--ink-dim)",
-                            marginTop: 14,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Accounting firms subscribe on USD client-count bands through Stripe
-                          Checkout. AI prepares the analysis; you review and sign off. By creating
-                          an account you agree to the{" "}
-                          <a href="/terms" style={{ color: "inherit" }}>
-                            Terms
-                          </a>
-                          .{" "}
-                          <a href="/privacy" style={{ color: "inherit" }}>
-                            Privacy
-                          </a>
-                          {" · "}
-                          <a href="/ai" style={{ color: "inherit" }}>
-                            AI notice
-                          </a>
-                        </p>
-                        <p style={{ textAlign: "center", marginTop: 16 }}>
-                          <button type="button" className="btn btn-ghost" onClick={goToOwnerSpark}>
-                            Business owners: start free
-                          </button>
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ margin: "8px 0 18px" }}>
-                          <MarketPicker
-                            value={draftMarket}
-                            onChange={setDraftMarket}
-                            variant="landing"
-                          />
-                        </div>
-                        <GoogleSignInButton
-                          intent="owner"
-                          tone="landing"
-                          label="Continue with Google"
-                          disabled={regBusy || !isDraftComplete(draftMarket)}
-                          next={
-                            peekPendingCheckout()
-                              ? billingStartPath(peekPendingCheckout()!)
-                              : undefined
-                          }
-                          onError={(msg) => showRegisterError(msg)}
-                        />
-                        <AuthDivider />
-                        <label htmlFor="regNameField">Full name</label>
-                        <input
-                          id="regNameField"
-                          type="text"
-                          required
-                          placeholder={t("nameExample", copyMarket)}
-                          value={regName}
-                          onChange={(e) => setRegName(e.target.value)}
-                        />
-
-                        <label htmlFor="regEmailField">Work email</label>
-                        <input
-                          id="regEmailField"
-                          type="email"
-                          required
-                          placeholder={t("emailExample", copyMarket)}
-                          value={regEmail}
-                          onChange={(e) => setRegEmail(e.target.value)}
-                        />
-
-                        <label htmlFor="regPasswordField">Password</label>
-                        <input
-                          id="regPasswordField"
-                          type="password"
-                          required
-                          placeholder="At least 6 characters"
-                          minLength={6}
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                        />
-
-                        <label htmlFor="regBusinessField">Business name</label>
-                        <input
-                          id="regBusinessField"
-                          type="text"
-                          placeholder={t("entityExample", copyMarket)}
-                          value={regBusiness}
-                          onChange={(e) => setRegBusiness(e.target.value)}
-                        />
-
-                        <label htmlFor="regPlan">Plan</label>
-                        <select
-                          id="regPlan"
-                          value={regPlan}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setRegPlan(value);
-                            const paid = paidPlanFromRegisterLabel(value);
-                            if (paid) {
-                              stashPendingCheckout({
-                                plan: paid,
-                                interval: "month",
-                                market: visitorCopyPack(draftMarket),
-                              });
-                            } else {
-                              clearPendingCheckout();
-                            }
-                          }}
-                        >
-                          <option value="Spark — Free early access">
-                            Spark — Free early access
-                          </option>
-                        </select>
-
-                        <button
-                          type="submit"
-                          className="btn btn-gold"
-                          disabled={regBusy}
-                          style={{ width: "100%", justifyContent: "center", marginTop: 28 }}
-                        >
-                          {regBusy
-                            ? "Creating your account…"
-                            : paidPlanFromRegisterLabel(regPlan)
-                              ? `Create account and start ${regPlan}`
-                              : "Get my free health score ✦"}
-                        </button>
-                        <p
-                          style={{
-                            textAlign: "center",
-                            fontSize: 11,
-                            color: "var(--ink-dim)",
-                            marginTop: 14,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Spark is free and does not ask for a card. Accounting firms subscribe on
-                          USD client-count bands through Stripe Checkout after creating a firm
-                          account. By creating an account you agree to the{" "}
-                          <a href="/terms" style={{ color: "inherit" }}>
-                            Terms
-                          </a>
-                          . {AI_USE_LEAD}{" "}
-                          <a href="/ai" style={{ color: "inherit" }}>
-                            AI notice
-                          </a>
-                          .{" "}
-                          <a href="/privacy" style={{ color: "inherit" }}>
-                            Privacy
-                          </a>
-                        </p>
-                      </>
-                    )}
-                  </>
-                )}
-              </form>
-            </div>
-          )}
+          {mounted && registerReady ? (
+            <Suspense fallback={<div className="reg-shell" style={{ minHeight: 480 }} />}>
+              <LandingRegisterForm
+                inviteClientId={inviteClientId}
+                inviteBusiness={inviteBusiness}
+                inviteNeedsCode={inviteNeedsCode}
+                inviteIsLegacyUuid={inviteIsLegacyUuid}
+                user={user}
+                regClientCode={regClientCode}
+                setRegClientCode={setRegClientCode}
+                regBusy={regBusy}
+                regError={regError}
+                showRegisterError={showRegisterError}
+                regName={regName}
+                setRegName={setRegName}
+                regEmail={regEmail}
+                setRegEmail={setRegEmail}
+                regPassword={regPassword}
+                setRegPassword={setRegPassword}
+                regRole={regRole}
+                setRegRole={setRegRole}
+                regPlan={regPlan}
+                setRegPlan={setRegPlan}
+                regFirmName={regFirmName}
+                setRegFirmName={setRegFirmName}
+                regBusiness={regBusiness}
+                setRegBusiness={setRegBusiness}
+                draftMarket={draftMarket}
+                setDraftMarket={setDraftMarket}
+                firmInterval={firmInterval}
+                copyMarket={copyMarket}
+                handleRegister={handleRegister}
+                goToFirmSignup={goToFirmSignup}
+                goToOwnerSpark={goToOwnerSpark}
+              />
+            </Suspense>
+          ) : mounted ? (
+            <div className="reg-shell" style={{ minHeight: 480 }} />
+          ) : null}
         </div>
       </section>
+      </main>
+
 
       {/* ══════════════════════════ FOOTER ══════════════════════════ */}
       <footer>
@@ -3690,6 +2800,11 @@ function LandingPage() {
               </a>
               {" · "}
               {DUAL_MARKET_BUILT}
+            </span>
+            <span>
+              <a href={PREFERRED_SOURCE_HREF} target="_blank" rel="noopener">
+                {PREFERRED_SOURCE_LABEL}
+              </a>
             </span>
           </div>
         </div>
