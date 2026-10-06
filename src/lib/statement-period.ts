@@ -91,15 +91,42 @@ function lastUtcDay(year: number, monthIndex: number): number {
 }
 
 /**
+ * Months from a financial-year start (1–12) through a month-end date.
+ * US January + 30 Sep → 9, starting 1 Jan. ZA March + 28 Feb → 12, starting 1 Mar
+ * of the previous calendar year. A September year-end (start month 10) stays 12.
+ */
+function financialYearSpan(
+  endDate: Date,
+  fyStartMonth: number,
+): { months: number; periodStart: string } {
+  const fy = Math.min(12, Math.max(1, Math.round(fyStartMonth) || 1));
+  const endMonth = endDate.getUTCMonth() + 1;
+  let months = endMonth - fy + 1;
+  let startYear = endDate.getUTCFullYear();
+  if (months <= 0) {
+    months += 12;
+    startYear -= 1;
+  }
+  return {
+    months,
+    periodStart: `${startYear}-${String(fy).padStart(2, "0")}-01`,
+  };
+}
+
+/**
  * How many months a statement covers when periodMonths was not stored.
- * Both dates: inclusive month span. A month-end pre-close date is calendar
- * YTD (30 Sep → 9, starting 1 Jan). A date before month-end is one month.
- * A closed sheet, or no date, stays on 12.
+ * Both dates: inclusive month span. A date before month-end is one month.
+ * A month-end date counts from the financial-year start (January when omitted)
+ * through that month — 30 Sep is 9 months, not an annual close.
+ * No date stays on 12. `preClose` is accepted so callers keep working; the
+ * month count follows the year start either way.
  */
 export function defaultPeriodCoverage(input: {
   periodStart?: string | null;
   periodEnd?: string | null;
   preClose?: boolean;
+  /** 1–12. Month-end statements count from this financial-year start. Default 1. */
+  fyStartMonth?: number | null;
 }): { months: number; periodStart: string | null } {
   const start = input.periodStart?.trim() ?? "";
   const end = input.periodEnd?.trim() ?? "";
@@ -119,13 +146,9 @@ export function defaultPeriodCoverage(input: {
       const month = String(endDate.getUTCMonth() + 1).padStart(2, "0");
       return { months: 1, periodStart: `${endDate.getUTCFullYear()}-${month}-01` };
     }
-    if (input.preClose) {
-      const months = endDate.getUTCMonth() + 1;
-      return {
-        months,
-        periodStart: months > 1 ? `${endDate.getUTCFullYear()}-01-01` : end.slice(0, 10),
-      };
-    }
+    const fy =
+      input.fyStartMonth != null && Number.isFinite(input.fyStartMonth) ? input.fyStartMonth : 1;
+    return financialYearSpan(endDate, fy);
   }
   return { months: 12, periodStart: null };
 }

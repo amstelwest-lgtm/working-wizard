@@ -97,11 +97,12 @@ import {
   BUSINESS_TYPE_TO_BENCHMARK,
   healthBandLabel,
   PERIOD_MONTH_OPTIONS,
+  PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
-  periodMonthsOf,
   scoreTier,
 } from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
+import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
@@ -358,6 +359,10 @@ type Inputs = {
   priorAccumDep: string;
   /** Months the P&L figures cover (1–12); absent = 12. Not a figure, so not in defaults. */
   periodMonths?: string;
+  /** "1" when Figures cover was chosen. An unlocked 12 still follows the statement dates. */
+  periodMonthsChosen?: string;
+  periodStart?: string;
+  periodEnd?: string;
 };
 
 // All fields start empty — no demo/placeholder data pre-filled.
@@ -3374,11 +3379,19 @@ function Index() {
     setSampleMode(false);
   }, [effectiveClientId]);
 
+  const fyStartMonth = operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault;
+  const coveredMonths = effectivePeriodMonths(v as unknown as Record<string, unknown>, {
+    fyStartMonth,
+  });
+  const ratioSource = useMemo(
+    () => ({ ...v, periodMonths: String(coveredMonths) }),
+    [v, coveredMonths],
+  );
   const n = useMemo(() => {
     const num = (s: string) => (s === "" ? 0 : parseFloat(s) || 0);
     // Flow figures scaled to 12 months (same rule as computeRatios) so a
     // quarter of actuals does not read as a small year.
-    const av = annualiseFinancials(v);
+    const av = annualiseFinancials(ratioSource);
     return {
       netIncome: num(av.netIncome),
       ebt: num(av.ebt),
@@ -3413,11 +3426,11 @@ function Index() {
         return Number.isFinite(parsed) ? parsed : Number.NaN;
       })(),
     };
-  }, [v]);
+  }, [ratioSource]);
 
   const safe = (a: number, b: number) => (b === 0 ? 0 : a / b);
 
-  const computedRatios = useMemo(() => computeRatios(v), [v]);
+  const computedRatios = useMemo(() => computeRatios(ratioSource), [ratioSource]);
 
   const taxBurden = computedRatios["Tax Burden"];
   const interestBurden = computedRatios["Interest Burden"];
@@ -5747,10 +5760,14 @@ function Index() {
                     </Label>
                     <select
                       className="h-7 rounded-md border border-amber-900/15 bg-amber-50/40 px-2 text-xs text-slate-950 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
-                      value={String(periodMonthsOf(v))}
+                      value={String(coveredMonths)}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setV((s) => ({ ...s, [PERIOD_MONTHS_KEY]: val }));
+                        setV((s) => ({
+                          ...s,
+                          [PERIOD_MONTHS_KEY]: val,
+                          [PERIOD_MONTHS_CHOSEN_KEY]: "1",
+                        }));
                       }}
                       title="P&L figures are scaled to a 12-month equivalent for ratios and the health score. Balance-sheet figures are never scaled."
                     >

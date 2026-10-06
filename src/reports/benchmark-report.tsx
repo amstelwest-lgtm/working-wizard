@@ -162,6 +162,7 @@ export function BenchmarkReportPDF({
   market,
 }: BenchmarkReportPDFProps) {
   const theme = resolveTheme(accountantProfile);
+  const industryLabel = spellLabor(industryName, market ?? ZA_MARKET);
 
   const comparable = benchmarkRows.filter((row) => !row.unscored);
   const positions = comparable.map(getPosition);
@@ -170,7 +171,7 @@ export function BenchmarkReportPDF({
   const below = positions.filter((p) => p === "below_median").length;
 
   const figures: HeadlineFigure[] = [
-    { label: "Ratios Compared", value: `${comparable.length}`, note: industryName },
+    { label: "Ratios Compared", value: `${comparable.length}`, note: industryLabel },
     { label: "Top Quartile", value: `${topQ}`, direction: "up", good: topQ > 0 },
     { label: "Above Median", value: `${above}`, good: true },
     {
@@ -187,7 +188,7 @@ export function BenchmarkReportPDF({
       above,
       below,
       total: comparable.length,
-      industryName,
+      industryName: industryLabel,
     },
     operatingProfile,
     market ?? ZA_MARKET,
@@ -200,7 +201,7 @@ export function BenchmarkReportPDF({
   return (
     <PDFDocument
       title={`Industry Benchmark — ${smeData.name}`}
-      subject={`Benchmark Report — ${industryName} (${industryCode})`}
+      subject={`Benchmark Report — ${industryLabel} (${industryCode})`}
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
@@ -208,7 +209,7 @@ export function BenchmarkReportPDF({
       market={market ?? ZA_MARKET}
     >
       <ReportTitle
-        kicker={reportKicker("benchmark", industryName)}
+        kicker={reportKicker("benchmark", industryLabel)}
         title="Industry Benchmark"
         subtitle={
           isUsCopy(market ?? ZA_MARKET)

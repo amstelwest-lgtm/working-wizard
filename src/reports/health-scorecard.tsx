@@ -409,18 +409,27 @@ export function HealthScorecardPDF({
         {pillarData.map(({ pillar, score, ratios }) => (
           <View key={pillar} style={styles.pillarSection}>
             <SectionHeader title={PILLAR_LABEL[pillar]} score={score ?? undefined} />
-            {ratios.map((r, i) => (
+            {ratios.map((r, i) => {
+              const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
+              const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;
+              const ratioName = r.unscored
+                ? `${spelled} — ${r.formatted_value}`
+                : r.annotation
+                  ? `${spelled} · ${r.annotation}`
+                  : spelled;
+              return (
               <RatioRow
                 key={r.ratio_key}
-                ratioName={spellLabor(r.ratio_name, market ?? ZA_MARKET)}
-                formattedValue={r.formatted_value}
+                ratioName={ratioName}
+                formattedValue={r.unscored && r.formatted_value.startsWith("n/a") ? "n/a" : percent}
                 healthScore={r.health_score}
                 healthTier={r.health_tier}
                 unscored={r.unscored}
                 priorScore={r.prior_period_score}
                 isAlternate={i % 2 === 1}
               />
-            ))}
+              );
+            })}
           </View>
         ))}
       </View>

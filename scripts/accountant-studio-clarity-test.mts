@@ -84,7 +84,7 @@ const inputs: RatioInputs = {
   founderHours: "2000",
 };
 const ratios = computeRatios(inputs);
-assert(Object.keys(ratios).length === 19, "computeRatios still returns the full 19");
+assert(Object.keys(ratios).length === 20, "computeRatios returns the ratio set, including debt-to-equity");
 const net = ratioActualLine("Net Margin", inputs, (n) => `R${n.toLocaleString("en-ZA")}`);
 assert(net.formula.includes("Net income"), "net margin formula");
 assert(net.calculation?.includes("15.0%"), `net margin mini actual, got ${net.calculation}`);

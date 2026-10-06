@@ -286,6 +286,80 @@ export function presentReturn(input: {
   };
 }
 
+/**
+ * Health score for a presented return. Null when the period is too short
+ * or the figure is otherwise unscored — a 100 must not sit next to "n/a".
+ */
+export function scoredReturnHealth(
+  presented: Pick<ReturnPresentation, "unscored" | "scoredValue">,
+  rawScore: number,
+): number | null {
+  if (presented.unscored || presented.scoredValue == null) return null;
+  if (!Number.isFinite(rawScore)) return null;
+  return Math.round(rawScore);
+}
+
+export type DebtEquitySource = "liabilities" | "facilities" | "none";
+
+export type DebtEquityReading = {
+  value: number;
+  source: DebtEquitySource;
+  note: string;
+};
+
+/**
+ * Debt-to-equity from extracted total liabilities when that total exists.
+ * Facility debt is a fallback only, and stays a separate interest-bearing
+ * figure. Neither source → the row is not scored.
+ */
+export function debtToEquityReading(input: {
+  totalLiabilities?: number | null;
+  facilityDebt?: number | null;
+  facilitiesCaptured?: boolean;
+  equity?: number | null;
+}): DebtEquityReading {
+  const equity = input.equity;
+  const equityOk = equity != null && Number.isFinite(equity) && equity !== 0;
+  const liabilities = input.totalLiabilities;
+  if (equityOk && liabilities != null && Number.isFinite(liabilities)) {
+    return {
+      value: liabilities / (equity as number),
+      source: "liabilities",
+      note: "Extracted total liabilities",
+    };
+  }
+  const facilities = input.facilityDebt;
+  if (
+    input.facilitiesCaptured &&
+    equityOk &&
+    facilities != null &&
+    Number.isFinite(facilities)
+  ) {
+    return {
+      value: facilities / (equity as number),
+      source: "facilities",
+      note: "Facility schedule",
+    };
+  }
+  return { value: Number.NaN, source: "none", note: "Capture facilities first" };
+}
+
+/** Every disabled download state has a reason. A ready report is enabled. */
+export function reportDownloadGate(input: {
+  ready: boolean;
+  loading: boolean;
+  blocked: boolean;
+  unavailableReason?: string | null;
+  busy?: boolean;
+}): { disabled: boolean; title: string } {
+  if (input.loading) return { disabled: true, title: "Loading client figures…" };
+  if (input.blocked) return { disabled: true, title: "Upload financials before generating client reports" };
+  if (input.unavailableReason) return { disabled: true, title: input.unavailableReason };
+  if (input.busy) return { disabled: true, title: "This report is already downloading" };
+  if (!input.ready) return { disabled: true, title: "Preparing the download…" };
+  return { disabled: false, title: "Download this report" };
+}
+
 export type MovementVerdict = "improving" | "stable" | "declining_most" | "declining_all" | "no_history";
 
 export function movementVerdict(input: {

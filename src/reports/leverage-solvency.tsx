@@ -10,7 +10,8 @@ import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { equityMultiplierRatio, scoreTier } from "@/lib/ratios";
-import { equityRollForward, NO_PRIOR_PERIOD } from "@/lib/report-coherence";
+import { scoreRatio } from "@/lib/health-score";
+import { debtToEquityReading, equityRollForward, NO_PRIOR_PERIOD } from "@/lib/report-coherence";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
@@ -218,7 +219,13 @@ export function LeverageSolvencyPDF({
   const hs = d.health_scores;
   const hasDebt = d.debt_facilities_captured;
   const totalAssets = d.total_assets > 0 ? d.total_assets : d.total_debt + d.total_equity;
-  const debtToEquity = hasDebt && d.total_equity !== 0 ? d.total_debt / d.total_equity : NaN;
+  const deReading = debtToEquityReading({
+    totalLiabilities: d.total_liabilities,
+    facilityDebt: d.total_debt,
+    facilitiesCaptured: hasDebt,
+    equity: d.total_equity,
+  });
+  const debtToEquity = deReading.value;
   const debtToAssets = hasDebt && totalAssets !== 0 ? d.total_debt / totalAssets : NaN;
   const equityMultiplier = equityMultiplierRatio(totalAssets, d.total_equity);
   const roll = equityRollForward({
@@ -238,7 +245,7 @@ export function LeverageSolvencyPDF({
       label: "Debt-to-Equity",
       value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "—",
       good: Number.isFinite(debtToEquity) ? debtToEquity <= 1.5 : undefined,
-      note: hasDebt ? undefined : "Capture facilities first",
+      note: deReading.source === "facilities" ? undefined : deReading.note,
     },
     {
       label: "Interest-bearing debt",
@@ -273,6 +280,7 @@ export function LeverageSolvencyPDF({
       totalDebt: hasDebt ? d.total_debt : 0,
       totalEquity: d.total_equity,
       debtCaptured: hasDebt,
+      debtFromLiabilities: deReading.source === "liabilities",
     },
     operatingProfile,
     m,
@@ -292,7 +300,9 @@ export function LeverageSolvencyPDF({
     {
       name: "Debt-to-Equity",
       value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "—",
-      score: hs.debtToEquity,
+      score: Number.isFinite(debtToEquity)
+        ? (hs.debtToEquity ?? Math.round(scoreRatio("Debt-to-Equity", debtToEquity)))
+        : null,
     },
     {
       name: "Debt-to-Assets",
