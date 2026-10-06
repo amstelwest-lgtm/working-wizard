@@ -68,15 +68,61 @@ assert(
 );
 assert(src.includes("LIGHTHOUSE_SENDER_NAME"), "the Team signer is shown");
 assert(src.includes("auto_send off"), "auto_send is shown locked off");
+assert(
+  (src.match(/auto_send off/g) ?? []).length === 1,
+  "auto_send off is stated once",
+);
+assert(!src.includes("Dry-run allowlist on"), "the allowlist dump is not repeated on the Agent tab");
+assert(src.includes("Allowlist:"), "the allowlist lives once, on System");
+assert(src.includes("Dry run"), "a dry-run row keeps a small badge");
+assert(!src.includes("sm:grid-cols-5"), "the five timezone cards are gone");
+assert(src.includes("geoWindowLine"), "US and SA share one window line");
+assert(!src.includes("Set US or South Africa"), "the unset-window filler is not rendered");
+assert(!src.includes("Drafts wait in the review inbox"), "the inbox reminder is not repeated in the drawer");
 assert(!src.includes("setSenderName"), "founder signer name is not editable");
 assert(!src.includes("Open in mail"), "mailto bypass is gone");
 assert(!src.includes("Opt-out link copied"), "unsubscribe copy control is gone");
 assert(!src.includes("writeText(lead.optOutLink"), "the drawer does not copy the unsubscribe URL");
 assert(!src.includes("Draft with Claude"), "the console does not brand drafts as Claude");
 assert(src.includes("Send windows enforced"), "E17 windows are enforced, not a reminder");
+assert(src.includes("Next up"), "the agent tab leads with Next up");
+assert(src.includes("See all"), "the full due list stays reachable");
+assert(src.includes("Review inbox"), "the review inbox stays");
+assert(
+  src.includes("Agent offline: AI key not configured (System)"),
+  "a missing AI key uses neutral admin copy",
+);
+assert(!src.includes("function Playbook"), "the sequences panel is not mounted");
+assert(!src.includes("ANTHROPIC_API_KEY"), "the panel does not name the AI key");
+assert(!src.includes("RESEND_API_KEY"), "the panel does not name the mail key");
+
+const VENDOR_UI = /\b(claude|anthropic|openai|chatgpt|gemini|gpt-?\d*)\b/i;
+const KEY_UI = /ANTHROPIC_API_KEY|RESEND_API_KEY|CLAUDE_MODEL/;
+
+function quotedStrings(body: string): string[] {
+  const out: string[] = [];
+  const re = /(["'`])((?:\\[\s\S]|(?!\1)[^\\])*?)\1/g;
+  for (const match of body.matchAll(re)) out.push(match[2] ?? "");
+  return out;
+}
+
+for (const file of [
+  "src/components/lighthouse-panel.tsx",
+  "src/components/lighthouse-agent-chat.tsx",
+  "src/routes/_authenticated/ops.tsx",
+]) {
+  const body = readFileSync(resolve(process.cwd(), file), "utf8");
+  const quoted = quotedStrings(body).join("\n");
+  const vendorHit = quoted.split("\n").find((line) => VENDOR_UI.test(line));
+  assert(!vendorHit, `${file} UI string names a model vendor: ${vendorHit ?? ""}`);
+  const keyHit = quoted.split("\n").find((line) => KEY_UI.test(line));
+  assert(!keyHit, `${file} UI string names an API key: ${keyHit ?? ""}`);
+}
 
 const ops = readFileSync(resolve(process.cwd(), "src/routes/_authenticated/ops.tsx"), "utf8");
 assert(ops.includes('?? "agent"'), "ops defaults a missing sales tab to agent");
+assert(ops.includes("AI key:"), "the console error screen labels the AI key without a vendor");
+assert(!ops.includes("ANTHROPIC:"), "the console error screen does not name a vendor");
 
 const fns = readFileSync(resolve(process.cwd(), "src/lib/lighthouse.functions.ts"), "utf8");
 assert(fns.includes("lighthouseTrialSiteUrl"), "trial links use the milonfinance resolver");
@@ -100,6 +146,8 @@ assert(windowCall > skipCall && resendCall > windowCall, "send is blocked outsid
 assert(approveCall > 0 && resendCall > approveCall, "send requires an approved draft");
 assert(fns.includes("next.auto_send = false"), "settings save hardcodes auto_send false");
 assert(!fns.includes("next.auto_send = data.autoSend"), "the client cannot turn auto_send on");
+assert(fns.includes("The draft came back unusable — try again."), "draft failures stay neutral");
+assert(!fns.includes("Claude returned"), "draft failures do not name a model vendor");
 
 assert(
   lighthouseTrialSiteUrl({}) === LIGHTHOUSE_TRIAL_SITE_URL,
@@ -191,5 +239,10 @@ assert(
   !emailAlreadyTouchedAtStep([{ email: "team@milon.co.za", stepNo: 1 }], "team@milon.co.za", 2),
   "an earlier step does not block the next step",
 );
+
+assert(src.includes('aria-label="Close"'), "the review drawer close control is labelled");
+assert(src.includes('event.key !== "Escape"'), "Escape closes the review drawer");
+assert(src.includes("onPointerDown={closeDrawer}"), "the close control closes on pointer down");
+assert(src.includes("pointer-events-none"), "the close icon does not steal the click");
 
 console.log("lighthouse tabs ok");

@@ -789,12 +789,18 @@ assert(!composerShouldSend("a", false), "a letter does not send");
 
 assert(panelSrc.includes("LighthouseAgentChat"), "Agent tab mounts the chat");
 assert(panelSrc.includes("Review inbox"), "review inbox stays");
-assert(panelSrc.includes("Today"), "due queue stays");
+assert(panelSrc.includes("Next up"), "next up stays");
+assert(panelSrc.includes("See all"), "due list stays reachable");
 assert(!panelSrc.includes('LIGHTHOUSE_TABS = ["agent", "firms", "system", "chat"]'), "chat is not a new tab");
 assert(uiSrc.includes("localStorage"), "the thread is stored in localStorage");
 assert(uiSrc.includes("Clear"), "Clear is in the chat");
 assert(uiSrc.includes("Shift+Enter"), "newline hint is in the chat");
 assert(!/claude|anthropic/i.test(uiSrc), "chat UI has no model branding");
+assert(!uiSrc.includes("Drafts stay in the review inbox"), "the chat header does not repeat the inbox line");
+assert(
+  (uiSrc.match(/review inbox/gi) ?? []).length === 1,
+  "the chat states the review inbox once",
+);
 assert(!uiSrc.includes("sendLighthouseTouch"), "chat UI does not send mail");
 assert(!uiSrc.includes("reviewLighthouseTouch"), "chat UI does not approve");
 
@@ -833,7 +839,12 @@ for (const promptText of LIGHTHOUSE_CHAT_PROMPTS) {
   assert(htmlText.includes(promptText), `suggested prompt renders: ${promptText}`);
 }
 assert(html.includes("Clear"), "Clear renders");
-assert(html.includes("Looking at the book"), "loading state renders");
+assert(html.includes("Thinking"), "loading state says Thinking");
+assert(
+  html.includes("this sends when the answer finishes"),
+  "prompt chips stay available with a tooltip while thinking",
+);
+assert(!html.includes("disabled:opacity-50"), "prompt chips are not faded out while thinking");
 assert(html.includes("The console is locked."), "error state renders");
 assert(html.includes("Enter to send"), "Enter hint renders");
 assert(html.includes("Shift+Enter"), "Shift+Enter hint renders");

@@ -53,7 +53,15 @@ export type AgentLead = RecipientPlace & {
   touches: AgentTouch[];
 };
 
-/** Firm, then a real contact name, then the email. Never the mailbox local-part. */
+/** "Milōn Dry Run" is the cohort label, not the firm. */
+export function isDryRunCohortName(value: string | null | undefined): boolean {
+  return /dry[\s-]*run/i.test((value ?? "").trim());
+}
+
+/**
+ * A real firm, then a real contact name, then the email.
+ * A dry-run cohort label never becomes the row title.
+ */
 export function firmCardTitle(lead: {
   name?: string | null;
   company?: string | null;
@@ -62,8 +70,8 @@ export function firmCardTitle(lead: {
   const company = (lead.company ?? "").trim();
   const name = (lead.name ?? "").trim();
   const email = (lead.email ?? "").trim();
-  if (company) return company;
-  if (name && !isGenericLeadName(name, email)) return name;
+  if (company && !isDryRunCohortName(company)) return company;
+  if (name && !isDryRunCohortName(name) && !isGenericLeadName(name, email)) return name;
   return email || "Unnamed";
 }
 
@@ -156,6 +164,22 @@ export function buildReviewInbox(leads: AgentLead[]): ReviewItem[] {
     if (a.status !== b.status) return a.status === "draft" ? -1 : 1;
     return a.title.localeCompare(b.title);
   });
+}
+
+export type LighthouseReviewPulse = {
+  inbox: number;
+  dueNow: number;
+};
+
+/**
+ * Pending review drafts plus rows that are due inside an open send window.
+ * The founder glance and the Agent tab both read this.
+ */
+export function lighthouseReviewPulse(leads: AgentLead[], now = new Date()): LighthouseReviewPulse {
+  return {
+    inbox: buildReviewInbox(leads).length,
+    dueNow: buildDueQueue(leads, now).filter((row) => row.open).length,
+  };
 }
 
 export type CadenceStrip = {
@@ -296,6 +320,71 @@ export function formatUsageMetric(events: number, uniqueUsers: number): string {
   if (!events) return "0";
   if (!uniqueUsers) return String(events);
   return `${events} · ${uniqueUsers}`;
+}
+
+export type NextUpKind = "review" | "approved" | "followup" | "import" | "plan";
+
+export type NextUpAction = {
+  kind: NextUpKind;
+  label: string;
+  leadId: string | null;
+  touchId: string | null;
+};
+
+/**
+ * One next action. Pending drafts beat an approved draft, which beats the
+ * first due firm (open window first). An empty book asks for an import.
+ */
+export function nextUpAction(input: {
+  inbox: ReviewItem[];
+  queue: DueQueueRow[];
+  hasFirms: boolean;
+}): NextUpAction {
+  const pending = input.inbox.filter((item) => item.status === "draft");
+  if (pending.length > 0) {
+    const first = pending[0];
+    return {
+      kind: "review",
+      label: pending.length === 1 ? "Review 1 draft" : `Review ${pending.length} drafts`,
+      leadId: first.leadId,
+      touchId: first.touchId,
+    };
+  }
+  const approved = input.inbox.filter((item) => item.status === "approved");
+  if (approved.length > 0) {
+    const first = approved[0];
+    return {
+      kind: "approved",
+      label: "Open approved draft",
+      leadId: first.leadId,
+      touchId: first.touchId,
+    };
+  }
+  const due = input.queue.find((row) => row.open) ?? input.queue[0];
+  if (due) {
+    return {
+      kind: "followup",
+      label: `Follow up with ${due.title}`,
+      leadId: due.leadId,
+      touchId: null,
+    };
+  }
+  if (!input.hasFirms) {
+    return { kind: "import", label: "Import cohort", leadId: null, touchId: null };
+  }
+  return { kind: "plan", label: "Run plan (dry-run)", leadId: null, touchId: null };
+}
+
+/** US uses the ET countdown when every US zone is closed. SA uses SAST. */
+export function geoWindowLine(clocks: ZoneClock[]): string {
+  const us = clocks.filter((clock) => clock.geo === "US");
+  const sa = clocks.find((clock) => clock.geo === "SA");
+  const et = us.find((clock) => clock.zone === "ET") ?? us[0];
+  const usPart = us.some((clock) => clock.open)
+    ? "US Open"
+    : `US opens in ${et?.countdownLabel ?? "—"}`;
+  const saPart = sa?.open ? "SA Open" : `SA opens in ${sa?.countdownLabel ?? "—"}`;
+  return `${usPart} · ${saPart}`;
 }
 
 export function trafficTagOf(tags: unknown): "warmup" | "campaign" | null {

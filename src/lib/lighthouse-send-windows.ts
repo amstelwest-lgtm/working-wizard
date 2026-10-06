@@ -366,3 +366,19 @@ export function sendWindowStatus(place: RecipientPlace, now = new Date()): SendW
 export function sendBlockedReason(place: RecipientPlace, now = new Date()): string | null {
   return sendWindowStatus(place, now).reason;
 }
+
+/**
+ * A closed window with a real zone. The "Set US or South Africa (—)" filler
+ * is hidden — there is no countdown to show until the place is known.
+ */
+export function nextWindowLine(status: {
+  open: boolean;
+  zone: string | null;
+  nextLabel: string;
+  countdownLabel: string;
+}): string | null {
+  if (status.open || !status.zone) return null;
+  if (!status.nextLabel || /set us or south africa/i.test(status.nextLabel)) return null;
+  if (!status.countdownLabel || status.countdownLabel === "—") return null;
+  return `Next window ${status.nextLabel} (${status.countdownLabel})`;
+}

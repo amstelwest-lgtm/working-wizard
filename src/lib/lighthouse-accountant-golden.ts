@@ -163,7 +163,7 @@ That’s where Milōn comes in.
 
 You give it the financial information you already have, and it turns it into a shared workspace for your firm and your client — showing business health, what has changed, where the pressure is, forward-looking cash and prioritised next actions.
 
-At the portfolio level, your team can see which clients need attention and why. At the client level, Milōn helps turn the underlying numbers into practical advisory — with Claude drafting the advice for your team to review, edit and sign off before anything reaches the client.
+At the portfolio level, your team can see which clients need attention and why. At the client level, Milōn helps turn the underlying numbers into practical advisory — with our AI agent drafting the advice for your team to review, edit and sign off before anything reaches the client.
 
 The opportunity we see for firms is bigger than simply saving time.
 

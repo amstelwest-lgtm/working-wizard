@@ -2,8 +2,8 @@
  * Milōn Lighthouse — agent-first sales console (agent, firms, system).
  * Usage lives on Platform — metrics. Access and pilot knobs live on Milōn IT.
  *
- * The Agent tab is the landing surface: due queue, review inbox, cadence,
- * and enforced send windows. Firms keeps the board as context. System holds
+ * The Agent tab is the landing surface: one Next up action, the review
+ * inbox, and the chat dock. Firms keeps the board as context. System holds
  * caps, the locked From / Reply-To, and the allowlist.
  */
 
@@ -12,7 +12,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  CalendarClock,
   Check,
   Copy,
   FileText,
@@ -24,7 +23,6 @@ import {
   Send,
   ShieldOff,
   Sparkles,
-  Target,
   Upload,
   X,
 } from "lucide-react";
@@ -46,9 +44,7 @@ import {
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
 import {
-  ACCOUNTANT_ONESHOT_GOLDEN,
   ACCOUNTANT_ONESHOT_SEQUENCE_KEY,
-  ACCOUNTANT_V1_GOLDEN,
   ACCOUNTANT_V1_SEQUENCE_KEY,
   sequenceUsesGoldenDefault,
 } from "@/lib/lighthouse-accountant-golden";
@@ -60,9 +56,13 @@ import {
   buildDueQueue,
   buildReviewInbox,
   cadenceOf,
+  lighthouseReviewPulse,
   firmCardTitle,
   formatOpsCount,
   formatOpsPercent,
+  geoWindowLine,
+  isDryRunCohortName,
+  nextUpAction,
   zoneClocks,
 } from "@/lib/lighthouse-agent";
 import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
@@ -73,7 +73,7 @@ import {
 } from "@/lib/lighthouse-targets";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
-import { sendWindowStatus } from "@/lib/lighthouse-send-windows";
+import { nextWindowLine, sendWindowStatus } from "@/lib/lighthouse-send-windows";
 import { FunnelHealthPanel } from "@/components/funnel-health-panel";
 import { LighthouseAgentChat } from "@/components/lighthouse-agent-chat";
 
@@ -168,6 +168,7 @@ export function LighthousePanel({
   const [firmTag, setFirmTag] = useState<"all" | "warmup" | "campaign">("all");
   const [firmSuppress, setFirmSuppress] = useState<"all" | "open" | "suppressed">("all");
   const [planPreview, setPlanPreview] = useState(false);
+  const [showDue, setShowDue] = useState(false);
   const [confirmSend, setConfirmSend] = useState<{
     touchId: string;
     leadId: string;
@@ -205,6 +206,18 @@ export function LighthousePanel({
     const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!confirmSend) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setConfirmSend(null);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [confirmSend]);
 
   const openLead = useMemo(
     () => dash?.leads.find((l) => l.id === openLeadId) ?? null,
@@ -283,13 +296,22 @@ export function LighthousePanel({
 
   const queue = buildDueQueue(dash.leads, now);
   const inbox = buildReviewInbox(dash.leads);
+  const reviewPulse = lighthouseReviewPulse(dash.leads, now);
   const mix = attentionMix(dash.leads, now);
   const clocks = zoneClocks(dash.leads, now);
-  const dueNow = queue.filter((row) => row.open);
   const capLeft = Math.max(0, dash.settings.dailySendCap - dash.sentToday);
   const dryRun = dash.capability.sendAllowlistEnforced;
   const cadenceLead = dash.leads.find((lead) => queue.some((row) => row.leadId === lead.id)) ?? null;
-  const cadence = cadenceLead ? cadenceOf(cadenceLead) : null;
+  const nextUp = nextUpAction({
+    inbox,
+    queue,
+    hasFirms: dash.leads.length > 0,
+  });
+  const focusLead =
+    (nextUp.leadId ? dash.leads.find((lead) => lead.id === nextUp.leadId) ?? null : null) ??
+    cadenceLead;
+  const focusCadence = focusLead ? cadenceOf(focusLead) : null;
+  const windowLine = geoWindowLine(clocks);
   const planCandidates = dash.leads.filter(
     (lead) =>
       !lead.doNotContact &&
@@ -346,304 +368,256 @@ export function LighthousePanel({
       {tab === "agent" && (
         <div className="mb-5 max-xl:pb-28 xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start xl:gap-4">
           <div className="min-w-0 space-y-4">
-          <div className="rounded-2xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ops-amber)]">
-              Lighthouse Agent
-            </div>
-            <p className="mt-1 text-sm text-[var(--ops-ink-soft)]">
-              {dryRun ? "Dry-run cohort" : "Live cohort"} · auto_send off ·{" "}
-              {formatOpsCount(capLeft)} sends left today
+          <div>
+            <p className="text-sm text-[var(--ops-ink-soft)]">
+              {dryRun ? "Dry-run" : "Live"} · auto_send off · {formatOpsCount(capLeft)} sends left
             </p>
-            {dryRun && (
-              <p className="mt-2 text-[12px] font-semibold text-[var(--ops-amber)]">
-                Dry-run allowlist on — Send now only hits {dash.capability.sendAllowlist.length}{" "}
-                test inbox{dash.capability.sendAllowlist.length === 1 ? "" : "es"}
-                {dash.capability.sendAllowlist.length
-                  ? `: ${dash.capability.sendAllowlist.join(", ")}`
-                  : ""}
-              </p>
-            )}
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-              <span className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[var(--ops-ink-soft)]">
-                auto_send off
-              </span>
-              <span className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[var(--ops-ink-soft)]">
-                {LIGHTHOUSE_SENDER_NAME}
-              </span>
-              <span className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[var(--ops-ink-soft)]">
-                From {LIGHTHOUSE_FROM_EMAIL}
-              </span>
-              {!dash.capability.aiConfigured && (
-                <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
-                  ANTHROPIC_API_KEY missing — agent rewrite is off
-                </span>
-              )}
-              {!dash.capability.emailConfigured && (
-                <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
-                  RESEND_API_KEY missing — sending is off, drafts still save
-                </span>
-              )}
-              {dash.sentToday >= dash.settings.dailySendCap && (
-                <span className="rounded-full border border-[var(--ops-danger-border)] px-3 py-1 text-[var(--ops-danger-ink)]">
-                  Daily cap full — kill switch
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-5">
-            {clocks.map((clock) => (
-              <div
-                key={clock.zone}
-                className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-3"
-              >
-                <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-                  {clock.zone}
-                </div>
-                <div className="mt-1 text-sm font-semibold text-[var(--ops-ink)]">
-                  {clock.open ? "Open" : clock.countdownLabel}
-                </div>
-                <div className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
-                  {clock.dueNow} due now · {clock.due} in queue
-                </div>
-                {!clock.open && (
-                  <div className="mt-1 text-[11px] text-[var(--ops-ink-soft)]">{clock.nextLabel}</div>
+            {(!dash.capability.aiConfigured ||
+              !dash.capability.emailConfigured ||
+              dash.sentToday >= dash.settings.dailySendCap) && (
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                {!dash.capability.aiConfigured && (
+                  <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
+                    Agent offline: AI key not configured (System)
+                  </span>
+                )}
+                {!dash.capability.emailConfigured && (
+                  <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
+                    Sending is off — drafts still save
+                  </span>
+                )}
+                {dash.sentToday >= dash.settings.dailySendCap && (
+                  <span className="rounded-full border border-[var(--ops-danger-border)] px-3 py-1 text-[var(--ops-danger-ink)]">
+                    Daily cap full — kill switch
+                  </span>
                 )}
               </div>
-            ))}
+            )}
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
-                <CalendarClock className="h-3.5 w-3.5 text-[var(--ops-amber)]" />
-                Today&apos;s queue · {formatOpsCount(dueNow.length)} in window
+          <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
+              Next up
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if ((nextUp.kind === "review" || nextUp.kind === "approved") && nextUp.touchId) {
+                    setReviewFocus(nextUp.touchId);
+                    document
+                      .getElementById("lighthouse-review-inbox")
+                      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    return;
+                  }
+                  if (nextUp.kind === "followup" && nextUp.leadId) {
+                    setOpenLeadId(nextUp.leadId);
+                    return;
+                  }
+                  if (nextUp.kind === "import") {
+                    setImportOpen(true);
+                    return;
+                  }
+                  setPlanPreview(true);
+                }}
+                className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-sm font-bold text-[#1b1300]"
+              >
+                {nextUp.label}
+              </button>
+              <p className="text-sm text-[var(--ops-ink-soft)]">
+                {formatOpsCount(reviewPulse.dueNow)} due now
+              </p>
+            </div>
+            <p className="mt-2 text-[12px] text-[var(--ops-ink-soft)]">{windowLine}</p>
+            {focusCadence && (
+              <p className="mt-1 text-[12px] text-[var(--ops-ink-dim)]">
+                Last touch {focusCadence.lastTouch} · delivery {focusCadence.delivery} ·{" "}
+                {focusCadence.engagement} · next {focusCadence.nextFollowUp}
+              </p>
+            )}
+            <div className="mt-3">
+              <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--ops-line)]">
+                <div
+                  className="h-full bg-[var(--ops-amber)]"
+                  style={{ width: `${mix.us + mix.sa ? mix.usPct : 80}%` }}
+                />
               </div>
-              {queue.length === 0 ? (
-                <p className="text-sm text-[var(--ops-ink-dim)]">Nothing is due inside a send window.</p>
+              <p className="text-[11px] text-[var(--ops-ink-dim)]">
+                US {formatOpsPercent(mix.usPct)} · SA {formatOpsPercent(mix.saPct)} · target about 80/20
+              </p>
+            </div>
+            {planPreview && (
+              <p className="mt-2 text-[12px] text-[var(--ops-ink-dim)]">
+                Dry-run only — nothing is sent. {formatOpsCount(planCandidates.length)} firms have
+                no next follow-up. Import a cohort or open a firm to draft the first touch.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowDue((open) => !open)}
+              className="mt-3 text-[12px] font-semibold text-[var(--ops-amber)]"
+            >
+              {showDue ? "Hide list" : "See all"}
+            </button>
+            {showDue &&
+              (queue.length === 0 ? (
+                <p className="mt-2 text-sm text-[var(--ops-ink-dim)]">
+                  Nothing is due inside a send window.
+                </p>
               ) : (
-                <ul className="space-y-2">
-                  {queue.slice(0, 12).map((row) => (
+                <ul className="mt-2 max-h-72 space-y-2 overflow-auto">
+                  {queue.map((row) => (
                     <li key={row.leadId}>
                       <button
                         type="button"
                         onClick={() => setOpenLeadId(row.leadId)}
                         className="flex w-full items-baseline justify-between gap-3 rounded-xl border border-[var(--ops-line)] px-3 py-2 text-left hover:border-[var(--ops-amber-border)]"
                       >
-                        <span className="truncate text-sm font-semibold text-[var(--ops-ink)]">
-                          {row.title}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-semibold text-[var(--ops-ink)]">
+                            {row.title}
+                          </span>
+                          {queueLeadIsDryRun(dash.leads, row.leadId) && <DryRunBadge />}
                         </span>
-                        <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
-                          {row.zone ?? "—"} · {row.open ? "due now" : row.countdownLabel}
-                        </span>
+                        {row.zone && row.countdownLabel !== "—" && (
+                          <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
+                            {row.zone} · {row.open ? "due now" : row.countdownLabel}
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}
                 </ul>
-              )}
+              ))}
+          </div>
+
+          <div
+            id="lighthouse-review-inbox"
+            className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4"
+          >
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
+              Review inbox · {formatOpsCount(reviewPulse.inbox)}
             </div>
-            <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
-                Review inbox · {formatOpsCount(inbox.length)}
-              </div>
-              {inbox.length === 0 ? (
-                <p className="text-sm text-[var(--ops-ink-dim)]">No drafts waiting for review.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {inbox.map((item) => {
-                    const lead = dash.leads.find((l) => l.id === item.leadId);
-                    const window = lead ? sendWindowStatus(lead, now) : null;
-                    return (
-                      <li
-                        key={item.touchId}
-                        className={`rounded-xl border px-3 py-2 ${
-                          reviewFocus === item.touchId
-                            ? "border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)]"
-                            : "border-[var(--ops-line)]"
-                        }`}
-                      >
-                        <div className="text-sm font-semibold text-[var(--ops-ink)]">{item.title}</div>
-                        <div className="truncate text-[12px] text-[var(--ops-ink-dim)]">
-                          {item.subject} · {item.angle} · {item.status}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {item.status === "draft" && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const touch = lead?.touches.find((t) => t.id === item.touchId);
-                                void runReview(
-                                  item.touchId,
-                                  "approve",
-                                  touch?.subject ?? "",
-                                  touch?.body ?? "",
-                                )
-                                  .then(() => toast.success("Approved — send only inside the window"))
-                                  .catch((e) =>
-                                    toast.error(e instanceof Error ? e.message : "Could not approve"),
-                                  );
-                              }}
-                              className="rounded-full bg-[var(--ops-amber-soft)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-amber)]"
-                            >
-                              Approve
-                            </button>
-                          )}
+            {reviewPulse.inbox === 0 ? (
+              <p className="text-sm text-[var(--ops-ink-dim)]">No drafts waiting for review.</p>
+            ) : (
+              <ul className="space-y-2">
+                {inbox.map((item) => {
+                  const lead = dash.leads.find((l) => l.id === item.leadId);
+                  const window = lead ? sendWindowStatus(lead, now) : null;
+                  return (
+                    <li
+                      key={item.touchId}
+                      className={`rounded-xl border px-3 py-2 ${
+                        reviewFocus === item.touchId
+                          ? "border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)]"
+                          : "border-[var(--ops-line)]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ops-ink)]">
+                        <span className="truncate">{item.title}</span>
+                        {lead && showsDryRunBadge(lead) && <DryRunBadge />}
+                      </div>
+                      <div className="truncate text-[12px] text-[var(--ops-ink-dim)]">
+                        {item.subject} · {item.angle} · {item.status}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {item.status === "draft" && (
                           <button
                             type="button"
-                            onClick={() => setOpenLeadId(item.leadId)}
+                            onClick={() => {
+                              const touch = lead?.touches.find((t) => t.id === item.touchId);
+                              void runReview(
+                                item.touchId,
+                                "approve",
+                                touch?.subject ?? "",
+                                touch?.body ?? "",
+                              )
+                                .then(() => toast.success("Approved — send only inside the window"))
+                                .catch((e) =>
+                                  toast.error(e instanceof Error ? e.message : "Could not approve"),
+                                );
+                            }}
+                            className="rounded-full bg-[var(--ops-amber-soft)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-amber)]"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setOpenLeadId(item.leadId)}
+                          className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-ink-soft)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void runReview(item.touchId, "reject")
+                              .then(() => toast.success("Rejected"))
+                              .catch((e) =>
+                                toast.error(e instanceof Error ? e.message : "Could not reject"),
+                              )
+                          }
+                          className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-ink-dim)]"
+                        >
+                          Reject
+                        </button>
+                        {item.status === "approved" && (
+                          <button
+                            type="button"
+                            disabled={!window?.open}
+                            onClick={() => {
+                              const touch = lead?.touches.find((t) => t.id === item.touchId);
+                              if (!lead?.email || !touch) return;
+                              setConfirmSend({
+                                touchId: item.touchId,
+                                leadId: item.leadId,
+                                subject: touch.subject ?? "",
+                                body: touch.body ?? "",
+                                email: lead.email,
+                                title: item.title,
+                              });
+                            }}
+                            className="rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 py-1 text-[11px] font-bold text-[#1b1300] disabled:opacity-40"
+                          >
+                            Send now
+                          </button>
+                        )}
+                        {item.status === "approved" && window && !window.open && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const touch = lead?.touches.find((t) => t.id === item.touchId);
+                              if (!lead?.email || !touch) return;
+                              setConfirmSend({
+                                touchId: item.touchId,
+                                leadId: item.leadId,
+                                subject: touch.subject ?? "",
+                                body: touch.body ?? "",
+                                email: lead.email,
+                                title: item.title,
+                                preview: true,
+                                windowReason: window.reason,
+                              });
+                            }}
                             className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-ink-soft)]"
                           >
-                            Edit
+                            Preview send
                           </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void runReview(item.touchId, "reject")
-                                .then(() => toast.success("Rejected"))
-                                .catch((e) =>
-                                  toast.error(e instanceof Error ? e.message : "Could not reject"),
-                                )
-                            }
-                            className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-ink-dim)]"
-                          >
-                            Reject
-                          </button>
-                          {item.status === "approved" && (
-                            <button
-                              type="button"
-                              disabled={!window?.open}
-                              onClick={() => {
-                                const touch = lead?.touches.find((t) => t.id === item.touchId);
-                                if (!lead?.email || !touch) return;
-                                setConfirmSend({
-                                  touchId: item.touchId,
-                                  leadId: item.leadId,
-                                  subject: touch.subject ?? "",
-                                  body: touch.body ?? "",
-                                  email: lead.email,
-                                  title: item.title,
-                                });
-                              }}
-                              className="rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 py-1 text-[11px] font-bold text-[#1b1300] disabled:opacity-40"
-                            >
-                              Send now
-                            </button>
-                          )}
-                          {item.status === "approved" && window && !window.open && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const touch = lead?.touches.find((t) => t.id === item.touchId);
-                                if (!lead?.email || !touch) return;
-                                setConfirmSend({
-                                  touchId: item.touchId,
-                                  leadId: item.leadId,
-                                  subject: touch.subject ?? "",
-                                  body: touch.body ?? "",
-                                  email: lead.email,
-                                  title: item.title,
-                                  preview: true,
-                                  windowReason: window.reason,
-                                });
-                              }}
-                              className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-ink-soft)]"
-                            >
-                              Preview send
-                            </button>
-                          )}
-                        </div>
-                        {item.status === "approved" && window && !window.open && (
-                          <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
-                            Next window {window.nextLabel} ({window.countdownLabel})
-                          </p>
                         )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+                      </div>
+                      {item.status === "approved" && window && nextWindowLine(window) && (
+                        <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
+                          {nextWindowLine(window)}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
-                Cadence
-              </div>
-              {cadence ? (
-                <dl className="grid grid-cols-2 gap-2 text-[12px]">
-                  <div>
-                    <dt className="text-[var(--ops-ink-dim)]">Last touch</dt>
-                    <dd className="text-[var(--ops-ink)]">{cadence.lastTouch}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--ops-ink-dim)]">Delivery</dt>
-                    <dd className="text-[var(--ops-ink)]">{cadence.delivery}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--ops-ink-dim)]">Engagement</dt>
-                    <dd className="text-[var(--ops-ink)]">{cadence.engagement}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[var(--ops-ink-dim)]">Next follow-up</dt>
-                    <dd className="text-[var(--ops-ink)]">{cadence.nextFollowUp}</dd>
-                  </div>
-                </dl>
-              ) : (
-                <p className="text-sm text-[var(--ops-ink-dim)]">No follow-up is scheduled.</p>
-              )}
-            </div>
-            <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
-                US / SA attention · target 80 / 20
-              </div>
-              <div className="mb-2 h-2 overflow-hidden rounded-full bg-[var(--ops-line)]">
-                <div
-                  className="h-full bg-[var(--ops-amber)]"
-                  style={{ width: `${mix.us + mix.sa ? mix.usPct : 80}%` }}
-                />
-              </div>
-              <p className="text-[12px] text-[var(--ops-ink-soft)]">
-                US {formatOpsPercent(mix.usPct)} · SA {formatOpsPercent(mix.saPct)} ·{" "}
-                {formatOpsCount(mix.us)} US / {formatOpsCount(mix.sa)} SA this week
-              </p>
-              <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
-                Shared daily cap (SAST) {formatOpsCount(dash.sentToday)}/
-                {formatOpsCount(dash.settings.dailySendCap)} — US and SA caps are not split yet.{" "}
-                {formatOpsCount(capLeft)} remaining.
-              </p>
-            </div>
-          </div>
-
-          {queue.length === 0 && inbox.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-[var(--ops-line-strong)] p-6 text-center">
-              <p className="text-sm text-[var(--ops-ink-soft)]">
-                No Agent loop yet. Run a dry-run plan or import a cohort.
-              </p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPlanPreview(true)}
-                  className="rounded-full border border-[var(--ops-amber-border)] px-4 py-2 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)]"
-                >
-                  Run plan (dry-run)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImportOpen(true)}
-                  className="rounded-full border border-[var(--ops-line-strong)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)]"
-                >
-                  Import cohort
-                </button>
-              </div>
-              {planPreview && (
-                <p className="mt-3 text-[12px] text-[var(--ops-ink-dim)]">
-                  Dry-run only — nothing is sent. {formatOpsCount(planCandidates.length)} firms have
-                  no next follow-up. Import a cohort or open a firm to draft the first touch.
-                </p>
-              )}
-            </div>
-          )}
           </div>
           <LighthouseAgentChat
             adminKey={adminKey}
@@ -783,8 +757,11 @@ export function LighthousePanel({
                     className="flex w-full items-baseline justify-between gap-3 border-b border-[var(--ops-line)] px-4 py-3 text-left last:border-b-0 hover:bg-[var(--ops-amber-soft)]"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-[var(--ops-ink)]">
-                        {firmCardTitle(lead)}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-[var(--ops-ink)]">
+                          {firmCardTitle(lead)}
+                        </span>
+                        {showsDryRunBadge(lead) && <DryRunBadge />}
                       </span>
                       <span className="block truncate text-[11px] text-[var(--ops-ink-dim)]">
                         {STAGE_LABELS[lead.stage]} · next {cadenceRow.nextFollowUp} · {lead.trafficTag ?? "untagged"}
@@ -792,9 +769,11 @@ export function LighthousePanel({
                         {lead.doNotContact ? " · suppressed" : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
-                      {sendWindowStatus(lead, now).zone ?? "—"}
-                    </span>
+                    {sendWindowStatus(lead, now).zone ? (
+                      <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
+                        {sendWindowStatus(lead, now).zone}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })
@@ -928,7 +907,7 @@ export function LighthousePanel({
       )}
 
       {confirmSend && (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4">
+        <div data-lighthouse-confirm className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-5">
             <h3 className="text-sm font-bold text-[var(--ops-ink)]">Send this email?</h3>
             <dl className="mt-3 space-y-1.5 text-[12.5px] text-[var(--ops-ink-soft)]">
@@ -1000,6 +979,26 @@ export function LighthousePanel({
   );
 }
 
+function showsDryRunBadge(lead: { name?: string | null; company?: string | null }): boolean {
+  return isDryRunCohortName(lead.company) || isDryRunCohortName(lead.name);
+}
+
+function queueLeadIsDryRun(
+  leads: Array<{ id: string; name?: string | null; company?: string | null }>,
+  leadId: string,
+): boolean {
+  const lead = leads.find((row) => row.id === leadId);
+  return lead ? showsDryRunBadge(lead) : false;
+}
+
+function DryRunBadge() {
+  return (
+    <span className="shrink-0 rounded-full border border-[var(--ops-line)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+      Dry run
+    </span>
+  );
+}
+
 function FunnelStat({
   label,
   value,
@@ -1061,12 +1060,14 @@ function PipelineBoard({
                   onClick={() => onOpen(l.id)}
                   className="w-full rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5 text-left transition-colors hover:border-[var(--ops-amber-border)]"
                 >
-                  <div className="truncate text-sm font-semibold text-[var(--ops-ink)]">
-                    {firmCardTitle(l)}
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-[var(--ops-ink)]">
+                      {firmCardTitle(l)}
+                    </div>
+                    {showsDryRunBadge(l) && <DryRunBadge />}
                   </div>
                   <div className="truncate text-[11px] text-[var(--ops-ink-dim)]">
-                    {l.company || "—"}
-                    {isGenericLeadName(l.name, l.email) && l.email ? ` · ${l.email}` : ""} ·{" "}
+                    {isGenericLeadName(l.name, l.email) && l.email ? `${l.email} · ` : ""}
                     {l.persona === "accountant" ? "practice" : "owner"}
                     {l.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? " · one-shot" : ""}
                   </div>
@@ -1240,121 +1241,6 @@ function AddLeadForm({
         </button>
       </div>
     </form>
-  );
-}
-
-function Playbook({ dash }: { dash: LighthouseDashboard }) {
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 text-sm text-[var(--ops-ink-soft)]">
-        <p className="font-semibold text-[var(--ops-ink)]">How the funnel is built</p>
-        <p className="mt-1.5 text-[var(--ops-ink-dim)]">
-          Accountant drip loads the approved v3 emails as the golden default. Rewrite is on
-          request. Accountant one-shot is a separate banger (call after they look).
-          Owner sequences use an agent draft.
-        </p>
-        <p className="mt-1.5 text-[var(--ops-ink-dim)]">
-          Every drip sequence ends at the tracked free-trial link. The accountant one-shot is
-          different: it asks for a look at the videos and one-pagers, then a call. If someone
-          writes back, you answer in the same thread.
-        </p>
-      </div>
-
-      {dash.sequences.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-[var(--ops-line-strong)] p-8 text-center text-sm text-[var(--ops-ink-dim)]">
-          Sequences load once the Lighthouse migration has been run.
-        </div>
-      )}
-
-      {dash.sequences
-        .filter((seq) => seq.key !== ACCOUNTANT_ONESHOT_SEQUENCE_KEY)
-        .map((seq) => (
-        <div key={seq.key} className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4 text-[var(--ops-amber)]" />
-            <h3 className="text-sm font-bold text-[var(--ops-ink)]">{seq.name}</h3>
-            <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--ops-ink-dim)]">
-              {seq.key}
-            </span>
-          </div>
-          <ol className="space-y-2">
-            {seq.steps.map((s) => {
-              const asset = dash.assets.find((a) => a.key === s.asset);
-              const golden = seq.key === "accountant_v1"
-                ? ACCOUNTANT_V1_GOLDEN.find((g) => g.step === s.step)
-                : undefined;
-              return (
-                <li
-                  key={s.step}
-                  className="grid gap-2 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-3 sm:grid-cols-[auto_1fr]"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ops-amber-soft)] text-[11px] font-bold text-[var(--ops-amber)]">
-                      {s.step}
-                    </span>
-                    <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
-                      day {s.day}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold capitalize text-[var(--ops-ink)]">
-                      {s.angle.replaceAll("_", " ")}
-                    </div>
-                    {golden && (
-                      <p className="mt-0.5 text-[12.5px] font-medium text-[var(--ops-ink-soft)]">
-                        Golden: {golden.subject}
-                      </p>
-                    )}
-                    <p className="mt-0.5 text-[12.5px] text-[var(--ops-ink-dim)]">{s.goal}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
-                      <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[var(--ops-ink-dim)]">
-                        ≤ {s.max_words} words
-                      </span>
-                      <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[var(--ops-ink-dim)]">
-                        cta: {s.cta.replaceAll("_", " ")}
-                      </span>
-                      {asset && (
-                        <span
-                          className={`rounded-full px-2 py-0.5 ${
-                            asset.status === "ready"
-                              ? "bg-[var(--ops-ok-bg)] text-[var(--ops-ok-ink)]"
-                              : "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]/80"
-                          }`}
-                        >
-                          {asset.title} · {asset.status === "ready" ? "ready" : "placeholder"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      ))}
-
-      <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-        <div className="mb-2 flex items-center gap-2">
-          <Target className="h-4 w-4 text-[var(--ops-amber)]" />
-          <h3 className="text-sm font-bold text-[var(--ops-ink)]">
-            Accountant one-shot / single banger
-          </h3>
-          <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--ops-ink-dim)]">
-            {ACCOUNTANT_ONESHOT_SEQUENCE_KEY}
-          </span>
-        </div>
-        <p className="text-[12.5px] font-medium text-[var(--ops-ink-soft)]">
-          Golden: {ACCOUNTANT_ONESHOT_GOLDEN.subject}
-        </p>
-        <p className="mt-1.5 text-[12.5px] text-[var(--ops-ink-dim)]">
-          Separate from the 5-step drip. Loads this golden copy with the first name filled.
-          Rewrite is optional. Mentions a follow-up call on purpose. Both one-pagers attach on send.
-        </p>
-        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-[var(--ops-line)] bg-[var(--ops-bg)] px-3 py-2 font-mono text-[11px] leading-relaxed text-[var(--ops-ink-soft)]">
-          {ACCOUNTANT_ONESHOT_GOLDEN.body}
-        </pre>
-      </div>
-    </div>
   );
 }
 
@@ -1535,7 +1421,6 @@ function SystemForm({
             From {LIGHTHOUSE_SENDER_NAME} &lt;{LIGHTHOUSE_FROM_EMAIL}&gt;
           </p>
           <p>Reply-to — hello@milonfinance.com</p>
-          <p>Signer locked · auto_send off</p>
           <p>Send windows enforced · US Tue–Thu 08:00–10:00 local · SA Tue–Thu 08:00–10:00 SAST</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -1779,6 +1664,24 @@ function LeadDrawer({
     }
   };
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector("[data-lighthouse-confirm]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  const closeDrawer = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-[80] flex justify-end bg-black/50 backdrop-blur-sm"
@@ -1790,10 +1693,18 @@ function LeadDrawer({
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-[var(--ops-ink)]">{firmCardTitle(lead)}</h2>
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[var(--ops-ink)]">
+              <span className="truncate">{firmCardTitle(lead)}</span>
+              {showsDryRunBadge(lead) && <DryRunBadge />}
+            </h2>
             <p className="text-sm text-[var(--ops-ink-dim)]">
               {lead.email || "No email"}
-              {lead.name && !isGenericLeadName(lead.name, lead.email) ? ` · ${lead.name}` : ""} ·{" "}
+              {lead.name &&
+              !isGenericLeadName(lead.name, lead.email) &&
+              firmCardTitle(lead) !== lead.name.trim()
+                ? ` · ${lead.name}`
+                : ""}
+              {" · "}
               {lead.persona === "accountant" ? "practice" : "owner"}
               {isOneshot ? " · one-shot" : ""}
               {lead.city ? ` · ${lead.city}` : ""}
@@ -1838,10 +1749,13 @@ function LeadDrawer({
             )}
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            aria-label="Close"
+            onPointerDown={closeDrawer}
+            onClick={closeDrawer}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--ops-line-strong)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink)]"
           >
-            <X className="h-4 w-4" />
+            <X className="pointer-events-none h-4 w-4" />
           </button>
         </div>
 
@@ -1979,7 +1893,7 @@ function LeadDrawer({
               {lead.inbound[0].subject || "(no subject)"}
             </p>
             <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-[var(--ops-ink-soft)]">
-              {(lead.inbound[0].body ?? "").slice(0, 700) || "(body not fetched yet — run the engagement migration and keep RESEND_API_KEY set)"}
+              {(lead.inbound[0].body ?? "").slice(0, 700) || "(body not fetched yet)"}
             </p>
             <p className="mt-1.5 text-[11px] text-[var(--ops-ink-dim)]">
               From {lead.inbound[0].fromEmail}
@@ -2132,7 +2046,7 @@ function LeadDrawer({
             className={`${inputCls} min-h-[260px] resize-y py-2 font-mono text-[12.5px] leading-relaxed`}
             placeholder={
               usesGolden
-                ? "Load the golden copy for this step. It lands in the review inbox."
+                ? "Load the golden copy for this step."
                 : "Agent draft, then edit before sending. Nothing sends without your approval."
             }
             value={body}
@@ -2300,10 +2214,8 @@ function LeadDrawer({
               ))}
           </select>
         </div>
-        {!windowStatus.open && (
-          <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
-            {windowStatus.reason ?? `Next window ${windowStatus.nextLabel}`}
-          </p>
+        {nextWindowLine(windowStatus) && (
+          <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">{nextWindowLine(windowStatus)}</p>
         )}
 
         {existing && (existing.sentAt || existing.deliveredAt || existing.clickedAt) && (
@@ -2354,7 +2266,7 @@ function LeadDrawer({
           </h3>
           {lead.touches.filter((t) => t.sentAt || t.status === "sent" || t.status === "failed" || t.status === "skipped").length === 0 ? (
             <p className="text-sm text-[var(--ops-ink-faint)]">
-              Nothing sent yet. Drafts wait in the review inbox.
+              Nothing sent yet.
             </p>
           ) : (
             <ul className="space-y-1.5">
