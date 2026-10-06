@@ -786,3 +786,69 @@ html .mk .firm-bands-table .firm-bands-name strong {
   white-space: nowrap;
   border: 0;
 }
+.mk .firm-trial-bar {
+  max-width: 720px;
+  margin: 0 auto 20px;
+  text-align: center;
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  padding: 18px 22px;
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+}
+.mk .firm-trial-bar-lead {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.mk .firm-trial-bar-sub,
+.mk .firm-trial-bar-za {
+  margin: 6px 0 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.mk .firm-trial-bar-sub { font-size: 15px; }
+.mk .firm-trial-bar-za { font-size: 14px; }
+.mk .firm-bands-watchlist {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+.mk .firm-band-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 767px) {
+  .mk .firm-bands-table-wrap { display: none; }
+  .mk .firm-band-cards { display: grid; gap: 10px; }
+  .mk .firm-band-card {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    background: var(--bg-2);
+  }
+  .mk .firm-band-card-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .mk .firm-band-card-name { margin: 0; font-weight: 700; }
+  .mk .firm-band-card.is-trial .firm-band-card-name { font-size: 20px; }
+  .mk .firm-band-card-limit { margin: 4px 0 0; font-size: 14px; }
+  .mk .firm-band-card-price { margin: 0; font-weight: 800; }
+  .mk .firm-band-card.is-trial .firm-band-card-price { font-size: 28px; color: var(--gold); }
+  .mk .firm-band-card .btn {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    margin-top: 12px;
+    min-height: 44px;
+    border-radius: 999px;
+    text-decoration: none;
+  }
+  .mk .firm-band-card.is-trial .btn { min-height: 52px; }
+  .mk .firm-band-card-note { margin: 8px 0 0; font-size: 13px; text-align: center; }
+}

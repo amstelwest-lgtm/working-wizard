@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -10,7 +10,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
 import { ViewModeProvider } from "@/contexts/view-mode";
 import { ShareButton } from "@/components/share";
@@ -237,6 +237,35 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function LandingFloatGate() {
+  const { user } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onLanding = pathname === "/" || pathname === "";
+  const [narrow, setNarrow] = useState(true);
+  const [measured, setMeasured] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    setMeasured(true);
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Logged-out `/` below 1024px: no pencil or share button in the DOM.
+  // Until the viewport is measured, render neither so a phone never hydrates them.
+  if (onLanding && !user && (!measured || narrow)) return null;
+  if (onLanding && !user) return <FloatingNoteButton safeCorner />;
+
+  return (
+    <>
+      <ShareButton />
+      <FloatingNoteButton />
+    </>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -248,8 +277,7 @@ function RootComponent() {
             <NotesProvider>
               <ViewModeProvider>
                 <Outlet />
-                <ShareButton />
-                <FloatingNoteButton />
+                <LandingFloatGate />
                 <NoteArchiveSheet />
                 <Toaster position="top-right" richColors offset={16} style={{ zIndex: 70 }} />
               </ViewModeProvider>

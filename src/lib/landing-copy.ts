@@ -103,10 +103,110 @@ export const AI_USE_LEAD = "How we use AI is set out in our";
 export const DASH_ARIA_LABEL =
   "Sample client dashboard: health score 78 with four pillar scores and a 13-week cash forecast showing a dip in week 6";
 
-export const PRICING_H2_USD = "USD bands by client count.";
-export const PRICING_H2_ZAR = "ZAR at Checkout.";
+export const PRICING_H2_USD = "Flat USD pricing by active clients, Solo to Scale.";
+export const PRICING_INTRO =
+  "One monthly price, set by how many clients you actively advise. Start on Solo and move up a band as your client list grows.";
+/**
+ * VERIFY-2 confirmed. Checkout creates a subscription on the chosen band price
+ * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
+ * Stripe bills that price when the trial ends and a card is on file.
+ */
+export const PRICING_TRIAL_AFTER =
+  "Card on file. After day 14 your chosen band bills automatically.";
+export const PRICING_WATCHLIST_NOTE =
+  "Watchlist clients are free and don't count toward your band until you open a full workspace for them.";
+export const PRICING_OWNER_BAR =
+  "Business owners: Spark is free during early access, no card needed.";
+export const PRICING_OWNER_CTA = "Start free on Spark";
+export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
+export const SOLO_CARD_NOTE = `${FIRM_TRIAL_SENTENCE}. Card on file.`;
 
-const HOMEPAGE_COST_QUESTION = "How do I get started, and what does MILŌN cost?";
+export const NAV_TRIAL_LABEL = "Start free trial";
+export const NAV_TRIAL_ARIA = "Start my 14-day free trial";
+
+export const PROOF_EYEBROW = "Proof, not promises";
+export const PROOF_H2 = "Every number shows its workings. Every sign-off leaves a trail.";
+
+/**
+ * VERIFY-12 confirmed. `ratioActualLine` leaves the calculation blank and
+ * `ratioFormulaLine` prints `Need: …` when an input is missing. Blank fields
+ * stay NaN in `computeRatios` rather than becoming 0.
+ */
+export const PROOF_RATIO_BODY =
+  "Each of the 19 ratios shows the figures behind it. Where a number is missing, Milōn says so instead of guessing.";
+/**
+ * VERIFY-11 confirmed: the PDF footer prints `signedOffByName` and the formatted
+ * `signedOffAt` (`report-footer.tsx`). Firm is omitted when `firm_name` is null.
+ * VERIFY-5 confirmed: `signoffStampFor` / `stampFromSignoff` drop the stamp when
+ * the figures' freshness timestamp is later than `signed_off_at`.
+ */
+export const PROOF_SIGNOFF_BODY =
+  "Signed-off reports carry the accountant's name and the sign-off date. If the figures change, the old sign-off no longer applies.";
+/**
+ * VERIFY-9 confirmed. The bot prompt refuses invented figures, and `request_human`
+ * stops the loop for a decision. No email claim (forecast_break can mail early).
+ */
+export const PROOF_BOT_BODY =
+  "Milōn Bot works only from what's on file. It won't invent figures, and it stops when a decision needs you.";
+
+export const PROOF_CARDS = [
+  {
+    id: "ratio",
+    title: "Workings on every ratio",
+    body: PROOF_RATIO_BODY,
+    alt: "Ratio detail showing days sales outstanding with the receivables and revenue figures used to calculate it",
+    base: "ratio-dso",
+  },
+  {
+    id: "signoff",
+    title: "Sign-off on the deliverable",
+    body: PROOF_SIGNOFF_BODY,
+    alt: "Advisory report footer with the accountant's sign-off stamp showing name and date",
+    base: "signoff-stamp",
+  },
+  {
+    id: "bot",
+    title: "An agent that knows its limits",
+    body: PROOF_BOT_BODY,
+    alt: "Milōn Bot run showing completed analysis steps and one step waiting for accountant approval",
+    base: "bot-run",
+  },
+] as const;
+
+export function proofImageSrc(base: string, width: 480 | 800 | 1200 | 1600): string {
+  return `/proof/${base}-${width}.webp`;
+}
+
+export function proofImageSrcSet(base: string): string {
+  return ([480, 800, 1200, 1600] as const)
+    .map((width) => `${proofImageSrc(base, width)} ${width}w`)
+    .join(", ");
+}
+
+/**
+ * VERIFY-6 is not confirmed as a blanket claim. `has_client_access` also admits
+ * Milōn IT to every client, and firm staff need a named assignment rather than
+ * seeing the whole firm. The RLS bullet and homepage FAQ item are omitted.
+ * VERIFY-7 confirmed: Checkout collects the card (`payment_method_collection:
+ * "always"`); no card number, expiry, or CVC column exists in the schema.
+ * VERIFY-8 confirmed: Settings calls `deleteOwnAccount` → `delete_own_account()`,
+ * which deletes the login and owned client/firm rows.
+ * The sign-off log line was verified in #302 (SELECT + INSERT only).
+ */
+export const PROOF_SECURITY_FACTS = [
+  "Card details are collected by Stripe Checkout. Milōn never stores them.",
+  "You can delete your account and its data from Settings.",
+  "Every sign-off is logged with the accountant's name and time, and log entries can't be edited afterwards.",
+] as const;
+
+export const PROOF_AI_LINK = "Read the AI notice →";
+export const PROOF_PRIVACY_LINK = "Privacy →";
+
+export const FAQ_MORE_LEAD = "More on cost, data and AI: ";
+export const FAQ_MORE_LINK = "all questions";
+
+/** Must match the homepage cost question in `HOMEPAGE_FAQ_ITEMS`. */
+export const HOMEPAGE_COST_QUESTION = "What does it cost?";
 const PUBLIC_COST_QUESTION = "What does it cost?";
 
 export function withSaPricingLines(answer: string, showSaPricing: boolean): string {

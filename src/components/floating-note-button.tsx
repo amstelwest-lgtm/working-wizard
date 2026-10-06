@@ -2,13 +2,25 @@ import { Archive, PenLine, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNotes } from "@/contexts/notes";
 
-export function FloatingNoteButton() {
+export function FloatingNoteButton({ safeCorner = false }: { safeCorner?: boolean }) {
   const { pinMode, setPinMode, surface, getNotesForTab, notes, openArchive } = useNotes();
   const count = surface?.clientId ? getNotesForTab(surface.tab).length : 0;
   const resolvedCount = notes.filter((n) => n.resolved).length;
 
   return (
-    <div id="wizard-notes-pin" className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2">
+    <div
+      id="wizard-notes-pin"
+      className={
+        safeCorner
+          ? "landing-safe fixed z-50 flex flex-col items-end gap-2"
+          : "fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2"
+      }
+      style={
+        safeCorner
+          ? { right: "max(24px, env(safe-area-inset-right))", bottom: "24px" }
+          : undefined
+      }
+    >
       {surface?.clientId && notes.length > 0 && (
         <button
           type="button"

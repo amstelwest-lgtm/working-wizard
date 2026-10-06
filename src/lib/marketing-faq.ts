@@ -1,4 +1,5 @@
 import { LIST_PRICES } from "./market/marketing";
+import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
@@ -38,31 +39,43 @@ export const SA_PRODUCT_QUESTION = "Is this built for South Africa or bolted on?
 export const SA_PRODUCT_ANSWER =
   "Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in the cost of doing business, and benchmarks drawn from South African context rather than from a US template with the currency symbol swapped.";
 
-/** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. Firms start with a ${FIRM_TRIAL_SENTENCE}, card on file. Business owners can start free on Spark during early access, no card needed.`;
+
+/**
+ * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.
+ * Accountant objections first. The "who can see a client's figures" item is
+ * omitted: VERIFY-6's "the whole firm, no browse-all" sentence is not accurate
+ * (`has_client_access` includes Milōn IT, and staff need a named assignment).
+ * The cost question string must stay equal to `HOMEPAGE_COST_QUESTION`.
+ */
 export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
-    question: "Does MILŌN replace my accountant?",
+    question: "Does Milōn replace the accountant?",
     answer:
       "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off every advisory pack. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
   },
   {
-    question: "Do I need QuickBooks or Xero to use MILŌN?",
+    question: "Is client data used to train AI models?",
+    answer:
+      "No. Client financial information isn't used to train third-party AI models. Amounts stay as they are, so the workings and your sign-off use real figures. The AI notice explains how AI is used in Milōn.",
+  },
+  {
+    question: "Do I need QuickBooks or Xero to use Milōn?",
     answer:
       "No, you do not need QuickBooks or Xero to use MILŌN. When the books are already there, connect QuickBooks Online or Xero and MILŌN reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
   },
   {
-    question: "Is my financial data used to train AI models?",
-    answer: `No, your client financial information is not used to train third-party AI models. ${AI_IDENTIFIERS_LINE} Client numbers are not used to train third-party models, while AI is used within MILŌN to prepare financial analysis for human accountant review.`,
+    question: "What does it cost?",
+    answer: HOMEPAGE_COST_ANSWER,
   },
   {
-    question: "What does MILŌN do for my business?",
+    question: "What does Milōn Bot do, and what's left to me?",
     answer:
-      "MILŌN turns your financial information into a clear view of your business's financial health and what may need attention. It assesses profit, assets, financing, and cash using 19 carefully selected financial ratios, including DuPont analysis, and provides a 13-week cash-flow forecast. AI then helps prepare context-driven analysis and recommendations for accountant review.",
+      "Milōn Bot reads the client's numbers from QuickBooks Online, Xero or an upload, calculates the health score and 19 ratios, builds the 13-week cash forecast and drafts the advisory deliverables. It works only from what's on file and stops when a decision needs you. You review, edit and sign off every advisory pack.",
   },
   {
-    question: "How do I get started, and what does MILŌN cost?",
-    answer:
-      "Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then a paid USD band by active client count (Solo through Scale; Enterprise is a custom quote) through Stripe Checkout. Business owners can start free with Spark during early access, with no card required.",
+    question: "What happens when the trial ends?",
+    answer: `Your ${FIRM_TRIAL_SENTENCE} runs with a card on file. After day 14 your chosen band bills automatically through Stripe Checkout. Milōn never stores card details, and you can delete your account and its data from Settings.`,
   },
 ];
 
