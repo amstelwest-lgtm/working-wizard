@@ -17,6 +17,11 @@ import {
   rehydrateClientName,
   rehydrateModelOutput,
 } from "../src/lib/redact-identifiers";
+import {
+  buildOverviewBrief,
+  formatOverviewForPrompt,
+  overviewFactLines,
+} from "../supabase/functions/ask-ai/overview-brief.ts";
 import { buildPrompt, sealAskAiPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext } from "../supabase/functions/ask-ai/types.ts";
 import { systemPromptFor } from "../supabase/functions/brain-propose/logic.ts";
@@ -141,6 +146,83 @@ assert(
     rehydrateModelOutput("Draft for [CLIENT]", askSealed.session).includes(CLIENT),
   "ask-ai output rehydration works",
 );
+
+const overview = buildOverviewBrief({
+  financials: {
+    equity: 90000,
+    totalAssets: 250000,
+    totalLiabilities: 160000,
+    revenue: 200000,
+    cogs: 80000,
+  },
+  copyPack: "us",
+  clientName: CLIENT,
+  brainSummary: {
+    headline: `${CLIENT} contact ${PERSON} <${EMAIL}> VAT ${TAX}. Equity is not a name.`,
+  },
+});
+const overviewText = formatOverviewForPrompt(overview, "accountant");
+assert(overviewText.includes("Total equity: $90,000"), "overview emits total equity");
+assert(overviewText.includes("Total assets: $250,000"), "overview emits total assets");
+assert(overviewText.includes("Total liabilities: $160,000"), "overview emits total liabilities");
+assert(overviewText.includes(CLIENT), "brain headline still names the client before sealing");
+const askOverview = sealAskAiPrompt(
+  buildPrompt(
+    "How healthy is this client?",
+    { ...askCtx, overview, copyPack: "us" },
+    "summary",
+    "accountant",
+  ),
+  { clientName: CLIENT, partyNames: [PERSON], emails: [EMAIL], taxIds: [TAX] },
+);
+const overviewPayload = `${askOverview.system}\n${askOverview.user}`;
+assert(!overviewPayload.includes("Harbour"), "overview prompt still has the client");
+assert(!overviewPayload.includes(EMAIL), "overview prompt still has the email");
+assert(!overviewPayload.includes(TAX), "overview prompt still has the VAT number");
+assert(!overviewPayload.includes(PERSON), "overview prompt still has the contact");
+assert(overviewPayload.includes("Total equity: $90,000"), "redaction dropped total equity");
+assert(overviewPayload.includes("Total assets: $250,000"), "redaction dropped total assets");
+assert(overviewPayload.includes("Total liabilities: $160,000"), "redaction dropped total liabilities");
+assert(overviewPayload.includes("[CLIENT]"), "overview prompt did not mark the client");
+
+const zaOverview = buildOverviewBrief({
+  financials: { equity: 90000, totalAssets: 1250000, totalLiabilities: 184320 },
+  copyPack: "za",
+  clientName: CLIENT,
+  brainSummary: { headline: `${CLIENT}'s balance sheet` },
+});
+const zaSealed = redactForModel(formatOverviewForPrompt(zaOverview, "owner"), {
+  clientName: CLIENT,
+});
+assert(!zaSealed.text.includes("Harbour"), "ZA overview still has the client");
+assert(zaSealed.text.includes("Total equity: R90,000"), "redaction dropped the rand equity");
+assert(zaSealed.text.includes("Total assets: R1,250,000"), "redaction dropped the rand assets");
+assert(zaSealed.text.includes("Total liabilities: R184,320"), "redaction dropped the rand liabilities");
+
+const botOverview = buildMilonBotChatPayload({
+  system: "You help with this client. Debtor Days stay numeric.",
+  overviewBlock: overviewText,
+  history: [],
+  message: `What is total equity? Debtor Days: 45. Trade receivables ${AMOUNT}. Period 2024-03-31.`,
+  audience: "accountant",
+  subject: { clientName: CLIENT, partyNames: [PERSON], emails: [EMAIL], taxIds: [TAX] },
+});
+const botOverviewPayload = `${botOverview.system}\n${botOverview.messages.map((turn) => turn.content).join("\n")}`;
+assert(!botOverviewPayload.includes("Harbour"), "milon-bot overview still has the client");
+assert(!botOverviewPayload.includes(EMAIL), "milon-bot overview still has the email");
+assert(botOverviewPayload.includes("Total equity: $90,000"), "milon-bot overview dropped total equity");
+assert(botOverviewPayload.includes("Total assets: $250,000"), "milon-bot overview dropped total assets");
+assert(botOverviewPayload.includes("Total liabilities: $160,000"), "milon-bot overview dropped total liabilities");
+assert(botOverviewPayload.includes(AMOUNT), "milon-bot overview dropped the amount");
+
+const overviewTool = redactToolResult(
+  { overview_lines: overviewFactLines(overview), name: CLIENT },
+  createRedactionSession({ clientName: CLIENT }),
+);
+assert(!overviewTool.includes("Harbour"), "overview tool result still has the client");
+assert(overviewTool.includes("Total equity: $90,000"), "overview tool result dropped total equity");
+assert(overviewTool.includes("Total assets: $250,000"), "overview tool result dropped total assets");
+assert(overviewTool.includes("Total liabilities: $160,000"), "overview tool result dropped total liabilities");
 
 // ── brain-propose ───────────────────────────────────────────────────────────
 const propose = buildBrainProposePayload({
