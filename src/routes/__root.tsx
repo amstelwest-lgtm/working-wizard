@@ -21,7 +21,7 @@ import { NoteArchiveSheet } from "@/components/note-archive";
 import { reportClientError } from "@/lib/monitoring";
 
 import appCss from "../styles.css?url";
-import { organizationGraphJson, pageHead, SEO_PAGES } from "@/lib/seo";
+import { notFoundHead, organizationGraphJson } from "@/lib/seo";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 
 function NotFoundComponent() {
@@ -86,42 +86,48 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => {
-    const home = pageHead(SEO_PAGES.home);
+  head: ({ match }) => {
+    // Homepage title, description, canonical, and og:url live on `/` only.
+    // Unmatched paths (including /blog and /pricing, which are not routes)
+    // must not inherit that metadata — they are real 404s.
+    const missing = match._notFound ? notFoundHead() : null;
     const jsonLd = {
       type: "application/ld+json",
       children: organizationGraphJson(),
     };
     return {
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "author", content: "Milōn" },
-      ...home.meta,
-      { name: "theme-color", content: "#0A0A0A" },
-      { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
-      { name: "apple-mobile-web-app-title", content: "Milōn" },
-    ],
-    links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap" },
-      { rel: "stylesheet", href: appCss },
-      { rel: "stylesheet", href: "/ask-ai.css" },
-      { rel: "manifest", href: "/manifest.json" },
-      { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
-      { rel: "icon", href: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
-      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
-      ...home.links,
-    ],
-    scripts: import.meta.env.DEV
-      ? [
-          jsonLd,
-          {
-            // Dev-only: report FULL browser errors (console truncates them) to
-            // the server so hydration failures can be diagnosed from logs.
-            children: `
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { name: "author", content: "Milōn" },
+        ...(missing?.meta ?? []),
+        { name: "theme-color", content: "#0A0A0A" },
+        { name: "apple-mobile-web-app-capable", content: "yes" },
+        { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+        { name: "apple-mobile-web-app-title", content: "Milōn" },
+      ],
+      links: [
+        { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+        {
+          rel: "stylesheet",
+          href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
+        },
+        { rel: "stylesheet", href: appCss },
+        { rel: "stylesheet", href: "/ask-ai.css" },
+        { rel: "manifest", href: "/manifest.json" },
+        { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
+        { rel: "icon", href: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+        { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
+        ...(missing?.links ?? []),
+      ],
+      scripts: import.meta.env.DEV
+        ? [
+            jsonLd,
+            {
+              // Dev-only: report FULL browser errors (console truncates them) to
+              // the server so hydration failures can be diagnosed from logs.
+              children: `
 (function () {
   // Defer ResizeObserver callbacks to the next animation frame. This
   // prevents the benign "ResizeObserver loop completed with undelivered
@@ -170,10 +176,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     return origErr.apply(console, arguments);
   };
 })();`,
-          },
-        ]
-      : [jsonLd],
-  };
+            },
+          ]
+        : [jsonLd],
+    };
   },
   shellComponent: RootShell,
   component: RootComponent,
@@ -190,11 +196,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
   const isLanding = pathname === "/" || pathname === "";
 
   return (
-    <html
-      lang="en-US"
-      data-landing={isLanding ? "1" : undefined}
-      suppressHydrationWarning
-    >
+    <html lang="en-US" data-landing={isLanding ? "1" : undefined} suppressHydrationWarning>
       <head>
         {/*
           FOUC guard for `/`:
@@ -212,16 +214,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: [
               'html[data-landing="1"]:not([data-theme="light"]),html[data-landing="1"]:not([data-theme="light"]) body{',
-              'background:#050507!important;background-color:#050507!important;',
-              'color:#f2ecdc!important;color-scheme:dark;color-scheme:only dark;',
-              '}',
+              "background:#050507!important;background-color:#050507!important;",
+              "color:#f2ecdc!important;color-scheme:dark;color-scheme:only dark;",
+              "}",
               'html[data-landing="1"][data-theme="light"],html[data-landing="1"][data-theme="light"] body{',
-              'background:#f7f4ec!important;background-color:#f7f4ec!important;',
-              'color:#1b1608!important;color-scheme:light;color-scheme:only light;',
-              '}',
+              "background:#f7f4ec!important;background-color:#f7f4ec!important;",
+              "color:#1b1608!important;color-scheme:light;color-scheme:only light;",
+              "}",
               'html.dark:not([data-theme="light"]),html.dark:not([data-theme="light"]) body{',
-              'background:#050507!important;background-color:#050507!important;',
-              '}',
+              "background:#050507!important;background-color:#050507!important;",
+              "}",
             ].join(""),
           }}
         />

@@ -97,7 +97,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer: `We use AI. ${AI_MODEL_DISCLOSURE} ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs off every advisory pack. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI. ${AI_MODEL_DISCLOSURE} ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs off every advisory pack. The AI notice at https://www.milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

@@ -1,7 +1,11 @@
 import { LIST_PRICES } from "./market/marketing";
 
-/** Canonical public origin. Trailing slash lives on paths, not here. */
-export const SITE_ORIGIN = "https://milonfinance.com";
+/**
+ * Production canonical origin for public metadata, sitemap locs, and robots.
+ * Always the www host. Do not derive this from the request: apex, localhost,
+ * and preview hosts must never appear in canonical, Open Graph, or schema.
+ */
+export const SITE_ORIGIN = "https://www.milonfinance.com";
 
 export type SeoPage = {
   path: string;
@@ -106,21 +110,17 @@ export function faqPageJson(items: FaqItem[]): string {
   });
 }
 
+/** Absolute www URL for a public path. Home is `/`; other paths keep their route path. */
 export function canonicalUrl(path: string): string {
-  if (path === "/") return `${SITE_ORIGIN}/`;
-  return `${SITE_ORIGIN}${path.endsWith("/") ? path : `${path}/`}`;
-}
-
-function slugFor(path: string): string {
-  if (path === "/") return "home";
-  return path.replace(/^\/|\/$/g, "").replace(/\//g, "-");
+  if (path === "/" || path === "") return `${SITE_ORIGIN}/`;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${SITE_ORIGIN}${normalized}`;
 }
 
 export function pageHead(page: SeoPage) {
   const path = page.path;
-  const url = `${SITE_ORIGIN}${path}`;
+  const url = canonicalUrl(path);
   const og = page.ogTitle ?? page.title;
-  const slug = slugFor(path);
   const image = `${SITE_ORIGIN}/og.png`;
   const index = page.index !== false;
   const robots = index
@@ -152,6 +152,25 @@ export function pageHead(page: SeoPage) {
       { rel: "alternate", hrefLang: "en-us", href: url },
       { rel: "alternate", hrefLang: "x-default", href: url },
     ],
+  };
+}
+
+/** Unmatched URLs (including /blog and /pricing, which are not pages). No homepage title, description, or og:url. */
+export const NOT_FOUND_TITLE = "Page not found | MILŌN";
+export const NOT_FOUND_DESCRIPTION =
+  "This address is not a page on MILŌN. It may be mistyped, or the page may have been moved.";
+
+export function notFoundHead() {
+  return {
+    meta: [
+      { title: NOT_FOUND_TITLE },
+      { name: "description", content: NOT_FOUND_DESCRIPTION },
+      { name: "robots", content: "noindex, nofollow" },
+      { property: "og:title", content: NOT_FOUND_TITLE },
+      { property: "og:description", content: NOT_FOUND_DESCRIPTION },
+      { property: "og:type", content: "website" },
+    ],
+    links: [] as Array<{ rel: string; href: string }>,
   };
 }
 
@@ -303,7 +322,7 @@ Primary: United States. Also serving South Africa.
 
 export function sitemapXml(lastmod: string): string {
   const urls = INDEXABLE_PATHS.map((path) => {
-    const loc = path === "/" ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}${path}`;
+    const loc = canonicalUrl(path);
     const priority = path === "/" ? "1.0" : "0.8";
     return `  <url>
     <loc>${loc}</loc>

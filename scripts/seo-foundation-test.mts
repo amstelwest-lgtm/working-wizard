@@ -7,10 +7,14 @@ import { resolve } from "node:path";
 import {
   INDEXABLE_PATHS,
   LLMS_TXT,
+  NOT_FOUND_DESCRIPTION,
+  NOT_FOUND_TITLE,
   ROBOTS_TXT,
   SEO_PAGES,
   SITE_ORIGIN,
+  canonicalUrl,
   faqPageJson,
+  notFoundHead,
   organizationGraphJson,
   pageHead,
   sitemapXml,
@@ -41,7 +45,8 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-assert(SITE_ORIGIN === "https://milonfinance.com", "canonical origin");
+assert(SITE_ORIGIN === "https://www.milonfinance.com", "canonical origin is www");
+assert(!SITE_ORIGIN.includes("://milonfinance.com"), "canonical origin is not the apex host");
 assert(visitorCopyPack({ country: null }) === "us", "unset visitors get US copy");
 assert(visitorCopyPack({ country: "ZA" }) === "za", "ZA opt-in still works");
 
@@ -58,6 +63,31 @@ assert(
   home.links.some((l) => l.rel === "canonical" && l.href === `${SITE_ORIGIN}/`),
   "home canonical",
 );
+assert(
+  home.meta.some((m) => "property" in m && m.property === "og:url" && m.content === `${SITE_ORIGIN}/`),
+  "home og:url",
+);
+
+function assertPublicHost(text: string, label: string) {
+  assert(!text.includes("https://milonfinance.com"), `${label} must not use the apex host`);
+  assert(!text.includes("localhost"), `${label} must not use localhost`);
+  assert(!text.includes("vercel.app"), `${label} must not use a preview host`);
+  assert(text.includes("https://www.milonfinance.com"), `${label} must use the www host`);
+}
+
+for (const page of Object.values(SEO_PAGES)) {
+  const head = pageHead(page);
+  const url = canonicalUrl(page.path);
+  assert(
+    head.links.some((l) => l.rel === "canonical" && l.href === url),
+    `${page.path} canonical is www + path`,
+  );
+  assert(
+    head.meta.some((m) => "property" in m && m.property === "og:url" && m.content === url),
+    `${page.path} og:url matches canonical`,
+  );
+  assertPublicHost(JSON.stringify(head), `${page.path} head`);
+}
 
 const app = pageHead(SEO_PAGES.app);
 assert(
@@ -88,7 +118,8 @@ assert(ROBOTS_TXT.includes("Allow: /"), "robots allow site");
 assert(ROBOTS_TXT.includes("GPTBot"), "robots allow AI crawlers");
 assert(ROBOTS_TXT.includes("Disallow: /app/"), "robots hide the workspace");
 assert(ROBOTS_TXT.includes("Disallow: /auth/"), "robots hide auth");
-assert(ROBOTS_TXT.includes("Sitemap: https://milonfinance.com/sitemap.xml"), "robots points at sitemap");
+assert(ROBOTS_TXT.includes("Sitemap: https://www.milonfinance.com/sitemap.xml"), "robots points at the www sitemap");
+assert(!ROBOTS_TXT.includes("https://milonfinance.com"), "robots does not advertise the apex host");
 
 assert(LLMS_TXT.includes("AI-automated finance function"), "llms.txt positioning");
 assert(LLMS_TXT.includes("QuickBooks Online"), "llms.txt names QuickBooks Online");
@@ -118,6 +149,10 @@ assert(!map.includes("/auth"), "sitemap excludes /auth");
 const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
 assert(root.includes('lang="en-US"'), "html lang is en-US");
 assert(root.includes("organizationGraphJson"), "root emits org JSON-LD");
+assert(root.includes("notFoundHead"), "unmatched URLs get the 404 head");
+assert(root.includes("match._notFound"), "404 head is limited to unmatched routes");
+assert(!root.includes("pageHead(SEO_PAGES.home)"), "root does not stamp homepage meta on every URL");
+assert(!root.includes("SEO_PAGES.home"), "root does not import homepage SEO");
 assert(root.includes('href: "/favicon.ico"'), "root uses /favicon.ico");
 assert(!root.includes("favicon-32"), "old favicon-32 is gone");
 assert(!root.includes("?v=2"), "icon URLs are not cache-busted");
@@ -130,6 +165,35 @@ assert(
   home.meta.some((m) => "property" in m && m.property === "og:image" && m.content === `${SITE_ORIGIN}/og.png`),
   "og:image is the 1200x630 card",
 );
+assertPublicHost(graph, "organization schema");
+assert(graph.includes("https://www.milonfinance.com/#organization"), "org @id is www");
+assert(graph.includes("https://www.milonfinance.com/#software"), "software @id is www");
+assert(graph.includes("https://www.milonfinance.com/#website"), "website @id is www");
+assertPublicHost(ROBOTS_TXT, "robots.txt");
+assertPublicHost(LLMS_TXT, "llms.txt");
+assertPublicHost(map, "sitemap");
+assert(!map.includes("https://milonfinance.com/"), "sitemap locs are not apex");
+
+const missing = notFoundHead();
+const missingJson = JSON.stringify(missing);
+assert(missing.meta.some((m) => "title" in m && m.title === NOT_FOUND_TITLE), "404 title is unique");
+assert(NOT_FOUND_TITLE !== SEO_PAGES.home.title, "404 title is not the homepage title");
+assert(
+  missing.meta.some((m) => "name" in m && m.name === "description" && m.content === NOT_FOUND_DESCRIPTION),
+  "404 description is unique",
+);
+assert(NOT_FOUND_DESCRIPTION !== SEO_PAGES.home.description, "404 description is not the homepage description");
+assert(
+  missing.meta.some((m) => "name" in m && m.name === "robots" && String(m.content).includes("noindex")),
+  "404 is noindex",
+);
+assert(!missingJson.includes(SEO_PAGES.home.title), "404 head does not repeat the homepage title");
+assert(!missingJson.includes(SEO_PAGES.home.description), "404 head does not repeat the homepage description");
+assert(!missingJson.includes('"og:url"'), "404 head does not emit og:url");
+assert(missing.links.length === 0, "404 head does not emit a canonical");
+assert(!existsSync(resolve("src/routes/blog.tsx")), "/blog is not a homepage stub route");
+assert(!existsSync(resolve("src/routes/pricing.tsx")), "/pricing is not a homepage stub route");
+
 assert(graph.includes("/icons/icon-512.png"), "org schema logo is the 512 icon");
 assert(!graph.includes(`${SITE_ORIGIN}/icon-512.png"`), "org schema does not use the old root icon path");
 
@@ -243,6 +307,8 @@ assert(
   faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does MILŌN replace my accountant?"),
   "homepage FAQ schema includes the accountant question",
 );
+assert(!faqPageJson(publicFaqUsItems()).includes("https://milonfinance.com"), "faq schema does not use the apex host");
+assert(faqPageJson(publicFaqUsItems()).includes("https://www.milonfinance.com/ai"), "faq schema points the AI notice at www");
 
 const firms = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
 assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");
@@ -270,6 +336,11 @@ for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwner
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
 assert(shell.includes("Works with QuickBooks Online and Xero."), "collateral footer names both ledgers");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
+assert(!shell.includes("google.com/preferences"), "collateral footer has no Google preferences URL");
+assert(!landing.includes("google.com/preferences"), "home footer has no Google preferences URL");
+assert(!landing.includes("GooglePreferredSourceButton"), "home footer has no Preferred Source button");
+assert(!shell.includes("GooglePreferredSourceButton"), "collateral footer has no Preferred Source button");
+assert(!existsSync(resolve("src/components/google-preferred-source-button.tsx")), "Preferred Source button is removed");
 assert(!shell.includes(">milon.co.za<"), "collateral footer does not lead with milon.co.za");
 assert(!shell.includes("linkedin.com"), "collateral footer does not hardcode LinkedIn");
 assert(!shell.includes("x.com/milonfinance"), "collateral footer does not hardcode a dead X URL");
