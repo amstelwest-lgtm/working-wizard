@@ -71,6 +71,7 @@ import {
   coldCadenceOpen,
   conversationActivityType,
   inferredTargetCountry,
+  isInboundReplyTouch,
   normalisePhoneE164,
   parseLighthouseImport,
   planLighthouseImport,
@@ -1735,12 +1736,18 @@ export const reviewLighthouseTouch = createServerFn({ method: "POST" })
     const admin = adminLoose();
     const { data: touchRow, error: tErr } = await admin
       .from("lighthouse_touches")
-      .select("id, status, sent_at")
+      .select("id, status, sent_at, angle, step_no, lead_id")
       .eq("id", data.touchId)
       .maybeSingle();
     if (tErr) throw new Error(tErr.message);
     if (!touchRow) throw new Error("Touch not found");
-    const touch = touchRow as { status?: string; sent_at?: string | null };
+    const touch = touchRow as {
+      status?: string;
+      sent_at?: string | null;
+      angle?: string | null;
+      step_no?: number | null;
+      lead_id?: string | null;
+    };
     if (touch.sent_at || touch.status === "sent") {
       throw new Error("This touch was already sent.");
     }
@@ -1751,6 +1758,35 @@ export const reviewLighthouseTouch = createServerFn({ method: "POST" })
         .eq("id", data.touchId);
       if (error) throw new Error(error.message);
       return { ok: true as const, status: "skipped" as const };
+    }
+    const replyTouch = isInboundReplyTouch({
+      angle: touch.angle ?? null,
+      stepNo: Number(touch.step_no ?? 0),
+    });
+    if (!replyTouch) {
+      const leadId = String(touch.lead_id ?? "");
+      const { data: leadRow, error: leadErr } = leadId
+        ? await admin
+            .from("milon_ops_leads")
+            .select("company, name, email, conversation_held")
+            .eq("id", leadId)
+            .maybeSingle()
+        : { data: null, error: null };
+      if (leadErr) throw new Error(leadErr.message);
+      const heldLead = leadRow as {
+        company?: string | null;
+        name?: string | null;
+        email?: string | null;
+        conversation_held?: boolean | null;
+      } | null;
+      if (heldLead) {
+        assertColdDraftOpen({
+          conversationHeld: Boolean(heldLead.conversation_held),
+          company: heldLead.company ?? null,
+          name: heldLead.name ?? null,
+          email: heldLead.email ?? null,
+        });
+      }
     }
     const subject = (data.subject ?? "").trim();
     const body = (data.body ?? "").trim();
@@ -1821,6 +1857,19 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     const to = (lead?.email as string | null) ?? "";
     if (!to || !to.includes("@")) throw new Error("Lead has no email address.");
     if (lead?.do_not_contact) throw new Error("Lead is marked do-not-contact.");
+    if (
+      !isInboundReplyTouch({
+        angle: (touch.angle as string | null) ?? null,
+        stepNo: Number(touch.step_no ?? 0),
+      })
+    ) {
+      assertColdDraftOpen({
+        conversationHeld: Boolean(lead?.conversation_held),
+        company: (lead?.company as string | null) ?? null,
+        name: (lead?.name as string | null) ?? null,
+        email: (lead?.email as string | null) ?? null,
+      });
+    }
     assertLighthouseSendRecipientAllowed(to);
 
     // Fail closed against the platform-wide suppression list: someone who

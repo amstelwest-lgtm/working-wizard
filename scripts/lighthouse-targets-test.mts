@@ -26,7 +26,10 @@ import {
   conversationActivityType,
   displayedLeadMarket,
   formatPhoneDisplay,
+  HELD_COLD_APPROVE_REASON,
+  heldColdApproveReason,
   inferredTargetCountry,
+  isInboundReplyTouch,
   isTargetNotContacted,
   mapLighthouseCountry,
   normalisePhoneE164,
@@ -34,6 +37,7 @@ import {
   planLighthouseImport,
   resumedColdTouchOn,
   scheduledColdTouchOn,
+  shouldFlushContactOnPointerDown,
 } from "../src/lib/lighthouse-targets";
 
 function assert(cond: boolean, msg: string) {
@@ -255,6 +259,52 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   assert(formatPhoneDisplay("4155550100") === "+1 415 555 0100", "US 10-digit displays grouped");
   assert(formatPhoneDisplay("call the office") === "call the office", "unnormalised phone stays raw");
   assert(formatPhoneDisplay("") === "", "blank phone stays blank");
+}
+
+{
+  assert(
+    heldColdApproveReason({ conversationHeld: true }, { angle: "value", stepNo: 2 }) ===
+      HELD_COLD_APPROVE_REASON,
+    "a held lead blocks approve and send on a cold value draft",
+  );
+  assert(
+    heldColdApproveReason({ conversationHeld: true }, { angle: "reply", stepNo: 6 }) === null,
+    "a reply to inbound mail can still be approved",
+  );
+  assert(
+    heldColdApproveReason({ conversationHeld: true }, { angle: "observation", stepNo: 7 }) === null,
+    "steps 6–8 stay approvable when a call was held",
+  );
+  assert(isInboundReplyTouch({ angle: "value", stepNo: 2 }) === false, "a value step is cold cadence");
+  assert(
+    heldColdApproveReason({ conversationHeld: false }, { angle: "value", stepNo: 2 }) === null,
+    "an open cadence can still approve a cold draft",
+  );
+  assert(
+    shouldFlushContactOnPointerDown({
+      activeElementId: "lighthouse-lead-phone",
+      targetElementId: null,
+    }) === true,
+    "a click on plain drawer text flushes the phone field",
+  );
+  assert(
+    shouldFlushContactOnPointerDown({
+      activeElementId: "lighthouse-lead-phone",
+      targetElementId: "lighthouse-lead-website",
+    }) === true,
+    "moving to another field flushes the one that was focused",
+  );
+  assert(
+    shouldFlushContactOnPointerDown({
+      activeElementId: "lighthouse-lead-phone",
+      targetElementId: "lighthouse-lead-phone",
+    }) === false,
+    "a click inside the focused field does not flush",
+  );
+  assert(
+    shouldFlushContactOnPointerDown({ activeElementId: null, targetElementId: null }) === false,
+    "pointer down outside a contact field is ignored",
+  );
 }
 
 {
@@ -554,6 +604,31 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   );
   assert(!replyFn.includes("assertColdDraftOpen"), "replies to inbound mail may still draft");
   assert(!replyFn.includes("heldColdDraftRefusal"), "reply drafts do not use the cold stop");
+  const reviewFn = fnSrc.slice(
+    fnSrc.indexOf("export const reviewLighthouseTouch"),
+    fnSrc.indexOf("export const sendLighthouseTouch"),
+  );
+  const rejectBranch = reviewFn.slice(
+    reviewFn.indexOf('if (data.action === "reject")'),
+    reviewFn.indexOf("const replyTouch"),
+  );
+  assert(reviewFn.includes("isInboundReplyTouch"), "approve lets an inbound reply through");
+  assert(reviewFn.includes("assertColdDraftOpen"), "approve refuses a held cold draft");
+  assert(
+    reviewFn.indexOf("assertColdDraftOpen") < reviewFn.indexOf('status: "approved"'),
+    "approve checks the held flag before it writes",
+  );
+  assert(!rejectBranch.includes("assertColdDraftOpen"), "reject does not drop the draft via the cold stop");
+  const sendFn = fnSrc.slice(
+    fnSrc.indexOf("export const sendLighthouseTouch"),
+    fnSrc.indexOf("export const upsertLighthouseAsset"),
+  );
+  assert(sendFn.includes("isInboundReplyTouch"), "send lets an inbound reply through");
+  assert(sendFn.includes("assertColdDraftOpen"), "send refuses a held cold draft");
+  assert(
+    sendFn.indexOf("assertColdDraftOpen") < sendFn.indexOf(".update("),
+    "send checks the held flag before it changes the touch",
+  );
   assert(persistSrc.includes("assertColdDraftOpen"), "the shared draft write checks the held flag");
   assert(chatSrc.includes("resolveChatLead"), "chat resolves a lead before drafting");
   assert(chatSrc.includes("refuseColdDraft"), "chat refuses a held lead");
@@ -562,8 +637,20 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   assert(panelSrc.includes("checked={lead.conversationHeld}"), "the checkbox reads the lead");
   assert(panelSrc.includes("pendingLeadPatches"), "the row and checkbox share one optimistic patch");
   assert(panelSrc.includes("displayedLeadMarket"), "the SA/US filter uses inferred country");
-  assert(/contactSaved[\s\S]{0,240}Saved/.test(panelSrc), "contact save shows Saved");
+  assert(/phoneSaved[\s\S]{0,240}Saved/.test(panelSrc), "phone save shows Saved");
+  assert(/websiteSaved[\s\S]{0,240}Saved/.test(panelSrc), "website save shows Saved");
   assert(panelSrc.includes("e.currentTarget.value"), "blur save reads the field, not a stale render");
+  assert(panelSrc.includes("shouldFlushContactOnPointerDown"), "a click outside the field flushes the edit");
+  assert(
+    panelSrc.includes('addEventListener("pointerdown", onPointerDown, true)'),
+    "the flush runs on pointer down before focus can be cancelled",
+  );
+  assert(panelSrc.includes("flushPendingContact"), "close, Escape, and the backdrop flush pending edits");
+  const closeAt = panelSrc.indexOf("const closeDrawer");
+  const closeFn = panelSrc.slice(closeAt, panelSrc.indexOf("return (", closeAt));
+  assert(!/event\.preventDefault/.test(closeFn), "the close control does not swallow blur");
+  assert(panelSrc.includes("heldColdApproveReason"), "Approve and Send read the held-lead reason");
+  assert(panelSrc.includes("Boolean(heldColdReason)"), "Approve and Send are disabled while a call is held");
   assert(fnSrc.includes("scheduledColdTouchOn"), "sending does not schedule a held lead");
   assert(fnSrc.includes('created_by_kind: "human"'), "a held call is recorded as a human activity");
   assert(panelSrc.includes("Call / meeting held"), "the drawer labels the checkbox");
