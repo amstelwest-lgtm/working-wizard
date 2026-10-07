@@ -29,6 +29,7 @@ import {
   type PendingCheckout,
 } from "@/lib/pending-checkout";
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "@/lib/auth-landing";
+import { readInsightSeen } from "@/lib/funnel-timing";
 import { listUserFirms } from "@/lib/firm-brand";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { practiceLocationHint } from "@/lib/firm-signup-copy";
@@ -268,6 +269,7 @@ function AuthPage() {
         hasLiveEntitlement,
         pending,
         next,
+        insightSeen: readInsightSeen(),
       });
       if (decision.kind === "billing") {
         const path = billingStartPath(decision.pending);
@@ -278,7 +280,7 @@ function AuthPage() {
         });
         return path;
       }
-      clearPendingCheckout();
+      if (decision.kind !== "workspace") clearPendingCheckout();
       if (await shouldOpenItInbox(userId)) {
         landedPathRef.current = "/ops";
         navigate({ to: "/ops", search: { tab: "it" } });

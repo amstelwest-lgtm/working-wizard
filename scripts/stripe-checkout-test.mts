@@ -297,7 +297,8 @@ assert(
   callback.indexOf("pendingCheckout") < callback.indexOf("goOps"),
   "paid Checkout resume runs before generic /app landing",
 );
-assert(callback.includes("firmSignupCheckoutIntent"), "fresh accountant Google signup starts paid Solo trial");
+assert(callback.includes("readInsightSeen"), "Google return opens Checkout only after an insight");
+assert(callback.includes("firmSignupCheckoutIntent"), "fresh accountant Google signup still stashes Solo");
 
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 assert(settings.includes("createBillingPortalSession"), "practice settings can open Customer Portal");

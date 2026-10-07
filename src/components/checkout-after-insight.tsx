@@ -1,0 +1,62 @@
+import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { FUNNEL_CHECKOUT_AFTER_INSIGHT } from "@/lib/funnel-timing";
+import {
+  billingStartSearch,
+  peekPendingCheckout,
+  registerLabelForPlan,
+} from "@/lib/pending-checkout";
+import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
+import { FIRM_TRIAL_SENTENCE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+
+/**
+ * Shown once figures are on screen. Entitled firms see nothing.
+ * Unpaid firms get one Checkout action for the stashed band (Solo by default).
+ */
+export function CheckoutAfterInsight() {
+  const checkEntitlement = useServerFn(getFirmBillingEntitlement);
+  const [unpaid, setUnpaid] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void checkEntitlement({ data: {} })
+      .then((result) => {
+        if (!cancelled) setUnpaid(!result.entitled);
+      })
+      .catch(() => {
+        if (!cancelled) setUnpaid(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkEntitlement]);
+
+  if (!unpaid) return null;
+
+  const pending = peekPendingCheckout() ?? firmSignupCheckoutIntent();
+  const planName = registerLabelForPlan(pending.plan);
+
+  return (
+    <section
+      className="card"
+      data-funnel={FUNNEL_CHECKOUT_AFTER_INSIGHT}
+      aria-label="Continue after the figures"
+      style={{ marginTop: 16 }}
+    >
+      <p className="kicker">Next · keep this practice</p>
+      <h3 style={{ margin: "6px 0 8px" }}>You have the figures. Continue on {planName}.</h3>
+      <p style={{ margin: "0 0 14px", maxWidth: "62ch" }}>
+        A first subscription is a {FIRM_TRIAL_SENTENCE}. The card is collected at Checkout, then
+        the paid band bills after day 14.
+      </p>
+      <Link
+        to="/billing/start"
+        search={billingStartSearch(pending)}
+        className="btn gold"
+      >
+        Continue with {planName}
+      </Link>
+    </section>
+  );
+}

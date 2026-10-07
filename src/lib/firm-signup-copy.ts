@@ -5,7 +5,7 @@ import { FIRM_TRIAL_SENTENCE, type FirmCheckoutBand, type FirmInterval } from "@
  * Auth Create Firm must use this helper so the two surfaces cannot drift.
  */
 export function firmSignupTrialReminder(planLabel: string): string {
-  return `You will start on ${planLabel} with a ${FIRM_TRIAL_SENTENCE}. A card is required. After day 14 the paid band bills automatically.`;
+  return `You will start on ${planLabel}. See the first client's figures, then a card starts the ${FIRM_TRIAL_SENTENCE}. After day 14 the paid band bills automatically.`;
 }
 
 /** Accountant nav / hero label. Firms need a card, so this is not "Start free". */

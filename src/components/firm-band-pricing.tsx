@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { FUNNEL_SOLO_FIRST } from "@/lib/funnel-timing";
 import { ENTERPRISE_CONTACT_HREF, firmSignupHref } from "@/lib/firm-signup-copy";
 import {
   PRICING_TRIAL_AFTER,
@@ -49,6 +51,93 @@ function clientLabel(band: FirmBand, withActive: boolean): string {
   return withActive ? `Up to ${band.clientLimit} active clients` : `Up to ${band.clientLimit}`;
 }
 
+type StartControl = (band: FirmBand, className: string) => ReactNode;
+
+function BandTable({
+  bands,
+  interval,
+  startControl,
+}: {
+  bands: FirmBand[];
+  interval: FirmInterval;
+  startControl: StartControl;
+}) {
+  return (
+    <div className="firm-bands-table-wrap">
+      <table className="firm-bands-table">
+        <thead>
+          <tr>
+            <th scope="col">Band</th>
+            <th scope="col">Active clients</th>
+            <th scope="col">{interval === "year" ? "Annual" : "Monthly"}</th>
+            <th scope="col">Start</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bands.map((band) => {
+            const price = bandPriceLabel(band, interval);
+            return (
+              <tr
+                key={band.id}
+                className={band.id === "solo" ? "is-trial" : undefined}
+                data-band={band.id}
+              >
+                <td className="firm-bands-name">
+                  <strong>{band.name}</strong>
+                </td>
+                <td className="firm-bands-limit">{clientLabel(band, false)}</td>
+                <td className="firm-bands-price">{price}</td>
+                <td className="firm-bands-cta">
+                  {startControl(band, band.id === "solo" ? "btn btn-gold" : "btn btn-ghost")}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BandCards({
+  bands,
+  interval,
+  startControl,
+}: {
+  bands: FirmBand[];
+  interval: FirmInterval;
+  startControl: StartControl;
+}) {
+  return (
+    <ul className="firm-band-cards">
+      {bands.map((band) => {
+        const price = bandPriceLabel(band, interval);
+        const solo = band.id === "solo";
+        const enterprise = band.customQuote;
+        return (
+          <li
+            key={band.id}
+            className={solo ? "firm-band-card is-trial" : "firm-band-card"}
+            data-band={band.id}
+          >
+            <div className="firm-band-card-top">
+              <div>
+                <p className="firm-band-card-name">{band.name}</p>
+                <p className="firm-band-card-limit">
+                  {enterprise ? "Unlimited · Custom" : clientLabel(band, true)}
+                </p>
+              </div>
+              {enterprise ? null : <p className="firm-band-card-price">{price}</p>}
+            </div>
+            {startControl(band, solo ? "btn btn-gold" : "btn btn-ghost")}
+            {solo ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function FirmBandPricingTable({
   interval,
   onIntervalChange,
@@ -58,6 +147,8 @@ export function FirmBandPricingTable({
   showSaPricing = false,
 }: Props) {
   const bands = FIRM_BAND_TABLE.filter((band) => band.id !== "starter");
+  const solo = bands.find((band) => band.id === "solo");
+  const largerBands = solo ? bands.filter((band) => band.id !== solo.id) : bands;
 
   const startControl = (band: FirmBand, className: string) => {
     const billed = pricedInterval(band, interval);
@@ -120,68 +211,19 @@ export function FirmBandPricingTable({
           </button>
         </div>
       ) : null}
-      <div className="firm-bands-table-wrap">
-        <table className="firm-bands-table">
-          <thead>
-            <tr>
-              <th scope="col">Band</th>
-              <th scope="col">Active clients</th>
-              <th scope="col">{interval === "year" ? "Annual" : "Monthly"}</th>
-              <th scope="col">Start</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bands.map((band) => {
-              const price = bandPriceLabel(band, interval);
-              return (
-                <tr
-                  key={band.id}
-                  className={band.id === "solo" ? "is-trial" : undefined}
-                  data-band={band.id}
-                >
-                  <td className="firm-bands-name">
-                    <strong>{band.name}</strong>
-                  </td>
-                  <td className="firm-bands-limit">{clientLabel(band, false)}</td>
-                  <td className="firm-bands-price">{price}</td>
-                  <td className="firm-bands-cta">
-                    {startControl(
-                      band,
-                      band.id === "solo" ? "btn btn-gold" : "btn btn-ghost",
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div data-funnel={FUNNEL_SOLO_FIRST}>
+        {solo ? (
+          <>
+            <BandTable bands={[solo]} interval={interval} startControl={startControl} />
+            <BandCards bands={[solo]} interval={interval} startControl={startControl} />
+          </>
+        ) : null}
+        <details className="firm-bands-more">
+          <summary>Larger bands, from Small to Scale</summary>
+          <BandTable bands={largerBands} interval={interval} startControl={startControl} />
+          <BandCards bands={largerBands} interval={interval} startControl={startControl} />
+        </details>
       </div>
-      <ul className="firm-band-cards">
-        {bands.map((band) => {
-          const price = bandPriceLabel(band, interval);
-          const solo = band.id === "solo";
-          const enterprise = band.customQuote;
-          return (
-            <li
-              key={band.id}
-              className={solo ? "firm-band-card is-trial" : "firm-band-card"}
-              data-band={band.id}
-            >
-              <div className="firm-band-card-top">
-                <div>
-                  <p className="firm-band-card-name">{band.name}</p>
-                  <p className="firm-band-card-limit">
-                    {enterprise ? "Unlimited · Custom" : clientLabel(band, true)}
-                  </p>
-                </div>
-                {enterprise ? null : <p className="firm-band-card-price">{price}</p>}
-              </div>
-              {startControl(band, solo ? "btn btn-gold" : "btn btn-ghost")}
-              {solo ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
-            </li>
-          );
-        })}
-      </ul>
       <p className="firm-bands-watchlist">{PRICING_WATCHLIST_NOTE}</p>
     </div>
   );

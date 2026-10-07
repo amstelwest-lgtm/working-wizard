@@ -43,6 +43,7 @@ import {
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { readInsightSeen } from "@/lib/funnel-timing";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { listUserFirms } from "@/lib/firm-brand";
 import {
@@ -283,8 +284,9 @@ function AuthCallbackPage() {
           readVisitorMarket()?.country === "ZA" ? "za" : "us",
         );
       }
-      if (pendingCheckout) {
-        stashPendingCheckout(pendingCheckout);
+      if (pendingCheckout) stashPendingCheckout(pendingCheckout);
+      // Checkout after insight. A fresh Solo stash still lands in the workspace.
+      if (pendingCheckout && readInsightSeen()) {
         if (!cancelled) {
           void navigate({
             to: "/billing/start",

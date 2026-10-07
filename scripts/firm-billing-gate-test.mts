@@ -63,7 +63,47 @@ assert(
     isMilonItMember: false,
     entitled: false,
   }) === "require_billing",
-  "firm without sub → redirected",
+  "firm without sub and no insight flag → redirected",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: false,
+  }) === "allow",
+  "before an insight the dashboard stays open",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/abc",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: false,
+  }) === "allow",
+  "before an insight the client workspace stays open",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/reports",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: false,
+  }) === "require_billing",
+  "reports still bill before an insight",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+  }) === "require_billing",
+  "after an insight an unpaid firm is sent to Checkout",
 );
 assert(
   decideFirmBillingPathGate({
@@ -299,9 +339,11 @@ const goToFirm = landing.slice(
   landing.indexOf("const goToOwnerSpark"),
 );
 assert(goToFirm.includes("if (user)"), "signed-in Create firm CTA checks the session");
+assert(goToFirm.includes("readInsightSeen"), "signed-in Create firm waits for an insight");
+assert(goToFirm.includes('to: "/dashboard"'), "before an insight the CTA opens the practice");
 assert(
   goToFirm.includes('to: "/billing/start"'),
-  "signed-in Create firm CTA short-circuits to billing start",
+  "after an insight the CTA can still open Checkout",
 );
 
 const firmRegister = landing.slice(
@@ -395,7 +437,8 @@ assert(!appSrc.includes("getFirmBillingEntitlement"), "owner /app is not Stripe-
 assert(appSrc.includes("shouldBounceFromOwnerApp"), "owner bounce helper still used");
 
 const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
-assert(required.includes("Finish firm billing to open your practice"), "required page copy");
+assert(required.includes("Continue on"), "required page is Checkout after the figures");
+assert(required.includes("The figures stay."), "required page does not pretend the workspace never opened");
 assert(required.includes("Resume Checkout"), "required page resumes Checkout");
 assert(required.includes('createFileRoute("/billing/required")'), "required route");
 
@@ -464,10 +507,10 @@ const freshSignup = decideAccountantAuthLanding({
   next: undefined,
 });
 assert(
-  freshSignup.kind === "billing" && freshSignup.pending.plan === "solo",
-  "Create firm signup still honours the plan",
+  freshSignup.kind === "workspace",
+  "Create firm signup opens the workspace; Checkout waits for an insight",
 );
-const resume = decideAccountantAuthLanding({
+const earlyResume = decideAccountantAuthLanding({
   flow: "signin",
   hadFirmBefore: false,
   hasLiveEntitlement: false,
@@ -475,8 +518,20 @@ const resume = decideAccountantAuthLanding({
   next: "/billing/start?plan=solo&interval=month&market=us",
 });
 assert(
-  resume.kind === "billing",
-  "sign-in to finish billing still continues when there is no firm yet",
+  earlyResume.kind === "workspace",
+  "before an insight, a billing next opens the practice",
+);
+const resume = decideAccountantAuthLanding({
+  flow: "signin",
+  hadFirmBefore: false,
+  hasLiveEntitlement: false,
+  pending: null,
+  next: "/billing/start?plan=solo&interval=month&market=us",
+  insightSeen: true,
+});
+assert(
+  resume.kind === "billing" && resume.pending.plan === "solo",
+  "after an insight, sign-in to finish billing still opens Solo Checkout",
 );
 assert(safeAccountantRedirect("/dashboard") === "/dashboard", "dashboard next is safe");
 assert(

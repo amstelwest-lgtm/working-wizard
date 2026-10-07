@@ -3,6 +3,7 @@ import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-but
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { t, type VisitorCopyPack } from "@/lib/market";
 import { billingStartPath, peekPendingCheckout } from "@/lib/pending-checkout";
+import { readInsightSeen } from "@/lib/funnel-timing";
 
 const PasswordResetPanel = lazy(() =>
   import("./password-reset-panel").then((mod) => ({ default: mod.PasswordResetPanel })),
@@ -64,9 +65,15 @@ export function LandingSignInModal({
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
-  const title = fpMode ? (fpDone ? "Check your email" : "Reset password") : peekPendingCheckout()
-    ? "Sign in to finish firm billing"
-    : "Sign in to MILŌN";
+  const title = fpMode
+    ? fpDone
+      ? "Check your email"
+      : "Reset password"
+    : peekPendingCheckout()
+      ? readInsightSeen()
+        ? "Sign in to finish firm billing"
+        : "Sign in to open your practice"
+      : "Sign in to MILŌN";
 
   useEffect(() => {
     restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;

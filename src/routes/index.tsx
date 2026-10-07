@@ -49,6 +49,7 @@ import {
 } from "@/lib/pending-checkout";
 import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
+import { readInsightSeen } from "@/lib/funnel-timing";
 import {
   FIRM_TRIAL_SENTENCE,
   firmSignupCheckoutIntent,
@@ -482,11 +483,16 @@ function LandingPage() {
       if (pendingCheckout) {
         stashPendingCheckout(pendingCheckout);
         if (!cancelled) {
-          navigate({
-            to: "/billing/start",
-            search: billingStartSearch(pendingCheckout),
-            replace: true,
-          });
+          if (readInsightSeen()) {
+            navigate({
+              to: "/billing/start",
+              search: billingStartSearch(pendingCheckout),
+              replace: true,
+            });
+          } else {
+            setPortalIntent("accountant");
+            navigate({ to: "/dashboard", replace: true });
+          }
         }
         return;
       }
@@ -499,11 +505,16 @@ function LandingPage() {
             const pending = firmSignupCheckoutIntent();
             stashPendingCheckout(pending);
             if (!cancelled) {
-              navigate({
-                to: "/billing/start",
-                search: billingStartSearch(pending),
-                replace: true,
-              });
+              if (readInsightSeen()) {
+                navigate({
+                  to: "/billing/start",
+                  search: billingStartSearch(pending),
+                  replace: true,
+                });
+              } else {
+                setPortalIntent("accountant");
+                navigate({ to: "/dashboard", replace: true });
+              }
             }
             return;
           }
@@ -886,11 +897,15 @@ function LandingPage() {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
         setPortalIntent("accountant");
-        void navigate({
-          to: "/billing/start",
-          search: billingStartSearch(pendingCheckout),
-          replace: true,
-        });
+        if (readInsightSeen()) {
+          void navigate({
+            to: "/billing/start",
+            search: billingStartSearch(pendingCheckout),
+            replace: true,
+          });
+        } else {
+          void navigate({ to: "/dashboard", replace: true });
+        }
         return;
       }
       if (pendingInvite) {
@@ -936,7 +951,13 @@ function LandingPage() {
               hasPendingFirmCheckout: false,
               ownsFirm,
               resumeFirmBilling: true,
+              insightSeen: readInsightSeen(),
             });
+            if (resume === "workspace") {
+              setPortalIntent("accountant");
+              void navigate({ to: "/dashboard", replace: true });
+              return;
+            }
             if (resume) {
               const pending = firmSignupCheckoutIntent(visitorCopyPack(draftMarket));
               stashPendingCheckout(pending);
@@ -1191,10 +1212,14 @@ function LandingPage() {
           });
           if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
           forcePortal("accountant");
-          navigate({
-            to: "/billing/start",
-            search: billingStartSearch(pending),
-          });
+          if (readInsightSeen()) {
+            navigate({
+              to: "/billing/start",
+              search: billingStartSearch(pending),
+            });
+          } else {
+            navigate({ to: "/dashboard" });
+          }
           return;
         }
         setRegDone(true);
@@ -1294,7 +1319,11 @@ function LandingPage() {
     setRegRole("Accountant / Advisory firm");
     setPortalIntent("accountant");
     if (user) {
-      void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
+      if (readInsightSeen()) {
+        void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
+      } else {
+        void navigate({ to: "/dashboard" });
+      }
       return;
     }
     toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
@@ -1314,10 +1343,14 @@ function LandingPage() {
     setRegisterReady(true);
     setMobileNavOpen(false);
     if (user) {
-      void navigate({
-        to: "/billing/start",
-        search: billingStartSearch({ plan, interval: firmInterval, market }),
-      });
+      if (readInsightSeen()) {
+        void navigate({
+          to: "/billing/start",
+          search: billingStartSearch({ plan, interval: firmInterval, market }),
+        });
+      } else {
+        void navigate({ to: "/dashboard" });
+      }
       return;
     }
     const target = opts?.scrollTo ?? "register";

@@ -48,7 +48,7 @@ App constants: `src/lib/stripe-plans.ts`. Session builder: `src/lib/stripe-check
 - `billing_address_collection: "required"` and `tax_id_collection: { enabled: true }`
 - Omit `payment_method_types` (dynamic payment methods)
 - `integration_identifier`: `milon-{band}-{interval}-{8 random letters}`
-- `payment_method_collection: "always"` — card on file at signup
+- `payment_method_collection: "always"` — card on file when Checkout starts
 - First subscription: `subscription_data.trial_period_days: 14` on the chosen paid band (default Solo monthly). A customer with any prior subscription does not get a second trial.
 
 If the signed-in email already has an **active** Stripe subscription, Checkout create opens the **Customer Portal** instead of a second subscription.
@@ -65,10 +65,10 @@ If the signed-in email already has an **active** Stripe subscription, Checkout c
 
 ## New firm signup — 14-day trial
 
-Every new firm is sent to Checkout on a **paid** band after `/auth` signup (email confirm and Google included). The default is Solo monthly (`milon_solo_monthly`). Starter $0 is not a new-signup path.
+New firms open the practice workspace after `/auth` signup (email confirm and Google included). Checkout on a **paid** band waits until the accountant has seen an insight (figures on a client). The default band is Solo monthly (`milon_solo_monthly`). Starter $0 is not a new-signup path. Dashboard and `/clients` stay open before that insight; after it, an unpaid owner resumes at `/billing/required`.
 
 - Copy: **14-day free trial · up to 3 clients**. Do not write “3 free clients” or “free forever.”
-- Card is required. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
+- Card is required at Checkout, not before the first figures. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
 - During the trial the app blocks the 4th client until the subscription is `active` on a band that allows it. The firm owner can end the trial from Add client (“Upgrade to paid plan”), which sets `trial_end: now` and bills the card.
 - Paid Solo+ uses the catalog client limits (Solo 15, Small 25, …).
 - FOUNDING / FOUNDING50 applies to monthly paid Solo+ invoices after the trial. It is not a free-forever coupon.

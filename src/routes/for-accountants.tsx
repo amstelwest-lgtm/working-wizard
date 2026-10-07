@@ -194,8 +194,8 @@ function ForAccountantsPage() {
       />
       <ul className="mk-list">
         <li>
-          <strong>14-day free trial · up to 3 clients.</strong> Card on file at signup. After day
-          14, paid Solo+ bills automatically.
+          <strong>14-day free trial · up to 3 clients.</strong> See a client&apos;s figures first.
+          Card on file when you continue. After day 14, paid Solo+ bills automatically.
         </li>
         {showSaPricing ? <li>{SA_FOUNDING_LINE}</li> : null}
       </ul>

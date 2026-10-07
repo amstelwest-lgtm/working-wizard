@@ -16,6 +16,8 @@ import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { UploadFinancials } from "@/components/upload-financials";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
+import { markInsightSeen } from "@/lib/funnel-timing";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
   markOnboardingDone,
@@ -1095,6 +1097,9 @@ function ClientView() {
     () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
     [financials],
   );
+  useEffect(() => {
+    if (hasFigures) markInsightSeen();
+  }, [hasFigures]);
   const startStudioTourAfterFigures = useCallback(() => {
     markOnboardingDone(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
     setFirstDataOpen(false);
@@ -2677,6 +2682,8 @@ function ClientView() {
                   }
                 />
 
+                {hasFigures ? <CheckoutAfterInsight /> : null}
+
                 {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
                 {!hasFigures && (
                   <div className="card hero-card first-figures" id="first-figures-card">
@@ -2685,41 +2692,11 @@ function ClientView() {
                       <h3>Nothing is scored yet</h3>
                       <p>
                         The health orb, profit waterfall, cash forecast and Milōn Bot all wait on
-                        the first numbers.{" "}
+                        the first numbers. The next step above is the one action.{" "}
                         {isUsCopy(clientMarket)
-                          ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF. Bank statements also work."
-                          : "Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work."}
+                          ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF."
+                          : "Fastest: about 3 months of bank statements for every account."}
                       </p>
-                    </div>
-                    <div className="ff-actions">
-                      {isUsCopy(clientMarket) ? (
-                        <>
-                          <button className={portalButtonClass("secondary")} onClick={() => setUploadOpen(true)}>
-                            Upload P&amp;L / balance sheet
-                          </button>
-                          <button
-                            className={portalButtonClass("secondary")}
-                            onClick={() => setShowBankDrafter(true)}
-                          >
-                            Draft from bank statements
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className={portalButtonClass("secondary")}
-                            onClick={() => setShowBankDrafter(true)}
-                          >
-                            Draft from bank statements
-                          </button>
-                          <button className={portalButtonClass("secondary")} onClick={() => setUploadOpen(true)}>
-                            Upload P&amp;L / balance sheet
-                          </button>
-                        </>
-                      )}
-                      <button className={portalButtonClass("secondary")} onClick={jumpToFinancials}>
-                        Type figures by hand
-                      </button>
                     </div>
                   </div>
                 )}
@@ -3888,76 +3865,82 @@ function ClientView() {
                 </DialogTitle>
                 <DialogDescription className="text-slate-300">
                   {isUsCopy(clientMarket)
-                    ? "Pick one path. Fastest: the latest P&L and balance sheet as Excel, CSV or PDF. About 3 months of bank statements work too. One pack drafts Health, Profit, Cash and Budget for you to review."
-                    : "Pick one path. Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work. One pack drafts Health, Profit, Cash and Budget for you to review."}
+                    ? "One action. Fastest: the latest P&L and balance sheet as Excel, CSV or PDF. That pack drafts Health, Profit, Cash and Budget for you to review."
+                    : "One action. Fastest: about 3 months of bank statements for every account. That pack drafts Health, Profit, Cash and Budget for you to review."}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-2.5 pt-2">
                 {isUsCopy(clientMarket) ? (
-                  <>
-                    <FirstDataChoice
-                      primary
-                      label="Upload a P&L and balance sheet"
-                      hint="Excel, CSV or PDF — review every figure before it saves"
-                      onClick={() => {
-                        setFirstDataOpen(false);
-                        setUploadOpen(true);
-                      }}
-                    />
-                    <FirstDataChoice
-                      label="Upload bank statements instead"
-                      hint="About 3 months for each account"
-                      onClick={() => {
-                        setFirstDataOpen(false);
-                        setShowBankDrafter(true);
-                      }}
-                    />
-                  </>
+                  <FirstDataChoice
+                    primary
+                    label="Upload a P&L and balance sheet"
+                    hint="Excel, CSV or PDF — review every figure before it saves"
+                    onClick={() => {
+                      setFirstDataOpen(false);
+                      setUploadOpen(true);
+                    }}
+                  />
                 ) : (
-                  <>
-                    <FirstDataChoice
-                      primary
-                      label="Upload bank statements"
-                      hint="About 3 months of PDFs for each account"
-                      onClick={() => {
-                        setFirstDataOpen(false);
-                        setShowBankDrafter(true);
-                      }}
-                    />
-                    <FirstDataChoice
-                      label="Upload a P&L and balance sheet instead"
-                      hint="Excel, CSV or PDF"
-                      onClick={() => {
-                        setFirstDataOpen(false);
-                        setUploadOpen(true);
-                      }}
-                    />
-                  </>
+                  <FirstDataChoice
+                    primary
+                    label="Upload bank statements"
+                    hint="About 3 months of PDFs for each account"
+                    onClick={() => {
+                      setFirstDataOpen(false);
+                      setShowBankDrafter(true);
+                    }}
+                  />
                 )}
-                <FirstDataChoice
-                  label="Connect QuickBooks"
-                  hint="Live sync from QuickBooks Online"
-                  onClick={() => {
-                    setFirstDataOpen(false);
-                    setShowQboDialog(true);
-                  }}
-                />
-                <FirstDataChoice
-                  label="Connect Xero"
-                  hint="Live sync of P&L and balance sheet"
-                  onClick={() => {
-                    setFirstDataOpen(false);
-                    setShowXeroDialog(true);
-                  }}
-                />
-                <FirstDataChoice
-                  label="Type the figures by hand"
-                  hint="Fill the financials grid yourself"
-                  onClick={() => {
-                    setFirstDataOpen(false);
-                    jumpToFinancials();
-                  }}
-                />
+                <details>
+                  <summary className="cursor-pointer pt-1 text-xs text-slate-400">
+                    Other ways
+                  </summary>
+                  <div className="mt-2 flex flex-col gap-2.5">
+                    {isUsCopy(clientMarket) ? (
+                      <FirstDataChoice
+                        label="Upload bank statements instead"
+                        hint="About 3 months for each account"
+                        onClick={() => {
+                          setFirstDataOpen(false);
+                          setShowBankDrafter(true);
+                        }}
+                      />
+                    ) : (
+                      <FirstDataChoice
+                        label="Upload a P&L and balance sheet instead"
+                        hint="Excel, CSV or PDF"
+                        onClick={() => {
+                          setFirstDataOpen(false);
+                          setUploadOpen(true);
+                        }}
+                      />
+                    )}
+                    <FirstDataChoice
+                      label="Connect QuickBooks"
+                      hint="Live sync from QuickBooks Online"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setShowQboDialog(true);
+                      }}
+                    />
+                    <FirstDataChoice
+                      label="Connect Xero"
+                      hint="Live sync of P&L and balance sheet"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setShowXeroDialog(true);
+                      }}
+                    />
+                    <FirstDataChoice
+                      label="Type the figures by hand"
+                      hint="Fill the financials grid yourself"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        jumpToFinancials();
+                      }}
+                    />
+                  </div>
+                </details>
                 <button
                   type="button"
                   onClick={() => setFirstDataOpen(false)}

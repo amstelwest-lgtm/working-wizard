@@ -9,8 +9,9 @@ import {
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
-import { isFirmProductPath } from "@/lib/stripe-entitlement";
+import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { readInsightSeen } from "@/lib/funnel-timing";
 import {
   shouldStayOnAccountantPortal,
   setPortalIntent,
@@ -66,16 +67,29 @@ function AuthGate() {
         setFirmGate("allow");
         return;
       }
+      let entitled = false;
       try {
         const result = await checkEntitlement({ data: {} });
         if (cancelled) return;
-        if (result.entitled) {
+        entitled = result.entitled;
+        if (entitled) {
           entitledRef.current = true;
           setFirmGate("allow");
           return;
         }
       } catch {
         if (cancelled) return;
+      }
+      const gate = decideFirmBillingPathGate({
+        pathname,
+        isAccountantFirmUser: true,
+        isMilonItMember: false,
+        entitled,
+        insightSeen: readInsightSeen(),
+      });
+      if (gate === "allow") {
+        setFirmGate("allow");
+        return;
       }
       const pending = peekPendingCheckout() ?? firmSignupCheckoutIntent();
       stashPendingCheckout(pending);
