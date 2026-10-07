@@ -39,6 +39,11 @@ import {
 } from "./payables.ts";
 import { formatSnapshotRatio } from "../../../src/lib/advisory-narrative.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
+import {
+  formatStatementMargin,
+  isStatementMarginName,
+  quotedStatementFigures,
+} from "../../../src/lib/statement-margin.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -81,7 +86,12 @@ function ratioLines(raw: unknown): string[] {
   const out: string[] = [];
   for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof val !== "number" || !Number.isFinite(val)) continue;
-    out.push(`${key}: ${formatSnapshotRatio(key, val)}`);
+    if (isStatementMarginName(key)) {
+      const shown = formatStatementMargin(val);
+      if (shown) out.push(`${key}: ${shown}`);
+    } else {
+      out.push(`${key}: ${formatSnapshotRatio(key, val)}`);
+    }
     if (out.length >= 16) break;
   }
   return out;
@@ -309,6 +319,11 @@ Deno.serve(async (req: Request) => {
     );
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
+    const quoted = quotedStatementFigures({
+      ratios: (snap.ratios ?? null) as Record<string, unknown> | null,
+      periodLabel: snap.period_label,
+    });
+    if (quoted.length) contextLines.push(quoted.join("\n"));
   }
   const unanswered = storedQuestions.filter((q) => q.status === "unanswered");
   if (unanswered.length) {

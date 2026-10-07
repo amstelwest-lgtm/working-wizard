@@ -141,7 +141,14 @@ assert(panelSrc.includes("Draft advisory from brain"), "Draft advisory from brai
 assert(panelSrc.includes("invokeBrainPropose"), "panel invokes brain-propose");
 assert(panelSrc.includes("invokeBrainDeliverableDraft"), "panel invokes brain-deliverable-draft");
 assert(panelSrc.includes("ClientBrainDrafts"), "drafts panel is extracted");
-assert(panelSrc.includes("Asking now"), "drip highlight on outstanding queue");
+assert(panelSrc.includes("Asking now"), "the open question is badged Asking now");
+assert(!panelSrc.includes("brain-highlight"), "the drip is not a second card for the same key");
+assert(
+  panelSrc.includes("Each open question is listed once above."),
+  "checklist questions are not repeated in the outstanding list",
+);
+assert(panelSrc.includes("outstandingRows"), "outstanding list drops keys already on a checklist");
+assert(panelSrc.includes("alignBrainFigureCopy"), "GAP and draft copy uses the shared margin aligner");
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(
   panelSrc.includes("collection of context around this client"),
@@ -309,6 +316,46 @@ assert(
   mergeOutstandingQuestions([...coreQs, ...mixQs], []).every((q) => q.prompt.trim().endsWith("?")),
   "every outstanding question is phrased as a question",
 );
+const payMotionDup = mergeOutstandingQuestions(
+  [
+    {
+      key: " operating_profile.payMotion ",
+      prompt: "How do you mostly make money?",
+      audience: "both",
+      answered: false,
+      answer: null,
+      source: "operating_profile",
+    },
+    {
+      key: "operating_profile.payMotion",
+      prompt: "How do you mostly make money?",
+      audience: "both",
+      answered: false,
+      answer: null,
+      source: "operating_profile",
+    },
+  ],
+  [
+    {
+      id: "q-pay",
+      client_id: "c1",
+      question_key: "operating_profile.payMotion",
+      prompt_text: "How do you mostly make money?",
+      audience: "both",
+      status: "unanswered",
+      answer_text: null,
+      answer_json: null,
+      last_asked_at: null,
+      answered_at: null,
+      answered_by: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+);
+assert(payMotionDup.length === 1, "payMotion outstanding question is one row");
+assert(payMotionDup[0]?.key === "operating_profile.payMotion", "duplicate keys trim to one key");
+assert(payMotionDup[0]?.source === "operating_profile", "the catalog row wins over the stored duplicate");
 
 const confirmedSeason = operatingProfileQuestionStates({
   ...coreProfile,

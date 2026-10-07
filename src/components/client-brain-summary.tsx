@@ -48,6 +48,7 @@ import {
   operatingProfileQuestionStates,
   productLineQuestionStates,
 } from "@/lib/client-brain-questions";
+import { alignBrainFigureCopy, type StatementFigureFacts } from "@/lib/statement-margin";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -99,11 +100,10 @@ function formatWhen(iso: string | null | undefined, fmt: (d: Date | string) => s
   return fmt(iso);
 }
 
-function StatusDot({ answered }: { answered: boolean }) {
+function StatusDot({ answered, asking }: { answered: boolean; asking?: boolean }) {
+  const label = answered ? "Answered" : asking ? "Asking now" : "Empty";
   return (
-    <span className={`status-tag ${answered ? "ok" : "faint"}`}>
-      {answered ? "Answered" : "Empty"}
-    </span>
+    <span className={`status-tag ${answered ? "ok" : asking ? "gold" : "faint"}`}>{label}</span>
   );
 }
 
@@ -130,6 +130,7 @@ export function ClientBrainSummary({
   onOpenUpload,
   onOpenTab,
   onAnswerProfile,
+  figureFacts,
 }: {
   clientId: string;
   clientName: string;
@@ -140,6 +141,8 @@ export function ClientBrainSummary({
   onOpenUpload?: () => void;
   onOpenTab?: (tab: BrainSummaryTab) => void;
   onAnswerProfile?: () => void;
+  /** Live Overview margins and period. Stored GAP / draft copy is aligned to these. */
+  figureFacts?: StatementFigureFacts;
 }) {
   const { user } = useAuth();
   const assertDeliverable = useServerFn(assertFirmCanGenerateDeliverable);
@@ -268,6 +271,11 @@ export function ClientBrainSummary({
     [...profileQuestions, ...productQuestions],
     storedQuestions,
   );
+  const checklistKeys = new Set(
+    [...profileQuestions, ...productQuestions].map((q) => q.key.trim()),
+  );
+  const outstandingRows = outstanding.filter((q) => !checklistKeys.has(q.key));
+  const alignCopy = (text: string) => alignBrainFigureCopy(text, figureFacts ?? {});
   const drip = useBrainDrip({
     clientId,
     derived: [...profileQuestions, ...productQuestions],
@@ -570,7 +578,7 @@ export function ClientBrainSummary({
                     {!q.answered && onAnswerProfile && (
                       <AnswerButton onClick={() => onAnswerProfile()} />
                     )}
-                    <StatusDot answered={q.answered} />
+                    <StatusDot answered={q.answered} asking={!q.answered && drip?.key === q.key} />
                   </div>
                 </li>
               ))}
@@ -621,7 +629,7 @@ export function ClientBrainSummary({
                     {!q.answered && onOpenTab && (
                       <AnswerButton onClick={() => onOpenTab("profit")} />
                     )}
-                    <StatusDot answered={q.answered} />
+                    <StatusDot answered={q.answered} asking={!q.answered && drip?.key === q.key} />
                   </div>
                 </li>
               ))}
@@ -647,7 +655,7 @@ export function ClientBrainSummary({
                 {gapReport.items.map((item) => (
                   <li key={item.key} className="brain-row-block">
                     <div className="brain-item-head">
-                      <strong>{item.title}</strong>
+                      <strong>{alignCopy(item.title)}</strong>
                       <span className="status-tag gold">
                         {item.status === "signed_off" ? "Signed off" : "Draft"}
                         {item.severity ? ` · ${item.severity}` : ""}
@@ -655,7 +663,7 @@ export function ClientBrainSummary({
                     </div>
                     {item.detail && (
                       <p className="sub" style={{ margin: "4px 0 0" }}>
-                        {item.detail}
+                        {alignCopy(item.detail)}
                       </p>
                     )}
                     {item.status !== "signed_off" && (
@@ -946,6 +954,7 @@ export function ClientBrainSummary({
             drafts={drafts}
             onReload={load}
             onOpenAdvisory={onOpenTab ? () => onOpenTab("advisory") : undefined}
+            figureFacts={figureFacts}
           />
 
           {/* Outstanding questions — shared owner + accountant queue */}
@@ -955,20 +964,15 @@ export function ClientBrainSummary({
               Shared with client management. One question is dripped at a time — no spam. Answer any of them
               here so you and client management are filling the same brain.
             </SectionLead>
-            {drip && (
-              <div className="brain-highlight">
-                <div className="mini-kicker">Asking now</div>
-                <div className="prompt">{drip.prompt}</div>
-                <div className="brain-row-meta">{drip.key}</div>
-              </div>
-            )}
-            {outstanding.length === 0 ? (
+            {outstandingRows.length === 0 ? (
               <p className="sub" style={{ margin: 0 }}>
-                No outstanding questions.
+                {outstanding.length > 0
+                  ? "Each open question is listed once above."
+                  : "No outstanding questions."}
               </p>
             ) : (
               <ul className="brain-list">
-                {outstanding.map((q) => (
+                {outstandingRows.map((q) => (
                   <li key={q.key} className="brain-row">
                     <div>
                       <div className="brain-row-title">{q.prompt}</div>
@@ -980,7 +984,7 @@ export function ClientBrainSummary({
                     <div className="brain-row-actions">
                       <AnswerButton onClick={() => routeQuestionAnswer(q)} />
                       <span className={`status-tag ${drip?.key === q.key ? "gold" : "faint"}`}>
-                        {drip?.key === q.key ? "Asking" : "Empty"}
+                        {drip?.key === q.key ? "Asking now" : "Empty"}
                       </span>
                     </div>
                   </li>

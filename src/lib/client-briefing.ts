@@ -14,6 +14,7 @@ import { profileIndustryLabel, profileAiContext } from "@/lib/profile-signals";
 import type { VarianceChip } from "@/lib/prior-period";
 import { ratioAttentionSignals } from "@/lib/data-requests";
 import { formatDate, formatMoneyCompact, type ResolvedMarket, ZA_MARKET } from "@/lib/market";
+import { formatStatementMargin } from "@/lib/statement-margin";
 
 // ── Financial snapshot ────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function snapshotHint(raw: string | null | undefined): string | undefined {
   return clipSnapshotHint(text, SNAPSHOT_HINT_DISPLAY_MAX);
 }
 
-const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`;
+const fmtPct = (v: number) => formatStatementMargin(v) ?? "—";
 
 function deltaFor(chip: VarianceChip | undefined): SnapshotMetric["delta"] | undefined {
   if (!chip || chip.delta == null || chip.prior == null) return undefined;
@@ -115,7 +116,7 @@ export function buildFinancialSnapshot(input: {
   market?: ResolvedMarket;
 }): SnapshotMetric[] {
   const market = input.market ?? ZA_MARKET;
-  const periodKnown = input.datedPeriod !== false && Boolean(input.periodLabel?.trim());
+  const periodText = input.periodLabel?.trim() || "";
   const allowMovement = input.datedPeriod !== false;
   const byKey = new Map(input.chips.map((c) => [c.key, c]));
   const out: SnapshotMetric[] = [];
@@ -123,20 +124,20 @@ export function buildFinancialSnapshot(input: {
   const rev = byKey.get("revenue");
   if (rev?.current != null) {
     const delta = allowMovement ? deltaFor(rev) : undefined;
+    let hint: string | undefined;
+    if (delta) {
+      hint = input.priorLabel ? `vs ${input.priorLabel}` : undefined;
+    } else if (periodText) {
+      hint = periodText;
+    } else if (input.datedPeriod === false) {
+      hint = "Period not dated";
+    }
     out.push({
       key: "revenue",
       label: "Revenue",
       value: formatMoneyCompact(rev.current, market),
       delta,
-      hint: !periodKnown
-        ? input.datedPeriod === false
-          ? "Period not dated"
-          : undefined
-        : delta
-          ? input.priorLabel
-            ? `vs ${input.priorLabel}`
-            : undefined
-          : input.periodLabel?.trim() || undefined,
+      hint,
     });
   }
   const gm = byKey.get("gm");

@@ -14,6 +14,7 @@
  *
  * No parallel page (stay in Open queries; do not dump the user on the wrong tab):
  *   next → owner Next moves only
+ *   moves → accountant Strategic Moves (not the owner Next tab)
  *   overview, summary, ask, reports, advisory → accountant studio only
  */
 
@@ -41,6 +42,7 @@ export const ACCOUNTANT_NOTE_TABS = [
   "reports",
   "plan",
   "advisory",
+  "moves",
 ] as const;
 
 /** Same-deliverable aliases. First owner-native id, then accountant-native id. */
@@ -53,6 +55,7 @@ const TAB_GROUPS: readonly (readonly string[])[] = [
   ["payables"],
   ["budget"],
   ["next"],
+  ["moves"],
   ["overview"],
   ["summary", "data", "brain"],
   ["ask"],
@@ -74,6 +77,7 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   waterfall: "Profit",
   profit: "Profit",
   next: "Next moves",
+  moves: "Moves",
   cash: "Cash",
   collections: "Collections",
   payables: "Payables",

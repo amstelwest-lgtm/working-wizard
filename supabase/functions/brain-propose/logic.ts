@@ -2,6 +2,7 @@
  * Deno copy of src/lib/client-brain-propose.ts + drip pickers.
  * Keep rules in sync: draft-only GAP/competitors, similar-title skip, 1 drip.
  */
+import { STATEMENT_FIGURE_RULES } from "../../../src/lib/statement-margin.ts";
 
 export const DRIP_COOLDOWN_DAYS = 14;
 export const MAX_NEW_STEPS_PER_CALL = 3;
@@ -90,6 +91,7 @@ const SHARED_RULES = [
   "- Do not mark anything signed_off. Do not treat drafts as truth.",
   "- You only see statement totals and ratios, never the ledger. Never name or count specific invoices, customers, suppliers, debtors or transactions; talk about the ratio, the trend and the amount instead.",
   "- If a 'Track record' block is present, treat it as evidence: do not re-propose a move that was measured as missed or went the other way unless the rationale says what will be different this time, and lean towards the kinds of move that delivered.",
+  ...STATEMENT_FIGURE_RULES,
 ];
 
 // ── Outcome history (P2.2) ────────────────────────────────────────────────────

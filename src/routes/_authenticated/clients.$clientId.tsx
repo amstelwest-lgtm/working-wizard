@@ -184,6 +184,8 @@ import { draftMilonWorkflow, type BriefingWorkflow } from "@/lib/client-briefing
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary } from "@/components/client-brain-summary";
+import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
+import { rankStrategicMoves } from "@/lib/strategic-moves";
 import {
   hashFigures,
   latestSnapshotId,
@@ -489,11 +491,13 @@ type ActiveTab =
   | "reports"
   | "plan"
   | "advisory"
-  | "summary";
+  | "summary"
+  | "moves";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
   "overview",
   "summary",
+  "moves",
   "ask",
   "ratios",
   "profit",
@@ -509,6 +513,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
 const CLIENT_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
   { id: "overview", label: "Overview" },
   { id: "summary", label: "Client Brain" },
+  { id: "moves", label: "Moves" },
 ];
 
 const DELIVERABLE_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
@@ -852,6 +857,7 @@ function ClientView() {
   const [profitFinOpen, setProfitFinOpen] = useState(true);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
+  const [planFocusMove, setPlanFocusMove] = useState<string | null>(null);
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
   const [cashBankUploadToken, setCashBankUploadToken] = useState(0);
   const [pendingBankFile, setPendingBankFile] = useState<File | null>(null);
@@ -1269,6 +1275,14 @@ function ClientView() {
       weeklyInputs,
     ],
   );
+  const figuresPeriodLabel =
+    (statementDated ? statementMeta.periodLabel?.trim() : "") ||
+    pickCurrentSnapshot(snapshots)?.period_label?.trim() ||
+    null;
+  const strategicMoves = rankStrategicMoves({
+    healthByKey: healthMap,
+    profile: briefingProfile,
+  });
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
@@ -1276,7 +1290,7 @@ function ClientView() {
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
-    periodLabel: statementDated ? statementMeta.periodLabel : null,
+    periodLabel: figuresPeriodLabel,
     datedPeriod: statementDated,
     market: clientMarket,
     cash:
@@ -2614,7 +2628,7 @@ function ClientView() {
                   onAddPastPeriod={() => setPastPeriodOpen(true)}
                   onOpenReports={() => revealTab("reports")}
                   hasFigures={hasFigures}
-                  figuresPeriodLabel={statementDated ? statementMeta.periodLabel : null}
+                  figuresPeriodLabel={figuresPeriodLabel}
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
@@ -2836,8 +2850,32 @@ function ClientView() {
                         onOpenUpload={() => setUploadOpen(true)}
                         onOpenTab={(tab) => setActiveTab(tab)}
                         onAnswerProfile={() => setProfileOpen(true)}
+                        figureFacts={{
+                          grossMargin: ratios["Gross Margin"],
+                          operatingMargin: ratios["Operating Margin"],
+                          periodLabel: figuresPeriodLabel,
+                        }}
                       />
                     </>
+                  )}
+                </div>
+
+                {/* ===== MOVES ===== */}
+                <div className={`tabpane${activeTab === "moves" ? " on" : ""}`} id="pane-moves">
+                  <DeliverableTabHead
+                    eyebrow="Strategic Moves"
+                    title="What to do next"
+                    lede="The same ranked list Action Plan cites as From strategic moves. Add a move to the plan when it is the next thing to chase."
+                  />
+                  {activeTab === "moves" && (
+                    <StrategicMovesPanel
+                      moves={strategicMoves}
+                      clientId={client.id}
+                      onOpenPlan={(moveKey) => {
+                        setPlanFocusMove(moveKey);
+                        setActiveTab("plan");
+                      }}
+                    />
                   )}
                 </div>
 
@@ -3554,6 +3592,15 @@ function ClientView() {
                           simplified={viewMode === "simplified"}
                           isOwner
                           initialFilter={search.filter === "overdue" ? "overdue" : undefined}
+                          moves={strategicMoves.map((move) => ({
+                            key: move.key,
+                            title: move.title,
+                            ratioName: move.ratioName,
+                            impactLine: move.impactLine,
+                            health: Number.isFinite(move.health) ? move.health : Number.NaN,
+                          }))}
+                          focusMoveKey={planFocusMove}
+                          onFocusHandled={() => setPlanFocusMove(null)}
                         />
                       )}
                     </Suspense>
