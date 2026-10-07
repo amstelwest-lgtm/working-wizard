@@ -299,7 +299,11 @@ export function AdvisoryPackPanel({
 
   const run = async (
     label: string,
-    fn: () => Promise<{ pack: AdvisoryPack; reviews: PackReview[] } | null>,
+    fn: () => Promise<{
+      pack: AdvisoryPack;
+      reviews: PackReview[];
+      actors?: Record<string, RecordedActor>;
+    } | null>,
     done?: string,
   ) => {
     if (busy) return;
@@ -310,7 +314,7 @@ export function AdvisoryPackPanel({
       if (res) {
         setPack(res.pack);
         setReviews(res.reviews);
-        if ("actors" in res && res.actors) setActors(res.actors);
+        if (res.actors) setActors(res.actors);
       }
       if (done) toast.success(done);
       onChanged?.();
