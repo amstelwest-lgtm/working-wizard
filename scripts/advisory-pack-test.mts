@@ -17,6 +17,8 @@ import {
   diffPackSections,
   fmtRatio,
   isMissingPackRelation,
+  advisoryPackSignOffGate,
+  overviewFiguresForPackDrift,
   packStatusLabel,
   parsePackContent,
   parsePackRow,
@@ -488,8 +490,26 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     [...PACK_STATUSES].sort().join(","),
     "statuses match SQL",
   );
+  const reviewActions = list(/action\s+text NOT NULL CHECK \(action IN \(([\s\S]*?)\)\)/, "action");
+  const staleSql = readFileSync(
+    resolve("supabase/migrations/20261007120000_advisory_pack_stale_signoff.sql"),
+    "utf8",
+  );
+  assert(staleSql.includes("'invalidate'"), "stale sign-off migration records invalidate");
+  assert(
+    staleSql.includes("CASE WHEN v_pack.requires_review THEN 'in_review' ELSE 'draft' END"),
+    "invalidate reverts a firm pack to review and an owner pack to draft",
+  );
+  assert(
+    staleSql.includes("Figures have changed since this pack was generated, regenerate"),
+    "invalidate audit note matches the regenerate banner",
+  );
+  assert(
+    staleSql.includes("reviewed_at = NULL") && staleSql.includes("reviewed_by = NULL"),
+    "invalidate clears the stored sign-off stamps",
+  );
   eq(
-    list(/action\s+text NOT NULL CHECK \(action IN \(([\s\S]*?)\)\)/, "action").join(","),
+    [...reviewActions, "invalidate"].sort().join(","),
     [...PACK_REVIEW_ACTIONS].sort().join(","),
     "review actions match SQL",
   );
@@ -502,9 +522,11 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     "generators match SQL",
   );
   const rpcActions = sql.match(/IF p_action NOT IN \(([\s\S]*?)\) THEN/)![1];
-  const rpcList = Array.from(rpcActions.matchAll(/'([a-z_]+)'/g), (x) => x[1]).sort();
+  const rpcList = Array.from(rpcActions.matchAll(/'([a-z_]+)'/g), (x) => x[1]);
+  const staleAllow = staleSql.match(/IF p_action NOT IN \(([\s\S]*?)\) THEN/)![1];
+  assert(staleAllow.includes("'invalidate'"), "review RPC allowlists invalidate");
   eq(
-    rpcList.join(","),
+    [...rpcList, "invalidate"].sort().join(","),
     [...PACK_APP_ACTIONS].sort().join(","),
     "RPC action allowlist matches PACK_APP_ACTIONS",
   );
@@ -574,6 +596,34 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(panel.includes("data-high-edit-rate"), "high edit rate surfaced to the accountant");
   assert(panel.includes("Show AI draft"), "AI draft vs final diff visible");
   assert(panel.includes('hasFirm ? "Sign off pack" : "Accept pack"'), "sign-off vs accept copy");
+  assert(panel.includes("advisoryPackSignOffGate"), "panel gates sign-off on the baked snapshot");
+  assert(panel.includes('action: "invalidate"'), "a stale SIGNED OFF is cleared");
+  assert(
+    panel.includes("data-signoff-blocked={signOffBlocked ? \"true\" : \"false\"}"),
+    "sign-off control is blocked while figures drift",
+  );
+  assert(
+    panel.includes("signOffGate.signOffHolds"),
+    "signed-off copy is hidden when the snapshot drifted",
+  );
+  assert(
+    fns.includes("throw new Error(ADVISORY_PACK_STALE_NOTE)") &&
+      fns.includes('data.action === "approve"'),
+    "server rejects approve while the snapshot disagrees with Overview",
+  );
+  assert(
+    fns.includes("loadLivePackFigures") && fns.includes("overviewFiguresForPackDrift"),
+    "server recomputes live Overview figures before approve or invalidate",
+  );
+  assert(
+    fns.includes("data.liveFigures") && panel.includes("liveFigures:"),
+    "the figures on screen count as drift even if the server recompute lags",
+  );
+  assert(
+    fns.includes('data.action === "invalidate"') &&
+      fns.includes("!figuresChanged || pack.status !== \"approved\""),
+    "invalidate is a no-op when figures still match",
+  );
   assert(!/navigate\(|useNavigate|window\.location/.test(panel), "panel never navigates");
 
   const nextStep = readFileSync(resolve("src/lib/next-step.ts"), "utf8");
@@ -616,6 +666,134 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(
     !/claude|anthropic/i.test(pdfLib + pdfReport + panel.slice(panel.indexOf("exportPdf"))),
     "no vendor name on the export path",
+  );
+}
+
+// ── 9. Stale sign-off vs the baked snapshot ──────────────────────────────────
+
+{
+  // QA US: pack v1 stayed SIGNED OFF at health 69 while Overview health was 71.
+  const qaContent = {
+    health: { overall: 69 },
+    forecast: { openingBalance: 100000 },
+    sections: [{ key: "forecast", body: "Opening balance. Runway 8 weeks." }],
+  };
+  const qaLive = { runwayLabel: "8 weeks", cash: 100000, healthScore: 71 };
+  const stale = advisoryPackSignOffGate("approved", true, qaContent, qaLive);
+  assert(stale.figuresChanged, "health 69 vs live 71 is drift");
+  assert(!stale.signOffHolds, "SIGNED OFF does not hold against Overview");
+  assert(stale.signOffBlocked, "a new sign-off is blocked while stale");
+  eq(stale.presentedStatus, "in_review", "firm sign-off reverts to review");
+  assert(
+    packStatusLabel(stale.presentedStatus, true) !== "Signed off",
+    "reverted firm pack is not labelled Signed off",
+  );
+
+  const owner = advisoryPackSignOffGate("approved", false, qaContent, qaLive);
+  eq(owner.presentedStatus, "draft", "owner acceptance reverts to draft");
+  assert(
+    packStatusLabel(owner.presentedStatus, false) !== "Accepted",
+    "reverted owner pack is not labelled Accepted",
+  );
+
+  const blockedDraft = advisoryPackSignOffGate("in_review", true, qaContent, qaLive);
+  assert(
+    blockedDraft.signOffBlocked && !blockedDraft.signOffHolds,
+    "an unsigned stale pack cannot become SIGNED OFF",
+  );
+  eq(blockedDraft.presentedStatus, "in_review", "an open pack keeps its status");
+
+  const matched = advisoryPackSignOffGate("approved", true, qaContent, {
+    runwayLabel: "8 weeks",
+    cash: 100000,
+    healthScore: 69,
+  });
+  assert(
+    !matched.figuresChanged && matched.signOffHolds && !matched.signOffBlocked,
+    "matching figures keep SIGNED OFF",
+  );
+  eq(packStatusLabel(matched.presentedStatus, true), "Signed off", "matching pack still says Signed off");
+
+  const penny = advisoryPackSignOffGate("approved", true, qaContent, {
+    runwayLabel: "8 weeks",
+    cash: 100000.4,
+    healthScore: 69,
+  });
+  assert(!penny.figuresChanged, "cash within 1 is not drift");
+
+  const noLive = advisoryPackSignOffGate("approved", true, qaContent, null);
+  assert(noLive.signOffHolds && !noLive.signOffBlocked, "missing live figures are not a false drift");
+
+  const rebuilt = {
+    health: { overall: 71 },
+    forecast: { openingBalance: 100000 },
+    sections: [{ key: "forecast", body: "Opening balance. Runway 8 weeks." }],
+  };
+  const afterRegen = advisoryPackSignOffGate("in_review", true, rebuilt, qaLive);
+  assert(!afterRegen.signOffBlocked && !afterRegen.figuresChanged, "regenerate clears the block");
+  const resigned = advisoryPackSignOffGate("approved", true, rebuilt, qaLive);
+  assert(resigned.signOffHolds, "sign-off can stick once the snapshot matches");
+
+  const onFile = {
+    revenue: "1000000",
+    cogs: "600000",
+    ebit: "150000",
+    ebt: "140000",
+    netIncome: "100000",
+    ebitda: "180000",
+    operatingCashflow: "160000",
+    totalAssets: "800000",
+    equity: "400000",
+    receivables: "120000",
+    inventory: "80000",
+    payables: "60000",
+    totalLiabilities: "400000",
+    fixedCosts: "200000",
+    variableCosts: "400000",
+    top5Revenue: "400000",
+    laborCost: "250000",
+    employees: "10",
+    founderHours: "40",
+    cash: "80000",
+  };
+  const live = overviewFiguresForPackDrift({ financials: onFile, fyStartMonth: 1 });
+  assert(live.healthScore != null, "overview health scored");
+  const bakedFromOverview = {
+    health: { overall: live.healthScore },
+    forecast: { openingBalance: live.cash },
+    sections: [{ key: "forecast", body: `Runway ${live.runwayLabel ?? ""}.` }],
+  };
+  const fresh = advisoryPackSignOffGate("approved", true, bakedFromOverview, live);
+  assert(
+    !fresh.figuresChanged && fresh.signOffHolds,
+    "a snapshot baked from the same Overview figures is not stale",
+  );
+
+  // Slower collections and a heavier creditor book move the rounded health
+  // the pack snapshot stores. Cash and runway stay put, so this is the same
+  // health drift as pack 69 vs Overview 71.
+  const moved = overviewFiguresForPackDrift({
+    financials: { ...onFile, receivables: "400000", payables: "200000" },
+    fyStartMonth: 1,
+  });
+  assert(
+    moved.healthScore != null && moved.healthScore !== live.healthScore,
+    "debtor and creditor days move the Overview health snapshot",
+  );
+  const drifted = advisoryPackSignOffGate("approved", true, bakedFromOverview, moved);
+  assert(
+    drifted.figuresChanged && drifted.signOffBlocked && !drifted.signOffHolds,
+    "moved Overview figures cannot leave SIGNED OFF in place",
+  );
+  const regenerated = {
+    health: { overall: moved.healthScore },
+    forecast: { openingBalance: moved.cash },
+    sections: [{ key: "forecast", body: `Runway ${moved.runwayLabel ?? ""}.` }],
+  };
+  const cleared = advisoryPackSignOffGate("approved", true, regenerated, moved);
+  assert(
+    cleared.signOffHolds && !cleared.signOffBlocked,
+    "regenerating from the new Overview lets sign-off stick",
   );
 }
 

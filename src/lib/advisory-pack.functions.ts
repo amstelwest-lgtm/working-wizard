@@ -8,8 +8,10 @@
  * versions it, supersedes the previous open pack and writes the audit row.
  *
  * `reviewAdvisoryPack` is the single write path for the review trail: edit /
- * comment / approve / request_changes / reject / deliver / read. Edit stats
- * (AI draft vs current) are computed here and stored with the action.
+ * comment / approve / request_changes / reject / deliver / read / invalidate.
+ * Edit stats (AI draft vs current) are computed here and stored with the action.
+ * Approve is refused, and an existing sign-off is cleared, when the snapshot
+ * baked into the pack no longer matches live Overview figures.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -17,20 +19,32 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { LooseSb } from "@/lib/advisory-state.functions";
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import {
+  ADVISORY_PACK_STALE_NOTE,
   PACK_APP_ACTIONS,
   PACK_SECTION_KEYS,
+  advisoryPackFiguresChanged,
   buildAdvisoryPack,
   computeEditStats,
   isMissingPackRelation,
+  overviewFiguresForPackDrift,
   parsePackReviewRow,
   parsePackRow,
   type AdvisoryPack,
   type AdvisoryPackContent,
+  type LivePackFigures,
   type PackReview,
   type PackSection,
 } from "@/lib/advisory-pack";
+import { parseOperatingProfile } from "@/lib/client-profile";
+import { coerceMarketSelection } from "@/lib/market/parse";
+import { ZA_MARKET, resolveMarket } from "@/lib/market/resolve";
+import { resolvePriorSnapshot } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics, persistedRunwayWeeks, runwayDisplayLabel } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  persistedRunwayWeeks,
+  runwayDisplayLabel,
+} from "@/lib/client-metrics";
 import { parseDataRequestRow, type DataRequest } from "@/lib/data-requests";
 import { computeOverallHealth } from "@/lib/health-score";
 import { outcomeStories } from "@/lib/outcomes";
@@ -358,6 +372,70 @@ function applySectionPatch(
   };
 }
 
+/**
+ * Same Overview health, cash, and runway the pack panel compares to the
+ * snapshot stored on `content`.
+ */
+async function loadLivePackFigures(sb: LooseSb, clientId: string): Promise<LivePackFigures> {
+  const { data, error } = await sb
+    .from("clients")
+    .select("financials, cashflow, financials_updated_at, market, operating_profile")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const row = (data ?? null) as {
+    financials?: Record<string, unknown> | null;
+    cashflow?: unknown;
+    financials_updated_at?: string | null;
+    market?: unknown;
+    operating_profile?: unknown;
+  } | null;
+  const financials =
+    row?.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
+      ? row.financials
+      : null;
+  let market = ZA_MARKET;
+  try {
+    market = resolveMarket(coerceMarketSelection(row?.market));
+  } catch {
+    market = ZA_MARKET;
+  }
+  const profile = parseOperatingProfile(row?.operating_profile);
+  const { data: snaps } = await sb
+    .from("client_financial_snapshots")
+    .select("period_label, period_date, financials")
+    .eq("client_id", clientId)
+    .order("period_date", { ascending: false })
+    .limit(24);
+  const prior = resolvePriorSnapshot(
+    (
+      (snaps ?? []) as Array<{
+        period_label: string | null;
+        period_date: string | null;
+        financials: Record<string, unknown> | null;
+      }>
+    ).map((snap) => ({
+      period_label: snap.period_label ?? "",
+      period_date: snap.period_date ?? "",
+      financials: snap.financials,
+    })),
+    new Date(),
+    {
+      financials,
+      periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
+    },
+  );
+  return overviewFiguresForPackDrift({
+    financials,
+    cashflow: row?.cashflow,
+    financialsUpdatedAt: row?.financials_updated_at ?? null,
+    priorFinancials: prior?.financials ?? null,
+    market,
+    fyStartMonth: profile?.fyStartMonth ?? market.fyStartMonthDefault,
+    timeZone: market.timezone,
+  });
+}
+
 export const reviewAdvisoryPack = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -369,6 +447,14 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
         section: z.enum(PACK_SECTION_KEYS).optional(),
         patch: SectionPatch.optional(),
         note: z.string().max(2000).optional(),
+        /** Overview figures the pack panel is showing. Drift on either side blocks sign-off. */
+        liveFigures: z
+          .object({
+            runwayLabel: z.string().nullable(),
+            cash: z.number().finite().nullable(),
+            healthScore: z.number().finite().nullable(),
+          })
+          .optional(),
       })
       .parse(input),
   )
@@ -385,6 +471,21 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
     if (readErr) throw new Error(readErr.message);
     if (!before) throw new Error("Pack not found");
     const pack = parsePackRow(before as Record<string, unknown>);
+
+    if (data.action === "approve" || data.action === "invalidate") {
+      const liveFigures = await loadLivePackFigures(sb, data.clientId);
+      const figuresChanged =
+        advisoryPackFiguresChanged(pack.content, liveFigures) ||
+        (data.liveFigures ? advisoryPackFiguresChanged(pack.content, data.liveFigures) : false);
+      if (data.action === "invalidate") {
+        if (!figuresChanged || pack.status !== "approved") {
+          const reviews = await loadReviews(sb, data.packId);
+          return { ok: true, pack, reviews };
+        }
+      } else if (figuresChanged) {
+        throw new Error(ADVISORY_PACK_STALE_NOTE);
+      }
+    }
 
     let editStats = pack.edit_stats;
     let after: Record<string, unknown> | null = null;
