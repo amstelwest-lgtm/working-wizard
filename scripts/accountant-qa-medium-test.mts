@@ -8,7 +8,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   attentionFootnote,
+  buildAttentionItems,
   derivePriority,
+  firmOpenQueriesClient,
+  practiceNeedsAttention,
   summarizePortfolioAttention,
   type PortfolioClientSignals,
 } from "../src/lib/portfolio-dashboard";
@@ -68,6 +71,77 @@ const clear = summarizePortfolioAttention([healthy, healthy]);
 assert(clear.needAttention === 0, "clear book counts zero");
 assert(attentionFootnote(clear) === "All clear", "all clear only when every badge is clear");
 
+function named(
+  id: string,
+  name: string,
+  partial: Partial<PortfolioClientSignals> & { displayStatus?: OverallHealth["displayStatus"] },
+) {
+  return { id, name, ...row(partial) };
+}
+
+const yankees = named("yankees", "Yankees", { displayStatus: "at_risk", score: 40 });
+const qaTest = named("qa-test", "QA Test Co", { displayStatus: "at_risk", score: 48 });
+const qaUs = named("qa-us", "QA US", {});
+const healthAlerts = buildAttentionItems([yankees, qaTest, qaUs], 3);
+assert(healthAlerts.length === 2, "a clear client is not a health alert");
+assert(
+  summarizePortfolioAttention([yankees, qaTest, qaUs]).needAttention === 2,
+  "priority badges alone miss a pack-only client",
+);
+const shared = practiceNeedsAttention(healthAlerts, [
+  {
+    clientId: "qa-us",
+    name: "QA US",
+    exceptions: [{ severity: 1, label: "Pack v1 waiting for your sign-off", tab: "advisory" }],
+  },
+]);
+assert(
+  shared.items.map((item) => item.name).join(",") === "QA US,QA Test Co,Yankees",
+  "the queue lists the pack and both watching clients",
+);
+assert(shared.summary.needAttention === shared.items.length, "the tile count is the list length");
+assert(shared.summary.needAttention === 3, "Yankees, QA Test Co, and QA US are one count");
+assert(
+  shared.summary.reviewNow + shared.summary.watching === shared.summary.needAttention,
+  "review now and watching cover every listed client",
+);
+assert(attentionFootnote(shared.summary) === "1 review now · 2 watching", "footnote matches the queue");
+const doubled = practiceNeedsAttention(healthAlerts, [
+  {
+    clientId: "yankees",
+    name: "Yankees",
+    exceptions: [{ severity: 1, label: "Pack v1 waiting for your sign-off", tab: "advisory" }],
+  },
+  {
+    clientId: "qa-us",
+    name: "QA US",
+    exceptions: [{ severity: 2, label: "1 overdue action", tab: "plan" }],
+  },
+]);
+assert(doubled.items.length === 3, "a client in health and portfolio is one row");
+assert(doubled.summary.needAttention === 3, "the shared count does not double-count");
+
+assert(firmOpenQueriesClient([]) === null, "an empty book has no queries destination");
+assert(
+  firmOpenQueriesClient([
+    { id: "a", name: "Yankees", openQueries: 0 },
+    { id: "b", name: "QA US", openQueries: 0 },
+  ]) === null,
+  "zero open queries is not a click target",
+);
+assert(
+  firmOpenQueriesClient([{ id: "only", name: "Yankees", openQueries: 2 }]) === "only",
+  "one client with queries is the destination",
+);
+assert(
+  firmOpenQueriesClient([
+    { id: "a", name: "Yankees", openQueries: 1 },
+    { id: "b", name: "QA US", openQueries: 4 },
+    { id: "c", name: "QA Test Co", openQueries: 4 },
+  ]) === "c",
+  "the busiest client wins, then the name",
+);
+
 const za = clientMarketDraftFromFirm({ country: "ZA", regionCode: null });
 assert(za.country === "ZA" && za.regionCode == null, "ZA firm drafts rand");
 const unknown = clientMarketDraftFromFirm(null);
@@ -114,8 +188,17 @@ const ended = formatFirmPlanStatus({
 assert(ended.headline === "Trial — ends today", "elapsed trial says it ends today");
 
 const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
-assert(dash.includes("summarizePortfolioAttention"), "dashboard tile uses the badge counter");
+assert(dash.includes("practiceNeedsAttention"), "dashboard tile and list share one attention queue");
+assert(dash.includes("queue={attentionBook.items}"), "the strip renders that same queue");
+assert(dash.includes("needAttention: attention.needAttention"), "greeting uses the shared count");
 assert(dash.includes("attentionFootnote"), "dashboard footnote uses the same summary");
+assert(!dash.includes("summarizePortfolioAttention"), "the tile does not count priority badges on their own");
+assert(dash.includes("firmOpenQueriesClient"), "open queries uses the destination helper");
+assert(
+  dash.includes("queriesClientId ? () => openClientQueries(queriesClientId) : undefined"),
+  "open queries is not clickable when no client has queries",
+);
+assert(!dash.includes("scrollIntoView"), "open queries does not scroll into a dead end");
 assert(dash.includes("bookLoading"), "dashboard waits on the client list");
 assert(dash.includes("Loading your clients…"), "greeting stays in a loading state");
 assert(dash.includes("clientMarketDraftFromFirm"), "add-client starts from the firm market");

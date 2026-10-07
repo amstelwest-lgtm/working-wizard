@@ -27,11 +27,12 @@ import {
   attentionFootnote,
   dataAsOfLabel,
   derivePriority,
+  firmOpenQueriesClient,
   firstNameOf,
   practiceGreeting,
+  practiceNeedsAttention,
   portfolioSummaryLine,
   revenueOf,
-  summarizePortfolioAttention,
   trendDelta30d,
   type PriorityLevel,
   type ScoreHistoryPoint,
@@ -99,6 +100,7 @@ import {
   statusPillFromHealth,
 } from "@/components/primitives";
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
+import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -1487,19 +1489,13 @@ function Dashboard() {
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
+  const queriesClientId = firmOpenQueriesClient(clientRows);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
   const greeting = practiceGreeting(profile.accountantName || user?.email?.split("@")[0]);
   const bookLoading = loading || brandLoading;
-  const attention = summarizePortfolioAttention(clientRows);
-  const summaryLine = bookLoading
-    ? "Loading your clients…"
-    : portfolioSummaryLine({
-        clientCount: clientRows.length,
-        needAttention: attention.needAttention,
-        avgHealth,
-      });
+  const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();
 
   const attentionItems = useMemo(
@@ -1521,6 +1517,18 @@ function Dashboard() {
       ),
     [clientRows],
   );
+  const attentionBook = useMemo(
+    () => practiceNeedsAttention(attentionItems, portfolioRows),
+    [attentionItems, portfolioRows],
+  );
+  const attention = attentionBook.summary;
+  const summaryLine = bookLoading
+    ? "Loading your clients…"
+    : portfolioSummaryLine({
+        clientCount: clientRows.length,
+        needAttention: attention.needAttention,
+        avgHealth,
+      });
 
   const insights = useMemo(
     () =>
@@ -1852,11 +1860,7 @@ function Dashboard() {
                 }
                 value={openQueriesTotal}
                 footnote={openQueriesTotal > 0 ? "Waiting on a reply" : "No open queries"}
-                onClick={() =>
-                  document
-                    .getElementById("wizard-dash-queries")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
+                onClick={queriesClientId ? () => openClientQueries(queriesClientId) : undefined}
               />
             </>
           )}
@@ -1866,9 +1870,8 @@ function Dashboard() {
         {!bookLoading ? (
           <PortfolioExceptions
             firmId={firmId}
-            refreshKey={clientRows.length}
             hideWhenClear
-            healthItems={attentionItems}
+            queue={attentionBook.items}
             className="mb-3"
           />
         ) : null}
