@@ -1,9 +1,10 @@
 /**
  * Financial Health Scorecard rows.
  *
- * Reports studio and Overview Export both call this. Debtor and creditor days
- * come from the stored figures-cover (`periodMonthsOf`), the same cover Ratios
- * and Collections use. A year-to-date span must not replace them.
+ * Reports studio and Overview Export both call this. Annualised returns and
+ * debtor and creditor days use the stored figures-cover (`periodMonthsOf`),
+ * the same cover Ratios and Collections use for DSO. A year-to-date span
+ * must not replace that cover.
  *
  * This module does not score pillars and does not supply a sign-off, a firm
  * name, or a timezone. `ZA_MARKET` is only the number-format default when a
@@ -14,7 +15,7 @@ import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config"
 import { reportScalarInputs } from "@/lib/equity-coherence";
 import { pillarForRatioName, scoreRatio } from "@/lib/health-score";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
-import { computeRatios, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
+import { computeRatios, periodMonthsOf, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
 import { presentScorecardRatio } from "@/lib/report-coherence";
 
 export type ScorecardRatioRow = {
@@ -45,8 +46,10 @@ function fmtRatioVal(name: string, val: number): string {
 }
 
 /**
- * Ratio map the scorecard prints. Margins stay on the year-span cover.
- * Debtor and creditor days are overlaid from the raw blob's stored cover.
+ * Ratio map the scorecard and the other studio reports print.
+ * Annualisation uses the stored figures cover (`periodMonthsOf`), the same
+ * cover as debtor and creditor days. A September year-end must not turn a
+ * stored 12-month file into a 9-month annualisation.
  */
 export function scorecardRatiosFromFinancials(
   financials: Record<string, unknown> | null | undefined,
@@ -74,7 +77,7 @@ export function scorecardRatiosFromFinancials(
     employees: fin.employees ?? "",
     founderHours: fin.founderHours ?? "",
     totalLiabilities: fin.totalLiabilities ?? "",
-    periodMonths: fin.periodMonths ?? "",
+    periodMonths: String(periodMonthsOf(raw)),
   };
   return withCanonicalDebtorCreditorDays(computeRatios(ratioInputs), raw);
 }

@@ -80,7 +80,8 @@ function scored(explicit: number | undefined, fallback: number): number {
 
 // ── Timeline diagram ───────────────────────────────────────────────────────
 
-const TL_W = 515;
+const TL_W = 490;
+const AXIS_LABEL_W = 28;
 const TL_ROW_H = 26;
 
 const tl = StyleSheet.create({
@@ -189,7 +190,18 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
         {ticks.map((t) => (
           <Fragment key={t}>
             <View style={[tl.axisTick, { left: x(t) }]} />
-            <Text style={[tl.axisLabel, { left: Math.max(0, x(t) - 8), width: 24 }]}>{t}d</Text>
+            <Text
+              style={[
+                tl.axisLabel,
+                {
+                  left: Math.max(0, Math.min(x(t) - AXIS_LABEL_W / 2, TL_W - AXIS_LABEL_W)),
+                  width: AXIS_LABEL_W,
+                  textAlign: "center",
+                },
+              ]}
+            >
+              {t}d
+            </Text>
           </Fragment>
         ))}
       </View>

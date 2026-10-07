@@ -419,7 +419,7 @@ const qaCycle = resolveThirteenWeekForecast({
   fyStartMonth: 1,
 });
 assert(
-  qaCycle.cycleNote === "Debtor days are 25. Collections use the same monthly revenue run-rate.",
+  qaCycle.cycleNote === "Debtor days are 43. Collections use the same monthly revenue run-rate.",
   qaCycle.cycleNote ?? "missing cycle note",
 );
 

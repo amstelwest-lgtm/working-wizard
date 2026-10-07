@@ -262,7 +262,7 @@ export function flatToRatioInputs(
  */
 export function overviewRatioInputs(
   financials: FlatFinancials | Record<string, unknown> | null | undefined,
-  opts?: { fyStartMonth?: number | null },
+  opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
 ): RatioInputs & { totalLiabilities?: string } {
   const fin = (financials ?? {}) as Record<string, unknown>;
   const text = (key: string): string => {
@@ -289,9 +289,24 @@ export function overviewRatioInputs(
     laborCost: text("laborCost"),
     employees: text("employees"),
     founderHours: text("founderHours"),
-    periodMonths: String(effectivePeriodMonths(fin, opts)),
+    periodMonths: String(ratioCoverMonths(fin, opts)),
     totalLiabilities: text("totalLiabilities"),
   };
+}
+
+/**
+ * Months used to annualise. Reports pass the stored cover (`periodMonthsOf`).
+ * The Ratios grid keeps the year-span default when no cover is passed.
+ */
+function ratioCoverMonths(
+  fin: Record<string, unknown>,
+  opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
+): number {
+  const explicit = opts?.periodMonths;
+  if (explicit != null && Number.isFinite(explicit) && explicit >= 1 && explicit <= 12) {
+    return Math.round(explicit);
+  }
+  return effectivePeriodMonths(fin, opts);
 }
 
 /**
@@ -301,7 +316,7 @@ export function overviewRatioInputs(
  */
 export function overviewRatios(
   financials: FlatFinancials | Record<string, unknown> | null | undefined,
-  opts?: { fyStartMonth?: number | null },
+  opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
 ): Record<string, number> {
   return withCanonicalDebtorCreditorDays(
     computeRatios(overviewRatioInputs(financials, opts)),
@@ -318,12 +333,17 @@ export function overviewRatios(
 export function scorecardHealthFromFinancials(input: {
   financials: FlatFinancials | Record<string, unknown> | null | undefined;
   fyStartMonth?: number | null;
+  /** Stored figures cover. Reports pass `periodMonthsOf`. Omitted on the Ratios page. */
+  periodMonths?: number | null;
   cashRunwayWeeks?: number | null;
   market?: ScoreMarket;
   shortfallWeek?: number | null;
 }): OverallHealth {
   return computeOverallHealth({
-    ratios: overviewRatios(input.financials, { fyStartMonth: input.fyStartMonth }),
+    ratios: overviewRatios(input.financials, {
+      fyStartMonth: input.fyStartMonth,
+      periodMonths: input.periodMonths,
+    }),
     cashRunwayWeeks: input.cashRunwayWeeks,
     market: input.market,
     shortfallWeek: input.shortfallWeek,

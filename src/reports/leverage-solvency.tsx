@@ -340,7 +340,16 @@ export function LeverageSolvencyPDF({
       {hasDebt ? (
         <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
       ) : (
-        <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8, fontFamily: "Helvetica" }}>
+        <Text
+          style={{
+            fontSize: 8,
+            color: C.muted,
+            marginBottom: 8,
+            fontFamily: "Helvetica",
+            lineHeight: 1.45,
+            width: 470,
+          }}
+        >
           {d.total_liabilities != null && Number.isFinite(d.total_liabilities)
             ? `Total liabilities are ${fmtRand(d.total_liabilities, m)}. Interest-bearing debt is the facility schedule, which is empty — that is not the same as debt-free. Equity multiplier is assets / equity${Number.isFinite(equityMultiplier) ? ` (${equityMultiplier.toFixed(2)}x)` : ""}.`
             : "No debt facilities captured on the client page — enter the schedule before quoting interest-bearing debt. Equity multiplier is assets / equity and does not require a facility schedule."}
