@@ -26,12 +26,13 @@ import {
   buildAdvisoryPack,
   computeEditStats,
   isMissingPackRelation,
-  overviewFiguresForPackDrift,
+  livePackMetrics,
   parsePackReviewRow,
   parsePackRow,
   type AdvisoryPack,
   type AdvisoryPackContent,
   type LivePackFigures,
+  type LivePackMetrics,
   type PackReview,
   type PackSection,
 } from "@/lib/advisory-pack";
@@ -39,14 +40,8 @@ import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { ZA_MARKET, resolveMarket } from "@/lib/market/resolve";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
-import type { SavedCashflowLike } from "@/lib/cash-runway";
-import {
-  assessClientMetrics,
-  persistedRunwayWeeks,
-  runwayDisplayLabel,
-} from "@/lib/client-metrics";
 import { parseDataRequestRow, type DataRequest } from "@/lib/data-requests";
-import { computeOverallHealth } from "@/lib/health-score";
+import { overviewRatios } from "@/lib/health-score";
 import { outcomeStories } from "@/lib/outcomes";
 import {
   parseRecommendationRow,
@@ -175,73 +170,144 @@ export type GeneratePackResult =
   | { ok: true; pack: AdvisoryPack }
   | { ok: false; reason: "not_migrated" | "no_figures" };
 
+type ClientFigureRow = {
+  name?: string;
+  firm_id?: string | null;
+  financials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+  financials_updated_at?: string | null;
+  market?: unknown;
+  operating_profile?: unknown;
+};
+
+type SnapshotFigureRow = {
+  id?: string;
+  period_label?: string | null;
+  period_date?: string | null;
+  ratios?: Record<string, number> | null;
+  financials?: Record<string, unknown> | null;
+};
+
+function hasStatementFigures(fin: Record<string, unknown> | null | undefined): boolean {
+  if (!fin) return false;
+  return ["revenue", "cogs", "ebit", "netIncome", "receivables", "payables"].some((key) => {
+    const value = fin[key];
+    return value != null && String(value).trim() !== "";
+  });
+}
+
+/**
+ * Live Overview metrics plus the snapshot rows a pack version is filed against.
+ * Health and ratios are recomputed here — stored snapshot ratios can still
+ * be the unadjusted annual pass (health 78) after Overview moved to 71.
+ */
+async function loadOverviewContext(
+  sb: LooseSb,
+  clientId: string,
+  now: Date,
+): Promise<{
+  row: ClientFigureRow | null;
+  snaps: SnapshotFigureRow[];
+  prior: ReturnType<typeof resolvePriorSnapshot>;
+  metrics: LivePackMetrics;
+  fyStartMonth: number;
+}> {
+  const { data, error } = await sb
+    .from("clients")
+    .select("name, firm_id, financials, cashflow, financials_updated_at, market, operating_profile")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const row = (data ?? null) as ClientFigureRow | null;
+  const financials =
+    row?.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
+      ? row.financials
+      : null;
+  let market = ZA_MARKET;
+  try {
+    market = resolveMarket(coerceMarketSelection(row?.market));
+  } catch {
+    market = ZA_MARKET;
+  }
+  const profile = parseOperatingProfile(row?.operating_profile);
+  const fyStartMonth = profile?.fyStartMonth ?? market.fyStartMonthDefault;
+  const { data: snapData } = await sb
+    .from("client_financial_snapshots")
+    .select("id, period_label, period_date, ratios, financials")
+    .eq("client_id", clientId)
+    .order("period_date", { ascending: false })
+    .limit(24);
+  const snaps = (snapData ?? []) as SnapshotFigureRow[];
+  const prior = resolvePriorSnapshot(
+    snaps.map((snap) => ({
+      id: snap.id,
+      period_label: snap.period_label ?? "",
+      period_date: snap.period_date ?? "",
+      financials: snap.financials ?? null,
+      ratios: snap.ratios ?? null,
+    })),
+    now,
+    {
+      financials,
+      periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
+    },
+  );
+  const metrics = livePackMetrics({
+    financials,
+    cashflow: row?.cashflow,
+    financialsUpdatedAt: row?.financials_updated_at ?? null,
+    priorFinancials: prior?.financials ?? null,
+    market,
+    fyStartMonth,
+    timeZone: market.timezone,
+    now,
+  });
+  return { row, snaps, prior, metrics, fyStartMonth };
+}
+
 export async function gatherPackInputs(
   sb: LooseSb,
   clientId: string,
   now: string,
 ): Promise<Parameters<typeof buildAdvisoryPack>[0] | null> {
-  const [clientRes, snapsRes, recsRes, reqsRes, openRes, overdueRes, outcomesRes] =
-    await Promise.all([
-      sb
-        .from("clients")
-        .select("name, firm_id, cashflow, financials, financials_updated_at")
-        .eq("id", clientId)
-        .maybeSingle(),
-      sb
-        .from("client_financial_snapshots")
-        .select("id, period_label, period_date, ratios")
-        .eq("client_id", clientId)
-        .order("period_date", { ascending: false })
-        .limit(2),
-      sb
-        .from("proposed_next_steps")
-        .select("*")
-        .eq("client_id", clientId)
-        .in("status", ["proposed", "approved", "edited"])
-        .limit(50),
-      sb
-        .from("data_requests")
-        .select("*")
-        .eq("client_id", clientId)
-        .in("status", ["open", "sent"])
-        .limit(50),
-      sb
-        .from("action_items")
-        .select("id", { count: "exact", head: true })
-        .eq("client_id", clientId)
-        .neq("status", "done"),
-      sb
-        .from("action_items")
-        .select("id", { count: "exact", head: true })
-        .eq("client_id", clientId)
-        .neq("status", "done")
-        .lt("due_date", now.slice(0, 10)),
-      sb
-        .from("recommendation_outcomes")
-        .select("*")
-        .eq("client_id", clientId)
-        .order("measured_at", { ascending: false })
-        .limit(300),
-    ]);
-  if (clientRes.error) throw new Error(clientRes.error.message);
-  const client = clientRes.data as {
-    name: string;
-    firm_id: string | null;
-    cashflow: SavedCashflowLike | null;
-    financials: Record<string, unknown> | null;
-    financials_updated_at: string | null;
-  } | null;
+  const nowDate = new Date(now);
+  const [overview, recsRes, reqsRes, openRes, overdueRes, outcomesRes] = await Promise.all([
+    loadOverviewContext(sb, clientId, Number.isFinite(nowDate.getTime()) ? nowDate : new Date()),
+    sb
+      .from("proposed_next_steps")
+      .select("*")
+      .eq("client_id", clientId)
+      .in("status", ["proposed", "approved", "edited"])
+      .limit(50),
+    sb
+      .from("data_requests")
+      .select("*")
+      .eq("client_id", clientId)
+      .in("status", ["open", "sent"])
+      .limit(50),
+    sb
+      .from("action_items")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .neq("status", "done"),
+    sb
+      .from("action_items")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .neq("status", "done")
+      .lt("due_date", now.slice(0, 10)),
+    sb
+      .from("recommendation_outcomes")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("measured_at", { ascending: false })
+      .limit(300),
+  ]);
+  const client = overview.row;
   if (!client) throw new Error("Client not found");
-
-  const snaps = (snapsRes.error ? [] : (snapsRes.data ?? [])) as Array<{
-    id: string;
-    period_label: string | null;
-    period_date: string | null;
-    ratios: Record<string, number> | null;
-  }>;
-  if (snaps.length === 0) return null;
-  const current = snaps[0];
-  const prior = snaps[1] ?? null;
+  if (overview.snaps.length === 0) return null;
+  const current = overview.snaps[0];
+  const prior = overview.prior;
 
   let firmName: string | null = null;
   if (client.firm_id) {
@@ -253,40 +319,31 @@ export async function gatherPackInputs(
     firmName = (firm as { name?: string } | null)?.name ?? null;
   }
 
-  const assessed = assessClientMetrics({
-    financials: client.financials,
-    cashflow: client.cashflow,
-    financialsUpdatedAt: client.financials_updated_at,
-  });
-  const cashRunwayWeeks = persistedRunwayWeeks(assessed.runway);
-  const closings = assessed.outlook.closing;
-  const opening = assessed.outlook.opening;
-
   const recommendations: Recommendation[] = (recsRes.error ? [] : (recsRes.data ?? [])).map(
     (r: Record<string, unknown>) => parseRecommendationRow(r),
   );
   const dataRequests: DataRequest[] = (reqsRes.error ? [] : (reqsRes.data ?? [])).map(
     (r: Record<string, unknown>) => parseDataRequestRow(r),
   );
-
-  const health = current.ratios
-    ? computeOverallHealth({ ratios: current.ratios, cashRunwayWeeks })
-    : null;
+  const priorRatios =
+    prior?.financials && hasStatementFigures(prior.financials)
+      ? overviewRatios(prior.financials, { fyStartMonth: overview.fyStartMonth })
+      : (prior?.ratios ?? null);
 
   return {
-    clientName: client.name,
+    clientName: client.name ?? "",
     firmName,
     hasFirm: client.firm_id !== null,
-    periodLabel: current.period_label,
+    periodLabel: current.period_label ?? null,
     priorPeriodLabel: prior?.period_label ?? null,
     figuresAsOf: current.period_date ?? client.financials_updated_at ?? null,
-    health,
-    ratios: current.ratios,
-    priorRatios: prior?.ratios ?? null,
-    openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
-    closings,
-    cashRunwayWeeks,
-    runwayLabel: runwayDisplayLabel(assessed.runway),
+    health: overview.metrics.health.overall == null ? null : overview.metrics.health,
+    ratios: overview.metrics.ratios,
+    priorRatios,
+    openingBalance: overview.metrics.openingBalance,
+    closings: overview.metrics.closings,
+    cashRunwayWeeks: overview.metrics.cashRunwayWeeks,
+    runwayLabel: overview.metrics.runwayLabel,
     recommendations,
     dataRequests,
     openActions: openRes.error ? 0 : (openRes.count ?? 0),
@@ -377,63 +434,8 @@ function applySectionPatch(
  * snapshot stored on `content`.
  */
 async function loadLivePackFigures(sb: LooseSb, clientId: string): Promise<LivePackFigures> {
-  const { data, error } = await sb
-    .from("clients")
-    .select("financials, cashflow, financials_updated_at, market, operating_profile")
-    .eq("id", clientId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  const row = (data ?? null) as {
-    financials?: Record<string, unknown> | null;
-    cashflow?: unknown;
-    financials_updated_at?: string | null;
-    market?: unknown;
-    operating_profile?: unknown;
-  } | null;
-  const financials =
-    row?.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
-      ? row.financials
-      : null;
-  let market = ZA_MARKET;
-  try {
-    market = resolveMarket(coerceMarketSelection(row?.market));
-  } catch {
-    market = ZA_MARKET;
-  }
-  const profile = parseOperatingProfile(row?.operating_profile);
-  const { data: snaps } = await sb
-    .from("client_financial_snapshots")
-    .select("period_label, period_date, financials")
-    .eq("client_id", clientId)
-    .order("period_date", { ascending: false })
-    .limit(24);
-  const prior = resolvePriorSnapshot(
-    (
-      (snaps ?? []) as Array<{
-        period_label: string | null;
-        period_date: string | null;
-        financials: Record<string, unknown> | null;
-      }>
-    ).map((snap) => ({
-      period_label: snap.period_label ?? "",
-      period_date: snap.period_date ?? "",
-      financials: snap.financials,
-    })),
-    new Date(),
-    {
-      financials,
-      periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
-    },
-  );
-  return overviewFiguresForPackDrift({
-    financials,
-    cashflow: row?.cashflow,
-    financialsUpdatedAt: row?.financials_updated_at ?? null,
-    priorFinancials: prior?.financials ?? null,
-    market,
-    fyStartMonth: profile?.fyStartMonth ?? market.fyStartMonthDefault,
-    timeZone: market.timezone,
-  });
+  const overview = await loadOverviewContext(sb, clientId, new Date());
+  return overview.metrics.figures;
 }
 
 export const reviewAdvisoryPack = createServerFn({ method: "POST" })

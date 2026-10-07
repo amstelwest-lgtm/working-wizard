@@ -221,6 +221,7 @@ export function AdvisoryPackPanel({
     if (!clientId || !pack || pack.status !== "approved") return;
     if (staleCleared.current === pack.id) return;
     staleCleared.current = pack.id;
+    const seen = seq.current;
     void review({
       data: {
         clientId,
@@ -236,6 +237,7 @@ export function AdvisoryPackPanel({
       },
     })
       .then((res) => {
+        if (seq.current !== seen) return;
         setPack(res.pack);
         setReviews(res.reviews);
         onChanged?.();
@@ -304,6 +306,8 @@ export function AdvisoryPackPanel({
       "generate",
       async () => {
         if (!clientId) return null;
+        // Drop an in-flight "figures changed" clear so it cannot put the old pack back.
+        seq.current += 1;
         const res = await generate({ data: { clientId } });
         if (!res.ok) {
           toast.message(
