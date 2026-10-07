@@ -13,6 +13,12 @@ import {
   STATEMENT_YTD_FIELD_KEYS,
 } from "@/lib/statement-period";
 import {
+  ledgerAttribution,
+  readCachedQboSync,
+  type BoardFigures,
+  type LedgerSyncFigures,
+} from "@/lib/ledger-link-copy";
+import {
   buildQboAuthUrl,
   exchangeCodeForTokens,
   fetchChartOfAccounts,
@@ -94,6 +100,12 @@ export type QboStatus = {
   ytdBasis: "financial" | "calendar" | null;
   agedArLine: string;
   agedApLine: string;
+  /** True when last_synced_at is set and the live blob was written by QuickBooks. */
+  figuresFromThisSync: boolean;
+  /** This connection's sync, from the live blob or the P&L cache. */
+  syncFigures: LedgerSyncFigures | null;
+  /** Overview figures, including a snapshot or upload that this link did not write. */
+  boardFigures: BoardFigures | null;
 } | null;
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
@@ -164,7 +176,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, financials")
+      .select("id, financials, financials_updated_at")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
@@ -179,18 +191,45 @@ export const getQboStatus = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!conn) return null;
-    const proof = qboFigureProof((client as { financials?: unknown }).financials);
-    const { data: agedRows } = await admin
+    const financials = (client as { financials?: unknown }).financials;
+    const proof = qboFigureProof(financials);
+    const { data: cacheRows } = await admin
       .from("qbo_sync_data")
       .select("data_type, raw_data")
       .eq("client_id", data.clientId)
-      .in("data_type", ["aged_ar", "aged_ap"]);
+      .in("data_type", ["aged_ar", "aged_ap", "pl", "bs"]);
     const aged = readCollectionsSnapshot(
-      (agedRows ?? []).find((row) => row.data_type === "aged_ar")?.raw_data,
+      (cacheRows ?? []).find((row) => row.data_type === "aged_ar")?.raw_data,
     );
     const agedAp = readPayablesSnapshot(
-      (agedRows ?? []).find((row) => row.data_type === "aged_ap")?.raw_data,
+      (cacheRows ?? []).find((row) => row.data_type === "aged_ap")?.raw_data,
     );
+    const { data: snapRows } = await admin
+      .from("client_financial_snapshots")
+      .select("source, created_at")
+      .eq("client_id", data.clientId)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    const attribution = ledgerAttribution({
+      provider: "qbo",
+      lastSyncedAt: conn.last_synced_at ?? null,
+      financials,
+      financialsUpdatedAt:
+        (client as { financials_updated_at?: string | null }).financials_updated_at ?? null,
+      snapshots: snapRows ?? [],
+      ownFromBlob: {
+        periodLabel: proof.periodLabel,
+        revenue: proof.revenue,
+        ytdPeriodLabel: proof.ytdPeriodLabel,
+        ytdRevenue: proof.ytdRevenue,
+        ytdBasis: proof.ytdBasis,
+        cash: proof.cash,
+      },
+      ownFromCache: readCachedQboSync(
+        (cacheRows ?? []).find((row) => row.data_type === "pl")?.raw_data,
+        (cacheRows ?? []).find((row) => row.data_type === "bs")?.raw_data,
+      ),
+    });
     return {
       realmId: conn.realm_id ?? "",
       companyName: conn.company_name ?? null,
@@ -201,6 +240,9 @@ export const getQboStatus = createServerFn({ method: "POST" })
       ...proof,
       agedArLine: aged ? agedArProofLine(aged) : proof.agedArLine,
       agedApLine: agedAp ? agedApProofLine(agedAp) : proof.agedApLine,
+      figuresFromThisSync: attribution.figuresFromThisSync,
+      syncFigures: attribution.syncFigures,
+      boardFigures: attribution.boardFigures,
     };
   });
 

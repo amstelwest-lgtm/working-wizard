@@ -13,6 +13,7 @@ import {
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { yearToDateTitle } from "@/lib/statement-period";
+import { describeLedgerLink } from "@/lib/ledger-link-copy";
 
 type Props = {
   clientId: string | null;
@@ -23,11 +24,11 @@ type Props = {
   onSyncComplete?: (inputs: Record<string, string>, summary: SyncResult["summary"]) => void;
 };
 
-function fmtDate(iso: string | null) {
-  if (!iso) return "never";
+function fmtDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -150,9 +151,31 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
 
   if (status) {
     const isError = status.syncStatus === "error";
-    const periodLabel = lastSync?.periodLabel ?? status.periodLabel;
-    const ytdPeriodLabel = lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel;
-    const ytdBasis = lastSync?.ytdBasis ?? status.ytdBasis;
+    const periodLabel =
+      lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;
+    const ytdPeriodLabel =
+      lastSync?.ytdPeriodLabel ?? status.syncFigures?.ytdPeriodLabel ?? status.ytdPeriodLabel;
+    const ytdBasis = lastSync?.ytdBasis ?? status.syncFigures?.ytdBasis ?? status.ytdBasis;
+    const linkCopy = describeLedgerLink(
+      {
+        provider: "qbo",
+        lastSyncedAt: status.lastSyncedAt,
+        syncStatus: status.syncStatus,
+        figuresFromThisSync: Boolean(lastSync) || status.figuresFromThisSync,
+        own: lastSync
+          ? {
+              periodLabel: lastSync.periodLabel,
+              revenue: lastSync.revenue,
+              ytdPeriodLabel: lastSync.ytdPeriodLabel,
+              ytdRevenue: lastSync.ytdRevenue,
+              ytdBasis: lastSync.ytdBasis,
+              cash: lastSync.cash,
+            }
+          : status.syncFigures,
+        board: status.boardFigures,
+      },
+      fmtDate,
+    );
     return (
       <div className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--ok"}`}>
         <div className="ledger-connect__head">
@@ -173,21 +196,13 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
             <p className="ledger-connect__meta ledger-connect__meta--flush">
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
-                : periodLabel
-                  ? `Last sync ${fmtDate(status.lastSyncedAt)} · Month to date ${periodLabel}${
-                      (lastSync?.revenue ?? status.revenue) != null
-                        ? ` · Revenue ${fmtExact(lastSync?.revenue ?? status.revenue)}`
-                        : ""
-                    }${
-                      ytdPeriodLabel
-                        ? ` · ${yearToDateTitle(ytdBasis)} ${ytdPeriodLabel}${
-                            (lastSync?.ytdRevenue ?? status.ytdRevenue) != null
-                              ? ` · Revenue ${fmtExact(lastSync?.ytdRevenue ?? status.ytdRevenue)}`
-                              : ""
-                          }`
-                        : ""
-                    }`
-                  : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
+                : linkCopy.statusLine}
+              {!isError && linkCopy.figuresLine ? (
+                <>
+                  <br />
+                  {linkCopy.figuresLine}
+                </>
+              ) : null}
             </p>
             <p id="qbo-aged-ar-status" className="ledger-connect__meta">
               {lastSync?.agedArLine ?? status.agedArLine}
@@ -222,7 +237,7 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
           </div>
         </div>
 
-        {(lastSync || status.periodLabel) && (
+        {(lastSync || linkCopy.showOwnStats) && (
           <div className="ledger-connect__stats ledger-connect__stats--ok">
             {[
               { label: "Month to date", value: periodLabel ?? "—" },
