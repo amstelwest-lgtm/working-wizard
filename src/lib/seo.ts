@@ -29,7 +29,7 @@ export const SEO_PAGES = {
   },
   forAccountants: {
     path: "/for-accountants",
-    title: "AI Advisory Software for Accounting Firms | MILŌN",
+    title: "Advisory drafts from QBO & Xero for accounting firms | MILŌN",
     description:
       "Launch advisory without extra headcount. Connect QuickBooks Online or Xero — MILŌN drafts the analysis; your team reviews and signs off.",
     imageAlt: "MILŌN for accounting firms — advisory delivery without extra headcount",
@@ -220,7 +220,7 @@ export function organizationGraphJson(): string {
         url: SITE_ORIGIN,
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         description:
-          "AI-automated finance function for accounting firms and small businesses. Connect QuickBooks Online or Xero, or upload statements. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, white-label reporting, and assignable action plans.",
+          "AI-automated finance function for accounting firms and small businesses. Connect QuickBooks Online or Xero, or upload statements. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, and assignable action plans.",
         featureList: [
           "Connect QuickBooks Online or Xero, or upload PDF, Excel, or CSV statements",
           "Business financial health score across profit, assets, financing and cash",
@@ -228,7 +228,7 @@ export function organizationGraphJson(): string {
           "13-week rolling cash flow forecast",
           "Budget vs actual variance reporting with AI commentary",
           "AI extraction of financial statements from PDF, Excel, or CSV",
-          "White-label client-ready PDF reports",
+          "Client-ready PDF advisory packs for review and sign-off",
           "Assignable action plans with email-based task completion",
           "Ask AI over your own financial data",
         ],
@@ -301,7 +301,7 @@ export const LLMS_TXT = `# MILŌN
 - Builds rolling 13-week direct cash flow forecasts
 - Produces budget vs actual variance reporting with written commentary
 - Extracts financial data from PDF, Excel, CSV, or a bank statement
-- Generates white-label client-ready reports for accounting firms
+- Generates client-ready advisory packs for accounting firms to review and sign off
 - Converts recommendations into assigned tasks completable from email
 
 ## Who it is for
