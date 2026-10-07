@@ -21,6 +21,8 @@ interface Props {
   outcomeWhy?: string;
   /** Called when the user taps "Assign" after the item exists — should switch to the Action Plan tab focused on this move. */
   onAssign: (moveKey: string) => void;
+  /** Studio gold button on the accountant Moves tab. Owner board keeps the compact chip. */
+  variant?: "owner" | "studio";
 }
 
 /**
@@ -28,7 +30,14 @@ interface Props {
  * (deduped by source_move_key), then offers "Open plan" to hand off into the
  * Action Plan tab for owner/date assignment (not the legacy employee_tasks flow).
  */
-export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign }: Props) {
+export function AddToPlanButton({
+  clientId,
+  moveKey,
+  title,
+  outcomeWhy,
+  onAssign,
+  variant = "owner",
+}: Props) {
   const [state, setState] = useState<"idle" | "adding" | "added">("idle");
 
   const add = async (e: React.MouseEvent) => {
@@ -98,7 +107,11 @@ export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAssign(moveKey); }}
         title="Open in Action Plan to assign an owner"
-        className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-1 text-[10px] text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300"
+        className={
+          variant === "studio"
+            ? "btn ghost mini"
+            : "inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-1 text-[10px] text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300"
+        }
       >
         <span className="font-bold uppercase tracking-wider">Open plan</span>
         <ArrowRight className="h-3 w-3" />
@@ -111,7 +124,11 @@ export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign
       onClick={add}
       disabled={state === "adding"}
       title="Add to Action Plan"
-      className="inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-1.5 py-1 text-[10px] text-sky-700 transition hover:bg-sky-500/25 disabled:opacity-60 dark:text-sky-200"
+      className={
+        variant === "studio"
+          ? "btn gold mini"
+          : "inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-1.5 py-1 text-[10px] text-sky-700 transition hover:bg-sky-500/25 disabled:opacity-60 dark:text-sky-200"
+      }
     >
       {state === "adding"
         ? <Loader2 className="h-3 w-3 animate-spin" />

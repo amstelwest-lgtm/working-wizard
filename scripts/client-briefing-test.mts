@@ -29,6 +29,7 @@ import {
 import { buildVarianceChips } from "../src/lib/prior-period";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
 import { resolveMarket } from "../src/lib/market";
+import { alignBrainFigureCopy, formatStatementMargin } from "../src/lib/statement-margin";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -85,6 +86,30 @@ assert(rev.value === "$1.6m" || rev.value === "$1.5m", `revenue compact: ${rev.v
 assert(rev.delta?.direction === "up" && rev.delta.text === "8.4%", `revenue delta ${rev.delta?.text}`);
 const gm = snap[1]!;
 assert(gm.value === "70.9%" && gm.delta?.text === "2.1pp" && gm.delta.good, "GM in pp, good");
+assert(formatStatementMargin(0.6) === "60.0%", "fraction 0.6 prints as 60.0%");
+assert(formatStatementMargin(0.086) === "8.6%", "fraction 0.086 prints as 8.6%");
+assert(formatStatementMargin(60) === "60.0%", "an already-percent margin is not scaled again");
+assert(
+  alignBrainFigureCopy(
+    "Gross margin of **0.6** and operating margin of **0.16**. Period not dated",
+    { grossMargin: 0.6, operatingMargin: 0.086, periodLabel: "Sep 2026" },
+  ) === "Gross margin of **60.0%** and operating margin of **8.6%**. Sep 2026",
+  "brain gap copy matches the overview percent scale and period",
+);
+const snapshotPeriod = buildFinancialSnapshot({
+  chips,
+  datedPeriod: false,
+  periodLabel: "Sep 2026",
+  market: US,
+});
+assert(
+  snapshotPeriod.find((row) => row.key === "revenue")?.hint === "Sep 2026",
+  "briefing dates revenue from the snapshot when the statement is undated",
+);
+assert(
+  !snapshotPeriod.find((row) => row.key === "gm")?.delta,
+  "an undated statement does not show a margin movement",
+);
 const om = snap[2]!;
 assert(om.delta?.direction === "down" && om.delta.text === "1.4pp" && !om.delta.good, "OM down 1.4pp, bad");
 assert(snap[3]!.value === "4 weeks", `runway once: ${snap[3]!.value}`);

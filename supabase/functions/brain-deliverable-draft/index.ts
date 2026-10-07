@@ -12,6 +12,7 @@ import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { partyNamesInBrain } from "../brain-propose/prompt.ts";
 import { buildDeliverableDraftPayload } from "./prompt.ts";
+import { quotedStatementFigures, ratioPromptLines, STATEMENT_FIGURE_RULES } from "../../../src/lib/statement-margin.ts";
 
 // --- logic (sync with src/lib/client-brain-deliverable.ts) ---
 
@@ -239,7 +240,8 @@ Rules:
 - assumptions is an explicit list of things the accountant must tick before sign-off. Empty array if none are warranted.
 - Do not mark the draft ready or sent. Do not include a status field.
 - body is the deliverable the accountant could send after sign-off. For client_email, do not put SUBJECT inside body; use subject.
-- Keep body under 900 words. Max 8 assumptions.`;
+- Keep body under 900 words. Max 8 assumptions.
+${STATEMENT_FIGURE_RULES.join("\n")}`;
 
 function compact(value: unknown, max = 800): string {
   const text = typeof value === "string" ? value : JSON.stringify(value);
@@ -248,14 +250,7 @@ function compact(value: unknown, max = 800): string {
 }
 
 function ratioLines(raw: unknown): string[] {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
-  const out: string[] = [];
-  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof val !== "number" || !Number.isFinite(val)) continue;
-    out.push(`${key}: ${val}`);
-    if (out.length >= 16) break;
-  }
-  return out;
+  return ratioPromptLines(raw);
 }
 
 Deno.serve(async (req: Request) => {
@@ -390,6 +385,11 @@ Deno.serve(async (req: Request) => {
     contextLines.push(`Latest snapshot: ${snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`);
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
+    const quoted = quotedStatementFigures({
+      ratios: (snap.ratios ?? null) as Record<string, unknown> | null,
+      periodLabel: snap.period_label,
+    });
+    if (quoted.length) contextLines.push(quoted.join("\n"));
   }
   const facts = (factRes.data ?? []) as Array<{ fact_text: string; category: string | null }>;
   if (facts.length) {

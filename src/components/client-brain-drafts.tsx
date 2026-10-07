@@ -44,6 +44,7 @@ import {
   toggleAssumptionChecked,
   updateAssumptionText,
 } from "@/lib/client-brain-deliverable";
+import { alignBrainFigureCopy, type StatementFigureFacts } from "@/lib/statement-margin";
 
 type DraftDialog =
   | { mode: "ready" | "discard" | "send"; draft: DeliverableDraft }
@@ -54,11 +55,13 @@ export function ClientBrainDrafts({
   drafts,
   onReload,
   onOpenAdvisory,
+  figureFacts,
 }: {
   clientId: string;
   drafts: DeliverableDraft[];
   onReload: () => Promise<void> | void;
   onOpenAdvisory?: () => void;
+  figureFacts?: StatementFigureFacts;
 }) {
   const { user } = useAuth();
   const { firmId } = useAccountantProfile();
@@ -208,7 +211,10 @@ export function ClientBrainDrafts({
           {drafts.map((draft) => {
             const items = parseAssumptionChecklist(draft.assumption_checklist);
             const parsed = parseDraftSubjectBody(draft.body);
-            const body = parsed.body || draft.body || "";
+            const body = alignBrainFigureCopy(parsed.body || draft.body || "", figureFacts ?? {});
+            const subject = parsed.subject
+              ? alignBrainFigureCopy(parsed.subject, figureFacts ?? {})
+              : "";
             const long = body.length > 420 && !expanded[draft.id];
             const editable = canEditAssumptions(draft.status);
             return (
@@ -217,8 +223,8 @@ export function ClientBrainDrafts({
                   <strong>{draftKindLabel(draft.kind)}</strong>
                   <span className="status-tag gold">{draftStatusLabel(draft.status)}</span>
                 </div>
-                {parsed.subject && (
-                  <div style={{ fontSize: 13.5, marginTop: 6, fontWeight: 600 }}>{parsed.subject}</div>
+                {subject && (
+                  <div style={{ fontSize: 13.5, marginTop: 6, fontWeight: 600 }}>{subject}</div>
                 )}
                 {body && (
                   <p className="sub" style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>

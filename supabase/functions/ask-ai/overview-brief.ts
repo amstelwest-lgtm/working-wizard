@@ -17,6 +17,7 @@ import {
   healthBandLabel,
   peerMedian,
 } from "../../../src/lib/ratios.ts";
+import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
@@ -165,7 +166,7 @@ export function formatMoney(n: number, copyPack: OverviewCopyPack): string {
 }
 
 function pct(fraction: number): string {
-  return `${(fraction * 100).toFixed(1)}%`;
+  return formatStatementMargin(fraction) ?? "—";
 }
 
 function days(n: number): string {

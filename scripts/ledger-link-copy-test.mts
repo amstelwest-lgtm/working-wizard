@@ -294,6 +294,19 @@ assert(
   undatedSnap.find((row) => row.key === "revenue")?.hint === "Period not dated",
   "revenue says the period is not dated",
 );
+const labeledUndated = buildFinancialSnapshot({
+  chips: flatChips,
+  datedPeriod: false,
+  periodLabel: "Sep 2026",
+});
+assert(
+  labeledUndated.every((row) => !row.delta),
+  "a snapshot label does not invent month-on-month movement",
+);
+assert(
+  labeledUndated.find((row) => row.key === "revenue")?.hint === "Sep 2026",
+  "revenue uses the snapshot period when the statement has no dates",
+);
 
 const datedSnap = buildFinancialSnapshot({
   chips: buildVarianceChips({
@@ -320,8 +333,12 @@ assert(
   "snapshot movement follows the statement dates",
 );
 assert(
-  route.includes("figuresPeriodLabel={statementDated ? statementMeta.periodLabel : null}"),
-  "workflow kicker follows the statement dates",
+  route.includes("figuresPeriodLabel={figuresPeriodLabel}"),
+  "workflow kicker uses the statement or snapshot period",
+);
+assert(
+  /const figuresPeriodLabel =[\s\S]{0,280}pickCurrentSnapshot\(snapshots\)/.test(route),
+  "an undated statement still dates the period from the snapshot",
 );
 assert(
   route.includes("boardFigures: xeroLink.boardFigures"),
