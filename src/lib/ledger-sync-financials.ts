@@ -15,11 +15,7 @@
  * statement back.
  */
 
-import {
-  isDatedLedgerSource,
-  readStatementMeta,
-  STATEMENT_YTD_FIELD_KEYS,
-} from "@/lib/statement-period";
+import { isDatedLedgerSource, readStatementMeta, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-period";
 
 export type LedgerSyncProvider = "qbo" | "xero" | "sage";
 

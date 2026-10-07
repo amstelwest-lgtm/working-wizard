@@ -135,16 +135,13 @@ export function defaultPeriodCoverage(input: {
     const to = utcDate(end);
     if (from && to && to >= from) {
       const months =
-        (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
-        (to.getUTCMonth() - from.getUTCMonth()) +
-        1;
+        (to.getUTCFullYear() - from.getUTCFullYear()) * 12 + (to.getUTCMonth() - from.getUTCMonth()) + 1;
       return { months: Math.min(12, Math.max(1, months)), periodStart: start.slice(0, 10) };
     }
   }
   const endDate = end ? utcDate(end) : null;
   if (endDate) {
-    const monthEnd =
-      endDate.getUTCDate() === lastUtcDay(endDate.getUTCFullYear(), endDate.getUTCMonth());
+    const monthEnd = endDate.getUTCDate() === lastUtcDay(endDate.getUTCFullYear(), endDate.getUTCMonth());
     if (!monthEnd) {
       const month = String(endDate.getUTCMonth() + 1).padStart(2, "0");
       return { months: 1, periodStart: `${endDate.getUTCFullYear()}-${month}-01` };
