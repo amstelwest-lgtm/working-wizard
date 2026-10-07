@@ -4,6 +4,11 @@
  * Reports studio and Overview Export both call this. Debtor and creditor days
  * come from the stored figures-cover (`periodMonthsOf`), the same cover Ratios
  * and Collections use. A year-to-date span must not replace them.
+ *
+ * This module does not score pillars and does not supply a sign-off, a firm
+ * name, or a timezone. `ZA_MARKET` is only the number-format default when a
+ * caller omits a market. Overview export and Reports studio pass the client
+ * market. Pillar and overall scores come from `scorecardHealthFromFinancials`.
  */
 import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { reportScalarInputs } from "@/lib/equity-coherence";

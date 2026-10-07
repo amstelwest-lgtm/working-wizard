@@ -28,11 +28,18 @@ import {
 } from "../src/lib/advisory-pack";
 import { ADVISORY_EVENTS } from "../src/lib/advisory-state";
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "../src/lib/advisory-narrative";
-import { computeOverallHealth, overviewRatioInputs, overviewRatios } from "../src/lib/health-score";
+import {
+  computeOverallHealth,
+  overviewRatioInputs,
+  overviewRatios,
+  scorecardHealthFromFinancials,
+} from "../src/lib/health-score";
 import { computeRatios } from "../src/lib/ratios";
 import { brainDraftSupersededByPack, checkRootCauseClaims, type Recommendation } from "../src/lib/recommendations";
 import {
+  creditorDaysReason,
   dataRequestDayRatios,
+  debtorDaysReason,
   detectDataGaps,
   overviewRequestCardRows,
   presentLiveDataRequests,
@@ -1212,6 +1219,53 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     shown[1].reason.includes(`Creditor days are ${above?.["Creditor Days"]}`),
     shown[1].reason,
   );
+  const tripled = overviewRequestCardRows(
+    [
+      {
+        source: "system",
+        status: "open",
+        rule_key: "debtor_days_no_ageing",
+        reason:
+          "Debtor days are 55. Debtor days are 55. Debtor days are 55 against a 40-day benchmark.",
+      },
+      {
+        source: "system",
+        status: "open",
+        rule_key: "creditor_days_no_ageing",
+        reason: "Creditor days are 81. Creditor days are 81. Creditor days are 81, above the 60-day mark.",
+      },
+    ],
+    {
+      revenue: "365000",
+      cogs: "365000",
+      receivables: "55000",
+      payables: "81000",
+      periodMonths: "12",
+      periodEnd: "2026-09-30",
+    },
+  );
+  const liveDays = dataRequestDayRatios({
+    revenue: "365000",
+    cogs: "365000",
+    receivables: "55000",
+    payables: "81000",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  });
+  assert(tripled.length === 2, "stored text that already quotes the figure still shows one card each");
+  eq(tripled[0].reason, debtorDaysReason(liveDays?.["Debtor Days"] ?? 0), tripled[0].reason ?? "");
+  eq(tripled[1].reason, creditorDaysReason(liveDays?.["Creditor Days"] ?? 0), tripled[1].reason ?? "");
+  assert(
+    (tripled[0].reason?.match(/Debtor days are/g) ?? []).length === 1,
+    "debtor sentence is not repeated",
+  );
+  assert(
+    (tripled[1].reason?.match(/Creditor days are/g) ?? []).length === 1,
+    "creditor sentence is not repeated",
+  );
+  const again = presentLiveDataRequests(tripled, liveDays);
+  eq(again[0].reason, tripled[0].reason, "a second rewrite does not append the debtor sentence");
+  eq(again[1].reason, tripled[1].reason, "a second rewrite does not append the creditor sentence");
   const storedOverviewCards = overviewRequestCardRows(
     [
       {
@@ -1336,6 +1390,70 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   const footer = readFileSync(resolve("src/components/pdf/report-footer.tsx"), "utf8");
   assert(footer.includes("formatSignedOffDateTime"), "every PDF footer uses the shared sign-off formatter");
   assert(!footer.includes("formatDateTime("), "the footer does not format an unlabeled clock");
+  assert(!footer.includes("profile.timeZone"), "PDF zone follows the client market, not the viewer profile");
+  assert(footer.includes("Prepared"), "an unsigned footer still carries a zoned prepared time");
+  const saClock = formatSignedOffDateTime("2026-10-06T16:29:00.000Z", ZA_MARKET, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  assert(saClock.includes("18:29"), `SA client is 18:29, got ${saClock}`);
+  assert(saClock.includes("SAST") || saClock.includes("UTC+2"), `SA client zone is SAST, got ${saClock}`);
+  assert(!saClock.includes("UTC-4"), `SA client is not a US offset, got ${saClock}`);
+  const yankees = {
+    revenue: "120000",
+    cogs: "48000",
+    ebit: "22000",
+    ebt: "18000",
+    netIncome: "14000",
+    ebitda: "26000",
+    totalAssets: "200000",
+    equity: "77500",
+    totalLiabilities: "122500",
+    receivables: "9194.51",
+    payables: "8386.76",
+    inventory: "4000",
+    periodMonths: "1",
+    periodMonthsChosen: "1",
+    periodStart: "2026-09-01",
+    periodEnd: "2026-09-21",
+  };
+  const usMarket = { country: "US" as const, copyPack: "us" as const };
+  const sharedHealth = scorecardHealthFromFinancials({
+    financials: yankees,
+    fyStartMonth: 1,
+    cashRunwayWeeks: 6,
+    market: usMarket,
+    shortfallWeek: null,
+  });
+  const overviewHealth = computeOverallHealth({
+    ratios: overviewRatios(yankees, { fyStartMonth: 1 }),
+    cashRunwayWeeks: 6,
+    market: usMarket,
+    shortfallWeek: null,
+  });
+  eq(sharedHealth.overall, overviewHealth.overall, "scorecard overall matches Ratios");
+  for (const id of ["profit", "assets", "financing", "cash"] as const) {
+    eq(
+      sharedHealth.pillars.find((pillar) => pillar.id === id)?.score,
+      overviewHealth.pillars.find((pillar) => pillar.id === id)?.score,
+      `scorecard ${id} pillar matches Ratios`,
+    );
+  }
+  assert(sharedHealth.overall != null, "Yankees-shaped fixture scores an overall");
+  const pdfSrc = readFileSync(resolve("src/reports/health-scorecard.tsx"), "utf8");
+  const overviewExport = readFileSync(
+    resolve("src/routes/_authenticated/clients.$clientId.tsx"),
+    "utf8",
+  );
+  assert(pdfSrc.includes("overallHealth ??"), "the PDF renders the shared health when it is passed");
+  assert(
+    overviewExport.includes("scorecardHealthFromFinancials"),
+    "Overview scores with the shared helper",
+  );
+  assert(overviewExport.includes("overallHealth,"), "Overview export passes that health into the PDF");
   const inApp = formatSignedOffDateTime("2026-10-08T01:15:46.000Z", {
     locale: "en-US",
     timezone: "America/New_York",

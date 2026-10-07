@@ -14,6 +14,8 @@ import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-re
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { yearToDateTitle } from "@/lib/statement-period";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
+import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
+import type { MoneyMarket } from "@/lib/market/format";
 
 type Props = {
   clientId: string | null;
@@ -22,6 +24,9 @@ type Props = {
   /** Bump to reload status after a sync started from another card. */
   refreshToken?: number;
   onSyncComplete?: (inputs: Record<string, string>, summary: SyncResult["summary"]) => void;
+  /** Statement figures Collections uses. Empty aged pulls must not hide them. */
+  financials?: Record<string, unknown> | null;
+  market?: MoneyMarket;
 };
 
 function fmtDate(iso: string) {
@@ -39,7 +44,14 @@ function fmtExact(n: number | null) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncComplete }: Props) {
+export function QboConnectCard({
+  clientId,
+  returnPath,
+  refreshToken = 0,
+  onSyncComplete,
+  financials,
+  market,
+}: Props) {
   const fetchStatus = useServerFn(getQboStatus);
   const fetchAuthUrl = useServerFn(getQboAuthUrl);
   const doSync = useServerFn(triggerQboSync);
@@ -205,10 +217,20 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
               ) : null}
             </p>
             <p id="qbo-aged-ar-status" className="ledger-connect__meta">
-              {lastSync?.agedArLine ?? status.agedArLine}
+              {ratiosAgedReadLine(
+                lastSync?.agedArLine ?? status.agedArLine,
+                "ar",
+                financials,
+                market,
+              )}
             </p>
             <p id="qbo-aged-ap-status" className="ledger-connect__meta">
-              {lastSync?.agedApLine ?? status.agedApLine}
+              {ratiosAgedReadLine(
+                lastSync?.agedApLine ?? status.agedApLine,
+                "ap",
+                financials,
+                market,
+              )}
             </p>
             {(lastSync?.openingCashNote ?? status.openingCashNote) ? (
               <p id="qbo-opening-cash-status" className="ledger-connect__meta">

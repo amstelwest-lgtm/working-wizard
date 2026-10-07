@@ -223,6 +223,19 @@ export const STALE_FIGURES_DAYS = 75;
  * peer median (40), not the healthy band (18) and not a private 45.
  */
 export const DEBTOR_DAYS_AGEING_THRESHOLD = peerMedian("debtorDays") ?? 40;
+export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
+
+/** One debtor-days sentence. Built from the live figure, never spliced into stored text. */
+export function debtorDaysReason(days: number): string {
+  const shown = Math.round(days);
+  return `Debtor days are ${shown} against a ${DEBTOR_DAYS_AGEING_THRESHOLD}-day benchmark. Statement totals show the problem but not who is behind it — the ageing lets MILŌN name the fix instead of guessing.`;
+}
+
+/** One creditor-days sentence. Built from the live figure, never spliced into stored text. */
+export function creditorDaysReason(days: number): string {
+  const shown = Math.round(days);
+  return `Creditor days are ${shown}, above the ${CREDITOR_DAYS_AGEING_THRESHOLD}-day mark. That may be deliberate or it may be strain — the ageing shows which suppliers are being stretched and for how long.`;
+}
 
 /** Stored asks still say 45. The card shows the same benchmark What matters uses. */
 export function displayedDataRequestReason(reason: string): string {
@@ -242,19 +255,6 @@ export function dataRequestDayRatios(
   if (statement.debtorDays != null) ratios["Debtor Days"] = statement.debtorDays;
   if (statement.creditorDays != null) ratios["Creditor Days"] = statement.creditorDays;
   return Object.keys(ratios).length ? ratios : null;
-}
-
-function replaceDayQuote(
-  reason: string,
-  label: "Debtor days" | "Creditor days",
-  days: number,
-): string {
-  const shown = Math.round(days);
-  const quoted = reason.replace(
-    new RegExp(`${label} are \\d+(?:\\.\\d+)?`),
-    `${label} are ${shown}`,
-  );
-  return quoted === reason ? `${label} are ${shown}. ${reason}` : quoted;
 }
 
 type DayQuoteRow = {
@@ -304,9 +304,7 @@ export function presentLiveDataRequests<T extends DayQuoteRow>(
       }
       out.push({
         ...row,
-        reason: displayedDataRequestReason(
-          replaceDayQuote(row.reason ?? "", "Debtor days", debtor),
-        ),
+        reason: debtorDaysReason(debtor),
       });
       continue;
     }
@@ -320,9 +318,7 @@ export function presentLiveDataRequests<T extends DayQuoteRow>(
       }
       out.push({
         ...row,
-        reason: displayedDataRequestReason(
-          replaceDayQuote(row.reason ?? "", "Creditor days", creditor),
-        ),
+        reason: creditorDaysReason(creditor),
       });
       continue;
     }
@@ -341,7 +337,6 @@ export function overviewRequestCardRows<T extends DayQuoteRow>(
 ): T[] {
   return presentLiveDataRequests(rows, dataRequestDayRatios(financials));
 }
-export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
 
 /**
  * The same debtor/creditor day signals as the Overview data-request cards.
@@ -577,7 +572,7 @@ export function detectDataGaps(f: DataGapFacts): DataRequestDraft[] {
       rule_key: "debtor_days_no_ageing",
       kind: "aged_debtors",
       title: "Aged debtors report",
-      reason: `Debtor days are ${Math.round(debtorDays)} against a ${DEBTOR_DAYS_AGEING_THRESHOLD}-day benchmark. Statement totals show the problem but not who is behind it — the ageing lets MILŌN name the fix instead of guessing.`,
+      reason: debtorDaysReason(debtorDays),
       severity: "important",
     });
   }
@@ -592,7 +587,7 @@ export function detectDataGaps(f: DataGapFacts): DataRequestDraft[] {
       rule_key: "creditor_days_no_ageing",
       kind: "aged_creditors",
       title: "Aged creditors report",
-      reason: `Creditor days are ${Math.round(creditorDays)}, above the ${CREDITOR_DAYS_AGEING_THRESHOLD}-day mark. That may be deliberate or it may be strain — the ageing shows which suppliers are being stretched and for how long.`,
+      reason: creditorDaysReason(creditorDays),
       severity: "important",
     });
   }

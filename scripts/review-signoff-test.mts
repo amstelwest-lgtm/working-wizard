@@ -11,7 +11,7 @@ import {
   type ClientReviewSignoff,
   type ReviewScope,
 } from "../src/lib/review-signoffs.functions";
-import { stampFromSignoff } from "../src/lib/review-signoff-stamp";
+import { isSamplePracticeSignoff, stampFromSignoff } from "../src/lib/review-signoff-stamp";
 import { computeIsStale, SIGNOFF_GOLD_BTN, SCOPE_SHORT_LABEL } from "../src/components/review-signoff";
 
 function assert(cond: boolean, msg: string) {
@@ -63,6 +63,32 @@ const healthStamp = stampFromSignoff(indexed.financials, false);
 assert(healthStamp?.signatureData === "data:image/png;base64,AAA", "stamp copies signature");
 assert(stampFromSignoff(indexed.financials, true) === null, "stale sign-off is not stamped");
 assert(stampFromSignoff(indexed.profitability, false)?.signatureData == null, "profit stamp has no health signature");
+
+const sampleSignoff: ClientReviewSignoff = {
+  ...rows[0],
+  signed_off_by_name: "A. Sample",
+  signed_off_by_initials: "AS",
+  signed_off_by_title: "CA(SA)",
+  firm_name: "Sample Practice",
+};
+assert(isSamplePracticeSignoff({ name: "A. Sample", firmName: "Sample Practice" }), "sample identity");
+assert(stampFromSignoff(sampleSignoff, false) === null, "sample practice is not stamped");
+assert(
+  stampFromSignoff(sampleSignoff, false, { clientFirmName: "Ben Accountants" }) === null,
+  "sample practice is not stamped onto another firm",
+);
+assert(
+  stampFromSignoff({ ...rows[0], firm_name: "Other Practice" }, false, {
+    clientFirmName: "Ben Accountants",
+  }) === null,
+  "a stamp from another firm is dropped",
+);
+assert(
+  stampFromSignoff(indexed.financials, false, { clientFirmName: "Babbage & Co" })?.firmName ===
+    "Babbage & Co",
+  "the client's own firm stamp is kept",
+);
+assert(stampFromSignoff(null, false) === null, "no sign-off renders no line");
 
 assert(computeIsStale(indexed.financials!, "2026-07-01T00:00:00.000Z") === false, "older data is not stale");
 assert(computeIsStale(indexed.financials!, "2026-08-03T00:00:00.000Z") === true, "newer data is stale");

@@ -310,6 +310,27 @@ export function overviewRatios(
 }
 
 /**
+ * Pillar and overall scores for Ratios, Overview, and the scorecard PDF.
+ * One call: `overviewRatios` plus the same runway, market, and shortfall
+ * Overview already passes to `computeOverallHealth`. The PDF renders this
+ * result; it does not average a different row set.
+ */
+export function scorecardHealthFromFinancials(input: {
+  financials: FlatFinancials | Record<string, unknown> | null | undefined;
+  fyStartMonth?: number | null;
+  cashRunwayWeeks?: number | null;
+  market?: ScoreMarket;
+  shortfallWeek?: number | null;
+}): OverallHealth {
+  return computeOverallHealth({
+    ratios: overviewRatios(input.financials, { fyStartMonth: input.fyStartMonth }),
+    cashRunwayWeeks: input.cashRunwayWeeks,
+    market: input.market,
+    shortfallWeek: input.shortfallWeek,
+  });
+}
+
+/**
  * Per-ratio health score (0–100). Shared by client page, reports studio,
  * and overall aggregation.
  */

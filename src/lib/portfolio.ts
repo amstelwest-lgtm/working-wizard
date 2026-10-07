@@ -25,6 +25,11 @@ export type PortfolioClientFacts = {
   proposedRecommendations: number;
   packStatus: "draft" | "in_review" | "changes_requested" | "approved" | "rejected" | null;
   packVersion: number | null;
+  /**
+   * Live Overview figures no longer match the pack. The queue must ask for a
+   * regenerate, not a sign-off.
+   */
+  packFiguresStale?: boolean;
   packEditRate: number | null;
   outcomesMissed: number;
   outcomesMeasured: number;
@@ -86,10 +91,13 @@ export function exceptionsFor(f: PortfolioClientFacts, now: string): PortfolioEx
   const out: PortfolioException[] = [];
 
   if (f.packStatus === "in_review" || f.packStatus === "changes_requested") {
+    const version = f.packVersion ?? 1;
     out.push({
       kind: "pack_waiting",
       severity: 1,
-      label: `Pack v${f.packVersion ?? 1} waiting for your sign-off`,
+      label: f.packFiguresStale
+        ? `Pack v${version} needs a regenerate`
+        : `Pack v${version} waiting for your sign-off`,
       tab: "advisory",
     });
   }
