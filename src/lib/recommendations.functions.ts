@@ -11,6 +11,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isMissingPackRelation } from "@/lib/advisory-pack";
 import { calibratedConfidence, deliveryByMetric } from "@/lib/outcomes";
 import { loadOutcomeInputs } from "@/lib/outcomes.functions";
 import {
@@ -19,6 +20,7 @@ import {
   OUTCOME_METHODS,
   RECOMMENDATION_PRIORITIES,
   RECOMMENDATION_SOURCES,
+  brainDraftSupersededByPack,
   checkRootCauseClaims,
   isMissingRecommendationRelation,
   parseRecommendationRow,
@@ -33,6 +35,23 @@ type LooseSb = {
   rpc: (fn: string, args?: Record<string, unknown>) => any;
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+async function latestPackGeneratedAt(sb: LooseSb, clientId: string): Promise<string | null> {
+  const { data, error } = await sb
+    .from("advisory_packs")
+    .select("generated_at")
+    .eq("client_id", clientId)
+    .neq("status", "superseded")
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (isMissingPackRelation(error)) return null;
+    return null;
+  }
+  const generatedAt = (data as { generated_at?: string } | null)?.generated_at;
+  return typeof generatedAt === "string" && generatedAt ? generatedAt : null;
+}
 
 async function assertClientAccess(sb: LooseSb, userId: string, clientId: string) {
   const { data, error } = await sb.rpc("has_client_access", {
@@ -101,7 +120,10 @@ export const listRecommendations = createServerFn({ method: "GET" })
         }
         throw new Error(error.message);
       }
-      const recs = ((rows ?? []) as Record<string, unknown>[]).map(parseRecommendationRow);
+      const packGeneratedAt = await latestPackGeneratedAt(sb, data.clientId);
+      const recs = ((rows ?? []) as Record<string, unknown>[])
+        .map(parseRecommendationRow)
+        .filter((row) => !brainDraftSupersededByPack(row, packGeneratedAt));
       const migrated =
         recs.length === 0 || Object.prototype.hasOwnProperty.call(rows?.[0] ?? {}, "priority");
       return { recommendations: sortRecommendations(recs), migrated };

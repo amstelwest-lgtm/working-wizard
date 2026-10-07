@@ -14,6 +14,7 @@
  */
 import type { Json } from "@/integrations/supabase/types";
 import type { AdvisoryState } from "@/lib/advisory-state";
+import { ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import { creditorDaysHealthyBand, peerMedian } from "@/lib/ratios";
 
 export const DATA_REQUEST_KINDS = [
@@ -228,6 +229,88 @@ export function displayedDataRequestReason(reason: string): string {
   const days = DEBTOR_DAYS_AGEING_THRESHOLD;
   return reason.replace(/\b45-day benchmark\b/g, `${days}-day benchmark`);
 }
+
+/**
+ * Debtor and creditor days the Overview request cards quote.
+ * The Ratios / Collections cover, not a stored snapshot (44 / 73).
+ */
+export function dataRequestDayRatios(
+  financials: Record<string, unknown> | null | undefined,
+): Record<string, number> | null {
+  const statement = ratiosStatementFigures(financials);
+  const ratios: Record<string, number> = {};
+  if (statement.debtorDays != null) ratios["Debtor Days"] = statement.debtorDays;
+  if (statement.creditorDays != null) ratios["Creditor Days"] = statement.creditorDays;
+  return Object.keys(ratios).length ? ratios : null;
+}
+
+function replaceDayQuote(
+  reason: string,
+  label: "Debtor days" | "Creditor days",
+  days: number,
+): string {
+  const shown = Math.round(days);
+  const quoted = reason.replace(
+    new RegExp(`${label} are \\d+(?:\\.\\d+)?`),
+    `${label} are ${shown}`,
+  );
+  return quoted === reason ? `${label} are ${shown}. ${reason}` : quoted;
+}
+
+/**
+ * Open system ageing cards follow the live day cover. A card whose rule no
+ * longer fires (days inside the band) is dropped so a stored 44 / 73 cannot
+ * stay on screen. Cards that still fire quote the live days.
+ */
+export function presentLiveDataRequests<
+  T extends Pick<DataRequest, "source" | "status" | "rule_key" | "reason">,
+>(rows: readonly T[], ratios: Record<string, number> | null | undefined): T[] {
+  if (!ratios) return [...rows];
+  const debtor = ratios["Debtor Days"];
+  const creditor = ratios["Creditor Days"];
+  const out: T[] = [];
+  for (const row of rows) {
+    const open = row.status === "open" || row.status === "sent";
+    if (row.source !== "system" || !open) {
+      out.push(row);
+      continue;
+    }
+    if (row.rule_key === "debtor_days_no_ageing") {
+      if (
+        typeof debtor !== "number" ||
+        !Number.isFinite(debtor) ||
+        debtor <= DEBTOR_DAYS_AGEING_THRESHOLD
+      ) {
+        continue;
+      }
+      out.push({
+        ...row,
+        reason: displayedDataRequestReason(
+          replaceDayQuote(row.reason ?? "", "Debtor days", debtor),
+        ),
+      });
+      continue;
+    }
+    if (row.rule_key === "creditor_days_no_ageing") {
+      if (
+        typeof creditor !== "number" ||
+        !Number.isFinite(creditor) ||
+        creditor <= CREDITOR_DAYS_AGEING_THRESHOLD
+      ) {
+        continue;
+      }
+      out.push({
+        ...row,
+        reason: displayedDataRequestReason(
+          replaceDayQuote(row.reason ?? "", "Creditor days", creditor),
+        ),
+      });
+      continue;
+    }
+    out.push(row);
+  }
+  return out;
+}
 export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
 
 /**
@@ -235,9 +318,7 @@ export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
  * What matters reads these so it cannot say nothing needs attention while a
  * card is flagging creditor days above 60 (or debtor days above the peer median).
  */
-export function ratioAttentionSignals(
-  ratios: Record<string, number> | null | undefined,
-): string[] {
+export function ratioAttentionSignals(ratios: Record<string, number> | null | undefined): string[] {
   const out: string[] = [];
   const debtorDays = ratios?.["Debtor Days"];
   if (
@@ -400,9 +481,7 @@ export type DataChaseCopy = {
  * Unknown kinds (count without a kind list) keep the generic sentence.
  */
 export function dataChaseCopy(count: number, kinds: readonly string[]): DataChaseCopy {
-  const known = kinds.filter((kind) =>
-    (DATA_REQUEST_KINDS as readonly string[]).includes(kind),
-  );
+  const known = kinds.filter((kind) => (DATA_REQUEST_KINDS as readonly string[]).includes(kind));
   const statementGaps = known.filter(isStatementCompletenessGap);
   const depth = known.length > 0 && statementGaps.length === 0 ? depthPhrase(known) : null;
   if (depth) {

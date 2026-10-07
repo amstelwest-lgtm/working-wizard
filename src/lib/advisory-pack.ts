@@ -23,8 +23,7 @@ import {
   type HealthPillarId,
   type OverallHealth,
   type ScoreMarket,
-  healthFromRatioInputs,
-  overviewRatioInputs,
+  computeOverallHealth,
   overviewRatios,
   pillarForRatioName,
   scoreRatio,
@@ -548,15 +547,13 @@ export function livePackMetrics(input: {
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
       ? assessed.runway.weeks
       : null;
-  const ratioInputs = overviewRatioInputs(input.financials, {
-    fyStartMonth: input.fyStartMonth,
+  const ratios = overviewRatios(input.financials, { fyStartMonth: input.fyStartMonth });
+  const health = computeOverallHealth({
+    ratios,
+    cashRunwayWeeks: runwayWeeks,
+    market: input.market ?? undefined,
+    shortfallWeek: assessed.outlook.shortfallWeek,
   });
-  const health = healthFromRatioInputs(
-    ratioInputs,
-    runwayWeeks,
-    input.market ?? undefined,
-    assessed.outlook.shortfallWeek,
-  );
   const opening = assessed.outlook.opening;
   const runwayLabel = runwayDisplayLabel(assessed.runway);
   return {
@@ -565,7 +562,7 @@ export function livePackMetrics(input: {
       cash: opening,
       healthScore: health.overall,
     },
-    ratios: overviewRatios(input.financials, { fyStartMonth: input.fyStartMonth }),
+    ratios,
     health,
     cashRunwayWeeks: runwayWeeks,
     openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
@@ -584,9 +581,8 @@ export function overviewFiguresForPackDrift(
  * Ratios quoted in recommendation sentences.
  * Margins stay on `livePackMetrics` (the same operating margin as Overview).
  * Debtor and creditor days follow `ratiosStatementFigures`, the Ratios Days AR
- * / Days AP tiles. The health-score year span annualises a September file to
- * 19 / 28; those tiles stay on the stored cover (25 / 37). Quoting the
- * health-span days left a rewritten 28 beside a stored 73.
+ * / Days AP tiles (`periodMonthsOf`). The health-score year span used to
+ * annualise a September file to 19 / 28; those days now use the same cover.
  */
 export function packNarrativeRatios(
   financials: Record<string, unknown> | null | undefined,

@@ -45,6 +45,8 @@ import { parseDataRequestRow, type DataRequest } from "@/lib/data-requests";
 import { overviewRatios } from "@/lib/health-score";
 import { outcomeStories } from "@/lib/outcomes";
 import {
+  brainDraftSupersededByPack,
+  isMissingRecommendationRelation,
   parseRecommendationRow,
   type Recommendation,
   type RecommendationOutcome,
@@ -409,8 +411,44 @@ export const generateAdvisoryPack = createServerFn({ method: "POST" })
       .eq("id", String(packId))
       .single();
     if (readErr) throw new Error(readErr.message);
-    return { ok: true, pack: parsePackRow(row as Record<string, unknown>) };
+    const pack = parsePackRow(row as Record<string, unknown>);
+    await supersedeBrainDraftsBeforePack(sb, data.clientId, pack.generated_at);
+    return { ok: true, pack };
   });
+
+/**
+ * Pending proposals created before this pack version still quote the previous
+ * cover (DSO 43.8, creditor days 73, OM 0.16). Mark them superseded so the
+ * brain cards do not keep those figures after Regenerate.
+ */
+async function supersedeBrainDraftsBeforePack(
+  sb: LooseSb,
+  clientId: string,
+  packGeneratedAt: string,
+): Promise<void> {
+  const { data, error } = await sb
+    .from("proposed_next_steps")
+    .select("id, status, created_at")
+    .eq("client_id", clientId)
+    .eq("status", "proposed");
+  if (error) {
+    if (isMissingRecommendationRelation(error)) return;
+    throw new Error(error.message);
+  }
+  const ids = ((data ?? []) as { id: string; status: string; created_at: string }[])
+    .filter((row) => brainDraftSupersededByPack(row, packGeneratedAt))
+    .map((row) => row.id);
+  if (ids.length === 0) return;
+  const { error: updateError } = await sb
+    .from("proposed_next_steps")
+    .update({ status: "superseded" })
+    .eq("client_id", clientId)
+    .eq("status", "proposed")
+    .in("id", ids);
+  if (updateError && !isMissingRecommendationRelation(updateError)) {
+    throw new Error(updateError.message);
+  }
+}
 
 // ── review ───────────────────────────────────────────────────────────────────
 

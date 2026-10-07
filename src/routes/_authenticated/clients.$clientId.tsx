@@ -70,13 +70,13 @@ import {
   PERIOD_MONTHS_KEY,
   scoreTier,
 } from "@/lib/ratios";
-import type { RatioInputs, HealthTier } from "@/lib/ratios";
+import type { HealthTier } from "@/lib/ratios";
 import {
   scoreRatio,
-  scoreFromRatioInputs,
-  healthFromRatioInputs,
+  computeOverallHealth,
   healthMapFromRatios,
   overviewRatioInputs,
+  overviewRatios,
   pillarForRatioName,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -1104,7 +1104,7 @@ function ClientView() {
       document.querySelector<HTMLInputElement>("#finCollapse .fin-grid input")?.focus();
     }, 120);
   }, []);
-  const ratios = computeRatios(ratioInputs);
+  const ratios = overviewRatios(financials, { fyStartMonth });
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
   const statementMeta = readStatementMeta(financials);
   const statementDated = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
@@ -1136,12 +1136,12 @@ function ClientView() {
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
-  const overallHealth: OverallHealth = healthFromRatioInputs(
-    ratioInputs,
-    effectiveRunway,
-    clientMarket,
-    cashOutlook.shortfallWeek,
-  );
+  const overallHealth: OverallHealth = computeOverallHealth({
+    ratios,
+    cashRunwayWeeks: effectiveRunway,
+    market: clientMarket,
+    shortfallWeek: cashOutlook.shortfallWeek,
+  });
   const plVersusBank = useMemo(
     () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
     [financials, client?.cashflow],
@@ -1811,7 +1811,7 @@ function ClientView() {
     const now = new Date();
     const periodDate = now.toISOString().slice(0, 10);
     const periodLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
-    const ratiosOut = computeRatios(ratioInputs);
+    const ratiosOut = overviewRatios(financials, { fyStartMonth });
 
     const { data: existing } = await supabase
       .from("client_financial_snapshots")
@@ -1861,9 +1861,9 @@ function ClientView() {
         setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       }
       toast.success(`Snapshot saved for ${periodLabel}`);
-      await recordScoreHistory(clientId, scoreFromRatioInputs(ratioInputs, effectiveRunway));
+      await recordScoreHistory(clientId, overallHealth.overall);
     }
-  }, [clientId, financials, debtSchedule, ratioInputs, effectiveRunway, mergeCurrentBlob]);
+  }, [clientId, financials, debtSchedule, fyStartMonth, overallHealth.overall, mergeCurrentBlob]);
 
   // ── Upload confirm ────────────────────────────────────────────────────────
 
@@ -1894,7 +1894,7 @@ function ClientView() {
         periodEnd: period?.periodEnd ?? "",
         ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
       };
-      const ratiosOut = computeRatios(inputs);
+      const ratiosOut = overviewRatios(inputs, { fyStartMonth });
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate) || !periodLabel) {
@@ -1971,7 +1971,15 @@ function ClientView() {
         .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
         .eq("id", clientId);
 
-      await recordScoreHistory(clientId, scoreFromRatioInputs(inputs, effectiveRunway));
+      await recordScoreHistory(
+        clientId,
+        computeOverallHealth({
+          ratios: ratiosOut,
+          cashRunwayWeeks: effectiveRunway,
+          market: clientMarket,
+          shortfallWeek: cashOutlook.shortfallWeek,
+        }).overall,
+      );
 
       // Update local state with new financials
       setFinancials(nextScalars);
@@ -2008,6 +2016,8 @@ function ClientView() {
       clientId,
       fyStartMonth,
       effectiveRunway,
+      clientMarket,
+      cashOutlook.shortfallWeek,
       mergeCurrentBlob,
       firmId,
       track,
@@ -3696,6 +3706,7 @@ function ClientView() {
                     firmId={client.firm_id ?? null}
                     audience="accountant"
                     canPropose={hasFigures}
+                    refreshKey={advisoryBump}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                     onOpenActions={() => setActiveTab("plan")}
                     onAddFigures={() => setFirstDataOpen(true)}
@@ -4084,7 +4095,15 @@ function ClientView() {
               });
               await recordScoreHistory(
                 clientId,
-                scoreFromRatioInputs({ ...ratioInputs, ...fields } as RatioInputs, effectiveRunway),
+                computeOverallHealth({
+                  ratios: overviewRatios(
+                    { ...financials, ...asStrings } as Record<string, unknown>,
+                    { fyStartMonth },
+                  ),
+                  cashRunwayWeeks: effectiveRunway,
+                  market: clientMarket,
+                  shortfallWeek: cashOutlook.shortfallWeek,
+                }).overall,
               );
               toast.success(
                 annualised

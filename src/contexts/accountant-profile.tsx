@@ -20,6 +20,18 @@ import {
   type FirmBrandRow,
 } from "@/lib/firm-brand";
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
+import { parseMarketSelection } from "@/lib/market/parse";
+import { resolveMarket } from "@/lib/market/resolve";
+
+function firmTimeZoneFromMarket(market: unknown): string | null {
+  const selection = parseMarketSelection(market);
+  if (!selection) return null;
+  try {
+    return resolveMarket(selection).timezone;
+  } catch {
+    return null;
+  }
+}
 
 export type AccountantProfile = {
   firmName: string;
@@ -32,6 +44,8 @@ export type AccountantProfile = {
   tagline: string | null;
   /** Personal drawn signature (data URL). Kept local to the accountant, copied onto each sign-off. */
   signatureDataUrl: string | null;
+  /** IANA zone from the firm's stored market. Absent until the practice picks one. */
+  timeZone?: string | null;
 };
 
 /** Legacy unscoped key — only migrated into a user-scoped key, never applied cross-user. */
@@ -51,6 +65,7 @@ export const DEFAULT_PROFILE: AccountantProfile = {
   accountantEmail: "",
   tagline: null,
   signatureDataUrl: null,
+  timeZone: null,
 };
 
 type AccountantProfileContextValue = {
@@ -113,6 +128,7 @@ function applyFirmToProfile(
   cached: AccountantProfile,
 ): AccountantProfile {
   const fromDb = profileFromFirm(row);
+  const timeZone = firmTimeZoneFromMarket(row.market);
 
   if (firmBrandIsEmpty(row) && (cached.firmName || cached.logoUrl || cached.tagline)) {
     const merged: AccountantProfile = {
@@ -126,6 +142,7 @@ function applyFirmToProfile(
       accountantEmail: cached.accountantEmail || fromDb.accountantEmail,
       tagline: cached.tagline ?? fromDb.tagline,
       signatureDataUrl: cached.signatureDataUrl ?? null,
+      timeZone,
     };
     saveToStorage(userId, merged);
     return merged;
@@ -137,6 +154,7 @@ function applyFirmToProfile(
     accountantName: fromDb.accountantName || cached.accountantName,
     accountantEmail: fromDb.accountantEmail || cached.accountantEmail,
     signatureDataUrl: cached.signatureDataUrl ?? null,
+    timeZone,
   };
   saveToStorage(userId, merged);
   return merged;

@@ -355,8 +355,9 @@ assert(qaPrompt.includes("$128,450"), "overview keeps cash on file");
 assert(!qaPrompt.includes("44 days") && !qaPrompt.includes("73 days") && !qaPrompt.includes("43.8"), qaPrompt);
 const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(
-  /healthFromRatioInputs\(\s*ratioSource,/.test(ownerSrc),
-  "owner health uses the same period coverage as Ratios",
+  ownerSrc.includes("withCanonicalDebtorCreditorDays") &&
+    /computeOverallHealth\(\s*\{/.test(ownerSrc),
+  "owner health scores the same debtor and creditor days as Ratios",
 );
 
 console.log("ask-ai-context-test: all assertions passed");

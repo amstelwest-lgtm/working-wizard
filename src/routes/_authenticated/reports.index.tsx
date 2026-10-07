@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import {
   computeRatios,
   healthBandLabel,
@@ -2230,7 +2231,10 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     totalLiabilities: fin["totalLiabilities"] ?? "",
     periodMonths: fin["periodMonths"] ?? "",
   };
-  const rawRatios = computeRatios(ratioInputs);
+  const rawRatios = withCanonicalDebtorCreditorDays(
+    computeRatios(ratioInputs),
+    rawFin as Record<string, unknown>,
+  );
   const statementMeta = readStatementMeta(rawFin);
   const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
   const periodMonths = effectivePeriodMonths(fin, { fyStartMonth });

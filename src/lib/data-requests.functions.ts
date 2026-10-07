@@ -21,10 +21,12 @@ import {
   DATA_REQUEST_KINDS,
   DATA_REQUEST_SEVERITIES,
   OPEN_DATA_REQUEST_STATUSES,
+  dataRequestDayRatios,
   dataRequestEmail,
   detectDataGaps,
   isMissingDataRequestRelation,
   parseDataRequestRow,
+  presentLiveDataRequests,
   sortDataRequests,
   suppressRecentlyResolved,
   type DataGapFacts,
@@ -59,6 +61,20 @@ async function loadRequests(
   };
 }
 
+async function loadLiveDayRatios(
+  sb: LooseSb,
+  clientId: string,
+): Promise<Record<string, number> | null> {
+  const { data, error } = await sb
+    .from("clients")
+    .select("financials")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) return null;
+  const financials = (data as { financials?: Record<string, unknown> | null } | null)?.financials;
+  return dataRequestDayRatios(financials ?? null);
+}
+
 // ── list ─────────────────────────────────────────────────────────────────────
 
 export const listDataRequests = createServerFn({ method: "GET" })
@@ -72,7 +88,8 @@ export const listDataRequests = createServerFn({ method: "GET" })
     const { rows, migrated } = await loadRequests(sb, data.clientId, {
       openOnly: !data.includeClosed,
     });
-    return { requests: rows, migrated };
+    const ratios = await loadLiveDayRatios(sb, data.clientId);
+    return { requests: presentLiveDataRequests(rows, ratios), migrated };
   });
 
 // ── sync (detector) ──────────────────────────────────────────────────────────
@@ -96,12 +113,12 @@ export async function gatherDataGapFacts(
   const [clientRes, snapRes, artRes] = await Promise.all([
     sb
       .from("clients")
-      .select("financials_updated_at, last_forecast_at, cashflow")
+      .select("financials_updated_at, last_forecast_at, cashflow, financials")
       .eq("id", clientId)
       .maybeSingle(),
     sb
       .from("client_financial_snapshots")
-      .select("period_date, ratios")
+      .select("period_date")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(1)
@@ -113,10 +130,10 @@ export async function gatherDataGapFacts(
     financials_updated_at?: string | null;
     last_forecast_at?: string | null;
     cashflow?: { openingBalance?: string | number | null } | null;
+    financials?: Record<string, unknown> | null;
   };
   const snap = (snapRes.error ? null : snapRes.data) as {
     period_date?: string | null;
-    ratios?: Record<string, number> | null;
   } | null;
 
   const artifactTags = new Set<string>();
@@ -139,7 +156,7 @@ export async function gatherDataGapFacts(
   return {
     state: snapshot.state,
     figuresAsOf,
-    ratios: snap?.ratios && typeof snap.ratios === "object" ? snap.ratios : null,
+    ratios: dataRequestDayRatios(client.financials),
     hasForecast: client.last_forecast_at != null,
     forecastOpeningBalance: client.cashflow?.openingBalance ?? null,
     hasAgedDebtors: artifactTags.has("aged_debtors"),

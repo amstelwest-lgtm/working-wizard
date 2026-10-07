@@ -101,7 +101,8 @@ import {
   PERIOD_MONTHS_KEY,
   scoreTier,
 } from "@/lib/ratios";
-import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
+import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
+import { computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
@@ -3245,7 +3246,10 @@ function Index() {
 
   const safe = (a: number, b: number) => (b === 0 ? 0 : a / b);
 
-  const computedRatios = useMemo(() => computeRatios(ratioSource), [ratioSource]);
+  const computedRatios = useMemo(
+    () => withCanonicalDebtorCreditorDays(computeRatios(ratioSource), v as unknown as Record<string, unknown>),
+    [ratioSource, v],
+  );
 
   const taxBurden = computedRatios["Tax Burden"];
   const interestBurden = computedRatios["Interest Burden"];
@@ -3483,12 +3487,12 @@ function Index() {
       ? ownerMetrics.runway.weeks
       : null;
   const ownerOutlook = ownerMetrics.outlook;
-  const overallHealth = healthFromRatioInputs(
-    ratioSource,
-    effectiveRunway,
-    boardMarket,
-    ownerOutlook.shortfallWeek,
-  );
+  const overallHealth = computeOverallHealth({
+    ratios: computedRatios as Record<string, number>,
+    cashRunwayWeeks: effectiveRunway,
+    market: boardMarket,
+    shortfallWeek: ownerOutlook.shortfallWeek,
+  });
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
@@ -5214,6 +5218,7 @@ function Index() {
                     firmId={clientMeta?.firm_id ?? null}
                     audience="owner"
                     canPropose={hasRealFinancials}
+                    refreshKey={advisoryBump}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                     onOpenActions={() => setActiveTab("tasks")}
                     onAddFigures={() => setFirstRunStep("first-data")}
