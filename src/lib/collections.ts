@@ -274,6 +274,78 @@ export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): s
   return `Aged receivables ${when} · ${contacts}${invoices}`;
 }
 
+/**
+ * Balance-sheet totals and day counts already on Overview / Ratios.
+ * Zero is a real figure. Blank fields stay null. This is not an age analysis.
+ */
+export type StatementWorkingCapital = {
+  receivables: number | null;
+  payables: number | null;
+  debtorDays: number | null;
+  creditorDays: number | null;
+};
+
+export const COLLECTIONS_UPLOAD_CTA = "Upload aged debtors and creditors";
+export const COLLECTIONS_XERO_CTA = "Connect Xero";
+export const COLLECTIONS_QBO_CTA = "Connect QuickBooks";
+
+export function collectionsStatementLead(copyPack: "za" | "us"): string {
+  if (copyPack === "us") {
+    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the same figures as Overview and Ratios. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+  }
+  return "Debtor days, creditor days, and the debtors and creditors totals below are the same figures as Overview and Ratios. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+}
+
+export function collectionsNoFiguresLead(): string {
+  return "Aged receivables are not on file yet. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to build the chase list.";
+}
+
+export function readStatementAmount(raw: unknown): number | null {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (!text) return null;
+  const n = Number(text.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Day counts from the ratio engine. Rounded the same way Overview prints them. */
+export function readStatementDays(raw: unknown): number | null {
+  const n = readStatementAmount(raw);
+  return n == null ? null : Math.round(n);
+}
+
+export function hasStatementWorkingCapital(
+  pos: StatementWorkingCapital | null | undefined,
+): boolean {
+  if (!pos) return false;
+  return [pos.receivables, pos.payables, pos.debtorDays, pos.creditorDays].some(
+    (n) => typeof n === "number" && Number.isFinite(n),
+  );
+}
+
+/** Sum contact age columns in report order. Skips blank labels and zero columns. */
+export function rollupAgeBuckets(
+  contacts: Array<Pick<CollectionsContact, "buckets">>,
+): { label: string; amount: number }[] {
+  const order: string[] = [];
+  const sums = new Map<string, number>();
+  for (const contact of contacts) {
+    for (const bucket of contact.buckets) {
+      const label = bucket.label.trim();
+      if (!label || !Number.isFinite(bucket.amount)) continue;
+      if (!sums.has(label)) order.push(label);
+      sums.set(label, (sums.get(label) ?? 0) + bucket.amount);
+    }
+  }
+  return order
+    .map((label) => ({
+      label,
+      amount: Math.round((sums.get(label) ?? 0) * 100) / 100,
+    }))
+    .filter((bucket) => Math.abs(bucket.amount) >= 0.005);
+}
+
 // ─── Xero contacts + AgedReceivablesByContact ────────────────────────────────
 
 function xeroUpdatedMs(raw: unknown): number {

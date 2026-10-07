@@ -10,6 +10,7 @@ import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
+import { readStatementAmount, readStatementDays } from "@/lib/collections";
 import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
@@ -956,10 +957,14 @@ function ClientView() {
   productMixRef.current = productMix;
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadPurpose, setUploadPurpose] = useState<"figures" | "aged">("figures");
   const [pastPeriodOpen, setPastPeriodOpen] = useState(false);
   const historyOnlyUploadRef = useRef(false);
   useEffect(() => {
-    if (!uploadOpen) historyOnlyUploadRef.current = false;
+    if (!uploadOpen) {
+      historyOnlyUploadRef.current = false;
+      setUploadPurpose("figures");
+    }
   }, [uploadOpen]);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [firstDataOpen, setFirstDataOpen] = useState(false);
@@ -3319,11 +3324,24 @@ function ClientView() {
                   <DeliverableTabHead
                     eyebrow="Collections"
                     title="Who to chase this week"
-                    lede="Named contacts and age buckets from the aged receivables report. Xero and QuickBooks stay the books. Milōn drafts the chase; it does not send it or record the receipt."
+                    lede="Named contacts and age buckets when an aged receivables report is on file. Until then, this tab shows the receivables, payables, and day counts already on Overview and Ratios. Upload the aged report, or connect Xero or QuickBooks, for the chase list."
                   />
                   <CollectionsPanel
                     clientId={client.id}
                     market={clientMarket}
+                    periodLabel={statementDated ? statementMeta.periodLabel : null}
+                    position={{
+                      receivables: readStatementAmount(financials.receivables),
+                      payables: readStatementAmount(financials.payables),
+                      debtorDays: readStatementDays(ratios["Debtor Days"]),
+                      creditorDays: readStatementDays(ratios["Creditor Days"]),
+                    }}
+                    onUploadAged={() => {
+                      setUploadPurpose("aged");
+                      setUploadOpen(true);
+                    }}
+                    onConnectXero={() => setShowXeroDialog(true)}
+                    onConnectQbo={() => setShowQboDialog(true)}
                     onOpenDrafts={() => setActiveTab("advisory")}
                     onOpenActions={() => setActiveTab("plan")}
                   />
@@ -3633,7 +3651,11 @@ function ClientView() {
                     marginBottom: 20,
                   }}
                 >
-                  <h3 style={{ fontSize: 20, fontWeight: 700 }}>Upload financial statement</h3>
+                  <h3 style={{ fontSize: 20, fontWeight: 700 }}>
+                    {uploadPurpose === "aged"
+                      ? "Upload aged debtors and creditors"
+                      : "Upload financial statement"}
+                  </h3>
                   <button
                     className="close"
                     onClick={() => setUploadOpen(false)}
@@ -3661,10 +3683,9 @@ function ClientView() {
                     marginBottom: 20,
                   }}
                 >
-                  Upload a statement — PDF, Excel, OpenDocument or CSV. Figures are read from the
-                  income statement and balance sheet. Review every figure before confirming. The
-                  quality of the financial information we produce depends on the accuracy of the
-                  information you upload.
+                  {uploadPurpose === "aged"
+                    ? "PDF, Excel or CSV of the aged debtors and creditors report. A balance sheet in the file updates the receivables and payables already on Overview. Named customers and age buckets come through when you connect Xero or QuickBooks."
+                    : "Upload a statement — PDF, Excel, OpenDocument or CSV. Figures are read from the income statement and balance sheet. Review every figure before confirming. The quality of the financial information we produce depends on the accuracy of the information you upload."}
                 </p>
                 <UploadFinancials
                   onConfirm={(result, prefs, period) => {

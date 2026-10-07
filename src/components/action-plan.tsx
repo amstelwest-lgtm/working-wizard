@@ -3049,6 +3049,21 @@ function VizCard({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/**
+ * The donut center used to sit in front of "On track · 2", so "4 On track · 2 Off track · 2"
+ * read as four actions on track. The leading number is how many are still open.
+ */
+export function formatActionHealthSummary(counts: Record<Health, number>): string {
+  const open = counts.on_track + counts.at_risk + counts.off_track + counts.overdue;
+  const parts = [`${open} open`];
+  if (counts.on_track) parts.push(`${counts.on_track} on track`);
+  if (counts.at_risk) parts.push(`${counts.at_risk} at risk`);
+  if (counts.off_track) parts.push(`${counts.off_track} off track`);
+  if (counts.overdue) parts.push(`${counts.overdue} overdue`);
+  if (counts.complete) parts.push(`${counts.complete} done`);
+  return parts.join(" · ");
+}
+
 function HealthDonut({
   counts,
   total,
@@ -3059,6 +3074,8 @@ function HealthDonut({
   onPick: (h: Health) => void;
 }) {
   const order: Health[] = ["on_track", "at_risk", "off_track", "overdue", "complete"];
+  const summary = formatActionHealthSummary(counts);
+  const open = counts.on_track + counts.at_risk + counts.off_track + counts.overdue;
   const r = 42,
     cx = 55,
     cy = 55,
@@ -3066,8 +3083,11 @@ function HealthDonut({
   let acc = 0;
   return (
     <VizCard title="Action health">
+      <p id="action-health-summary" className="mb-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+        {summary}
+      </p>
       <div className="flex items-center gap-4">
-        <svg width={110} height={110} className="shrink-0 -rotate-90">
+        <svg width={110} height={110} className="shrink-0 -rotate-90" aria-label={summary} role="img">
           <circle
             cx={cx}
             cy={cy}
@@ -3099,13 +3119,23 @@ function HealthDonut({
           })}
           <text
             x={cx}
-            y={cy}
+            y={cy - 6}
             textAnchor="middle"
             dominantBaseline="central"
-            transform={`rotate(90 ${cx} ${cy})`}
+            transform={`rotate(90 ${cx} ${cy - 6})`}
             className="fill-slate-950 text-xl font-black tabular-nums dark:fill-white"
           >
-            {total}
+            {open}
+          </text>
+          <text
+            x={cx}
+            y={cy + 12}
+            textAnchor="middle"
+            dominantBaseline="central"
+            transform={`rotate(90 ${cx} ${cy + 12})`}
+            className="fill-slate-500 text-[9px] font-semibold uppercase tracking-wide dark:fill-slate-400"
+          >
+            open
           </text>
         </svg>
         <div className="space-y-1">
@@ -3121,7 +3151,8 @@ function HealthDonut({
                   className="h-2 w-2 rounded-full"
                   style={{ background: HEALTH_META[k].color }}
                 />
-                {HEALTH_META[k].label} · <span className="font-bold tabular-nums">{counts[k]}</span>
+                <span className="font-bold tabular-nums">{counts[k]}</span>
+                {HEALTH_META[k].label}
               </button>
             ))}
         </div>

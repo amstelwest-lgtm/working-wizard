@@ -990,6 +990,52 @@ html:not([data-theme="light"]) .accountant-portal input[type="radio"]:checked::a
 }
 .accountant-portal .collections-actions,
 .accountant-portal .payables-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.accountant-portal .collections-position{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:10px;
+  margin:0 0 16px;
+}
+.accountant-portal .collections-position div{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px 14px;
+}
+.accountant-portal .collections-position dt{
+  font-size:11px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--ink-dim);
+  margin:0 0 4px;
+}
+.accountant-portal .collections-position dd{
+  margin:0;
+  font-size:20px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.accountant-portal .collections-buckets{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:0 0 14px;
+}
+.accountant-portal .collections-buckets span{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:96px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:8px 10px;
+  font-size:12px;
+  color:var(--ink-dim);
+}
+.accountant-portal .collections-buckets strong{
+  font-size:14px;
+  font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
 
 /* ===== Reports Studio — ultra-premium catalogue ===== */
 .reports-studio{
