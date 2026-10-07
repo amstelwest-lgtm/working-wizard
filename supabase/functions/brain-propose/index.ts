@@ -38,6 +38,7 @@ import {
   readPayablesSnapshot,
 } from "./payables.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
+import { quotedStatementFigures, ratioPromptLines } from "../../../src/lib/statement-margin.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -76,14 +77,7 @@ function compact(value: unknown, max = 800): string {
 }
 
 function ratioLines(raw: unknown): string[] {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
-  const out: string[] = [];
-  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof val !== "number" || !Number.isFinite(val)) continue;
-    out.push(`${key}: ${val}`);
-    if (out.length >= 16) break;
-  }
-  return out;
+  return ratioPromptLines(raw);
 }
 
 Deno.serve(async (req: Request) => {
@@ -308,6 +302,11 @@ Deno.serve(async (req: Request) => {
     );
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
+    const quoted = quotedStatementFigures({
+      ratios: (snap.ratios ?? null) as Record<string, unknown> | null,
+      periodLabel: snap.period_label,
+    });
+    if (quoted.length) contextLines.push(quoted.join("\n"));
   }
   const unanswered = storedQuestions.filter((q) => q.status === "unanswered");
   if (unanswered.length) {

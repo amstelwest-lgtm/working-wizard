@@ -163,7 +163,8 @@ import {
   stampProfileProvenance,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
-import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
+import { profileIndustryLabel } from "@/lib/profile-signals";
+import { rankStrategicMoves } from "@/lib/strategic-moves";
 import {
   hasOwnerFirstUploadHandled,
   isInvitedOwnerWithFigures,
@@ -1243,188 +1244,6 @@ const RISK_TUNING: Record<
   },
 };
 
-const NEXT_STEP_META: Record<
-  RatioKey,
-  { impact: number; impactLine: string; cynefin: "Clear" | "Complicated" | "Complex" | "Chaotic" }
-> = {
-  operatingMargin: {
-    impact: 10,
-    impactLine:
-      "Lifts every dollar of revenue straight into profit — biggest direct hit on net income.",
-    cynefin: "Complicated",
-  },
-  netMargin: {
-    impact: 10,
-    impactLine:
-      "The single best gauge of true profitability — fixing it compounds across all sales.",
-    cynefin: "Complicated",
-  },
-  roe: {
-    impact: 9,
-    impactLine:
-      "Top-of-funnel score for owners — moves only when profit, efficiency or leverage move.",
-    cynefin: "Complex",
-  },
-  workingCapitalDays: {
-    impact: 9,
-    impactLine:
-      "Frees trapped cash you can redeploy without raising debt — pure safety + growth fuel.",
-    cynefin: "Complicated",
-  },
-  debtorDays: {
-    impact: 8,
-    impactLine: "Faster customer payment kills the #1 cause of small-business cash crunches.",
-    cynefin: "Clear",
-  },
-  inventoryDays: {
-    impact: 7,
-    impactLine: "Shrinks dead stock risk and unlocks shelf cash — direct hit on safety & margin.",
-    cynefin: "Clear",
-  },
-  creditorDays: {
-    impact: 6,
-    impactLine: "Stretching supplier terms is free working capital — zero interest cost.",
-    cynefin: "Clear",
-  },
-  interestBurden: {
-    impact: 8,
-    impactLine: "Cutting interest expense flows straight to net profit and lowers bankruptcy risk.",
-    cynefin: "Complicated",
-  },
-  taxBurden: {
-    impact: 6,
-    impactLine:
-      "Smarter tax structure keeps more profit in the business with no extra sales needed.",
-    cynefin: "Complicated",
-  },
-  equityMultiplier: {
-    impact: 7,
-    impactLine: "Right-sizing leverage protects you in a downturn — the #1 driver of survival.",
-    cynefin: "Complex",
-  },
-  assetTurnover: {
-    impact: 6,
-    impactLine: "More sales per dollar of assets means higher returns without extra investment.",
-    cynefin: "Complicated",
-  },
-  roa: {
-    impact: 7,
-    impactLine: "Combines margin and efficiency — moving it proves the operation actually works.",
-    cynefin: "Complex",
-  },
-  fixedCostRatio: {
-    impact: 8,
-    impactLine: "Heavy fixed costs trap you in a high break-even — every sale fights uphill.",
-    cynefin: "Complicated",
-  },
-  dol: {
-    impact: 9,
-    impactLine:
-      "High operating leverage means a small dip in sales can wipe out profit — survival risk.",
-    cynefin: "Complex",
-  },
-  customerConcentration: {
-    impact: 9,
-    impactLine:
-      "Losing one big customer can cripple the business — concentration is hidden bankruptcy risk.",
-    cynefin: "Complex",
-  },
-  gpToLabor: {
-    impact: 8,
-    impactLine:
-      "Labor is the largest controllable cost in most SMEs — productivity here drives margin.",
-    cynefin: "Complicated",
-  },
-  salesPerEmployee: {
-    impact: 7,
-    impactLine: "Tells you when to hire, when to tool up, and which teams are over-staffed.",
-    cynefin: "Complicated",
-  },
-  ocfToEbitda: {
-    impact: 9,
-    impactLine:
-      "If profit isn't turning into cash, the business is an accounting illusion — fix this first.",
-    cynefin: "Complicated",
-  },
-  revenuePerFounderHour: {
-    impact: 8,
-    impactLine: "If the business depends on the founder's hours, it can't scale and can't be sold.",
-    cynefin: "Complex",
-  },
-  grossMargin: {
-    impact: 10,
-    impactLine:
-      "Gross margin is the foundation of every profitability metric — improving it lifts the entire P&L.",
-    cynefin: "Complicated",
-  },
-  directCostsRatio: {
-    impact: 9,
-    impactLine:
-      "Every percentage point of COGS reduction falls directly to gross profit with no extra sales needed.",
-    cynefin: "Clear",
-  },
-  fundingStructure: {
-    impact: 8,
-    impactLine:
-      "Equity buffer determines survival in a downturn — undercapitalised businesses fail first.",
-    cynefin: "Complex",
-  },
-  workingCapitalUtilization: {
-    impact: 7,
-    impactLine:
-      "Inefficient working capital traps cash that could fund growth — a silent drag on returns.",
-    cynefin: "Complicated",
-  },
-  fixedCapitalUtilization: {
-    impact: 7,
-    impactLine:
-      "Idle fixed assets reduce ROA and tie up capital that could generate returns elsewhere.",
-    cynefin: "Clear",
-  },
-  workingCapitalFunding: {
-    impact: 8,
-    impactLine:
-      "High WC intensity means the business funds growth through trapped cash, not profit — fix it.",
-    cynefin: "Complicated",
-  },
-  revenueGrowth: {
-    impact: 10,
-    impactLine:
-      "Revenue growth compounds everything — higher sales lift margins, coverage ratios and valuation multiples simultaneously.",
-    cynefin: "Complex",
-  },
-  capexIntensity: {
-    impact: 6,
-    impactLine:
-      "Right-sizing capex frees cash for operations while ensuring the asset base keeps pace with growth.",
-    cynefin: "Complicated",
-  },
-  assetReinvestmentRatio: {
-    impact: 7,
-    impactLine:
-      "A ratio below 1× signals the business is slowly consuming its asset base — long-run capacity risk.",
-    cynefin: "Complicated",
-  },
-  currentRatio: {
-    impact: 9,
-    impactLine:
-      "Falling below 1× means current liabilities exceed current assets — insolvency risk is immediate.",
-    cynefin: "Clear",
-  },
-  debtToEquity: {
-    impact: 8,
-    impactLine:
-      "Excessive debt erodes flexibility and signals distress to lenders — every extra rand of equity de-risks the business.",
-    cynefin: "Complicated",
-  },
-  debtToAssets: {
-    impact: 7,
-    impactLine:
-      "The higher debt funds your assets, the more vulnerable you are to a revenue shock or rate rise.",
-    cynefin: "Complicated",
-  },
-};
-
 // =====================================================================
 // Business-type → underlying economic model → benchmark adjustments.
 // We never use universal SME benchmarks. Each economic model multiplies
@@ -2095,15 +1914,6 @@ function flatExtractionToMergedResult(
     document_count: 1,
     file_names: [fileName],
   };
-}
-
-function eisenhowerOf(health: number, impact: number): "Do" | "Decide" | "Delegate" | "Delete" {
-  const urgent = health < 60;
-  const important = impact >= 7;
-  if (urgent && important) return "Do";
-  if (!urgent && important) return "Decide";
-  if (urgent && !important) return "Delegate";
-  return "Delete";
 }
 
 function Index() {
@@ -3723,35 +3533,11 @@ function Index() {
     ratioMeta: RATIO_META,
   });
 
-  // Next-steps prioritisation: Pareto (impact weighting) × Eisenhower (urgency from health) × Cynefin (problem domain).
-  const nextSteps = (Object.keys(RATIO_META) as RatioKey[])
-    .flatMap((k) => {
-      const meta = RATIO_META[k];
-      const ns = NEXT_STEP_META[k];
-      if (!meta || !ns) return [];
-      const health = healthMap[k];
-      const urgency = isFinite(health) ? 100 - health : 50;
-      // Profile answers (top pressure, stock, pay timing, team) reorder moves
-      // so structurally irrelevant ratios sink and the owner's pain surfaces.
-      const score = urgency * ns.impact * profilePriorityWeight(operatingProfile, meta.friendly);
-      return [
-        {
-          key: k,
-          title: meta.steps[0],
-          ratioName: meta.friendly,
-          icon: meta.icon,
-          cynefin: ns.cynefin,
-          eisenhower: eisenhowerOf(health, ns.impact),
-          impact: ns.impact,
-          impactLine: ns.impactLine,
-          health,
-          score,
-          actions: meta.steps.slice(0, 3),
-        },
-      ];
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
+  // Same ranker as the accountant Moves tab and Action Plan import.
+  const nextSteps = rankStrategicMoves({
+    healthByKey: healthMap,
+    profile: operatingProfile,
+  }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
   const healthBand =

@@ -386,16 +386,19 @@ export function mergeOutstandingQuestions(
 ): QuestionState[] {
   const byKey = new Map<string, QuestionState>();
   for (const q of derived) {
-    if (!q.answered) {
-      byKey.set(q.key, { ...q, prompt: asFluentCustomerQuestion(q.prompt) });
-    }
+    const key = q.key.trim();
+    if (!key || q.answered || byKey.has(key)) continue;
+    byKey.set(key, { ...q, key, prompt: asFluentCustomerQuestion(q.prompt) });
   }
   for (const row of stored) {
     if (row.status !== "unanswered") continue;
-    const catalog = catalogPromptForKey(row.question_key);
-    byKey.set(row.question_key, {
-      key: row.question_key,
-      prompt: asFluentCustomerQuestion(catalog ?? (row.prompt_text?.trim() || row.question_key)),
+    const key = row.question_key.trim();
+    // Catalog row wins. A second stored row for the same key is the same question.
+    if (!key || byKey.has(key)) continue;
+    const catalog = catalogPromptForKey(key);
+    byKey.set(key, {
+      key,
+      prompt: asFluentCustomerQuestion(catalog ?? (row.prompt_text?.trim() || key)),
       audience: row.audience,
       answered: false,
       answer: null,

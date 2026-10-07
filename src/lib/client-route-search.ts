@@ -23,6 +23,7 @@ const ACCOUNTANT_TAB_ALIASES: Record<string, string> = {
   bot: "ask",
   "milon-bot": "ask",
   report: "reports",
+  "strategic-moves": "moves",
 };
 
 export function normalizeAccountantClientTab(tab: string): string {

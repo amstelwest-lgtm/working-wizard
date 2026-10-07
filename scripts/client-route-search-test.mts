@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { normalizeAccountantClientTab } from "../src/lib/client-route-search";
+import { STRATEGIC_MOVE_CATALOG, rankStrategicMoves } from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -31,6 +32,11 @@ assert(normalizeAccountantClientTab("cash-forecast") === "cash", "?tab=cash-fore
 assert(normalizeAccountantClientTab("bot") === "ask", "?tab=bot opens Milōn Bot");
 assert(normalizeAccountantClientTab("milon-bot") === "ask", "?tab=milon-bot opens Milōn Bot");
 assert(normalizeAccountantClientTab("report") === "reports", "?tab=report opens Reports");
+assert(normalizeAccountantClientTab("moves") === "moves", "?tab=moves stays Moves");
+assert(
+  normalizeAccountantClientTab("strategic-moves") === "moves",
+  "?tab=strategic-moves opens Moves",
+);
 
 const route = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const parser = route.slice(route.indexOf("validateSearch:"), route.indexOf("component: ClientView"));
@@ -40,5 +46,25 @@ assert(
   route.includes('resolveAccountantTab(search.tab) ?? "overview"'),
   "the first paint uses the parsed tab, not a later Overview landing",
 );
+assert(route.includes('{ id: "moves", label: "Moves" }'), "Moves is in the client nav");
+assert(route.includes('id="pane-moves"'), "Moves has its own pane");
+assert(route.includes("StrategicMovesPanel"), "Moves pane shows Strategic Moves");
+assert(route.includes("rankStrategicMoves"), "Moves and Action Plan share the ranked list");
+assert(route.includes('"moves"'), "moves is an accountant tab");
+
+const app = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(app.includes("rankStrategicMoves"), "owner next moves use the shared ranker");
+for (const entry of STRATEGIC_MOVE_CATALOG) {
+  assert(app.includes(entry.title), `playbook still contains the ${entry.key} move`);
+}
+const ranked = rankStrategicMoves({
+  healthByKey: { grossMargin: 20, operatingMargin: 90 },
+  limit: 2,
+  entries: STRATEGIC_MOVE_CATALOG.filter((entry) =>
+    entry.key === "grossMargin" || entry.key === "operatingMargin",
+  ),
+});
+assert(ranked[0]?.key === "grossMargin", "weaker health ranks above a healthy lever");
+assert(ranked.length === 2, "ranker keeps one row per move");
 
 console.log("client-route-search-test: all assertions passed");

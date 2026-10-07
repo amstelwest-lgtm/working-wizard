@@ -40,6 +40,10 @@ assert(accountantWorkspaceTab("tasks") === "plan", "old staff-tasks links open A
 assert(accountantWorkspaceTab("actions") === "plan", "?tab=actions opens Action Plan");
 assert(accountantWorkspaceTab("cash") === "cash", "Cash stays Cash");
 assert(accountantWorkspaceTab("next") === null, "Next moves has no accountant page");
+assert(accountantWorkspaceTab("moves") === "moves", "Moves opens the Strategic Moves tab");
+assert(ownerWorkspaceTab("moves") === null, "Moves has no owner page");
+assert(noteTabLabel("moves") === "Moves", "Moves badge says Moves");
+assert(!noteTabsMatch("next", "moves"), "owner Next moves is not the accountant Moves tab");
 assert(accountantWorkspaceTab("ask") === "ask", "Milōn Bot stays on the studio");
 assert(accountantWorkspaceTab("summary") === "summary", "Summary stays Summary");
 assert(accountantWorkspaceTab("data") === "summary", "?tab=data is Client Brain");
