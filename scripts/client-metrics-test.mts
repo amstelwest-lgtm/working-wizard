@@ -12,6 +12,7 @@ import { healthFromFlatFinancials } from "../src/lib/health-score";
 import {
   assessClientMetrics,
   cycleTimelineAxis,
+  resolveThirteenWeekForecast,
   forecastMinimumCash,
   scoreCreditorDays,
   scoreWorkingCapitalDays,
@@ -385,5 +386,23 @@ assert(
 assert(yankeesHealth.overall === 71 && yankeesHealth.displayLabel === "Watch", `Yankees health ${yankeesHealth.overall} ${yankeesHealth.displayLabel}`);
 assert(yankeesBrief.health === 71 && yankeesBrief.healthLabel === "Watch", "bot brief matches Overview");
 assert(Math.round(yankeesBrief.creditorDays ?? 0) === 329, "bot creditor days stay annualised");
+
+const qaCycle = resolveThirteenWeekForecast({
+  financials: {
+    cash: "128450",
+    revenue: "700000",
+    cogs: "280000",
+    receivables: "82192",
+    payables: "48658",
+    periodMonths: "12",
+    periodEnd: "2026-07-31",
+  },
+  openingCash: 128450,
+  fyStartMonth: 1,
+});
+assert(
+  qaCycle.cycleNote === "Debtor days are 25. Collections use the same monthly revenue run-rate.",
+  qaCycle.cycleNote ?? "missing cycle note",
+);
 
 console.log("client-metrics-test: all assertions passed");

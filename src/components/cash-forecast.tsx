@@ -695,6 +695,7 @@ export function CashForecastPanel({
           .eq("id", clientId);
       }
       setBankSeeded(Boolean(bankAt));
+      const loadedProfile = parseOperatingProfileUnknown(data?.operating_profile);
       const outlook = resolveThirteenWeekForecast({
         financials: finRecord,
         cashflow: cf,
@@ -704,6 +705,7 @@ export function CashForecastPanel({
         }),
         periodEnd: typeof finRecord?.periodEnd === "string" ? finRecord.periodEnd : null,
         timeZone: market.timezone,
+        fyStartMonth: loadedProfile?.fyStartMonth ?? market.fyStartMonthDefault,
       });
       setForecastCycleNote(outlook.cycleNote);
       setStartDate(outlook.startDate);
@@ -860,6 +862,7 @@ export function CashForecastPanel({
         financials: inputFinancials,
         cashflow: payload,
         timeZone: market.timezone,
+        fyStartMonth: inputProfile?.fyStartMonth ?? market.fyStartMonthDefault,
       });
       const { error } = await supabase
         .from("clients")

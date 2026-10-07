@@ -8,6 +8,7 @@ import { resolveRatioRecord } from "../ask-ai/derive-ratios.ts";
 import {
   buildOverviewBrief,
   copyPackFromMarket,
+  overviewFyStartMonth,
   type OverviewBrief,
 } from "../ask-ai/overview-brief.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
@@ -19,7 +20,9 @@ export async function loadOverviewBrief(
   const [clientRes, snapRes] = await Promise.all([
     client
       .from("clients")
-      .select("name, market, financials, cashflow, cash_runway_weeks, financials_updated_at, brain_summary")
+      .select(
+        "name, market, financials, cashflow, cash_runway_weeks, financials_updated_at, brain_summary, operating_profile",
+      )
       .eq("id", clientId)
       .maybeSingle(),
     client
@@ -43,11 +46,14 @@ export async function loadOverviewBrief(
       ? (snapRes.data.ratios as Record<string, unknown>)
       : null;
   const fallback = resolveRatioRecord(snapRatios, financials);
+  const copyPack = copyPackFromMarket(row?.market);
+  const fyStartMonth = overviewFyStartMonth(copyPack, row?.operating_profile);
   const metrics = assessClientMetrics({
     financials,
     cashflow: (row as { cashflow?: unknown } | null)?.cashflow,
     financialsUpdatedAt:
       (row as { financials_updated_at?: string | null } | null)?.financials_updated_at ?? null,
+    fyStartMonth,
   });
   return buildOverviewBrief({
     financials,
@@ -55,7 +61,9 @@ export async function loadOverviewBrief(
     cash: metrics.cash.amount,
     runwayWeeks: metrics.runway.weeks,
     runwayLabel: runwayDisplayLabel(metrics.runway),
-    copyPack: copyPackFromMarket(row?.market),
+    copyPack,
+    fyStartMonth,
+    shortfallWeek: metrics.outlook.shortfallWeek,
     clientName: typeof row?.name === "string" ? row.name : null,
     periodLabel: (snapRes.data?.period_label as string | null) ?? null,
     figuresAsOf: (snapRes.data?.period_date as string | null) ?? null,
