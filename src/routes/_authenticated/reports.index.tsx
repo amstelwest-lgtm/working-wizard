@@ -101,6 +101,7 @@ import {
   parseBudgetDocument,
   type BudgetPdfActual,
 } from "@/lib/budget-pdf";
+import { reseedBudgetIfScaleBroken } from "@/lib/budget.bridges";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton } from "@/components/review-signoff";
@@ -2149,13 +2150,19 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     profitability: (signoffRes.data ?? []).find((s) => s.scope === "profitability") ?? null,
     budget: (signoffRes.data ?? []).find((s) => s.scope === "budget") ?? null,
   };
-  const budget = parseBudgetDocument(clientRow?.budget);
-  const budgetUpdatedAt = clientRow?.budget_updated_at ?? budget?.updatedAt ?? null;
+  const storedBudget = parseBudgetDocument(clientRow?.budget);
+  const budgetUpdatedAt = clientRow?.budget_updated_at ?? storedBudget?.updatedAt ?? null;
   const uploadedBudgetActuals = await loadBudgetActualsForPdf(clientId);
   const rawFinancials =
     clientRow?.financials && typeof clientRow.financials === "object"
       ? (clientRow.financials as Record<string, unknown>)
       : null;
+  const budget = storedBudget
+    ? reseedBudgetIfScaleBroken(
+        storedBudget,
+        rawFinancials as Record<string, string | number | null | undefined> | null,
+      )
+    : null;
   const statementActual = budgetActualFromFinancials(rawFinancials);
   const budgetActuals =
     uploadedBudgetActuals.length > 0

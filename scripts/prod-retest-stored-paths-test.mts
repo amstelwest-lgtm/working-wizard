@@ -18,8 +18,11 @@ import {
 } from "../src/lib/advisory-pack";
 import {
   budgetIsImplausible,
+  budgetScaleBreak,
   budgetSeedIsUntouched,
+  budgetWasRebuiltFromActuals,
   repairUntouchedSeededBudget,
+  reseedBudgetIfScaleBroken,
 } from "../src/lib/budget.bridges";
 import { budgetCogsFollowsGpPct, computeBudgetMonths } from "../src/lib/budget.compute";
 import type { BudgetDocument } from "../src/lib/budget.types";
@@ -147,16 +150,44 @@ const qaEbit = qaMonths.reduce((sum, row) => sum + row.ebit, 0);
 assert(Math.abs(qaOverheads - 42000) < 1, `QA FY overheads ${qaOverheads}`);
 assert(Math.abs(qaEbit - 33000) < 1, `QA FY EBIT ${qaEbit}`);
 
-assert(!budgetSeedIsUntouched(yankees.budget), "Yankees has a note, so the seed is left for the rebuild banner");
+assert(!budgetSeedIsUntouched(yankees.budget), "Yankees has a note, so a mild mismatch would stay");
 assert(budgetCogsFollowsGpPct(yankees.budget), "zero per-unit costs follow the GP% input");
-const yankeesMonths = computeBudgetMonths(yankees.budget);
+const storedMonths = computeBudgetMonths(yankees.budget);
+const storedRev = storedMonths.reduce((sum, row) => sum + row.revenue, 0);
+const storedCogs = storedMonths.reduce((sum, row) => sum + row.cogs, 0);
+assert(
+  budgetScaleBreak(yankees.budget, yankees.financials as Record<string, string>) != null,
+  "the stored Yankees plan is an order of magnitude above the statement",
+);
+const yankeesBudget = reseedBudgetIfScaleBroken(
+  yankees.budget,
+  yankees.financials as Record<string, string>,
+);
+const yankeesMonths = computeBudgetMonths(yankeesBudget);
 const yankeesRev = yankeesMonths.reduce((sum, row) => sum + row.revenue, 0);
 const yankeesCogs = yankeesMonths.reduce((sum, row) => sum + row.cogs, 0);
+assert(storedRev > yankeesRev * 10, `stored revenue ${storedRev} is more than 10× ${yankeesRev}`);
+assert(storedCogs > yankeesCogs * 10, `stored COGS ${storedCogs} is more than 10× ${yankeesCogs}`);
+assert(yankeesRev > 140_000 && yankeesRev < 160_000, `reseeded Yankees revenue ${yankeesRev}`);
+assert(yankeesCogs > 12_000 && yankeesCogs < 15_000, `reseeded Yankees COGS ${yankeesCogs}`);
 const gp = yankeesRev > 0 ? (1 - yankeesCogs / yankeesRev) * 100 : 0;
-assert(Math.abs(gp - 70.9) < 0.2, `Yankees GP ${gp} next to a 70.9 input`);
+assert(Math.abs(gp - 91) < 0.5, `Yankees GP follows the 21-day statement, got ${gp}`);
+assert(budgetWasRebuiltFromActuals(yankeesBudget), "the rebuild is written on the budget");
 assert(
-  budgetIsImplausible(yankees.budget, yankees.financials as Record<string, string>),
-  "Yankees revenue is still far above the statement, so the rebuild banner stays",
+  !budgetIsImplausible(yankeesBudget, yankees.financials as Record<string, string>),
+  "the rebuilt Yankees plan lines up with the statement",
+);
+assert(
+  budgetScaleBreak(yankeesBudget, yankees.financials as Record<string, string>) == null,
+  "reseed clears the order-of-magnitude gap",
+);
+const yankeesAgain = reseedBudgetIfScaleBroken(
+  yankeesBudget,
+  yankees.financials as Record<string, string>,
+);
+assert(
+  (yankeesAgain.notes ?? []).length === (yankeesBudget.notes ?? []).length,
+  "a second read does not rebuild again",
 );
 
 const qaEquity = readTimeEquity(qa.financials);
