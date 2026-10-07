@@ -1119,8 +1119,16 @@ function ClientView() {
         financialsUpdatedAt: client?.financials_updated_at ?? null,
         priorFinancials: priorSnapshot?.financials ?? null,
         timeZone: clientMarket.timezone,
+        fyStartMonth,
       }),
-    [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot, clientMarket.timezone],
+    [
+      financials,
+      client?.cashflow,
+      client?.financials_updated_at,
+      priorSnapshot,
+      clientMarket.timezone,
+      fyStartMonth,
+    ],
   );
   const metricRunway = assessed.runway;
   const cashOutlook = assessed.outlook;
@@ -3350,6 +3358,7 @@ function ClientView() {
                           financials,
                           cashflow: payload,
                           financialsUpdatedAt: client?.financials_updated_at ?? null,
+                          fyStartMonth,
                         });
                         setClient((c) =>
                           c

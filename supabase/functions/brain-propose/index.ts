@@ -37,6 +37,7 @@ import {
   payablesPromptBlock,
   readPayablesSnapshot,
 } from "./payables.ts";
+import { formatSnapshotRatio } from "../../../src/lib/advisory-narrative.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 
@@ -80,7 +81,7 @@ function ratioLines(raw: unknown): string[] {
   const out: string[] = [];
   for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof val !== "number" || !Number.isFinite(val)) continue;
-    out.push(`${key}: ${val}`);
+    out.push(`${key}: ${formatSnapshotRatio(key, val)}`);
     if (out.length >= 16) break;
   }
   return out;

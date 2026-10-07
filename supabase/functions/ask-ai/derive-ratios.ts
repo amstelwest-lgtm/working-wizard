@@ -1,7 +1,6 @@
 /**
- * Slim ratio + pillar derivation for Ask AI.
- * Deno cannot import `@/lib/ratios` — keep this in lockstep with computeRatios()
- * and PILLAR_RATIO_NAMES in src/lib.
+ * Ask AI ratio derivation. Ratios come from `computeRatios` / `flatToRatioInputs`
+ * so Overview copy uses the same days, margins, and period as the Ratios page.
  */
 
 import {
@@ -9,6 +8,8 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
+import { flatToRatioInputs } from "../../../src/lib/health-score.ts";
+import { computeRatios } from "../../../src/lib/ratios.ts";
 
 export const DISPLAY_TO_CAMEL: Record<string, string> = {
   "Net Margin": "netMargin",
@@ -30,21 +31,8 @@ export const DISPLAY_TO_CAMEL: Record<string, string> = {
   "Gross Profit / Labor": "gpToLabor",
   "Sales-per-Employee Ratio": "salesPerEmployee",
   "OCF / EBITDA": "ocfToEbitda",
+  "Debt-to-Equity": "debtToEquity",
 };
-
-const FLOW_KEYS = [
-  "revenue",
-  "cogs",
-  "ebit",
-  "ebt",
-  "netIncome",
-  "ebitda",
-  "operatingCashflow",
-  "fixedCosts",
-  "variableCosts",
-  "top5Revenue",
-  "laborCost",
-] as const;
 
 const PILLAR_NAMES: Record<string, readonly string[]> = {
   profit: [
@@ -74,87 +62,16 @@ function num(raw: unknown): number {
   return Number.isFinite(n) ? n : NaN;
 }
 
-function periodMonths(fin: Record<string, unknown>): number {
-  const raw = fin.periodMonths;
-  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
-  return Number.isFinite(n) && n >= 1 && n <= 12 ? Math.round(n) : 12;
-}
-
-function annualise(fin: Record<string, unknown>): Record<string, number> {
-  const months = periodMonths(fin);
-  const scale = months === 12 ? 1 : 12 / months;
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(fin)) {
-    const n = num(v);
-    if (!Number.isFinite(n)) continue;
-    const scaled = (FLOW_KEYS as readonly string[]).includes(k) ? n * scale : n;
-    // Match annualiseFinancials(): flow figures round to cents before ratios.
-    out[k] = (FLOW_KEYS as readonly string[]).includes(k)
-      ? Math.round(scaled * 100) / 100
-      : scaled;
-  }
-  return out;
-}
-
-function safe(a: number, b: number): number {
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
-  return b === 0 ? 0 : a / b;
-}
-
-/** Same display-name keys as `computeRatios()` in src/lib/ratios.ts. */
+/**
+ * Same display-name keys as `computeRatios()` in src/lib/ratios.ts, including
+ * `effectivePeriodMonths` when a financial-year start is passed.
+ */
 export function computeRatiosFromFinancials(
   financials: Record<string, unknown> | null | undefined,
+  opts?: { fyStartMonth?: number | null },
 ): Record<string, number> {
-  if (!financials || typeof financials !== "object") return {};
-  const n = annualise(financials);
-  const operatingMargin = safe(n.ebit, n.revenue);
-  const netMargin = safe(n.netIncome, n.revenue);
-  const grossMargin = safe((n.revenue ?? NaN) - (n.cogs ?? NaN), n.revenue);
-  const assetTurnover = safe(n.revenue, n.totalAssets);
-  const equityMultiplier =
-    Number.isFinite(n.totalAssets) && Number.isFinite(n.equity) && n.equity !== 0
-      ? n.totalAssets / n.equity
-      : NaN;
-  const roa = netMargin * assetTurnover;
-  const roe = n.equity > 0 ? roa * equityMultiplier : NaN;
-  const debtorDays = safe(n.receivables, n.revenue) * 365;
-  const inventoryDays = safe(n.inventory, n.cogs) * 365;
-  const creditorDays = safe(n.payables, n.cogs) * 365;
-  const wcDays = debtorDays + inventoryDays - creditorDays;
-  const fcr = safe(n.fixedCosts, n.revenue);
-  const cm = (n.revenue ?? NaN) - (n.variableCosts ?? NaN);
-  const dol = safe(cm, n.ebit);
-  const cc = safe(n.top5Revenue, n.revenue);
-  const gpToLabor = safe((n.revenue ?? NaN) - (n.cogs ?? NaN), n.laborCost);
-  const spe = safe(n.revenue, n.employees);
-  const ocfEbitda =
-    Number.isFinite(n.operatingCashflow) && Number.isFinite(n.ebitda) && n.ebitda !== 0
-      ? n.operatingCashflow / n.ebitda
-      : NaN;
-  const interestBurden = n.ebit > 0 ? safe(n.ebt, n.ebit) : NaN;
-  const taxBurden = n.ebt > 0 ? safe(n.netIncome, n.ebt) : NaN;
-
-  return {
-    "Net Margin": netMargin,
-    "Operating Margin": operatingMargin,
-    "Gross Margin": grossMargin,
-    "Return on Equity": roe,
-    "Return on Assets": roa,
-    "Asset Turnover": assetTurnover,
-    "Equity Multiplier": equityMultiplier,
-    "Interest Burden": interestBurden,
-    "Tax Burden": taxBurden,
-    "Debtor Days": debtorDays,
-    "Inventory Days": inventoryDays,
-    "Creditor Days": creditorDays,
-    "Working Capital Days": wcDays,
-    "Fixed Cost Ratio": fcr,
-    "Degree of Operating Leverage": dol,
-    "Top-5 Customer Share": cc,
-    "Gross Profit / Labor": gpToLabor,
-    "Sales-per-Employee Ratio": spe,
-    "OCF / EBITDA": ocfEbitda,
-  };
+  if (!financials || typeof financials !== "object" || Array.isArray(financials)) return {};
+  return computeRatios(flatToRatioInputs(financials, { fyStartMonth: opts?.fyStartMonth }));
 }
 
 function clamp(n: number): number {
