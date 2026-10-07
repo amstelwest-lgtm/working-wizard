@@ -256,7 +256,7 @@ function TeamAccessPage() {
                       className="mt-1 border-slate-700 bg-[var(--bg)] text-slate-100"
                       value={invName}
                       onChange={(e) => setInvName(e.target.value)}
-                      placeholder="Thandi Mokoena"
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -266,7 +266,7 @@ function TeamAccessPage() {
                       type="email"
                       value={invEmail}
                       onChange={(e) => setInvEmail(e.target.value)}
-                      placeholder="thandi@practice.co.za"
+                      autoComplete="off"
                     />
                   </div>
                   <div>

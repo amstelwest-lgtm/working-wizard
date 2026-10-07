@@ -85,6 +85,33 @@ export function eligibleForIntroTrial(priorSubscriptionCount: number): boolean {
   return priorSubscriptionCount <= 0;
 }
 
+/**
+ * Trial-ended copy applies only when the trial is the subscription state.
+ * An active (CURRENT) plan, including paid or legacy Starter, is not that state.
+ */
+export function showStarterTrialEndedCopy(
+  phase: FirmSubscriptionPhase | null | undefined,
+  expired: boolean | null | undefined,
+): boolean {
+  if (!expired) return false;
+  return phase !== "active";
+}
+
+/** Drop the ended flag when the live subscription is already the current plan. */
+export function starterTrialForPlanState(
+  phase: FirmSubscriptionPhase | null | undefined,
+  clock: StarterTrialBanner,
+): StarterTrialBanner {
+  if (phase === "active") return { ...clock, expired: false, showCountdown: false };
+  return clock;
+}
+
+function bandClientCapMessage(name: string, clientLimit: number, starter: boolean): string {
+  const limit = `${name} includes up to ${clientLimit} active clients. Upgrade to a larger band to add another.`;
+  if (starter) return `You can't add another client on Starter. ${limit}`;
+  return limit;
+}
+
 export function decideFirmClientCreate(input: {
   /** Local deploys without a Stripe key do not invent a cap. */
   stripeConfigured: boolean;
@@ -94,12 +121,13 @@ export function decideFirmClientCreate(input: {
   /**
    * Enforced Starter past day 14. Omitted means the caller is not applying
    * the clock (existing firms, paid bands, or a missing start).
+   * Ignored when `phase` is active: that subscription is the current plan.
    */
   starterTrialExpired?: boolean;
 }): FirmClientCreateDecision {
   if (!input.stripeConfigured) return { allowed: true };
 
-  if (input.starterTrialExpired) {
+  if (showStarterTrialEndedCopy(input.phase, input.starterTrialExpired)) {
     return {
       allowed: false,
       code: "starter_trial_ended",
@@ -128,7 +156,7 @@ export function decideFirmClientCreate(input: {
         allowed: false,
         code: "band_client_cap",
         bandName: band.name,
-        message: `${band.name} includes up to ${band.clientLimit} active clients. Upgrade to a larger band to add another.`,
+        message: bandClientCapMessage(band.name, band.clientLimit, band.id === "starter"),
       };
     }
   }

@@ -19,6 +19,15 @@ assert(clientSrc.includes("embedded"), "client workspace embeds studio chrome");
 assert(!clientSrc.includes("REPORT_TEMPLATES"), "old report gallery catalogue is gone");
 assert(!clientSrc.includes("rep-grid"), "old report gallery markup is gone");
 assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the client Reports tab and scrolls to it");
+{
+  const header = clientSrc.slice(clientSrc.indexOf("topbar-actions"), clientSrc.indexOf("BREADCRUMB"));
+  assert(header.includes("openReportsStudio"), "client-header Reports studio leaves the client page");
+  assert(!header.includes("handleGenerateReport"), "client-header Reports studio does not stay on ?tab=reports");
+  const openFn = clientSrc.slice(clientSrc.indexOf("const openReportsStudio"), clientSrc.indexOf("const handleExportPDF"));
+  assert(openFn.includes('to: "/reports"'), "client-header Reports studio opens /reports");
+  assert(openFn.includes("clientId,"), "client-header Reports studio passes this client's id");
+  assert(openFn.includes("client: undefined"), "client-header URL is /reports?clientId= only");
+}
 assert(
   /activeTab === "budget" \? "flex" : "none"/.test(clientSrc) ||
     /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc),
@@ -47,6 +56,7 @@ assert(!demoSrc.includes("MOCK_RATIO_RESULTS"), "demo mock UI is deleted, not ov
 const dashSrc = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
 assert(dashSrc.includes('search: { tab: "reports" }'), "dashboard report icon opens the client Reports tab");
 assert(dashSrc.includes('to: "/reports"'), "dashboard Reports studio still opens standalone studio");
+assert(dashSrc.includes("clientId: undefined"), "firm Reports studio nav stays unscoped");
 
 const walkSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 {

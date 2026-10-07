@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
-import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
+import { showStarterTrialEndedCopy, type FirmPlanDisplay } from "@/lib/firm-client-cap";
 import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
@@ -227,6 +227,11 @@ function SettingsPage() {
     toast.success("Guided tour will show next time you open the board");
   };
 
+  const trialEnded =
+    plan != null &&
+    plan.configured !== false &&
+    showStarterTrialEndedCopy(plan.phase, plan.starterTrial?.expired);
+
   return (
     <SettingsShell>
       <BackLink
@@ -364,14 +369,14 @@ function SettingsPage() {
               ) : (
                 <>
                   <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
-                  {plan?.starterTrial && !plan.starterTrial.expired ? (
+                  {plan?.starterTrial && !trialEnded ? (
                     firmStarterTrialCountdownCopy(plan.starterTrial) ? (
                       <p role="status" className="text-sm">
                         {firmStarterTrialCountdownCopy(plan.starterTrial)}
                       </p>
                     ) : null
                   ) : null}
-                  {plan?.starterTrial?.expired ? null : (
+                  {trialEnded ? null : (
                     <>
                       {plan?.detail ? (
                         <p className="text-xs text-[var(--ink-dim)]">{plan.detail}</p>
@@ -384,7 +389,7 @@ function SettingsPage() {
                 </>
               )}
             </div>
-            {plan?.starterTrial?.expired && plan.configured !== false ? (
+            {trialEnded ? (
               <div className="mb-3">
                 <TrialEndedPlanBlock
                   firmId={firmId}
@@ -398,6 +403,7 @@ function SettingsPage() {
                     clientCount: plan.clientCount,
                     usageLabel: plan.usageLabel,
                     saDiscount: plan.saDiscount,
+                    phase: plan.phase,
                   }}
                   onUpgrade={handlePlanUpgrade}
                 />
