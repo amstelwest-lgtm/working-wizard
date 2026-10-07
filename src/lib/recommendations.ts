@@ -174,6 +174,22 @@ export function isOpenRecommendation(r: Pick<Recommendation, "status">): boolean
   return r.status === "proposed";
 }
 
+/**
+ * Pending brain drafts written before the latest pack version quote the
+ * figures from that older pass. Regenerate supersedes them; the panel
+ * also hides them so a stored 43.8 / 73 / 0.16 cannot stay on the card.
+ */
+export function brainDraftSupersededByPack(
+  draft: { status: string; created_at: string },
+  packGeneratedAt: string | null | undefined,
+): boolean {
+  if (draft.status !== "proposed" || !packGeneratedAt) return false;
+  const packAt = Date.parse(packGeneratedAt);
+  const created = Date.parse(draft.created_at);
+  if (!Number.isFinite(packAt) || !Number.isFinite(created)) return false;
+  return created < packAt;
+}
+
 export function isActionable(r: Pick<Recommendation, "status">): boolean {
   return r.status === "approved" || r.status === "edited";
 }

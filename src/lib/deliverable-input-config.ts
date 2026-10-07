@@ -190,7 +190,13 @@ function hasArAp(financials: DeliverableInputContext["financials"]): boolean {
  * effective period. A shorter effective cover annualises harder and yields
  * different days (19/28 instead of 25/37 on the QA US file).
  */
-export function computedDaysAr(financials: DeliverableInputContext["financials"]): number | null {
+type DayCoverFinancials =
+  | DeliverableInputContext["financials"]
+  | Record<string, unknown>
+  | null
+  | undefined;
+
+export function computedDaysAr(financials: DayCoverFinancials): number | null {
   const rec = num(financials?.receivables);
   const rev = num(financials?.revenue);
   if (rev <= 0) return null;
@@ -200,7 +206,7 @@ export function computedDaysAr(financials: DeliverableInputContext["financials"]
   return Math.round((rec / annualRev) * 365);
 }
 
-export function computedDaysAp(financials: DeliverableInputContext["financials"]): number | null {
+export function computedDaysAp(financials: DayCoverFinancials): number | null {
   const pay = num(financials?.payables);
   const cogs = num(financials?.cogs);
   if (cogs <= 0) return null;
@@ -222,15 +228,35 @@ function statementStockAmount(raw: unknown): number | null {
  * The four Ratios statement figures: Days AR, Days AP, accounts receivable, accounts payable.
  * Collections statement-fallback tiles call this so they cannot drift onto the health-score path.
  */
-export function ratiosStatementFigures(
-  financials: DeliverableInputContext["financials"],
-): StatementWorkingCapital {
+export function ratiosStatementFigures(financials: DayCoverFinancials): StatementWorkingCapital {
   return {
     receivables: statementStockAmount(financials?.receivables),
     payables: statementStockAmount(financials?.payables),
     debtorDays: computedDaysAr(financials),
     creditorDays: computedDaysAp(financials),
   };
+}
+
+/**
+ * Debtor and creditor days every surface quotes. Same `periodMonthsOf` cover
+ * as Ratios, Collections, and Payables. A health-score year span must not
+ * replace these (19/28 instead of 25/37).
+ */
+export function withCanonicalDebtorCreditorDays(
+  ratios: Record<string, number>,
+  financials: DayCoverFinancials,
+): Record<string, number> {
+  const statement = ratiosStatementFigures(financials);
+  const next = { ...ratios };
+  if (statement.debtorDays != null) next["Debtor Days"] = statement.debtorDays;
+  if (statement.creditorDays != null) next["Creditor Days"] = statement.creditorDays;
+  const dso = next["Debtor Days"];
+  const dio = next["Inventory Days"];
+  const dpo = next["Creditor Days"];
+  if ([dso, dio, dpo].every((n) => typeof n === "number" && Number.isFinite(n))) {
+    next["Working Capital Days"] = Math.round(dso + dio - dpo);
+  }
+  return next;
 }
 
 export function defaultDaysAr(ctx: DeliverableInputContext): number {

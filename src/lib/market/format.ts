@@ -122,6 +122,98 @@ export function formatDateTime(
   });
 }
 
+/** A stored IANA zone, or null when the string is blank or not a real zone. */
+export function usableTimeZone(zone: string | null | undefined): string | null {
+  const trimmed = zone?.trim() ?? "";
+  if (!trimmed) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: trimmed }).format(0);
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+/** Firm zone when the practice stored one, otherwise the market or signer zone. */
+export function signedOffTimeZone(
+  firmTimeZone: string | null | undefined,
+  marketTimeZone: string | null | undefined,
+): string {
+  return usableTimeZone(firmTimeZone) ?? usableTimeZone(marketTimeZone) ?? "UTC";
+}
+
+function offsetLabel(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === "GMT" || trimmed === "UTC") return "UTC";
+  const match = /^(?:GMT|UTC)([+-])(\d{1,2})(?::?(\d{2}))?$/i.exec(trimmed);
+  if (!match) return null;
+  const hours = String(Number(match[2]));
+  const minutes = match[3];
+  if (minutes && minutes !== "00") return `UTC${match[1]}${hours}:${minutes}`;
+  return `UTC${match[1]}${hours}`;
+}
+
+function offsetFromZone(date: Date, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      timeZoneName: "shortOffset",
+    }).formatToParts(date);
+    const raw = parts.find((part) => part.type === "timeZoneName")?.value ?? "";
+    return offsetLabel(raw) ?? "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/** Letter abbreviations (SAST, EDT) stay. Offset-only short names become UTC+2. */
+function zoneLabel(name: string, date: Date, timeZone: string): string {
+  const trimmed = name.trim();
+  const offset = offsetLabel(trimmed);
+  if (offset) return offset;
+  if (/^[A-Z]{2,5}$/.test(trimmed)) return trimmed;
+  return offsetFromZone(date, timeZone);
+}
+
+/**
+ * Sign-off time for every PDF footer. Always in the firm zone when one is
+ * stored, otherwise the market zone, and always with a zone label. Never the
+ * server's local zone and never an unlabeled clock.
+ */
+export function formatSignedOffDateTime(
+  d: Date | string | number,
+  market: Pick<ResolvedMarket, "locale" | "timezone"> = ZA_MARKET,
+  opts?: Intl.DateTimeFormatOptions & { firmTimeZone?: string | null },
+): string {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return "—";
+  const { firmTimeZone, ...rest } = opts ?? {};
+  const timeZone = signedOffTimeZone(firmTimeZone, rest.timeZone ?? market.timezone);
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat(market.locale, {
+      ...rest,
+      timeZone,
+      timeZoneName: "short",
+    }).formatToParts(date);
+  } catch {
+    parts = new Intl.DateTimeFormat(market.locale, {
+      ...rest,
+      timeZone: "UTC",
+      timeZoneName: "short",
+    }).formatToParts(date);
+  }
+  const activeZone = parts.some((part) => part.type === "timeZoneName") ? timeZone : "UTC";
+  const rendered = parts
+    .map((part) =>
+      part.type === "timeZoneName" ? zoneLabel(part.value, date, activeZone) : part.value,
+    )
+    .join("");
+  if (/\b(?:UTC(?:[+-]\d{1,2}(?::\d{2})?)?|[A-Z]{2,5})\b/.test(rendered)) return rendered;
+  return `${rendered} ${offsetFromZone(date, timeZone)}`;
+}
+
 export function formatPercentRate(rate: number, digits = 2): string {
   if (!Number.isFinite(rate)) return "—";
   return `${(rate * 100).toFixed(digits)}%`;

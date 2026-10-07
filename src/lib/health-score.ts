@@ -1,3 +1,4 @@
+import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
   bandedPillarStatus,
@@ -293,12 +294,19 @@ export function overviewRatioInputs(
   };
 }
 
-/** Ratios Overview and the Ratios grid show for this statement. */
+/**
+ * Ratios Overview, the health orb, the scorecard, and the pack score.
+ * Margins stay on the year-span cover. Debtor and creditor days are the
+ * Ratios / Collections `periodMonthsOf` figures.
+ */
 export function overviewRatios(
   financials: FlatFinancials | Record<string, unknown> | null | undefined,
   opts?: { fyStartMonth?: number | null },
 ): Record<string, number> {
-  return computeRatios(overviewRatioInputs(financials, opts));
+  return withCanonicalDebtorCreditorDays(
+    computeRatios(overviewRatioInputs(financials, opts)),
+    financials,
+  );
 }
 
 /**

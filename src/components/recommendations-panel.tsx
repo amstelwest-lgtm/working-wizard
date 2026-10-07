@@ -48,6 +48,8 @@ type Props = {
   onAddFigures?: () => void;
   /** Firm that owns the client, so a trial block can open the plan picker. */
   firmId?: string | null;
+  /** Bump after the advisory pack regenerates so superseded drafts leave the list. */
+  refreshKey?: string | number;
   className?: string;
 };
 
@@ -97,6 +99,7 @@ export function RecommendationsPanel({
   onOpenActions,
   onAddFigures,
   firmId = null,
+  refreshKey,
   className,
 }: Props) {
   const copy = COPY[audience];
@@ -138,7 +141,7 @@ export function RecommendationsPanel({
     }
     setLoading(true);
     void load();
-  }, [clientId, load]);
+  }, [clientId, load, refreshKey]);
 
   const open = useMemo(() => rows.filter(isOpenRecommendation), [rows]);
   const approved = useMemo(() => rows.filter(isActionable), [rows]);

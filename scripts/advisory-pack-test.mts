@@ -30,7 +30,11 @@ import { ADVISORY_EVENTS } from "../src/lib/advisory-state";
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "../src/lib/advisory-narrative";
 import { computeOverallHealth, overviewRatioInputs, overviewRatios } from "../src/lib/health-score";
 import { computeRatios } from "../src/lib/ratios";
-import { checkRootCauseClaims, type Recommendation } from "../src/lib/recommendations";
+import { brainDraftSupersededByPack, checkRootCauseClaims, type Recommendation } from "../src/lib/recommendations";
+import { dataRequestDayRatios, detectDataGaps, presentLiveDataRequests } from "../src/lib/data-requests";
+import { ratiosStatementFigures } from "../src/lib/deliverable-input-config";
+import { formatSignedOffDateTime } from "../src/lib/market/format";
+import { ZA_MARKET } from "../src/lib/market/resolve";
 import type { DataRequest } from "../src/lib/data-requests";
 
 function assert(cond: boolean, msg: string) {
@@ -871,8 +875,9 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
 
 {
   const us = { country: "US" as const, copyPack: "us" as const };
-  // Unlocked periodMonths 12 with a July month-end. Stored snapshot ratios keep
-  // the annual pass (health 78). Overview and Ratios use the 7-month span.
+  // Unlocked periodMonths 12 with a July month-end. Margins use the 7-month
+  // span. Debtor and creditor days use the stored cover, so this sparse file
+  // scores the same 78 as the annual snapshot.
   const hand = {
     revenue: "50000",
     cogs: "20000",
@@ -888,10 +893,9 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   });
   eq(storedHealth.overall, 78, "stored annual snapshot still scores 78");
   const live = livePackMetrics({ financials: hand, fyStartMonth: 1, market: us });
-  assert(
-    live.figures.healthScore != null && live.figures.healthScore !== 78,
-    `live Overview health is not the stale 78, got ${live.figures.healthScore}`,
-  );
+  eq(live.ratios["Debtor Days"], 44, "live debtor days use the stored cover");
+  eq(live.ratios["Creditor Days"], 73, "live creditor days use the stored cover");
+  eq(live.figures.healthScore, 78, "day inputs on the stored cover recompute to the same 78");
   eq(
     overviewFiguresForPackDrift({ financials: hand, fyStartMonth: 1, market: us }).healthScore,
     live.figures.healthScore,
@@ -913,13 +917,13 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     "approved",
     true,
     {
-      health: { overall: 78 },
+      health: { overall: 71 },
       forecast: { openingBalance: live.figures.cash },
       sections: [{ key: "forecast", body: `Runway ${live.figures.runwayLabel ?? ""}.` }],
     },
     live.figures,
   );
-  assert(staleGate.figuresChanged && staleGate.signOffBlocked, "health 78 vs live Overview blocks sign-off");
+  assert(staleGate.figuresChanged && staleGate.signOffBlocked, "health 71 vs live Overview blocks sign-off");
 
   const qa = {
     revenue: "700000",
@@ -932,8 +936,8 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     cash: "128450",
   };
   const qaLive = livePackMetrics({ financials: qa, fyStartMonth: 1, market: us });
-  eq(qaLive.ratios["Debtor Days"], 25, "pack debtor days match Ratios");
-  eq(qaLive.ratios["Creditor Days"], 37, "pack creditor days match Ratios");
+  eq(qaLive.ratios["Debtor Days"], 43, "pack debtor days match the stored cover");
+  eq(qaLive.ratios["Creditor Days"], 63, "pack creditor days match the stored cover");
   assert(Math.round(qaLive.ratios["Operating Margin"] * 1000) === 86, "pack OM is 8.6%");
   const qaPack = buildAdvisoryPack(
     inputs({
@@ -952,7 +956,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     }),
   );
   const qaBullet = qaPack.sections.find((s) => s.key === "recommendations")!.bullets![0];
-  assert(qaBullet.includes("25 days") && qaBullet.includes("37 days") && qaBullet.includes("8.6%"), qaBullet);
+  assert(qaBullet.includes("43 days") && qaBullet.includes("63 days") && qaBullet.includes("8.6%"), qaBullet);
   assert(!qaBullet.includes("43.8") && !qaBullet.includes("0.16"), qaBullet);
   const qaGate = advisoryPackSignOffGate("in_review", true, qaPack, qaLive.figures);
   assert(!qaGate.figuresChanged && !qaGate.signOffBlocked, "QA US regen matches Overview and can be signed off");
@@ -994,10 +998,10 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
 }
 
 {
-  // Live QA US file. Health uses the 9-month year span (debtor 19 / creditor 28).
-  // Ratios Days AR/AP keep the stored 12-month cover (25 / 37). Recommendation
-  // sentences must quote the Ratios days and the Overview percent, including
-  // the shapes the stored draft actually uses.
+  // Live QA US file. The year span used to annualise debtor/creditor days to
+  // 19 / 28. Scorecard, pack, and Ratios now share the stored 12-month cover
+  // (25 / 37). Recommendation sentences quote those days and the Overview
+  // percent, including the shapes the stored draft actually uses.
   const qaUs = {
     revenue: "700000",
     cogs: "280000",
@@ -1011,8 +1015,8 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   };
   const us = { country: "US" as const, copyPack: "us" as const };
   const live = livePackMetrics({ financials: qaUs, fyStartMonth: 1, market: us });
-  eq(live.ratios["Debtor Days"], 19, "health-span debtor days stay 19");
-  eq(live.ratios["Creditor Days"], 28, "health-span creditor days stay 28");
+  eq(live.ratios["Debtor Days"], 25, "scorecard debtor days match Ratios");
+  eq(live.ratios["Creditor Days"], 37, "scorecard creditor days match Ratios");
   assert(Math.round(live.ratios["Operating Margin"] * 1000) === 86, "live OM is 8.6%");
   const quoted = packNarrativeRatios(qaUs, live.ratios);
   eq(quoted?.["Debtor Days"], 25, "narrative debtor days match Ratios");
@@ -1072,6 +1076,197 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(!gate.figuresChanged && !gate.signOffBlocked, "narrative rewrite does not stale the health snapshot");
   const signed = advisoryPackSignOffGate("approved", true, qaPack, live.figures);
   assert(signed.signOffHolds && !signed.figuresChanged, "sign-off still holds when health matches");
+  const packSrc = readFileSync(resolve("src/lib/advisory-pack.ts"), "utf8");
+  assert(
+    packSrc.includes("overviewRatios") && !packSrc.includes("healthFromRatioInputs"),
+    "pack health is scored from the same ratio map as Overview",
+  );
+  const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+  assert(studio.includes("overviewRatios(financials"), "studio orb and export use the canonical days");
+  const reports = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+  assert(
+    reports.includes("withCanonicalDebtorCreditorDays"),
+    "the reports scorecard uses the Ratios day cover",
+  );
+}
+
+{
+  // One fixture: scorecard ratios, request-card days, pack narrative, and Ratios.
+  const parity = {
+    revenue: "700000",
+    cogs: "280000",
+    ebit: "60000",
+    receivables: "48500",
+    payables: "28500",
+    inventory: "62000",
+    cash: "128450",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  };
+  const tiles = ratiosStatementFigures(parity);
+  const scorecard = overviewRatios(parity, { fyStartMonth: 1 });
+  const narrative = packNarrativeRatios(parity, scorecard);
+  const cards = dataRequestDayRatios(parity);
+  eq(tiles.debtorDays, 25, "Ratios DSO is 25");
+  eq(tiles.creditorDays, 37, "Ratios DPO is 37");
+  eq(scorecard["Debtor Days"], tiles.debtorDays, "scorecard DSO matches Ratios");
+  eq(scorecard["Creditor Days"], tiles.creditorDays, "scorecard DPO matches Ratios");
+  eq(narrative?.["Debtor Days"], tiles.debtorDays, "pack narrative DSO matches Ratios");
+  eq(narrative?.["Creditor Days"], tiles.creditorDays, "pack narrative DPO matches Ratios");
+  eq(cards?.["Debtor Days"], tiles.debtorDays, "request cards DSO matches Ratios");
+  eq(cards?.["Creditor Days"], tiles.creditorDays, "request cards DPO matches Ratios");
+  const staleCards = presentLiveDataRequests(
+    [
+      {
+        source: "system",
+        status: "open",
+        rule_key: "debtor_days_no_ageing",
+        reason: "Debtor days are 44 against a 45-day benchmark.",
+      },
+      {
+        source: "system",
+        status: "open",
+        rule_key: "creditor_days_no_ageing",
+        reason: "Creditor days are 73, above the 60-day mark.",
+      },
+    ],
+    cards,
+  );
+  assert(
+    !staleCards.some((row) => /44|73/.test(row.reason)),
+    "stored 44 / 73 cards are not rendered once live days are inside the band",
+  );
+  const gaps = detectDataGaps({
+    state: "recommendations",
+    figuresAsOf: "2026-09-30",
+    ratios: cards,
+    hasForecast: true,
+    forecastOpeningBalance: "128450",
+    hasAgedDebtors: false,
+    hasAgedCreditors: false,
+    now: "2026-10-07T12:00:00.000Z",
+  });
+  assert(
+    !gaps.some((gap) => /44|73|19|28/.test(gap.reason)),
+    "the detector does not ask from the stale or health-span days",
+  );
+  const above = dataRequestDayRatios({
+    revenue: "365000",
+    cogs: "365000",
+    receivables: "60000",
+    payables: "90000",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  });
+  const shown = presentLiveDataRequests(
+    [
+      {
+        source: "system",
+        status: "open",
+        rule_key: "debtor_days_no_ageing",
+        reason: "Debtor days are 44 against a 40-day benchmark.",
+      },
+      {
+        source: "system",
+        status: "open",
+        rule_key: "creditor_days_no_ageing",
+        reason: "Creditor days are 73, above the 60-day mark.",
+      },
+    ],
+    above,
+  );
+  assert(shown.length === 2, "cards stay when the live days are still outside the band");
+  assert(
+    shown[0].reason.includes(`Debtor days are ${above?.["Debtor Days"]}`),
+    shown[0].reason,
+  );
+  assert(
+    shown[1].reason.includes(`Creditor days are ${above?.["Creditor Days"]}`),
+    shown[1].reason,
+  );
+  eq(above?.["Debtor Days"], overviewRatios({
+    revenue: "365000",
+    cogs: "365000",
+    receivables: "60000",
+    payables: "90000",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  }, { fyStartMonth: 1 })["Debtor Days"], "card DSO matches the scorecard on the high-days file");
+}
+
+{
+  const packAt = "2026-10-07T18:00:00.000Z";
+  assert(
+    brainDraftSupersededByPack(
+      { status: "proposed", created_at: "2026-10-01T12:00:00.000Z" },
+      packAt,
+    ),
+    "a pending draft from before the pack is superseded",
+  );
+  assert(
+    !brainDraftSupersededByPack(
+      { status: "approved", created_at: "2026-10-01T12:00:00.000Z" },
+      packAt,
+    ),
+    "an approved draft is left in place",
+  );
+  assert(
+    !brainDraftSupersededByPack(
+      { status: "proposed", created_at: "2026-10-07T18:05:00.000Z" },
+      packAt,
+    ),
+    "a draft created after the pack stays pending",
+  );
+  const fns = readFileSync(resolve("src/lib/advisory-pack.functions.ts"), "utf8");
+  assert(
+    fns.includes("supersedeBrainDraftsBeforePack") && fns.includes("brainDraftSupersededByPack"),
+    "regenerate supersedes pending brain drafts from before the new pack",
+  );
+  const panel = readFileSync(resolve("src/components/recommendations-panel.tsx"), "utf8");
+  assert(panel.includes("Propose from brain"), "Propose from brain stays the accountant primary");
+  assert(
+    (panel.match(/from-\[#f3d98a\]/g) ?? []).length >= 1,
+    "the gold propose control is unchanged",
+  );
+}
+
+{
+  const signed = formatSignedOffDateTime("2026-10-07T18:34:00.000Z", ZA_MARKET, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  assert(signed.includes("20:34"), `Johannesburg sign-off is 20:34, got ${signed}`);
+  assert(signed.includes("SAST") || signed.includes("UTC+2"), `zone label missing: ${signed}`);
+  const firmWins = formatSignedOffDateTime(
+    "2026-10-07T18:22:00.000Z",
+    { locale: "en-US", timezone: "America/New_York" },
+    {
+      firmTimeZone: "Africa/Johannesburg",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
+  assert(firmWins.includes("20:22") || firmWins.includes("8:22"), `firm zone wins, got ${firmWins}`);
+  assert(/SAST|UTC\+2/.test(firmWins), `firm zone is labelled, got ${firmWins}`);
+  const unlabeled = formatSignedOffDateTime("2026-10-07T18:22:00.000Z", {
+    locale: "en-ZA",
+    timezone: "Etc/GMT-2",
+  });
+  assert(/\b(?:UTC(?:[+-]\d{1,2}(?::\d{2})?)?|[A-Z]{2,5})\b/.test(unlabeled), unlabeled);
+  assert(!/\bGMT\b/.test(unlabeled), `offset names use UTC, got ${unlabeled}`);
+  const footer = readFileSync(resolve("src/components/pdf/report-footer.tsx"), "utf8");
+  assert(footer.includes("formatSignedOffDateTime"), "every PDF footer uses the shared sign-off formatter");
+  assert(!footer.includes("formatDateTime("), "the footer does not format an unlabeled clock");
+  assert(
+    readFileSync(resolve("src/lib/market/format.ts"), "utf8").includes('timeZoneName: "short"'),
+    "the sign-off formatter asks for a short zone name",
+  );
 }
 
 console.log("advisory-pack: all checks passed");

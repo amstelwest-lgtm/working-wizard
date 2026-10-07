@@ -7,7 +7,7 @@
 
 import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { formatDateTime } from "@/lib/market";
+import { formatSignedOffDateTime } from "@/lib/market";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
 import type { ReportSignoffStamp } from "./pdf-document";
@@ -54,7 +54,8 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
   const market = usePdfMarket();
   const signoffDate = reviewSignoff
-    ? formatDateTime(reviewSignoff.signedOffAt, market, {
+    ? formatSignedOffDateTime(reviewSignoff.signedOffAt, market, {
+        firmTimeZone: profile.timeZone,
         day: "numeric",
         month: "short",
         year: "numeric",
