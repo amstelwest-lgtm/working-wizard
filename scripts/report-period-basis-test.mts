@@ -15,7 +15,12 @@ import { fyMonths } from "../src/lib/budget.months";
 import { periodMonthsOf } from "../src/lib/ratios";
 import { presentReturn } from "../src/lib/report-coherence";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "../src/lib/scorecard-rows";
-import { benchmarkEmptyCopy } from "../src/lib/benchmark-empty";
+import {
+  BENCHMARK_REVIEW_BUSINESS_TYPE_CTA,
+  BENCHMARK_SET_BUSINESS_TYPE_CTA,
+  benchmarkEmptyCopy,
+} from "../src/lib/benchmark-empty";
+import { benchmarkBusinessType } from "../src/lib/benchmark-sector";
 import { defaultStringifySearch } from "@tanstack/router-core";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 
@@ -101,13 +106,17 @@ assert(
 
 const studio = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
 assert(studio.includes("benchmarkEmptyCopy"), "the benchmark empty state names the sector");
+assert(studio.includes("benchmarkSectorForClient"), "the report builder uses the shared sector helper");
 assert(studio.includes("text-slate-800"), "the empty-state sentence is dark on the light preview sheet");
 assert(studio.includes("emptyMessage"), "preview renders that sentence instead of failing quietly");
 assert(
   studio.includes("search={{ tab: \"overview\", profile: 1 }}") &&
-    studio.includes("Set the client&apos;s business type"),
-  "the empty state links to the client business profile",
+    studio.includes('state.emptyCta || "Set the client\'s business type"') &&
+    !studio.includes("clientId && state.offerSetBusinessType"),
+  "the empty state always links to the profile, including when a sector is already set",
 );
+assert(studio.includes('.eq("business_type", sector)'), "benchmarks are filtered by business type");
+assert(!studio.includes('.eq("market"'), "the benchmark query does not filter on market");
 const wholesale = benchmarkEmptyCopy({
   studioSectorName: "Wholesale Trade — Non-Specialised",
 });
@@ -116,6 +125,10 @@ assert(
   wholesale.message,
 );
 assert(wholesale.offerSetBusinessType === false, "a selected industry is not a missing profile");
+assert(
+  wholesale.cta === BENCHMARK_REVIEW_BUSINESS_TYPE_CTA,
+  "a set sector still links so the accountant can review the type",
+);
 const profileSector = benchmarkEmptyCopy({
   profileSectorName: "Wholesale & distribution",
   studioSectorName: "Wholesale Trade — Non-Specialised",
@@ -124,8 +137,38 @@ assert(
   profileSector.message === "No benchmarks yet for Wholesale & distribution.",
   "a stored profile wins over the studio default",
 );
+assert(profileSector.cta === BENCHMARK_REVIEW_BUSINESS_TYPE_CTA, profileSector.cta);
 const unset = benchmarkEmptyCopy({});
 assert(unset.offerSetBusinessType === true, "a blank profile still asks for a business type");
+assert(unset.cta === BENCHMARK_SET_BUSINESS_TYPE_CTA, unset.cta);
+assert(benchmarkBusinessType("Retail") === "retail", "Retail resolves to the retail benchmark key");
+assert(benchmarkBusinessType("  RETAIL ") === "retail", "the lookup trims and ignores case");
+assert(
+  benchmarkBusinessType("Wholesale Trade — Non-Specialised") === "other",
+  "wholesale follows the existing distribution → other map",
+);
+assert(benchmarkBusinessType("distribution") === "other", "distribution still maps to other");
+assert(benchmarkBusinessType("Agriculture") === null, "an unknown label does not invent a sector");
+const benchmarkSql = readFileSync(
+  resolve("supabase/migrations/20260512133447_1a33e14b-1a88-4322-9434-d790a25c784e.sql"),
+  "utf8",
+);
+const benchmarkTable = benchmarkSql.slice(0, benchmarkSql.indexOf("INSERT INTO"));
+assert(!/market|region/i.test(benchmarkTable), "industry_benchmarks has no market or region column");
+for (const metric of [
+  "grossMargin",
+  "operatingMargin",
+  "netMargin",
+  "debtorDays",
+  "inventoryDays",
+  "creditorDays",
+  "assetTurnover",
+  "roa",
+  "roe",
+  "fixedCostRatio",
+]) {
+  assert(benchmarkSql.includes(`('retail','${metric}'`), `retail seed is missing ${metric}`);
+}
 const profileHref = defaultStringifySearch({ tab: "overview", profile: 1 });
 assert(profileHref.includes("profile=1"), `profile search is profile=1, got ${profileHref}`);
 assert(!profileHref.includes("%22"), `profile search is not JSON-quoted, got ${profileHref}`);
@@ -171,6 +214,41 @@ const overheads = reconciled.sections.find((section) => section.title === "Overh
 assert(
   overheads?.note?.includes("does not split operating expenses") === true,
   overheads?.note ?? "missing overhead note",
+);
+const drivers = reconciled.sections.find((section) => section.title === "Revenue drivers");
+assert(drivers?.rows.length === 1, `expected one priced driver, got ${drivers?.rows.length}`);
+assert(
+  drivers?.rows[0]?.actual === 700000,
+  `single driver actual is the P&L revenue, got ${drivers?.rows[0]?.actual}`,
+);
+const primary = buildBudgetPdfModel(
+  {
+    ...doc,
+    revenueLines: [{ ...doc.revenueLines[0], name: "Primary revenue" }],
+  },
+  withDa ? [withDa] : [],
+  ZA_MARKET,
+);
+const primaryRow = primary.sections.find((section) => section.title === "Revenue drivers")?.rows[0];
+assert(primaryRow?.label === "Primary revenue", primaryRow?.label ?? "missing driver");
+assert(primaryRow?.budget != null && Math.abs(primaryRow.budget - 700000) < 1, `driver budget ${primaryRow?.budget}`);
+assert(primaryRow?.actual === 700000, `Primary revenue actual is the P&L total, got ${primaryRow?.actual}`);
+const split = buildBudgetPdfModel(
+  {
+    ...doc,
+    revenueLines: [
+      doc.revenueLines[0],
+      { ...doc.revenueLines[0], id: "second_stream", name: "Secondary stream" },
+    ],
+  },
+  withDa ? [withDa] : [],
+  ZA_MARKET,
+);
+const splitDrivers = split.sections.find((section) => section.title === "Revenue drivers");
+assert((splitDrivers?.rows.length ?? 0) >= 2, "two priced drivers stay separate");
+assert(
+  splitDrivers?.rows.every((item) => item.actual == null) === true,
+  "several drivers do not copy the P&L total",
 );
 const budgetPdf = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8");
 assert(budgetPdf.includes("Budget ${fmtRand(row.budget, market)}"), "exec tiles lead with the total");

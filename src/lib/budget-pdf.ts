@@ -421,14 +421,25 @@ export function buildBudgetPdfModel(
   );
 
   const driverMonths = hasActuals ? budgetMonthKeys : fy;
-  const driverRows = doc.revenueLines
-    .map((line) =>
-      budgetOnlyRow(
-        scrubPlaceholderText(line.name || "") || "Revenue line",
-        revenueDriverBudget(doc, driverMonths, line.id),
-      ),
-    )
-    .filter((r) => Math.abs(r.budget) >= 1);
+  const pricedDrivers = doc.revenueLines
+    .map((line) => ({
+      label: scrubPlaceholderText(line.name || "") || "Revenue line",
+      budget: revenueDriverBudget(doc, driverMonths, line.id),
+    }))
+    .filter((row) => Math.abs(row.budget) >= 1);
+  // One driver has no split to recover from the statement, so its actual is
+  // the P&L revenue total. Several drivers stay blank rather than inventing a split.
+  const singleDriverRevenue =
+    pricedDrivers.length === 1 && hasActuals && actualSum ? actualSum.revenue : null;
+  const driverRows: BudgetPdfRow[] = pricedDrivers.map((row) =>
+    singleDriverRevenue != null
+      ? fromVariance(
+          varianceLine("revenue", row.label, row.budget, singleDriverRevenue, true),
+          row.label,
+        )
+      : budgetOnlyRow(row.label, row.budget),
+  );
+  const singleDriver = singleDriverRevenue != null;
 
   const bucketActualSum = actualSum
     ? actualSum.overheadsPeople +
@@ -482,9 +493,11 @@ export function buildBudgetPdfModel(
   if (driverRows.length) {
     sections.push({
       title: "Revenue drivers",
-      note: inclusiveVat
-        ? "Entered amounts for the active scenario, same months as the P&L. P&L revenue above is ex-VAT."
-        : "Entered amounts for the active scenario, same months as the P&L. Actuals stay at P&L totals.",
+      note: singleDriver
+        ? "One revenue driver, so the actual is the P&L revenue total for the same period."
+        : inclusiveVat
+          ? "Entered amounts for the active scenario, same months as the P&L. P&L revenue above is ex-VAT."
+          : "Entered amounts for the active scenario, same months as the P&L.",
       rows: driverRows,
     });
   }

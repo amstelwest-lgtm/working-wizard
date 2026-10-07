@@ -94,13 +94,13 @@ import { FeatureFinder } from "@/components/feature-finder";
 import {
   annualiseFinancials,
   computeRatios,
-  BUSINESS_TYPE_TO_BENCHMARK,
   healthBandLabel,
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
   scoreTier,
 } from "@/lib/ratios";
+import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -2954,7 +2954,7 @@ function Index() {
 
   const [benchmarks, setBenchmarks] = useState<Record<string, Benchmark>>({});
   useEffect(() => {
-    const bt = businessTypeId ? BUSINESS_TYPE_TO_BENCHMARK[businessTypeId] : null;
+    const bt = benchmarkBusinessType(businessTypeId);
     if (!bt) {
       setBenchmarks({});
       return;

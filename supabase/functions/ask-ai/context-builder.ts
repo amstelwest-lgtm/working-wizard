@@ -25,32 +25,8 @@ import {
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
+import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
 import { peerMedian } from "../../../src/lib/ratios.ts";
-
-/**
- * Maps the application's stored business_type values to the benchmark category keys
- * used in industry_benchmarks.business_type.
- * Mirrors BUSINESS_TYPE_TO_BENCHMARK in src/lib/ratios.ts (kept in sync manually).
- */
-const BUSINESS_TYPE_TO_BENCHMARK: Record<string, string> = {
-  service: "services",
-  agency: "services",
-  product: "other",
-  saas: "saas",
-  marketplace: "other",
-  asset_heavy: "other",
-  distribution: "other",
-  retail: "retail",
-  manufacturing: "manufacturing",
-  project: "professional",
-  franchise: "retail",
-  subscription: "saas",
-  logistics: "other",
-  hospitality: "hospitality",
-  healthcare: "professional",
-  construction: "construction",
-  hybrid: "other",
-};
 
 /** Infer display format from the canonical camelCase key. */
 function inferFormat(camelKey: string): string {
@@ -234,7 +210,8 @@ export async function buildContext(
       }
 
       const rawBizType = profile?.business_type ?? "";
-      const businessType = BUSINESS_TYPE_TO_BENCHMARK[rawBizType] ?? "other";
+      // Unknown types still use the generic set. A stored "Retail" resolves to retail.
+      const businessType = benchmarkBusinessType(rawBizType) ?? "other";
 
       type Entry = { displayKey: string; camelKey: string; value: number };
       const entries: Entry[] = [];
