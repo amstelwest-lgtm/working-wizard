@@ -14,6 +14,8 @@
  * firms.starter_trial_enforced, not this status check.
  */
 
+import { isPreInsightWorkspacePath } from "@/lib/funnel-timing";
+
 export const ENTITLING_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
 export type EntitlingSubscriptionStatus = (typeof ENTITLING_SUBSCRIPTION_STATUSES)[number];
 
@@ -151,18 +153,29 @@ export function decideFirmBillingEntitlement(input: {
   return { entitled: false, reason: "no_active_subscription" };
 }
 
-export type PostLoginBillingResume = "billing_start" | "billing_required";
+export type PostLoginBillingResume = "billing_start" | "billing_required" | "workspace";
 
 /**
- * After sign-in from firm signup / pricing, send unpaid firm owners back into
- * Checkout instead of the owner Spark board. Pending checkout always wins.
+ * After sign-in from firm signup / pricing, unpaid firm owners go to the
+ * practice workspace until they have seen an insight, then Checkout.
+ * Pending checkout still wins over the owner Spark board.
  * Owner-door sign-in without a pending firm band must not steal Spark.
+ * `insightSeen` omitted keeps the previous Checkout resume (callers that
+ * have not been updated). Pass the live flag to defer.
  */
 export function decidePostLoginBillingResume(input: {
   hasPendingFirmCheckout: boolean;
   ownsFirm: boolean;
   resumeFirmBilling: boolean;
+  insightSeen?: boolean;
 }): PostLoginBillingResume | null {
+  const insightSeen = input.insightSeen !== false;
+  if (!insightSeen) {
+    if (input.hasPendingFirmCheckout || (input.resumeFirmBilling && input.ownsFirm)) {
+      return "workspace";
+    }
+    return null;
+  }
   if (input.hasPendingFirmCheckout) return "billing_start";
   if (input.resumeFirmBilling && input.ownsFirm) return "billing_required";
   return null;
@@ -173,6 +186,11 @@ export function decideFirmBillingPathGate(input: {
   isAccountantFirmUser: boolean;
   isMilonItMember: boolean;
   entitled: boolean;
+  /**
+   * When false, dashboard and client workspace stay open so the accountant
+   * can reach an insight before Checkout. Omitted still requires billing.
+   */
+  insightSeen?: boolean;
 }): FirmBillingPathDecision {
   if (isBillingExemptPath(input.pathname)) return "allow";
   if (isOwnerSparkPath(input.pathname)) return "allow";
@@ -181,5 +199,6 @@ export function decideFirmBillingPathGate(input: {
   if (input.isMilonItMember) return "allow";
   if (!input.isAccountantFirmUser) return "allow";
   if (input.entitled) return "allow";
+  if (input.insightSeen === false && isPreInsightWorkspacePath(input.pathname)) return "allow";
   return "require_billing";
 }

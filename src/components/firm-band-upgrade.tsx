@@ -9,6 +9,7 @@ import {
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
+import { FUNNEL_SOLO_FIRST } from "@/lib/funnel-timing";
 import { FIRM_VOUCHER_INVALID_MESSAGE } from "@/lib/firm-voucher";
 import {
   FIRM_BAND_CATALOG,
@@ -111,6 +112,8 @@ export function FirmBandUpgrade({
   }, [selected, interval]);
 
   const currentIdx = currentBand ? FIRM_BAND_IDS.indexOf(currentBand) : -1;
+  const soloLeads =
+    selected === "solo" && (currentBand == null || currentBand === "starter");
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
   const showSa = saDiscount && !voucherApplied;
 
@@ -214,6 +217,7 @@ export function FirmBandUpgrade({
             <label
               key={band.id}
               aria-current={isCurrent ? "true" : undefined}
+              data-funnel={band.id === "solo" && soloLeads ? FUNNEL_SOLO_FIRST : undefined}
               className="text-foreground"
               style={{
                 display: "grid",
@@ -249,6 +253,18 @@ export function FirmBandUpgrade({
                     }}
                   >
                     Current
+                  </span>
+                ) : null}
+                {band.id === "solo" && soloLeads ? (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 11,
+                      letterSpacing: ".08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Start here
                   </span>
                 ) : null}
                 <span className="text-muted-foreground" style={{ display: "block", fontSize: 12 }}>

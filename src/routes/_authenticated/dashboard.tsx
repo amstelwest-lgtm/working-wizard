@@ -75,6 +75,8 @@ import { FeatureFinder } from "@/components/feature-finder";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
+import { markInsightSeen } from "@/lib/funnel-timing";
 import { MarketPicker } from "@/components/market-picker";
 import {
   clientMarketDraftFromFirm,
@@ -1504,6 +1506,9 @@ function Dashboard() {
   // ── Derived stats ─────────────────────────────────────────────────────────
   // Average only scored clients — never invent 50 for empty financials.
   const scoredRows = clientRows.filter((c) => c.score != null && Number.isFinite(c.score));
+  useEffect(() => {
+    if (scoredRows.length > 0) markInsightSeen();
+  }, [scoredRows.length]);
   const avgHealth = scoredRows.length
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
@@ -1717,7 +1722,7 @@ function Dashboard() {
           <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
             <button
               id="wizard-dash-reports"
-              className="tb-btn gold"
+              className={clientRows.length === 0 ? "tb-btn" : "tb-btn gold"}
               onClick={() => {
                 setMobileNavOpen(false);
                 navigate({
@@ -1913,6 +1918,8 @@ function Dashboard() {
           />
         ) : null}
 
+        {scoredRows.length > 0 ? <CheckoutAfterInsight /> : null}
+
         {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">
           <h2>Clients</h2>
@@ -1935,7 +1942,11 @@ function Dashboard() {
             </svg>
             Referral link
           </button>
-          <button id="wizard-add-client" className="btn gold mini" onClick={() => setAddOpen(true)}>
+          <button
+            id="wizard-add-client"
+            className={clientRows.length === 0 ? "btn ghost mini" : "btn gold mini"}
+            onClick={() => setAddOpen(true)}
+          >
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -1949,7 +1960,7 @@ function Dashboard() {
           clientRows.length === 0 ? (
             <EmptyState
               title="Your book is empty — add the first client"
-              description="One client, one upload (bank statements or a P&L and balance sheet), and the full advisory board — Health, Profit, Cash, Budget, Reports — fills in. No statements to hand? Start with a sandbox client and learn the loop first."
+              description="Add one client. The next step on their page is the one upload or sync that fills Health, Profit, Cash and Budget."
               action={
                 <button className="btn gold" type="button" onClick={() => setFirstClientOpen(true)}>
                   Add your first client

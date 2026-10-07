@@ -2,11 +2,10 @@
  * Where /auth sends someone after a password sign-in or Create firm signup.
  *
  * Viewing Create firm stashes `?plan=&interval=` in sessionStorage. Plain
- * Sign in must ignore that leftover. An account that already has a firm or a
- * live subscription must never be sent to Stripe Checkout or the Customer
- * Portal from this page. Only a Create firm signup (or the explicit
- * already-registered resume, which puts billing on `next`) may start Checkout,
- * and only when the account does not already have a firm or subscription.
+ * Sign in must ignore that leftover for Checkout. An account that already has
+ * a firm or a live subscription must never be sent to Stripe Checkout from
+ * this page. Create firm opens the workspace. Checkout waits until an insight
+ * has been seen, including an explicit `/billing/start` resume.
  */
 import {
   isBillingStartPath,
@@ -16,7 +15,11 @@ import {
 
 export type AccountantAuthFlow = "signin" | "signup";
 
-export type AccountantAuthLanding = { kind: "billing"; pending: PendingCheckout } | { kind: "app" };
+export type AccountantAuthLanding =
+  | { kind: "billing"; pending: PendingCheckout }
+  /** Practice workspace. The stashed band stays for Checkout after an insight. */
+  | { kind: "workspace" }
+  | { kind: "app" };
 
 export function safeAccountantRedirect(next: string | undefined): string | null {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) return null;
@@ -32,9 +35,12 @@ export function safeAccountantRedirect(next: string | undefined): string | null 
 }
 
 /**
- * True when this auth attempt should open Stripe Checkout.
- * Sign-in ignores a stashed plan unless `next` is explicitly `/billing/start`
- * (the Create firm "sign in to finish billing" handoff).
+ * Where this auth attempt goes.
+ * Checkout opens after an insight (`insightSeen`). Before that, Create firm
+ * and a stashed band open the workspace and keep the plan. An explicit
+ * `/billing/start` next still opens Checkout once an insight exists.
+ * An account that already has a firm or a live subscription is never sent
+ * to Stripe from this page.
  */
 export function decideAccountantAuthLanding(input: {
   flow: AccountantAuthFlow;
@@ -44,14 +50,17 @@ export function decideAccountantAuthLanding(input: {
   hasLiveEntitlement: boolean;
   pending: PendingCheckout | null;
   next: string | undefined;
+  /** Figures already seen. Omitted means not yet — Checkout waits. */
+  insightSeen?: boolean;
 }): AccountantAuthLanding {
   const explicit = isBillingStartPath(input.next) ? pendingCheckoutFromNext(input.next) : null;
   if (input.hadFirmBefore || input.hasLiveEntitlement) return { kind: "app" };
+  const insightSeen = input.insightSeen === true;
   if (input.flow === "signup") {
-    const pending = explicit ?? input.pending;
-    if (pending) return { kind: "billing", pending };
-    return { kind: "app" };
+    if (explicit && insightSeen) return { kind: "billing", pending: explicit };
+    return { kind: "workspace" };
   }
-  if (explicit) return { kind: "billing", pending: explicit };
+  if (explicit && insightSeen) return { kind: "billing", pending: explicit };
+  if (explicit || input.pending) return { kind: "workspace" };
   return { kind: "app" };
 }

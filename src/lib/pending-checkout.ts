@@ -16,7 +16,7 @@ export const PENDING_CHECKOUT_KEY = "milon_pending_checkout";
 export const RESUME_FIRM_BILLING_KEY = "milon_resume_firm_billing";
 
 export const FIRM_BILLING_SIGNIN_MESSAGE =
-  "You already have a Milōn account — sign in to finish firm billing.";
+  "You already have a Milōn account — sign in to open your practice.";
 
 export const OWNER_ALREADY_REGISTERED_MESSAGE =
   "That email already has a Milōn account — sign in instead.";

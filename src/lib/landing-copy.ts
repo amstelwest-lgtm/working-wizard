@@ -18,7 +18,7 @@ export const HERO_LEDE =
   "Milōn Bot reads the numbers, diagnoses the business, and drafts the advisory deliverables. The accountant reviews and signs off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
-export const HERO_CTA_NOTE = `${FIRM_TRIAL_SENTENCE}. Card on file. Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
+export const HERO_CTA_NOTE = `${FIRM_TRIAL_SENTENCE}. See a client's figures first, then card on file. Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
 export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
@@ -112,14 +112,14 @@ export const PRICING_INTRO =
  * Stripe bills that price when the trial ends and a card is on file.
  */
 export const PRICING_TRIAL_AFTER =
-  "Card on file. After day 14 your chosen band bills automatically.";
+  "Card on file. After you see a client's figures, day 14 bills the band you continue on.";
 export const PRICING_WATCHLIST_NOTE =
   "Watchlist clients are free and don't count toward your band until you open a full workspace for them.";
 export const PRICING_OWNER_BAR =
   "Business owners: Spark is free during early access, no card needed.";
 export const PRICING_OWNER_CTA = "Start free on Spark";
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
-export const SOLO_CARD_NOTE = `${FIRM_TRIAL_SENTENCE}. Card on file.`;
+export const SOLO_CARD_NOTE = `${FIRM_TRIAL_SENTENCE}. Card on file after the first figures.`;
 
 export const NAV_TRIAL_LABEL = "Start free trial";
 export const NAV_TRIAL_ARIA = "Start my 14-day free trial";

@@ -95,10 +95,10 @@ function BillingRequiredPage() {
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
-        <h1 className="mt-2 text-xl font-semibold">Finish firm billing to open your practice</h1>
+        <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Complete Checkout for {planName} ({priceLabel(pending.plan, pending.interval)}) to open
-          the accountant workspace. A card is required. A first subscription includes a{" "}
+          The figures stay. Checkout for {planName} ({priceLabel(pending.plan, pending.interval)})
+          starts the subscription. A card is required. A first subscription includes a{" "}
           {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing resumes on the paid band without
           another trial. Owner Spark stays free.
         </p>
