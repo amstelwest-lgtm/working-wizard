@@ -743,77 +743,7 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   .accountant-portal .topbar-menu-btn{width:36px;height:36px}
 }
 
-/* ===== Reading-path coach. Dark uses portal ink. Light keeps the cream card. ===== */
-.accountant-portal .workflow-coach{
-  position:sticky;
-  top:78px;
-  z-index:32;
-  display:flex;
-  align-items:center;
-  gap:10px 14px;
-  flex-wrap:wrap;
-  margin:0 0 16px;
-  padding:8px 10px 8px 14px;
-  border-radius:14px;
-  border:1px solid var(--line);
-  background:var(--bg-2);
-  color:var(--ink);
-  box-shadow:0 8px 24px rgba(0,0,0,.28);
-}
-html[data-theme="light"] .accountant-portal .workflow-coach{
-  border:1px solid #e4d7b0;
-  background:#fffdf6;
-  color:#1b1608;
-  box-shadow:0 8px 24px rgba(27,22,8,.08);
-}
-.accountant-portal .workflow-coach__kicker{
-  flex:none;
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-  color:var(--gold);
-}
-html[data-theme="light"] .accountant-portal .workflow-coach__kicker{color:#8a6508}
-.accountant-portal .workflow-coach__steps{
-  display:flex;
-  gap:4px;
-  margin:0;
-  padding:0;
-  list-style:none;
-  overflow-x:auto;
-  flex:1 1 220px;
-  min-width:0;
-}
-.accountant-portal .workflow-coach__step{
-  border:none;
-  background:transparent;
-  color:var(--ink);
-  font-size:12px;
-  font-weight:700;
-  letter-spacing:.01em;
-  padding:5px 8px;
-  border-radius:999px;
-  white-space:nowrap;
-}
-html[data-theme="light"] .accountant-portal .workflow-coach__step{color:#3d3420}
-.accountant-portal .workflow-coach__step:hover{background:color-mix(in srgb,var(--gold) 14%,transparent)}
-html[data-theme="light"] .accountant-portal .workflow-coach__step:hover{background:#f3ead2}
-.accountant-portal .workflow-coach__step[data-current="true"]{
-  background:var(--gold);
-  color:#1b1300;
-}
-html[data-theme="light"] .accountant-portal .workflow-coach__step[data-current="true"]{
-  background:#1b1608;
-  color:#fffdf6;
-}
-.accountant-portal .workflow-coach__step[data-done="true"]:not([data-current="true"]){
-  color:var(--ink-dim);
-}
-html[data-theme="light"] .accountant-portal .workflow-coach__step[data-done="true"]:not([data-current="true"]){
-  color:#6b6354;
-}
-.accountant-portal .workflow-coach__go,
+/* Bot deliverable handoff. The reading-path strip used to share this button. */
 .ask-ai-handoff{
   flex:none;
   border:none;
@@ -827,7 +757,6 @@ html[data-theme="light"] .accountant-portal .workflow-coach__step[data-done="tru
   padding:7px 14px;
   cursor:pointer;
 }
-.accountant-portal .workflow-coach__go:hover,
 .ask-ai-handoff:hover{background:#e0b85c}
 .accountant-portal .data-fresh{
   margin:0 0 18px;
@@ -963,10 +892,7 @@ html:not([data-theme="light"]) .accountant-portal input[type="radio"]:checked::a
   border-radius:50%;
   background:var(--gold);
 }
-#coach-pillars,#action-plan-work,#data-up-to-date{scroll-margin-top:150px}
-@media(max-width:860px){
-  .accountant-portal .workflow-coach{top:8px}
-}
+#coach-pillars,#action-plan-work,#data-up-to-date{scroll-margin-top:88px}
 
 @media (prefers-reduced-motion:reduce){.accountant-portal *{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 

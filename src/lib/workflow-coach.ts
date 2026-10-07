@@ -1,5 +1,5 @@
 /**
- * Accountant reading path — navigation only.
+ * Accountant reading-path targets — navigation resolution only.
  *
  * Data → Health → Pillars → Profitability → Cash → Budget → Actions
  *   1. Data confirms the books (Xero, QuickBooks, or an upload) on Client Brain
@@ -8,9 +8,9 @@
  *   4–6. Evidence: waterfall, 13-week cash, budget
  *   7. Assign the moves
  *
- * Continue prefers the next step that is not yet done, then the immediate
- * next page, so a deliverable is never a dead end. One Continue lives on
- * the sticky strip.
+ * The left deliverable rail is the only chrome for these destinations.
+ * Deep links (`?tab=`, focus, coach, why) still resolve through these ids.
+ * There is no horizontal strip and no Continue button in the client shell.
  */
 
 import { scoreTier } from "@/lib/ratios";
@@ -329,8 +329,7 @@ export function syncSucceeded(link: DataSyncLink | undefined): boolean {
 
 /**
  * Data is done when Xero or QuickBooks has a successful sync, or a financial
- * snapshot is already on file (an upload writes one). Continue stays available
- * either way — this only drives the check on the strip.
+ * snapshot is already on file (an upload writes one).
  */
 export function dataStepDone(input: {
   xero?: DataSyncLink;
