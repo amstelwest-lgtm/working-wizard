@@ -150,6 +150,13 @@ export function computeBudgetMonths(
     depByMonth.push(depreciation);
   }
 
+  // Statement D&A is non-cash. Depreciation already on the capex schedule
+  // counts toward it, so a seeded plan is not charged twice.
+  const capexDepYear = depByMonth.reduce((sum, n) => sum + n, 0);
+  const statementDep = Math.max(0, doc.statementDepreciation ?? 0);
+  const plugMonth =
+    months.length > 0 ? Math.max(0, statementDep - capexDepYear) / months.length : 0;
+
   let prevInventoryStock = 0;
   let accruedSalesTax = 0;
 
@@ -158,7 +165,7 @@ export function computeBudgetMonths(
     const revenue = revenueByMonth[i];
     const cogs = cogsByMonth[i];
     const overheads = overheadByMonth[i];
-    const depreciation = depByMonth[i];
+    const depreciation = depByMonth[i] + plugMonth;
     const grossProfit = revenue - cogs;
     const gpPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
     const ebitda = grossProfit - overheads;
@@ -366,6 +373,7 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
       usefulLifeMonths: c.usefulLifeMonths ?? 36,
       residual: c.residual ?? 0,
     })),
+    statementDepreciation: Math.max(0, Number(raw.statementDepreciation) || 0),
     notes: raw.notes ?? [],
   });
 }

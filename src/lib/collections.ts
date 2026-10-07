@@ -275,7 +275,7 @@ export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): s
 }
 
 /**
- * Balance-sheet totals and day counts already on Overview / Ratios.
+ * Balance-sheet totals and Ratios Days AR / Days AP.
  * Zero is a real figure. Blank fields stay null. This is not an age analysis.
  */
 export type StatementWorkingCapital = {
@@ -291,9 +291,9 @@ export const COLLECTIONS_QBO_CTA = "Connect QuickBooks";
 
 export function collectionsStatementLead(copyPack: "za" | "us"): string {
   if (copyPack === "us") {
-    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the same figures as Overview and Ratios. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the Ratios Days AR, Days AP, accounts receivable, and accounts payable figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
   }
-  return "Debtor days, creditor days, and the debtors and creditors totals below are the same figures as Overview and Ratios. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+  return "Debtor days, creditor days, and the debtors and creditors totals below are the Ratios Days AR, Days AP, debtors, and creditors figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
 }
 
 export function collectionsNoFiguresLead(): string {

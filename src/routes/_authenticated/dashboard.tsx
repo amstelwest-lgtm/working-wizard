@@ -27,11 +27,12 @@ import {
   attentionFootnote,
   dataAsOfLabel,
   derivePriority,
+  firmOpenQueriesClient,
   firstNameOf,
   practiceGreeting,
+  practiceNeedsAttention,
   portfolioSummaryLine,
   revenueOf,
-  summarizePortfolioAttention,
   trendDelta30d,
   type PriorityLevel,
   type ScoreHistoryPoint,
@@ -40,7 +41,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
-import { idleStarterTrialBanner, type FirmClientCreateAllowance } from "@/lib/firm-client-cap";
+import {
+  idleStarterTrialBanner,
+  showStarterTrialEndedCopy,
+  type FirmClientCreateAllowance,
+} from "@/lib/firm-client-cap";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
@@ -99,6 +104,7 @@ import {
   statusPillFromHealth,
 } from "@/components/primitives";
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
+import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -319,16 +325,35 @@ function FirmClientCapNotice({
   ) => void;
 }) {
   const onValidateVoucher = useFirmVoucherCheck(firmId);
-  if (cap.code === "starter_trial_ended") {
+  const currentPlan = cap.upgrade?.phase === "active";
+  if (cap.code === "starter_trial_ended" && !currentPlan) {
     return (
       <TrialEndedPlanBlock
         firmId={firmId}
         upgrading={upgrading}
-        upgrade={cap.upgrade ?? null}
+        upgrade={
+          cap.upgrade
+            ? {
+                band: cap.upgrade.band,
+                interval: cap.upgrade.interval,
+                priceCurrency: cap.upgrade.priceCurrency,
+                zarByBand: cap.upgrade.zarByBand,
+                canUpgrade: cap.upgrade.canUpgrade,
+                clientCount: cap.upgrade.clientCount,
+                usageLabel: cap.upgrade.usageLabel,
+                saDiscount: cap.upgrade.saDiscount,
+                phase: cap.upgrade.phase,
+              }
+            : null
+        }
         onUpgrade={onUpgradeBand}
       />
     );
   }
+  const limitMessage =
+    currentPlan && cap.upgrade?.band === "starter" && cap.code !== "band_client_cap"
+      ? "You can't add another client on Starter."
+      : cap.message;
   const upgrade = cap.upgrade;
   return (
     <div role="alert">
@@ -336,7 +361,7 @@ function FirmClientCapNotice({
         {cap.code === "trial_client_cap" ? "Trial client limit" : "Plan client limit"}
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
-        {cap.message}
+        {limitMessage}
       </p>
       {cap.canEndTrial && confirmUpgrade ? (
         <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink)", lineHeight: 1.55 }}>
@@ -867,6 +892,8 @@ type InviteDraftUi = {
   emailed: boolean;
   sendError: string | null;
   draftedBy: "claude" | "template";
+  /** Set when Send can deliver. Hidden when sending is not configured. */
+  from: string | null;
 };
 
 function InviteOwnerDialog({
@@ -898,18 +925,24 @@ function InviteOwnerDialog({
         <div className="drawer-body" style={{ padding: "24px 30px" }}>
           {draft.emailed ? (
             <p style={{ marginBottom: 14, fontSize: 13, color: "var(--ok)", lineHeight: 1.55 }}>
-              Invite emailed to {draft.email}. The same message is copied below if you want to
-              forward it.
+              Invite emailed to {draft.email}. Copy the message below if you want to forward it.
             </p>
           ) : (
             <p
               style={{ marginBottom: 14, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
             >
               {draft.sendError
-                ? `Could not send automatically (${draft.sendError}). Copy the message or try again.`
-                : "No email on file yet — add client management's email to send, or copy the message into your own email."}
+                ? `Could not send (${draft.sendError}). Copy the message or try again.`
+                : draft.email.trim()
+                  ? "Review the message, then send it or copy it."
+                  : "Add client management's email to send, or copy the message into your own email."}
             </p>
           )}
+          {draft.from ? (
+            <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--ink)", lineHeight: 1.55 }}>
+              From {draft.from}
+            </p>
+          ) : null}
           <div style={{ marginBottom: 14 }}>
             <label
               style={{
@@ -978,7 +1011,7 @@ function InviteOwnerDialog({
             <button
               className="btn gold"
               onClick={onSend}
-              disabled={sending || !draft.email.trim()}
+              disabled={sending || !draft.email.trim() || !draft.from}
               style={{ flex: 1, minWidth: 140 }}
             >
               {sending ? "Sending…" : draft.emailed ? "Send again" : "Send email"}
@@ -1373,10 +1406,9 @@ function Dashboard() {
         data: {
           clientId: c.id,
           toEmail: c.contact_email || null,
-          sendEmail: Boolean(c.contact_email),
+          sendEmail: false,
         },
       });
-      await navigator.clipboard?.writeText(inv.pasteText);
       const next: InviteDraftUi = {
         clientId: c.id,
         clientName: c.name,
@@ -1385,23 +1417,12 @@ function Dashboard() {
         body: inv.body,
         pasteText: inv.pasteText,
         email: inv.email ?? c.contact_email ?? "",
-        emailed: inv.emailed,
-        sendError: inv.sendError,
+        emailed: false,
+        sendError: null,
         draftedBy: inv.draftedBy,
+        from: inv.from,
       };
       setInviteDraft(next);
-      setClientRows((rows) =>
-        rows.map((row) =>
-          row.id === c.id ? { ...row, contact_email: next.email || row.contact_email } : row,
-        ),
-      );
-      if (inv.emailed) {
-        toast.success(`Invite emailed to ${inv.email} · message copied`);
-      } else if (inv.sendError) {
-        toast.error(inv.sendError);
-      } else {
-        toast.success("Invite message copied — add an email to send it");
-      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not prepare invite");
     }
@@ -1487,19 +1508,13 @@ function Dashboard() {
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
+  const queriesClientId = firmOpenQueriesClient(clientRows);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
   const greeting = practiceGreeting(profile.accountantName || user?.email?.split("@")[0]);
   const bookLoading = loading || brandLoading;
-  const attention = summarizePortfolioAttention(clientRows);
-  const summaryLine = bookLoading
-    ? "Loading your clients…"
-    : portfolioSummaryLine({
-        clientCount: clientRows.length,
-        needAttention: attention.needAttention,
-        avgHealth,
-      });
+  const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();
 
   const attentionItems = useMemo(
@@ -1521,6 +1536,18 @@ function Dashboard() {
       ),
     [clientRows],
   );
+  const attentionBook = useMemo(
+    () => practiceNeedsAttention(attentionItems, portfolioRows),
+    [attentionItems, portfolioRows],
+  );
+  const attention = attentionBook.summary;
+  const summaryLine = bookLoading
+    ? "Loading your clients…"
+    : portfolioSummaryLine({
+        clientCount: clientRows.length,
+        needAttention: attention.needAttention,
+        avgHealth,
+      });
 
   const insights = useMemo(
     () =>
@@ -1852,11 +1879,7 @@ function Dashboard() {
                 }
                 value={openQueriesTotal}
                 footnote={openQueriesTotal > 0 ? "Waiting on a reply" : "No open queries"}
-                onClick={() =>
-                  document
-                    .getElementById("wizard-dash-queries")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
+                onClick={queriesClientId ? () => openClientQueries(queriesClientId) : undefined}
               />
             </>
           )}
@@ -1866,14 +1889,16 @@ function Dashboard() {
         {!bookLoading ? (
           <PortfolioExceptions
             firmId={firmId}
-            refreshKey={clientRows.length}
             hideWhenClear
-            healthItems={attentionItems}
+            queue={attentionBook.items}
             className="mb-3"
           />
         ) : null}
 
-        {trialAllowance?.starterTrial?.expired ? (
+        {showStarterTrialEndedCopy(
+          trialAllowance?.upgrade?.phase,
+          trialAllowance?.starterTrial?.expired,
+        ) ? (
           <p className="dash-trial-banner" role="status">
             <Link to="/settings" className="dash-trial-banner__link">
               {STARTER_TRIAL_ENDED_MESSAGE}

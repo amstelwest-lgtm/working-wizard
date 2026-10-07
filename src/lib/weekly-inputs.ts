@@ -4,6 +4,8 @@
  * waterfalls read the same week aggregates.
  */
 
+import { periodProfitBridge } from "@/lib/period-profit";
+
 export type WeeklyRow = {
   revenue: number;
   costOfSales: number;
@@ -97,51 +99,30 @@ export type WaterfallFallback = {
   revenue: number;
   cogs: number;
   fixedCosts: number;
+  /** Non-cash D&A kept off the operating-expense step. Absent means zero. */
+  depreciation?: number;
   interest: number;
   tax: number;
 };
 
-function fieldPresent(fields: Record<string, unknown>, key: string): boolean {
-  const v = fields[key];
-  return v != null && String(v) !== "";
-}
-
-function fieldNum(fields: Record<string, unknown>, key: string): number {
-  const v = fields[key];
-  if (v == null || v === "") return 0;
-  const n = typeof v === "number" ? v : parseFloat(String(v));
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Period P&L → waterfall fallback. Same residual rules on owner and accountant. */
+/** Period P&L → waterfall fallback. Same bridge on owner and accountant. */
 export function derivePeriodWaterfallFallback(fields: Record<string, unknown>): WaterfallFallback {
-  const revenue = fieldNum(fields, "revenue");
-  const cogs = fieldNum(fields, "cogs");
-  const gross = revenue - cogs;
-  // The operating-expense step must reconcile to the EBIT the user typed:
-  // fixedCosts alone omits variable overheads and depreciation, which showed
-  // an operating profit above the client's own P&L. Fall back to fixedCosts
-  // only when EBIT is not provided.
-  const fixedCosts = fieldPresent(fields, "ebit")
-    ? gross - fieldNum(fields, "ebit")
-    : fieldPresent(fields, "fixedCosts")
-      ? fieldNum(fields, "fixedCosts")
-      : 0;
-  const interest =
-    fieldPresent(fields, "ebit") && fieldPresent(fields, "ebt")
-      ? fieldNum(fields, "ebit") - fieldNum(fields, "ebt")
-      : 0;
-  const tax =
-    fieldPresent(fields, "ebt") && fieldPresent(fields, "netIncome")
-      ? fieldNum(fields, "ebt") - fieldNum(fields, "netIncome")
-      : 0;
-  return { revenue, cogs, fixedCosts, interest, tax };
+  const bridge = periodProfitBridge(fields);
+  return {
+    revenue: bridge.revenue,
+    cogs: bridge.cogs,
+    fixedCosts: bridge.operatingExpenses,
+    depreciation: bridge.depreciation,
+    interest: bridge.interest,
+    tax: bridge.tax,
+  };
 }
 
 export type ResolvedWaterfallFigures = {
   revenue: number;
   costOfSales: number;
   fixedCosts: number;
+  depreciation: number;
   interest: number;
   tax: number;
   source: "weekly" | "period";
@@ -164,6 +145,7 @@ export function resolveWaterfallFigures(
     revenue: hasWeekly ? agg.revenue : (fallback?.revenue ?? 0),
     costOfSales: hasWeekly ? agg.costOfSales : (fallback?.cogs ?? 0),
     fixedCosts: hasWeekly ? agg.fixedCosts : (fallback?.fixedCosts ?? 0),
+    depreciation: hasWeekly ? 0 : (fallback?.depreciation ?? 0),
     interest: hasWeekly ? agg.interest : (fallback?.interest ?? 0),
     tax: hasWeekly ? agg.tax : (fallback?.tax ?? 0),
     source: hasWeekly ? "weekly" : "period",

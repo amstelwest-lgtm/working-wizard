@@ -42,6 +42,26 @@ export function invitePasteText(subject: string, body: string): string {
   return `Subject: ${subject}\n\n${body}`.trim();
 }
 
+/** Addr-spec from `Name <addr>` or a bare address. */
+export function inviteFromAddress(fromRaw?: string | null): string {
+  const raw = (fromRaw ?? "").trim() || "noreply@milon.co.za";
+  if (raw.includes("<")) return raw.replace(/^.*<([^>]+)>.*$/, "$1").trim();
+  return raw;
+}
+
+export function inviteFromHeader(fromRaw?: string | null): string {
+  return `MILŌN <${inviteFromAddress(fromRaw)}>`;
+}
+
+/** From line when Resend can send. Null when sending is not configured. */
+export function inviteFromWhenSendable(input: {
+  apiKey?: string | null;
+  fromEmail?: string | null;
+}): string | null {
+  if (!input.apiKey?.trim()) return null;
+  return inviteFromHeader(input.fromEmail);
+}
+
 function signOff(input: InviteDraftInput): string {
   const name = input.accountantName.trim() || "Your accountant";
   const firm = input.firmName.trim();
@@ -134,11 +154,8 @@ export async function sendInviteViaResend(opts: {
   idempotencyKey: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milon.co.za";
-  const fromAddr = fromRaw.includes("<")
-    ? fromRaw.replace(/^.*<([^>]+)>.*$/, "$1").trim()
-    : fromRaw.trim();
   if (!apiKey) return { ok: false, error: "RESEND_API_KEY not configured" };
+  const from = inviteFromHeader(process.env.RESEND_FROM_EMAIL);
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -149,7 +166,7 @@ export async function sendInviteViaResend(opts: {
         "Idempotency-Key": opts.idempotencyKey.slice(0, 256),
       },
       body: JSON.stringify({
-        from: `MILŌN <${fromAddr}>`,
+        from,
         to: [opts.to],
         ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
         subject: opts.subject,

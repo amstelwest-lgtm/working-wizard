@@ -80,6 +80,7 @@ async function exportPDF(opts: {
   revenue: number;
   costOfSales: number;
   fixedCosts: number;
+  depreciation?: number;
   interest: number;
   tax: number;
   accountantProfile: import("@/contexts/accountant-profile").AccountantProfile;
@@ -90,8 +91,9 @@ async function exportPDF(opts: {
   periodLabel?: string | null;
 }) {
   const { revenue, costOfSales, fixedCosts, interest, tax } = opts;
+  const depreciation = opts.depreciation ?? 0;
   const grossProfit = revenue - costOfSales;
-  const operatingProfit = grossProfit - fixedCosts;
+  const operatingProfit = grossProfit - fixedCosts - depreciation;
   const ebt = operatingProfit - interest;
   const netProfit = ebt - tax;
 
@@ -115,6 +117,7 @@ async function exportPDF(opts: {
     gross_margin_pct: revenue ? grossProfit / revenue : 0,
     operating_profit: operatingProfit,
     operating_margin_pct: revenue ? operatingProfit / revenue : 0,
+    depreciation,
     ebt,
     tax,
     net_profit: netProfit,
@@ -207,14 +210,17 @@ export function ProfitabilityWaterfall({
   const revenue = figures.revenue;
   const costOfSales = figures.costOfSales;
   const fixedCosts = figures.fixedCosts;
+  const depreciation = figures.depreciation;
   const interest = figures.interest;
   const tax = figures.tax;
 
   const grossProfit = revenue - costOfSales;
-  const operatingProfit = grossProfit - fixedCosts;
+  const afterOverheads = grossProfit - fixedCosts;
+  const operatingProfit = afterOverheads - depreciation;
   const ebt = operatingProfit - interest;
   const netProfit = ebt - tax;
   const taxNote = estimatedTaxNote({ clientName, tax, operatingProfit });
+  const showDepreciation = Math.abs(depreciation) >= 0.5;
 
   const steps: WfStep[] = [
     { label: "Revenue", delta: revenue, runningEnd: revenue, kind: "total", showStatus: false },
@@ -235,11 +241,22 @@ export function ProfitabilityWaterfall({
     {
       label: "Operating Expenses",
       delta: -fixedCosts,
-      runningEnd: operatingProfit,
+      runningEnd: showDepreciation ? afterOverheads : operatingProfit,
       kind: "decrease",
       showStatus: true,
       statusRatio: "Fixed Cost Ratio",
     },
+    ...(showDepreciation
+      ? [
+          {
+            label: "Depreciation",
+            delta: -depreciation,
+            runningEnd: operatingProfit,
+            kind: "decrease" as const,
+            showStatus: false,
+          },
+        ]
+      : []),
     {
       label: "Operating Profit",
       delta: operatingProfit,
@@ -315,6 +332,7 @@ export function ProfitabilityWaterfall({
                     revenue,
                     costOfSales,
                     fixedCosts,
+                    depreciation,
                     interest,
                     tax,
                     accountantProfile: profile,
@@ -527,9 +545,9 @@ export function ProfitabilityWaterfall({
                         {s.label}
                       </div>
                       <div className="truncate text-sm font-extrabold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
-                        {fmt(s.runningEnd)}
+                        {fmt(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd)}
                         <span className="ml-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                          {pct(s.runningEnd, revenue)}
+                          {pct(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd, revenue)}
                         </span>
                       </div>
                     </div>

@@ -102,6 +102,7 @@ import {
   type BudgetPdfActual,
 } from "@/lib/budget-pdf";
 import { reseedBudgetIfScaleBroken } from "@/lib/budget.bridges";
+import { periodProfitBridge } from "@/lib/period-profit";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton } from "@/components/review-signoff";
@@ -1569,6 +1570,7 @@ function buildProfitabilityData(
   const gp = revenue - cogs;
   const gmPct = gp / revenue;
   const omPct = ebit / revenue;
+  const depreciation = periodProfitBridge(fin).depreciation;
   const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
   const interestBurden = interestBurdenRatio(ebit, ebtVal);
   const taxBurden = taxBurdenRatio(ebtVal, net);
@@ -1598,6 +1600,7 @@ function buildProfitabilityData(
     net_margin_pct: nmPct,
     net_margin_score: Math.round(scoreForRatio("Net Margin", nmPct)),
     net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", nmPct))),
+    depreciation,
   };
 
   let prior_period: ProfitabilityData["prior_period"] | undefined;
@@ -1614,6 +1617,7 @@ function buildProfitabilityData(
       Number.isFinite(pCogs)
     ) {
       const pGp = pRev - pCogs;
+      const pDepreciation = periodProfitBridge(priorFin).depreciation;
       const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
       const pInterest = interestBurdenRatio(pEbit, pEbtVal);
       const pTaxBurden = taxBurdenRatio(pEbtVal, pNet);
@@ -1644,6 +1648,7 @@ function buildProfitabilityData(
         net_margin_pct: pNet / pRev,
         net_margin_score: Math.round(scoreForRatio("Net Margin", pNet / pRev)),
         net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", pNet / pRev))),
+        depreciation: pDepreciation,
       };
     }
   }

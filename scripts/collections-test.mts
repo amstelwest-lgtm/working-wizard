@@ -380,23 +380,35 @@ eq(rolled[0]?.label, "Current", "age columns keep report order");
 eq(rolled[0]?.amount, 125, "current balances add across contacts");
 eq(rolled[1]?.amount, 40, "aged balances add across contacts");
 assert(collectionsStatementLead("us").includes("Days sales outstanding"), "US lead names DSO");
+assert(collectionsStatementLead("us").includes("Days AR"), "US lead names Ratios Days AR");
 assert(collectionsStatementLead("us").includes("QuickBooks"), "US lead offers QuickBooks");
+assert(!collectionsStatementLead("us").includes("Overview"), "US lead does not claim Overview");
 assert(collectionsStatementLead("za").includes("Debtor days"), "ZA lead names debtor days");
+assert(collectionsStatementLead("za").includes("Ratios"), "ZA lead names Ratios");
+assert(!collectionsStatementLead("za").includes("Overview"), "ZA lead does not claim Overview");
 assert(collectionsNoFiguresLead().includes("QuickBooks"), "no-figures lead is not Xero-only");
 
 const panel = readFileSync(resolve("src/components/collections-panel.tsx"), "utf8");
+const fallback = readFileSync(resolve("src/components/statement-arap-fallback.tsx"), "utf8");
 assert(!panel.includes("Sync Xero to pull aged receivables"), "the Xero-only dead end is gone");
-assert(panel.includes('id="collections-from-statements"'), "statement fallback has a stable id");
-assert(panel.includes('id="collections-statement-position"'), "AR/AP and day counts render together");
+assert(panel.includes("StatementArApFallback"), "empty collections uses the shared AR/AP surface");
+assert(panel.includes('idPrefix="collections"'), "collections fallback keeps its id prefix");
+assert(fallback.includes("`${idPrefix}-from-statements`"), "statement fallback has a stable id");
+assert(panel.includes('id="collections-statement-position"'), "a named list still shows the statement tiles");
+assert(fallback.includes("`${idPrefix}-statement-position`"), "empty state renders the same tiles");
 assert(panel.includes('id="collections-age-buckets"'), "a named list shows age buckets");
 eq(COLLECTIONS_UPLOAD_CTA, "Upload aged debtors and creditors", "primary CTA uploads the aged report");
 eq(COLLECTIONS_XERO_CTA, "Connect Xero", "Xero stays available");
 eq(COLLECTIONS_QBO_CTA, "Connect QuickBooks", "QuickBooks is a first-class path");
-assert(panel.includes("COLLECTIONS_UPLOAD_CTA"), "the panel renders the upload CTA");
-assert(panel.includes("COLLECTIONS_XERO_CTA"), "the panel renders the Xero CTA");
-assert(panel.includes("COLLECTIONS_QBO_CTA"), "the panel renders the QuickBooks CTA");
-assert(panel.includes('id="collections-connect-qbo"'), "QuickBooks button is addressable");
-assert(rail.includes("readStatementDays"), "Collections reads the same day counts as Ratios");
+assert(fallback.includes("COLLECTIONS_UPLOAD_CTA"), "the shared surface renders the upload CTA");
+assert(fallback.includes("COLLECTIONS_XERO_CTA"), "the shared surface renders the Xero CTA");
+assert(fallback.includes("COLLECTIONS_QBO_CTA"), "the shared surface renders the QuickBooks CTA");
+assert(fallback.includes("`${idPrefix}-connect-qbo`"), "QuickBooks button is addressable");
+assert(rail.includes("ratiosStatementFigures"), "Collections uses the Ratios Days AR / Days AP helper");
+assert(
+  !rail.includes('readStatementDays(ratios["Debtor Days"])'),
+  "Collections does not re-derive days from the health-score path",
+);
 assert(rail.includes("onConnectQbo"), "Collections can open the QuickBooks dialog");
 assert(rail.includes("Upload aged debtors and creditors"), "the upload dialog names the aged report");
 

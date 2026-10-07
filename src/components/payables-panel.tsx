@@ -1,5 +1,7 @@
 /**
  * Accountant Payables — who to pay, delay, or renegotiate from the aged payables cache.
+ * When that cache is empty, the tab uses the same statement AR/AP surface as
+ * Collections (Ratios Days AR / Days AP / AR $ / AP $, plus upload and connect).
  * Drafts go through the existing recommendation → Action Plan loop.
  */
 import { useEffect, useState } from "react";
@@ -8,18 +10,32 @@ import { toast } from "sonner";
 import { getPayables } from "@/lib/payables.functions";
 import {
   buildPayablesDraft,
+  payablesNoFiguresLead,
   payablesSourceLabel,
+  payablesStatementLead,
   supplierMove,
   type PayablesSnapshot,
 } from "@/lib/payables";
+import { hasStatementWorkingCapital, type StatementWorkingCapital } from "@/lib/collections";
 import { createRecommendation } from "@/lib/recommendations.functions";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import {
+  StatementArApFallback,
+  StatementArApTiles,
+  type StatementCopyMarket,
+} from "@/components/statement-arap-fallback";
 
 type Props = {
   clientId: string;
-  market?: MoneyMarket;
+  market?: StatementCopyMarket;
   /** Weeks already stored on the cash forecast. Null when that figure is absent. */
   runwayWeeks?: number | null;
+  /** Receivables, payables, Days AR, and Days AP from ratiosStatementFigures. */
+  position?: StatementWorkingCapital | null;
+  periodLabel?: string | null;
+  onUploadAged?: () => void;
+  onConnectXero?: () => void;
+  onConnectQbo?: () => void;
   onOpenDrafts?: () => void;
   onOpenActions?: () => void;
 };
@@ -28,10 +44,19 @@ function money(n: number, market?: MoneyMarket) {
   return formatMoney(n, market, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function copyPackOf(market?: StatementCopyMarket): "za" | "us" {
+  return market?.copyPack === "us" ? "us" : "za";
+}
+
 export function PayablesPanel({
   clientId,
   market,
   runwayWeeks = null,
+  position = null,
+  periodLabel = null,
+  onUploadAged,
+  onConnectXero,
+  onConnectQbo,
   onOpenDrafts,
   onOpenActions,
 }: Props) {
@@ -70,6 +95,9 @@ export function PayablesPanel({
   }, [clientId]);
 
   const draft = buildPayablesDraft(snapshot, runwayWeeks);
+  const fromStatements = hasStatementWorkingCapital(position);
+  const namedList =
+    snapshot != null && snapshot.status === "applied" && snapshot.suppliers.length > 0;
 
   const fileDraft = async () => {
     if (!draft || filing || filed) return;
@@ -100,105 +128,125 @@ export function PayablesPanel({
     }
   };
 
-  if (loading) {
-    return <p className="payables-muted">Loading the payables list…</p>;
-  }
-  if (error) {
-    return <p className="payables-muted">{error}</p>;
-  }
-  if (!snapshot) {
+  if (namedList && snapshot) {
     return (
-      <p className="payables-muted">
-        Sync Xero or QuickBooks to pull aged payables. Payables reads who to pay, delay, or
-        renegotiate from the books. It does not keep a second ledger, send payments, or record
-        bills.
-      </p>
+      <div className="payables" id="payables-list">
+        <p className="payables-kicker">
+          {payablesSourceLabel(snapshot.source)}
+          {snapshot.asOf ? ` · as of ${snapshot.asOf}` : ""} · {line}
+        </p>
+        {snapshot.note ? <p className="payables-note">{snapshot.note}</p> : null}
+        {fromStatements && position ? (
+          <StatementArApTiles
+            position={position}
+            market={market}
+            id="payables-statement-position"
+          />
+        ) : null}
+        <div className="payables-scroll">
+          <table className="payables-table">
+            <thead>
+              <tr>
+                <th>Who</th>
+                <th>Outstanding</th>
+                <th>Overdue</th>
+                <th>Age</th>
+                <th>Move</th>
+                <th>Books ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.suppliers.map((supplier) => (
+                <tr key={supplier.supplierId}>
+                  <td>{supplier.name}</td>
+                  <td>{money(supplier.outstanding, market)}</td>
+                  <td>{money(supplier.overdue, market)}</td>
+                  <td>{supplier.ageBucket || "—"}</td>
+                  <td>
+                    {supplier.overdue >= 0.005
+                      ? supplierMove(supplier.ageBucket, runwayWeeks)
+                      : "—"}
+                  </td>
+                  <td>
+                    {supplier.bills.length
+                      ? supplier.bills
+                          .slice(0, 4)
+                          .map((bill) => bill.reference)
+                          .join(", ")
+                      : "Supplier total only"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {draft ? (
+          <div className="payables-script">
+            <p className="payables-kicker">Pay, delay, or renegotiate</p>
+            <pre>{draft.rationale}</pre>
+            <div className="payables-actions">
+              <button
+                type="button"
+                className="btn gold mini"
+                disabled={filing || filed}
+                onClick={fileDraft}
+              >
+                {filed ? "Draft added" : filing ? "Adding…" : "Add payables draft"}
+              </button>
+              {onOpenDrafts ? (
+                <button type="button" className="btn ghost mini" onClick={onOpenDrafts}>
+                  Review drafts
+                </button>
+              ) : null}
+              {onOpenActions ? (
+                <button type="button" className="btn ghost mini" onClick={onOpenActions}>
+                  Action Plan
+                </button>
+              ) : null}
+            </div>
+            <p className="payables-note">
+              Accept works the same way as other recommendations. Partner sign-off stays on the
+              Action Plan. Milōn does not send a payment or record the bill.
+            </p>
+          </div>
+        ) : (
+          <p className="payables-note">
+            Nothing is overdue on this report, so there is no payables draft.
+          </p>
+        )}
+      </div>
     );
   }
-  if (snapshot.status === "skipped") {
-    return (
-      <p className="payables-muted" id="payables-skip">
-        {snapshot.skipReason ?? line}
-      </p>
-    );
-  }
-  if (snapshot.status === "empty" || snapshot.suppliers.length === 0) {
-    return (
-      <p className="payables-muted" id="payables-empty">
-        {line}
-        {snapshot.note ? ` ${snapshot.note}` : ""} Nothing to pay on this pull.
-      </p>
-    );
-  }
+
+  const pack = copyPackOf(market);
+  const booksNote =
+    snapshot?.status === "skipped"
+      ? (snapshot.skipReason ?? line)
+      : snapshot && (snapshot.status === "empty" || snapshot.suppliers.length === 0)
+        ? `${line}${snapshot.note ? ` ${snapshot.note}` : ""} Nothing outstanding on that pull.`
+        : null;
 
   return (
-    <div className="payables" id="payables-list">
-      <p className="payables-kicker">
-        {payablesSourceLabel(snapshot.source)}
-        {snapshot.asOf ? ` · as of ${snapshot.asOf}` : ""} · {line}
-      </p>
-      {snapshot.note ? <p className="payables-note">{snapshot.note}</p> : null}
-      <div className="payables-scroll">
-        <table className="payables-table">
-          <thead>
-            <tr>
-              <th>Who</th>
-              <th>Outstanding</th>
-              <th>Overdue</th>
-              <th>Age</th>
-              <th>Move</th>
-              <th>Books ref</th>
-            </tr>
-          </thead>
-          <tbody>
-            {snapshot.suppliers.map((supplier) => (
-              <tr key={supplier.supplierId}>
-                <td>{supplier.name}</td>
-                <td>{money(supplier.outstanding, market)}</td>
-                <td>{money(supplier.overdue, market)}</td>
-                <td>{supplier.ageBucket || "—"}</td>
-                <td>{supplier.overdue >= 0.005 ? supplierMove(supplier.ageBucket, runwayWeeks) : "—"}</td>
-                <td>
-                  {supplier.bills.length
-                    ? supplier.bills
-                        .slice(0, 4)
-                        .map((bill) => bill.reference)
-                        .join(", ")
-                    : "Supplier total only"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {draft ? (
-        <div className="payables-script">
-          <p className="payables-kicker">Pay, delay, or renegotiate</p>
-          <pre>{draft.rationale}</pre>
-          <div className="payables-actions">
-            <button type="button" className="btn gold mini" disabled={filing || filed} onClick={fileDraft}>
-              {filed ? "Draft added" : filing ? "Adding…" : "Add payables draft"}
-            </button>
-            {onOpenDrafts ? (
-              <button type="button" className="btn ghost mini" onClick={onOpenDrafts}>
-                Review drafts
-              </button>
-            ) : null}
-            {onOpenActions ? (
-              <button type="button" className="btn ghost mini" onClick={onOpenActions}>
-                Action Plan
-              </button>
-            ) : null}
-          </div>
-          <p className="payables-note">
-            Accept works the same way as other recommendations. Partner sign-off stays on the Action
-            Plan. Milōn does not send a payment or record the bill.
-          </p>
-        </div>
-      ) : (
-        <p className="payables-note">Nothing is overdue on this report, so there is no payables draft.</p>
-      )}
-    </div>
+    <>
+      {error ? <p className="payables-muted">{error}</p> : null}
+      <StatementArApFallback
+        idPrefix="payables"
+        position={position}
+        market={market}
+        periodLabel={periodLabel}
+        fromStatements={fromStatements}
+        lead={fromStatements ? payablesStatementLead(pack) : payablesNoFiguresLead()}
+        loading={loading}
+        loadingLead="Checking Xero and QuickBooks for named suppliers."
+        booksNote={!loading && booksNote ? booksNote : null}
+        booksNoteId={snapshot?.status === "skipped" ? "payables-skip" : "payables-empty"}
+        footnote="Milōn drafts the move once the aged report is on file. It does not send a payment or record the bill."
+        kickerWhenEmpty="Payables"
+        onUploadAged={onUploadAged}
+        onConnectXero={onConnectXero}
+        onConnectQbo={onConnectQbo}
+      />
+    </>
   );
 }

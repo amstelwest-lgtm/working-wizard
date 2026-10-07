@@ -390,4 +390,16 @@ assert(propose.includes("persistedRunwayWeeks"), "propose uses the shared runway
 assert(propose.includes('source: "ai", data_depth: "statement"'), "statement drafts stay statement depth");
 assert(propose.includes("dropOverclaimingSteps(payload.next_steps)"), "ungrounded invoice claims are still dropped");
 
+const panel = readFileSync(resolve("src/components/payables-panel.tsx"), "utf8");
+assert(!panel.includes("Sync Xero or QuickBooks to pull aged payables"), "the sync-only dead end is gone");
+assert(panel.includes("StatementArApFallback"), "empty payables uses the shared AR/AP surface");
+assert(panel.includes('idPrefix="payables"'), "payables fallback keeps its id prefix");
+assert(panel.includes("payablesStatementLead"), "payables lead names the statement figures");
+assert(rail.includes("ratiosStatementFigures(financials)"), "payables tiles use the Ratios helper");
+const payablesBlock = rail.slice(rail.indexOf('id="pane-payables"'));
+assert(payablesBlock.includes("onUploadAged"), "payables can open the aged upload");
+assert(payablesBlock.includes("onConnectXero"), "payables can open Xero");
+assert(payablesBlock.includes("onConnectQbo"), "payables can open QuickBooks");
+assert(!payablesBlock.slice(0, 1200).includes("Overview and Ratios"), "payables lede does not claim Overview");
+
 console.log("payables-test ok");

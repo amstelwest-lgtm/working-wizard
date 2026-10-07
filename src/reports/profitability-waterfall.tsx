@@ -47,6 +47,8 @@ export type PeriodData = {
   net_margin_pct: number;
   net_margin_score?: number;
   net_margin_tier?: string;
+  /** Non-cash D&A between operating expenses and operating profit. */
+  depreciation?: number;
 };
 
 export type ProfitabilityData = PeriodData & {
@@ -127,7 +129,11 @@ const brStyles = StyleSheet.create({
 function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
   const market = usePdfMarket();
   const cogs = d.revenue - d.gross_profit;
-  const opex = d.gross_profit - d.operating_profit;
+  const statedDep = Math.max(0, d.depreciation ?? 0);
+  const opexIfSplit = d.gross_profit - d.operating_profit - statedDep;
+  const depreciation = opexIfSplit >= -1 ? statedDep : 0;
+  const opex = d.gross_profit - d.operating_profit - depreciation;
+  const afterOpex = d.gross_profit - opex;
   const interest = d.operating_profit - d.ebt;
 
   const steps: BridgeStep[] = [
@@ -137,9 +143,19 @@ function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
     {
       label: "Operating\nExpenses",
       delta: -opex,
-      runningEnd: d.operating_profit,
+      runningEnd: depreciation > 0 ? afterOpex : d.operating_profit,
       kind: "decrease",
     },
+    ...(depreciation > 0
+      ? [
+          {
+            label: "Depreciation",
+            delta: -depreciation,
+            runningEnd: d.operating_profit,
+            kind: "decrease" as const,
+          },
+        ]
+      : []),
     {
       label: "Operating\nProfit",
       delta: d.operating_profit,

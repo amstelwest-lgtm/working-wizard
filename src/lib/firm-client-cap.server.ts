@@ -9,6 +9,7 @@ import {
   formatFirmPlanStatus,
   idleStarterTrialBanner,
   phaseFromSubscriptionStatus,
+  starterTrialForPlanState,
   type FirmClientCreateAllowance,
   type FirmPlanDisplay,
   type FirmSubscriptionPhase,
@@ -280,12 +281,15 @@ function trialBannerFor(
   sub: EntitlingFirmSubscription | null,
 ): StarterTrialBanner {
   if (!firm) return idleStarterTrialBanner();
-  return starterTrialClock({
-    enforced: firm.starterTrialEnforced,
-    band: sub?.band ?? null,
-    stripeTrialEnd: sub?.trialEnd,
-    startedAt: sub?.startedAt,
-  });
+  return starterTrialForPlanState(
+    sub?.phase ?? "none",
+    starterTrialClock({
+      enforced: firm.starterTrialEnforced,
+      band: sub?.band ?? null,
+      stripeTrialEnd: sub?.trialEnd,
+      startedAt: sub?.startedAt,
+    }),
+  );
 }
 
 async function loadMembershipRole(

@@ -116,6 +116,7 @@ export function applyTemplateChange(
       usefulLifeMonths: c.usefulLifeMonths ?? 36,
       residual: c.residual ?? 0,
     })),
+    statementDepreciation: prev.statementDepreciation ?? fresh.statementDepreciation ?? 0,
     notes: prev.notes ?? [],
     cogsPerUnit: Object.fromEntries(mappedLines.map((l) => [l.id, prev.cogsPerUnit[l.id] ?? 0])),
     updatedAt: new Date().toISOString(),
