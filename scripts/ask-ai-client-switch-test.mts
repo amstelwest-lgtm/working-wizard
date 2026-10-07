@@ -31,6 +31,7 @@ class FakeElement {
   tagName: string;
   className = "";
   type = "";
+  role = "";
   disabled = false;
   placeholder = "";
   value = "";
@@ -529,6 +530,156 @@ await test("Scenario 5c: a failed send keeps the draft", async () => {
 
   const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
   assert(ta?.value === "Keep this if it fails", "a failed send leaves the draft in the box");
+  const err = container.find((el) => el.className.includes("ask-ai-error"));
+  assert(err?.textContent === "nope", "a failed send shows the error in the thread");
+  assert(err?.role === "alert", "the error is an alert");
+});
+
+await test("Scenario 6: a suggested chip then Ask shows a reply", async () => {
+  const { mockFetch } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+  });
+
+  const chip = container.find(
+    (el) => el.className.includes("ask-ai-chip") && (el.textContent ?? "").includes("biggest drag"),
+  );
+  if (!chip) throw new Error("suggestion chip missing");
+  chip.click();
+  const send = container.find((el) => el.className.includes("ask-ai-send"));
+  if (!send) throw new Error("send button missing");
+  send.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  const answer = container.find((el) => el.className.includes("ask-ai-answer"));
+  assert(ta?.value === "", "a successful chip send clears the composer");
+  assert((answer?.innerHTML ?? "").includes("test answer"), "the chip send shows the reply");
+  assert(container.children[0]?.dataset.askState === "answer", "the thread is in the answer state");
+});
+
+await test("Scenario 6b: Thinking keeps the chip draft until the reply arrives", async () => {
+  let release: (value: unknown) => void = () => {};
+  (globalThis as Record<string, unknown>).fetch = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+  });
+
+  const chipText = "What's the biggest drag on this client's score vs peers?";
+  const chip = container.find(
+    (el) => el.className.includes("ask-ai-chip") && el.textContent === chipText,
+  );
+  if (!chip) throw new Error("suggestion chip missing");
+  chip.click();
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const during = container.find((el) => el.className.includes("ask-ai-textarea"));
+  const send = container.find((el) => el.className.includes("ask-ai-send"));
+  assert(during?.value === chipText, "Thinking does not wipe the draft");
+  assert((send?.innerHTML ?? "").includes("Thinking"), "the send control shows Thinking");
+  assert(container.children[0]?.dataset.askState === "thinking", "state is thinking");
+
+  release({
+    ok: true,
+    status: 200,
+    json: async () => ({ answer: "Debtor days.", chips: [] }),
+  });
+  await new Promise((r) => setTimeout(r, 0));
+
+  const after = container.find((el) => el.className.includes("ask-ai-textarea"));
+  const answer = container.find((el) => el.className.includes("ask-ai-answer"));
+  assert(after?.value === "", "the draft clears once the reply is in");
+  assert((answer?.innerHTML ?? "").includes("Debtor days."), "the reply is in the thread");
+});
+
+await test("Scenario 7: empty, non-JSON, and network failures stay visible", async () => {
+  const chipText = "What's the biggest drag on this client's score vs peers?";
+
+  async function ask(fetchImpl: unknown) {
+    (globalThis as Record<string, unknown>).fetch = fetchImpl;
+    const container = makeContainer("route-client");
+    mountAskAi(container, {
+      endpoint: "https://example.com/functions/v1/ask-ai",
+      botEndpoint: "https://example.com/functions/v1/milon-bot",
+      variant: "studio",
+      audience: "accountant",
+      getToken: async () => "test-token",
+    });
+    const chip = container.find(
+      (el) => el.className.includes("ask-ai-chip") && el.textContent === chipText,
+    );
+    if (!chip) throw new Error("suggestion chip missing");
+    chip.click();
+    container.find((el) => el.className.includes("ask-ai-send"))?.click();
+    await new Promise((r) => setTimeout(r, 0));
+    return container;
+  }
+
+  const empty = await ask(async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify({ answer: "  ", chips: [] }),
+  }));
+  assert(
+    empty.find((el) => el.className.includes("ask-ai-textarea"))?.value === chipText,
+    "an empty reply keeps the draft",
+  );
+  assert(
+    (empty.find((el) => el.className.includes("ask-ai-error"))?.textContent ?? "").includes(
+      "didn't return an answer",
+    ),
+    "an empty reply shows an error",
+  );
+  assert(
+    empty.find((el) => el.className.includes("ask-ai-answer")) == null,
+    "an empty reply does not paint a blank answer",
+  );
+
+  const html = await ask(async () => ({
+    ok: false,
+    status: 502,
+    text: async () => "<!doctype html><html>bad gateway</html>",
+  }));
+  assert(
+    html.find((el) => el.className.includes("ask-ai-textarea"))?.value === chipText,
+    "a non-JSON edge error keeps the draft",
+  );
+  assert(
+    (html.find((el) => el.className.includes("ask-ai-error"))?.textContent ?? "").includes(
+      "Couldn't read Milōn's reply",
+    ),
+    "a non-JSON edge error is visible",
+  );
+
+  const offline = await ask(async () => {
+    throw new TypeError("Failed to fetch");
+  });
+  assert(
+    offline.find((el) => el.className.includes("ask-ai-textarea"))?.value === chipText,
+    "a network failure keeps the draft",
+  );
+  assert(
+    (offline.find((el) => el.className.includes("ask-ai-error"))?.textContent ?? "").includes(
+      "Couldn't reach Milōn",
+    ),
+    "a network failure is visible",
+  );
+  assert(offline.children[0]?.dataset.askState === "error", "state is error, not a silent reset");
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

@@ -590,8 +590,8 @@ const ask = read("src/lib/ask-ai.js");
 const submit = ask.slice(ask.indexOf("async function submit"));
 assert(submit.includes('question = ""'), "submit clears the composer");
 assert(
-  submit.indexOf('question = ""') < submit.indexOf("await fetch"),
-  "the composer clears before the request, not when the answer arrives",
+  submit.indexOf("await fetch") < submit.indexOf('question = ""'),
+  "the composer clears only after the request returns a reply",
 );
 assert(submit.includes("question = q"), "a failed send restores the draft");
 assert(ask.includes("compositionstart"), "IME composition guard stays");

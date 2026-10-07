@@ -18,6 +18,7 @@ import {
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
 import { friendlyReachMessage } from "./reach-error.ts";
+import { parseAskAiBody, parseAskAiPayload } from "./ask-ai-response.ts";
 
 export {
   routeMilonIntent,
@@ -61,7 +62,8 @@ function inlineMd(s) {
 }
 
 export function renderMarkdown(md) {
-  const lines = escapeHtml(md).split("\n");
+  const source = typeof md === "string" ? md : "";
+  const lines = escapeHtml(source).split("\n");
   const out = [];
   let listType = null; // "ul" | "ol"
   let tableRows = null; // array of arrays
@@ -207,6 +209,7 @@ export function mountAskAi(container, options) {
 
     const widget = document.createElement("div");
     widget.className = studio ? "ask-ai-widget ask-ai-studio" : "ask-ai-widget";
+    widget.dataset.askState = loading ? "thinking" : errorMsg ? "error" : answer ? "answer" : "idle";
 
     if (!open) {
       const trigger = document.createElement("button");
@@ -355,6 +358,7 @@ export function mountAskAi(container, options) {
       if (errorMsg) {
         const err = document.createElement("div");
         err.className = "ask-ai-error";
+        err.role = "alert";
         err.textContent = errorMsg;
         panel.appendChild(err);
       }
@@ -443,6 +447,7 @@ export function mountAskAi(container, options) {
     const list = document.createElement("ol");
     const steps = Array.isArray(run.trace) ? run.trace : [];
     steps.forEach((step) => {
+      if (!step || typeof step !== "object") return;
       const li = document.createElement("li");
       const verified =
         step.verified === true
@@ -485,22 +490,73 @@ export function mountAskAi(container, options) {
     return wrap;
   }
 
+  async function readTurn(res) {
+    const status = typeof res?.status === "number" ? res.status : 0;
+    const ok = Boolean(res?.ok) && status >= 200 && status < 300;
+    // text() sees HTML/empty edge bodies. json() is the fallback the unit harness uses.
+    if (res && typeof res.text === "function") {
+      try {
+        return parseAskAiPayload(status, await res.text(), ok);
+      } catch (e) {
+        return { ok: false, error: friendlyReachMessage(e, "Couldn't read Milōn's reply. Try again.") };
+      }
+    }
+    if (res && typeof res.json === "function") {
+      try {
+        return parseAskAiBody(status, await res.json(), ok);
+      } catch (e) {
+        return { ok: false, error: friendlyReachMessage(e, "Couldn't read Milōn's reply. Try again.") };
+      }
+    }
+    return parseAskAiPayload(status, "", ok);
+  }
+
+  function paintBareError(message) {
+    const text = message || "Something went wrong.";
+    try {
+      container.innerHTML = "";
+      const err = document.createElement("div");
+      err.className = "ask-ai-error";
+      err.role = "alert";
+      err.textContent = text;
+      container.appendChild(err);
+    } catch {
+      /* last-resort paint failed; nothing safer to do */
+    }
+  }
+
+  function safeRender(draft) {
+    try {
+      render();
+      return;
+    } catch (e) {
+      if (typeof answer !== "string" || !answer.trim()) answer = "";
+      errorMsg = errorMsg || friendlyReachMessage(e, "Something went wrong.");
+      if (!String(question || "").trim() && draft) question = draft;
+    }
+    try {
+      render();
+    } catch {
+      paintBareError(errorMsg);
+    }
+  }
+
   async function submit() {
     const q = question.trim();
     if (!q || loading) return;
-    question = "";
-      const objective = parseAgentObjective(q);
-      const createIntent = persistedCreateIntent(q);
-      creatingDeliverable = Boolean(createIntent);
-      workingObjective = Boolean(objective) && !createIntent;
-      pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
+    // Keep the draft in the composer until a reply is actually in hand.
+    const objective = parseAgentObjective(q);
+    const createIntent = persistedCreateIntent(q);
+    creatingDeliverable = Boolean(createIntent);
+    workingObjective = Boolean(objective) && !createIntent;
+    pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
     loading = true;
     answer = "";
     answerChips = [];
     toolHints = [];
     agentRun = null;
     errorMsg = "";
-    render();
+    safeRender(q);
 
     try {
       const token = await getToken();
@@ -554,35 +610,39 @@ export function mountAskAi(container, options) {
         ),
       });
 
-      const data = await res.json();
+      const turn = await readTurn(res);
+      if (!turn.ok) throw new Error(turn.error || "Something went wrong.");
 
-      if (res.status === 429)
-        throw new Error(data.error || "Rate limit reached — try again in a moment.");
-      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
-
-      answer = data.answer || "No answer returned.";
+      answer = turn.answer;
       if (answer.includes("Your trial has ended, choose a plan")) {
         window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
       }
-      answerChips = data.chips || [];
-      agentRun = data.run && typeof data.run === "object" ? data.run : null;
-      toolHints = Array.isArray(data.tools)
-        ? data.tools.map((t) => toolHint(t.name, t.status))
-        : [];
+      answerChips = turn.chips;
+      agentRun = turn.run;
+      toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
       history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
       if (history.length > 16) history = history.slice(-16);
-      if (data.created && typeof onPersistedCreate === "function") {
-        onPersistedCreate({ question: q, created: data.created });
+      question = "";
+      try {
+        if (turn.created && typeof onPersistedCreate === "function") {
+          onPersistedCreate({ question: q, created: turn.created });
+        }
+      } catch {
+        /* a side effect must not hide the reply */
       }
     } catch (e) {
       question = q;
-      errorMsg = friendlyReachMessage(e, "Something went wrong.");
+      answer = "";
+      answerChips = [];
+      toolHints = [];
+      agentRun = null;
+      errorMsg = friendlyReachMessage(e, "Something went wrong.") || "Something went wrong.";
     } finally {
       loading = false;
       pendingIntent = null;
       workingObjective = false;
       creatingDeliverable = false;
-      render();
+      safeRender(q);
     }
   }
 
