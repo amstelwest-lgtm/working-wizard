@@ -1185,6 +1185,20 @@ function ClientView() {
       .map(([key]) => ratioQueryLabel(key));
     return [...new Set(labels)];
   }, [ratioQueryCounts]);
+  /** Ratios with an open client question. One health view still badges them. */
+  const openRatioQueryRows = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: Array<{ key: string; label: string; count: number }> = [];
+    for (const [key, count] of Object.entries(ratioQueryCounts)) {
+      if (count <= 0) continue;
+      const label = ratioQueryLabel(key);
+      if (seen.has(label)) continue;
+      seen.add(label);
+      rows.push({ key, label, count });
+    }
+    rows.sort((a, b) => a.label.localeCompare(b.label));
+    return rows;
+  }, [ratioQueryCounts]);
   const deliverableInputContext = useMemo(
     () => ({
       financials,
@@ -2271,7 +2285,8 @@ function ClientView() {
         default: {
           const route = nextStepRoute(key, "accountant", clientId);
           const tab = resolveAccountantTab(route.tab ?? undefined) ?? "overview";
-          revealTab(tab, undefined, route.search.filter);
+          const nextSearch = { tab, filter: route.search.filter };
+          revealTab(tab, undefined, nextSearch.filter);
         }
       }
     },
@@ -2844,11 +2859,8 @@ function ClientView() {
                           })()}
                         />
                       </div>
-                      {/* Pillar summary cards */}
-                      <div
-                        id="coach-pillars"
-                        style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}
-                      >
+                      {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
+                      <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
                         <SimplifiedRatios
                           sections={simplifiedSections}
                           onAddPastPeriod={() => setPastPeriodOpen(true)}
@@ -2860,6 +2872,25 @@ function ClientView() {
                           }}
                         />
                       </div>
+                      {openRatioQueryRows.length > 0 ? (
+                        <div className="ratio-rows" style={{ marginTop: 16 }}>
+                          {openRatioQueryRows.map((row) => (
+                            <button
+                              key={row.key}
+                              type="button"
+                              className="ratio-row"
+                              onClick={() => openDrawerFromUiKey(row.key)}
+                            >
+                              <span className="rn">
+                                {row.label}
+                                <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+                                  {row.count === 1 ? "1 query" : `${row.count} queries`}
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                   </div>
 
                   {/* Accounting connections — visible on Health & Ratios without opening Financials */}
