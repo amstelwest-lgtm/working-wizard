@@ -13,7 +13,11 @@ import {
   type LedgerSyncFigures,
 } from "@/lib/ledger-link-copy";
 import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
-import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
+import {
+  applyLedgerSyncFinancials,
+  emptyLedgerSyncError,
+  ledgerSyncWouldWipe,
+} from "@/lib/ledger-sync-financials";
 import {
   applyXeroOpeningCash,
   describeXeroOpeningCash,
@@ -599,6 +603,9 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         !Array.isArray(existing.financials)
           ? (existing.financials as Record<string, unknown>)
           : {};
+      if (ledgerSyncWouldWipe(prev, fields)) {
+        throw new Error(emptyLedgerSyncError("xero"));
+      }
       const merged = applyLedgerSyncFinancials(prev, fields, "xero");
 
       const nowIso = new Date().toISOString();

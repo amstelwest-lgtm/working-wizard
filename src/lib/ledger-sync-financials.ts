@@ -6,6 +6,11 @@
  * assets, a year-to-date companion). Overview then kept calling the board a
  * saved statement, and the other ledger card said the sync was not this file.
  *
+ * An empty dated report is not a success. QuickBooks can return a month with
+ * every P&L and balance-sheet total at zero (a quiet company, or a report that
+ * did not parse). That must not replace a live non-zero statement or get
+ * stamped as owned by the ledger.
+ *
  * Autosave of a form that was opened before the sync must not put that
  * statement back.
  */
@@ -52,6 +57,51 @@ function blank(value: unknown): boolean {
   return value == null || value === "";
 }
 
+const LIVE_FIGURE_KEYS = [...LEDGER_FIGURE_KEYS, "ytdRevenue", "ytdNetIncome"] as const;
+
+function ledgerFigureNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** True when every P&L and balance-sheet figure is missing or zero. */
+export function ledgerSyncReportIsEmpty(fields: Record<string, unknown>): boolean {
+  return LIVE_FIGURE_KEYS.every((key) => {
+    if (!(key in fields) || blank(fields[key])) return true;
+    const n = ledgerFigureNumber(fields[key]);
+    return n == null || n === 0;
+  });
+}
+
+/** True when the live blob still has a non-zero ledger figure worth keeping. */
+export function ledgerBlobHasLiveFigures(prev: unknown): boolean {
+  if (!prev || typeof prev !== "object" || Array.isArray(prev)) return false;
+  const blob = prev as Record<string, unknown>;
+  return LIVE_FIGURE_KEYS.some((key) => {
+    const n = ledgerFigureNumber(blob[key]);
+    return n != null && n !== 0;
+  });
+}
+
+/**
+ * A dated sync whose P&L and balance sheet are all zero must not replace a
+ * live statement. A blank file can still accept that sync.
+ */
+export function ledgerSyncWouldWipe(prev: unknown, fields: Record<string, unknown>): boolean {
+  const dated = Boolean(fields.periodStart && fields.periodEnd);
+  return dated && ledgerSyncReportIsEmpty(fields) && ledgerBlobHasLiveFigures(prev);
+}
+
+/** Shown on the connection card and the sync toast. Figures on file stay. */
+export function emptyLedgerSyncError(provider: LedgerSyncProvider): string {
+  const name = provider === "qbo" ? "QuickBooks" : "Xero";
+  return `${name} returned an empty statement (revenue, cash, assets and equity are all zero). Overview figures were left unchanged.`;
+}
+
 /**
  * Overlay a successful sync onto the live financials blob.
  * A dated sync sets `statementSource` to this provider and drops the previous
@@ -66,6 +116,7 @@ export function applyLedgerSyncFinancials(
     prev && typeof prev === "object" && !Array.isArray(prev)
       ? { ...(prev as Record<string, unknown>) }
       : {};
+  if (ledgerSyncWouldWipe(base, fields)) return base;
   const dated = Boolean(fields.periodStart && fields.periodEnd);
   if (dated) {
     for (const key of LEDGER_STATEMENT_KEYS) {

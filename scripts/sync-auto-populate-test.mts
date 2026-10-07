@@ -11,13 +11,17 @@ import { buildAutoPopulateWrites, ledgerSeededCashflow } from "../src/lib/auto-p
 import {
   applyLedgerSyncFinancials,
   autosaveKeepsLedgerSync,
+  emptyLedgerSyncError,
+  ledgerSyncWouldWipe,
 } from "../src/lib/ledger-sync-financials";
+import { resolveThirteenWeekForecast } from "../src/lib/client-metrics";
 import { describeLedgerLink, ledgerAttribution } from "../src/lib/ledger-link-copy";
 import { ZA_MARKET } from "../src/lib/market";
 import { qboBankActivityFromParts, sumQboQueryAmounts } from "../src/lib/qbo";
 import {
   applyQboOpeningCash,
   applyXeroOpeningCash,
+  isQboBalanceSheetHoldNote,
   QBO_BANK_LINES_SOURCE,
   QBO_BANK_RECEIVED_LINE_ID,
   QBO_BANK_SPENT_LINE_ID,
@@ -66,6 +70,38 @@ assert(owned.periodLabel === "1 Oct 2026 – 7 Oct 2026", "sync period replaces 
 assert(owned.ytdRevenue == null, "the Xero year-to-date companion does not survive");
 assert(owned.currentAssets == null, "a Xero-only figure does not survive a QuickBooks sync");
 assert(owned.cash === 500, "sync cash replaces the statement cash");
+
+const zeroQbo: Record<string, string | number> = {
+  statementSource: "qbo",
+  periodLabel: "1 Oct 2026 – 7 Oct 2026",
+  periodStart: "2026-10-01",
+  periodEnd: "2026-10-07",
+  periodMonths: "1",
+  revenue: 0,
+  cogs: 0,
+  netIncome: 0,
+  fixedCosts: 0,
+  cash: "0.00",
+  totalAssets: 0,
+  equity: 0,
+  ytdRevenue: 0,
+  ytdNetIncome: 0,
+};
+assert(ledgerSyncWouldWipe(yankeesXero, zeroQbo), "an all-zero QuickBooks report would wipe live figures");
+const keptYankees = applyLedgerSyncFinancials(yankeesXero, zeroQbo, "qbo");
+assert(keptYankees.statementSource === "xero", "an empty QuickBooks sync does not take the Xero statement");
+assert(keptYankees.revenue === yankeesXero.revenue, "empty QuickBooks sync keeps revenue");
+assert(keptYankees.cash === yankeesXero.cash, "empty QuickBooks sync keeps cash");
+assert(
+  keptYankees.periodLabel === yankeesXero.periodLabel,
+  "empty QuickBooks sync does not retitle the period as QuickBooks",
+);
+assert(
+  emptyLedgerSyncError("qbo").includes("left unchanged"),
+  "the empty-sync error says the figures were left unchanged",
+);
+const blankFile = applyLedgerSyncFinancials({}, zeroQbo, "qbo");
+assert(blankFile.statementSource === "qbo", "a blank file can still accept an empty QuickBooks sync");
 assert(
   JSON.stringify(owned.weeklyInputs) === JSON.stringify(yankeesXero.weeklyInputs),
   "weekly inputs the sync does not own stay on the file",
@@ -232,6 +268,69 @@ assert(
   "a typed opening still wins",
 );
 
+const noBanks = qboBankActivityFromParts({
+  accounts: [
+    { id: "9", name: "Sales", type: "Income", subType: "Sales", balance: 8633, active: true },
+  ],
+  balanceSheetCash: 7430.22,
+  received: 0,
+  spent: 0,
+  from: "2026-07-08",
+  to: "2026-10-07",
+});
+assert(noBanks.accountCount === 0, "an income account is not a bank account");
+assert(noBanks.source === "balance_sheet", "no bank accounts fall back to the balance sheet");
+assert(noBanks.totalClosing === 7430.22, "opening cash is the balance-sheet cash line");
+const typedOpening = applyQboOpeningCash({ openingBalance: "100" }, noBanks.totalClosing ?? 0, "2026-10-07");
+assert(typedOpening.reason === "typed_opening", "balance-sheet cash does not overwrite a typed opening");
+const held = seedQboBankForecastLines(
+  typedOpening.cashflow,
+  {
+    accountCount: noBanks.accountCount,
+    cashReceived: noBanks.cashReceived,
+    cashSpent: noBanks.cashSpent,
+    from: noBanks.from,
+    to: noBanks.to,
+  },
+  { balanceSheetCash: 7430.22 },
+);
+assert(held.status === "seeded" && held.changed, "no bank accounts still seed from balance-sheet cash");
+assert(held.cashflow.openingBalance === "100", "the seeded forecast keeps the typed opening");
+assert(held.cashflow.forecastLinesSource === QBO_BANK_LINES_SOURCE, "the hold is a QuickBooks forecast");
+assert(isQboBalanceSheetHoldNote(String(held.reason)), "the note names the balance sheet and 13 weeks");
+const heldLines = held.cashflow.revenue as Array<{ id: string; frequency: string }>;
+assert(heldLines[0]?.id === QBO_BANK_RECEIVED_LINE_ID, "the hold is a QuickBooks forecast line");
+assert(heldLines[0]?.frequency === "recurring-weekly", "the hold covers the weekly forecast");
+const holdOutlook = resolveThirteenWeekForecast({
+  financials: { revenue: 0, cogs: 0, fixedCosts: 0, cash: 7430.22, periodMonths: "1" },
+  cashflow: held.cashflow,
+  openingCash: 100,
+  now: new Date(2026, 9, 7),
+});
+assert(holdOutlook.replaceStored === false, "a balance-sheet hold is not replaced by a zero P&L");
+assert(holdOutlook.weekDates.length === 13, "the hold is a 13-week forecast");
+assert(holdOutlook.opening === 100, "the hold uses the typed opening");
+assert(
+  holdOutlook.inflow.every((n) => n === 0) && holdOutlook.outflow.every((n) => n === 0),
+  "the hold does not invent cash received or cash spent",
+);
+assert(!ledgerSeededCashflow(held.cashflow as never), "a zero-movement hold can still be upgraded from the budget");
+
+const quietMonth = buildAutoPopulateWrites(
+  { profitability: true, cash_forecast: true, budget: true },
+  {
+    fields: { revenue: "1200", cogs: "400", fixedCosts: "300", cash: "7430.22", periodMonths: "1" },
+    existingCashflow: held.cashflow as never,
+    market: ZA_MARKET,
+    now: "2026-10-07T12:00:00.000Z",
+  },
+);
+assert(quietMonth.applied.includes("cash_forecast"), "real figures still draft the cash forecast");
+assert(
+  (quietMonth.update.cashflow as { openingBalance?: string }).openingBalance === "100",
+  "the budget draft does not overwrite a typed opening",
+);
+
 const kept = buildAutoPopulateWrites(
   { profitability: true, cash_forecast: true, budget: true },
   {
@@ -264,5 +363,19 @@ assert(qboFn.includes("fetchQboBankActivity"), "QuickBooks sync reads bank activ
 const briefing = read("src/components/client-briefing.tsx");
 assert(briefing.includes("syncOwnsFigures"), "a sync that owns the file demotes the upload CTA");
 assert(briefing.includes("Upload a statement instead"), "upload stays available without a second primary CTA");
+assert(
+  briefing.includes("syncOwnsFigures ? null"),
+  "a sync that owns the file hides Connect QuickBooks and Connect Xero",
+);
+assert(qboFn.includes("ledgerSyncWouldWipe"), "QuickBooks sync refuses an empty report");
+assert(qboFn.includes("balanceSheetCash"), "QuickBooks sync passes balance-sheet cash into the forecast seed");
+const qboComplete = studio.slice(
+  studio.indexOf("const onQboSyncComplete"),
+  studio.indexOf("const onXeroSyncComplete"),
+);
+assert(
+  qboComplete.includes("setCashForecastReloadToken"),
+  "QuickBooks sync reloads the cash forecast",
+);
 
 console.log("sync-auto-populate: all assertions passed");

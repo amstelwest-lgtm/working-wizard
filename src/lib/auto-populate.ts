@@ -18,6 +18,7 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { budgetToCashForecastPayload, seedBudgetFromFinancials } from "@/lib/budget.bridges";
+import { isTypedForecastOpening } from "@/lib/xero-opening";
 import { buildCashflowPublishPayload, type ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import type {
   CashForecastPublishPayload,
@@ -196,11 +197,17 @@ export function resolveBudgetDocForAutoPopulate(ctx: {
 
 const LEDGER_FORECAST_LINE_SOURCES = new Set(["xero-bank-summary", "qbo-bank-activity"]);
 
-/** True when this sync already published the 13-week lines. Do not replace them with a budget draft. */
+/** True when this sync already published non-zero 13-week lines. A balance-sheet hold (zero movement) can still be upgraded from the budget. */
 export function ledgerSeededCashflow(existing: ExistingCashflow | null | undefined): boolean {
   if (!existing || typeof existing !== "object") return false;
   const source = (existing as { forecastLinesSource?: unknown }).forecastLinesSource;
-  return typeof source === "string" && LEDGER_FORECAST_LINE_SOURCES.has(source);
+  if (typeof source !== "string" || !LEDGER_FORECAST_LINE_SOURCES.has(source)) return false;
+  const rows = [
+    ...(existing.revenue ?? []),
+    ...(existing.expenses ?? []),
+    ...(existing.other ?? []),
+  ];
+  return rows.some((line) => Math.abs(parseFloat(String(line?.amount ?? "")) || 0) > 0);
 }
 
 function hasFigures(fields: AutoPopulateContext["fields"]): boolean {
@@ -278,7 +285,12 @@ export function buildAutoPopulateWrites(
     } else if (seededDoc) {
       payload = budgetToCashForecastPayload(seededDoc);
       const openingCash = parseFloat(String(ctx.fields.cash ?? "")) || 0;
-      if (openingCash > 0) payload = { ...payload, openingBalance: String(openingCash) };
+      const typedOpening = isTypedForecastOpening(ctx.existingCashflow);
+      if (typedOpening && ctx.existingCashflow?.openingBalance) {
+        payload = { ...payload, openingBalance: String(ctx.existingCashflow.openingBalance) };
+      } else if (openingCash > 0) {
+        payload = { ...payload, openingBalance: String(openingCash) };
+      }
       changes.push("Cash forecast drafted from the budget's first three months");
     }
     if (payload) {

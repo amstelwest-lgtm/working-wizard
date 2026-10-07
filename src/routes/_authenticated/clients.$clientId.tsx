@@ -1715,6 +1715,7 @@ function ClientView() {
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
       setQboRefresh((n) => n + 1);
+      setCashForecastReloadToken((n) => n + 1);
       populateAfterSync(inputs, "QuickBooks");
     },
     [populateAfterSync],

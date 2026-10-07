@@ -18,7 +18,11 @@ import {
   type BoardFigures,
   type LedgerSyncFigures,
 } from "@/lib/ledger-link-copy";
-import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
+import {
+  applyLedgerSyncFinancials,
+  emptyLedgerSyncError,
+  ledgerSyncWouldWipe,
+} from "@/lib/ledger-sync-financials";
 import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
 import { bankSummaryRange } from "@/lib/xero";
 import {
@@ -516,7 +520,6 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         !Array.isArray(existing.financials)
           ? (existing.financials as Record<string, unknown>)
           : {};
-      const merged = applyLedgerSyncFinancials(prev, fields, "qbo");
 
       const nowIso = new Date().toISOString();
       const bankWindow = bankSummaryRange(ledger.to);
@@ -531,6 +534,14 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         activity.totalClosing != null && Number.isFinite(activity.totalClosing)
           ? activity.totalClosing
           : bs.cash;
+      if (Number.isFinite(cashPosition)) fields.cash = String(cashPosition);
+      // A dated all-zero P&L and balance sheet must not own the file.
+      if (ledgerSyncWouldWipe(prev, fields)) {
+        throw new Error(emptyLedgerSyncError("qbo"));
+      }
+      const merged = applyLedgerSyncFinancials(prev, fields, "qbo");
+      if (Number.isFinite(cashPosition)) merged.cash = cashPosition;
+
       const cashSource: QboOpeningCashSource = activity.source;
       const opening = applyQboOpeningCash(
         (existing as { cashflow?: unknown } | null)?.cashflow,
@@ -551,13 +562,11 @@ export const triggerQboSync = createServerFn({ method: "POST" })
             to: activity.to,
           }
         : null;
-      const seeded = seedQboBankForecastLines(opening.cashflow, flows);
+      const seeded = seedQboBankForecastLines(opening.cashflow, flows, {
+        balanceSheetCash: Number.isFinite(bs.cash) ? bs.cash : null,
+      });
       const openingCashNote = describeQboOpeningCash(opening.reason, cashPosition, cashSource);
       const forecastLinesNote = seeded.reason;
-      if (Number.isFinite(cashPosition)) {
-        fields.cash = String(cashPosition);
-        merged.cash = cashPosition;
-      }
       const cashflowChanged = opening.changed || seeded.changed;
       const runway = cashflowChanged
         ? runwayWeeksFromCashflow(seeded.cashflow as SavedCashflowLike)

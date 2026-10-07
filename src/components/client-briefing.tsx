@@ -311,16 +311,24 @@ export function ClientBriefing(p: ClientBriefingProps) {
                 {syncOwnsFigures ? "Upload a statement instead" : "Upload"}
               </button>
             ) : null}
-            {p.onConnectQuickBooks ? (
-              <BrandConnectButton
-                id="client-connect-qbo"
-                brand="quickbooks"
-                onClick={p.onConnectQuickBooks}
-              />
-            ) : null}
-            {p.onConnectXero ? (
-              <BrandConnectButton id="client-connect-xero" brand="xero" onClick={p.onConnectXero} />
-            ) : null}
+            {syncOwnsFigures ? null : (
+              <>
+                {p.onConnectQuickBooks ? (
+                  <BrandConnectButton
+                    id="client-connect-qbo"
+                    brand="quickbooks"
+                    onClick={p.onConnectQuickBooks}
+                  />
+                ) : null}
+                {p.onConnectXero ? (
+                  <BrandConnectButton
+                    id="client-connect-xero"
+                    brand="xero"
+                    onClick={p.onConnectXero}
+                  />
+                ) : null}
+              </>
+            )}
             {p.openQueries > 0 ? (
               <button
                 type="button"
