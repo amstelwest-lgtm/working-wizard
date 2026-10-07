@@ -418,8 +418,8 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
     "server fn delegates to the pure resolver",
   );
   assert(
-    fns.includes('count(sb, "data_requests", data.clientId'),
-    "openDataRequests counts live data_requests (P0.6)",
+    fns.includes("openDataRequestFacts") && fns.includes('.in("status", ["open", "sent"])'),
+    "openDataRequests reads live data_requests (P0.6)",
   );
   assert(
     fns.includes('.eq("status", "unanswered").in("audience", questionAudiences)'),
