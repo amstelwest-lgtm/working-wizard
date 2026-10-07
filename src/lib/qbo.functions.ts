@@ -18,12 +18,22 @@ import {
   type BoardFigures,
   type LedgerSyncFigures,
 } from "@/lib/ledger-link-copy";
+import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
+import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
+import { bankSummaryRange } from "@/lib/xero";
+import {
+  applyQboOpeningCash,
+  describeQboOpeningCash,
+  seedQboBankForecastLines,
+  type QboOpeningCashSource,
+} from "@/lib/xero-opening";
 import {
   buildQboAuthUrl,
   exchangeCodeForTokens,
   fetchChartOfAccounts,
   fetchQboAgedPayables,
   fetchQboAgedReceivables,
+  fetchQboBankActivity,
   fetchQboLedgerStatement,
   fetchRecentTransactions,
   mapQboToFinancialInputs,
@@ -100,6 +110,8 @@ export type QboStatus = {
   ytdBasis: "financial" | "calendar" | null;
   agedArLine: string;
   agedApLine: string;
+  openingCashNote: string | null;
+  forecastLinesNote: string | null;
   /** True when last_synced_at is set and the live blob was written by QuickBooks. */
   figuresFromThisSync: boolean;
   /** This connection's sync, from the live blob or the P&L cache. */
@@ -107,6 +119,18 @@ export type QboStatus = {
   /** Overview figures, including a snapshot or upload that this link did not write. */
   boardFigures: BoardFigures | null;
 } | null;
+
+function readQboBankNote(
+  rows: Array<{ data_type?: string; raw_data?: unknown }> | null,
+  key: "openingCash" | "forecastLines",
+): string | null {
+  const raw = (rows ?? []).find((row) => row.data_type === "bank")?.raw_data;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const note = (raw as Record<string, unknown>)[key];
+  if (!note || typeof note !== "object" || Array.isArray(note)) return null;
+  const reason = (note as { reason?: unknown }).reason;
+  return typeof reason === "string" && reason.trim() ? reason : null;
+}
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
   const raw = fields[key];
@@ -165,6 +189,8 @@ function qboFigureProof(financials: unknown): {
     ytdBasis: meta.ytdBasis,
     agedArLine: "Aged receivables appear after the next Sync",
     agedApLine: "Aged payables appear after the next Sync",
+    openingCashNote: null,
+    forecastLinesNote: null,
   };
 }
 
@@ -197,7 +223,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
       .from("qbo_sync_data")
       .select("data_type, raw_data")
       .eq("client_id", data.clientId)
-      .in("data_type", ["aged_ar", "aged_ap", "pl", "bs"]);
+      .in("data_type", ["aged_ar", "aged_ap", "pl", "bs", "bank"]);
     const aged = readCollectionsSnapshot(
       (cacheRows ?? []).find((row) => row.data_type === "aged_ar")?.raw_data,
     );
@@ -240,6 +266,8 @@ export const getQboStatus = createServerFn({ method: "POST" })
       ...proof,
       agedArLine: aged ? agedArProofLine(aged) : proof.agedArLine,
       agedApLine: agedAp ? agedApProofLine(agedAp) : proof.agedApLine,
+      openingCashNote: readQboBankNote(cacheRows, "openingCash"),
+      forecastLinesNote: readQboBankNote(cacheRows, "forecastLines"),
       figuresFromThisSync: attribution.figuresFromThisSync,
       syncFigures: attribution.syncFigures,
       boardFigures: attribution.boardFigures,
@@ -313,6 +341,8 @@ export type SyncResult = {
     ytdBasis: "financial" | "calendar" | null;
     agedArLine: string;
     agedApLine: string;
+    openingCashNote: string;
+    forecastLinesNote: string;
   };
 };
 
@@ -479,7 +509,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
       const { data: existing } = await supabaseAdmin
         .from("clients")
-        .select("financials")
+        .select("financials, cashflow")
         .eq("id", data.clientId)
         .maybeSingle();
       const prev =
@@ -488,19 +518,65 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         !Array.isArray(existing.financials)
           ? (existing.financials as Record<string, unknown>)
           : {};
-      const merged: Record<string, unknown> = {
-        ...prev,
-        ...fields,
-      };
-      if (!ledger.year) {
-        for (const key of STATEMENT_YTD_FIELD_KEYS) delete merged[key];
+      const merged = applyLedgerSyncFinancials(prev, fields, "qbo");
+
+      const nowIso = new Date().toISOString();
+      const bankWindow = bankSummaryRange(ledger.to);
+      const activity = await fetchQboBankActivity(
+        realmId,
+        accessToken,
+        bankWindow,
+        accounts,
+        bs.cash,
+      );
+      const cashPosition =
+        activity.totalClosing != null && Number.isFinite(activity.totalClosing)
+          ? activity.totalClosing
+          : bs.cash;
+      const cashSource: QboOpeningCashSource = activity.source;
+      const opening = applyQboOpeningCash(
+        (existing as { cashflow?: unknown } | null)?.cashflow,
+        cashPosition,
+        ledger.to,
+      );
+      const flows = activity.returned
+        ? {
+            accountCount:
+              activity.accountCount > 0
+                ? activity.accountCount
+                : activity.cashReceived !== 0 || activity.cashSpent !== 0
+                  ? 1
+                  : 0,
+            cashReceived: activity.cashReceived,
+            cashSpent: activity.cashSpent,
+            from: activity.from,
+            to: activity.to,
+          }
+        : null;
+      const seeded = seedQboBankForecastLines(opening.cashflow, flows);
+      const openingCashNote = describeQboOpeningCash(opening.reason, cashPosition, cashSource);
+      const forecastLinesNote = seeded.reason;
+      if (Number.isFinite(cashPosition)) {
+        fields.cash = String(cashPosition);
+        merged.cash = cashPosition;
       }
+      const cashflowChanged = opening.changed || seeded.changed;
+      const runway = cashflowChanged
+        ? runwayWeeksFromCashflow(seeded.cashflow as SavedCashflowLike)
+        : null;
 
       await supabaseAdmin
         .from("clients")
         .update({
           financials: merged as never,
-          financials_updated_at: new Date().toISOString(),
+          financials_updated_at: nowIso,
+          ...(cashflowChanged
+            ? {
+                cashflow: seeded.cashflow as never,
+                last_forecast_at: nowIso,
+                ...(runway != null ? { cash_runway_weeks: runway } : {}),
+              }
+            : {}),
         })
         .eq("id", data.clientId);
 
@@ -512,7 +588,6 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         ledger.periodLabel,
       );
 
-      const nowIso = new Date().toISOString();
       const cacheRows: Array<{
         client_id: string;
         data_type: string;
@@ -545,6 +620,23 @@ export const triggerQboSync = createServerFn({ method: "POST" })
           client_id: data.clientId,
           data_type: "bs",
           raw_data: bs,
+          synced_at: nowIso,
+        },
+        {
+          client_id: data.clientId,
+          data_type: "bank",
+          raw_data: {
+            from: activity.from,
+            to: activity.to,
+            accountCount: activity.accountCount,
+            totalClosing: activity.totalClosing,
+            cashReceived: activity.returned ? activity.cashReceived : null,
+            cashSpent: activity.returned ? activity.cashSpent : null,
+            returned: activity.returned,
+            source: activity.source,
+            openingCash: { status: opening.reason, reason: openingCashNote },
+            forecastLines: { status: seeded.status, reason: forecastLinesNote },
+          },
           synced_at: nowIso,
         },
       ];
@@ -609,7 +701,9 @@ export const triggerQboSync = createServerFn({ method: "POST" })
           netIncome: pnl.netIncome,
           totalAssets: bs.totalAssets,
           equity: bs.equity,
-          cash: bs.cash,
+          cash: cashPosition,
+          openingCashNote,
+          forecastLinesNote,
           operatingCashflow: ledger.operatingCashflow,
           accountsCount: accounts?.length ?? 0,
           transactionsCount: transactions?.length ?? 0,

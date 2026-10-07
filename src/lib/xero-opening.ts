@@ -1,19 +1,19 @@
 import { CASH_FORECAST_WEEKS } from "@/lib/cash-runway";
 
 /**
- * Starting cash and a weekly run-rate for the 13-week forecast after a Xero sync.
- * Pure — safe for the cash-forecast screen and the server sync.
+ * Starting cash and a weekly run-rate for the 13-week forecast after a
+ * Xero or QuickBooks sync. Pure — safe for the cash-forecast screen and
+ * the server sync.
  *
- * Bank-summary closing balances (or the balance-sheet cash line) fill an
- * empty opening. A figure the accountant typed is left alone. Openings this
- * module wrote are marked `openingBalanceSource: "xero"` and refresh on the
- * next sync.
+ * Bank closing balances (or the balance-sheet cash line) fill an empty
+ * opening. A figure the accountant typed is left alone. Openings this
+ * module wrote are marked `openingBalanceSource` and refresh on the next
+ * sync, including when the other ledger takes the file.
  *
- * Cash received and cash spent are one total for the whole Bank Summary
- * window. When the forecast has no typed amounts, they become two weekly
- * lines (total ÷ 13). Typed amounts are not overwritten. Lines this module
- * wrote are marked `forecastLinesSource: "xero-bank-summary"` and refresh
- * until someone edits them.
+ * Cash received and cash spent are one total for the window. When the
+ * forecast has no typed amounts, they become two weekly lines (total ÷ 13).
+ * Typed amounts are not overwritten. Lines this module wrote refresh until
+ * someone edits them.
  */
 
 export type XeroOpeningApplyReason =
@@ -28,6 +28,19 @@ export type XeroOpeningCashSource = "bank_summary" | "balance_sheet";
 export const XERO_BANK_LINES_SOURCE = "xero-bank-summary";
 export const XERO_BANK_RECEIVED_LINE_ID = "xero-bank-received";
 export const XERO_BANK_SPENT_LINE_ID = "xero-bank-spent";
+
+export const QBO_BANK_LINES_SOURCE = "qbo-bank-activity";
+export const QBO_BANK_RECEIVED_LINE_ID = "qbo-bank-received";
+export const QBO_BANK_SPENT_LINE_ID = "qbo-bank-spent";
+
+const LEDGER_OPENING_SOURCES = new Set(["xero", "qbo"]);
+const LEDGER_LINE_SOURCES = new Set([XERO_BANK_LINES_SOURCE, QBO_BANK_LINES_SOURCE]);
+const LEDGER_SEED_LINE_IDS = new Set([
+  XERO_BANK_RECEIVED_LINE_ID,
+  XERO_BANK_SPENT_LINE_ID,
+  QBO_BANK_RECEIVED_LINE_ID,
+  QBO_BANK_SPENT_LINE_ID,
+]);
 
 export type XeroForecastLineSeedStatus = "seeded" | "refreshed" | "unchanged" | "skipped";
 
@@ -52,10 +65,11 @@ function moneyString(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
 
-export function applyXeroOpeningCash(
+function applyLedgerOpeningCash(
   existing: unknown,
   cash: number,
   startDate: string,
+  source: "xero" | "qbo",
 ): { cashflow: Record<string, unknown>; changed: boolean; reason: XeroOpeningApplyReason } {
   const base =
     existing && typeof existing === "object" && !Array.isArray(existing)
@@ -68,26 +82,42 @@ export function applyXeroOpeningCash(
     typeof currentRaw === "number" ? currentRaw : parseFloat(String(currentRaw ?? ""));
   const empty =
     currentRaw == null || currentRaw === "" || !Number.isFinite(current) || current === 0;
-  const xeroOwned = base.openingBalanceSource === "xero";
+  const ledgerOwned = LEDGER_OPENING_SOURCES.has(String(base.openingBalanceSource ?? ""));
   // A typed opening wins over a zero reading and over a new bank total.
-  if (!empty && !xeroOwned) return { cashflow: base, changed: false, reason: "typed_opening" };
+  if (!empty && !ledgerOwned) return { cashflow: base, changed: false, reason: "typed_opening" };
   // A zero bank reading must not invent an opening. A later sync can still
   // move an opening we own to zero.
-  if (cash === 0 && !xeroOwned) return { cashflow: base, changed: false, reason: "zero_balance" };
+  if (cash === 0 && !ledgerOwned) return { cashflow: base, changed: false, reason: "zero_balance" };
 
   const next = moneyString(cash);
   if (
     String(currentRaw ?? "") === next &&
-    xeroOwned &&
+    base.openingBalanceSource === source &&
     typeof base.startDate === "string" &&
     base.startDate
   ) {
     return { cashflow: base, changed: false, reason: "unchanged" };
   }
   base.openingBalance = next;
-  base.openingBalanceSource = "xero";
+  base.openingBalanceSource = source;
   if (typeof base.startDate !== "string" || !base.startDate) base.startDate = startDate;
   return { cashflow: base, changed: true, reason: "applied" };
+}
+
+export function applyXeroOpeningCash(
+  existing: unknown,
+  cash: number,
+  startDate: string,
+): { cashflow: Record<string, unknown>; changed: boolean; reason: XeroOpeningApplyReason } {
+  return applyLedgerOpeningCash(existing, cash, startDate, "xero");
+}
+
+export function applyQboOpeningCash(
+  existing: unknown,
+  cash: number,
+  startDate: string,
+): { cashflow: Record<string, unknown>; changed: boolean; reason: XeroOpeningApplyReason } {
+  return applyLedgerOpeningCash(existing, cash, startDate, "qbo");
 }
 
 /** Sentence for the Xero card and the client briefing after Sync. */
@@ -116,6 +146,34 @@ export function describeXeroOpeningCash(
   return "Opening cash skipped — Xero did not return a cash balance.";
 }
 
+export type QboOpeningCashSource = "bank_accounts" | "balance_sheet";
+
+/** Sentence for the QuickBooks card after Sync. */
+export function describeQboOpeningCash(
+  reason: XeroOpeningApplyReason,
+  amount: number,
+  source: QboOpeningCashSource,
+): string {
+  const figure = moneyString(amount);
+  if (reason === "applied") {
+    return source === "bank_accounts"
+      ? `Opening cash applied from QuickBooks bank accounts (${figure}).`
+      : `Opening cash applied from the balance sheet (${figure}). QuickBooks bank accounts had no closing balances.`;
+  }
+  if (reason === "unchanged") {
+    return source === "bank_accounts"
+      ? `Opening cash already matched QuickBooks bank accounts (${figure}).`
+      : `Opening cash already matched the balance sheet (${figure}).`;
+  }
+  if (reason === "typed_opening") {
+    return "Opening cash skipped — the forecast already has a typed opening.";
+  }
+  if (reason === "zero_balance") {
+    return "Opening cash skipped — the closing balance is zero.";
+  }
+  return "Opening cash skipped — QuickBooks did not return a cash balance.";
+}
+
 function asLines(value: unknown): ForecastLine[] {
   if (!Array.isArray(value)) return [];
   const out: ForecastLine[] = [];
@@ -139,8 +197,8 @@ function lineAmount(line: ForecastLine): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function isXeroBankLine(line: ForecastLine): boolean {
-  return line.id === XERO_BANK_RECEIVED_LINE_ID || line.id === XERO_BANK_SPENT_LINE_ID;
+function isLedgerBankLine(line: ForecastLine): boolean {
+  return LEDGER_SEED_LINE_IDS.has(line.id);
 }
 
 function weeklyLine(id: string, name: string, total: number): ForecastLine {
@@ -154,24 +212,59 @@ function weeklyLine(id: string, name: string, total: number): ForecastLine {
   };
 }
 
-function sectionWithSeed(
-  existing: ForecastLine[],
-  seed: ForecastLine | null,
-  seedId: string,
-): ForecastLine[] {
+function sectionWithSeed(existing: ForecastLine[], seed: ForecastLine | null): ForecastLine[] {
   if (seed) return [seed];
-  return existing.filter((line) => line.id !== seedId);
+  // A zero side drops both ledgers' seed lines so a Xero line cannot survive a QuickBooks sync.
+  return existing.filter((line) => !LEDGER_SEED_LINE_IDS.has(line.id));
 }
 
+type ForecastSeedVoice = {
+  source: string;
+  receivedId: string;
+  spentId: string;
+  receivedName: string;
+  spentName: string;
+  /** "Bank Summary" or "QuickBooks bank activity" — used in the skip sentences. */
+  reportLabel: string;
+  /** "Xero" or "QuickBooks" — the edited-line sentence. */
+  providerName: string;
+  /** "Xero Bank Summary" — the note and the line titles' report. */
+  noteLabel: string;
+};
+
+const XERO_SEED_VOICE: ForecastSeedVoice = {
+  source: XERO_BANK_LINES_SOURCE,
+  receivedId: XERO_BANK_RECEIVED_LINE_ID,
+  spentId: XERO_BANK_SPENT_LINE_ID,
+  receivedName: "Cash received (Xero Bank Summary)",
+  spentName: "Cash spent (Xero Bank Summary)",
+  reportLabel: "Bank Summary",
+  providerName: "Xero",
+  noteLabel: "Xero Bank Summary",
+};
+
+const QBO_SEED_VOICE: ForecastSeedVoice = {
+  source: QBO_BANK_LINES_SOURCE,
+  receivedId: QBO_BANK_RECEIVED_LINE_ID,
+  spentId: QBO_BANK_SPENT_LINE_ID,
+  receivedName: "Cash received (QuickBooks)",
+  spentName: "Cash spent (QuickBooks)",
+  reportLabel: "QuickBooks bank activity",
+  providerName: "QuickBooks",
+  noteLabel: "QuickBooks bank activity",
+};
+
 /**
- * Even weekly run-rate from Bank Summary cash received / cash spent.
- * `flows` is null when the report was not returned (missing scope or error).
- * A non-zero line that is not one of the two Xero seed lines blocks the write.
- * Seed lines that were edited (source flag cleared) are also left alone.
+ * Even weekly run-rate from cash received / cash spent.
+ * `flows` is null when the report was not returned.
+ * A non-zero line that is not a ledger seed line blocks the write.
+ * Seed lines that were edited (source flag cleared) are left alone.
+ * Lines the other ledger seeded are replaced — the sync that just succeeded owns the file.
  */
-export function seedXeroBankForecastLines(
+function seedLedgerBankForecastLines(
   existing: Record<string, unknown>,
   flows: XeroBankFlowSeed | null,
+  voice: ForecastSeedVoice,
 ): {
   cashflow: Record<string, unknown>;
   changed: boolean;
@@ -183,8 +276,7 @@ export function seedXeroBankForecastLines(
       cashflow: existing,
       changed: false,
       status: "skipped",
-      reason:
-        "Forecast lines skipped — Bank Summary was not returned, so cash received and cash spent were not added.",
+      reason: `Forecast lines skipped — ${voice.reportLabel} was not returned, so cash received and cash spent were not added.`,
     };
   }
   if (flows.accountCount <= 0) {
@@ -192,7 +284,7 @@ export function seedXeroBankForecastLines(
       cashflow: existing,
       changed: false,
       status: "skipped",
-      reason: "Forecast lines skipped — Bank Summary listed no bank accounts.",
+      reason: `Forecast lines skipped — ${voice.reportLabel} listed no bank accounts.`,
     };
   }
   const received = Number.isFinite(flows.cashReceived) ? flows.cashReceived : 0;
@@ -202,61 +294,55 @@ export function seedXeroBankForecastLines(
       cashflow: existing,
       changed: false,
       status: "skipped",
-      reason: "Forecast lines skipped — Bank Summary cash received and cash spent are both zero.",
+      reason: `Forecast lines skipped — ${voice.reportLabel} cash received and cash spent are both zero.`,
     };
   }
 
   const revenue = asLines(existing.revenue);
   const expenses = asLines(existing.expenses);
   const other = asLines(existing.other);
-  const owned = existing.forecastLinesSource === XERO_BANK_LINES_SOURCE;
+  const ownedByThis = existing.forecastLinesSource === voice.source;
+  const ownedByLedger = LEDGER_LINE_SOURCES.has(String(existing.forecastLinesSource ?? ""));
   const foreignTyped = [...revenue, ...expenses, ...other].some(
-    (line) => lineAmount(line) !== 0 && !isXeroBankLine(line),
+    (line) => lineAmount(line) !== 0 && !isLedgerBankLine(line),
   );
   if (foreignTyped) {
     return {
       cashflow: existing,
       changed: false,
       status: "skipped",
-      reason:
-        "Forecast lines skipped — the 13-week forecast already has typed amounts. Bank Summary cash received and cash spent were not written over them.",
+      reason: `Forecast lines skipped — the 13-week forecast already has typed amounts. ${voice.reportLabel} cash received and cash spent were not written over them.`,
     };
   }
   const seedTyped = [...revenue, ...expenses].some(
-    (line) => lineAmount(line) !== 0 && isXeroBankLine(line),
+    (line) => lineAmount(line) !== 0 && isLedgerBankLine(line),
   );
-  if (seedTyped && !owned) {
+  if (seedTyped && !ownedByLedger) {
     return {
       cashflow: existing,
       changed: false,
       status: "skipped",
-      reason:
-        "Forecast lines skipped — the Xero cash lines on the forecast were edited, so this Sync left them as they are.",
+      reason: `Forecast lines skipped — the ${voice.providerName} cash lines on the forecast were edited, so this Sync left them as they are.`,
     };
   }
 
   const receivedLine =
-    received !== 0
-      ? weeklyLine(XERO_BANK_RECEIVED_LINE_ID, "Cash received (Xero Bank Summary)", received)
-      : null;
-  const spentLine =
-    spent !== 0
-      ? weeklyLine(XERO_BANK_SPENT_LINE_ID, "Cash spent (Xero Bank Summary)", spent)
-      : null;
-  const nextRevenue = sectionWithSeed(revenue, receivedLine, XERO_BANK_RECEIVED_LINE_ID);
-  const nextExpenses = sectionWithSeed(expenses, spentLine, XERO_BANK_SPENT_LINE_ID);
-  const note = `Weekly run-rate from Xero Bank Summary ${flows.from} to ${flows.to}: cash received ${moneyString(received)} and cash spent ${moneyString(spent)}, spread evenly over ${CASH_FORECAST_WEEKS} weeks. Editing a line keeps your figures on the next Sync.`;
+    received !== 0 ? weeklyLine(voice.receivedId, voice.receivedName, received) : null;
+  const spentLine = spent !== 0 ? weeklyLine(voice.spentId, voice.spentName, spent) : null;
+  const nextRevenue = sectionWithSeed(revenue, receivedLine);
+  const nextExpenses = sectionWithSeed(expenses, spentLine);
+  const note = `Weekly run-rate from ${voice.noteLabel} ${flows.from} to ${flows.to}: cash received ${moneyString(received)} and cash spent ${moneyString(spent)}, spread evenly over ${CASH_FORECAST_WEEKS} weeks. Editing a line keeps your figures on the next Sync.`;
   const same =
     JSON.stringify(revenue) === JSON.stringify(nextRevenue) &&
     JSON.stringify(expenses) === JSON.stringify(nextExpenses) &&
     existing.forecastLinesNote === note &&
-    owned;
+    ownedByThis;
   if (same) {
     return {
       cashflow: existing,
       changed: false,
       status: "unchanged",
-      reason: `Forecast lines already match the Bank Summary weekly run-rate (cash received ${moneyString(received)}, cash spent ${moneyString(spent)}).`,
+      reason: `Forecast lines already match the ${voice.reportLabel} weekly run-rate (cash received ${moneyString(received)}, cash spent ${moneyString(spent)}).`,
     };
   }
 
@@ -264,18 +350,47 @@ export function seedXeroBankForecastLines(
     ...existing,
     revenue: nextRevenue,
     expenses: nextExpenses,
-    forecastLinesSource: XERO_BANK_LINES_SOURCE,
+    forecastLinesSource: voice.source,
     forecastLinesNote: note,
   };
-  const refreshed = owned || seedTyped;
+  const refreshed = ownedByLedger || seedTyped;
   return {
     cashflow: next,
     changed: true,
     status: refreshed ? "refreshed" : "seeded",
     reason: refreshed
-      ? `Forecast lines refreshed from Bank Summary — cash received ${moneyString(received)} and cash spent ${moneyString(spent)} as a weekly run-rate over ${CASH_FORECAST_WEEKS} weeks.`
-      : `Forecast lines seeded from Bank Summary — cash received ${moneyString(received)} and cash spent ${moneyString(spent)} as a weekly run-rate over ${CASH_FORECAST_WEEKS} weeks. Lines with no amount were replaced. A typed amount would have been kept.`,
+      ? `Forecast lines refreshed from ${voice.reportLabel} — cash received ${moneyString(received)} and cash spent ${moneyString(spent)} as a weekly run-rate over ${CASH_FORECAST_WEEKS} weeks.`
+      : `Forecast lines seeded from ${voice.reportLabel} — cash received ${moneyString(received)} and cash spent ${moneyString(spent)} as a weekly run-rate over ${CASH_FORECAST_WEEKS} weeks. Lines with no amount were replaced. A typed amount would have been kept.`,
   };
+}
+
+/**
+ * Even weekly run-rate from Bank Summary cash received / cash spent.
+ * `flows` is null when the report was not returned (missing scope or error).
+ */
+export function seedXeroBankForecastLines(
+  existing: Record<string, unknown>,
+  flows: XeroBankFlowSeed | null,
+): {
+  cashflow: Record<string, unknown>;
+  changed: boolean;
+  status: XeroForecastLineSeedStatus;
+  reason: string;
+} {
+  return seedLedgerBankForecastLines(existing, flows, XERO_SEED_VOICE);
+}
+
+/** Same weekly run-rate as the Xero bank path, from QuickBooks bank activity. */
+export function seedQboBankForecastLines(
+  existing: Record<string, unknown>,
+  flows: XeroBankFlowSeed | null,
+): {
+  cashflow: Record<string, unknown>;
+  changed: boolean;
+  status: XeroForecastLineSeedStatus;
+  reason: string;
+} {
+  return seedLedgerBankForecastLines(existing, flows, QBO_SEED_VOICE);
 }
 
 /**

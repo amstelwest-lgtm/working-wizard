@@ -585,6 +585,127 @@ export type QboCashFlow = {
   financingCashflow: number;
 };
 
+/** Sum of TotalAmt across every entity array in a QBO query response. */
+export function sumQboQueryAmounts(json: unknown): number {
+  if (!json || typeof json !== "object") return 0;
+  const lists = (json as { QueryResponse?: Record<string, unknown> }).QueryResponse ?? {};
+  let total = 0;
+  for (const value of Object.values(lists)) {
+    if (!Array.isArray(value)) continue;
+    for (const row of value) {
+      if (!row || typeof row !== "object") continue;
+      const n = Number((row as { TotalAmt?: unknown }).TotalAmt);
+      if (Number.isFinite(n)) total += Math.abs(n);
+    }
+  }
+  return Math.round(total * 100) / 100;
+}
+
+export function qboEntityTotalQuery(entity: string, from: string, to: string): string {
+  return `SELECT TotalAmt FROM ${entity} WHERE TxnDate >= '${from}' AND TxnDate <= '${to}' MAXRESULTS 1000`;
+}
+
+export type QboBankActivity = {
+  accountCount: number;
+  /** Closing cash used as the forecast opening. Bank balances when present, else the balance sheet. */
+  totalClosing: number | null;
+  cashReceived: number;
+  cashSpent: number;
+  from: string;
+  to: string;
+  /** False when every cash-in and cash-out query failed. */
+  returned: boolean;
+  source: "bank_accounts" | "balance_sheet";
+};
+
+/**
+ * Opening cash prefers active bank-account balances (the QuickBooks stand-in
+ * for a Xero Bank Summary closing total). Cash received is deposits, payments,
+ * and sales receipts. Cash spent is purchases and bill payments.
+ */
+export function qboBankActivityFromParts(input: {
+  accounts: QboAccount[] | null;
+  balanceSheetCash: number;
+  received: number | null;
+  spent: number | null;
+  from: string;
+  to: string;
+}): QboBankActivity {
+  const banks = (input.accounts ?? []).filter(
+    (account) => account.active && account.type === "Bank" && Number.isFinite(account.balance),
+  );
+  const bankTotal = banks.length
+    ? Math.round(banks.reduce((sum, account) => sum + account.balance, 0) * 100) / 100
+    : null;
+  const sheet = Number.isFinite(input.balanceSheetCash) ? input.balanceSheetCash : null;
+  const useBanks = bankTotal != null && banks.length > 0;
+  return {
+    accountCount: banks.length,
+    totalClosing: useBanks ? bankTotal : sheet,
+    cashReceived: input.received ?? 0,
+    cashSpent: input.spent ?? 0,
+    from: input.from,
+    to: input.to,
+    returned: input.received != null || input.spent != null,
+    source: useBanks ? "bank_accounts" : "balance_sheet",
+  };
+}
+
+const QBO_CASH_IN = ["Deposit", "Payment", "SalesReceipt"] as const;
+const QBO_CASH_OUT = ["Purchase", "BillPayment"] as const;
+
+async function sumQboEntity(
+  realmId: string,
+  accessToken: string,
+  entity: string,
+  from: string,
+  to: string,
+): Promise<number | null> {
+  try {
+    const json = await qboGet(
+      realmId,
+      accessToken,
+      `/query?query=${encodeURIComponent(qboEntityTotalQuery(entity, from, to))}`,
+    );
+    return sumQboQueryAmounts(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 13-week cash in and cash out, plus bank-account closing balances.
+ * A failed query is null so a total outage does not look like a real zero.
+ */
+export async function fetchQboBankActivity(
+  realmId: string,
+  accessToken: string,
+  range: { from: string; to: string },
+  accounts: QboAccount[] | null,
+  balanceSheetCash: number,
+): Promise<QboBankActivity> {
+  const [deposits, payments, sales, purchases, bills] = await Promise.all([
+    ...QBO_CASH_IN.map((entity) => sumQboEntity(realmId, accessToken, entity, range.from, range.to)),
+    ...QBO_CASH_OUT.map((entity) => sumQboEntity(realmId, accessToken, entity, range.from, range.to)),
+  ]);
+  const receivedParts = [deposits, payments, sales];
+  const spentParts = [purchases, bills];
+  const received = receivedParts.every((n) => n == null)
+    ? null
+    : Math.round(receivedParts.reduce((sum, n) => sum + (n ?? 0), 0) * 100) / 100;
+  const spent = spentParts.every((n) => n == null)
+    ? null
+    : Math.round(spentParts.reduce((sum, n) => sum + (n ?? 0), 0) * 100) / 100;
+  return qboBankActivityFromParts({
+    accounts,
+    balanceSheetCash,
+    received,
+    spent,
+    from: range.from,
+    to: range.to,
+  });
+}
+
 export function parseQboCashFlow(
   json: unknown,
   amountColumn = qboMoneyColumnIndex(json),
@@ -823,7 +944,10 @@ export function mapQboToFinancialInputs(
     set("operatingCashflow", operatingCashflow);
   }
   const setBs = (k: string, v: number) => {
-    if (Number.isFinite(v) && v !== 0) out[k] = v;
+    if (!Number.isFinite(v)) return;
+    // A dated statement replaces the previous total, including a real zero.
+    if (!dated && v === 0) return;
+    out[k] = v;
   };
   setBs("totalAssets", bs.totalAssets);
   setBs("equity", bs.equity);

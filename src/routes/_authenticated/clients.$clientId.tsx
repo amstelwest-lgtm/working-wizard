@@ -26,9 +26,15 @@ import {
 import {
   loadAutoPopulateState,
   runAutoPopulate,
+  runSyncAutoPopulate,
   type AutoPopulateState,
 } from "@/lib/auto-populate-run";
-import { summariseAutoPopulate, type AutoPopulatePrefs } from "@/lib/auto-populate";
+import {
+  defaultAutoPopulatePrefs,
+  summariseAutoPopulate,
+  type AutoPopulatePrefs,
+} from "@/lib/auto-populate";
+import { autosaveKeepsLedgerSync } from "@/lib/ledger-sync-financials";
 import { MarketProvider } from "@/contexts/market";
 import {
   coerceMarketSelection,
@@ -1643,10 +1649,16 @@ function ClientView() {
 
   const persistMergedFinancials = useCallback(
     async (updated: Record<string, unknown>) => {
+      const { data: row } = await supabase
+        .from("clients")
+        .select("financials")
+        .eq("id", clientId)
+        .maybeSingle();
+      const financials = autosaveKeepsLedgerSync(row?.financials ?? null, updated);
       const updatedAt = new Date().toISOString();
       const { error } = await supabase
         .from("clients")
-        .update({ financials: updated as never, financials_updated_at: updatedAt })
+        .update({ financials: financials as never, financials_updated_at: updatedAt })
         .eq("id", clientId);
       if (error) {
         toast.error(`Autosave failed: ${error.message}`);
@@ -1656,7 +1668,7 @@ function ClientView() {
       setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
       void upsertCurrentPeriodSnapshot({
         clientId,
-        financials: updated,
+        financials,
         source: "autosave",
       });
       setAutosaveStatus("saved");
@@ -1666,22 +1678,58 @@ function ClientView() {
     [clientId],
   );
 
-  const onQboSyncComplete = useCallback((inputs: Record<string, string>) => {
-    const nextScalars = { ...financialsRef.current, ...inputs };
-    financialsRef.current = nextScalars;
-    setFinancials(nextScalars);
-    setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
-    setQboRefresh((n) => n + 1);
-  }, []);
+  const populateAfterSync = useCallback(
+    (inputs: Record<string, string>, provider: "QuickBooks" | "Xero") => {
+      void runSyncAutoPopulate({
+        clientId,
+        fields: inputs,
+        chosen: autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+        firstUpload: autoPopulateState?.firstUpload ?? true,
+        firstActualsMonth: inputs.periodStart?.slice(0, 7) ?? null,
+        fallbackMarket: client?.market ?? null,
+        surface: "accountant_portal",
+      })
+        .then(applyAutoPopulateResult)
+        .catch((e) => {
+          console.warn(`auto-populate after ${provider} sync:`, e);
+          toast.error(`Figures saved, but drafting deliverables failed: ${(e as Error).message}`);
+        });
+    },
+    [applyAutoPopulateResult, autoPopulateState, client?.market, clientId],
+  );
 
-  const onXeroSyncComplete = useCallback((inputs: Record<string, string>) => {
-    const nextScalars = { ...financialsRef.current, ...inputs };
-    financialsRef.current = nextScalars;
-    setFinancials(nextScalars);
-    setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
-    setXeroRefresh((n) => n + 1);
-    setCashForecastReloadToken((n) => n + 1);
-  }, []);
+  const onQboSyncComplete = useCallback(
+    (inputs: Record<string, string>) => {
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      const nextScalars = { ...financialsRef.current, ...inputs };
+      financialsRef.current = nextScalars;
+      setFinancials(nextScalars);
+      setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+      setQboRefresh((n) => n + 1);
+      populateAfterSync(inputs, "QuickBooks");
+    },
+    [populateAfterSync],
+  );
+
+  const onXeroSyncComplete = useCallback(
+    (inputs: Record<string, string>) => {
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      const nextScalars = { ...financialsRef.current, ...inputs };
+      financialsRef.current = nextScalars;
+      setFinancials(nextScalars);
+      setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+      setXeroRefresh((n) => n + 1);
+      setCashForecastReloadToken((n) => n + 1);
+      populateAfterSync(inputs, "Xero");
+    },
+    [populateAfterSync],
+  );
 
   const handleFinancialChange = useCallback(
     (key: string, value: string) => {
@@ -3192,6 +3240,7 @@ function ClientView() {
                       periodLabel={readStatementMeta(financials).periodLabel}
                       preferPeriod={preferStatementPeriod(financials)}
                       yearToDate={statementYearLine(financials)}
+                      statementSource={readStatementMeta(financials).statementSource}
                       periodNote={
                         preferStatementPeriod(financials) || (!qboLink && !xeroLink)
                           ? null

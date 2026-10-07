@@ -210,6 +210,16 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
             <p id="qbo-aged-ap-status" className="ledger-connect__meta">
               {lastSync?.agedApLine ?? status.agedApLine}
             </p>
+            {(lastSync?.openingCashNote ?? status.openingCashNote) ? (
+              <p id="qbo-opening-cash-status" className="ledger-connect__meta">
+                {lastSync?.openingCashNote ?? status.openingCashNote}
+              </p>
+            ) : null}
+            {(lastSync?.forecastLinesNote ?? status.forecastLinesNote) ? (
+              <p id="qbo-bank-forecast-status" className="ledger-connect__meta">
+                {lastSync?.forecastLinesNote ?? status.forecastLinesNote}
+              </p>
+            ) : null}
           </div>
           <div className="ledger-connect__actions">
             <button
