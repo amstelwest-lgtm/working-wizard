@@ -575,6 +575,11 @@ const S_SEP = snap(
     `ordered by severity: ${ex.map((e) => e.kind)}`,
   );
   eq(ex[0].label, "Pack v3 waiting for your sign-off", "pack label");
+  eq(
+    exceptionsFor({ ...loud, packFiguresStale: true }, NOW)[0].label,
+    "Pack v3 needs a regenerate",
+    "a stale pack asks for a regenerate, not a sign-off",
+  );
   eq(ex[0].tab, "advisory", "pack resolves on advisory tab");
   assert(
     ex.find((e) => e.kind === "stuck")!.label.includes('days at "With your accountant"'),

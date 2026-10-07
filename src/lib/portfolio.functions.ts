@@ -13,6 +13,10 @@ import type { LooseSb } from "@/lib/advisory-state.functions";
 import type { AdvisoryState } from "@/lib/advisory-state";
 import { ADVISORY_STATES } from "@/lib/advisory-state";
 import { outcomeVerdict, type RecommendationOutcome } from "@/lib/recommendations";
+import { advisoryPackFiguresChanged, livePackMetrics } from "@/lib/advisory-pack";
+import { parseOperatingProfile } from "@/lib/client-profile";
+import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
+import { resolveMarket } from "@/lib/market/resolve";
 import {
   rankPortfolio,
   summarisePortfolio,
@@ -35,6 +39,48 @@ async function groupCount(
   const { data, error } = await q;
   if (error) return [];
   return (data ?? []) as Array<Record<string, unknown>>;
+}
+
+function asRecord(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  return raw as Record<string, unknown>;
+}
+
+/** Same comparison as the pack banner. A stale pack is not ready to sign. */
+function packFiguresAreStale(
+  client: {
+    financials: unknown;
+    cashflow: unknown;
+    market: unknown;
+    operating_profile: unknown;
+    financials_updated_at: string | null;
+  },
+  content: unknown,
+): boolean {
+  const financials = asRecord(client.financials);
+  const packed = asRecord(content);
+  if (!financials || !packed) return false;
+  try {
+    const market = resolveMarket(
+      parseMarketSelection(client.market) ?? coerceMarketSelection(client.market ?? null),
+    );
+    const fyStartMonth =
+      parseOperatingProfile(client.operating_profile)?.fyStartMonth ?? market.fyStartMonthDefault;
+    const live = livePackMetrics({
+      financials,
+      cashflow: client.cashflow,
+      financialsUpdatedAt: client.financials_updated_at,
+      market,
+      fyStartMonth,
+      timeZone: market.timezone,
+    });
+    return advisoryPackFiguresChanged(
+      packed as Parameters<typeof advisoryPackFiguresChanged>[0],
+      live.figures,
+    );
+  } catch {
+    return false;
+  }
 }
 
 function tally(
@@ -71,7 +117,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const { data: clientsRaw, error } = await sb
       .from("clients")
       .select(
-        "id, name, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at",
+        "id, name, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, financials, cashflow, market, operating_profile",
       )
       .eq("firm_id", data.firmId)
       .order("name")
@@ -85,6 +131,10 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
       next_review_at: string | null;
       financials_updated_at: string | null;
       last_login_at: string | null;
+      financials: unknown;
+      cashflow: unknown;
+      market: unknown;
+      operating_profile: unknown;
     }>;
     if (clients.length === 0) {
       return { rows: [], summary: summarisePortfolio([]), generatedAt: now };
@@ -115,8 +165,12 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
       groupCount(sb, "proposed_next_steps", ids, "client_id, status", (q) =>
         (q as { eq: (c: string, v: string) => unknown }).eq("status", "proposed"),
       ),
-      groupCount(sb, "advisory_packs", ids, "client_id, status, version, edit_stats", (q) =>
-        (q as { neq: (c: string, v: string) => unknown }).neq("status", "superseded"),
+      groupCount(
+        sb,
+        "advisory_packs",
+        ids,
+        "client_id, status, version, edit_stats, content",
+        (q) => (q as { neq: (c: string, v: string) => unknown }).neq("status", "superseded"),
       ),
       groupCount(
         sb,
@@ -150,7 +204,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     // Latest live pack per client (highest version).
     const packByClient = new Map<
       string,
-      { status: string; version: number; edit_rate: number | null }
+      { status: string; version: number; edit_rate: number | null; content: unknown }
     >();
     for (const p of packs) {
       const id = String(p.client_id);
@@ -162,6 +216,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
           status: String(p.status),
           version: v,
           edit_rate: es?.edit_rate ?? null,
+          content: p.content,
         });
       }
     }
@@ -207,6 +262,10 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
             : null,
         packVersion: pack?.version ?? null,
         packEditRate: pack?.edit_rate ?? null,
+        packFiguresStale:
+          pack != null &&
+          (pack.status === "in_review" || pack.status === "changes_requested") &&
+          packFiguresAreStale(c, pack.content),
         outcomesMissed: missed.get(c.id) ?? 0,
         outcomesMeasured: measured.get(c.id) ?? 0,
         lastLoginAt: c.last_login_at,

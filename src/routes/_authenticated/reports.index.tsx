@@ -54,7 +54,14 @@ import {
   reportScalarInputs,
 } from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
-import { NOT_SCORED_LABEL, scorePlaybookCatalogue, scoreRatio } from "@/lib/health-score";
+import {
+  NOT_SCORED_LABEL,
+  scorecardHealthFromFinancials,
+  scorePlaybookCatalogue,
+  scoreRatio,
+  type OverallHealth,
+} from "@/lib/health-score";
+import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
@@ -1153,6 +1160,10 @@ type ClientReportData = {
   /** Month name matching the studio dropdown, from the statement period end. */
   periodMonth: string | null;
   periodYear: string | null;
+  /** Same pillar/overall scores Ratios and Overview show. */
+  overallHealth: OverallHealth | null;
+  /** Firm row name for this client. Sign-off stamps from another firm are dropped. */
+  clientFirmName: string | null;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -1193,6 +1204,8 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   dataPeriodLabel: null,
   periodMonth: null,
   periodYear: null,
+  overallHealth: null,
+  clientFirmName: null,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -2016,7 +2029,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     supabase
       .from("clients")
       .select(
-        "id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at",
+        "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -2051,6 +2064,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
 
   const clientRow = clientRes.data as unknown as {
     name: string;
+    firm_id: string | null;
     cash_runway_weeks: number | null;
     financials: unknown;
     cashflow: unknown;
@@ -2065,6 +2079,16 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const market = resolveMarket(
     parseMarketSelection(clientRow?.market) ?? coerceMarketSelection(clientRow?.market ?? null),
   );
+  let clientFirmName: string | null = null;
+  if (clientRow?.firm_id) {
+    const firmRes = await supabase
+      .from("firms")
+      .select("name")
+      .eq("id", clientRow.firm_id)
+      .maybeSingle();
+    const name = firmRes.data?.name?.trim();
+    clientFirmName = name || null;
+  }
   const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
   const businessTypeId = clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
   const sectorBench = await loadSectorBenchmarks(businessTypeId);
@@ -2128,6 +2152,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     dataPeriodLabel,
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
+    clientFirmName,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -2222,6 +2247,13 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     assessed.runway.kind === "cash_generative" &&
     cashForecast != null &&
     forecastIsCashGenerative(forecastReceipts, forecastPayments);
+  const overallHealth = scorecardHealthFromFinancials({
+    financials: rawFin as Record<string, unknown>,
+    fyStartMonth,
+    cashRunwayWeeks: healthWeeks,
+    market,
+    shortfallWeek: assessed.outlook.shortfallWeek,
+  });
 
   return {
     hasData: true,
@@ -2259,6 +2291,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     dataPeriodLabel,
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
+    overallHealth,
+    clientFirmName,
   };
 }
 
@@ -2276,7 +2310,7 @@ function signoffFreshAt(scope: ReviewScope, cd: ClientReportData | null): string
   return cd.financialsUpdatedAt;
 }
 
-/** Only current (non-stale) sign-offs are stamped onto a report footer. */
+/** Only current (non-stale) sign-offs from this client's firm are stamped. */
 function signoffStampFor(
   scope: "financials" | "cash_forecast" | "profitability" | "budget",
   cd: ClientReportData | null,
@@ -2284,15 +2318,9 @@ function signoffStampFor(
   if (!cd) return null;
   const signoff = cd.reviewSignoffs[scope];
   const freshAt = signoffFreshAt(scope, cd);
-  if (!signoff || isSignoffStale(signoff, freshAt)) return null;
-  return {
-    signedOffByName: signoff.signed_off_by_name,
-    signedOffByInitials: signoff.signed_off_by_initials ?? null,
-    signedOffByTitle: signoff.signed_off_by_title,
-    firmName: signoff.firm_name,
-    signedOffAt: signoff.signed_off_at,
-    signatureData: signoff.signature_data ?? null,
-  };
+  return stampFromSignoff(signoff, isSignoffStale(signoff, freshAt), {
+    clientFirmName: cd.clientFirmName,
+  });
 }
 
 /** G19 — drop prior columns when the Studio toggle is off. */
@@ -2415,6 +2443,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         reviewSignoff: financialsStamp,
         operatingProfile,
         cashRunwayWeeks: isDemo ? null : (cd!.cashRunwayWeeks ?? null),
+        overallHealth: isDemo ? null : cd!.overallHealth,
         market,
       });
     },

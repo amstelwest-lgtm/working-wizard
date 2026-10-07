@@ -50,19 +50,24 @@ const styles = StyleSheet.create({
   milon: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint },
 });
 
+const FOOTER_CLOCK = {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+} as const;
+
 export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
   const market = usePdfMarket();
+  // Zone is the client's market (the PDF context), never the viewer's profile zone.
   const signoffDate = reviewSignoff
-    ? formatSignedOffDateTime(reviewSignoff.signedOffAt, market, {
-        firmTimeZone: profile.timeZone,
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? formatSignedOffDateTime(reviewSignoff.signedOffAt, market, FOOTER_CLOCK)
     : null;
+  const preparedAt = reviewSignoff
+    ? null
+    : formatSignedOffDateTime(new Date(), market, FOOTER_CLOCK);
 
   return (
     <View style={styles.wrapper} fixed={fixed}>
@@ -86,7 +91,9 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
                 {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
               </Text>
             </View>
-          ) : null}
+          ) : (
+            <Text style={styles.signoff}>Prepared {preparedAt}</Text>
+          )}
         </View>
 
         <Text

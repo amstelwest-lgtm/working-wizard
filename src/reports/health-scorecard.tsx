@@ -19,7 +19,11 @@ import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { DuPontStrip } from "@/components/pdf/dupont";
-import { computeOverallHealth, type HealthPillarId } from "@/lib/health-score";
+import {
+  computeOverallHealth,
+  type HealthPillarId,
+  type OverallHealth,
+} from "@/lib/health-score";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
 import { spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
@@ -53,6 +57,12 @@ export type HealthScorecardPDFProps = {
   reviewSignoff?: ReportSignoffStamp | null;
   /** When known, blended into the cash pillar (same rule as dashboard / client header). */
   cashRunwayWeeks?: number | null;
+  /**
+   * Pillar and overall scores from `scorecardHealthFromFinancials` — the same
+   * call Ratios and Overview use. When set, the headline does not re-average
+   * the presented rows.
+   */
+  overallHealth?: OverallHealth | null;
   market?: ResolvedMarket;
 };
 
@@ -201,17 +211,20 @@ export function HealthScorecardPDF({
   reviewSignoff,
   operatingProfile,
   cashRunwayWeeks,
+  overallHealth,
   market,
 }: HealthScorecardPDFProps) {
   const scoredForHealth = ratioResults.filter((r) => !r.unscored);
-  const overall = computeOverallHealth({
-    scoredRatios: scoredForHealth.map((r) => ({
-      name: r.ratio_name,
-      score: r.health_score,
-      pillar: r.pillar as HealthPillarId,
-    })),
-    cashRunwayWeeks,
-  });
+  const overall =
+    overallHealth ??
+    computeOverallHealth({
+      scoredRatios: scoredForHealth.map((r) => ({
+        name: r.ratio_name,
+        score: r.health_score,
+        pillar: r.pillar as HealthPillarId,
+      })),
+      cashRunwayWeeks,
+    });
   const overallScore = overall.overall;
   const overallTier = overall.displayStatus;
   const overallColor = TIER_META[overallTier].color;

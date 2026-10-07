@@ -9,6 +9,7 @@ import {
   catalogCopyIsClientFacing,
   computedDaysAp,
   computedDaysAr,
+  ratiosAgedReadLine,
   ratiosStatementFigures,
   configNeedsRefresh,
   countCheckedSources,
@@ -300,5 +301,25 @@ assert(
   !studio.includes('deliverableId="budget"'),
   "budget is not double-wired in the studio shell",
 );
+
+const agedEmpty = "Aged receivables as of 2026-10-07 · nothing outstanding";
+const agedWithStatement = ratiosAgedReadLine(
+  agedEmpty,
+  "ar",
+  { receivables: "9194.51", revenue: "100000", periodMonths: "12" },
+  { currency: "USD", locale: "en-US" },
+);
+assert(
+  agedWithStatement.includes("9,194.51") && !agedWithStatement.includes("nothing outstanding"),
+  agedWithStatement,
+);
+assert(
+  ratiosAgedReadLine("Aged receivables as of 2026-10-07 · 2 contacts", "ar", {
+    receivables: "9194.51",
+    revenue: "100000",
+  }).includes("2 contacts"),
+  "a named aged pull is left alone",
+);
+assert(studio.includes('id="ratios-statement-position"'), "Health & Ratios shows the statement Days AR/AP cards");
 
 console.log("deliverable-input-config-test: all assertions passed");

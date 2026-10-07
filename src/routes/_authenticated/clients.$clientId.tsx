@@ -77,6 +77,7 @@ import {
   healthMapFromRatios,
   overviewRatioInputs,
   overviewRatios,
+  scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
@@ -128,6 +129,8 @@ import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-clie
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { StatementArApTiles } from "@/components/statement-arap-fallback";
+import { hasStatementWorkingCapital } from "@/lib/collections";
 import { SageConnectCard } from "@/components/sage-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
@@ -1103,8 +1106,9 @@ function ClientView() {
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
-  const overallHealth: OverallHealth = computeOverallHealth({
-    ratios,
+  const overallHealth: OverallHealth = scorecardHealthFromFinancials({
+    financials,
+    fyStartMonth,
     cashRunwayWeeks: effectiveRunway,
     market: clientMarket,
     shortfallWeek: cashOutlook.shortfallWeek,
@@ -2132,9 +2136,12 @@ function ClientView() {
         cashFlowKnown: cashFlowKnown(financials),
       },
     );
+    const clientFirmName =
+      firmId && client.firm_id && firmId === client.firm_id ? profile.firmName : null;
     const financialsStamp = stampFromSignoff(
       financialsSignoff,
       computeIsStale(financialsSignoff, client.financials_updated_at ?? null),
+      { clientFirmName },
     );
     return pdf(
       HealthScorecardPDF({
@@ -2142,6 +2149,7 @@ function ClientView() {
         ratioResults,
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
+        overallHealth,
         reviewSignoff: financialsStamp,
         market: clientMarket,
       }) as Parameters<typeof pdf>[0],
@@ -2156,7 +2164,9 @@ function ClientView() {
     partMonth,
     financialsSignoff,
     profile,
+    firmId,
     effectiveRunway,
+    overallHealth,
     overviewScorecardPeriodLabel,
   ]);
 
@@ -3015,6 +3025,13 @@ function ClientView() {
                       ) : null}
                   </div>
 
+                  {hasStatementWorkingCapital(ratiosStatementFigures(financials)) ? (
+                    <StatementArApTiles
+                      position={ratiosStatementFigures(financials)}
+                      market={clientMarket}
+                      id="ratios-statement-position"
+                    />
+                  ) : null}
                   {/* Accounting connections — visible on Health & Ratios without opening Financials */}
                   <div
                     id="accounting-connect"
@@ -3025,12 +3042,16 @@ function ClientView() {
                       returnPath={`/clients/${clientId}`}
                       refreshToken={qboRefresh}
                       onSyncComplete={onQboSyncComplete}
+                      financials={financials}
+                      market={clientMarket}
                     />
                     <XeroConnectCard
                       clientId={clientId}
                       returnPath={`/clients/${clientId}`}
                       refreshToken={xeroRefresh}
                       onSyncComplete={onXeroSyncComplete}
+                      financials={financials}
+                      market={clientMarket}
                     />
                     <SageConnectCard
                       clientId={clientId}

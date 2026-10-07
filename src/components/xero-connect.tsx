@@ -14,6 +14,8 @@ import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-re
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 import { describeLedgerLink } from "@/lib/ledger-link-copy";
+import { ratiosAgedReadLine } from "@/lib/deliverable-input-config";
+import type { MoneyMarket } from "@/lib/market/format";
 
 type Props = {
   clientId: string | null;
@@ -22,6 +24,9 @@ type Props = {
   /** Bump to reload status after a sync started from another card. */
   refreshToken?: number;
   onSyncComplete?: (inputs: Record<string, string>, summary: XeroSyncResult["summary"]) => void;
+  /** Statement figures Collections uses. Empty aged pulls must not hide them. */
+  financials?: Record<string, unknown> | null;
+  market?: MoneyMarket;
 };
 
 function fmtDate(iso: string) {
@@ -63,7 +68,14 @@ function bankSummaryLines(input: {
   );
 }
 
-export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSyncComplete }: Props) {
+export function XeroConnectCard({
+  clientId,
+  returnPath,
+  refreshToken = 0,
+  onSyncComplete,
+  financials,
+  market,
+}: Props) {
   const fetchStatus = useServerFn(getXeroStatus);
   const fetchAuthUrl = useServerFn(getXeroAuthUrl);
   const doSync = useServerFn(triggerXeroSync);
@@ -283,9 +295,23 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                   : "Bank balances appear after the next Sync"}
               </span>
               <br />
-              <span id="xero-aged-ar-status">{lastSync?.agedArLine ?? status.agedArLine}</span>
+              <span id="xero-aged-ar-status">
+                {ratiosAgedReadLine(
+                  lastSync?.agedArLine ?? status.agedArLine,
+                  "ar",
+                  financials,
+                  market,
+                )}
+              </span>
               <br />
-              <span id="xero-aged-ap-status">{lastSync?.agedApLine ?? status.agedApLine}</span>
+              <span id="xero-aged-ap-status">
+                {ratiosAgedReadLine(
+                  lastSync?.agedApLine ?? status.agedApLine,
+                  "ap",
+                  financials,
+                  market,
+                )}
+              </span>
             </p>
           </div>
           <div className="ledger-connect__actions">

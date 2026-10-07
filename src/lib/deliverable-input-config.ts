@@ -13,6 +13,7 @@ import { periodMonthsOf } from "@/lib/ratios";
 import type { BudgetSeasonality } from "@/lib/budget.types";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import type { StatementWorkingCapital } from "@/lib/collections";
+import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 
 export const DELIVERABLE_INPUT_IDS = [
   "cash",
@@ -235,6 +236,31 @@ export function ratiosStatementFigures(financials: DayCoverFinancials): Statemen
     debtorDays: computedDaysAr(financials),
     creditorDays: computedDaysAp(financials),
   };
+}
+
+/**
+ * Ratios aged-report line, read from the same statement figures Collections shows.
+ * An empty aged pull must not say "nothing outstanding" while AR or AP is on the statements.
+ */
+export function ratiosAgedReadLine(
+  agedLine: string,
+  kind: "ar" | "ap",
+  financials: DayCoverFinancials,
+  market?: MoneyMarket,
+): string {
+  if (!/nothing outstanding/i.test(agedLine)) return agedLine;
+  const position = ratiosStatementFigures(financials);
+  const amount = kind === "ar" ? position.receivables : position.payables;
+  if (amount == null || Math.abs(amount) < 0.005) return agedLine;
+  const days = kind === "ar" ? position.debtorDays : position.creditorDays;
+  const money = formatMoney(amount, market, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const noun = kind === "ar" ? "accounts receivable" : "accounts payable";
+  const dayLabel = kind === "ar" ? "Days AR" : "Days AP";
+  const dayBit = days != null ? ` · ${dayLabel} ${days}` : "";
+  return agedLine.replace(/nothing outstanding/i, `${noun} ${money} on the statements${dayBit}`);
 }
 
 /**
