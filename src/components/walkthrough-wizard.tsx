@@ -10,6 +10,7 @@ import {
   markOnboardingDone,
   onboardingDone,
 } from "@/lib/onboarding";
+import { spotlightClickBlockers, type SpotBox } from "@/lib/spotlight-hole";
 
 export type WalkthroughVariant =
   | "owner"
@@ -340,6 +341,35 @@ function padFor(el: Element): number {
   return el instanceof HTMLElement && el.classList.contains("health-orb") ? ORB_PAD : SPOT_PAD;
 }
 
+function clickSpotsEqual(a: SpotBox[], b: SpotBox[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every(
+    (spot, i) =>
+      Math.abs(spot.top - b[i].top) < 1 &&
+      Math.abs(spot.left - b[i].left) < 1 &&
+      Math.abs(spot.width - b[i].width) < 1 &&
+      Math.abs(spot.height - b[i].height) < 1,
+  );
+}
+
+/** Lit feature, plus any extra controls that must stay clickable during the tour. */
+function readClickSpots(primary: Element | null, extraIds: readonly string[]): SpotBox[] {
+  const spots: SpotBox[] = [];
+  if (primary) {
+    const spot = measureSpot(primary);
+    spots.push({ top: spot.top, left: spot.left, width: spot.width, height: spot.height });
+  }
+  for (const id of extraIds) {
+    const el = document.getElementById(id);
+    if (!el || el === primary) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 1 && rect.height > 1) {
+      spots.push({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+    }
+  }
+  return spots;
+}
+
 function measureSpot(el: Element): Spot {
   const r = el.getBoundingClientRect();
   const vw = window.innerWidth;
@@ -451,6 +481,7 @@ export function WalkthroughWizard({
   ready = true,
   onComplete,
   onFinish,
+  passThroughIds = [],
 }: {
   onTabChange?: (tab: string) => void;
   userRole?: string | null;
@@ -462,6 +493,8 @@ export function WalkthroughWizard({
   onComplete?: () => void;
   /** Fires only when the last step's primary button is pressed (not on skip). */
   onFinish?: () => void;
+  /** Element ids that stay clickable even when they sit outside the spotlight. */
+  passThroughIds?: readonly string[];
 }) {
   const variant: WalkthroughVariant =
     variantProp ??
@@ -478,6 +511,7 @@ export function WalkthroughWizard({
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
   const [spot, setSpot] = useState<Spot | null>(null);
+  const [clickSpots, setClickSpots] = useState<SpotBox[]>([]);
   const [cardTop, setCardTop] = useState(28);
   const [cardMaxH, setCardMaxH] = useState(420);
   const prevTargetRef = useRef<string | null>(null);
@@ -486,7 +520,10 @@ export function WalkthroughWizard({
   const onTabChangeRef = useRef(onTabChange);
   const lastTabRef = useRef<string | null>(null);
   const spotRef = useRef<Spot | null>(null);
+  const clickSpotsRef = useRef<SpotBox[]>([]);
+  const passThroughIdsRef = useRef(passThroughIds);
   const paintTimersRef = useRef<number[]>([]);
+  passThroughIdsRef.current = passThroughIds;
 
   onTabChangeRef.current = onTabChange;
 
@@ -532,9 +569,18 @@ export function WalkthroughWizard({
       );
     };
 
+    const publishHoles = (el: Element | null) => {
+      const nextHoles = readClickSpots(el, passThroughIdsRef.current);
+      if (!clickSpotsEqual(clickSpotsRef.current, nextHoles)) {
+        clickSpotsRef.current = nextHoles;
+        setClickSpots(nextHoles);
+      }
+    };
+
     const layout = (el: Element | null) => {
       if (cancelled) return;
       const cardH = measuredCardHeight(cardRef.current);
+      publishHoles(el);
       if (!el) {
         if (spotRef.current !== null) {
           spotRef.current = null;
@@ -619,6 +665,11 @@ export function WalkthroughWizard({
         raf = 0;
         const el = activeElRef.current;
         const cardH = measuredCardHeight(cardRef.current);
+        const holes = readClickSpots(el && document.contains(el) ? el : null, passThroughIdsRef.current);
+        if (!clickSpotsEqual(clickSpotsRef.current, holes)) {
+          clickSpotsRef.current = holes;
+          setClickSpots(holes);
+        }
         if (!el || !document.contains(el)) {
           if (spotRef.current !== null) {
             spotRef.current = null;
@@ -663,6 +714,8 @@ export function WalkthroughWizard({
       .forEach((el) => el.classList.remove("wizard-highlight"));
     activeElRef.current = null;
     setSpot(null);
+    clickSpotsRef.current = [];
+    setClickSpots([]);
     setVisible(false);
     onComplete?.();
   };
@@ -700,17 +753,28 @@ export function WalkthroughWizard({
 
   return (
     <>
-      {/* Click catcher — does not dim; spotlight box-shadow dims around the hole */}
-      <div
-        aria-hidden
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 8000,
-          pointerEvents: "all",
-          background: spot ? "transparent" : "rgba(7, 9, 15, 0.68)",
-        }}
-      />
+      {/* Click catcher with the spotlight (and pass-through controls) cut out.
+          A full-viewport layer sat above the lit feature because the spotlight
+          is pointer-events: none, so clicks on Open queries never left /dashboard. */}
+      {spotlightClickBlockers(clickSpots, {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }).map((box, i) => (
+        <div
+          key={`${box.top}-${box.left}-${box.width}-${box.height}-${i}`}
+          aria-hidden
+          style={{
+            position: "fixed",
+            top: box.top,
+            left: box.left,
+            width: box.width,
+            height: box.height,
+            zIndex: 8000,
+            pointerEvents: "all",
+            background: spot ? "transparent" : "rgba(7, 9, 15, 0.68)",
+          }}
+        />
+      ))}
 
       {/* Spotlight hole: transparent pad + giant shadow darkens everything else */}
       {spot && (
