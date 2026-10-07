@@ -257,6 +257,7 @@ import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { SageConnectCard } from "@/components/sage-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -2986,6 +2987,7 @@ function Index() {
   const [btSaveError, setBtSaveError] = useState<string | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showXeroDialog, setShowXeroDialog] = useState(false);
+  const [showSageDialog, setShowSageDialog] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
   const [bankCashDraft, setBankCashDraft] = useState<
@@ -3170,6 +3172,7 @@ function Index() {
       showBankDrafter ||
       showQboDialog ||
       showXeroDialog ||
+      showSageDialog ||
       showCashFromBanks ||
       reviewOpen
     ) {
@@ -3183,6 +3186,7 @@ function Index() {
     showBankDrafter,
     showQboDialog,
     showXeroDialog,
+    showSageDialog,
     showCashFromBanks,
     reviewOpen,
   ]);
@@ -3725,6 +3729,7 @@ function Index() {
                   !reviewOpen &&
                   !showQboDialog &&
                   !showXeroDialog &&
+                  !showSageDialog &&
                   hydratedClientId === effectiveClientId
                 }
                 onTabChange={handleTourTabChange}
@@ -3811,6 +3816,15 @@ function Index() {
                         title="Connect Xero"
                       >
                         Xero
+                      </button>
+                      <button
+                        type="button"
+                        id="owner-header-sage"
+                        onClick={() => setShowSageDialog(true)}
+                        className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
+                        title="Connect Sage Accounting"
+                      >
+                        Sage
                       </button>
                     </>
                   )}
@@ -3951,6 +3965,13 @@ function Index() {
                               className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                             >
                               <Plug2 className="h-3.5 w-3.5" /> Connect Xero
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowSageDialog(true)}
+                              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                              <Plug2 className="h-3.5 w-3.5" /> Connect Sage
                             </button>
                           </>
                         )}
@@ -4105,8 +4126,8 @@ function Index() {
                 </DialogHeader>
                 <div className="flex flex-col gap-3 pt-2">
                   {(isUsCopy(boardMarket)
-                    ? (["files", "qbo", "xero", "bank"] as const)
-                    : (["bank", "xero", "files", "qbo"] as const)
+                    ? (["files", "qbo", "xero", "sage", "bank"] as const)
+                    : (["bank", "xero", "sage", "files", "qbo"] as const)
                   ).map((id) => {
                     const hero =
                       (isUsCopy(boardMarket) && id === "files") ||
@@ -4121,6 +4142,11 @@ function Index() {
                           ? () => {
                               setFirstRunStep(null);
                               setShowXeroDialog(true);
+                            }
+                        : id === "sage"
+                          ? () => {
+                              setFirstRunStep(null);
+                              setShowSageDialog(true);
                             }
                         : id === "files"
                           ? () => {
@@ -4137,6 +4163,8 @@ function Index() {
                         ? "Connect QuickBooks Online"
                         : id === "xero"
                           ? "Connect Xero"
+                        : id === "sage"
+                          ? "Connect Sage"
                         : id === "files"
                           ? isUsCopy(boardMarket)
                             ? "Upload Excel, ODS, CSV or PDF financials (recommended)"
@@ -4149,11 +4177,13 @@ function Index() {
                         ? "Live sync from QuickBooks Online"
                         : id === "xero"
                           ? "Live sync of P&L and balance sheet"
+                        : id === "sage"
+                          ? "Sage Business Cloud Accounting (South Africa)"
                         : id === "files"
                           ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
                           : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
                     const icon =
-                      id === "qbo" || id === "xero" ? (
+                      id === "qbo" || id === "xero" || id === "sage" ? (
                         <Plug2 className="h-4 w-4" />
                       ) : id === "files" ? (
                         <Database className="h-4 w-4" />
@@ -4178,6 +4208,8 @@ function Index() {
                                 ? "bg-emerald-500/10 text-emerald-400"
                                 : id === "xero"
                                   ? "bg-sky-500/10 text-sky-400"
+                                  : id === "sage"
+                                    ? "bg-emerald-500/10 text-emerald-300"
                                 : "bg-slate-700 text-slate-300"
                           }`}
                         >
@@ -4490,6 +4522,15 @@ function Index() {
                                         >
                                           <Plug2 className="h-4 w-4" />
                                           Connect Xero
+                                        </button>
+                                        <button
+                                          type="button"
+                                          id="owner-empty-sage"
+                                          onClick={() => setShowSageDialog(true)}
+                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                        >
+                                          <Plug2 className="h-4 w-4" />
+                                          Connect Sage
                                         </button>
                                         <button
                                           onClick={() => {
@@ -5475,6 +5516,23 @@ function Index() {
                     Live sync of P&amp;L and balance sheet, same path as QuickBooks.
                   </span>
                 </button>
+                <button
+                  type="button"
+                  id="owner-connect-sage"
+                  onClick={() => {
+                    setShowFinData(false);
+                    setShowSageDialog(true);
+                  }}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-slate-300 bg-white p-4 text-left transition-colors hover:border-[#b7872a]/70 hover:bg-[#d4a550]/10 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#d4a550]/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    <Plug2 className="h-4 w-4" />
+                    Connect Sage
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    Sage Business Cloud Accounting (South Africa). Email, password, and Company ID.
+                  </span>
+                </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
@@ -5968,6 +6026,51 @@ function Index() {
                       });
                   }
                   setShowQboDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showSageDialog} onOpenChange={setShowSageDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  Sage Accounting
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect Sage Business Cloud Accounting (South Africa). Milōn checks the login
+                  and stores it. Statement sync does not fill Health until figures are available.
+                </DialogDescription>
+              </DialogHeader>
+              <SageConnectCard
+                clientId={effectiveClientId}
+                onSyncComplete={(inputs) => {
+                  setV((prev) => ({
+                    ...prev,
+                    ...inputs,
+                  }));
+                  setHasRealFinancials(true);
+                  void handleOwnerFirstRealFinancialsUpload();
+                  setCashForecastReloadToken((n) => n + 1);
+                  if (effectiveClientId) {
+                    void runSyncAutoPopulate({
+                      clientId: effectiveClientId,
+                      fields: inputs,
+                      chosen: autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                      firstUpload: autoPopulateState?.firstUpload ?? true,
+                      firstActualsMonth: inputs.periodStart?.slice(0, 7) ?? null,
+                      fallbackMarket: workspaceMarket,
+                      surface: "owner_app",
+                    })
+                      .then(applyAutoPopulateResult)
+                      .catch((e) => {
+                        console.warn("auto-populate after Sage sync:", e);
+                        toast.error(
+                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                        );
+                      });
+                  }
+                  setShowSageDialog(false);
                 }}
               />
             </DialogContent>

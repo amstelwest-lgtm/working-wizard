@@ -32,9 +32,9 @@ export const XERO_YTD_FIELD_KEYS = [
 /** Same companion keys on a QuickBooks sync. */
 export const STATEMENT_YTD_FIELD_KEYS = XERO_YTD_FIELD_KEYS;
 
-/** Xero and QuickBooks both store an explicit from/to on the financials blob. */
+/** Xero, QuickBooks, and Sage each store an explicit from/to on the financials blob. */
 export function isDatedLedgerSource(source: string | null | undefined): boolean {
-  return source === "xero" || source === "qbo";
+  return source === "xero" || source === "qbo" || source === "sage";
 }
 
 const MONTH_STAMP = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}$/;

@@ -9,7 +9,7 @@
 
 import { readStatementMeta, yearToDateTitle, type YearBasis } from "@/lib/statement-period";
 
-export type LedgerProvider = "xero" | "qbo";
+export type LedgerProvider = "xero" | "qbo" | "sage";
 
 export type LedgerSyncFigures = {
   periodLabel: string | null;
@@ -54,7 +54,9 @@ function num(value: unknown): number | null {
 }
 
 function providerName(provider: LedgerProvider): string {
-  return provider === "xero" ? "Xero" : "QuickBooks";
+  if (provider === "xero") return "Xero";
+  if (provider === "sage") return "Sage";
+  return "QuickBooks";
 }
 
 export function figureSourcePhrase(source: string | null | undefined): string {
@@ -63,6 +65,8 @@ export function figureSourcePhrase(source: string | null | undefined): string {
       return "a saved Xero statement";
     case "qbo":
       return "a saved QuickBooks statement";
+    case "sage":
+      return "a saved Sage statement";
     case "upload":
     case "pdf_upload":
       return "an uploaded statement";

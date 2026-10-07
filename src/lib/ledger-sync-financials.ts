@@ -1,5 +1,5 @@
 /**
- * A successful Xero or QuickBooks sync owns the live figures.
+ * A successful Xero, QuickBooks, or Sage sync owns the live figures.
  *
  * Merging `{ ...previous, ...sync }` left the previous statement's identity
  * and any figure the new report omitted (a zero cash line, Xero current
@@ -17,7 +17,13 @@
 
 import { isDatedLedgerSource, readStatementMeta, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-period";
 
-export type LedgerSyncProvider = "qbo" | "xero";
+export type LedgerSyncProvider = "qbo" | "xero" | "sage";
+
+export function ledgerSyncProviderName(provider: LedgerSyncProvider): string {
+  if (provider === "qbo") return "QuickBooks";
+  if (provider === "xero") return "Xero";
+  return "Sage";
+}
 
 /** Period identity a dated sync replaces outright. */
 export const LEDGER_STATEMENT_KEYS = [
@@ -98,7 +104,7 @@ export function ledgerSyncWouldWipe(prev: unknown, fields: Record<string, unknow
 
 /** Shown on the connection card and the sync toast. Figures on file stay. */
 export function emptyLedgerSyncError(provider: LedgerSyncProvider): string {
-  const name = provider === "qbo" ? "QuickBooks" : "Xero";
+  const name = ledgerSyncProviderName(provider);
   return `${name} returned an empty statement (revenue, cash, assets and equity are all zero). Overview figures were left unchanged.`;
 }
 

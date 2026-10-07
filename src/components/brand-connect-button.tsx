@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from "react";
 
-type Brand = "quickbooks" | "xero";
+type Brand = "quickbooks" | "xero" | "sage";
 
 type Props = {
   brand: Brand;
@@ -12,7 +12,14 @@ type Props = {
 const LABEL: Record<Brand, string> = {
   quickbooks: "Connect to QuickBooks",
   xero: "Connect to Xero",
+  sage: "Connect to Sage",
 };
+
+function busyFallback(brand: Brand): string {
+  if (brand === "quickbooks") return "Opening QuickBooks…";
+  if (brand === "xero") return "Opening Xero…";
+  return "Checking Sage…";
+}
 
 /**
  * White circle with a simple “xero” wordmark in Xero blue.
@@ -40,9 +47,7 @@ export function BrandConnectButton({
   type = "button",
   ...rest
 }: Props) {
-  const label = busy
-    ? (busyLabel ?? (brand === "quickbooks" ? "Opening QuickBooks…" : "Opening Xero…"))
-    : LABEL[brand];
+  const label = busy ? (busyLabel ?? busyFallback(brand)) : LABEL[brand];
 
   return (
     <button
