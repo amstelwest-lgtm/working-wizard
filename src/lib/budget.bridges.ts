@@ -7,7 +7,12 @@ import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
 import { newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
-import { annualiseFinancials, FLOW_FIELD_KEYS } from "@/lib/ratios";
+import {
+  annualiseFinancials,
+  FLOW_FIELD_KEYS,
+  PERIOD_MONTHS_CHOSEN_KEY,
+  PERIOD_MONTHS_KEY,
+} from "@/lib/ratios";
 
 function num(v: string | number | null | undefined): number {
   if (v == null || v === "") return 0;
@@ -32,6 +37,17 @@ export type SeedFromFinancialsResult = {
 
 /** Annual budget revenue above this multiple of the annualised actual is not credible. */
 export const BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE = 3;
+
+/**
+ * Revenue or cost of sales above this multiple of the annualised actual
+ * cannot be a growth plan. It is a bad scale (a short period treated as a
+ * year, or a year multiplied again). Those plans are rebuilt.
+ */
+export const BUDGET_BROKEN_SCALE_MULTIPLE = 10;
+
+/** File note written when an order-of-magnitude plan is replaced. */
+export const BUDGET_REBUILT_NOTE =
+  "Rebuilt from the latest actuals. The stored plan was more than 10× annualised revenue or cost of sales, so it was not kept.";
 
 /** Inclusive day count of a statement span. Null when either date is missing. */
 export function inclusivePeriodDays(
@@ -61,19 +77,52 @@ function scaleFlowFields<T extends Record<string, unknown>>(fin: T, scale: numbe
   return out as T;
 }
 
+/** Stored period length, or null when the blob does not say. */
+function explicitPeriodMonths(fin: Record<string, unknown>): number | null {
+  const raw = fin[PERIOD_MONTHS_KEY];
+  if (raw == null || String(raw).trim() === "") return null;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw));
+  if (!Number.isFinite(n) || n < 1 || n > 12) return null;
+  return Math.round(n);
+}
+
+/** True when the accountant locked "Figures cover" rather than leaving the default. */
+function figuresCoverChosen(fin: Record<string, unknown>): boolean {
+  return String(fin[PERIOD_MONTHS_CHOSEN_KEY] ?? "").trim() === "1";
+}
+
 /**
  * Period P&L → a year, for the budget seed.
  * A dated span shorter than a year uses 365 / inclusive days, so 1–21 Sep
  * is not treated as one month or as a finished year. With no dates,
  * `periodMonths` scales the same way the ratio layer does (missing → 12).
+ *
+ * A locked Figures cover wins over the dates: 12 months stays a year, and
+ * a stated shorter length uses 12 / months. An unlocked length whose day
+ * scale is more than {@link BUDGET_BROKEN_SCALE_MULTIPLE} times the stated
+ * months is not applied — a two-day label must not turn one month into
+ * ~180× a year.
  */
 export function annualiseBudgetFinancials<T extends Record<string, unknown>>(fin: T): T {
+  const months = explicitPeriodMonths(fin);
+  if (figuresCoverChosen(fin) && months != null) {
+    if (months === 12) return fin;
+    return scaleFlowFields(fin, 12 / months);
+  }
+
   const days = inclusivePeriodDays(
     fin.periodStart as string | null | undefined,
     fin.periodEnd as string | null | undefined,
   );
   if (days != null && days > 0 && days < 360) {
-    return scaleFlowFields(fin, 365 / days);
+    const dayScale = 365 / days;
+    if (months != null && months < 12) {
+      const monthScale = 12 / months;
+      if (dayScale > monthScale * BUDGET_BROKEN_SCALE_MULTIPLE) {
+        return scaleFlowFields(fin, monthScale);
+      }
+    }
+    return scaleFlowFields(fin, dayScale);
   }
   return annualiseFinancials(fin);
 }
@@ -85,7 +134,10 @@ function withCostAliases(
   if (presentNumber(normalised.cogs) == null && presentNumber(normalised.cost_of_sales) != null) {
     normalised.cogs = normalised.cost_of_sales;
   }
-  if (presentNumber(normalised.fixedCosts) == null && presentNumber(normalised.operating_expenses) != null) {
+  if (
+    presentNumber(normalised.fixedCosts) == null &&
+    presentNumber(normalised.operating_expenses) != null
+  ) {
     normalised.fixedCosts = normalised.operating_expenses;
   }
   if (presentNumber(normalised.laborCost) == null && presentNumber(normalised.labourCost) != null) {
@@ -181,29 +233,96 @@ function budgetYearTotals(doc: BudgetDocument): { revenue: number; cogs: number 
   };
 }
 
+function annualisedActuals(periodFinancials: Record<string, string | number | null | undefined>): {
+  revenue: number | null;
+  cogs: number | null;
+} {
+  const annual = annualiseBudgetFinancials(withCostAliases(periodFinancials));
+  return {
+    revenue: presentNumber(annual.revenue),
+    cogs: presentNumber(annual.cogs),
+  };
+}
+
+function exceedsMultiple(budget: number, actual: number | null, multiple: number): boolean {
+  return actual != null && actual > 0 && budget > actual * multiple + 1;
+}
+
 /**
  * A stored budget that cannot be the same business as the latest actuals.
- * COGS of 0 while the period has cost of sales, or a year of revenue more
- * than about 3× the annualised actual. Callers prompt; they do not overwrite.
+ * COGS of 0 while the period has cost of sales, or a year of revenue or
+ * cost of sales more than about 3× the annualised actual. Callers prompt.
+ * An order-of-magnitude gap is rebuilt by {@link reseedBudgetIfScaleBroken}.
  */
 export function budgetIsImplausible(
   doc: BudgetDocument,
   periodFinancials: Record<string, string | number | null | undefined> | null | undefined,
 ): boolean {
   if (!periodFinancials) return false;
-  const annual = annualiseBudgetFinancials(withCostAliases(periodFinancials));
-  const actualRevenue = presentNumber(annual.revenue);
-  const actualCogs = presentNumber(annual.cogs);
+  const actual = annualisedActuals(periodFinancials);
   const budget = budgetYearTotals(doc);
-  if (actualCogs != null && actualCogs > 0 && budget.cogs <= 0.5) return true;
-  if (
-    actualRevenue != null &&
-    actualRevenue > 0 &&
-    budget.revenue > actualRevenue * BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE + 1
-  ) {
+  if (actual.cogs != null && actual.cogs > 0 && budget.cogs <= 0.5) return true;
+  if (exceedsMultiple(budget.revenue, actual.revenue, BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE))
     return true;
-  }
+  if (exceedsMultiple(budget.cogs, actual.cogs, BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE)) return true;
   return false;
+}
+
+export type BudgetScaleBreak = "revenue" | "cogs";
+
+/**
+ * Revenue or cost of sales more than 10× the annualised actual.
+ * That ratio is a broken scale, not a plan someone meant to keep.
+ */
+export function budgetScaleBreak(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, string | number | null | undefined> | null | undefined,
+): BudgetScaleBreak | null {
+  if (!periodFinancials) return null;
+  const actual = annualisedActuals(periodFinancials);
+  const budget = budgetYearTotals(doc);
+  if (exceedsMultiple(budget.revenue, actual.revenue, BUDGET_BROKEN_SCALE_MULTIPLE))
+    return "revenue";
+  if (exceedsMultiple(budget.cogs, actual.cogs, BUDGET_BROKEN_SCALE_MULTIPLE)) return "cogs";
+  return null;
+}
+
+export function budgetWasRebuiltFromActuals(doc: BudgetDocument): boolean {
+  return (doc.notes ?? []).some((note) =>
+    (note.text ?? "").startsWith("Rebuilt from the latest actuals."),
+  );
+}
+
+/**
+ * Replace a stored plan whose revenue or cost of sales is more than 10× the
+ * annualised actual. The replacement is the same seed a new budget would
+ * get, plus a file note. A second call is a no-op. If the seed would still
+ * be an order of magnitude off, the stored plan is left for the rebuild prompt.
+ */
+export function reseedBudgetIfScaleBroken(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, string | number | null | undefined> | null | undefined,
+): BudgetDocument {
+  const normalized = normalizeBudgetDocument(doc);
+  if (!periodFinancials || !budgetScaleBreak(normalized, periodFinancials)) return normalized;
+  const seeded = seedBudgetFromFinancials(normalized, periodFinancials);
+  if (budgetScaleBreak(seeded.doc, periodFinancials)) return normalized;
+  if (budgetWasRebuiltFromActuals(seeded.doc)) {
+    return normalizeBudgetDocument(seeded.doc);
+  }
+  return normalizeBudgetDocument({
+    ...seeded.doc,
+    notes: [
+      ...(seeded.doc.notes ?? []),
+      {
+        id: newId("note"),
+        at: new Date().toISOString(),
+        by: "Milōn",
+        kind: "note" as const,
+        text: BUDGET_REBUILT_NOTE,
+      },
+    ],
+  });
 }
 
 /** Apply period financials into budget assumptions (does not invent volume history). */

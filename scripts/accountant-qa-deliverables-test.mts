@@ -8,7 +8,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { REPORT_CATALOG, reportKicker } from "../src/lib/report-catalog";
-import { budgetIsImplausible, seedBudgetFromFinancials } from "../src/lib/budget.bridges";
+import {
+  annualiseBudgetFinancials,
+  budgetIsImplausible,
+  budgetScaleBreak,
+  budgetWasRebuiltFromActuals,
+  reseedBudgetIfScaleBroken,
+  seedBudgetFromFinancials,
+} from "../src/lib/budget.bridges";
 import { laborProductivityFileStem, laborProductivityTitle } from "../src/lib/market/copy";
 import { formatDateTime } from "../src/lib/market/format";
 import { createBudgetDocument } from "../src/lib/budget.months";
@@ -205,6 +212,73 @@ edited.revenueLines = edited.revenueLines.map((line, index) =>
     : line,
 );
 assert(!budgetIsImplausible(edited, yankeesPeriod), "an edited budget under 3x is not replaced");
+assert(budgetScaleBreak(edited, yankeesPeriod) == null, "a 2× plan is not an order-of-magnitude break");
+assert(
+  reseedBudgetIfScaleBroken(edited, yankeesPeriod).revenueLines[0]?.months["2026-01"]?.price ===
+    edited.revenueLines[0]?.months["2026-01"]?.price,
+  "a plan under 10× is left alone",
+);
+
+const staleRevenue = computeBudgetMonths(staleBudget, staleBudget.activeScenario).reduce(
+  (sum, row) => sum + row.revenue,
+  0,
+);
+const rebuilt = reseedBudgetIfScaleBroken(staleBudget, yankeesPeriod);
+const rebuiltRows = computeBudgetMonths(rebuilt, rebuilt.activeScenario);
+const rebuiltRevenue = rebuiltRows.reduce((sum, row) => sum + row.revenue, 0);
+const rebuiltCogs = rebuiltRows.reduce((sum, row) => sum + row.cogs, 0);
+assert(budgetScaleBreak(staleBudget, yankeesPeriod) === "revenue", "about 15× revenue is a broken scale");
+assert(staleRevenue > rebuiltRevenue * 10, `stored plan ${staleRevenue} is more than 10× the reseed ${rebuiltRevenue}`);
+assert(
+  Math.abs(rebuiltRevenue - 150_060) < 50,
+  `reseed annualises the 21-day period near $150k, got ${rebuiltRevenue}`,
+);
+assert(rebuiltCogs > 12_000 && rebuiltCogs < 15_000, `reseeded COGS stays with the period, got ${rebuiltCogs}`);
+assert(budgetWasRebuiltFromActuals(rebuilt), "the rebuild is a file note");
+assert(budgetScaleBreak(rebuilt, yankeesPeriod) == null, "the rebuilt plan matches the annualised actuals");
+const rebuiltAgain = reseedBudgetIfScaleBroken(rebuilt, yankeesPeriod);
+const rebuildNotes = (rebuiltAgain.notes ?? []).filter((note) =>
+  (note.text ?? "").startsWith("Rebuilt from the latest actuals."),
+);
+assert(rebuildNotes.length === 1, "reseed does not stack a second rebuild note");
+
+const cogsBlow = seedBudgetFromFinancials(budgetDoc(), yankeesPeriod).doc;
+cogsBlow.cogsMode = "per_unit";
+cogsBlow.gpPct = 0;
+const primaryId = cogsBlow.revenueLines[0]?.id ?? "";
+cogsBlow.cogsPerUnit = { ...cogsBlow.cogsPerUnit, [primaryId]: 200_000 };
+assert(budgetScaleBreak(cogsBlow, yankeesPeriod) === "cogs", "COGS an order of magnitude above actuals is a break");
+const cogsFixed = reseedBudgetIfScaleBroken(cogsBlow, yankeesPeriod);
+const cogsFixedTotal = computeBudgetMonths(cogsFixed, cogsFixed.activeScenario).reduce(
+  (sum, row) => sum + row.cogs,
+  0,
+);
+assert(cogsFixedTotal > 12_000 && cogsFixedTotal < 15_000, `COGS blow-up reseeds, got ${cogsFixedTotal}`);
+assert(budgetWasRebuiltFromActuals(cogsFixed), "a COGS blow-up leaves the same rebuild note");
+
+const twoDay = annualiseBudgetFinancials({
+  revenue: "10000",
+  cogs: "4000",
+  periodMonths: "1",
+  periodStart: "2026-09-01",
+  periodEnd: "2026-09-02",
+});
+assert(
+  Math.abs(Number(twoDay.revenue) - 120_000) < 1,
+  `a 2-day label on a stated month stays ×12, got ${twoDay.revenue}`,
+);
+assert(Number(twoDay.revenue) < 100_000 * 10, "day scale must not turn one month into ~180×");
+
+const lockedYear = annualiseBudgetFinancials({
+  revenue: "150000",
+  cogs: "13500",
+  periodMonths: "12",
+  periodMonthsChosen: "1",
+  periodStart: "2026-09-01",
+  periodEnd: "2026-09-21",
+});
+assert(Number(lockedYear.revenue) === 150_000, "a locked 12-month cover is not multiplied by 365/21");
+assert(Number(lockedYear.cogs) === 13_500, "locked-year COGS is not scaled again");
 
 const budgetPanel = read("src/components/budget/budget-panel.tsx");
 assert(
@@ -213,7 +287,19 @@ assert(
 );
 assert(
   budgetPanel.includes("budgetIsImplausible"),
-  "a stored budget is checked instead of overwritten on load",
+  "a stored budget inside 10× is checked instead of overwritten on load",
+);
+assert(
+  budgetPanel.includes("reseedBudgetIfScaleBroken"),
+  "an order-of-magnitude plan is rebuilt on load",
+);
+assert(
+  budgetPanel.includes("This budget was rebuilt from the latest actuals"),
+  "the rebuild is visible on the budget tab",
+);
+assert(
+  read("src/routes/_authenticated/reports.index.tsx").includes("reseedBudgetIfScaleBroken"),
+  "budget reports do not trust a stored plan that is 10× the actuals",
 );
 
 assert(laborProductivityTitle({ copyPack: "us" }) === "Labor Productivity", "US card title");
