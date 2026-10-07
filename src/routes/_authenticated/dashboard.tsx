@@ -1788,7 +1788,7 @@ function Dashboard() {
                 navigate({ to: "/settings" });
               }}
             />
-            <span className="profile-chip" title={profile.accountantName || user?.email || ""}>
+            <span className="profile-chip" title={greetingSource || user?.email || ""}>
               <span className="av">{profileInitials || "·"}</span>
               {greetName}
             </span>
