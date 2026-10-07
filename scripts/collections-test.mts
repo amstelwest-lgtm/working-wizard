@@ -380,8 +380,12 @@ eq(rolled[0]?.label, "Current", "age columns keep report order");
 eq(rolled[0]?.amount, 125, "current balances add across contacts");
 eq(rolled[1]?.amount, 40, "aged balances add across contacts");
 assert(collectionsStatementLead("us").includes("Days sales outstanding"), "US lead names DSO");
+assert(collectionsStatementLead("us").includes("Days AR"), "US lead names Ratios Days AR");
 assert(collectionsStatementLead("us").includes("QuickBooks"), "US lead offers QuickBooks");
+assert(!collectionsStatementLead("us").includes("Overview"), "US lead does not claim Overview");
 assert(collectionsStatementLead("za").includes("Debtor days"), "ZA lead names debtor days");
+assert(collectionsStatementLead("za").includes("Ratios"), "ZA lead names Ratios");
+assert(!collectionsStatementLead("za").includes("Overview"), "ZA lead does not claim Overview");
 assert(collectionsNoFiguresLead().includes("QuickBooks"), "no-figures lead is not Xero-only");
 
 const panel = readFileSync(resolve("src/components/collections-panel.tsx"), "utf8");
@@ -396,7 +400,11 @@ assert(panel.includes("COLLECTIONS_UPLOAD_CTA"), "the panel renders the upload C
 assert(panel.includes("COLLECTIONS_XERO_CTA"), "the panel renders the Xero CTA");
 assert(panel.includes("COLLECTIONS_QBO_CTA"), "the panel renders the QuickBooks CTA");
 assert(panel.includes('id="collections-connect-qbo"'), "QuickBooks button is addressable");
-assert(rail.includes("readStatementDays"), "Collections reads the same day counts as Ratios");
+assert(rail.includes("ratiosStatementFigures"), "Collections uses the Ratios Days AR / Days AP helper");
+assert(
+  !rail.includes('readStatementDays(ratios["Debtor Days"])'),
+  "Collections does not re-derive days from the health-score path",
+);
 assert(rail.includes("onConnectQbo"), "Collections can open the QuickBooks dialog");
 assert(rail.includes("Upload aged debtors and creditors"), "the upload dialog names the aged report");
 

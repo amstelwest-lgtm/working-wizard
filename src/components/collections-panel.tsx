@@ -1,8 +1,9 @@
 /**
  * Accountant Collections — a weekly chase list from the aged receivables cache.
- * When that cache is empty, the tab still shows the AR/AP totals and day counts
- * already on Overview and Ratios, with a way to upload the age analysis or
- * connect Xero or QuickBooks. Drafts go through the recommendation → Action Plan loop.
+ * When that cache is empty, the tab still shows AR $, AP $, Days AR, and Days AP
+ * from ratiosStatementFigures — the same helper as the Ratios tab — with a way
+ * to upload the age analysis or connect Xero or QuickBooks. Drafts go through
+ * the recommendation → Action Plan loop.
  */
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -30,7 +31,7 @@ type CopyMarket = MoneyMarket & { copyPack?: "za" | "us" };
 type Props = {
   clientId: string;
   market?: CopyMarket;
-  /** Receivables, payables, and day counts already computed for Overview / Ratios. */
+  /** Receivables, payables, Days AR, and Days AP from ratiosStatementFigures. */
   position?: StatementWorkingCapital | null;
   periodLabel?: string | null;
   onUploadAged?: () => void;
