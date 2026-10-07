@@ -11,9 +11,12 @@ import { derivePeriodWaterfallFallback } from "../src/lib/weekly-inputs";
 import { healthFromFlatFinancials } from "../src/lib/health-score";
 import {
   assessClientMetrics,
+  clientRunway,
   cycleTimelineAxis,
   resolveThirteenWeekForecast,
   forecastMinimumCash,
+  RUNWAY_INSUFFICIENT_LABEL,
+  RUNWAY_PROFITABLE_LABEL,
   scoreCreditorDays,
   scoreWorkingCapitalDays,
   scoreWorkingCapitalFunding,
@@ -125,7 +128,9 @@ assert((waterfall.depreciation ?? 0) === 0, "reconciled opex has no depreciation
 const onFile = assessClientMetrics({ financials: mapped });
 assert(onFile.cash.amount === 25_000 && onFile.cash.source === "period", "TB cash is the cash source");
 assert(
-  onFile.runway.kind === "unknown" && onFile.runway.label === "Not enough data",
+  onFile.runway.kind === "unknown" &&
+    onFile.runway.label ===
+      "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway",
   `P&L cash without a cash-flow line is not cash generative, got ${onFile.runway.kind} ${onFile.runway.label}`,
 );
 assert(onFile.runway.weeks !== 0 && onFile.runway.label !== "0 weeks", "positive cash is not 0 weeks");
@@ -158,7 +163,9 @@ const staleForecast = assessClientMetrics({
 });
 assert(staleForecast.cash.amount === 7430.22, "stale forecast opening is not Overview cash");
 assert(
-  staleForecast.runway.kind === "unknown" && staleForecast.runway.label === "Not enough data",
+  staleForecast.runway.kind === "unknown" &&
+    staleForecast.runway.label ===
+      "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway",
   "a stale forecast opening is not cash-flow evidence",
 );
 
@@ -382,6 +389,17 @@ const plOnly = assessClientMetrics({
 assert(
   plOnly.runway.kind === "unknown" && plOnly.runway.label === "Not enough data",
   `hand-entered P&L is not cash generative, got ${plOnly.runway.label}`,
+);
+
+const profitable = clientRunway({ cash: 25000, netIncome: 33000 });
+assert(
+  profitable.kind === "unknown" && profitable.weeks === null && profitable.label === RUNWAY_PROFITABLE_LABEL,
+  "cash plus a P&L profit asks for a cash-flow statement",
+);
+const noProfitFigure = clientRunway({ cash: 15000, netIncome: null });
+assert(
+  noProfitFigure.kind === "unknown" && noProfitFigure.label === RUNWAY_INSUFFICIENT_LABEL,
+  "cash without a profit figure stays not enough data",
 );
 assert(yankeesHealth.overall === 71 && yankeesHealth.displayLabel === "Watch", `Yankees health ${yankeesHealth.overall} ${yankeesHealth.displayLabel}`);
 assert(yankeesBrief.health === 71 && yankeesBrief.healthLabel === "Watch", "bot brief matches Overview");

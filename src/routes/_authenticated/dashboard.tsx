@@ -1059,7 +1059,7 @@ function Dashboard() {
     };
   }, [user, navigate]);
 
-  const { firmId, firms, brandLoading, profile, refreshFirms } = useAccountantProfile();
+  const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource } = useAccountantProfile();
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -1528,8 +1528,8 @@ function Dashboard() {
   const queriesDestination = firmOpenQueriesDestination(clientRows);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
-  const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
-  const greeting = practiceGreeting(profile.accountantName || user?.email?.split("@")[0]);
+  const greetName = firstNameOf(greetingSource);
+  const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();

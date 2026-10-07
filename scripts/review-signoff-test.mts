@@ -125,7 +125,25 @@ const mig = readFileSync(resolve("supabase/migrations/20260831120000_review_sign
 assert(mig.includes("signature_data"), "migration adds signature column");
 assert(mig.includes("action_plan"), "migration allows action_plan scope");
 
+const identityLock = readFileSync(
+  resolve("supabase/migrations/20261007210000_review_signoff_identity_lock.sql"),
+  "utf8",
+);
+assert(identityLock.includes("BEFORE INSERT OR UPDATE"), "identity trigger runs before the write");
+assert(identityLock.includes("profiles"), "signer name is forced from the actor profile");
+assert(identityLock.includes("firms"), "firm name is forced from the client's firm");
+assert(identityLock.includes("signed_off_by_id cannot be changed"), "signer id is locked on update");
+assert(identityLock.includes("signed_off_at cannot be changed"), "signed time is locked on update");
+assert(identityLock.includes("signed_off_by_name cannot be changed"), "signer name is locked on update");
+assert(identityLock.includes("firm_name cannot be changed"), "firm name is locked on update");
+assert(
+  identityLock.includes("NEW.signed_off_by_initials := public.review_signoff_initials(actor_name)"),
+  "initials are forced from the actor name",
+);
+
 const uiSrc = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
+assert(uiSrc.includes("isSamplePracticeSignoff"), "sample identity is not shown as signed");
+assert(uiSrc.includes("signoffForDisplay"), "Ratios badge drops a sample-practice row");
 assert(uiSrc.includes("Your signature"), "accountant can draw a signature");
 assert(uiSrc.includes("data-signoff-certificate"), "proof uses the gold certificate");
 assert(uiSrc.includes("data-signoff-corner"), "owner board uses the corner signature stamp");

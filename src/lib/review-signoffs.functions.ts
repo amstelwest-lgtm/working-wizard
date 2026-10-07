@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { persistedSignoffFirmName, persistedSignerName } from "@/lib/accountant-identity";
 
 export const REVIEW_SCOPES = [
   "financials",
@@ -251,19 +252,40 @@ export const signoffReview = createServerFn({ method: "POST" })
     await assertClientAccess(userData.user.id, data.clientId, sb);
     await assertCanSignOff(userData.user.id, data.clientId, sb);
 
-    // Trusted display name from auth user metadata (signup personal info).
+    // Name and firm come from the database. The dialog's firmName is ignored.
     const meta = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
-    const trustedName =
-      (typeof meta.full_name === "string" && meta.full_name.trim()) ||
-      (typeof meta.name === "string" && meta.name.trim()) ||
-      (userData.user.email ? userData.user.email.split("@")[0] : null);
+    const { data: profileRow, error: profileErr } = await sb
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userData.user.id)
+      .maybeSingle();
+    if (profileErr) throw new Error(profileErr.message);
+    const trustedName = persistedSignerName({
+      profileFullName: profileRow?.full_name,
+      authFullName: typeof meta.full_name === "string" ? meta.full_name : null,
+      authName: typeof meta.name === "string" ? meta.name : null,
+      email: userData.user.email,
+    });
     if (!trustedName) throw new Error("Cannot determine signer name from account");
 
+    const { data: clientRow, error: clientErr } = await sb
+      .from("clients")
+      .select("firm_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (clientErr) throw new Error(clientErr.message);
+    let clientFirmName: string | null = null;
+    if (clientRow?.firm_id) {
+      const { data: firmRow, error: firmErr } = await sb
+        .from("firms")
+        .select("name")
+        .eq("id", clientRow.firm_id)
+        .maybeSingle();
+      if (firmErr) throw new Error(firmErr.message);
+      clientFirmName = firmRow?.name ?? null;
+    }
+
     const initials = initialsFromName(trustedName);
-    const firmFromMeta =
-      typeof meta.firm_name === "string" && meta.firm_name.trim()
-        ? meta.firm_name.trim()
-        : null;
     const signatureData =
       typeof data.signatureData === "string" && data.signatureData.startsWith("data:image/")
         ? data.signatureData
@@ -279,7 +301,7 @@ export const signoffReview = createServerFn({ method: "POST" })
           signed_off_by_name: trustedName,
           signed_off_by_initials: initials || null,
           signed_off_by_title: data.accountantTitle ?? null,
-          firm_name: data.firmName?.trim() || firmFromMeta,
+          firm_name: persistedSignoffFirmName({ clientFirmName }),
           note: data.note ?? null,
           signature_data: signatureData,
           signed_off_at: new Date().toISOString(),

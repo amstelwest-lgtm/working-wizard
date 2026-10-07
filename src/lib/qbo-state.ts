@@ -62,6 +62,37 @@ export function readQboRealmId(params: { get(name: string): string | null }): st
   return null;
 }
 
+export type QboRealmOwner = {
+  clientId: string;
+  clientName: string;
+  firmId: string | null;
+};
+
+/**
+ * Another client in the same firm already holds this QuickBooks company.
+ * The same client reconnecting, or a client in a different firm, is allowed.
+ * Returns the other client's name when the connection must be refused.
+ */
+export function qboDuplicateRealmClientName(input: {
+  clientId: string;
+  firmId: string | null;
+  owners: QboRealmOwner[];
+}): string | null {
+  if (!input.firmId) return null;
+  const other = input.owners.find(
+    (owner) => owner.clientId !== input.clientId && owner.firmId === input.firmId,
+  );
+  if (!other) return null;
+  const name = other.clientName.replace(/[\r\n]+/g, " ").trim();
+  return name || "another client";
+}
+
+export function qboDuplicateRealmReason(clientName: string): string {
+  const name = clientName.replace(/[\r\n]+/g, " ").trim() || "another client";
+  const clipped = name.length > 80 ? `${name.slice(0, 77)}…` : name;
+  return `This QuickBooks company is already connected to ${clipped}`;
+}
+
 /** Intuit error codes are short tokens. Anything else becomes a fixed reason. */
 export function sanitizeQboOauthReason(raw: string | null | undefined): string {
   const value = (raw ?? "").trim().toLowerCase();

@@ -2,7 +2,15 @@
  * QuickBooks OAuth callback checks — no I/O, no live Intuit calls.
  * Run: pnpm test:qbo-state
  */
-import { qboOauthCallbackIssue, readQboRealmId, sanitizeQboOauthReason } from "../src/lib/qbo-state";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  qboDuplicateRealmClientName,
+  qboDuplicateRealmReason,
+  qboOauthCallbackIssue,
+  readQboRealmId,
+  sanitizeQboOauthReason,
+} from "../src/lib/qbo-state";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -37,5 +45,44 @@ assert(readQboRealmId(new URLSearchParams("realmId=official&realmid=other")) ===
 
 assert(sanitizeQboOauthReason("access_denied") === "access_denied", "intuit error passes through");
 assert(sanitizeQboOauthReason("Missing parameter: redirect_uri") === "denied", "prose is not a reason token");
+
+const yankees = "11111111-1111-4111-8111-111111111111";
+const qaUs = "22222222-2222-4222-8222-222222222222";
+const firm = "33333333-3333-4333-8333-333333333333";
+const otherFirm = "44444444-4444-4444-8444-444444444444";
+const owners = [
+  { clientId: yankees, clientName: "New York Yankees", firmId: firm },
+  { clientId: qaUs, clientName: "QA US", firmId: firm },
+];
+assert(
+  qboDuplicateRealmClientName({ clientId: qaUs, firmId: firm, owners }) === "New York Yankees",
+  "same firm, other client blocks the realm",
+);
+assert(
+  qboDuplicateRealmClientName({
+    clientId: yankees,
+    firmId: firm,
+    owners: [{ clientId: yankees, clientName: "New York Yankees", firmId: firm }],
+  }) === null,
+  "the same client may reconnect its own realm",
+);
+assert(
+  qboDuplicateRealmClientName({
+    clientId: qaUs,
+    firmId: otherFirm,
+    owners: [{ clientId: yankees, clientName: "New York Yankees", firmId: firm }],
+  }) === null,
+  "a realm on another firm is not a duplicate",
+);
+assert(
+  qboDuplicateRealmReason("New York Yankees") ===
+    "This QuickBooks company is already connected to New York Yankees",
+  "duplicate realm error names the other client",
+);
+
+const callbackSrc = readFileSync(resolve("src/routes/api/qbo/callback.ts"), "utf8");
+assert(callbackSrc.includes("qboDuplicateRealmClientName"), "callback refuses a duplicate realm");
+assert(callbackSrc.includes("qboDuplicateRealmReason"), "callback redirects with the client name");
+assert(!callbackSrc.includes("onConflict: \"realm_id\""), "upsert stays per client");
 
 console.log("qbo-state ok");

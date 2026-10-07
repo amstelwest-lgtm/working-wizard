@@ -24,6 +24,7 @@ import {
   type DeliverableWorkflow,
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
+import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
 
 export const SCOPE_LABEL: Record<ReviewScope, string> = {
   financials: "this period's financials / health",
@@ -312,6 +313,20 @@ function SignaturePad({
   );
 }
 
+/** A sample-practice row is not a sign-off. The Ratios badge must not say signed. */
+function signoffForDisplay(signoff: ClientReviewSignoff | null): ClientReviewSignoff | null {
+  if (!signoff) return null;
+  if (
+    isSamplePracticeSignoff({
+      name: signoff.signed_off_by_name,
+      firmName: signoff.firm_name,
+    })
+  ) {
+    return null;
+  }
+  return signoff;
+}
+
 /**
  * Read-only sign-off certificate for the client-facing (owner) side.
  * Renders nothing when there has never been a sign-off for this scope.
@@ -332,10 +347,11 @@ export function ReviewSignoffBadge({
   compact?: boolean;
   placement?: SignoffPlacement;
 }) {
-  if (!signoff) return null;
+  const shown = signoffForDisplay(signoff);
+  if (!shown) return null;
   return (
     <SignoffCertificate
-      signoff={signoff}
+      signoff={shown}
       scope={scope}
       isStale={isStale}
       placement={placement ?? (compact ? "compact" : "block")}
@@ -430,8 +446,9 @@ export function ReviewSignoffButton({
     };
   }, [clientId, scope, signoff?.id, signoff?.signed_off_at, isStale, loadWorkflow]);
 
+  const shownSignoff = signoffForDisplay(signoff);
   const cycleStatus =
-    signoff && !isStale ? "signed_off" : (workflow?.status === "ready_for_review" ? "ready_for_review" : "draft");
+    shownSignoff && !isStale ? "signed_off" : (workflow?.status === "ready_for_review" ? "ready_for_review" : "draft");
   const canSubmit = workflow?.canSubmit ?? false;
   const canReview = workflow?.canReview ?? false;
   const canSignOff = workflow?.canSignOff ?? false;
@@ -475,11 +492,11 @@ export function ReviewSignoffButton({
     }
   };
 
-  if (signoff && !isStale) {
+  if (shownSignoff && !isStale) {
     return (
       <div className={compact ? "flex flex-col items-end" : "mt-2 w-full max-w-md"}>
         <SignoffCertificate
-          signoff={signoff}
+          signoff={shownSignoff}
           scope={scope}
           isStale={false}
           placement={compact ? "compact" : "block"}
@@ -517,9 +534,9 @@ export function ReviewSignoffButton({
 
   return (
     <div className={compact ? "flex flex-col items-end gap-2" : "mt-2 flex w-full max-w-md flex-col items-end gap-2"}>
-      {signoff && isStale && (
+      {shownSignoff && isStale && (
         <SignoffCertificate
-          signoff={signoff}
+          signoff={shownSignoff}
           scope={scope}
           isStale
           placement={compact ? "compact" : "block"}
@@ -550,7 +567,7 @@ export function ReviewSignoffButton({
             className={SIGNOFF_GOLD_BTN}
           >
             <PenLine className="h-3.5 w-3.5" />
-            {signoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
+            {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
           </button>
         ) : null}
         {workflow && canSubmit && cycleStatus === "draft" ? (
@@ -603,7 +620,7 @@ export function ReviewSignoffButton({
             className={SIGNOFF_GOLD_BTN}
           >
             <PenLine className="h-3.5 w-3.5" />
-            {signoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
+            {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
           </button>
         ) : null}
       </div>

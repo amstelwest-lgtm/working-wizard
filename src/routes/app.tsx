@@ -317,7 +317,7 @@ export const Route = createFileRoute("/app")({
     if (
       typeof search.reason === "string" &&
       search.reason.length > 0 &&
-      search.reason.length <= 80
+      search.reason.length <= 180
     ) {
       out.reason = search.reason;
     }
