@@ -1,0 +1,230 @@
+/**
+ * Sage Business Cloud Accounting (SA) connect scaffolding.
+ * No live Sage calls. Run: pnpm test:sage-connect
+ */
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  applyLedgerSyncFinancials,
+  emptyLedgerSyncError,
+  ledgerSyncWouldWipe,
+} from "../src/lib/ledger-sync-financials";
+import { describeLedgerLink } from "../src/lib/ledger-link-copy";
+import { isDatedLedgerSource } from "../src/lib/statement-period";
+import {
+  SAGE_EMPTY_SYNC_MESSAGE,
+  decryptSagePassword,
+  encryptSagePassword,
+  parseSageCompany,
+  sageBasicAuthorization,
+  sageCompanyValidateUrl,
+  sageConnectionInsert,
+  sageCredentialsConfigured,
+  sageSyncWriteDecision,
+  sageValidateError,
+  validateSageLogin,
+} from "../src/lib/sage";
+
+function assert(cond: boolean, msg: string) {
+  if (!cond) throw new Error(msg);
+}
+
+function read(path: string) {
+  return readFileSync(resolve(path), "utf8");
+}
+
+process.env.SESSION_SECRET = "sage-test-session-secret";
+process.env.SAGE_SA_API_KEY = "test-api-key";
+
+assert(sageCredentialsConfigured(), "API key marks Sage as configured");
+delete process.env.SAGE_SA_API_KEY;
+assert(!sageCredentialsConfigured(), "missing API key is not configured");
+process.env.SAGE_SA_API_KEY = "test-api-key";
+
+const auth = sageBasicAuthorization("owner@example.co.za", "p@ss:word");
+assert(auth.startsWith("Basic "), "Basic auth prefix");
+assert(!auth.includes("p@ss:word"), "password is not left in the header text");
+assert(atob(auth.slice("Basic ".length)).includes("owner@example.co.za"), "email is in the basic token");
+
+const url = sageCompanyValidateUrl("42", "test-api-key");
+assert(url.startsWith("https://accounting.sageone.co.za/api/2.0.0/Company/Get/42"), "validate hits Company/Get");
+assert(url.includes("apikey=test-api-key"), "API key is the apikey query parameter");
+assert(url.includes("companyid=42"), "company id is sent with the company read");
+assert(!url.includes("/oauth"), "validate URL is not an OAuth endpoint");
+
+const parsed = parseSageCompany({ ID: 42, Name: "Cape Books" }, "42");
+assert(parsed?.companyName === "Cape Books", "company name is read from Sage");
+assert(parsed?.companyId === "42", "company id is the one the user typed");
+assert(parseSageCompany({ Results: [{ ID: 7, Name: "Other" }] }, "42") === null, "a different company is not a match");
+assert(
+  parseSageCompany({ Results: [{ ID: 42, Name: "Listed" }] }, "42")?.companyName === "Listed",
+  "a results list can confirm the company",
+);
+
+const originalFetch = globalThis.fetch;
+let seenUrl = "";
+let seenAuth = "";
+globalThis.fetch = async (input, init) => {
+  seenUrl = String(input);
+  const headers = init?.headers as Record<string, string>;
+  seenAuth = headers.Authorization;
+  return new Response(JSON.stringify({ ID: 42, Name: "Cape Books" }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+};
+
+const ok = await validateSageLogin({
+  username: "owner@example.co.za",
+  password: "s3cret",
+  companyId: "42",
+  apiKey: "test-api-key",
+});
+assert(ok.ok === true && ok.company.companyName === "Cape Books", "validate happy path returns the company");
+assert(seenUrl.includes("apikey=test-api-key"), "validate sends the API key");
+assert(seenAuth.startsWith("Basic "), "validate sends Basic auth");
+assert(!seenUrl.includes("s3cret"), "password is not put on the URL");
+assert(!seenUrl.includes("ProfitAndLoss") && !seenUrl.includes("BalanceSheet"), "validate does not pull statements");
+
+globalThis.fetch = async () => new Response("no", { status: 401 });
+const rejected = await validateSageLogin({
+  username: "owner@example.co.za",
+  password: "wrong",
+  companyId: "42",
+  apiKey: "test-api-key",
+});
+assert(rejected.ok === false && rejected.reason === "rejected", "401 is a rejected login");
+assert(sageValidateError("rejected") === "Sage rejected that email or password.", "rejected copy names Sage");
+
+globalThis.fetch = async () => new Response("missing", { status: 404 });
+const missing = await validateSageLogin({
+  username: "owner@example.co.za",
+  password: "s3cret",
+  companyId: "99",
+  apiKey: "test-api-key",
+});
+assert(missing.ok === false && missing.reason === "company_not_found", "404 is an unknown company");
+
+const unconfigured = await validateSageLogin(
+  { username: "a@b.co", password: "x", companyId: "1", apiKey: "  " },
+  async () => {
+    throw new Error("should not call Sage without a key");
+  },
+);
+assert(unconfigured.ok === false && unconfigured.reason === "not_configured", "blank key does not call Sage");
+
+globalThis.fetch = originalFetch;
+
+const cipher = await encryptSagePassword("s3cret");
+assert(cipher.startsWith("v1."), "password is versioned ciphertext");
+assert(!cipher.includes("s3cret"), "ciphertext does not contain the password");
+assert((await decryptSagePassword(cipher)) === "s3cret", "ciphertext round-trips");
+
+const row = sageConnectionInsert({
+  clientId: "11111111-1111-1111-1111-111111111111",
+  username: "owner@example.co.za",
+  passwordEnc: cipher,
+  company: { companyId: "42", companyName: "Cape Books" },
+  connectedAt: "2026-10-07T12:00:00.000Z",
+});
+assert(row.password_enc === cipher, "stored column is password_enc");
+assert(row.username === "owner@example.co.za", "email is stored");
+assert(row.company_id === "42", "company id is stored");
+assert(row.sync_status === "idle", "a new connection has not synced");
+assert(row.last_synced_at === null, "connect does not pretend a sync ran");
+assert(!("access_token" in row) && !("refresh_token" in row), "no OAuth token columns");
+
+const live = { statementSource: "xero", revenue: 5000, cash: 800, periodStart: "2026-09-01", periodEnd: "2026-09-30" };
+const emptyDecision = sageSyncWriteDecision({}, live);
+assert(emptyDecision.write === false, "no figures is not a write");
+if (!emptyDecision.write) {
+  assert(emptyDecision.error.includes("left unchanged"), "empty sync says figures were left unchanged");
+  assert(emptyDecision.error.includes("Sage"), "empty sync names Sage");
+  assert(!emptyDecision.error.includes("Xero"), "empty Sage sync is not labelled Xero");
+}
+assert(SAGE_EMPTY_SYNC_MESSAGE.includes("left unchanged"), "the sync stub tells the user nothing was written");
+
+const zeroSage: Record<string, string | number> = {
+  statementSource: "sage",
+  periodStart: "2026-10-01",
+  periodEnd: "2026-10-07",
+  periodLabel: "1 Oct 2026 – 7 Oct 2026",
+  revenue: 0,
+  netIncome: 0,
+  cash: 0,
+  totalAssets: 0,
+  equity: 0,
+};
+assert(ledgerSyncWouldWipe(live, zeroSage), "an all-zero Sage report would wipe live figures");
+const kept = applyLedgerSyncFinancials(live, zeroSage, "sage");
+assert(kept.statementSource === "xero", "empty Sage sync does not take the live statement");
+assert(kept.revenue === 5000, "empty Sage sync keeps revenue");
+assert(emptyLedgerSyncError("sage").startsWith("Sage "), "provider enum names Sage");
+assert(isDatedLedgerSource("sage"), "Sage is a dated ledger source once Eng1 writes one");
+
+const copy = describeLedgerLink(
+  {
+    provider: "sage",
+    lastSyncedAt: null,
+    syncStatus: "idle",
+    figuresFromThisSync: false,
+    own: null,
+    board: null,
+  },
+  () => "unused",
+);
+assert(copy.statusLine.includes("Sage"), "Sage link copy uses the Sage name");
+assert(!copy.statusLine.includes("QuickBooks"), "Sage is not described as QuickBooks");
+assert(copy.showOwnStats === false, "a connection with no sync does not show a ratio grid");
+
+const migration = read("supabase/migrations/20261007170000_sage_sa_connections.sql");
+assert(migration.includes("CREATE TABLE IF NOT EXISTS public.sage_connections"), "connections table");
+assert(migration.includes("password_enc"), "password column is password_enc");
+assert(migration.includes("company_id"), "company id column");
+assert(migration.includes("CREATE TABLE IF NOT EXISTS public.sage_sync_data"), "sync cache table");
+assert(migration.includes("ENABLE ROW LEVEL SECURITY"), "RLS on");
+assert(!/CREATE POLICY/i.test(migration), "deny-all — no policies");
+assert(!/oauth|access_token|refresh_token|redirect_uri/i.test(migration), "no OAuth table or token columns");
+
+const fn = read("src/lib/sage.functions.ts");
+assert(fn.includes("validateSageLogin"), "connect validates with Sage");
+assert(fn.includes("encryptSagePassword"), "connect encrypts the password");
+assert(fn.includes("sage_connections"), "connect stores the connection");
+assert(fn.includes("sageSyncWriteDecision"), "sync uses the empty-sync guard");
+assert(fn.includes("TODO(Eng1)"), "sync leaves an Eng1 hook");
+assert(!fn.includes("runAutoPopulate"), "sync does not auto-populate");
+assert(!fn.includes("applyLedgerSyncFinancials"), "sync does not write statement figures");
+assert(!fn.includes("password_enc"), "status select does not return the password column");
+
+const card = read("src/components/sage-connect.tsx");
+assert(card.includes('brand="sage"'), "card uses the shared connect button");
+assert(card.includes("Email"), "card asks for email");
+assert(card.includes("Password"), "card asks for password");
+assert(card.includes("Company ID"), "card asks for Company ID");
+assert(card.includes("SAGE_SA_API_KEY"), "missing key shows the not-configured state");
+assert(card.includes('id="sage-empty-sync"'), "empty sync has a visible state");
+assert(card.includes(': "Sync"'), "connected card has Sync");
+assert(card.includes("Disconnect"), "connected card has Disconnect");
+assert(!card.includes("onSyncComplete?.(result.fields)") || card.includes("result.populated"), "sync completion waits for real figures");
+assert(card.includes("if (result.populated)"), "empty sync does not complete into the book");
+
+const owner = read("src/routes/app.tsx");
+const studio = read("src/routes/_authenticated/clients.$clientId.tsx");
+const briefing = read("src/components/client-briefing.tsx");
+const fresh = read("src/components/data-up-to-date.tsx");
+assert(owner.includes("<SageConnectCard"), "owner app mounts Sage connect");
+assert(owner.includes('id="owner-connect-sage"'), "owner data sources show Connect Sage");
+assert(owner.includes('id="owner-header-sage"'), "owner header shows Sage next to Xero");
+assert(owner.includes("Connect Sage"), "owner first-data offers Sage");
+assert(studio.includes("<SageConnectCard"), "accountant studio mounts Sage connect");
+assert(studio.includes('label="Connect Sage"'), "accountant Other ways offers Sage");
+assert(studio.includes('id="accounting-connect"'), "Sage sits on the accounting connect surface");
+assert(briefing.includes('id="client-connect-sage"'), "briefing shows Connect Sage");
+assert(fresh.includes("<SageConnectCard"), "data step shows Sage beside Xero and QuickBooks");
+assert(!existsSync(resolve("src/routes/api/sage/callback.ts")), "no Sage OAuth callback route");
+assert(!read("src/routeTree.gen.ts").includes("/api/sage/callback"), "route tree has no Sage callback");
+assert(!read(".env.example").includes("SAGE_CLIENT_SECRET"), "no OAuth client secret env");
+assert(read(".env.example").includes("SAGE_SA_API_KEY"), "env example names the API key");
+assert(read("docs/SAGE_SA.md").includes("SAGE_SA_API_KEY"), "docs tell Theo where the key goes");
+
+console.log("sage-connect-test: ok");

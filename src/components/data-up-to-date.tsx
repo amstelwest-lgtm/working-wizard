@@ -1,6 +1,6 @@
 /**
  * Client Brain — first step of the reading path.
- * Confirms Xero, QuickBooks, or an upload before Health.
+ * Confirms Xero, QuickBooks, Sage, or an upload before Health.
  * Dark uses portal ink. Light keeps the cream card.
  *
  * The title uses the same open-request kinds as Overview's next step:
@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { SageConnectCard } from "@/components/sage-connect";
 import { dataSectionStatus, isOpenDataRequest, type DataRequestKind } from "@/lib/data-requests";
 import { listDataRequests } from "@/lib/data-requests.functions";
 import type { SyncResult } from "@/lib/qbo.functions";
@@ -21,9 +22,11 @@ type Props = {
   returnPath: string;
   xeroRefresh?: number;
   qboRefresh?: number;
+  sageRefresh?: number;
   onXeroSyncComplete?: (inputs: Record<string, string>, summary: XeroSyncResult["summary"]) => void;
   onQboSyncComplete?: (inputs: Record<string, string>, summary: SyncResult["summary"]) => void;
   onUpload: () => void;
+  onSageConnectionChange?: () => void;
   /** Last sync or snapshot period. Computed by the shell from live status. */
   freshness: string;
 };
@@ -33,9 +36,11 @@ export function DataUpToDate({
   returnPath,
   xeroRefresh = 0,
   qboRefresh = 0,
+  sageRefresh = 0,
   onXeroSyncComplete,
   onQboSyncComplete,
   onUpload,
+  onSageConnectionChange,
   freshness,
 }: Props) {
   const list = useServerFn(listDataRequests);
@@ -70,7 +75,7 @@ export function DataUpToDate({
       <span className="data-fresh__kicker">Data</span>
       <h2 className="data-fresh__title">{status.title}</h2>
       <p className="data-fresh__lede">
-        Confirm Xero or QuickBooks is current, or upload the statements. Then continue to Health.
+        Confirm Xero, QuickBooks, or Sage is current, or upload the statements. Then continue to Health.
       </p>
       {status.note ? <p className="data-fresh__note">{status.note}</p> : null}
       <p className="data-fresh__line" data-data-freshness="">
@@ -88,6 +93,11 @@ export function DataUpToDate({
           returnPath={returnPath}
           refreshToken={qboRefresh}
           onSyncComplete={onQboSyncComplete}
+        />
+        <SageConnectCard
+          clientId={clientId}
+          refreshToken={sageRefresh}
+          onConnectionChange={onSageConnectionChange}
         />
       </div>
       <button type="button" className="data-fresh__upload" onClick={onUpload}>

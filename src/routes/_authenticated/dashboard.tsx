@@ -40,6 +40,7 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
+import { getSageStatuses } from "@/lib/sage.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
   idleStarterTrialBanner,
@@ -1157,6 +1158,9 @@ function Dashboard() {
   const [xeroStatuses, setXeroStatuses] = useState<
     Record<string, { tenantName: string | null; lastSyncedAt: string | null; syncStatus: string }>
   >({});
+  const [sageStatuses, setSageStatuses] = useState<
+    Record<string, { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }>
+  >({});
   const [playbookCatalogue, setPlaybookCatalogue] = useState<PlaybookMeta[]>([]);
   // playbook drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -1175,6 +1179,7 @@ function Dashboard() {
 
   const getStatuses = useServerFn(getQboStatuses);
   const getXeroStatusMap = useServerFn(getXeroStatuses);
+  const getSageStatusMap = useServerFn(getSageStatuses);
   const mintInvite = useServerFn(inviteClientOwner);
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
 
@@ -1186,6 +1191,7 @@ function Dashboard() {
       setClientRows([]);
       setQboStatuses({});
       setXeroStatuses({});
+      setSageStatuses({});
       setIsItMember(false);
       setLoading(false);
       return;
@@ -1250,6 +1256,11 @@ function Dashboard() {
       }
       try {
         setXeroStatuses(await getXeroStatusMap({ data: { clientIds: ids } }));
+      } catch {
+        // non-fatal
+      }
+      try {
+        setSageStatuses(await getSageStatusMap({ data: { clientIds: ids } }));
       } catch {
         // non-fatal
       }
@@ -1997,6 +2008,7 @@ function Dashboard() {
                   const score = c.score != null ? Math.round(c.score) : null;
                   const qbo = qboStatuses[c.id];
                   const xero = xeroStatuses[c.id];
+                  const sage = sageStatuses[c.id];
                   return (
                     <tr
                       key={c.id}
@@ -2151,6 +2163,23 @@ function Dashboard() {
                             }}
                           >
                             XO
+                          </span>
+                        )}
+                        {sage && (
+                          <span
+                            title={`Sage${sage.companyName ? ` — ${sage.companyName}` : ""}`}
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              letterSpacing: "0.08em",
+                              color: "#fff",
+                              background: "#00843D",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              marginLeft: 6,
+                            }}
+                          >
+                            SG
                           </span>
                         )}
                       </td>

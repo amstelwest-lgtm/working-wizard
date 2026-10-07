@@ -132,6 +132,7 @@ import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-clie
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { SageConnectCard } from "@/components/sage-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
 import {
@@ -682,6 +683,7 @@ function ClientView() {
   const track = useTrack();
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showXeroDialog, setShowXeroDialog] = useState(false);
+  const [showSageDialog, setShowSageDialog] = useState(false);
 
   // QBO / Xero OAuth return — callbacks land here for accountants.
   // Open the connect dialog so Sync is on screen; the inline cards sit on
@@ -926,6 +928,7 @@ function ClientView() {
   const fetchXeroLink = useServerFn(getXeroStatus);
   const [qboLink, setQboLink] = useState<QboStatus>(null);
   const [qboRefresh, setQboRefresh] = useState(0);
+  const [sageRefresh, setSageRefresh] = useState(0);
   const fetchQboLink = useServerFn(getQboStatus);
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>(emptyWeeklyInputs);
@@ -2447,7 +2450,8 @@ function ClientView() {
               !showBankDrafter &&
               !uploadOpen &&
               !showQboDialog &&
-              !showXeroDialog
+              !showXeroDialog &&
+              !showSageDialog
             }
             onTabChange={handleTourTabChange}
             onFinish={
@@ -2673,6 +2677,7 @@ function ClientView() {
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
+                  onConnectSage={() => setShowSageDialog(true)}
                   qboLink={
                     qboLink
                       ? {
@@ -2845,6 +2850,8 @@ function ClientView() {
                         returnPath={`/clients/${clientId}`}
                         xeroRefresh={xeroRefresh}
                         qboRefresh={qboRefresh}
+                        sageRefresh={sageRefresh}
+                        onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
                         onXeroSyncComplete={onXeroSyncComplete}
                         onQboSyncComplete={onQboSyncComplete}
                         onUpload={() => setUploadOpen(true)}
@@ -3033,6 +3040,11 @@ function ClientView() {
                       returnPath={`/clients/${clientId}`}
                       refreshToken={xeroRefresh}
                       onSyncComplete={onXeroSyncComplete}
+                    />
+                    <SageConnectCard
+                      clientId={clientId}
+                      refreshToken={sageRefresh}
+                      onConnectionChange={() => setSageRefresh((n) => n + 1)}
                     />
                   </div>
 
@@ -3862,6 +3874,25 @@ function ClientView() {
             </DialogContent>
           </Dialog>
 
+          <Dialog open={showSageDialog} onOpenChange={setShowSageDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  Sage Accounting
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect Sage Business Cloud Accounting (South Africa). Email, password, and
+                  Company ID. Sync does not change this client&apos;s figures yet.
+                </DialogDescription>
+              </DialogHeader>
+              <SageConnectCard
+                clientId={clientId}
+                refreshToken={sageRefresh}
+                onConnectionChange={() => setSageRefresh((n) => n + 1)}
+              />
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={showXeroDialog} onOpenChange={setShowXeroDialog}>
             <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
               <DialogHeader>
@@ -3962,6 +3993,14 @@ function ClientView() {
                       onClick={() => {
                         setFirstDataOpen(false);
                         setShowXeroDialog(true);
+                      }}
+                    />
+                    <FirstDataChoice
+                      label="Connect Sage"
+                      hint="Sage Business Cloud Accounting (South Africa)"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setShowSageDialog(true);
                       }}
                     />
                     <FirstDataChoice

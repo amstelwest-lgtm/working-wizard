@@ -205,6 +205,7 @@ export type ClientBriefingProps = {
   onUpload?: () => void;
   onConnectQuickBooks?: () => void;
   onConnectXero?: () => void;
+  onConnectSage?: () => void;
   /** Present when this client has a QuickBooks connection. Revenue only after a dated sync. */
   qboLink?: LedgerLinkProof | null;
   /** Present when this client has a Xero connection. Revenue only after a dated sync. */
@@ -325,6 +326,13 @@ export function ClientBriefing(p: ClientBriefingProps) {
                     id="client-connect-xero"
                     brand="xero"
                     onClick={p.onConnectXero}
+                  />
+                ) : null}
+                {p.onConnectSage ? (
+                  <BrandConnectButton
+                    id="client-connect-sage"
+                    brand="sage"
+                    onClick={p.onConnectSage}
                   />
                 ) : null}
               </>

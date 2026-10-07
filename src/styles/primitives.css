@@ -1129,6 +1129,42 @@ html[data-theme="light"] .accountant-portal .milon-next-step__foot {
   background: rgba(19, 181, 234, 0.06);
 }
 
+.ledger-connect--sage {
+  border: 1px solid rgba(0, 132, 61, 0.4);
+  background: rgba(0, 132, 61, 0.06);
+}
+
+.ledger-connect__fields {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ledger-connect__label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.ledger-connect__input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+html[data-theme="light"] .ledger-connect__input {
+  border-color: #d6d3d1;
+  background: #fff;
+  color: #1b1608;
+}
+
 .ledger-connect--error {
   border: 1px solid rgba(239, 68, 68, 0.3);
   background: rgba(239, 68, 68, 0.05);
@@ -1300,6 +1336,10 @@ html[data-theme="light"] .ledger-connect__code {
   background: rgba(27, 22, 8, 0.08);
 }
 
+html[data-theme="light"] .ledger-connect__label {
+  color: #1b1608;
+}
+
 /* Intuit / Xero connect buttons. Fills stay the brand hex in light and dark
    so they stay recognizable on cream cards and on the dark board.
    Sync and Disconnect keep .ledger-connect__sync / __disconnect. */
@@ -1353,6 +1393,16 @@ html[data-theme="light"] .ledger-connect__code {
 .brand-connect--xero:hover:not(:disabled),
 .accountant-portal .brand-connect--xero:hover:not(:disabled) {
   background-color: #0ea0d0;
+}
+
+.brand-connect--sage,
+.accountant-portal .brand-connect--sage {
+  background-color: #00843d;
+}
+
+.brand-connect--sage:hover:not(:disabled),
+.accountant-portal .brand-connect--sage:hover:not(:disabled) {
+  background-color: #006b32;
 }
 
 .brand-connect:disabled,

@@ -2556,6 +2556,85 @@ export type Database = {
           },
         ]
       }
+      sage_connections: {
+        Row: {
+          client_id: string
+          company_id: string
+          company_name: string | null
+          connected_at: string
+          id: string
+          last_synced_at: string | null
+          password_enc: string
+          sync_error: string | null
+          sync_status: string
+          username: string
+        }
+        Insert: {
+          client_id: string
+          company_id: string
+          company_name?: string | null
+          connected_at?: string
+          id?: string
+          last_synced_at?: string | null
+          password_enc: string
+          sync_error?: string | null
+          sync_status?: string
+          username: string
+        }
+        Update: {
+          client_id?: string
+          company_id?: string
+          company_name?: string | null
+          connected_at?: string
+          id?: string
+          last_synced_at?: string | null
+          password_enc?: string
+          sync_error?: string | null
+          sync_status?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sage_connections_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sage_sync_data: {
+        Row: {
+          client_id: string
+          data_type: string
+          id: string
+          raw_data: Json | null
+          synced_at: string
+        }
+        Insert: {
+          client_id: string
+          data_type: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+        }
+        Update: {
+          client_id?: string
+          data_type?: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sage_sync_data_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

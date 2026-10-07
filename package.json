@@ -122,6 +122,7 @@
     "test:xero-mapper": "vite-node --config scripts/vite-test.config.ts scripts/xero-mapper-test.mts",
     "test:xero-state": "vite-node --config scripts/vite-test.config.ts scripts/xero-state-test.mts",
     "test:qbo-state": "vite-node --config scripts/vite-test.config.ts scripts/qbo-state-test.mts",
+    "test:sage-connect": "vite-node --config scripts/vite-test.config.ts scripts/sage-connect-test.mts",
     "test:qbo-mapper": "vite-node --config scripts/vite-test.config.ts scripts/qbo-mapper-test.mts",
     "test:ledger-link-copy": "vite-node --config scripts/vite-test.config.ts scripts/ledger-link-copy-test.mts",
     "test:sync-auto-populate": "vite-node --config scripts/vite-test.config.ts scripts/sync-auto-populate-test.mts",
