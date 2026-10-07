@@ -29,7 +29,11 @@ import {
 import { buildVarianceChips } from "../src/lib/prior-period";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
 import { resolveMarket } from "../src/lib/market";
-import { alignBrainFigureCopy, formatStatementMargin } from "../src/lib/statement-margin";
+import {
+  alignBrainFigureCopy,
+  formatStatementMargin,
+  visibleStatementFigures,
+} from "../src/lib/statement-margin";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -89,6 +93,53 @@ assert(gm.value === "70.9%" && gm.delta?.text === "2.1pp" && gm.delta.good, "GM 
 assert(formatStatementMargin(0.6) === "60.0%", "fraction 0.6 prints as 60.0%");
 assert(formatStatementMargin(0.086) === "8.6%", "fraction 0.086 prints as 8.6%");
 assert(formatStatementMargin(60) === "60.0%", "an already-percent margin is not scaled again");
+assert(formatStatementMargin(91) === "91.0%", "an already-percent 91 is not scaled to 9100%");
+assert(formatStatementMargin(29) === "29.0%", "an already-percent 29 is not scaled again");
+// Yankees Sep 2026 Xero snapshot (e9dc0c5a). These are fractions on the live
+// ratio path. 60.0% / 8.6% is QA US Test LLC (3cc31b6a), a different file.
+const yankeesGross = 0.9101209229058562;
+const yankeesOperating = 0.28969607116382506;
+assert(formatStatementMargin(yankeesGross) === "91.0%", "Yankees gross fraction prints as 91.0%");
+assert(
+  formatStatementMargin(yankeesOperating) === "29.0%",
+  "Yankees operating fraction prints as 29.0%",
+);
+const yankeesLines = visibleStatementFigures({
+  grossMargin: yankeesGross,
+  operatingMargin: yankeesOperating,
+  netMargin: yankeesOperating,
+  periodLabel: "1 Sep 2026 – 21 Sep 2026",
+});
+assert(
+  yankeesLines.map((line) => `${line.label} ${line.value}`).join(" | ") ===
+    "Gross margin 91.0% | Operating margin 29.0% | Net margin 29.0%",
+  `summary lines match Overview scale: ${yankeesLines.map((line) => line.value).join(",")}`,
+);
+const yankeesSnap = buildFinancialSnapshot({
+  chips: buildVarianceChips({
+    currentFinancials: { revenue: 8633.6, cogs: 775.98, ebit: 2501.12 },
+    currentRatios: { "Gross Margin": yankeesGross, "Operating Margin": yankeesOperating },
+    prior: null,
+  }),
+  cashRunwayWeeks: null,
+  periodLabel: "1 Sep 2026 – 21 Sep 2026",
+  market: US,
+});
+assert(
+  yankeesSnap.find((row) => row.key === "gm")?.value === "91.0%",
+  "Overview GM for the Yankees fraction is 91.0%",
+);
+assert(
+  yankeesSnap.find((row) => row.key === "om")?.value === "29.0%",
+  "Overview OM for the Yankees fraction is 29.0%",
+);
+assert(
+  yankeesSnap.find((row) => row.key === "gm")?.value ===
+    yankeesLines.find((line) => line.key === "gross")?.value &&
+    yankeesSnap.find((row) => row.key === "om")?.value ===
+      yankeesLines.find((line) => line.key === "operating")?.value,
+  "Overview GM/OM equal the Client Brain summary lines",
+);
 assert(
   alignBrainFigureCopy(
     "Gross margin of **0.6** and operating margin of **0.16**. Period not dated",

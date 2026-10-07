@@ -4,6 +4,9 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { StatementFigures } from "../src/components/client-brain-summary";
 import {
   artifactKindLabel,
   buildNextStepEditDiff,
@@ -149,6 +152,38 @@ assert(
 );
 assert(panelSrc.includes("outstandingRows"), "outstanding list drops keys already on a checklist");
 assert(panelSrc.includes("alignBrainFigureCopy"), "GAP and draft copy uses the shared margin aligner");
+assert(panelSrc.includes("visibleStatementFigures"), "summary prints the shared margin lines");
+assert(panelSrc.includes("data-brain-statement-figures"), "summary exposes a statement-figures region");
+assert(
+  panelSrc.includes('data-brain-figure={line.key}'),
+  "each margin is its own visible row",
+);
+const figuresFn = panelSrc.slice(panelSrc.indexOf("export function StatementFigures"));
+assert(figuresFn.length > 0, "StatementFigures is exported for the summary pane");
+const figuresBody = figuresFn.slice(0, figuresFn.indexOf("export function ClientBrainSummary"));
+assert(
+  !figuresBody.includes("<details") && !figuresBody.includes("collapse") && !figuresBody.includes("sr-only"),
+  "statement figures are not collapsed or screen-reader only",
+);
+assert(
+  !figuresBody.includes('display: "none"') && !figuresBody.includes("opacity: 0"),
+  "statement figures are not visually hidden",
+);
+const summaryPane = clientSrc.slice(clientSrc.indexOf('id="pane-summary"'));
+const summaryOpen = summaryPane.slice(0, summaryPane.indexOf("<DataUpToDate"));
+assert(
+  summaryOpen.includes("<StatementFigures"),
+  "statement figures are the first block in the visible summary pane",
+);
+assert(
+  clientSrc.includes('netMargin: ratios["Net Margin"]'),
+  "summary net margin is the same ratio engine as Overview",
+);
+assert(
+  clientSrc.includes('grossMargin: ratios["Gross Margin"]') &&
+    clientSrc.includes('operatingMargin: ratios["Operating Margin"]'),
+  "summary GM/OM are the Overview ratio fields",
+);
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(
   panelSrc.includes("collection of context around this client"),
@@ -595,5 +630,27 @@ assert(draftPanelSrc.includes('status: "sent"'), "send sets status sent");
 assert(draftPanelSrc.includes("advisory_delivery_id"), "send links advisory_delivery_id");
 assert(!draftPanelSrc.includes("clients.$clientId"), "does not rewrite the fat portal");
 assert(!appSrc.toLowerCase().includes("deliverable_drafts"), "owner app is not a drafts workspace");
+
+const figuresHtml = renderToStaticMarkup(
+  createElement(StatementFigures, {
+    facts: {
+      grossMargin: 0.9101209229058562,
+      operatingMargin: 0.28969607116382506,
+      netMargin: 0.28969607116382506,
+      periodLabel: "1 Sep 2026 – 21 Sep 2026",
+    },
+  }),
+);
+assert(figuresHtml.includes("Gross margin"), "rendered summary names gross margin");
+assert(figuresHtml.includes(">91.0%<"), "rendered summary shows 91.0%");
+assert(figuresHtml.includes("Operating margin"), "rendered summary names operating margin");
+assert(figuresHtml.includes(">29.0%<"), "rendered summary shows 29.0%");
+assert(figuresHtml.includes("Net margin"), "rendered summary names net margin");
+assert(figuresHtml.includes('data-brain-figure="gross"'), "gross row is in the markup");
+assert(figuresHtml.includes('data-brain-figure="operating"'), "operating row is in the markup");
+assert(
+  !/display:\s*none|visibility:\s*hidden|opacity:\s*0|sr-only/.test(figuresHtml),
+  "rendered statement figures are not hidden",
+);
 
 console.log("client-brain-summary-test: all assertions passed");

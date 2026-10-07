@@ -49,7 +49,11 @@ import {
   operatingProfileQuestionStates,
   productLineQuestionStates,
 } from "@/lib/client-brain-questions";
-import { alignBrainFigureCopy, type StatementFigureFacts } from "@/lib/statement-margin";
+import {
+  alignBrainFigureCopy,
+  visibleStatementFigures,
+  type StatementFigureFacts,
+} from "@/lib/statement-margin";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -118,6 +122,42 @@ function AnswerButton({ onClick, label = "Answer" }: { onClick: () => void; labe
     <button type="button" className={portalButtonClass("secondary")} onClick={onClick}>
       {label}
     </button>
+  );
+}
+
+/**
+ * Overview's gross and operating margin, plus net when the ratio engine has one.
+ * First block on Client Brain so the percentages are in the summary viewport.
+ * Overview and Profit keep their own copies inside panes that are hidden on this tab.
+ */
+export function StatementFigures({ facts }: { facts: StatementFigureFacts | undefined }) {
+  const lines = visibleStatementFigures(facts);
+  if (!lines.length) return null;
+  const period = facts?.periodLabel?.trim();
+  return (
+    <section
+      className="card pad"
+      data-brain-statement-figures
+      aria-label="Statement figures"
+      style={{ marginBottom: 16 }}
+    >
+      <span className="briefing-kicker">Statement figures</span>
+      <p className="sub" style={{ margin: "6px 0 0" }}>
+        Same gross and operating margin as Overview{period ? ` · ${period}` : ""}.
+      </p>
+      <div className="briefing-snapshot">
+        <dl>
+          {lines.map((line) => (
+            <div key={line.key} className="briefing-metric" data-brain-figure={line.key}>
+              <dt>{line.label}</dt>
+              <dd>
+                <span className="briefing-value">{line.value}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
   );
 }
 
