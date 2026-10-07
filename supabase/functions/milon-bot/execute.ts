@@ -8,6 +8,7 @@ import type { AgentAudience, AgentToolName } from "./agent.ts";
 import { resolveRatioRecord } from "../ask-ai/derive-ratios.ts";
 import {
   buildOverviewBrief,
+  overviewFyStartMonth,
   copyPackFromMarket,
   overviewFactLines,
 } from "../ask-ai/overview-brief.ts";
@@ -401,7 +402,9 @@ export async function executeAgentTool(
         .maybeSingle(),
       ctx.userClient
         .from("clients")
-        .select("name, market, financials, cashflow, financials_updated_at, brain_summary")
+        .select(
+          "name, market, financials, cashflow, financials_updated_at, brain_summary, operating_profile",
+        )
         .eq("id", ctx.clientId)
         .maybeSingle(),
     ]);
@@ -410,10 +413,13 @@ export async function executeAgentTool(
       clientRes.data?.financials && typeof clientRes.data.financials === "object"
         ? (clientRes.data.financials as Record<string, unknown>)
         : null;
+    const copyPack = copyPackFromMarket(clientRes.data?.market);
+    const fyStartMonth = overviewFyStartMonth(copyPack, clientRes.data?.operating_profile);
     const healthMetrics = assessClientMetrics({
       financials: liveFinancials,
       cashflow: clientRes.data?.cashflow,
       financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
+      fyStartMonth,
     });
     const runway = persistedRunwayWeeks(healthMetrics.runway);
     if (name === "get_health") {
@@ -421,7 +427,6 @@ export async function executeAgentTool(
         (snap?.ratios ?? null) as Record<string, unknown> | null,
         (snap?.financials ?? liveFinancials) as Record<string, unknown> | null,
       );
-      const copyPack = copyPackFromMarket(clientRes.data?.market);
       const brief = buildOverviewBrief({
         financials: liveFinancials,
         ratios: resolved,
@@ -429,6 +434,8 @@ export async function executeAgentTool(
         runwayLabel: runwayDisplayLabel(healthMetrics.runway),
         cash: healthMetrics.cash.amount,
         copyPack,
+        fyStartMonth,
+        shortfallWeek: healthMetrics.outlook.shortfallWeek,
         clientName: typeof clientRes.data?.name === "string" ? clientRes.data.name : null,
         brainSummary: clientRes.data?.brain_summary ?? null,
         periodLabel: (snap?.period_label as string | null) ?? null,

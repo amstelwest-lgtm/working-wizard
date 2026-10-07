@@ -28,8 +28,9 @@ import {
   formatOverviewForPrompt,
   planActionsFromOverview,
 } from "../supabase/functions/ask-ai/overview-brief.ts";
-import { healthFromFlatFinancials } from "../src/lib/health-score.ts";
+import { healthFromFlatFinancials, healthFromRatioInputs, flatToRatioInputs } from "../src/lib/health-score.ts";
 import { assessClientMetrics } from "../src/lib/client-metrics.ts";
+import { computeRatios } from "../src/lib/ratios.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -308,6 +309,54 @@ assert(
 assert(
   planActionsFromOverview({ ...overview, creditorDays: 61 }).some((m) => m.sourceMoveKey === "bot:creditor-days"),
   "61 creditor days is outside the shared band",
+);
+
+// QA US: unlocked periodMonths 12 with a July month-end is 7 months from January.
+// Ratios annualise that span (debtor 25 / creditor 37). Overview copy and the
+// cash pillar must quote those figures, not the unannualised 43 / 63.
+const qaUs = {
+  cash: "128450",
+  revenue: "700000",
+  cogs: "280000",
+  ebit: "60200",
+  receivables: "82192",
+  payables: "48658",
+  periodMonths: "12",
+  periodEnd: "2026-07-31",
+};
+const qaInputs = flatToRatioInputs(qaUs, { fyStartMonth: 1 });
+const qaRatios = computeRatios(qaInputs);
+assert(qaRatios["Debtor Days"] === 25, `Ratios debtor days 25, got ${qaRatios["Debtor Days"]}`);
+assert(qaRatios["Creditor Days"] === 37, `Ratios creditor days 37, got ${qaRatios["Creditor Days"]}`);
+assert(Math.round(qaRatios["Gross Margin"] * 1000) === 600, "Ratios gross margin 60%");
+assert(Math.round(qaRatios["Operating Margin"] * 1000) === 86, "Ratios operating margin 8.6%");
+const storedTwelve = computeRatiosFromFinancials(qaUs);
+assert(storedTwelve["Debtor Days"] === 43, `stored 12 debtor days stay 43, got ${storedTwelve["Debtor Days"]}`);
+assert(storedTwelve["Creditor Days"] === 63, `stored 12 creditor days stay 63, got ${storedTwelve["Creditor Days"]}`);
+const qaHealth = healthFromRatioInputs(qaInputs, null, { country: "US", copyPack: "us" });
+const qaBrief = buildOverviewBrief({
+  financials: qaUs,
+  cash: 128450,
+  copyPack: "us",
+  clientName: "QA US Test LLC",
+});
+const qaCash = qaHealth.pillars.find((p) => p.id === "cash")?.score;
+const briefCash = qaBrief.pillars.find((p) => p.id === "cash")?.score;
+assert(qaBrief.debtorDays === 25 && qaBrief.creditorDays === 37, `overview days ${qaBrief.debtorDays}/${qaBrief.creditorDays}`);
+assert(briefCash === qaCash, `overview cash pillar ${briefCash} matches Ratios ${qaCash}`);
+assert(qaBrief.health === qaHealth.overall, `overview health ${qaBrief.health} matches Ratios ${qaHealth.overall}`);
+const qaPrompt = formatOverviewForPrompt(qaBrief, "accountant");
+assert(qaPrompt.includes("Debtor days: 25 days"), qaPrompt);
+assert(qaPrompt.includes("Creditor days: 37 days"), qaPrompt);
+assert(qaPrompt.includes("Gross margin: 60.0%"), qaPrompt);
+assert(qaPrompt.includes("Operating margin: 8.6%"), qaPrompt);
+assert(qaPrompt.includes("$700,000"), "overview keeps period revenue");
+assert(qaPrompt.includes("$128,450"), "overview keeps cash on file");
+assert(!qaPrompt.includes("44 days") && !qaPrompt.includes("73 days") && !qaPrompt.includes("43.8"), qaPrompt);
+const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(
+  /healthFromRatioInputs\(\s*ratioSource,/.test(ownerSrc),
+  "owner health uses the same period coverage as Ratios",
 );
 
 console.log("ask-ai-context-test: all assertions passed");

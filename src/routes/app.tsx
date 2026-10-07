@@ -3652,6 +3652,7 @@ function Index() {
     cashflow: clientMeta?.cashflow ?? null,
     financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
     timeZone: boardMarket.timezone,
+    fyStartMonth,
   });
   const effectiveRunway =
     ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
@@ -3659,7 +3660,7 @@ function Index() {
       : null;
   const ownerOutlook = ownerMetrics.outlook;
   const overallHealth = healthFromRatioInputs(
-    v,
+    ratioSource,
     effectiveRunway,
     boardMarket,
     ownerOutlook.shortfallWeek,
