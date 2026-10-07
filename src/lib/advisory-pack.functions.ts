@@ -27,6 +27,7 @@ import {
   computeEditStats,
   isMissingPackRelation,
   livePackMetrics,
+  packNarrativeRatios,
   parsePackReviewRow,
   parsePackRow,
   type AdvisoryPack,
@@ -329,6 +330,10 @@ export async function gatherPackInputs(
     prior?.financials && hasStatementFigures(prior.financials)
       ? overviewRatios(prior.financials, { fyStartMonth: overview.fyStartMonth })
       : (prior?.ratios ?? null);
+  const financials =
+    client.financials && typeof client.financials === "object" && !Array.isArray(client.financials)
+      ? client.financials
+      : null;
 
   return {
     clientName: client.name ?? "",
@@ -339,6 +344,7 @@ export async function gatherPackInputs(
     figuresAsOf: current.period_date ?? client.financials_updated_at ?? null,
     health: overview.metrics.health.overall == null ? null : overview.metrics.health,
     ratios: overview.metrics.ratios,
+    narrativeRatios: packNarrativeRatios(financials, overview.metrics.ratios),
     priorRatios,
     openingBalance: overview.metrics.openingBalance,
     closings: overview.metrics.closings,

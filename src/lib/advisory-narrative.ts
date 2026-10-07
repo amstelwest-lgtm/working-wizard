@@ -1,7 +1,7 @@
 /**
  * Quoted days and margins in advisory copy. One formatter, shared with the
- * pack ratio block, so a stored sentence cannot keep an older 43.8 / 0.16
- * after the snapshot already says 25 days and 8.6%.
+ * pack, so a stored sentence cannot keep 43.8 / 73 / 0.16 after live Ratios
+ * already say 25 days, 37 days, and 8.6%.
  */
 
 const DAYS_RATIOS = new Set([
@@ -48,6 +48,16 @@ function ratioValue(ratios: Record<string, number>, name: string): number | null
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+/** A hyphen or dash glued to another digit is a band ("30–60"), not a reading. */
+function continuesRange(text: string, index: number): boolean {
+  return /^[\u2013\u2014-]\d/.test(text.slice(index));
+}
+
+/**
+ * Days agree on the rounded count. A margin agrees only when it is already
+ * printed as a percent within 0.6 points — a bare fraction such as 0.16 is
+ * rewritten even when it is 100× the ratio.
+ */
 function citationAgrees(
   cited: number,
   suffix: string | undefined,
@@ -55,9 +65,8 @@ function citationAgrees(
   kind: QuoteKind,
 ): boolean {
   if (kind === "days") return Math.round(cited) === Math.round(value);
-  const asPercent = Boolean(suffix?.includes("%")) || Math.abs(cited) > 1.5;
-  const citedPct = asPercent ? cited : cited * 100;
-  return Math.abs(citedPct - value * 100) <= 0.6;
+  if (!suffix?.includes("%")) return false;
+  return Math.abs(cited - value * 100) <= 0.6;
 }
 
 function formattedQuote(name: string, value: number, kind: QuoteKind): string {
@@ -98,21 +107,73 @@ function groundDayPair(text: string, ratios: Record<string, number>): string {
   );
 }
 
+/** Words that may sit between a label and the figure it quotes. */
+const LABEL_CONNECTOR =
+  String.raw`(?:\s+(?:ratio|figure|reading|are|is|of|at|currently|about|around|now))*`;
+
 function groundLabeled(text: string, ratios: Record<string, number>): string {
   let out = text;
   for (const spec of LABEL_SPECS) {
     const value = ratioValue(ratios, spec.name);
     if (value == null) continue;
     const formatted = formattedQuote(spec.name, value, spec.kind);
-    const re = new RegExp(
-      String.raw`(?<![\w/])(${spec.labels})\b(\s*(?:are|is|of|at)?\s*[:=]?\s*)(-?\d+(?:\.\d+)?)(\s*(?:%|days))?`,
+    const bareDays = spec.kind === "days" ? String(Math.round(value)) : formatted;
+    // "debtor days ratio of 43.8" / "creditor days of 73" / "OM 0.16"
+    const after = new RegExp(
+      String.raw`(?<![\w/])(${spec.labels})\b(${LABEL_CONNECTOR}\s*[:=]?\s*)(\*\*)?(-?\d+(?:\.\d+)?)(\*\*)?(\s*(?:%|days?))?`,
       "gi",
     );
-    out = out.replace(re, (full, label: string, mid: string, num: string, suffix?: string) => {
-      const cited = Number(num);
-      if (!Number.isFinite(cited) || citationAgrees(cited, suffix, value, spec.kind)) return full;
-      return `${label}${mid}${formatted}`;
-    });
+    out = out.replace(
+      after,
+      (
+        full: string,
+        label: string,
+        mid: string,
+        _open: string | undefined,
+        num: string,
+        _close: string | undefined,
+        suffix: string | undefined,
+        offset: number,
+        whole: string,
+      ) => {
+        const cited = Number(num);
+        if (!Number.isFinite(cited)) return full;
+        const numberEnd = offset + full.lastIndexOf(num) + num.length;
+        if (continuesRange(whole, numberEnd)) return full;
+        if (citationAgrees(cited, suffix, value, spec.kind)) return full;
+        return `${label}${mid}${formatted}`;
+      },
+    );
+    // "43.8-day debtor days" / "At 73 creditor days" / "a 0.16 operating margin"
+    // A signed delta ("−12 debtor days") is an impact, not the current reading.
+    const before = new RegExp(
+      String.raw`(?<![\w.%\u2013\u2014\u2212+-])(\*\*)?(\d+(?:\.\d+)?)(\*\*)?(\s*-\s*days?\s+|\s+days?\s+|\s*%\s+|\s+)(${spec.labels})\b`,
+      "gi",
+    );
+    out = out.replace(
+      before,
+      (
+        full: string,
+        _open: string | undefined,
+        num: string,
+        _close: string | undefined,
+        sep: string,
+        label: string,
+        offset: number,
+        whole: string,
+      ) => {
+        const cited = Number(num);
+        if (!Number.isFinite(cited)) return full;
+        const numberStart = offset + full.indexOf(num);
+        const numberEnd = numberStart + num.length;
+        if (continuesRange(whole, numberEnd)) return full;
+        const percentSep = sep.includes("%");
+        if (citationAgrees(cited, percentSep ? "%" : undefined, value, spec.kind)) return full;
+        const shown = spec.kind === "days" && /day/i.test(`${sep}${label}`) ? bareDays : formatted;
+        const sepOut = shown.includes("%") ? sep.replace("%", "") : sep;
+        return `${shown}${sepOut}${label}`;
+      },
+    );
   }
   return out;
 }

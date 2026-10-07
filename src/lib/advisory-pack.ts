@@ -16,6 +16,7 @@
  * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "@/lib/advisory-narrative";
+import { ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import type { Json } from "@/integrations/supabase/types";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 import {
@@ -579,6 +580,26 @@ export function overviewFiguresForPackDrift(
   return livePackMetrics(input).figures;
 }
 
+/**
+ * Ratios quoted in recommendation sentences.
+ * Margins stay on `livePackMetrics` (the same operating margin as Overview).
+ * Debtor and creditor days follow `ratiosStatementFigures`, the Ratios Days AR
+ * / Days AP tiles. The health-score year span annualises a September file to
+ * 19 / 28; those tiles stay on the stored cover (25 / 37). Quoting the
+ * health-span days left a rewritten 28 beside a stored 73.
+ */
+export function packNarrativeRatios(
+  financials: Record<string, unknown> | null | undefined,
+  liveRatios: Record<string, number> | null | undefined,
+): Record<string, number> | null {
+  if (!liveRatios) return null;
+  const statement = ratiosStatementFigures(financials ?? null);
+  const next = { ...liveRatios };
+  if (statement.debtorDays != null) next["Debtor Days"] = statement.debtorDays;
+  if (statement.creditorDays != null) next["Creditor Days"] = statement.creditorDays;
+  return next;
+}
+
 // ── Builder ──────────────────────────────────────────────────────────────────
 
 export type PackInputs = {
@@ -590,6 +611,12 @@ export type PackInputs = {
   figuresAsOf: string | null;
   health: OverallHealth | null;
   ratios: Record<string, number> | null;
+  /**
+   * Figures recommendation sentences quote. Defaults to `ratios`.
+   * Generation passes `packNarrativeRatios` so days match Ratios, not the
+   * health-span cover and not a stored snapshot.
+   */
+  narrativeRatios?: Record<string, number> | null;
   priorRatios: Record<string, number> | null;
   openingBalance: number | null;
   /** Weekly closing balances from the saved 13-week forecast; null = no forecast. */
@@ -667,6 +694,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     };
   }
 
+  const quotedRatios = input.narrativeRatios ?? input.ratios;
   const recs: PackRecommendationRef[] = [...input.recommendations]
     .filter((r) => r.status !== "rejected" && r.status !== "superseded")
     .sort((a, b) => rank(a.priority) - rank(b.priority) || a.title.localeCompare(b.title))
@@ -675,12 +703,12 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
       const impact = expectedImpactLabel(r, cur);
       return {
         id: r.id,
-        title: groundAdvisoryNarrative(r.title, input.ratios),
+        title: groundAdvisoryNarrative(r.title, quotedRatios),
         problem:
-          problemSource == null ? null : groundAdvisoryNarrative(problemSource, input.ratios),
+          problemSource == null ? null : groundAdvisoryNarrative(problemSource, quotedRatios),
         priority: r.priority,
         status: r.status,
-        expectedImpact: impact == null ? null : groundAdvisoryNarrative(impact, input.ratios),
+        expectedImpact: impact == null ? null : groundAdvisoryNarrative(impact, quotedRatios),
         dataDepth: r.data_depth,
       };
     });
