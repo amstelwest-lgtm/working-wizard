@@ -25,6 +25,7 @@ import {
   type PackInputs,
 } from "../src/lib/advisory-pack";
 import { ADVISORY_EVENTS } from "../src/lib/advisory-state";
+import { formatSnapshotRatio, groundAdvisoryNarrative } from "../src/lib/advisory-narrative";
 import { computeOverallHealth } from "../src/lib/health-score";
 import { checkRootCauseClaims, type Recommendation } from "../src/lib/recommendations";
 import type { DataRequest } from "../src/lib/data-requests";
@@ -795,6 +796,54 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     cleared.signOffHolds && !cleared.signOffBlocked,
     "regenerating from the new Overview lets sign-off stick",
   );
+}
+
+{
+  const ratios = {
+    "Debtor Days": 25,
+    "Creditor Days": 37,
+    "Gross Margin": 0.6,
+    "Operating Margin": 0.086,
+  };
+  const problem =
+    "Debtor days 43.8 and creditor days 73 (healthy band 30–60), debtor/creditor 43.8 / 73, OM 0.16. Review within 90 days. Customers are paying later each month.";
+  const grounded = groundAdvisoryNarrative(problem, ratios);
+  assert(!grounded.includes("43.8") && !grounded.includes("0.16"), grounded);
+  assert(grounded.includes("25 days") && grounded.includes("37 days"), grounded);
+  assert(grounded.includes("25 / 37"), grounded);
+  assert(grounded.includes("8.6%"), grounded);
+  assert(grounded.includes("30–60") && grounded.includes("90 days"), grounded);
+  assert(grounded.includes("Customers are paying later each month"), grounded);
+  assert(
+    groundAdvisoryNarrative("Debtor days 71 vs 45", { "Debtor Days": 71 }) === "Debtor days 71 vs 45",
+    "a citation that already matches the snapshot stays",
+  );
+  assert(
+    groundAdvisoryNarrative("Customers are paying later each month", ratios) ===
+      "Customers are paying later each month",
+    "narrative without figures stays verbatim",
+  );
+  assert(formatSnapshotRatio("Operating Margin", 0.086) === "8.6%", "OM formats as a percent");
+  assert(formatSnapshotRatio("Debtor Days", 43.8) === "44 days", "days round");
+  assert(formatSnapshotRatio("Gross Margin", 0.6) === "60.0%", "GM formats as a percent");
+  const pack = buildAdvisoryPack(
+    inputs({
+      ratios,
+      recommendations: [
+        rec({
+          title: "Collect faster",
+          problem,
+          rationale: "Debtor days 71 vs 45",
+        }),
+      ],
+    }),
+  );
+  const bullet = pack.sections.find((s) => s.key === "recommendations")!.bullets![0];
+  assert(bullet.includes("25 days") && bullet.includes("37 days") && bullet.includes("8.6%"), bullet);
+  assert(!bullet.includes("43.8") && !bullet.includes("0.16"), bullet);
+  assert(!bullet.includes("Debtor days 71 vs 45"), "rationale is not the shown problem");
+  const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
+  assert(propose.includes("formatSnapshotRatio"), "propose quotes formatted snapshot ratios");
 }
 
 console.log("advisory-pack: all checks passed");

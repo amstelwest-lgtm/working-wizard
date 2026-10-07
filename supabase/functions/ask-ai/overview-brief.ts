@@ -6,24 +6,19 @@
  * into the cash pillar. Ask AI must not read `client_score_history` for this
  * number — that row can lag the live financials.
  *
- * Ratio math matches `computeRatios` / `computeRatiosFromFinancials`, including
- * cent-rounding on annualised flows.
+ * Ratio math and pillar scores match `computeRatios` / `computeOverallHealth`,
+ * including the financial-year span Ratios uses for days.
  */
 
-import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
+import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
+import { computeOverallHealth, type ScoreMarket } from "../../../src/lib/health-score.ts";
 import {
-  scoreCreditorDays,
-  scoreLowerIsBetterDays,
-  scoreWorkingCapitalDays,
-} from "../../../src/lib/client-metrics.ts";
-import {
-  bandedPillarStatus,
   creditorDaysHealthyBand,
   healthBandLabel,
   peerMedian,
-  scoreTier,
 } from "../../../src/lib/ratios.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
+import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -63,37 +58,9 @@ export type OverviewBrief = {
   brainHeadline: string | null;
 };
 
-const PILLAR_NAMES: Record<OverviewPillar["id"], readonly string[]> = {
-  profit: [
-    "Gross Margin",
-    "Operating Margin",
-    "Net Margin",
-    "Fixed Cost Ratio",
-    "Degree of Operating Leverage",
-    "Gross Profit / Labor",
-    "Top-5 Customer Share",
-  ],
-  assets: ["Asset Turnover", "Return on Assets", "Inventory Days", "Sales-per-Employee Ratio"],
-  financing: ["Equity Multiplier", "Interest Burden", "Tax Burden", "Return on Equity"],
-  cash: ["Debtor Days", "Creditor Days", "Working Capital Days", "OCF / EBITDA"],
-};
-
-const PILLAR_LABELS: Record<OverviewPillar["id"], string> = {
-  profit: "Profitability",
-  assets: "Asset Efficiency",
-  financing: "Financing",
-  cash: "Cash & Working Capital",
-};
-
-const ALL_PILLARS: OverviewPillar["id"][] = ["profit", "assets", "financing", "cash"];
-
 const CAMEL_TO_DISPLAY: Record<string, string> = {};
 for (const [display, camel] of Object.entries(DISPLAY_TO_CAMEL)) {
   CAMEL_TO_DISPLAY[camel] = display;
-}
-
-function clamp(n: number): number {
-  return Math.min(100, Math.max(0, n));
 }
 
 function asNumber(raw: unknown): number | null {
@@ -129,54 +96,6 @@ function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Wat
   return healthBandLabel(status);
 }
 
-/** Same bands as `scoreCashRunway` in src/lib/health-score.ts. */
-export function scoreCashRunwayWeeks(weeks: number): number {
-  if (!Number.isFinite(weeks)) return Number.NaN;
-  if (weeks >= 16) return 100;
-  if (weeks >= 12) return 85;
-  if (weeks >= 8) return 65;
-  if (weeks >= 4) return 45;
-  if (weeks >= 2) return 25;
-  return 10;
-}
-
-function salesPerEmployeeTarget(copyPack: OverviewCopyPack): number {
-  return copyPack === "us" ? 150_000 : 300_000;
-}
-
-/** Per-ratio 0–100 score. Display names, same thresholds as `scoreRatio`. */
-export function scoreOverviewRatio(
-  name: string,
-  val: number,
-  copyPack: OverviewCopyPack = "za",
-): number {
-  if (!Number.isFinite(val)) return Number.NaN;
-  if (name === "Net Margin") return clamp((val / 0.15) * 100);
-  if (name === "Operating Margin") return clamp((val / 0.2) * 100);
-  if (name === "Gross Margin") return clamp((val / 0.4) * 100);
-  if (name === "Return on Assets") return clamp((val / 0.12) * 100);
-  if (name === "Return on Equity") return clamp((val / 0.2) * 100);
-  if (name === "Asset Turnover") return clamp((val / 1.5) * 100);
-  if (name === "Gross Profit / Labor") return clamp((val / 0.6) * 100);
-  if (name === "Sales-per-Employee Ratio") return clamp((val / salesPerEmployeeTarget(copyPack)) * 100);
-  if (name === "OCF / EBITDA") return clamp(val * 100);
-  if (name === "Interest Burden") return clamp(val * 100);
-  if (name === "Tax Burden") return clamp(val * 100);
-  if (name === "Fixed Cost Ratio") return clamp(((0.5 - val) / 0.5) * 100);
-  if (name === "Top-5 Customer Share") return clamp(((0.8 - val) / 0.8) * 100);
-  if (name === "Debtor Days" || name === "Inventory Days") return scoreLowerIsBetterDays(val);
-  if (name === "Working Capital Days") return scoreWorkingCapitalDays(val);
-  if (name === "Creditor Days") return scoreCreditorDays(val);
-  if (name === "Equity Multiplier") return clamp(((4 - val) / 3) * 100);
-  if (name === "Degree of Operating Leverage") {
-    if (val <= 0) return 30;
-    if (val <= 2) return clamp(50 + (val / 2) * 40);
-    if (val <= 4) return clamp(90 - ((val - 2) / 2) * 40);
-    return clamp(50 - (val - 4) * 10);
-  }
-  return 50;
-}
-
 function finiteDisplayRatios(raw: Record<string, number> | null | undefined): Record<string, number> {
   const out: Record<string, number> = {};
   if (!raw) return out;
@@ -205,6 +124,30 @@ export function copyPackFromMarket(raw: unknown): OverviewCopyPack {
     if (country === "US") return "us";
   }
   return "za";
+}
+
+function marketFromCopyPack(copyPack: OverviewCopyPack): ScoreMarket {
+  return copyPack === "us" ? { country: "US", copyPack: "us" } : { country: "ZA", copyPack: "za" };
+}
+
+/** Profile year-start when the funnel stored one, otherwise the market default. */
+export function overviewFyStartMonth(
+  copyPack: OverviewCopyPack,
+  operatingProfile: unknown,
+): number {
+  const profile = parseOperatingProfile(operatingProfile);
+  const fromProfile = profile?.fyStartMonth;
+  if (fromProfile != null && Number.isFinite(fromProfile) && fromProfile >= 1 && fromProfile <= 12) {
+    return fromProfile;
+  }
+  return copyPack === "us" ? 1 : 3;
+}
+
+function resolvedFyStart(copyPack: OverviewCopyPack, explicit?: number | null): number {
+  if (explicit != null && Number.isFinite(Number(explicit)) && Number(explicit) >= 1) {
+    return Number(explicit);
+  }
+  return copyPack === "us" ? 1 : 3;
 }
 
 function money(n: number, copyPack: OverviewCopyPack): string {
@@ -238,54 +181,42 @@ export function buildOverviewBrief(input: {
   /** Resolved cash (bank, then period). When set, wins over financials.cash. */
   cash?: number | null;
   copyPack?: OverviewCopyPack;
+  /** Operating-profile year start. Omitted uses January for US and March for ZA. */
+  fyStartMonth?: number | null;
+  /** First forecast week below zero. Week 1 cannot display Healthy. */
+  shortfallWeek?: number | null;
+  market?: ScoreMarket;
   clientName?: string | null;
   periodLabel?: string | null;
   figuresAsOf?: string | null;
   brainSummary?: unknown;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
+  const market = input.market ?? marketFromCopyPack(copyPack);
+  const fyStartMonth = resolvedFyStart(copyPack, input.fyStartMonth);
   const financials =
     input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
       ? input.financials
       : null;
-  const derived = finiteDisplayRatios(computeRatiosFromFinancials(financials));
+  const derived = finiteDisplayRatios(computeRatiosFromFinancials(financials, { fyStartMonth }));
   const ratios = Object.keys(derived).length > 0 ? derived : finiteDisplayRatios(input.ratios ?? null);
 
-  const bucket: Record<OverviewPillar["id"], number[]> = {
-    profit: [],
-    assets: [],
-    financing: [],
-    cash: [],
-  };
-  for (const id of ALL_PILLARS) {
-    for (const name of PILLAR_NAMES[id]) {
-      const val = ratios[name];
-      if (!Number.isFinite(val)) continue;
-      const scored = scoreOverviewRatio(name, val, copyPack);
-      if (Number.isFinite(scored)) bucket[id].push(scored);
-    }
-  }
   const runway = asNumber(input.runwayWeeks);
-  if (runway != null) bucket.cash.push(scoreCashRunwayWeeks(runway));
-
-  const pillars: OverviewPillar[] = ALL_PILLARS.map((id) => {
-    const nums = bucket[id];
-    const score =
-      nums.length === 0 ? null : Math.round(nums.reduce((s, n) => s + n, 0) / nums.length);
-    return { id, label: PILLAR_LABELS[id], score, status: bandedPillarStatus(score, nums) };
+  const scored = computeOverallHealth({
+    ratios,
+    cashRunwayWeeks: runway,
+    shortfallWeek: input.shortfallWeek,
+    market,
   });
-  const scored = pillars.filter((p) => p.score != null) as Array<OverviewPillar & { score: number }>;
-  const overallRaw =
-    scored.length === 0 ? null : scored.reduce((s, p) => s + p.score, 0) / scored.length;
-  const health = overallRaw == null ? null : Math.round(overallRaw);
-  const status = health == null ? null : scoreTier(health);
-  const hasCritical = scored.some((p) => p.status === "critical");
-  const healthStatus =
-    status == null ? null : hasCritical && status === "healthy" ? "at_risk" : status;
-  const weakest =
-    scored.length === 0
-      ? null
-      : [...scored].sort((a, b) => a.score - b.score)[0];
+  const pillars: OverviewPillar[] = scored.pillars.map((pillar) => ({
+    id: pillar.id,
+    label: pillar.label,
+    score: pillar.score,
+    status: pillar.status,
+  }));
+  const health = scored.overall;
+  const healthStatus = health == null ? null : scored.displayStatus;
+  const weakest = scored.weakestPillar;
 
   const periodFromFin =
     typeof financials?.periodLabel === "string" && financials.periodLabel.trim()
@@ -302,9 +233,10 @@ export function buildOverviewBrief(input: {
     healthStatus,
     healthLabel: healthStatus ? chipLabel(healthStatus) : null,
     pillars,
-    weakest: weakest
-      ? { id: weakest.id, label: weakest.label, score: weakest.score }
-      : null,
+    weakest:
+      weakest && weakest.score != null
+        ? { id: weakest.id, label: weakest.label, score: weakest.score }
+        : null,
     cash: input.cash !== undefined ? input.cash : asNumber(financials?.cash),
     revenue: asNumber(financials?.revenue),
     runwayWeeks: runway,

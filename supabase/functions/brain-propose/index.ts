@@ -37,8 +37,13 @@ import {
   payablesPromptBlock,
   readPayablesSnapshot,
 } from "./payables.ts";
+import { formatSnapshotRatio } from "../../../src/lib/advisory-narrative.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
-import { quotedStatementFigures, ratioPromptLines } from "../../../src/lib/statement-margin.ts";
+import {
+  formatStatementMargin,
+  isStatementMarginName,
+  quotedStatementFigures,
+} from "../../../src/lib/statement-margin.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -77,7 +82,19 @@ function compact(value: unknown, max = 800): string {
 }
 
 function ratioLines(raw: unknown): string[] {
-  return ratioPromptLines(raw);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof val !== "number" || !Number.isFinite(val)) continue;
+    if (isStatementMarginName(key)) {
+      const shown = formatStatementMargin(val);
+      if (shown) out.push(`${key}: ${shown}`);
+    } else {
+      out.push(`${key}: ${formatSnapshotRatio(key, val)}`);
+    }
+    if (out.length >= 16) break;
+  }
+  return out;
 }
 
 Deno.serve(async (req: Request) => {

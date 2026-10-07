@@ -23,7 +23,7 @@ import {
   DISPLAY_TO_CAMEL,
   resolveRatioRecord,
 } from "./derive-ratios.ts";
-import { buildOverviewBrief, copyPackFromMarket } from "./overview-brief.ts";
+import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { peerMedian } from "../../../src/lib/ratios.ts";
 
@@ -117,6 +117,7 @@ export async function buildContext(
   let financialsUpdatedAt: string | null = null;
   let clientName: string | null = null;
   let brainSummary: unknown = null;
+  let operatingProfile: unknown = null;
   if (tier !== "none") {
     let { data, error } = await supabase
       .from("clients")
@@ -151,6 +152,7 @@ export async function buildContext(
       financialsUpdatedAt = typeof rawUpdated === "string" ? rawUpdated : null;
       const rawRevenue = fin["annual_revenue"] ?? fin["revenue"];
       const op = (data.operating_profile ?? null) as Record<string, unknown> | null;
+      operatingProfile = op;
       profileQuestions = profileQuestionsFromOperating(op);
       profile = {
         client_id: data.id,
@@ -291,6 +293,7 @@ export async function buildContext(
           financials,
           cashflow,
           financialsUpdatedAt,
+          fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
         });
   const cashForecast =
     tier === "none"
@@ -349,6 +352,8 @@ export async function buildContext(
           runwayWeeks: metrics?.runway.weeks ?? null,
           runwayLabel: metrics ? runwayDisplayLabel(metrics.runway) : null,
           copyPack,
+          fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
+          shortfallWeek: metrics?.outlook.shortfallWeek,
           clientName,
           periodLabel: snapPeriod,
           figuresAsOf: snapDate,

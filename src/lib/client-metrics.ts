@@ -8,6 +8,7 @@
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
+import { effectivePeriodMonths } from "./equity-coherence.ts";
 import {
   computeRatios,
   metricDirection,
@@ -211,6 +212,8 @@ export function assessClientMetrics(input: {
   priorFinancials?: Record<string, unknown> | null;
   now?: Date;
   timeZone?: string | null;
+  /** Financial-year start. Debtor/creditor days in the cycle note use it. */
+  fyStartMonth?: number | null;
 }): {
   cash: ResolvedCash;
   runway: ClientRunway;
@@ -251,6 +254,7 @@ export function assessClientMetrics(input: {
     now: input.now,
     timeZone: input.timeZone,
     periodEnd: typeof fin?.periodEnd === "string" ? fin.periodEnd : null,
+    fyStartMonth: input.fyStartMonth,
   });
   const hasSeries =
     outlook.totalInflow > 0.5 || outlook.totalOutflow > 0.5 || outlook.source === "stored";
@@ -1082,6 +1086,8 @@ export function resolveThirteenWeekForecast(input: {
   now?: Date;
   periodEnd?: string | null;
   timeZone?: string | null;
+  /** When set, debtor/creditor days use the same span as Ratios. */
+  fyStartMonth?: number | null;
 }): ThirteenWeekForecast {
   const weeks = CASH_FORECAST_WEEK_COUNT;
   const fin = asRecord(input.financials);
@@ -1101,7 +1107,13 @@ export function resolveThirteenWeekForecast(input: {
   });
   let cycleNote: string | null = null;
   if (fin && (finiteNum(fin.revenue) != null || operating != null)) {
-    const ratios = computeRatios(ratioInputsFromFinancials(fin));
+    const ratioInputs = ratioInputsFromFinancials(fin);
+    if (input.fyStartMonth != null && Number.isFinite(Number(input.fyStartMonth))) {
+      ratioInputs.periodMonths = String(
+        effectivePeriodMonths(fin, { fyStartMonth: Number(input.fyStartMonth) }),
+      );
+    }
+    const ratios = computeRatios(ratioInputs);
     const creditorDays = ratios["Creditor Days"];
     const debtorDays = ratios["Debtor Days"];
     if (Number.isFinite(creditorDays) && creditorDays > 90) {

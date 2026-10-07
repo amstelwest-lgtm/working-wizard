@@ -15,6 +15,7 @@
  * Vocabulary mirrors supabase/migrations/20260918160000_advisory_packs.sql
  * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
+import { formatSnapshotRatio, groundAdvisoryNarrative } from "@/lib/advisory-narrative";
 import type { Json } from "@/integrations/supabase/types";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 import {
@@ -356,10 +357,8 @@ const MULTIPLE_RATIOS = new Set([
 
 export function fmtRatio(name: string, v: number): string {
   if (!Number.isFinite(v)) return "—";
-  if (DAYS_RATIOS.has(name)) return `${Math.round(v)} days`;
   if (name === "Sales-per-Employee Ratio") return fmtMoney(v);
-  if (MULTIPLE_RATIOS.has(name)) return `${v.toFixed(2)}×`;
-  return `${(v * 100).toFixed(1)}%`;
+  return formatSnapshotRatio(name, v);
 }
 
 function fmtDelta(name: string, delta: number): string {
@@ -639,15 +638,20 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const recs: PackRecommendationRef[] = [...input.recommendations]
     .filter((r) => r.status !== "rejected" && r.status !== "superseded")
     .sort((a, b) => rank(a.priority) - rank(b.priority) || a.title.localeCompare(b.title))
-    .map((r) => ({
-      id: r.id,
-      title: r.title,
-      problem: r.problem ?? r.rationale ?? null,
-      priority: r.priority,
-      status: r.status,
-      expectedImpact: expectedImpactLabel(r, cur),
-      dataDepth: r.data_depth,
-    }));
+    .map((r) => {
+      const problemSource = r.problem ?? r.rationale ?? null;
+      const impact = expectedImpactLabel(r, cur);
+      return {
+        id: r.id,
+        title: groundAdvisoryNarrative(r.title, input.ratios),
+        problem:
+          problemSource == null ? null : groundAdvisoryNarrative(problemSource, input.ratios),
+        priority: r.priority,
+        status: r.status,
+        expectedImpact: impact == null ? null : groundAdvisoryNarrative(impact, input.ratios),
+        dataDepth: r.data_depth,
+      };
+    });
 
   const gaps: PackDataGapRef[] = input.dataRequests
     .filter((d) => d.status === "open" || d.status === "sent")
