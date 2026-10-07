@@ -158,7 +158,7 @@ export function FirmBandUpgrade({
   }
 
   return (
-    <div>
+    <div className="firm-band-upgrade">
       {usageLabel ? (
         <p className="text-foreground" style={{ margin: "0 0 12px", fontSize: 13 }}>
           {usageLabel}
