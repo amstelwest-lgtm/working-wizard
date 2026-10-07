@@ -7,6 +7,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   MILON_CAPABILITIES,
+  SNAPSHOT_HINT_DISPLAY_MAX,
+  SNAPSHOT_HINT_SCHEMA_MAX,
+  SNAPSHOT_METRIC_KEYS,
   buildFinancialSnapshot,
   describeBusiness,
   fallbackWorkflow,
@@ -18,7 +21,11 @@ import {
   workflowPrompt,
   type WorkflowContext,
 } from "../src/lib/client-briefing";
-import { parseBriefingWorkflow, workflowCacheFresh } from "../src/lib/client-briefing.functions";
+import {
+  parseBriefingWorkflow,
+  parseWorkflowSnapshot,
+  workflowCacheFresh,
+} from "../src/lib/client-briefing.functions";
 import { buildVarianceChips } from "../src/lib/prior-period";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
 import { resolveMarket } from "../src/lib/market";
@@ -83,6 +90,53 @@ assert(om.delta?.direction === "down" && om.delta.text === "1.4pp" && !om.delta.
 assert(snap[3]!.value === "4 weeks", `runway once: ${snap[3]!.value}`);
 assert(snap[4]!.label === "Last updated" && /Sep 12, 2026/.test(snap[4]!.value), "last updated = freshest stamp");
 assert(!JSON.stringify(snap).includes("vs prior —"), "never renders a meaningless vs prior —");
+
+// Cash is the fifth snapshot row when every metric exists. The anchor note is
+// longer than the old 80-character hint cap and used to 400 draft/propose.
+const anchorNote =
+  "400 days sit between 2025-01-01 and this week (2026-02-05). Opening cash is still the balance on 2025-01-01.";
+assert(anchorNote.length > 80 && anchorNote.length <= SNAPSHOT_HINT_SCHEMA_MAX, `anchor note length ${anchorNote.length}`);
+const withCash = buildFinancialSnapshot({
+  chips,
+  cashRunwayWeeks: 4,
+  financialsUpdatedAt: "2026-09-12T10:00:00.000Z",
+  lastForecastAt: "2026-09-01T10:00:00.000Z",
+  priorLabel: "Sep 2025",
+  market: US,
+  cash: { amount: 1_200_000, floor: 250_000, dipsBelowFloorWeek: 4, note: anchorNote },
+});
+assert(
+  withCash.map((m) => m.key).join(",") === "revenue,gm,om,runway,cash,updated",
+  `cash sits at snapshot[4]: ${withCash.map((m) => m.key).join(",")}`,
+);
+assert(withCash[4]!.key === "cash" && withCash[4]!.hint === anchorNote, "short-enough cash note is kept");
+const parsedCash = parseWorkflowSnapshot(withCash);
+assert(
+  parsedCash[4]?.key === "cash" && parsedCash[4]?.hint === anchorNote,
+  "MetricSchema accepts cash and a hint over 80 characters",
+);
+const overflowNote = `${anchorNote} ${"The statement line is older than the forecast start.".repeat(8)}`;
+assert(overflowNote.length > SNAPSHOT_HINT_SCHEMA_MAX, "fixture exceeds the schema cap");
+const clipped = buildFinancialSnapshot({
+  chips: [],
+  cashRunwayWeeks: null,
+  cash: { amount: 1_200_000, floor: 250_000, dipsBelowFloorWeek: null, note: overflowNote },
+});
+assert(clipped[0]?.key === "cash", "cash row still built from a long note");
+assert((clipped[0]!.hint?.length ?? 0) <= SNAPSHOT_HINT_DISPLAY_MAX, `display hint clipped: ${clipped[0]?.hint?.length}`);
+assert(clipped[0]!.hint?.endsWith("…"), "clipped hint is marked");
+const parsedOverflow = parseWorkflowSnapshot([
+  { key: "cash", label: "Cash", value: "R 1.2m", hint: overflowNote },
+]);
+assert(
+  (parsedOverflow[0]?.hint?.length ?? 0) <= SNAPSHOT_HINT_SCHEMA_MAX,
+  "hint overflow is clipped at parse instead of throwing",
+);
+assert(
+  parseWorkflowSnapshot([{ key: "cash", label: "Cash", value: "R 1.2m" }])[0]?.key === "cash",
+  "cash without a hint still parses",
+);
+assert(SNAPSHOT_METRIC_KEYS.includes("cash"), "shared key list includes cash");
 
 // no prior → no deltas, still no "—"
 const noPrior = buildFinancialSnapshot({
