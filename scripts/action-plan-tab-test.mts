@@ -10,6 +10,7 @@ import ActionPlan, {
   chaseEmailType,
   chaseableItems,
   driverHealthLabel,
+  formatActionHealthSummary,
   healthMeta,
   mergeActionPlanTeam,
   parseActionPlanFilter,
@@ -32,6 +33,26 @@ assert(derived.error instanceof Error && derived.error.message === "boom", "boun
 assert(driverHealthLabel(67.4) === 67, "finite health rounds");
 assert(driverHealthLabel(Number.NaN) === null, "NaN health is blank, not a crash");
 assert(driverHealthLabel(Number.POSITIVE_INFINITY) === null, "Infinity health is blank");
+assert(
+  formatActionHealthSummary({
+    on_track: 2,
+    at_risk: 0,
+    off_track: 2,
+    overdue: 0,
+    complete: 0,
+  }) === "4 open · 2 on track · 2 off track",
+  "the leading count is open actions, and on-track keeps its own count",
+);
+assert(
+  formatActionHealthSummary({
+    on_track: 1,
+    at_risk: 1,
+    off_track: 0,
+    overdue: 1,
+    complete: 3,
+  }) === "3 open · 1 on track · 1 at risk · 1 overdue · 3 done",
+  "done stays out of the open count",
+);
 assert(healthMeta("at_risk").label === "At risk", "known health");
 assert(healthMeta("nope").label === "On track", "unknown health falls back");
 assert(healthMeta(undefined).label === "On track", "missing health falls back");

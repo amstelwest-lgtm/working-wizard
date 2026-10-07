@@ -10,12 +10,21 @@ import {
   attachQboInvoiceDetail,
   buildCollectionsDraft,
   chooseCollections,
+  collectionsNoFiguresLead,
   collectionsPromptBlock,
+  collectionsStatementLead,
+  COLLECTIONS_QBO_CTA,
+  COLLECTIONS_UPLOAD_CTA,
+  COLLECTIONS_XERO_CTA,
   finalizeCollections,
+  hasStatementWorkingCapital,
   parseQboAgedReceivables,
   parseXeroAgedReceivablesByContact,
   parseXeroContactsPage,
   readCollectionsSnapshot,
+  readStatementAmount,
+  readStatementDays,
+  rollupAgeBuckets,
   selectXeroContactsForAging,
   type CollectionsSnapshot,
 } from "../src/lib/collections";
@@ -328,5 +337,67 @@ const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"
 assert(propose.includes("buildCollectionsDraft"), "propose files a collections draft from the cache");
 assert(propose.includes('source: "ai", data_depth: "statement"'), "statement drafts stay statement depth");
 assert(propose.includes("dropOverclaimingSteps(payload.next_steps)"), "ungrounded invoice claims are still dropped");
+
+eq(readStatementAmount(""), null, "blank receivables stay blank");
+eq(readStatementAmount("48,500.25"), 48500.25, "statement totals keep commas");
+eq(readStatementAmount(0), 0, "a zero balance is a real total");
+eq(readStatementDays(44.4), 44, "day counts round the way Overview prints them");
+eq(readStatementDays(Number.NaN), null, "missing days stay off the card");
+assert(
+  hasStatementWorkingCapital({
+    receivables: 48500,
+    payables: null,
+    debtorDays: null,
+    creditorDays: null,
+  }),
+  "AR alone is enough to leave the empty state",
+);
+assert(
+  !hasStatementWorkingCapital({
+    receivables: null,
+    payables: null,
+    debtorDays: null,
+    creditorDays: null,
+  }),
+  "no statement figures means there is nothing to reconcile",
+);
+const rolled = rollupAgeBuckets([
+  {
+    buckets: [
+      { label: "Current", amount: 100 },
+      { label: "1 Month", amount: 40 },
+    ],
+  },
+  {
+    buckets: [
+      { label: "Current", amount: 25 },
+      { label: "1 Month", amount: 0 },
+    ],
+  },
+]);
+eq(rolled.length, 2, "zero columns drop out of the age rollup");
+eq(rolled[0]?.label, "Current", "age columns keep report order");
+eq(rolled[0]?.amount, 125, "current balances add across contacts");
+eq(rolled[1]?.amount, 40, "aged balances add across contacts");
+assert(collectionsStatementLead("us").includes("Days sales outstanding"), "US lead names DSO");
+assert(collectionsStatementLead("us").includes("QuickBooks"), "US lead offers QuickBooks");
+assert(collectionsStatementLead("za").includes("Debtor days"), "ZA lead names debtor days");
+assert(collectionsNoFiguresLead().includes("QuickBooks"), "no-figures lead is not Xero-only");
+
+const panel = readFileSync(resolve("src/components/collections-panel.tsx"), "utf8");
+assert(!panel.includes("Sync Xero to pull aged receivables"), "the Xero-only dead end is gone");
+assert(panel.includes('id="collections-from-statements"'), "statement fallback has a stable id");
+assert(panel.includes('id="collections-statement-position"'), "AR/AP and day counts render together");
+assert(panel.includes('id="collections-age-buckets"'), "a named list shows age buckets");
+eq(COLLECTIONS_UPLOAD_CTA, "Upload aged debtors and creditors", "primary CTA uploads the aged report");
+eq(COLLECTIONS_XERO_CTA, "Connect Xero", "Xero stays available");
+eq(COLLECTIONS_QBO_CTA, "Connect QuickBooks", "QuickBooks is a first-class path");
+assert(panel.includes("COLLECTIONS_UPLOAD_CTA"), "the panel renders the upload CTA");
+assert(panel.includes("COLLECTIONS_XERO_CTA"), "the panel renders the Xero CTA");
+assert(panel.includes("COLLECTIONS_QBO_CTA"), "the panel renders the QuickBooks CTA");
+assert(panel.includes('id="collections-connect-qbo"'), "QuickBooks button is addressable");
+assert(rail.includes("readStatementDays"), "Collections reads the same day counts as Ratios");
+assert(rail.includes("onConnectQbo"), "Collections can open the QuickBooks dialog");
+assert(rail.includes("Upload aged debtors and creditors"), "the upload dialog names the aged report");
 
 console.log("collections-test ok");
