@@ -68,6 +68,17 @@ export const XERO_AGED_AP_RECONNECT =
 
 export const AGED_AP_PENDING = "Aged payables appear after the next Sync";
 
+export function payablesStatementLead(copyPack: "za" | "us"): string {
+  if (copyPack === "us") {
+    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the Ratios Days AR, Days AP, accounts receivable, and accounts payable figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
+  }
+  return "Debtor days, creditor days, and the debtors and creditors totals below are the Ratios Days AR, Days AP, debtors, and creditors figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
+}
+
+export function payablesNoFiguresLead(): string {
+  return "Aged payables are not on file yet. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to build the supplier list.";
+}
+
 export const PAYABLES_TITLE = "Decide which overdue payables to pay, delay, or renegotiate";
 
 function round2(n: number): number {

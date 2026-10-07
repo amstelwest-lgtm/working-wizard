@@ -10,9 +10,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getCollections } from "@/lib/collections.functions";
 import {
-  COLLECTIONS_QBO_CTA,
-  COLLECTIONS_UPLOAD_CTA,
-  COLLECTIONS_XERO_CTA,
   buildCollectionsDraft,
   collectionsNoFiguresLead,
   collectionsStatementLead,
@@ -23,10 +20,14 @@ import {
   type StatementWorkingCapital,
 } from "@/lib/collections";
 import { createRecommendation } from "@/lib/recommendations.functions";
-import { t } from "@/lib/market/copy";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import {
+  StatementArApFallback,
+  StatementArApTiles,
+  type StatementCopyMarket,
+} from "@/components/statement-arap-fallback";
 
-type CopyMarket = MoneyMarket & { copyPack?: "za" | "us" };
+type CopyMarket = StatementCopyMarket;
 
 type Props = {
   clientId: string;
@@ -45,107 +46,8 @@ function money(n: number, market?: MoneyMarket) {
   return formatMoney(n, market, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function statementMoney(n: number, market?: MoneyMarket) {
-  const cents = Math.abs(n - Math.round(n)) >= 0.005;
-  return formatMoney(
-    n,
-    market,
-    cents
-      ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-      : { maximumFractionDigits: 0, minimumFractionDigits: 0 },
-  );
-}
-
 function copyPackOf(market?: CopyMarket): "za" | "us" {
   return market?.copyPack === "us" ? "us" : "za";
-}
-
-function StatementPosition({
-  position,
-  market,
-}: {
-  position: StatementWorkingCapital;
-  market?: CopyMarket;
-}) {
-  const copy = { copyPack: copyPackOf(market) } as const;
-  const metrics: { key: string; label: string; value: string }[] = [];
-  if (typeof position.debtorDays === "number" && Number.isFinite(position.debtorDays)) {
-    metrics.push({ key: "dso", label: t("dso", copy), value: `${position.debtorDays} days` });
-  }
-  if (typeof position.receivables === "number" && Number.isFinite(position.receivables)) {
-    metrics.push({
-      key: "ar",
-      label: t("receivables", copy),
-      value: statementMoney(position.receivables, market),
-    });
-  }
-  if (typeof position.creditorDays === "number" && Number.isFinite(position.creditorDays)) {
-    metrics.push({ key: "dpo", label: t("dpo", copy), value: `${position.creditorDays} days` });
-  }
-  if (typeof position.payables === "number" && Number.isFinite(position.payables)) {
-    metrics.push({
-      key: "ap",
-      label: t("payables", copy),
-      value: statementMoney(position.payables, market),
-    });
-  }
-  if (!metrics.length) return null;
-  return (
-    <dl className="collections-position" id="collections-statement-position">
-      {metrics.map((metric) => (
-        <div key={metric.key} data-metric={metric.key}>
-          <dt>{metric.label}</dt>
-          <dd>{metric.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function NextActions({
-  onUploadAged,
-  onConnectXero,
-  onConnectQbo,
-}: {
-  onUploadAged?: () => void;
-  onConnectXero?: () => void;
-  onConnectQbo?: () => void;
-}) {
-  if (!onUploadAged && !onConnectXero && !onConnectQbo) return null;
-  return (
-    <div className="collections-actions">
-      {onUploadAged ? (
-        <button
-          type="button"
-          className="btn gold mini"
-          id="collections-upload-aged"
-          onClick={onUploadAged}
-        >
-          {COLLECTIONS_UPLOAD_CTA}
-        </button>
-      ) : null}
-      {onConnectXero ? (
-        <button
-          type="button"
-          className="btn ghost mini"
-          id="collections-connect-xero"
-          onClick={onConnectXero}
-        >
-          {COLLECTIONS_XERO_CTA}
-        </button>
-      ) : null}
-      {onConnectQbo ? (
-        <button
-          type="button"
-          className="btn ghost mini"
-          id="collections-connect-qbo"
-          onClick={onConnectQbo}
-        >
-          {COLLECTIONS_QBO_CTA}
-        </button>
-      ) : null}
-    </div>
-  );
 }
 
 export function CollectionsPanel({
@@ -236,7 +138,11 @@ export function CollectionsPanel({
         </p>
         {snapshot.note ? <p className="collections-note">{snapshot.note}</p> : null}
         {fromStatements && position ? (
-          <StatementPosition position={position} market={market} />
+          <StatementArApTiles
+            position={position}
+            market={market}
+            id="collections-statement-position"
+          />
         ) : null}
         {buckets.length > 0 ? (
           <div className="collections-buckets" id="collections-age-buckets">
@@ -327,39 +233,25 @@ export function CollectionsPanel({
         : null;
 
   return (
-    <div className="collections" id="collections-from-statements">
+    <>
       {error ? <p className="collections-muted">{error}</p> : null}
-      {!loading && booksNote ? (
-        <p
-          className="collections-note"
-          id={snapshot?.status === "skipped" ? "collections-skip" : "collections-empty"}
-        >
-          {booksNote}
-        </p>
-      ) : null}
-      <p className="collections-kicker">
-        {fromStatements ? "From the statements" : "Collections"}
-        {fromStatements && periodLabel ? ` · ${periodLabel}` : ""}
-      </p>
-      <p className="collections-note" id="collections-fallback-lead">
-        {loading
-          ? "Checking Xero and QuickBooks for named customers."
-          : fromStatements
-            ? collectionsStatementLead(pack)
-            : collectionsNoFiguresLead()}
-      </p>
-      {fromStatements && position ? (
-        <StatementPosition position={position} market={market} />
-      ) : null}
-      <NextActions
+      <StatementArApFallback
+        idPrefix="collections"
+        position={position}
+        market={market}
+        periodLabel={periodLabel}
+        fromStatements={fromStatements}
+        lead={fromStatements ? collectionsStatementLead(pack) : collectionsNoFiguresLead()}
+        loading={loading}
+        loadingLead="Checking Xero and QuickBooks for named customers."
+        booksNote={!loading && booksNote ? booksNote : null}
+        booksNoteId={snapshot?.status === "skipped" ? "collections-skip" : "collections-empty"}
+        footnote="Milōn drafts the chase once the aged report is on file. It does not email the customer or record the receipt."
+        kickerWhenEmpty="Collections"
         onUploadAged={onUploadAged}
         onConnectXero={onConnectXero}
         onConnectQbo={onConnectQbo}
       />
-      <p className="collections-note">
-        Milōn drafts the chase once the aged report is on file. It does not email the customer or
-        record the receipt.
-      </p>
-    </div>
+    </>
   );
 }
