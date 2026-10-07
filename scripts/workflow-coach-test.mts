@@ -5,6 +5,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { dataSectionStatus } from "../src/lib/data-requests.ts";
 import {
   COACH_STEPS,
   coachPageForTab,
@@ -233,7 +234,29 @@ for (const step of COACH_STEPS) {
 }
 
 const dataSection = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");
-assert(dataSection.includes("Data up to date"), "section title");
+assert(
+  dataSection.includes("dataSectionStatus({ freshness, openKinds })"),
+  "section title comes from the shared data status",
+);
+assert(
+  dataSection.includes('<h2 className="data-fresh__title">{status.title}</h2>'),
+  "section title",
+);
+assert(dataSection.includes("aria-label={status.title}"), "section title is the accessible name");
+assert(
+  dataSectionStatus({
+    freshness: "Last sync · Xero · Sep 2026",
+    openKinds: ["aged_debtors", "aged_creditors"],
+  }).title === "Data up to date",
+  "section title stays Data up to date when only ageing reports are open",
+);
+assert(
+  dataSectionStatus({
+    freshness: "Last sync · Xero · Sep 2026",
+    openKinds: ["management_accounts"],
+  }).title === "Data is not up to date",
+  "section title leaves Data up to date when a statement is missing",
+);
 assert(dataSection.includes("XeroConnectCard"), "reuses the Xero connect card");
 assert(dataSection.includes("QboConnectCard"), "reuses the QuickBooks connect card");
 assert(dataSection.includes("Upload statements"), "upload CTA is on the data section");

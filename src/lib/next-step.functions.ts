@@ -17,6 +17,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isMissingAdvisoryRelation } from "@/lib/advisory-state";
 import { loadAdvisorySnapshot, type LooseSb } from "@/lib/advisory-state.functions";
+import { DATA_REQUEST_KINDS, type DataRequestKind } from "@/lib/data-requests";
 import {
   NEXT_STEP_AUDIENCES,
   resolveNextStep,
@@ -62,6 +63,28 @@ async function count(
     throw new Error(error.message);
   }
   return n ?? 0;
+}
+
+/** Open asks, with kinds, so Overview and the Data tab describe the same gap. */
+async function openDataRequestFacts(
+  sb: LooseSb,
+  clientId: string,
+): Promise<{ count: number; kinds: DataRequestKind[] }> {
+  const { data, error } = await sb
+    .from("data_requests")
+    .select("kind")
+    .eq("client_id", clientId)
+    .in("status", ["open", "sent"]);
+  if (error) {
+    if (isMissingRelation(error)) return { count: 0, kinds: [] };
+    throw new Error(error.message);
+  }
+  const kinds = ((data ?? []) as Array<{ kind?: unknown }>)
+    .map((row) => (typeof row.kind === "string" ? row.kind : ""))
+    .filter((kind): kind is DataRequestKind =>
+      (DATA_REQUEST_KINDS as readonly string[]).includes(kind),
+    );
+  return { count: kinds.length, kinds };
 }
 
 /**
@@ -228,8 +251,8 @@ export const getNextStep = createServerFn({ method: "GET" })
       ),
       count(sb, "action_items", data.clientId, (q) => q.eq("status", "blocked")),
       recommendationGaps(sb, data.clientId),
-      // P0.6: open or sent asks. 0 on a pre-P0.6 database.
-      count(sb, "data_requests", data.clientId, (q) => q.in("status", ["open", "sent"])),
+      // P0.6: open or sent asks, with kinds. Empty on a pre-P0.6 database.
+      openDataRequestFacts(sb, data.clientId),
       latestPack(sb, data.clientId),
     ]);
 
@@ -249,7 +272,8 @@ export const getNextStep = createServerFn({ method: "GET" })
       overdueActions,
       blockedActions,
       actionedUnmeasured: gaps.actionedUnmeasured,
-      openDataRequests,
+      openDataRequests: openDataRequests.count,
+      openDataRequestKinds: openDataRequests.kinds,
       packStatus: pack?.status ?? null,
       packVersion: pack?.version ?? null,
       packRequiresReview: pack?.requiresReview ?? false,

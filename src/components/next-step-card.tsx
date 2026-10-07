@@ -189,7 +189,7 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
 
   if (!step) return null;
 
-  const chips = outstandingChips(step.outstanding, audience);
+  const chips = outstandingChips(step.outstanding, audience, step.openDataRequestKinds);
 
   return (
     <section

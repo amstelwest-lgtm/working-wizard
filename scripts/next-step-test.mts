@@ -328,6 +328,32 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
     "data_request",
     "missing data beats everything",
   );
+  const ageing = acct(
+    facts({
+      state: "action_execution",
+      hasProfile: true,
+      hasFinancials: true,
+      hasSnapshot: true,
+      openDataRequests: 2,
+      openDataRequestKinds: ["aged_debtors", "aged_creditors"],
+    }),
+  );
+  eq(
+    ageing.title,
+    "Send the aged debtors and aged creditors reports",
+    "ageing asks are not missing statements",
+  );
+  assert(!ageing.title.includes("missing document"), "ageing title does not say missing documents");
+  eq(
+    outstandingChips(ageing.outstanding, "accountant", ageing.openDataRequestKinds)[0]?.label,
+    "Aged debtors and creditors still missing",
+    "chip matches the ageing ask",
+  );
+  eq(
+    owner({ ...base, openDataRequests: 2 }).title,
+    "Send the 2 missing documents",
+    "a bare count still says missing documents",
+  );
 
   // Blockers never override the pre-data states: there is nothing to chase yet.
   for (const state of [
@@ -392,8 +418,8 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
     "server fn delegates to the pure resolver",
   );
   assert(
-    fns.includes('count(sb, "data_requests", data.clientId'),
-    "openDataRequests counts live data_requests (P0.6)",
+    fns.includes("openDataRequestFacts") && fns.includes('.in("status", ["open", "sent"])'),
+    "openDataRequests reads live data_requests (P0.6)",
   );
   assert(
     fns.includes('.eq("status", "unanswered").in("audience", questionAudiences)'),
