@@ -1071,7 +1071,12 @@ function ClientView() {
   }, []);
   const ratios = computeRatios(ratioInputs);
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
-  const priorSnapshot = resolvePriorSnapshot(snapshots);
+  const statementMeta = readStatementMeta(financials);
+  const statementDated = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
+  const priorSnapshot = resolvePriorSnapshot(snapshots, new Date(), {
+    periodEnd: statementMeta.periodEnd,
+    financials,
+  });
   const assessed = useMemo(
     () =>
       assessClientMetrics({
@@ -1215,6 +1220,8 @@ function ClientView() {
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
+    periodLabel: statementDated ? statementMeta.periodLabel : null,
+    datedPeriod: statementDated,
     market: clientMarket,
     cash:
       assessed.cash.amount != null
@@ -2535,6 +2542,7 @@ function ClientView() {
                   onAddPastPeriod={() => setPastPeriodOpen(true)}
                   onOpenReports={() => revealTab("reports")}
                   hasFigures={hasFigures}
+                  figuresPeriodLabel={statementDated ? statementMeta.periodLabel : null}
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
@@ -2549,6 +2557,9 @@ function ClientView() {
                           ytdPeriodLabel: qboLink.ytdPeriodLabel,
                           ytdRevenue: qboLink.ytdRevenue,
                           ytdBasis: qboLink.ytdBasis,
+                          figuresFromThisSync: qboLink.figuresFromThisSync,
+                          syncFigures: qboLink.syncFigures,
+                          boardFigures: qboLink.boardFigures,
                         }
                       : null
                   }
@@ -2563,6 +2574,9 @@ function ClientView() {
                           ytdPeriodLabel: xeroLink.ytdPeriodLabel,
                           ytdRevenue: xeroLink.ytdRevenue,
                           ytdBasis: xeroLink.ytdBasis,
+                          figuresFromThisSync: xeroLink.figuresFromThisSync,
+                          syncFigures: xeroLink.syncFigures,
+                          boardFigures: xeroLink.boardFigures,
                           bsAsOf: xeroLink.bsAsOf,
                           bankCount: xeroLink.bankCount,
                           bankTotal: xeroLink.bankTotal,

@@ -69,24 +69,52 @@ export function buildFinancialSnapshot(input: {
   financialsUpdatedAt?: string | null;
   lastForecastAt?: string | null;
   priorLabel?: string | null;
+  /**
+   * Statement range on the live figures, e.g. "1 Sep 2026 – 21 Sep 2026".
+   * Shown on revenue when there is no separate prior period.
+   */
+  periodLabel?: string | null;
+  /**
+   * False when the live statement has no from/to dates. Movement vs a prior
+   * snapshot is then hidden — "flat" would claim a month that is not dated.
+   * Omit to keep the previous behaviour for callers that have not opted in.
+   */
+  datedPeriod?: boolean;
   market?: ResolvedMarket;
 }): SnapshotMetric[] {
   const market = input.market ?? ZA_MARKET;
+  const periodKnown = input.datedPeriod !== false && Boolean(input.periodLabel?.trim());
+  const allowMovement = input.datedPeriod !== false;
   const byKey = new Map(input.chips.map((c) => [c.key, c]));
   const out: SnapshotMetric[] = [];
 
   const rev = byKey.get("revenue");
   if (rev?.current != null) {
+    const delta = allowMovement ? deltaFor(rev) : undefined;
     out.push({
       key: "revenue",
       label: "Revenue",
       value: formatMoneyCompact(rev.current, market),
-      delta: deltaFor(rev),
+      delta,
+      hint: !periodKnown
+        ? input.datedPeriod === false
+          ? "Period not dated"
+          : undefined
+        : delta
+          ? input.priorLabel
+            ? `vs ${input.priorLabel}`
+            : undefined
+          : input.periodLabel?.trim() || undefined,
     });
   }
   const gm = byKey.get("gm");
   if (gm?.current != null && Number.isFinite(gm.current)) {
-    out.push({ key: "gm", label: "Gross margin", value: fmtPct(gm.current), delta: deltaFor(gm) });
+    out.push({
+      key: "gm",
+      label: "Gross margin",
+      value: fmtPct(gm.current),
+      delta: allowMovement ? deltaFor(gm) : undefined,
+    });
   }
   const om = byKey.get("om");
   if (om?.current != null && Number.isFinite(om.current)) {
@@ -94,7 +122,7 @@ export function buildFinancialSnapshot(input: {
       key: "om",
       label: "Operating margin",
       value: fmtPct(om.current),
-      delta: deltaFor(om),
+      delta: allowMovement ? deltaFor(om) : undefined,
     });
   }
   if (input.runwayLabel) {
@@ -107,11 +135,7 @@ export function buildFinancialSnapshot(input: {
       value: `${Number.isInteger(w) ? w : w.toFixed(1)} ${w === 1 ? "week" : "weeks"}`,
     });
   }
-  if (
-    input.cash &&
-    Number.isFinite(input.cash.amount) &&
-    Number.isFinite(input.cash.floor)
-  ) {
+  if (input.cash && Number.isFinite(input.cash.amount) && Number.isFinite(input.cash.floor)) {
     const position =
       input.cash.dipsBelowFloorWeek == null
         ? "stays above floor"
@@ -458,7 +482,10 @@ RULES:
 - British/South African spelling. Plain text only, no bullet points, no headings, no quotes.`;
 }
 
-export function sealWorkflowPrompt(ctx: WorkflowContext): { text: string; session: RedactionSession } {
+export function sealWorkflowPrompt(ctx: WorkflowContext): {
+  text: string;
+  session: RedactionSession;
+} {
   return redactForModel(workflowPromptBody(ctx), { clientName: ctx.clientName });
 }
 
@@ -510,14 +537,8 @@ export function sanitizeWorkflowText(raw: string): string | null {
 }
 
 function citedPercent(text: string, subject: RegExp): number | null {
-  const after = new RegExp(
-    `${subject.source}[^\\d%]{0,40}(\\d+(?:\\.\\d+)?)\\s*%`,
-    "i",
-  );
-  const before = new RegExp(
-    `(\\d+(?:\\.\\d+)?)\\s*%[^\\n.]{0,40}${subject.source}`,
-    "i",
-  );
+  const after = new RegExp(`${subject.source}[^\\d%]{0,40}(\\d+(?:\\.\\d+)?)\\s*%`, "i");
+  const before = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%[^\\n.]{0,40}${subject.source}`, "i");
   const match = text.match(before) ?? text.match(after);
   if (!match) return null;
   const n = parseFloat(match[1]);
