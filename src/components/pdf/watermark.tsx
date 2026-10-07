@@ -41,17 +41,25 @@ export function DemoWatermark() {
 }
 
 /**
- * Unsigned budget. Sits in the header band, small and light, so it does not
- * cover the variance table.
+ * Unsigned budget. A flat line in the page body. The old rotated header
+ * word wrapped, and the last two letters sat in the top margin.
  */
 export function DraftWatermark() {
   return (
     <View style={styles.layer} fixed>
       <Text
-        style={[
-          styles.diagonal,
-          { top: 36, left: 80, width: 460, opacity: 0.045, fontSize: 22, letterSpacing: 6 },
-        ]}
+        style={{
+          position: "absolute",
+          top: 400,
+          left: 40,
+          width: 515,
+          textAlign: "center",
+          fontSize: 22,
+          fontFamily: "Helvetica-Bold",
+          color: C.blueDeep,
+          opacity: 0.05,
+          letterSpacing: 4,
+        }}
       >
         DRAFT
       </Text>
@@ -72,13 +80,13 @@ const chip = StyleSheet.create({
     paddingVertical: 3.5,
     marginBottom: 12,
     backgroundColor: C.white,
+    maxWidth: 480,
   },
   dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: C.gold },
   text: {
     fontSize: 6.5,
     fontFamily: "Helvetica-Bold",
     color: C.amberDeep,
-    letterSpacing: 0.8,
     textTransform: "uppercase",
   },
 });

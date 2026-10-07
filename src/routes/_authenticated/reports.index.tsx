@@ -49,7 +49,6 @@ import {
 import {
   ASSET_REPORT_NEEDS,
   cashFlowKnown,
-  effectivePeriodMonths,
   LEVERAGE_REPORT_NEEDS,
   reportScalarInputs,
 } from "@/lib/equity-coherence";
@@ -2160,6 +2159,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const debtRaw = (rawFin as Record<string, unknown>).debt_schedule;
   const fyStartMonth = operatingProfile?.fyStartMonth ?? market.fyStartMonthDefault;
   const fin = reportScalarInputs(rawFin as Record<string, unknown>, { fyStartMonth });
+  const periodMonths = periodMonthsOf(rawFin as Record<string, unknown>);
+  fin.periodMonths = String(periodMonths);
   // Keep debt_schedule as a JSON string key so buildLeverageData can parse it
   if (debtRaw != null) {
     fin["debt_schedule"] = typeof debtRaw === "string" ? debtRaw : JSON.stringify(debtRaw);
@@ -2171,7 +2172,6 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   });
   const statementMeta = readStatementMeta(rawFin);
   const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
-  const periodMonths = effectivePeriodMonths(fin, { fyStartMonth });
   const equityNow = getNum(fin, "equity");
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     period_label: s.period_label,
@@ -2250,6 +2250,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const overallHealth = scorecardHealthFromFinancials({
     financials: rawFin as Record<string, unknown>,
     fyStartMonth,
+    periodMonths,
     cashRunwayWeeks: healthWeeks,
     market,
     shortfallWeek: assessed.outlook.shortfallWeek,
@@ -2607,9 +2608,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         ? cd.benchmarkSector
         : (INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0]);
       if (cd && cd.benchmark.length === 0) {
-        throw new Error(
-          "No sector benchmarks available — set the client business type / profile, then regenerate.",
-        );
+        throw new Error(BENCHMARK_EMPTY_MESSAGE);
       }
       const isDemo = !cd;
       return renderToBlob(BenchmarkReportPDF, {
@@ -2835,11 +2834,16 @@ const REPORT_SIGNOFF_SCOPE: Record<string, ReviewScope> = {
 
 // ── Preview state ──────────────────────────────────────────────────────────
 
+export const BENCHMARK_EMPTY_MESSAGE =
+  "No sector benchmarks available — set the client business type / profile, then regenerate.";
+
 type PreviewState = {
   key: string;
   name: string;
   blobUrl: string | null;
   loading: boolean;
+  /** Inline empty state. The preview stays open instead of failing quietly. */
+  emptyMessage?: string | null;
 };
 
 /** Card title and ZIP stem. Labor/Labour comes from the firm locale, in one place. */
@@ -3174,13 +3178,16 @@ function SettingsPanel({
 
 function PreviewModal({
   state,
+  clientId,
   onClose,
   onDownload,
 }: {
   state: PreviewState | null;
+  clientId?: string;
   onClose: () => void;
   onDownload: () => void;
 }) {
+  const empty = Boolean(state?.emptyMessage);
   return (
     <Dialog
       open={state !== null}
@@ -3193,15 +3200,17 @@ function PreviewModal({
           <DialogTitle className="text-sm font-semibold text-foreground">
             {state?.name ?? "Report Preview"}
           </DialogTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 border-border text-foreground hover:bg-muted text-xs"
-            onClick={onDownload}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download
-          </Button>
+          {empty ? null : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-border text-foreground hover:bg-muted text-xs"
+              onClick={onDownload}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </Button>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden bg-slate-100">
@@ -3210,6 +3219,22 @@ function PreviewModal({
               <div className="text-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">Generating PDF…</p>
+              </div>
+            </div>
+          ) : state?.emptyMessage ? (
+            <div className="flex h-full items-center justify-center px-6">
+              <div className="max-w-md rounded-lg border border-border bg-card px-6 py-5 text-center shadow-sm">
+                <p className="text-sm text-foreground">{state.emptyMessage}</p>
+                {clientId ? (
+                  <Link
+                    to="/clients/$clientId"
+                    params={{ clientId }}
+                    search={{ tab: "overview", profile: "1" }}
+                    className="mt-3 inline-block text-sm font-medium text-[#1e5b9e] underline underline-offset-2"
+                  >
+                    Set the client&apos;s business type
+                  </Link>
+                ) : null}
               </div>
             </div>
           ) : state?.blobUrl ? (
@@ -3817,7 +3842,18 @@ export function ReportsStudio({
       });
       return true;
     } catch (err) {
-      toast.error(`Preview failed: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      if (message === BENCHMARK_EMPTY_MESSAGE) {
+        setPreviewState({
+          key: report.key,
+          name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
+          blobUrl: null,
+          loading: false,
+          emptyMessage: message,
+        });
+        return true;
+      }
+      toast.error(`Preview failed: ${message}`);
       console.error(err);
       setPreviewState(null);
       setPreviewKey(null);
@@ -3974,6 +4010,7 @@ export function ReportsStudio({
         </div>
         <PreviewModal
           state={previewState}
+          clientId={clientId}
           onClose={() => {
             closePreview();
             clearDeepLinkSearch();
@@ -4268,6 +4305,7 @@ export function ReportsStudio({
       {/* Preview modal */}
       <PreviewModal
         state={previewState}
+        clientId={clientId}
         onClose={closePreview}
         onDownload={() => {
           if (!previewState?.blobUrl) return;

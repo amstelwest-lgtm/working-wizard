@@ -9,7 +9,6 @@
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
-import { effectivePeriodMonths } from "./equity-coherence.ts";
 import {
   computeRatios,
   metricDirection,
@@ -1108,7 +1107,7 @@ export function resolveThirteenWeekForecast(input: {
   now?: Date;
   periodEnd?: string | null;
   timeZone?: string | null;
-  /** When set, debtor/creditor days use the same span as Ratios. */
+  /** Kept for callers. Days use the stored cover (`periodMonthsOf`), not the year span. */
   fyStartMonth?: number | null;
 }): ThirteenWeekForecast {
   const weeks = CASH_FORECAST_WEEK_COUNT;
@@ -1130,11 +1129,7 @@ export function resolveThirteenWeekForecast(input: {
   let cycleNote: string | null = null;
   if (fin && (finiteNum(fin.revenue) != null || operating != null)) {
     const ratioInputs = ratioInputsFromFinancials(fin);
-    if (input.fyStartMonth != null && Number.isFinite(Number(input.fyStartMonth))) {
-      ratioInputs.periodMonths = String(
-        effectivePeriodMonths(fin, { fyStartMonth: Number(input.fyStartMonth) }),
-      );
-    }
+    ratioInputs.periodMonths = String(periodMonthsOf(fin));
     const ratios = computeRatios(ratioInputs);
     const creditorDays = ratios["Creditor Days"];
     const debtorDays = ratios["Debtor Days"];

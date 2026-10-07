@@ -29,12 +29,19 @@ import {
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
 import { formatMoney, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { periodMonthsOf } from "@/lib/ratios";
 import { readStatementMeta } from "@/lib/statement-period";
 
 export type BudgetPdfActual = {
   month: string;
   status: ActualsStatus;
   totals: Partial<TaxonomyTotals>;
+  /**
+   * Set when this row is the whole statement, not one uploaded month.
+   * Budget is summed over this many months of the plan. The actual is the
+   * statement total once.
+   */
+  statementCoverMonths?: number;
 };
 
 export type BudgetPdfRow = {
@@ -215,6 +222,21 @@ function contiguousLabel(months: string[], market: Pick<ResolvedMarket, "locale"
   return `${first} – ${last} · ${months.length} months`;
 }
 
+/**
+ * FY months the statement covers. A 12-month cover is the whole plan, even
+ * when the statement is dated in September. A shorter cover is that many
+ * months ending on the statement month.
+ */
+export function budgetMonthsForCover(fy: string[], endMonth: string, periodMonths: number): string[] {
+  const n = Math.max(1, Math.min(fy.length, Math.round(periodMonths)));
+  if (n >= fy.length) return fy.slice();
+  const endIdx = fy.indexOf(endMonth);
+  if (endIdx < 0) return fy.slice(0, n);
+  const startIdx = endIdx - n + 1;
+  if (startIdx >= 0) return fy.slice(startIdx, endIdx + 1);
+  return fy.slice(0, n);
+}
+
 function monthsAreContiguous(fy: string[], picked: string[]): boolean {
   if (picked.length <= 1) return true;
   const indexes = picked.map((m) => fy.indexOf(m)).filter((i) => i >= 0);
@@ -319,6 +341,7 @@ export function budgetActualFromFinancials(
       depreciation: 0,
       ebit: profit,
     },
+    statementCoverMonths: periodMonthsOf(fin),
   };
 }
 
@@ -339,9 +362,18 @@ export function buildBudgetPdfModel(
   const comparedMonths = fy.filter((m) => actualByMonth.has(m));
   const hasActuals = comparedMonths.length > 0;
   const includesDraftActuals = comparedMonths.some((m) => actualByMonth.get(m)?.status === "draft");
+  const statementRow = actuals.length === 1 ? actuals[0] : undefined;
+  const statementCover =
+    hasActuals && statementRow?.statementCoverMonths != null
+      ? statementRow.statementCoverMonths
+      : null;
+  const budgetMonthKeys =
+    statementCover != null
+      ? budgetMonthsForCover(fy, statementRow?.month ?? comparedMonths[0], statementCover)
+      : comparedMonths;
 
   const budgetWindow = hasActuals
-    ? comparedMonths.map((m) => byMonth.get(m)).filter((r): r is BudgetMonthResult => Boolean(r))
+    ? budgetMonthKeys.map((m) => byMonth.get(m)).filter((r): r is BudgetMonthResult => Boolean(r))
     : results;
   const budgetSum = sumBudget(budgetWindow);
   const actualSum = hasActuals
@@ -378,7 +410,7 @@ export function buildBudgetPdfModel(
       budgetOnlyRow(DISPLAY_LABEL[key] ?? key, 0, true),
   );
 
-  const driverMonths = hasActuals ? comparedMonths : fy;
+  const driverMonths = hasActuals ? budgetMonthKeys : fy;
   const driverRows = doc.revenueLines
     .map((line) =>
       budgetOnlyRow(
@@ -428,7 +460,9 @@ export function buildBudgetPdfModel(
     {
       title: "Profit and loss",
       note: hasActuals
-        ? "Budget and actual are summed over the months that have an uploaded actual."
+        ? statementCover != null
+          ? "Budget is prorated to the same period the statement actuals cover."
+          : "Budget and actual are summed over the months that have an uploaded actual."
         : "Full-year budget. Actual and variance stay blank until a month is uploaded.",
       rows: pnlRows,
     },
@@ -453,15 +487,16 @@ export function buildBudgetPdfModel(
     });
   }
 
+  const labelMonths = hasActuals ? budgetMonthKeys : comparedMonths;
   const comparedLabel = hasActuals
-    ? monthsAreContiguous(fy, comparedMonths)
-      ? contiguousLabel(comparedMonths, market)
-      : `${comparedMonths.length} months with actuals (not consecutive)`
+    ? monthsAreContiguous(fy, labelMonths)
+      ? contiguousLabel(labelMonths, market)
+      : `${labelMonths.length} months with actuals (not consecutive)`
     : "No month actuals uploaded";
 
   const fySum = sumBudget(results);
   const fullYearNote = hasActuals
-    ? comparedMonths.length < fy.length
+    ? labelMonths.length < fy.length
       ? `Full-year budget revenue ${money(fySum.revenue, market)}, profit ${money(fySum.ebit, market)}. Variance covers ${comparedLabel} only. Opening cash ${money(doc.openingCash || 0, market)}.`
       : `Variance covers the full budget year. Opening cash ${money(doc.openingCash || 0, market)}.`
     : `Full-year budget. Opening cash ${money(doc.openingCash || 0, market)}.`;
