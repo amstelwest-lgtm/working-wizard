@@ -62,26 +62,25 @@ export function timeGreeting(now = new Date()): string {
 function isNameInitial(token: string): boolean {
   if (token.length === 1 && /^[A-Za-z]$/.test(token)) return true;
   if (!token.includes(".")) return false;
-  return (
-    /^[A-Za-z](?:\.[A-Za-z])*\.?$/.test(token) && token.replace(/[^A-Za-z]/g, "").length <= 3
-  );
+  return /^[A-Za-z](?:\.[A-Za-z])*\.?$/.test(token) && token.replace(/[^A-Za-z]/g, "").length <= 3;
 }
 
 /**
  * Short name for the practice greeting.
  * Uses the first real given-name token. Leading initials ("A. Sample") are
- * skipped so the line is "Sample", not "A.".
+ * skipped so the line is "Sample", not "A.". A trailing comma or period on
+ * that token ("Sample,") is not part of the name — the greeting adds one period.
  */
 export function firstNameOf(name: string | null | undefined): string {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return "there";
   const tokens = trimmed.split(/\s+/).filter(Boolean);
   const given = tokens.find((token) => !isNameInitial(token));
-  const chosen = (given ?? tokens[tokens.length - 1] ?? trimmed).replace(/\.+$/, "");
+  const chosen = (given ?? tokens[tokens.length - 1] ?? trimmed).replace(/[.,]+$/g, "");
   return chosen || "there";
 }
 
-/** "Good morning, Sample." — one period, never "A..". */
+/** "Good morning, Sample." — one period, never "A.." or "Sample,.". */
 export function practiceGreeting(name: string | null | undefined, now = new Date()): string {
   return `${timeGreeting(now)}, ${firstNameOf(name)}.`;
 }
@@ -313,12 +312,22 @@ export type MergedAttention = {
   openPlan: boolean;
   openQueries: boolean;
   overdue: boolean;
+  /**
+   * Same split as the Need attention tile footnote.
+   * "review" is "review now"; "watch" is "watching".
+   */
+  bucket: "review" | "watch";
 };
 
 function attentionRank(severity: AttentionSeverity | number): number {
   if (severity === "critical" || severity === 1) return 0;
   if (severity === "high" || severity === 2) return 1;
   return 2;
+}
+
+/** Rank 0 is "review now". Everything else in the queue is "watching". */
+function attentionBucket(rank: number): "review" | "watch" {
+  return rank === 0 ? "review" : "watch";
 }
 
 function uniqueJoin(parts: readonly string[]): string {
@@ -346,6 +355,7 @@ export function mergeNeedsAttention(
 
   for (const item of health) {
     const overdue = /overdue/i.test(item.detail);
+    const rank = attentionRank(item.severity);
     byId.set(item.clientId, {
       clientId: item.clientId,
       name: item.name,
@@ -355,7 +365,8 @@ export function mergeNeedsAttention(
       openPlan: Boolean(item.openPlan),
       openQueries: Boolean(item.openQueries),
       overdue,
-      rank: attentionRank(item.severity),
+      bucket: attentionBucket(rank),
+      rank,
     });
   }
 
@@ -368,6 +379,7 @@ export function mergeNeedsAttention(
       ...(existing ? [existing.reason] : []),
       ...urgent.map((exception) => exception.label),
     ]);
+    const rank = Math.min(attentionRank(top.severity), existing?.rank ?? 9);
     byId.set(row.clientId, {
       clientId: row.clientId,
       name: existing?.name || row.name,
@@ -377,13 +389,67 @@ export function mergeNeedsAttention(
       openPlan: existing?.openPlan ?? top.tab === "plan",
       openQueries: existing?.openQueries ?? false,
       overdue: existing?.overdue ?? /overdue/i.test(top.label),
-      rank: Math.min(attentionRank(top.severity), existing?.rank ?? 9),
+      bucket: attentionBucket(rank),
+      rank,
     });
   }
 
   return [...byId.values()]
     .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
     .map(({ rank: _rank, ...row }) => row);
+}
+
+/**
+ * Tile counts for the queue `mergeNeedsAttention` renders.
+ * `needAttention` is the row count — the greeting and the list cannot disagree.
+ */
+export function summarizeAttentionQueue(
+  items: readonly Pick<MergedAttention, "bucket">[],
+): PortfolioAttentionSummary {
+  let reviewNow = 0;
+  let watching = 0;
+  for (const item of items) {
+    if (item.bucket === "review") reviewNow += 1;
+    else watching += 1;
+  }
+  return { needAttention: reviewNow + watching, reviewNow, watching };
+}
+
+/**
+ * One Needs attention definition for the practice home.
+ * Health alerts and portfolio exceptions (pack sign-off, blocking data, …)
+ * are the same rows the strip lists and the same clients the tile counts.
+ */
+export function practiceNeedsAttention(
+  health: readonly AttentionItem[],
+  portfolio: readonly NeedsAttentionSource[],
+): { items: MergedAttention[]; summary: PortfolioAttentionSummary } {
+  const items = mergeNeedsAttention(health, portfolio);
+  return { items, summary: summarizeAttentionQueue(items) };
+}
+
+/**
+ * Where the practice Open queries tile goes.
+ * Unresolved notes live on the client (`?queries=open`). Returns null when
+ * none are open — there is no firm-wide queries page to open.
+ * Several clients: the one with the most unresolved notes (name breaks ties).
+ */
+export function firmOpenQueriesClient(
+  rows: readonly { id: string; name?: string | null; openQueries: number }[],
+): string | null {
+  let best: { id: string; name: string; openQueries: number } | null = null;
+  for (const row of rows) {
+    if (!row.id || row.openQueries <= 0) continue;
+    const name = row.name?.trim() ?? "";
+    if (
+      !best ||
+      row.openQueries > best.openQueries ||
+      (row.openQueries === best.openQueries && name.localeCompare(best.name) < 0)
+    ) {
+      best = { id: row.id, name, openQueries: row.openQueries };
+    }
+  }
+  return best?.id ?? null;
 }
 
 /** Rule-based portfolio insight chips. */
