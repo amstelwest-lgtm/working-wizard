@@ -21,6 +21,7 @@ import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { BrandConnectButton } from "@/components/brand-connect-button";
+import { portalButtonClass } from "@/lib/client-chrome";
 import { formatIsoDateUTC } from "@/lib/statement-period";
 import {
   describeLedgerLink,
@@ -236,7 +237,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               <span className="briefing-kicker">Financial Health</span>
               <b>{healthHeadline(p.healthScore, p.healthLabel)}</b>
               {p.healthScore != null && p.onViewBreakdown ? (
-                <button type="button" className="btn gold mini" onClick={p.onViewBreakdown}>
+                <button type="button" className={portalButtonClass("secondary")} onClick={p.onViewBreakdown}>
                   View breakdown
                 </button>
               ) : null}
@@ -298,7 +299,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               <button
                 type="button"
                 id="client-upload-cta"
-                className="btn gold"
+                className={portalButtonClass("secondary")}
                 onClick={p.onUpload}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -321,7 +322,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               <button
                 type="button"
                 id="wizard-open-queries"
-                className="btn gold mini"
+                className={portalButtonClass("secondary")}
                 onClick={p.onOpenQueries}
               >
                 {p.openQueries} open {p.openQueries === 1 ? "query" : "queries"}
@@ -330,19 +331,19 @@ export function ClientBriefing(p: ClientBriefingProps) {
               <button
                 type="button"
                 id="wizard-open-queries"
-                className="btn ghost mini"
+                className={portalButtonClass("secondary")}
                 onClick={p.onOpenQueries}
               >
                 No open queries
               </button>
             )}
             {p.hasFigures && p.movementReportAvailable ? (
-              <button type="button" className="btn gold mini" onClick={p.onOpenMovementReport}>
+              <button type="button" className={portalButtonClass("secondary")} onClick={p.onOpenMovementReport}>
                 Open movement report
               </button>
             ) : null}
             {p.onOpenReports ? (
-              <button type="button" className="btn gold mini" onClick={p.onOpenReports}>
+              <button type="button" className={portalButtonClass("secondary")} onClick={p.onOpenReports}>
                 {p.reportsIssued > 0 ? "Open Reports" : "Create report"}
               </button>
             ) : p.reportsIssued > 0 ? (
@@ -372,12 +373,12 @@ export function ClientBriefing(p: ClientBriefingProps) {
           )}
           <div className="briefing-actions">
             {p.profile ? (
-              <button type="button" className="btn gold mini" onClick={() => setProfileOpen(true)}>
+              <button type="button" className={portalButtonClass("secondary")} onClick={() => setProfileOpen(true)}>
                 View full profile
               </button>
             ) : null}
             {p.onEditProfile ? (
-              <button type="button" className="btn gold mini" onClick={p.onEditProfile}>
+              <button type="button" className={portalButtonClass("secondary")} onClick={p.onEditProfile}>
                 {p.profile ? "Edit profile" : "Fill profile now"}
               </button>
             ) : null}
