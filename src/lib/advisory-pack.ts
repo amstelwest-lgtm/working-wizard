@@ -22,8 +22,9 @@ import {
   type HealthPillarId,
   type OverallHealth,
   type ScoreMarket,
-  flatToRatioInputs,
   healthFromRatioInputs,
+  overviewRatioInputs,
+  overviewRatios,
   pillarForRatioName,
   scoreRatio,
 } from "@/lib/health-score";
@@ -507,12 +508,23 @@ export function advisoryPackSignOffGate(
   };
 }
 
+export type LivePackMetrics = {
+  figures: LivePackFigures;
+  /** Same ratios the Ratios grid computes from the live statement. */
+  ratios: Record<string, number>;
+  health: OverallHealth;
+  cashRunwayWeeks: number | null;
+  openingBalance: number | null;
+  closings: number[] | null;
+  runwayLabel: string | null;
+};
+
 /**
- * Overview health, cash, and runway from the client blobs the studio already
- * scores. Pack generation stores those three on `content`; this is the live
- * side of that snapshot.
+ * Overview health, cash, runway, and ratios from the client blobs the studio
+ * already scores. Pack generation stores this snapshot; the sign-off gate
+ * compares it to the same function.
  */
-export function overviewFiguresForPackDrift(input: {
+export function livePackMetrics(input: {
   financials: Record<string, unknown> | null | undefined;
   cashflow?: unknown;
   financialsUpdatedAt?: string | null;
@@ -521,7 +533,7 @@ export function overviewFiguresForPackDrift(input: {
   fyStartMonth?: number | null;
   timeZone?: string | null;
   now?: Date;
-}): LivePackFigures {
+}): LivePackMetrics {
   const assessed = assessClientMetrics({
     financials: input.financials ?? null,
     cashflow: input.cashflow,
@@ -529,22 +541,42 @@ export function overviewFiguresForPackDrift(input: {
     priorFinancials: input.priorFinancials ?? null,
     now: input.now,
     timeZone: input.timeZone,
+    fyStartMonth: input.fyStartMonth,
   });
   const runwayWeeks =
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
       ? assessed.runway.weeks
       : null;
+  const ratioInputs = overviewRatioInputs(input.financials, {
+    fyStartMonth: input.fyStartMonth,
+  });
   const health = healthFromRatioInputs(
-    flatToRatioInputs(input.financials, { fyStartMonth: input.fyStartMonth }),
+    ratioInputs,
     runwayWeeks,
     input.market ?? undefined,
     assessed.outlook.shortfallWeek,
   );
+  const opening = assessed.outlook.opening;
+  const runwayLabel = runwayDisplayLabel(assessed.runway);
   return {
-    runwayLabel: runwayDisplayLabel(assessed.runway),
-    cash: assessed.outlook.opening,
-    healthScore: health.overall,
+    figures: {
+      runwayLabel,
+      cash: opening,
+      healthScore: health.overall,
+    },
+    ratios: overviewRatios(input.financials, { fyStartMonth: input.fyStartMonth }),
+    health,
+    cashRunwayWeeks: runwayWeeks,
+    openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
+    closings: assessed.outlook.closing,
+    runwayLabel,
   };
+}
+
+export function overviewFiguresForPackDrift(
+  input: Parameters<typeof livePackMetrics>[0],
+): LivePackFigures {
+  return livePackMetrics(input).figures;
 }
 
 // ── Builder ──────────────────────────────────────────────────────────────────
@@ -767,7 +799,9 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
       ? `The forecast has no opening bank balance, so its runway starts from zero and the week-${forecast.lowestWeek} low of ${fmtMoney(
           forecast.lowestClosing ?? 0,
           cur,
-        )} is understated by whatever is actually in the bank.`
+        )} is understated by whatever is actually in the bank.${
+          input.runwayLabel ? ` Runway ${input.runwayLabel}.` : ""
+        }`
       : `Opening balance ${fmtMoney(forecast.openingBalance, cur)}; lowest point ${fmtMoney(
           forecast.lowestClosing ?? 0,
           cur,

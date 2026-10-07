@@ -18,6 +18,7 @@ import {
   fmtRatio,
   isMissingPackRelation,
   advisoryPackSignOffGate,
+  livePackMetrics,
   overviewFiguresForPackDrift,
   packStatusLabel,
   parsePackContent,
@@ -26,7 +27,8 @@ import {
 } from "../src/lib/advisory-pack";
 import { ADVISORY_EVENTS } from "../src/lib/advisory-state";
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "../src/lib/advisory-narrative";
-import { computeOverallHealth } from "../src/lib/health-score";
+import { computeOverallHealth, overviewRatioInputs, overviewRatios } from "../src/lib/health-score";
+import { computeRatios } from "../src/lib/ratios";
 import { checkRootCauseClaims, type Recommendation } from "../src/lib/recommendations";
 import type { DataRequest } from "../src/lib/data-requests";
 
@@ -613,8 +615,16 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     "server rejects approve while the snapshot disagrees with Overview",
   );
   assert(
-    fns.includes("loadLivePackFigures") && fns.includes("overviewFiguresForPackDrift"),
+    fns.includes("loadLivePackFigures") && fns.includes("livePackMetrics"),
     "server recomputes live Overview figures before approve or invalidate",
+  );
+  assert(
+    !fns.includes("computeOverallHealth({ ratios: current.ratios"),
+    "regen does not bake stored snapshot ratios",
+  );
+  assert(
+    panel.includes("if (seq.current !== seen) return") && panel.includes("seq.current += 1"),
+    "regen drops an in-flight stale clear so the new pack stays on screen",
   );
   assert(
     fns.includes("data.liveFigures") && panel.includes("liveFigures:"),
@@ -648,6 +658,14 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(
     studio.includes('audience="accountant"\n                    canGenerate={hasFigures}'),
     "studio pack panel is the accountant seat",
+  );
+  assert(
+    studio.includes("overviewRatioInputs(financials"),
+    "studio Ratios and Overview score the live statement, not a stored snapshot",
+  );
+  assert(
+    app.includes("priorFinancials: ownerPrior?.financials"),
+    "owner Overview uses the same prior snapshot as the pack",
   );
 
   assert(panel.includes('id="advisory-pack-export-pdf"'), "pack panel mounts Export PDF");
@@ -844,6 +862,130 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(!bullet.includes("Debtor days 71 vs 45"), "rationale is not the shown problem");
   const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
   assert(propose.includes("formatSnapshotRatio"), "propose quotes formatted snapshot ratios");
+}
+
+{
+  const us = { country: "US" as const, copyPack: "us" as const };
+  // Unlocked periodMonths 12 with a July month-end. Stored snapshot ratios keep
+  // the annual pass (health 78). Overview and Ratios use the 7-month span.
+  const hand = {
+    revenue: "50000",
+    cogs: "20000",
+    ebit: "8000",
+    receivables: "6000",
+    payables: "4000",
+    periodMonths: "12",
+    periodEnd: "2026-07-31",
+    cash: "12000",
+  };
+  const storedHealth = computeOverallHealth({
+    ratios: computeRatios({ ...overviewRatioInputs(hand, { fyStartMonth: 1 }), periodMonths: "12" }),
+  });
+  eq(storedHealth.overall, 78, "stored annual snapshot still scores 78");
+  const live = livePackMetrics({ financials: hand, fyStartMonth: 1, market: us });
+  assert(
+    live.figures.healthScore != null && live.figures.healthScore !== 78,
+    `live Overview health is not the stale 78, got ${live.figures.healthScore}`,
+  );
+  eq(
+    overviewFiguresForPackDrift({ financials: hand, fyStartMonth: 1, market: us }).healthScore,
+    live.figures.healthScore,
+    "drift check uses the same live health",
+  );
+  const rebuilt = buildAdvisoryPack(
+    inputs({
+      health: live.health,
+      ratios: live.ratios,
+      openingBalance: live.openingBalance,
+      closings: live.closings,
+      cashRunwayWeeks: live.cashRunwayWeeks,
+      runwayLabel: live.runwayLabel,
+    }),
+  );
+  const gate = advisoryPackSignOffGate("in_review", true, rebuilt, live.figures);
+  assert(!gate.figuresChanged && !gate.signOffBlocked, "regen from live Overview clears sign-off");
+  const staleGate = advisoryPackSignOffGate(
+    "approved",
+    true,
+    {
+      health: { overall: 78 },
+      forecast: { openingBalance: live.figures.cash },
+      sections: [{ key: "forecast", body: `Runway ${live.figures.runwayLabel ?? ""}.` }],
+    },
+    live.figures,
+  );
+  assert(staleGate.figuresChanged && staleGate.signOffBlocked, "health 78 vs live Overview blocks sign-off");
+
+  const qa = {
+    revenue: "700000",
+    cogs: "280000",
+    ebit: "60200",
+    receivables: "82192",
+    payables: "48658",
+    periodMonths: "12",
+    periodEnd: "2026-07-31",
+    cash: "128450",
+  };
+  const qaLive = livePackMetrics({ financials: qa, fyStartMonth: 1, market: us });
+  eq(qaLive.ratios["Debtor Days"], 25, "pack debtor days match Ratios");
+  eq(qaLive.ratios["Creditor Days"], 37, "pack creditor days match Ratios");
+  assert(Math.round(qaLive.ratios["Operating Margin"] * 1000) === 86, "pack OM is 8.6%");
+  const qaPack = buildAdvisoryPack(
+    inputs({
+      health: qaLive.health,
+      ratios: qaLive.ratios,
+      openingBalance: qaLive.openingBalance,
+      closings: qaLive.closings,
+      cashRunwayWeeks: qaLive.cashRunwayWeeks,
+      runwayLabel: qaLive.runwayLabel,
+      recommendations: [
+        rec({
+          title: "Collect faster",
+          problem: "Debtor days 43.8 and creditor days 73, OM 0.16.",
+        }),
+      ],
+    }),
+  );
+  const qaBullet = qaPack.sections.find((s) => s.key === "recommendations")!.bullets![0];
+  assert(qaBullet.includes("25 days") && qaBullet.includes("37 days") && qaBullet.includes("8.6%"), qaBullet);
+  assert(!qaBullet.includes("43.8") && !qaBullet.includes("0.16"), qaBullet);
+  const qaGate = advisoryPackSignOffGate("in_review", true, qaPack, qaLive.figures);
+  assert(!qaGate.figuresChanged && !qaGate.signOffBlocked, "QA US regen matches Overview and can be signed off");
+  const storedQa = overviewRatios({ ...qa, periodMonths: "12", periodEnd: undefined }, { fyStartMonth: 1 });
+  assert(storedQa["Debtor Days"] !== 25, "dropping the year span is the stale snapshot");
+
+  const yankees = {
+    cash: "7430.22",
+    revenue: "8633.6",
+    cogs: "775.98",
+    ebit: "2501.12",
+    ebt: "2501.12",
+    netIncome: "2501.12",
+    ebitda: "2501.12",
+    operatingCashflow: "0",
+    totalAssets: "21323.01",
+    equity: "8266.73",
+    payables: "8386.76",
+    receivables: "9194.51",
+    fixedCosts: "5356.5",
+    periodMonths: "1",
+  };
+  const yankeesLive = livePackMetrics({ financials: yankees, fyStartMonth: 1, market: us });
+  eq(yankeesLive.figures.healthScore, 71, "Yankees pack health matches Overview 71");
+
+  const withPrior = livePackMetrics({
+    financials: { cash: "10000", netIncome: "5000", revenue: "8000", operatingCashflow: "1000" },
+    priorFinancials: { cash: "50000" },
+    fyStartMonth: 1,
+  });
+  const withoutPrior = livePackMetrics({
+    financials: { cash: "10000", netIncome: "5000", revenue: "8000", operatingCashflow: "1000" },
+    fyStartMonth: 1,
+  });
+  assert(
+    withPrior.figures.runwayLabel !== withoutPrior.figures.runwayLabel,
+    "prior cash changes the runway label the banner compares",
+  );
 }
 
 console.log("advisory-pack: all checks passed");

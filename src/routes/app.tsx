@@ -106,6 +106,7 @@ import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -3457,10 +3458,19 @@ function Index() {
 
   // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
   // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
+  const ownerPrior = useMemo(
+    () =>
+      resolvePriorSnapshot(history, new Date(), {
+        periodEnd: v.periodEnd ?? null,
+        financials: v as unknown as Record<string, unknown>,
+      }),
+    [history, v],
+  );
   const ownerMetrics = assessClientMetrics({
     financials: v as unknown as Record<string, unknown>,
     cashflow: clientMeta?.cashflow ?? null,
     financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    priorFinancials: ownerPrior?.financials ?? null,
     timeZone: boardMarket.timezone,
     fyStartMonth,
   });

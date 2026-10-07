@@ -255,6 +255,53 @@ export function flatToRatioInputs(
 }
 
 /**
+ * Ratio inputs Overview and the Ratios grid score.
+ * Period length follows the financial-year span. Equity stays the figure on
+ * the statement — the same fields the accountant page passes to `computeRatios`.
+ */
+export function overviewRatioInputs(
+  financials: FlatFinancials | Record<string, unknown> | null | undefined,
+  opts?: { fyStartMonth?: number | null },
+): RatioInputs & { totalLiabilities?: string } {
+  const fin = (financials ?? {}) as Record<string, unknown>;
+  const text = (key: string): string => {
+    const value = fin[key];
+    if (value == null) return "";
+    return typeof value === "string" ? value : String(value);
+  };
+  return {
+    revenue: text("revenue"),
+    cogs: text("cogs"),
+    ebit: text("ebit"),
+    ebt: text("ebt"),
+    netIncome: text("netIncome"),
+    ebitda: text("ebitda"),
+    operatingCashflow: text("operatingCashflow"),
+    totalAssets: text("totalAssets"),
+    equity: text("equity"),
+    receivables: text("receivables"),
+    inventory: text("inventory"),
+    payables: text("payables"),
+    fixedCosts: text("fixedCosts"),
+    variableCosts: text("variableCosts"),
+    top5Revenue: text("top5Revenue"),
+    laborCost: text("laborCost"),
+    employees: text("employees"),
+    founderHours: text("founderHours"),
+    periodMonths: String(effectivePeriodMonths(fin, opts)),
+    totalLiabilities: text("totalLiabilities"),
+  };
+}
+
+/** Ratios Overview and the Ratios grid show for this statement. */
+export function overviewRatios(
+  financials: FlatFinancials | Record<string, unknown> | null | undefined,
+  opts?: { fyStartMonth?: number | null },
+): Record<string, number> {
+  return computeRatios(overviewRatioInputs(financials, opts));
+}
+
+/**
  * Per-ratio health score (0–100). Shared by client page, reports studio,
  * and overall aggregation.
  */

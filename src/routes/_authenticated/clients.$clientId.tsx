@@ -70,6 +70,7 @@ import {
   scoreFromRatioInputs,
   healthFromRatioInputs,
   healthMapFromRatios,
+  overviewRatioInputs,
   pillarForRatioName,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -1069,28 +1070,7 @@ function ClientView() {
   const parsedEquity = Number(equityCheck.equity);
   const equityAmount =
     equityCheck.equity.trim() !== "" && Number.isFinite(parsedEquity) ? parsedEquity : null;
-  const ratioInputs: RatioInputs & { totalLiabilities?: string } = {
-    revenue: financials["revenue"] ?? "",
-    cogs: financials["cogs"] ?? "",
-    ebit: financials["ebit"] ?? "",
-    ebt: financials["ebt"] ?? "",
-    netIncome: financials["netIncome"] ?? "",
-    ebitda: financials["ebitda"] ?? "",
-    operatingCashflow: financials["operatingCashflow"] ?? "",
-    totalAssets: financials["totalAssets"] ?? "",
-    equity: financials["equity"] ?? "",
-    receivables: financials["receivables"] ?? "",
-    inventory: financials["inventory"] ?? "",
-    payables: financials["payables"] ?? "",
-    fixedCosts: financials["fixedCosts"] ?? "",
-    variableCosts: financials["variableCosts"] ?? "",
-    top5Revenue: financials["top5Revenue"] ?? "",
-    laborCost: financials["laborCost"] ?? "",
-    employees: financials["employees"] ?? "",
-    founderHours: financials["founderHours"] ?? "",
-    periodMonths: String(coverageMonths),
-    totalLiabilities: financials["totalLiabilities"] ?? "",
-  };
+  const ratioInputs = overviewRatioInputs(financials, { fyStartMonth });
   const periodMonths = coverageMonths;
   /** True once any P&L / balance-sheet figure exists — gates the empty-state card and Ask AI note. */
   const hasFigures = useMemo(
