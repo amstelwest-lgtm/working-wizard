@@ -303,14 +303,17 @@ const router = createRouter({
   routeTree,
   history: createMemoryHistory({ initialEntries: ["/dashboard"] }),
 });
-const href = `/clients/${routed.params.clientId}?queries=open`;
-const matched = router.matchRoutes(href);
-const routeIds = matched.map((match) => match.routeId);
-assert(routeIds.includes("/_authenticated/clients/$clientId"), "the helper URL is the client page");
-assert(!routeIds.includes("/_authenticated/dashboard"), "the helper URL is not the dashboard");
-const clientMatch = matched.find((match) => match.routeId === "/_authenticated/clients/$clientId");
-const search = (clientMatch as { search?: { queries?: string } } | undefined)?.search;
-assert(search?.queries === "open", "the client match keeps ?queries=open");
-assert(routed.search.queries === search?.queries, "the destination search is the URL search");
+const built = router.buildLocation({
+  to: routed.to,
+  params: routed.params,
+  search: routed.search,
+});
+assert(built.pathname === `/clients/${CLIENT_ID}`, "the helper leaves /dashboard for that client");
+assert(!built.pathname.startsWith("/dashboard"), "the helper URL is not the dashboard");
+assert(built.search.queries === "open", "the helper search opens the queries panel");
+assert(built.searchStr === "?queries=open", "the address bar is ?queries=open");
+const routeIds = router.matchRoutes(built.pathname).map((match) => match.routeId);
+assert(routeIds.includes("/_authenticated/clients/$clientId"), "that pathname is the client page");
+assert(!routeIds.includes("/_authenticated/dashboard"), "that pathname does not match the dashboard");
 
 console.log("accountant-qa-medium-test: ok");
