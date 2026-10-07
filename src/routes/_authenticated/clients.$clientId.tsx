@@ -2448,6 +2448,22 @@ function ClientView() {
                   className={`tabpane${activeTab === "overview" ? " on" : ""}`}
                   id="pane-overview"
                 >
+                {hasFigures ? (
+                  <div className="card hero-card action-bar" data-bot-entry>
+                    <span className="lbl">
+                      <b>Milōn Bot</b> — drafts the next steps from the figures on file. You sign
+                      them off.
+                    </span>
+                    <button
+                      type="button"
+                      className="btn gold mini"
+                      data-ask-bot
+                      onClick={() => selectRail("ask")}
+                    >
+                      Ask Milōn Bot
+                    </button>
+                  </div>
+                ) : null}
                 {/* ===== NEXT STEP — one CTA, on Overview only (P0.4) ===== */}
                 <NextStepCard
                   className="mb-4"

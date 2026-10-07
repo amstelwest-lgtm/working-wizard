@@ -19,6 +19,7 @@ import {
 import { deliverableHandoff } from "./workflow-coach.ts";
 import { friendlyReachMessage } from "./reach-error.ts";
 import { parseAskAiBody, parseAskAiPayload } from "./ask-ai-response.ts";
+import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
 
 export {
   routeMilonIntent,
@@ -203,6 +204,8 @@ export function mountAskAi(container, options) {
   let creatingDeliverable = false;
   let errorMsg = "";
   let history = [];
+  let signoffCtas = [];
+  let lastQuestion = "";
 
   function render() {
     container.innerHTML = "";
@@ -334,6 +337,8 @@ export function mountAskAi(container, options) {
         pendingIntent = null;
         history = [];
         errorMsg = "";
+        signoffCtas = [];
+        lastQuestion = "";
         if (!studio) open = false;
         render();
       });
@@ -403,8 +408,33 @@ export function mountAskAi(container, options) {
           answerEl.appendChild(chipRow);
         }
 
+        if (signoffCtas.length && typeof onOpenDeliverable === "function") {
+          const row = document.createElement("div");
+          row.className = "ask-ai-signoff-row";
+          const note = document.createElement("p");
+          note.className = "ask-ai-signoff-state";
+          note.dataset.signoffState = "1";
+          note.textContent = botSignoffStateLine(signoffCtas);
+          row.appendChild(note);
+          signoffCtas.forEach((cta) => {
+            const go = document.createElement("button");
+            go.type = "button";
+            go.className = "ask-ai-handoff ask-ai-signoff";
+            go.dataset.signoff = cta.kind;
+            go.dataset.tab = cta.tab;
+            go.textContent = cta.label;
+            go.addEventListener("click", () => {
+              onOpenDeliverable(botSignoffDestination(cta, lastQuestion));
+            });
+            row.appendChild(go);
+          });
+          answerEl.appendChild(row);
+        }
+
         const handoff =
-          typeof onOpenDeliverable === "function" ? deliverableHandoff(question) : null;
+          signoffCtas.length || typeof onOpenDeliverable !== "function"
+            ? null
+            : deliverableHandoff(lastQuestion);
         if (handoff) {
           const go = document.createElement("button");
           go.type = "button";
@@ -556,6 +586,8 @@ export function mountAskAi(container, options) {
     toolHints = [];
     agentRun = null;
     errorMsg = "";
+    signoffCtas = [];
+    lastQuestion = q;
     safeRender(q);
 
     try {
@@ -622,6 +654,11 @@ export function mountAskAi(container, options) {
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
       history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
       if (history.length > 16) history = history.slice(-16);
+      signoffCtas = botSignoffCtas({
+        tools: turn.tools,
+        created: turn.created,
+        run: turn.run,
+      });
       question = "";
       try {
         if (turn.created && typeof onPersistedCreate === "function") {
@@ -636,6 +673,7 @@ export function mountAskAi(container, options) {
       answerChips = [];
       toolHints = [];
       agentRun = null;
+      signoffCtas = [];
       errorMsg = friendlyReachMessage(e, "Something went wrong.") || "Something went wrong.";
     } finally {
       loading = false;

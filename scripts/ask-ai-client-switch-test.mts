@@ -682,6 +682,50 @@ await test("Scenario 7: empty, non-JSON, and network failures stay visible", asy
   assert(offline.children[0]?.dataset.askState === "error", "state is error, not a silent reset");
 });
 
+await test("Scenario 8: a drafted recommendation offers Review Action Plan", async () => {
+  const opened: Array<{ tab?: string; coach?: string; why?: string }> = [];
+  (globalThis as Record<string, unknown>).fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      answer: "Drafted three moves. They are not approved.",
+      chips: [],
+      tools: [{ name: "propose_next_steps", status: "ok" }],
+    }),
+  });
+
+  const container = makeContainer("client-signoff");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    botEndpoint: "https://example.com/functions/v1/milon-bot",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+    onOpenDeliverable: (dest: { tab?: string; coach?: string; why?: string }) => {
+      opened.push(dest);
+    },
+  });
+
+  const chipText = "Propose next steps from what's on file.";
+  const chip = container.find((el) => el.className.includes("ask-ai-chip") && el.textContent === chipText);
+  if (!chip) throw new Error("propose chip missing");
+  chip.click();
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const go = container.find((el) => el.dataset.signoff === "actions");
+  assert(go?.textContent === "Review Action Plan", `expected Review Action Plan, got ${go?.textContent}`);
+  assert(go?.dataset.tab === "plan", "the button targets the Action Plan tab");
+  assert(
+    (container.find((el) => el.dataset.signoffState === "1")?.textContent ?? "").includes("approval"),
+    "the thread says the work is waiting",
+  );
+  go?.click();
+  assert(opened.length === 1, "one click opens the existing deliverable");
+  assert(opened[0].tab === "plan" && opened[0].coach === "actions", "deep link is this client's Action Plan");
+  assert((opened[0].why ?? "").includes("Propose next steps"), "the route keeps the question");
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n─────────────────────────────────────`);
