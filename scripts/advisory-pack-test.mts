@@ -20,6 +20,7 @@ import {
   advisoryPackSignOffGate,
   livePackMetrics,
   overviewFiguresForPackDrift,
+  packNarrativeRatios,
   packStatusLabel,
   parsePackContent,
   parsePackRow,
@@ -619,6 +620,10 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     "server recomputes live Overview figures before approve or invalidate",
   );
   assert(
+    fns.includes("packNarrativeRatios"),
+    "regen quotes Ratios days in recommendation sentences",
+  );
+  assert(
     !fns.includes("computeOverallHealth({ ratios: current.ratios"),
     "regen does not bake stored snapshot ratios",
   );
@@ -986,6 +991,87 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     withPrior.figures.runwayLabel !== withoutPrior.figures.runwayLabel,
     "prior cash changes the runway label the banner compares",
   );
+}
+
+{
+  // Live QA US file. Health uses the 9-month year span (debtor 19 / creditor 28).
+  // Ratios Days AR/AP keep the stored 12-month cover (25 / 37). Recommendation
+  // sentences must quote the Ratios days and the Overview percent, including
+  // the shapes the stored draft actually uses.
+  const qaUs = {
+    revenue: "700000",
+    cogs: "280000",
+    ebit: "60000",
+    receivables: "48500",
+    payables: "28500",
+    inventory: "62000",
+    cash: "128450",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  };
+  const us = { country: "US" as const, copyPack: "us" as const };
+  const live = livePackMetrics({ financials: qaUs, fyStartMonth: 1, market: us });
+  eq(live.ratios["Debtor Days"], 19, "health-span debtor days stay 19");
+  eq(live.ratios["Creditor Days"], 28, "health-span creditor days stay 28");
+  assert(Math.round(live.ratios["Operating Margin"] * 1000) === 86, "live OM is 8.6%");
+  const quoted = packNarrativeRatios(qaUs, live.ratios);
+  eq(quoted?.["Debtor Days"], 25, "narrative debtor days match Ratios");
+  eq(quoted?.["Creditor Days"], 37, "narrative creditor days match Ratios");
+  assert(Math.round((quoted?.["Operating Margin"] ?? 0) * 1000) === 86, "narrative OM stays live");
+
+  const debtorTitle =
+    "Investigate and action the 43.8-day debtor days position for a retail business";
+  const debtorProblem =
+    "A debtor days ratio of 43.8 is elevated for retail, where cash or near-cash settlement is typical.";
+  const creditorTitle =
+    "Review creditor days of 73 against supplier terms to confirm sustainability and avoid supply risk";
+  const creditorProblem =
+    "At 73 creditor days the business is stretching payables significantly. With a 0.16 operating margin there is limited buffer if key suppliers tighten terms.";
+  const debtorGrounded = `${groundAdvisoryNarrative(debtorTitle, quoted)} ${groundAdvisoryNarrative(debtorProblem, quoted)}`;
+  const creditorGrounded = `${groundAdvisoryNarrative(creditorTitle, quoted)} ${groundAdvisoryNarrative(creditorProblem, quoted)}`;
+  assert(!debtorGrounded.includes("43.8"), debtorGrounded);
+  assert(debtorGrounded.includes("25-day") && debtorGrounded.includes("25 days"), debtorGrounded);
+  assert(!creditorGrounded.includes("73") && !creditorGrounded.includes("0.16"), creditorGrounded);
+  assert(creditorGrounded.includes("37 days") && creditorGrounded.includes("37 creditor"), creditorGrounded);
+  assert(creditorGrounded.includes("8.6%"), creditorGrounded);
+  assert(
+    groundAdvisoryNarrative("Review creditor days of 28 days against supplier terms", quoted) ===
+      "Review creditor days of 37 days against supplier terms",
+    "a health-span 28 already written into the title is rewritten to Ratios",
+  );
+  assert(
+    groundAdvisoryNarrative("−12 debtor days in 60 days", quoted) === "−12 debtor days in 60 days",
+    "an impact delta is not the current debtor days",
+  );
+  assert(
+    groundAdvisoryNarrative("Review within 90 days. Healthy band 30–60.", quoted) ===
+      "Review within 90 days. Healthy band 30–60.",
+    "horizons and bands stay",
+  );
+
+  const qaPack = buildAdvisoryPack(
+    inputs({
+      health: live.health,
+      ratios: live.ratios,
+      narrativeRatios: quoted,
+      openingBalance: live.openingBalance,
+      closings: live.closings,
+      cashRunwayWeeks: live.cashRunwayWeeks,
+      runwayLabel: live.runwayLabel,
+      recommendations: [
+        rec({ title: debtorTitle, problem: debtorProblem, rationale: "Debtor days 71 vs 45" }),
+        rec({ title: creditorTitle, problem: creditorProblem }),
+      ],
+    }),
+  );
+  const bullets = qaPack.sections.find((s) => s.key === "recommendations")!.bullets!.join("\n");
+  assert(!bullets.includes("43.8") && !bullets.includes("0.16") && !/\b73\b/.test(bullets), bullets);
+  assert(bullets.includes("25") && bullets.includes("37") && bullets.includes("8.6%"), bullets);
+  assert(!bullets.includes("Debtor days 71 vs 45"), "rationale is not the shown problem");
+  const gate = advisoryPackSignOffGate("in_review", true, qaPack, live.figures);
+  assert(!gate.figuresChanged && !gate.signOffBlocked, "narrative rewrite does not stale the health snapshot");
+  const signed = advisoryPackSignOffGate("approved", true, qaPack, live.figures);
+  assert(signed.signOffHolds && !signed.figuresChanged, "sign-off still holds when health matches");
 }
 
 console.log("advisory-pack: all checks passed");
