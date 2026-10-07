@@ -2033,6 +2033,20 @@ function ClientView() {
     revealTab("reports");
   }, [revealTab]);
 
+  /** Standalone suite (client combobox + Preview PDF). The in-page Reports tab stays on ?tab=reports. */
+  const openReportsStudio = useCallback(() => {
+    setMobileNavOpen(false);
+    void navigate({
+      to: "/reports",
+      search: {
+        client: undefined,
+        clientId,
+        report: undefined,
+        action: undefined,
+      },
+    });
+  }, [clientId, navigate]);
+
   const handleExportPDF = useCallback(async () => {
     if (!client) return;
     try {
@@ -2422,13 +2436,7 @@ function ClientView() {
                     navigate({ to: "/settings" });
                   }}
                 />
-                <button
-                  className="tb-btn gold"
-                  onClick={() => {
-                    setMobileNavOpen(false);
-                    handleGenerateReport();
-                  }}
-                >
+                <button type="button" className="tb-btn gold" onClick={openReportsStudio}>
                   <svg viewBox="0 0 24 24">
                     <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                     <path d="M14 3v6h6" />
