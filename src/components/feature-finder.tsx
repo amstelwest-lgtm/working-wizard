@@ -24,6 +24,7 @@ import {
   CLIENTS_GROUP,
   includeClientGroup,
   paletteEmptyCopy,
+  searchClientSectionJumps,
   searchClients,
 } from "@/lib/feature-finder-clients";
 import { subscribeFeatureFinderHotkey, toggleFinderOpen } from "@/lib/feature-finder-hotkey";
@@ -87,7 +88,15 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
     () => searchFeatures(query, { audience, clientId }),
     [query, audience, clientId],
   );
-  const groups = useMemo(() => groupResults(match.results), [match.results]);
+  const onFirmDashboard = showClients && !clientId?.trim();
+  const sectionJumps = useMemo(
+    () => (onFirmDashboard ? searchClientSectionJumps(query, clients) : []),
+    [onFirmDashboard, query, clients],
+  );
+  const groups = useMemo(
+    () => groupResults([...match.results, ...sectionJumps]),
+    [match.results, sectionJumps],
+  );
   const clientHits = useMemo(
     () => (showClients ? searchClients(query, clients) : []),
     [showClients, query, clients],
@@ -95,8 +104,8 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
   const shortcut = featureFinderShortcutLabel(mac);
   const showClientHint = audience === "accountant" && !clientId?.trim();
   const emptyCopy = paletteEmptyCopy({
-    needsClient: match.needsClient,
-    featureCount: match.results.length,
+    needsClient: match.needsClient && sectionJumps.length === 0,
+    featureCount: match.results.length + sectionJumps.length,
     clientCount: clientHits.length,
     clientsLoading: showClients && clientsLoading,
   });
@@ -190,8 +199,8 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
           <DialogTitle className="sr-only">Search {searchLabel}</DialogTitle>
           <DialogDescription className="sr-only">
             {showClients
-              ? "Jump to a client, or to Health, Cash, Collections, and other product functions."
-              : "Jump to Health, Cash, Collections, and other product functions."}
+              ? "Jump to a client, or to Health, Cash, Budget, Collections, and other product functions."
+              : "Jump to Health, Cash, Budget, and other product functions."}
           </DialogDescription>
           <Command
             shouldFilter={false}
@@ -246,7 +255,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
           <div className="feature-finder-foot">
             <span>
               {showClientHint
-                ? "Open a client for the studio pages, or search the firm."
+                ? "Search a client, or Cash, Budget, and other sections."
                 : showClients
                   ? "Features and clients"
                   : "Features"}

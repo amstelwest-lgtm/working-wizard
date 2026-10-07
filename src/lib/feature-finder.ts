@@ -149,7 +149,7 @@ const FEATURES: readonly FeatureDef[] = [
     hint: "12-month budget",
     order: 50,
     scope: "client",
-    synonyms: ["variance", "12-month", "12 month"],
+    synonyms: ["budget", "variance", "12-month", "12 month", "budget variance"],
     audiences: ["accountant", "owner"],
     requiresClient: true,
     studio: BUDGET,
@@ -371,6 +371,95 @@ export function searchFeatures(query: string, ctx: FeatureFinderContext): Featur
   return {
     results,
     needsClient: omitted.length > 0 && results.length === 0,
+  };
+}
+
+export type FirmSectionTarget = {
+  id: string;
+  label: string;
+  hint: string;
+  score: number;
+  order: number;
+  search: Extract<FeatureDestination, { kind: "client" }>["search"];
+};
+
+/**
+ * Studio sections named by a firm-dashboard query, where no client file is open.
+ * `clientQuery` is leftover text that narrows the book (`yankees` in `budget yankees`).
+ * Empty means every client has the section.
+ */
+export function firmSectionTargets(query: string): {
+  targets: FirmSectionTarget[];
+  clientQuery: string;
+} {
+  const q = normalizeFeatureQuery(query);
+  if (!q) return { targets: [], clientQuery: "" };
+
+  const defs = FEATURES.filter(
+    (def) => def.requiresClient && def.audiences.includes("accountant") && def.studio,
+  );
+  const rank = (span: string) =>
+    defs
+      .map((def) => ({ def, score: scoreFeature(span, def, "accountant" as const) }))
+      .filter((row) => row.score >= 50)
+      .sort((a, b) => b.score - a.score || a.def.order - b.def.order);
+
+  const tokens = q.split(" ").filter(Boolean);
+  let best: { start: number; end: number; rows: ReturnType<typeof rank> } | null = null;
+  for (let i = 0; i < tokens.length; i++) {
+    for (let j = i + 1; j <= tokens.length; j++) {
+      const span = tokens.slice(i, j).join(" ");
+      const rows = rank(span);
+      if (!rows.length) continue;
+      const top = rows[0]!.score;
+      const longer = best ? j - i > best.end - best.start : false;
+      if (!best || top > best.rows[0]!.score || (top === best.rows[0]!.score && longer)) {
+        best = { start: i, end: j, rows };
+      }
+    }
+  }
+  if (!best) return { targets: [], clientQuery: "" };
+
+  const restTokens = [...tokens.slice(0, best.start), ...tokens.slice(best.end)];
+  const rest = restTokens.join(" ");
+  const restRows = rest ? rank(rest) : [];
+  if (rest && restRows.length) {
+    const byId = new Map<string, (typeof restRows)[number]>();
+    for (const row of [...best.rows, ...restRows]) {
+      const prev = byId.get(row.def.id);
+      if (!prev || row.score > prev.score) byId.set(row.def.id, row);
+    }
+    const merged = [...byId.values()].sort(
+      (a, b) => b.score - a.score || a.def.order - b.def.order,
+    );
+    return { targets: merged.map(toFirmSectionTarget), clientQuery: "" };
+  }
+
+  const topScore = best.rows[0]!.score;
+  return {
+    targets: best.rows.filter((row) => row.score === topScore).map(toFirmSectionTarget),
+    clientQuery: clientQueryFrom(rest),
+  };
+}
+
+/** "Budget for Yankees" uses the same "for" as the jump label. It is not part of the name. */
+function clientQueryFrom(rest: string): string {
+  return rest
+    .split(" ")
+    .filter((token) => token && token !== "for")
+    .join(" ");
+}
+
+function toFirmSectionTarget(row: { def: FeatureDef; score: number }): FirmSectionTarget {
+  const studio = row.def.studio;
+  if (!studio) throw new Error(`section ${row.def.id} has no studio tab`);
+  return {
+    id: row.def.id,
+    label: row.def.label,
+    hint: row.def.hint,
+    score: row.score,
+    order: row.def.order,
+    search: studio,
   };
 }
 
