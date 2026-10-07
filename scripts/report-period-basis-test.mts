@@ -15,6 +15,8 @@ import { fyMonths } from "../src/lib/budget.months";
 import { periodMonthsOf } from "../src/lib/ratios";
 import { presentReturn } from "../src/lib/report-coherence";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "../src/lib/scorecard-rows";
+import { benchmarkEmptyCopy } from "../src/lib/benchmark-empty";
+import { defaultStringifySearch } from "@tanstack/router-core";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 
 function assert(cond: boolean, msg: string) {
@@ -98,15 +100,80 @@ assert(
 );
 
 const studio = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
-assert(
-  studio.includes("No sector benchmarks available — set the client business type / profile, then regenerate."),
-  "the benchmark empty state keeps the existing sentence",
-);
+assert(studio.includes("benchmarkEmptyCopy"), "the benchmark empty state names the sector");
+assert(studio.includes("text-slate-800"), "the empty-state sentence is dark on the light preview sheet");
 assert(studio.includes("emptyMessage"), "preview renders that sentence instead of failing quietly");
 assert(
-  studio.includes('search={{ tab: "overview", profile: "1" }}') &&
+  studio.includes("search={{ tab: \"overview\", profile: 1 }}") &&
     studio.includes("Set the client&apos;s business type"),
   "the empty state links to the client business profile",
 );
+const wholesale = benchmarkEmptyCopy({
+  studioSectorName: "Wholesale Trade — Non-Specialised",
+});
+assert(
+  wholesale.message === "No benchmarks yet for Wholesale Trade — Non-Specialised.",
+  wholesale.message,
+);
+assert(wholesale.offerSetBusinessType === false, "a selected industry is not a missing profile");
+const profileSector = benchmarkEmptyCopy({
+  profileSectorName: "Wholesale & distribution",
+  studioSectorName: "Wholesale Trade — Non-Specialised",
+});
+assert(
+  profileSector.message === "No benchmarks yet for Wholesale & distribution.",
+  "a stored profile wins over the studio default",
+);
+const unset = benchmarkEmptyCopy({});
+assert(unset.offerSetBusinessType === true, "a blank profile still asks for a business type");
+const profileHref = defaultStringifySearch({ tab: "overview", profile: 1 });
+assert(profileHref.includes("profile=1"), `profile search is profile=1, got ${profileHref}`);
+assert(!profileHref.includes("%22"), `profile search is not JSON-quoted, got ${profileHref}`);
+const clientRoute = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+assert(clientRoute.includes('search.profile === 1 || search.profile === "1"'), "profile=1 opens the editor");
+assert(clientRoute.includes("if (search.profile === 1) setProfileOpen(true)"), "the overview reads profile=1");
+
+const withDa = budgetActualFromFinancials({
+  ...qaUs,
+  ebitda: "69000",
+  revenue: 700000,
+  cogs: 280000,
+  ebit: 60000,
+  fixedCosts: 351000,
+});
+assert(withDa?.totals.depreciation === 9000, `statement depreciation is 9k, got ${withDa?.totals.depreciation}`);
+assert(withDa?.totals.ebit === 60000, `statement profit stays EBIT, got ${withDa?.totals.ebit}`);
+assert(
+  withDa?.totals.overheadsTotal === 351000,
+  `operating expenses stay 351k, got ${withDa?.totals.overheadsTotal}`,
+);
+assert(withDa?.totals.overheadsOther === 0, "an unsplit operating-expense total is not booked as Other");
+assert(withDa?.overheadsUnsplit === true, "the statement actual is marked unsplit");
+const reconciled = buildBudgetPdfModel(doc, withDa ? [withDa] : [], ZA_MARKET);
+const pnl = reconciled.sections.find((section) => section.title === "Profit and loss");
+const row = (label: string) => pnl?.rows.find((item) => item.label === label);
+const revenueRow = row("Revenue");
+const cogsRow = row("COGS");
+const opexRow = row("Operating expenses");
+const dep = row("Depreciation");
+const profit = row("Profit");
+assert(dep?.actual === 9000, `depreciation actual is 9k, got ${dep?.actual}`);
+assert(profit?.actual === 60000, `profit actual is EBIT 60k, got ${profit?.actual}`);
+assert(opexRow?.actual === 351000, `operating expenses actual stays 351k, got ${opexRow?.actual}`);
+const actualBridge =
+  (revenueRow?.actual ?? 0) -
+  (cogsRow?.actual ?? 0) -
+  (opexRow?.actual ?? 0) -
+  (dep?.actual ?? 0) -
+  (profit?.actual ?? 0);
+assert(Math.abs(actualBridge) < 1, `actual lines reconcile to profit, gap ${actualBridge}`);
+const overheads = reconciled.sections.find((section) => section.title === "Overheads");
+assert(
+  overheads?.note?.includes("does not split operating expenses") === true,
+  overheads?.note ?? "missing overhead note",
+);
+const budgetPdf = readFileSync(resolve("src/reports/budget-variance.tsx"), "utf8");
+assert(budgetPdf.includes("Budget ${fmtRand(row.budget, market)}"), "exec tiles lead with the total");
+assert(!budgetPdf.includes("value: signedMoney(row.delta, market)"), "exec tiles do not lead with the variance");
 
 console.log("report-period-basis-test ok");

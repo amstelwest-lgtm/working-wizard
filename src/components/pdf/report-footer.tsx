@@ -7,7 +7,7 @@
 
 import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { formatSignedOffDateTime } from "@/lib/market";
+import { formatReviewDateTime } from "@/lib/market";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
 import type { ReportSignoffStamp } from "./pdf-document";
@@ -50,24 +50,14 @@ const styles = StyleSheet.create({
   milon: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint },
 });
 
-const FOOTER_CLOCK = {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-} as const;
-
 export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
   const market = usePdfMarket();
   // Zone is the client's market (the PDF context), never the viewer's profile zone.
   const signoffDate = reviewSignoff
-    ? formatSignedOffDateTime(reviewSignoff.signedOffAt, market, FOOTER_CLOCK)
+    ? formatReviewDateTime(reviewSignoff.signedOffAt, market)
     : null;
-  const preparedAt = reviewSignoff
-    ? null
-    : formatSignedOffDateTime(new Date(), market, FOOTER_CLOCK);
+  const preparedAt = reviewSignoff ? null : formatReviewDateTime(new Date(), market);
 
   return (
     <View style={styles.wrapper} fixed={fixed}>

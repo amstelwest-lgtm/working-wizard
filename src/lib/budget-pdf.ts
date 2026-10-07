@@ -29,6 +29,7 @@ import {
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
 import { formatMoney, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { periodProfitBridge } from "@/lib/period-profit";
 import { periodMonthsOf } from "@/lib/ratios";
 import { readStatementMeta } from "@/lib/statement-period";
 
@@ -42,6 +43,15 @@ export type BudgetPdfActual = {
    * statement total once.
    */
   statementCoverMonths?: number;
+  /** Interest between EBIT and profit before tax. Zero when the statement has none. */
+  interest?: number;
+  /** Tax between profit before tax and net profit. */
+  tax?: number;
+  /**
+   * The statement gave one operating-expense total and no People / Premises /
+   * Operations / Sales split. Do not book that total as Other.
+   */
+  overheadsUnsplit?: boolean;
 };
 
 export type BudgetPdfRow = {
@@ -319,28 +329,28 @@ export function budgetActualFromFinancials(
   const revenue = finiteField(fin, "revenue");
   const cogs = finiteField(fin, "cogs");
   const ebit = finiteField(fin, "ebit");
-  const fixed = finiteField(fin, "fixedCosts");
   if (revenue == null && cogs == null && ebit == null) return null;
-  const rev = revenue ?? 0;
-  const cost = cogs ?? 0;
-  const overheads = fixed ?? 0;
-  const profit = ebit ?? rev - cost - overheads;
+  const bridge = periodProfitBridge(fin);
   return {
     month,
     status: "confirmed",
     totals: {
-      revenue: rev,
-      cogs: cost,
-      grossProfit: rev - cost,
+      revenue: bridge.revenue,
+      cogs: bridge.cogs,
+      grossProfit: bridge.grossProfit,
+      // A single operating-expense total is not the Other bucket.
       overheadsPeople: 0,
       overheadsPremises: 0,
       overheadsOps: 0,
       overheadsSales: 0,
-      overheadsOther: overheads,
-      overheadsTotal: overheads,
-      depreciation: 0,
-      ebit: profit,
+      overheadsOther: 0,
+      overheadsTotal: bridge.operatingExpenses,
+      depreciation: bridge.depreciation,
+      ebit: bridge.ebit,
     },
+    interest: bridge.interest,
+    tax: bridge.tax,
+    overheadsUnsplit: true,
     statementCoverMonths: periodMonthsOf(fin),
   };
 }
@@ -427,7 +437,9 @@ export function buildBudgetPdfModel(
       actualSum.overheadsSales +
       actualSum.overheadsOther
     : 0;
-  const bucketsSplit = bucketActualSum >= 1;
+  const overheadsUnsplit =
+    hasActuals && comparedMonths.some((m) => actualByMonth.get(m)?.overheadsUnsplit);
+  const bucketsSplit = !overheadsUnsplit && bucketActualSum >= 1;
 
   const bucketRows: BudgetPdfRow[] = BUCKET_ORDER.map((bucket) => {
     const budget = overheadBudget(doc, driverMonths, bucket);
@@ -476,11 +488,48 @@ export function buildBudgetPdfModel(
       rows: driverRows,
     });
   }
+  if (hasActuals && actualSum) {
+    let interest = 0;
+    let tax = 0;
+    for (const month of comparedMonths) {
+      const row = actualByMonth.get(month);
+      interest += row?.interest ?? 0;
+      tax += row?.tax ?? 0;
+    }
+    if (Math.abs(interest) >= 1 || Math.abs(tax) >= 1) {
+      const profit = pnlRows.find((row) => row.label === DISPLAY_LABEL.ebit);
+      const profitBudget = profit?.budget ?? budgetSum.ebit;
+      const profitActual = profit?.actual ?? actualSum.ebit;
+      if (Math.abs(interest) >= 1) {
+        pnlRows.push(
+          fromVariance(varianceLine("unmapped", "Interest", 0, interest, false), "Interest"),
+        );
+      }
+      if (Math.abs(tax) >= 1) {
+        pnlRows.push(fromVariance(varianceLine("unmapped", "Tax", 0, tax, false), "Tax"));
+      }
+      pnlRows.push(
+        fromVariance(
+          varianceLine(
+            "ebit",
+            "Net profit",
+            profitBudget,
+            profitActual - interest - tax,
+            true,
+          ),
+          "Net profit",
+          true,
+        ),
+      );
+    }
+  }
+
   if (bucketRows.length) {
     sections.push({
       title: "Overheads",
-      note:
-        hasActuals && !bucketsSplit
+      note: overheadsUnsplit
+        ? "The statement does not split operating expenses into People, Premises, Operations, or Sales, so this section is the budget plan only."
+        : hasActuals && !bucketsSplit
           ? "Uploaded actuals were not split into overhead groups, so this section is the budget plan only. Operating expenses in the P&L include the total."
           : "Grouped the same way month actuals are stored. Higher actual cost is adverse.",
       rows: bucketRows,

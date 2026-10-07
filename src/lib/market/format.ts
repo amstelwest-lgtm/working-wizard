@@ -214,6 +214,34 @@ export function formatSignedOffDateTime(
   return `${rendered} ${offsetFromZone(date, timeZone)}`;
 }
 
+/**
+ * One clock for the in-app sign-off line, the review trail, and PDF footers.
+ * Short month, numeric day and year, numeric hour (no leading zero), 2-digit
+ * minute, no seconds, and a short zone — the same fields as `formatDateTime`
+ * with `timeZoneName: "short"`. The zone label still comes from
+ * `formatSignedOffDateTime`, so a GMT offset is written as UTC+N.
+ */
+export const REVIEW_CLOCK: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+};
+
+export function formatReviewDateTime(
+  d: Date | string | number,
+  market: Pick<ResolvedMarket, "locale" | "timezone"> = ZA_MARKET,
+  opts?: { firmTimeZone?: string | null },
+): string {
+  return formatSignedOffDateTime(d, market, {
+    ...REVIEW_CLOCK,
+    firmTimeZone: opts?.firmTimeZone,
+  })
+    .replace(/\u202f/g, " ")
+    .replace(/\u00a0/g, " ");
+}
+
 export function formatPercentRate(rate: number, digits = 2): string {
   if (!Number.isFinite(rate)) return "—";
   return `${(rate * 100).toFixed(digits)}%`;

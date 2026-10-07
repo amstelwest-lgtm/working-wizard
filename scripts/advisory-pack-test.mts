@@ -1388,8 +1388,9 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(/\b(?:UTC(?:[+-]\d{1,2}(?::\d{2})?)?|[A-Z]{2,5})\b/.test(unlabeled), unlabeled);
   assert(!/\bGMT\b/.test(unlabeled), `offset names use UTC, got ${unlabeled}`);
   const footer = readFileSync(resolve("src/components/pdf/report-footer.tsx"), "utf8");
-  assert(footer.includes("formatSignedOffDateTime"), "every PDF footer uses the shared sign-off formatter");
+  assert(footer.includes("formatReviewDateTime"), "every PDF footer uses the shared sign-off formatter");
   assert(!footer.includes("formatDateTime("), "the footer does not format an unlabeled clock");
+  assert(!footer.includes('hour: "2-digit"'), "the footer clock does not pad the hour");
   assert(!footer.includes("profile.timeZone"), "PDF zone follows the client market, not the viewer profile");
   assert(footer.includes("Prepared"), "an unsigned footer still carries a zoned prepared time");
   const saClock = formatSignedOffDateTime("2026-10-06T16:29:00.000Z", ZA_MARKET, {
@@ -1468,7 +1469,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(/9:15:46/.test(inApp), `in-app sign-off keeps the clock, got ${inApp}`);
   assert(/EDT|UTC-4/.test(inApp), `in-app sign-off names the zone, got ${inApp}`);
   const packPanel = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
-  assert(packPanel.includes("formatSignedOffDateTime"), "the pack sign-off line uses the shared formatter");
+  assert(packPanel.includes("formatReviewDateTime"), "the pack sign-off line uses the shared formatter");
   assert(!packPanel.includes("toLocaleString"), "the pack sign-off line is not an unlabeled local clock");
   assert(
     readFileSync(resolve("src/lib/market/format.ts"), "utf8").includes('timeZoneName: "short"'),

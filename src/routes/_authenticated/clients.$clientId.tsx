@@ -403,8 +403,8 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     why?: string;
     /** Health page sub-step: the score, or the pillar drill. */
     focus?: string;
-    /** Open the business profile so a sector can be set. */
-    profile?: string;
+    /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
+    profile?: number;
   } => {
     const out: {
       qbo?: string;
@@ -418,7 +418,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       coach?: string;
       why?: string;
       focus?: string;
-      profile?: string;
+      profile?: number;
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.xero === "string") out.xero = search.xero;
@@ -433,7 +433,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
     if (search.focus === "health" || search.focus === "pillars") out.focus = search.focus;
-    if (search.profile === "1") out.profile = "1";
+    if (search.profile === 1 || search.profile === "1") out.profile = 1;
     if (
       search.filter === "overdue" ||
       search.filter === "at_risk" ||
@@ -809,7 +809,7 @@ function ClientView() {
     if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
-    if (search.profile === "1") setProfileOpen(true);
+    if (search.profile === 1) setProfileOpen(true);
   }, [search.note, search.tab, search.queries, search.profile, requestOpenNote, openArchive]);
   // Landing tab: Overview — the client explanation, profile, and upload.
   // Deliverables stay clean. Decided once per client, after load, and never

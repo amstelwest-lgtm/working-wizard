@@ -46,6 +46,7 @@ import {
   interestBurdenRatio,
   taxBurdenRatio,
 } from "@/lib/ratios";
+import { benchmarkEmptyCopy } from "@/lib/benchmark-empty";
 import {
   ASSET_REPORT_NEEDS,
   cashFlowKnown,
@@ -2346,12 +2347,14 @@ function resolveBenchmarkSector(
   operatingProfile: ClientOperatingProfile | null,
 ): { code: string; name: string } | null {
   const bt = businessTypeId ?? operatingProfile?.businessTypeId ?? null;
-  if (!bt) return null;
-  const sector = BUSINESS_TYPE_TO_BENCHMARK[bt];
-  if (!sector) return null;
+  if (!bt && !operatingProfile?.templateId) return null;
+  const name = clientIndustryLabel(operatingProfile, bt);
+  if (!name || name === "—") return null;
+  const sector = bt ? BUSINESS_TYPE_TO_BENCHMARK[bt] : undefined;
+  if (!sector) return { code: "unmapped", name };
   return {
     code: `sector:${sector}`,
-    name: clientIndustryLabel(operatingProfile, bt),
+    name,
   };
 }
 
@@ -2608,7 +2611,15 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         ? cd.benchmarkSector
         : (INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0]);
       if (cd && cd.benchmark.length === 0) {
-        throw new Error(BENCHMARK_EMPTY_MESSAGE);
+        const studio = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
+        const empty = benchmarkEmptyCopy({
+          profileSectorName: cd.benchmarkSector?.name ?? null,
+          studioSectorName: studio.name,
+        });
+        const error = new Error(empty.message);
+        (error as Error & { offerSetBusinessType?: boolean }).offerSetBusinessType =
+          empty.offerSetBusinessType;
+        throw error;
       }
       const isDemo = !cd;
       return renderToBlob(BenchmarkReportPDF, {
@@ -2844,6 +2855,8 @@ type PreviewState = {
   loading: boolean;
   /** Inline empty state. The preview stays open instead of failing quietly. */
   emptyMessage?: string | null;
+  /** Profile and the industry combobox are both blank. */
+  offerSetBusinessType?: boolean;
 };
 
 /** Card title and ZIP stem. Labor/Labour comes from the firm locale, in one place. */
@@ -3217,20 +3230,22 @@ function PreviewModal({
           {state?.loading ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">Generating PDF…</p>
+                <Loader2 className="h-8 w-8 animate-spin text-slate-500 mx-auto mb-3" />
+                <p className="text-sm text-slate-600">Generating PDF…</p>
               </div>
             </div>
           ) : state?.emptyMessage ? (
             <div className="flex h-full items-center justify-center px-6">
-              <div className="max-w-md rounded-lg border border-border bg-card px-6 py-5 text-center shadow-sm">
-                <p className="text-sm text-foreground">{state.emptyMessage}</p>
-                {clientId ? (
+              {/* The preview sheet is light even in the dark portal, where
+                  text-foreground is cream and disappears on this card. */}
+              <div className="max-w-md rounded-lg border border-slate-300 bg-white px-6 py-5 text-center shadow-sm">
+                <p className="text-sm leading-relaxed text-slate-800">{state.emptyMessage}</p>
+                {clientId && state.offerSetBusinessType ? (
                   <Link
                     to="/clients/$clientId"
                     params={{ clientId }}
-                    search={{ tab: "overview", profile: "1" }}
-                    className="mt-3 inline-block text-sm font-medium text-[#1e5b9e] underline underline-offset-2"
+                    search={{ tab: "overview", profile: 1 }}
+                    className="mt-3 inline-block text-sm font-medium text-sky-900 underline underline-offset-2"
                   >
                     Set the client&apos;s business type
                   </Link>
@@ -3843,13 +3858,16 @@ export function ReportsStudio({
       return true;
     } catch (err) {
       const message = (err as Error).message;
-      if (message === BENCHMARK_EMPTY_MESSAGE) {
+      const offerSetBusinessType = (err as Error & { offerSetBusinessType?: boolean })
+        .offerSetBusinessType;
+      if (message.startsWith("No benchmarks yet for ") || message === BENCHMARK_EMPTY_MESSAGE) {
         setPreviewState({
           key: report.key,
           name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
           blobUrl: null,
           loading: false,
           emptyMessage: message,
+          offerSetBusinessType: offerSetBusinessType === true,
         });
         return true;
       }
