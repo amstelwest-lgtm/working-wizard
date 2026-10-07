@@ -27,7 +27,7 @@ import {
   attentionFootnote,
   dataAsOfLabel,
   derivePriority,
-  firmOpenQueriesClient,
+  firmOpenQueriesDestination,
   firstNameOf,
   practiceGreeting,
   practiceNeedsAttention,
@@ -75,6 +75,7 @@ import { FeatureFinder } from "@/components/feature-finder";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { OPEN_QUERIES_TILE_ID } from "@/lib/spotlight-hole";
 import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
 import { markInsightSeen } from "@/lib/funnel-timing";
 import { MarketPicker } from "@/components/market-picker";
@@ -1513,7 +1514,7 @@ function Dashboard() {
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
-  const queriesClientId = firmOpenQueriesClient(clientRows);
+  const queriesDestination = firmOpenQueriesDestination(clientRows);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
@@ -1593,12 +1594,11 @@ function Dashboard() {
       search: overdue ? { tab: "plan", filter: "overdue" } : { tab: "plan" },
     });
 
-  const openClientQueries = (clientId: string) =>
-    navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: { queries: "open" },
-    });
+  const openClientQueries = (clientId: string) => {
+    const dest = firmOpenQueriesDestination([{ id: clientId, openQueries: 1 }]);
+    if (!dest) return;
+    navigate({ to: dest.to, params: dest.params, search: dest.search });
+  };
 
   const scatterClients = useMemo(
     () =>
@@ -1685,6 +1685,7 @@ function Dashboard() {
         variant={clientRows.length > 0 ? "accountant-dashboard" : "accountant-dashboard-empty"}
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
         onFinish={clientRows.length === 0 ? () => setFirstClientOpen(true) : undefined}
+        passThroughIds={[OPEN_QUERIES_TILE_ID]}
       />
       {/* Ambient background */}
       <div id="atmos">
@@ -1876,6 +1877,7 @@ function Dashboard() {
               />
 
               <MetricTile
+                id={OPEN_QUERIES_TILE_ID}
                 label="Open queries"
                 icon={
                   <svg viewBox="0 0 24 24">
@@ -1884,7 +1886,7 @@ function Dashboard() {
                 }
                 value={openQueriesTotal}
                 footnote={openQueriesTotal > 0 ? "Waiting on a reply" : "No open queries"}
-                onClick={queriesClientId ? () => openClientQueries(queriesClientId) : undefined}
+                link={queriesDestination ?? undefined}
               />
             </>
           )}

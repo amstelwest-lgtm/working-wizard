@@ -11,6 +11,7 @@ import {
   buildAttentionItems,
   derivePriority,
   firmOpenQueriesClient,
+  firmOpenQueriesDestination,
   practiceNeedsAttention,
   summarizePortfolioAttention,
   type PortfolioClientSignals,
@@ -142,6 +143,27 @@ assert(
   "the busiest client wins, then the name",
 );
 
+const busyRows = [
+  { id: "a", name: "Yankees", openQueries: 1 },
+  { id: "b", name: "QA US", openQueries: 4 },
+  { id: "c", name: "QA Test Co", openQueries: 4 },
+];
+const busyDest = firmOpenQueriesDestination(busyRows);
+assert(busyDest?.params.clientId === firmOpenQueriesClient(busyRows), "the tile destination is the helper's client");
+assert(busyDest?.to === "/clients/$clientId", "open queries leaves the dashboard for a client");
+assert(busyDest?.search.queries === "open", "open queries uses the client queries panel");
+assert(
+  firmOpenQueriesDestination([
+    { id: "a", name: "Yankees", openQueries: 0 },
+    { id: "b", name: "QA US", openQueries: 0 },
+  ]) === null,
+  "a zero count is not a link",
+);
+assert(
+  firmOpenQueriesDestination([{ id: "", name: "Missing", openQueries: 3 }]) === null,
+  "a count without a client id is not a link",
+);
+
 const za = clientMarketDraftFromFirm({ country: "ZA", regionCode: null });
 assert(za.country === "ZA" && za.regionCode == null, "ZA firm drafts rand");
 const unknown = clientMarketDraftFromFirm(null);
@@ -193,12 +215,14 @@ assert(dash.includes("queue={attentionBook.items}"), "the strip renders that sam
 assert(dash.includes("needAttention: attention.needAttention"), "greeting uses the shared count");
 assert(dash.includes("attentionFootnote"), "dashboard footnote uses the same summary");
 assert(!dash.includes("summarizePortfolioAttention"), "the tile does not count priority badges on their own");
-assert(dash.includes("firmOpenQueriesClient"), "open queries uses the destination helper");
+assert(dash.includes("firmOpenQueriesDestination(clientRows)"), "open queries tile uses the destination helper");
 assert(
-  dash.includes("queriesClientId ? () => openClientQueries(queriesClientId) : undefined"),
-  "open queries is not clickable when no client has queries",
+  dash.includes("link={queriesDestination ?? undefined}"),
+  "open queries is not a link when no client has queries",
 );
+assert(dash.includes("OPEN_QUERIES_TILE_ID"), "the tile has a stable id the tour can leave clickable");
 assert(!dash.includes("scrollIntoView"), "open queries does not scroll into a dead end");
+assert(!dash.includes("queriesClientId ? () => openClientQueries"), "the tile is not an onClick that the tour can swallow");
 assert(dash.includes("bookLoading"), "dashboard waits on the client list");
 assert(dash.includes("Loading your clients…"), "greeting stays in a loading state");
 assert(dash.includes("clientMarketDraftFromFirm"), "add-client starts from the firm market");
@@ -240,5 +264,56 @@ const access = readFileSync(resolve("src/lib/practice-access.functions.ts"), "ut
 assert(access.includes("export const getPracticeTeamRoster"), "roster server function exists");
 assert(access.includes('.in("id", ids)'), "member profiles load in one query");
 assert(access.includes("Promise.all([clientQuery, assignQuery, inviteQuery])"), "secondary reads run together");
+
+const holeSrc = readFileSync(resolve("src/lib/spotlight-hole.ts"), "utf8");
+const wizard = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
+assert(wizard.includes("spotlightClickBlockers"), "the tour catcher is built from the spotlight holes");
+assert(wizard.includes("passThroughIds"), "the dashboard can keep a control clickable outside the spotlight");
+assert(!wizard.includes("inset: 0,\n          zIndex: 8000"), "the tour does not lay one click catcher over the whole screen");
+assert(holeSrc.includes("subtractOne"), "a lit rectangle is removed from the catcher");
+
+const { boxContains, spotlightClickBlockers } = await import("../src/lib/spotlight-hole");
+const viewport = { width: 1280, height: 800 };
+const board = { top: 180, left: 40, width: 1200, height: 96 };
+const tile = { top: 188, left: 980, width: 240, height: 80 };
+const blockers = spotlightClickBlockers([board, tile], viewport);
+const tileCenter = { x: tile.left + tile.width / 2, y: tile.top + tile.height / 2 };
+const boardCenter = { x: board.left + board.width / 2, y: board.top + board.height / 2 };
+assert(
+  !blockers.some((box) => boxContains(box, tileCenter.x, tileCenter.y)),
+  "a click on Open queries is not swallowed by the tour",
+);
+assert(
+  !blockers.some((box) => boxContains(box, boardCenter.x, boardCenter.y)),
+  "a click inside the spotlight reaches the page",
+);
+assert(
+  blockers.some((box) => boxContains(box, 8, 8)),
+  "a click outside the spotlight still hits the tour",
+);
+const covered = spotlightClickBlockers([], viewport);
+assert(covered.length === 1 && boxContains(covered[0], 100, 100), "with no hole the catcher covers the page");
+
+const { createMemoryHistory, createRouter } = await import("@tanstack/react-router");
+const { routeTree } = await import("../src/routeTree.gen");
+const CLIENT_ID = "11111111-1111-4111-8111-111111111111";
+const routed = firmOpenQueriesDestination([{ id: CLIENT_ID, name: "QA Test Co", openQueries: 2 }]);
+assert(routed != null, "router fixture has a destination");
+const router = createRouter({
+  routeTree,
+  history: createMemoryHistory({ initialEntries: ["/dashboard"] }),
+});
+const built = router.buildLocation({
+  to: routed.to,
+  params: routed.params,
+  search: routed.search,
+});
+assert(built.pathname === `/clients/${CLIENT_ID}`, "the helper leaves /dashboard for that client");
+assert(!built.pathname.startsWith("/dashboard"), "the helper URL is not the dashboard");
+assert(built.search.queries === "open", "the helper search opens the queries panel");
+assert(built.searchStr === "?queries=open", "the address bar is ?queries=open");
+const routeIds = router.matchRoutes(built.pathname).map((match) => match.routeId);
+assert(routeIds.includes("/_authenticated/clients/$clientId"), "that pathname is the client page");
+assert(!routeIds.includes("/_authenticated/dashboard"), "that pathname does not match the dashboard");
 
 console.log("accountant-qa-medium-test: ok");

@@ -452,6 +452,27 @@ export function firmOpenQueriesClient(
   return best?.id ?? null;
 }
 
+/**
+ * Navigation for that client. Null when `firmOpenQueriesClient` has nowhere
+ * to go — the tile must not pretend to be a link.
+ * Unresolved notes open on the client page at `?queries=open`.
+ */
+export function firmOpenQueriesDestination(
+  rows: readonly { id: string; name?: string | null; openQueries: number }[],
+): {
+  to: "/clients/$clientId";
+  params: { clientId: string };
+  search: { queries: "open" };
+} | null {
+  const clientId = firmOpenQueriesClient(rows);
+  if (!clientId) return null;
+  return {
+    to: "/clients/$clientId",
+    params: { clientId },
+    search: { queries: "open" },
+  };
+}
+
 /** Rule-based portfolio insight chips. */
 export function buildPortfolioInsights(
   rows: Array<
