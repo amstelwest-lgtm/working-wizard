@@ -543,7 +543,7 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
 
   const panel = readFileSync(resolve("src/components/data-requests-panel.tsx"), "utf8");
   assert(
-    panel.includes('if (rows.length === 0 && audience === "owner") return null;'),
+    panel.includes('if (shownRows.length === 0 && audience === "owner") return null;'),
     "owner sees nothing when nothing is open",
   );
   assert(panel.includes("useServerFn(sendDataRequestEmail)"), "accountant can email");

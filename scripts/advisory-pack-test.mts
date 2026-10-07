@@ -31,7 +31,17 @@ import { formatSnapshotRatio, groundAdvisoryNarrative } from "../src/lib/advisor
 import { computeOverallHealth, overviewRatioInputs, overviewRatios } from "../src/lib/health-score";
 import { computeRatios } from "../src/lib/ratios";
 import { brainDraftSupersededByPack, checkRootCauseClaims, type Recommendation } from "../src/lib/recommendations";
-import { dataRequestDayRatios, detectDataGaps, presentLiveDataRequests } from "../src/lib/data-requests";
+import {
+  dataRequestDayRatios,
+  detectDataGaps,
+  overviewRequestCardRows,
+  presentLiveDataRequests,
+} from "../src/lib/data-requests";
+import {
+  buildScorecardRatioResults,
+  scorecardDownloadShouldRenderLive,
+  scorecardRatiosFromFinancials,
+} from "../src/lib/scorecard-rows";
 import { ratiosStatementFigures } from "../src/lib/deliverable-input-config";
 import { formatSignedOffDateTime } from "../src/lib/market/format";
 import { ZA_MARKET } from "../src/lib/market/resolve";
@@ -1082,11 +1092,29 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     "pack health is scored from the same ratio map as Overview",
   );
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-  assert(studio.includes("overviewRatios(financials"), "studio orb and export use the canonical days");
+  assert(studio.includes("overviewRatios(financials"), "the Overview orb uses the canonical days");
+  assert(
+    studio.includes("scorecardRatiosFromFinancials") && studio.includes("market: clientMarket"),
+    "Overview Export renders the shared scorecard in the client market",
+  );
+  assert(
+    studio.includes("financials={financials}") && studio.includes("liveScorecard={renderOverviewScorecard}"),
+    "Overview cards and history use the live figures, not a stored artifact",
+  );
   const reports = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
   assert(
-    reports.includes("withCanonicalDebtorCreditorDays"),
-    "the reports scorecard uses the Ratios day cover",
+    reports.includes("scorecardRatiosFromFinancials"),
+    "the reports scorecard uses the same day cover as Overview Export",
+  );
+  const requestPanel = readFileSync(resolve("src/components/data-requests-panel.tsx"), "utf8");
+  assert(
+    requestPanel.includes("overviewRequestCardRows"),
+    "Overview request cards recompute day quotes at render time",
+  );
+  const history = readFileSync(resolve("src/components/advisory-sent-history.tsx"), "utf8");
+  assert(
+    history.includes("scorecardDownloadShouldRenderLive"),
+    "a stored scorecard download renders live",
   );
 }
 
@@ -1184,6 +1212,51 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     shown[1].reason.includes(`Creditor days are ${above?.["Creditor Days"]}`),
     shown[1].reason,
   );
+  const storedOverviewCards = overviewRequestCardRows(
+    [
+      {
+        source: "accountant",
+        status: "open",
+        rule_key: null,
+        kind: "aged_debtors",
+        reason: "Debtor days are 44 against a 40-day benchmark.",
+      },
+      {
+        source: "system",
+        status: "open",
+        rule_key: null,
+        kind: "aged_creditors",
+        reason: "Creditor days are 73, above the 60-day mark.",
+      },
+    ],
+    parity,
+  );
+  assert(
+    storedOverviewCards.length === 0,
+    "Overview request cards hide stored 44 / 73 once live days are inside the band",
+  );
+  const exportRows = buildScorecardRatioResults(
+    scorecardRatiosFromFinancials(parity, { fyStartMonth: 1 }),
+    { ...ZA_MARKET, locale: "en-US", timezone: "America/New_York" },
+  );
+  eq(
+    exportRows.find((row) => row.ratio_name === "Debtor Days")?.formatted_value,
+    "25d",
+    "Overview export DSO is 25d",
+  );
+  eq(
+    exportRows.find((row) => row.ratio_name === "Creditor Days")?.formatted_value,
+    "37d",
+    "Overview export DPO is 37d",
+  );
+  assert(
+    scorecardDownloadShouldRenderLive({ kind: "report_pdf", report_key: "scorecard" }),
+    "an archived scorecard is rebuilt",
+  );
+  assert(
+    !scorecardDownloadShouldRenderLive({ kind: "report_pdf", report_key: "forecast" }),
+    "other archived PDFs stay archived",
+  );
   eq(above?.["Debtor Days"], overviewRatios({
     revenue: "365000",
     cogs: "365000",
@@ -1263,6 +1336,22 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   const footer = readFileSync(resolve("src/components/pdf/report-footer.tsx"), "utf8");
   assert(footer.includes("formatSignedOffDateTime"), "every PDF footer uses the shared sign-off formatter");
   assert(!footer.includes("formatDateTime("), "the footer does not format an unlabeled clock");
+  const inApp = formatSignedOffDateTime("2026-10-08T01:15:46.000Z", {
+    locale: "en-US",
+    timezone: "America/New_York",
+  }, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  assert(/9:15:46/.test(inApp), `in-app sign-off keeps the clock, got ${inApp}`);
+  assert(/EDT|UTC-4/.test(inApp), `in-app sign-off names the zone, got ${inApp}`);
+  const packPanel = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
+  assert(packPanel.includes("formatSignedOffDateTime"), "the pack sign-off line uses the shared formatter");
+  assert(!packPanel.includes("toLocaleString"), "the pack sign-off line is not an unlabeled local clock");
   assert(
     readFileSync(resolve("src/lib/market/format.ts"), "utf8").includes('timeZoneName: "short"'),
     "the sign-off formatter asks for a short zone name",

@@ -257,25 +257,44 @@ function replaceDayQuote(
   return quoted === reason ? `${label} are ${shown}. ${reason}` : quoted;
 }
 
+type DayQuoteRow = {
+  status: string;
+  rule_key?: string | null;
+  reason?: string | null;
+};
+
 /**
- * Open system ageing cards follow the live day cover. A card whose rule no
- * longer fires (days inside the band) is dropped so a stored 44 / 73 cannot
- * stay on screen. Cards that still fire quote the live days.
+ * A persisted ask that quotes debtor or creditor days. The rule key is enough;
+ * stored sentences are too, even when the row was saved without that key.
+ * A hand-written ask that does not quote a figure is left alone.
  */
-export function presentLiveDataRequests<
-  T extends Pick<DataRequest, "source" | "status" | "rule_key" | "reason">,
->(rows: readonly T[], ratios: Record<string, number> | null | undefined): T[] {
+function dayQuoteCard(row: DayQuoteRow): "debtor" | "creditor" | null {
+  const reason = row.reason ?? "";
+  if (row.rule_key === "debtor_days_no_ageing" || /Debtor days are \d/.test(reason))
+    return "debtor";
+  if (row.rule_key === "creditor_days_no_ageing" || /Creditor days are \d/.test(reason)) {
+    return "creditor";
+  }
+  return null;
+}
+
+/**
+ * Open ageing cards follow the live day cover. A card whose quoted days are
+ * inside the band is dropped, so a stored 44 / 73 cannot stay on screen.
+ * Cards that still fire quote the live days. Stored sentences are not trusted.
+ */
+export function presentLiveDataRequests<T extends DayQuoteRow>(
+  rows: readonly T[],
+  ratios: Record<string, number> | null | undefined,
+): T[] {
   if (!ratios) return [...rows];
   const debtor = ratios["Debtor Days"];
   const creditor = ratios["Creditor Days"];
   const out: T[] = [];
   for (const row of rows) {
     const open = row.status === "open" || row.status === "sent";
-    if (row.source !== "system" || !open) {
-      out.push(row);
-      continue;
-    }
-    if (row.rule_key === "debtor_days_no_ageing") {
+    const card = open ? dayQuoteCard(row) : null;
+    if (card === "debtor") {
       if (
         typeof debtor !== "number" ||
         !Number.isFinite(debtor) ||
@@ -291,7 +310,7 @@ export function presentLiveDataRequests<
       });
       continue;
     }
-    if (row.rule_key === "creditor_days_no_ageing") {
+    if (card === "creditor") {
       if (
         typeof creditor !== "number" ||
         !Number.isFinite(creditor) ||
@@ -310,6 +329,17 @@ export function presentLiveDataRequests<
     out.push(row);
   }
   return out;
+}
+
+/**
+ * Overview request cards. The copy is derived from the live canonical days
+ * at render time. A stored reason that still says 44 or 73 is not shown.
+ */
+export function overviewRequestCardRows<T extends DayQuoteRow>(
+  rows: readonly T[],
+  financials: Record<string, unknown> | null | undefined,
+): T[] {
+  return presentLiveDataRequests(rows, dataRequestDayRatios(financials));
 }
 export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
 

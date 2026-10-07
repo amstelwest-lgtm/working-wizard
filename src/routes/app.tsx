@@ -4289,6 +4289,7 @@ function Index() {
                     className="mt-3"
                     clientId={effectiveClientId}
                     audience="owner"
+                    financials={v as unknown as Record<string, unknown>}
                     refreshKey={`${activeTab}|${advisoryBump}|${firstRunStep ?? ""}`}
                     onUpload={() => setFirstRunStep("first-data")}
                     onOpenForecast={() => setActiveTab("cash")}
