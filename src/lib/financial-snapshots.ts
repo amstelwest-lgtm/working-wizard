@@ -9,7 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
-import { resolveSnapshotPeriodLabel } from "@/lib/statement-period";
+import { readStatementMeta, resolveSnapshotPeriodLabel } from "@/lib/statement-period";
 
 export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "pdf_upload";
 
@@ -104,6 +104,9 @@ export async function upsertPeriodSnapshot(opts: {
   }
 
   const periodLabel = resolveSnapshotPeriodLabel(existing?.period_label, requestedLabel);
+  const statementSource = readStatementMeta(opts.financials).statementSource;
+  const ledgerSource =
+    statementSource === "qbo" || statementSource === "xero" ? statementSource : null;
 
   if (existingId) {
     const { error } = await supabase
@@ -113,6 +116,7 @@ export async function upsertPeriodSnapshot(opts: {
         ratios: ratiosOut as never,
         period_label: periodLabel,
         period_date: periodDate,
+        ...(ledgerSource ? { source: ledgerSource } : {}),
       })
       .eq("id", existingId);
     if (error) return { id: null, error: error.message, periodLabel, periodDate };
@@ -127,7 +131,7 @@ export async function upsertPeriodSnapshot(opts: {
       period_date: periodDate,
       financials: opts.financials as never,
       ratios: ratiosOut as never,
-      source: opts.source ?? "autosave",
+      source: ledgerSource ?? opts.source ?? "autosave",
     })
     .select("id")
     .maybeSingle();

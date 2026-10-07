@@ -236,9 +236,11 @@ import { NoFiguresBanner } from "@/components/no-figures-banner";
 import {
   loadAutoPopulateState,
   runAutoPopulate,
+  runSyncAutoPopulate,
   type AutoPopulateState,
 } from "@/lib/auto-populate-run";
-import { summariseAutoPopulate } from "@/lib/auto-populate";
+import { defaultAutoPopulatePrefs, summariseAutoPopulate } from "@/lib/auto-populate";
+import { autosaveKeepsLedgerSync } from "@/lib/ledger-sync-financials";
 import {
   UPLOAD_ACCEPT,
   UPLOAD_FORMATS_LABEL,
@@ -2841,20 +2843,18 @@ function Index() {
     setSaveStatus("saving");
     const t = setTimeout(async () => {
       const financialsUpdatedAt = new Date().toISOString();
+      const { data: row } = await supabase
+        .from("clients")
+        .select("financials")
+        .eq("id", effectiveClientId)
+        .maybeSingle();
+      const serverFinancials = (row?.financials as Record<string, unknown> | null) ?? null;
       let blob: Record<string, unknown>;
       if (hasRealFinancials) {
-        blob = { ...v, weeklyInputs, productMix };
+        blob = autosaveKeepsLedgerSync(serverFinancials, { ...v, weeklyInputs, productMix });
       } else {
-        const { data: row } = await supabase
-          .from("clients")
-          .select("financials")
-          .eq("id", effectiveClientId)
-          .maybeSingle();
         blob = overlayProductMix(
-          overlayWeeklyInputs(
-            (row?.financials as Record<string, unknown> | null) ?? {},
-            weeklyInputs,
-          ),
+          overlayWeeklyInputs(serverFinancials ?? {}, weeklyInputs),
           productMix,
         );
       }
@@ -5089,6 +5089,7 @@ function Index() {
                       periodLabel={readStatementMeta(v).periodLabel}
                       preferPeriod={preferStatementPeriod(v)}
                       yearToDate={statementYearLine(v)}
+                      statementSource={readStatementMeta(v).statementSource}
                     />
                   </div>
                   {/* Optional product-line mix — collapsed until the owner opts in */}
@@ -5938,6 +5939,24 @@ function Index() {
                   }));
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();
+                  if (effectiveClientId) {
+                    void runSyncAutoPopulate({
+                      clientId: effectiveClientId,
+                      fields: inputs,
+                      chosen: autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                      firstUpload: autoPopulateState?.firstUpload ?? true,
+                      firstActualsMonth: inputs.periodStart?.slice(0, 7) ?? null,
+                      fallbackMarket: workspaceMarket,
+                      surface: "owner_app",
+                    })
+                      .then(applyAutoPopulateResult)
+                      .catch((e) => {
+                        console.warn("auto-populate after QuickBooks sync:", e);
+                        toast.error(
+                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                        );
+                      });
+                  }
                   setShowQboDialog(false);
                 }}
               />
@@ -5967,6 +5986,24 @@ function Index() {
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();
                   setCashForecastReloadToken((n) => n + 1);
+                  if (effectiveClientId) {
+                    void runSyncAutoPopulate({
+                      clientId: effectiveClientId,
+                      fields: inputs,
+                      chosen: autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                      firstUpload: autoPopulateState?.firstUpload ?? true,
+                      firstActualsMonth: inputs.periodStart?.slice(0, 7) ?? null,
+                      fallbackMarket: workspaceMarket,
+                      surface: "owner_app",
+                    })
+                      .then(applyAutoPopulateResult)
+                      .catch((e) => {
+                        console.warn("auto-populate after Xero sync:", e);
+                        toast.error(
+                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                        );
+                      });
+                  }
                   setShowXeroDialog(false);
                 }}
               />

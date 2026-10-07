@@ -13,6 +13,7 @@ import {
   type LedgerSyncFigures,
 } from "@/lib/ledger-link-copy";
 import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
+import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
 import {
   applyXeroOpeningCash,
   describeXeroOpeningCash,
@@ -598,13 +599,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         !Array.isArray(existing.financials)
           ? (existing.financials as Record<string, unknown>)
           : {};
-      const merged: Record<string, unknown> = {
-        ...prev,
-        ...fields,
-      };
-      if (!ledger.year) {
-        for (const key of XERO_YTD_FIELD_KEYS) delete merged[key];
-      }
+      const merged = applyLedgerSyncFinancials(prev, fields, "xero");
 
       const nowIso = new Date().toISOString();
       const agedAr = await fetchXeroAgedReceivables(tenantId, accessToken, ledger.to, nowIso);

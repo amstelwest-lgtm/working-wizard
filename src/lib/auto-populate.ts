@@ -5,6 +5,8 @@
  * forecast, budget — is drafted from the statements with no extra clicks.
  * Later uploads: checkboxes decide which deliverables the new pack refreshes;
  * the choice is remembered per client in clients.auto_update_prefs.
+ * A Xero or QuickBooks sync runs this same write. Cash lines the sync just
+ * seeded from bank activity are kept; budget and profitability still land.
  *
  * Anything written here bumps the deliverable's freshness stamp so an existing
  * accountant sign-off flips to "Needs re-review" (see computeIsStale).
@@ -192,6 +194,15 @@ export function resolveBudgetDocForAutoPopulate(ctx: {
   });
 }
 
+const LEDGER_FORECAST_LINE_SOURCES = new Set(["xero-bank-summary", "qbo-bank-activity"]);
+
+/** True when this sync already published the 13-week lines. Do not replace them with a budget draft. */
+export function ledgerSeededCashflow(existing: ExistingCashflow | null | undefined): boolean {
+  if (!existing || typeof existing !== "object") return false;
+  const source = (existing as { forecastLinesSource?: unknown }).forecastLinesSource;
+  return typeof source === "string" && LEDGER_FORECAST_LINE_SOURCES.has(source);
+}
+
 function hasFigures(fields: AutoPopulateContext["fields"]): boolean {
   const n = (v: unknown) => parseFloat(String(v ?? "").replace(/[^0-9.-]/g, "")) || 0;
   return n(fields.revenue) > 0 || n(fields.fixedCosts) > 0 || n(fields.cogs) > 0;
@@ -255,7 +266,11 @@ export function buildAutoPopulateWrites(
 
   if (plan.cash_forecast) {
     let payload: CashForecastPublishPayload | null = null;
-    if (ctx.cashDraft && ctx.cashDraft.lines.some((l) => l.status !== "excluded" && l.amount > 0)) {
+    if (!ctx.cashDraft && ledgerSeededCashflow(ctx.existingCashflow)) {
+      update.last_forecast_at = now;
+      applied.push("cash_forecast");
+      changes.push("Cash forecast kept from the ledger sync");
+    } else if (ctx.cashDraft && ctx.cashDraft.lines.some((l) => l.status !== "excluded" && l.amount > 0)) {
       payload = cashForecastFromBankDraft(ctx.cashDraft, ctx.existingCashflow);
       changes.push(
         `Cash forecast published from ${ctx.cashDraft.lines.filter((l) => l.status !== "excluded").length} bank movement lines`,
@@ -271,7 +286,7 @@ export function buildAutoPopulateWrites(
       update.cashflow_bank_draft = ctx.cashDraft ?? payload;
       update.last_forecast_at = now;
       applied.push("cash_forecast");
-    } else {
+    } else if (!applied.includes("cash_forecast")) {
       skipped.push({ target: "cash_forecast", reason: "Nothing to forecast from yet" });
     }
   }

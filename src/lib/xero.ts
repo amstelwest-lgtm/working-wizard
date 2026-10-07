@@ -1260,7 +1260,10 @@ export function mapXeroToFinancialInputs(
   set("ebitda", pnl.ebitda);
   set("fixedCosts", pnl.operatingExpenses);
   const setBs = (k: string, v: number) => {
-    if (Number.isFinite(v) && v !== 0) out[k] = v;
+    if (!Number.isFinite(v)) return;
+    // A dated statement replaces the previous total, including a real zero.
+    if (!dated && v === 0) return;
+    out[k] = v;
   };
   setBs("totalAssets", bs.totalAssets);
   setBs("equity", bs.equity);

@@ -171,6 +171,7 @@ export function ProfitabilityWaterfall({
   preferPeriod = false,
   yearToDate = null,
   periodNote = null,
+  statementSource = null,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
@@ -188,6 +189,8 @@ export function ProfitabilityWaterfall({
   } | null;
   /** Shown when a Xero link exists but the stored total has no dates yet. */
   periodNote?: string | null;
+  /** Dated ledger that owns these period figures. */
+  statementSource?: string | null;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const { profile, firmId } = useAccountantProfile();
@@ -205,7 +208,15 @@ export function ProfitabilityWaterfall({
   const figures = resolveWaterfallFigures(weeklyInputs, fallback, { preferPeriod });
   const hasWeekly = figures.source === "weekly";
   const periodBit = periodLabel?.trim() || null;
-  const sourceBit = preferPeriod ? "Xero" : hasWeekly ? "aggregated weekly data" : "period inputs";
+  const sourceBit = preferPeriod
+    ? statementSource === "qbo"
+      ? "QuickBooks"
+      : statementSource === "xero"
+        ? "Xero"
+        : "the ledger"
+    : hasWeekly
+      ? "aggregated weekly data"
+      : "period inputs";
 
   const revenue = figures.revenue;
   const costOfSales = figures.costOfSales;

@@ -76,8 +76,18 @@ export type RunAutoPopulateInput = {
   /** Workspace market when the client row has none (owner board). */
   fallbackMarket?: unknown;
   surface: "owner_app" | "accountant_portal";
-  source: "bank_pack" | "financial_statement";
+  source: "bank_pack" | "financial_statement" | "ledger_sync";
 };
+
+/**
+ * Same deliverable writes as a first upload, after a QBO or Xero sync.
+ * The dialog checkboxes are the stored prefs; a first sync still fills everything.
+ */
+export async function runSyncAutoPopulate(
+  input: Omit<RunAutoPopulateInput, "source">,
+): Promise<RunAutoPopulateResult> {
+  return runAutoPopulate({ ...input, source: "ledger_sync" });
+}
 
 export type RunAutoPopulateResult = AutoPopulateWrites & {
   firstUpload: boolean;

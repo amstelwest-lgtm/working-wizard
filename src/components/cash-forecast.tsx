@@ -497,9 +497,9 @@ export function CashForecastPanel({
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(null);
   const xeroBankNoteRef = useRef<string | null>(null);
   const xeroCashMarkers = useRef<{
-    openingSource: "xero" | null;
+    openingSource: "xero" | "qbo" | null;
     openingBalance: string | null;
-    linesSource: "xero-bank-summary" | null;
+    linesSource: "xero-bank-summary" | "qbo-bank-activity" | null;
     linesKey: string | null;
   }>({
     openingSource: null,
@@ -666,10 +666,18 @@ export function CashForecastPanel({
       const shownOpening =
         seededOpening ??
         (cf?.openingBalance != null && cf.openingBalance !== "" ? String(cf.openingBalance) : null);
+      const openingSource =
+        !seededOpening && (cf?.openingBalanceSource === "xero" || cf?.openingBalanceSource === "qbo")
+          ? cf.openingBalanceSource
+          : null;
+      const linesSource =
+        cf?.forecastLinesSource === "xero-bank-summary" || cf?.forecastLinesSource === "qbo-bank-activity"
+          ? cf.forecastLinesSource
+          : null;
       xeroCashMarkers.current = {
-        openingSource: cf?.openingBalanceSource === "xero" && !seededOpening ? "xero" : null,
+        openingSource,
         openingBalance: shownOpening,
-        linesSource: cf?.forecastLinesSource === "xero-bank-summary" ? "xero-bank-summary" : null,
+        linesSource,
         linesKey: JSON.stringify({
           revenue: cf?.revenue ?? null,
           expenses: cf?.expenses ?? null,
@@ -677,7 +685,9 @@ export function CashForecastPanel({
         }),
       };
       const bankNote =
-        cf?.forecastLinesSource === "xero-bank-summary" && typeof cf.forecastLinesNote === "string"
+        (cf?.forecastLinesSource === "xero-bank-summary" ||
+          cf?.forecastLinesSource === "qbo-bank-activity") &&
+        typeof cf.forecastLinesNote === "string"
           ? cf.forecastLinesNote
           : null;
       xeroBankNoteRef.current = bankNote;
@@ -825,7 +835,7 @@ export function CashForecastPanel({
     const t = setTimeout(async () => {
       const markers = xeroCashMarkers.current;
       const linesUntouched =
-        markers.linesSource === "xero-bank-summary" &&
+        markers.linesSource != null &&
         JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
       const payload = {
         startDate,
@@ -842,12 +852,12 @@ export function CashForecastPanel({
         revGrowthPct,
         capexAmount,
         capexWeek,
-        ...(markers.openingSource === "xero" && openingBalance === markers.openingBalance
-          ? { openingBalanceSource: "xero" as const }
+        ...(markers.openingSource && openingBalance === markers.openingBalance
+          ? { openingBalanceSource: markers.openingSource }
           : {}),
-        ...(linesUntouched
+        ...(linesUntouched && markers.linesSource
           ? {
-              forecastLinesSource: "xero-bank-summary" as const,
+              forecastLinesSource: markers.linesSource,
               ...(xeroBankNoteRef.current ? { forecastLinesNote: xeroBankNoteRef.current } : {}),
             }
           : plEstimateRef.current

@@ -214,6 +214,9 @@ export type ClientBriefingProps = {
 export function ClientBriefing(p: ClientBriefingProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const { market } = useMarketFormat();
+  const syncOwnsFigures = Boolean(
+    p.qboLink?.figuresFromThisSync || p.xeroLink?.figuresFromThisSync,
+  );
   const statusTone =
     p.healthStatus === "critical" ? "risk" : p.healthStatus === "at_risk" ? "warn" : "ok";
 
@@ -305,7 +308,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
                 </svg>
-                Upload
+                {syncOwnsFigures ? "Upload a statement instead" : "Upload"}
               </button>
             ) : null}
             {p.onConnectQuickBooks ? (
