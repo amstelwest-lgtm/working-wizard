@@ -37,7 +37,6 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import {
   healthBandLabel,
   scoreTier,
-  BUSINESS_TYPE_TO_BENCHMARK,
   periodMonthsOf,
   benchmarkHealthyEnd,
   creditorDaysPaysSlowly,
@@ -47,6 +46,7 @@ import {
   taxBurdenRatio,
 } from "@/lib/ratios";
 import { benchmarkEmptyCopy } from "@/lib/benchmark-empty";
+import { benchmarkSectorForClient } from "@/lib/benchmark-sector";
 import {
   ASSET_REPORT_NEEDS,
   cashFlowKnown,
@@ -1287,8 +1287,14 @@ function normalizeBenchProps(
 
 async function loadSectorBenchmarks(
   businessTypeId: string | null | undefined,
+  operatingProfile: ClientOperatingProfile | null,
 ): Promise<Record<string, SectorBenchProps>> {
-  const sector = businessTypeId ? BUSINESS_TYPE_TO_BENCHMARK[businessTypeId] : null;
+  const templateLabel = operatingProfile?.templateId
+    ? clientIndustryLabel({ templateId: operatingProfile.templateId }, null)
+    : null;
+  // "Retail" and "retail" are the same key. The table has no market/region
+  // column, so this filter does not drop a US client.
+  const sector = benchmarkSectorForClient({ businessType: businessTypeId, templateLabel });
   if (!sector) return {};
   const { data, error } = await supabase
     .from("industry_benchmarks")
@@ -2091,7 +2097,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   }
   const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
   const businessTypeId = clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
-  const sectorBench = await loadSectorBenchmarks(businessTypeId);
+  const sectorBench = await loadSectorBenchmarks(businessTypeId, operatingProfile);
   const benchmarkSector = resolveBenchmarkSector(businessTypeId, operatingProfile);
   const preliminary = assessClientMetrics({
     financials:
@@ -2350,7 +2356,10 @@ function resolveBenchmarkSector(
   if (!bt && !operatingProfile?.templateId) return null;
   const name = clientIndustryLabel(operatingProfile, bt);
   if (!name || name === "—") return null;
-  const sector = bt ? BUSINESS_TYPE_TO_BENCHMARK[bt] : undefined;
+  const templateLabel = operatingProfile?.templateId
+    ? clientIndustryLabel({ templateId: operatingProfile.templateId }, null)
+    : null;
+  const sector = benchmarkSectorForClient({ businessType: bt, templateLabel });
   if (!sector) return { code: "unmapped", name };
   return {
     code: `sector:${sector}`,
@@ -2616,9 +2625,14 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
           profileSectorName: cd.benchmarkSector?.name ?? null,
           studioSectorName: studio.name,
         });
-        const error = new Error(empty.message);
-        (error as Error & { offerSetBusinessType?: boolean }).offerSetBusinessType =
-          empty.offerSetBusinessType;
+        const error = new Error(empty.message) as Error & {
+          offerSetBusinessType?: boolean;
+          emptyCta?: string;
+        };
+        // A named sector with no rows still links to the profile so the
+        // accountant can review the type. The helper does not invent rows.
+        error.offerSetBusinessType = empty.offerSetBusinessType;
+        error.emptyCta = empty.cta;
         throw error;
       }
       const isDemo = !cd;
@@ -2857,6 +2871,8 @@ type PreviewState = {
   emptyMessage?: string | null;
   /** Profile and the industry combobox are both blank. */
   offerSetBusinessType?: boolean;
+  /** Profile link. Shown whether or not a business type is already set. */
+  emptyCta?: string;
 };
 
 /** Card title and ZIP stem. Labor/Labour comes from the firm locale, in one place. */
@@ -3240,14 +3256,14 @@ function PreviewModal({
                   text-foreground is cream and disappears on this card. */}
               <div className="max-w-md rounded-lg border border-slate-300 bg-white px-6 py-5 text-center shadow-sm">
                 <p className="text-sm leading-relaxed text-slate-800">{state.emptyMessage}</p>
-                {clientId && state.offerSetBusinessType ? (
+                {clientId ? (
                   <Link
                     to="/clients/$clientId"
                     params={{ clientId }}
                     search={{ tab: "overview", profile: 1 }}
                     className="mt-3 inline-block text-sm font-medium text-sky-900 underline underline-offset-2"
                   >
-                    Set the client&apos;s business type
+                    {state.emptyCta || "Set the client's business type"}
                   </Link>
                 ) : null}
               </div>
@@ -3858,8 +3874,7 @@ export function ReportsStudio({
       return true;
     } catch (err) {
       const message = (err as Error).message;
-      const offerSetBusinessType = (err as Error & { offerSetBusinessType?: boolean })
-        .offerSetBusinessType;
+      const tagged = err as Error & { offerSetBusinessType?: boolean; emptyCta?: string };
       if (message.startsWith("No benchmarks yet for ") || message === BENCHMARK_EMPTY_MESSAGE) {
         setPreviewState({
           key: report.key,
@@ -3867,7 +3882,8 @@ export function ReportsStudio({
           blobUrl: null,
           loading: false,
           emptyMessage: message,
-          offerSetBusinessType: offerSetBusinessType === true,
+          offerSetBusinessType: tagged.offerSetBusinessType === true,
+          emptyCta: tagged.emptyCta,
         });
         return true;
       }

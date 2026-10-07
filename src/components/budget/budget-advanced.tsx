@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import { supabase } from "@/integrations/supabase/client";
-import { BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { industryBenchmarkCaption, isUsCopy } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 import type { BudgetDocument } from "@/lib/budget.types";
@@ -51,7 +51,8 @@ export function BudgetAdvancedPanel({
   const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
-    const sector = (businessTypeId && BUSINESS_TYPE_TO_BENCHMARK[businessTypeId]) || "other";
+    // Unset types keep the previous generic hint. A stored "Retail" uses retail.
+    const sector = benchmarkBusinessType(businessTypeId) ?? "other";
     supabase
       .from("industry_benchmarks")
       .select("metric_key, p50")

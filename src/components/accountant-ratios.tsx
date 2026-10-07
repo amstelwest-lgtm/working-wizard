@@ -18,7 +18,8 @@ import { FileDown, Mail, MessageCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
-import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK, healthBandLabel, scoreTier } from "@/lib/ratios";
+import { benchmarkBusinessType } from "@/lib/benchmark-sector";
+import { computeRatios, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
@@ -336,7 +337,7 @@ export function AccountantRatiosPanel({
         setContact({ email: data?.contact_email ?? "", phone: data?.contact_phone ?? "" });
         skipNextAutosave.current = true;
         setLoaded(true);
-        const bt = data?.business_type ? BUSINESS_TYPE_TO_BENCHMARK[data.business_type] : null;
+        const bt = benchmarkBusinessType(data?.business_type);
         if (bt) {
           supabase
             .from("industry_benchmarks")
