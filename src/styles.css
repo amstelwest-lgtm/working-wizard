@@ -1022,47 +1022,147 @@ button.auth-entry__link {
   color: var(--brand-gold-ui);
 }
 
-/* Trial-ended plan card. Surface tokens follow html.dark.
-   The portal stylesheet redefines :root --card as near-transparent glass and
-   --ink as cream, which painted this card white with unreadable light type.
-   Rebind the tokens on the card so bg-card / text-foreground stay paired. */
+/* Trial-ended plan card (dashboard banner, Add client, generation gate).
+   Do not rebind --card / --foreground. Tailwind bg-card and text-foreground
+   read --color-* inherited from :root, and the portal later sets :root --card
+   to near-transparent glass while --ink stays cream. That painted a white
+   slab with light-grey type inside the dark practice chrome.
+   Paint explicit surfaces. Dark is html.dark or the portal's own dark
+   (anything except data-theme=light). Light stays cream with near-black ink. */
 .trial-ended-block {
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.129 0.042 264.695);
-  --muted-foreground: oklch(0.45 0.03 264);
-  --border: oklch(0.88 0.01 255);
-  --ink: var(--foreground);
-  --ink-dim: var(--muted-foreground);
+  --paywall-bg: #fffdf8;
+  --paywall-ink: #1b1608;
+  --paywall-muted: #4a4030;
+  --paywall-line: rgba(140, 110, 10, 0.28);
+  --border: var(--paywall-line);
   margin: 0 0 16px;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--foreground);
+  border: 1px solid var(--paywall-line);
+  background-color: var(--paywall-bg) !important;
+  background-image: none !important;
+  color: var(--paywall-ink);
+  color-scheme: light;
 }
-html.dark .trial-ended-block {
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --foreground: oklch(0.984 0.003 247.858);
-  --muted-foreground: oklch(0.82 0.02 256);
-  --border: oklch(0.984 0.003 247.858 / 18%);
+html.dark .trial-ended-block,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block {
+  --paywall-bg: #101018;
+  --paywall-ink: #f7f1e4;
+  --paywall-muted: #e4dccb;
+  --paywall-line: rgba(212, 175, 55, 0.35);
+  --border: var(--paywall-line);
+  background-color: #101018 !important;
+  background-image: none !important;
+  color: #f7f1e4;
+  color-scheme: dark;
+}
+.trial-ended-block .trial-ended-title,
+.trial-ended-block .text-foreground,
+.trial-ended-block .firm-band-upgrade {
+  color: var(--paywall-ink);
+  -webkit-text-fill-color: var(--paywall-ink);
+}
+.trial-ended-block .text-muted-foreground,
+.trial-ended-block .trial-ended-note {
+  color: var(--paywall-muted);
+  -webkit-text-fill-color: var(--paywall-muted);
+}
+html.dark .trial-ended-block .trial-ended-title,
+html.dark .trial-ended-block .text-foreground,
+html.dark .trial-ended-block .firm-band-upgrade,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ended-title,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .text-foreground,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .firm-band-upgrade {
+  color: #f7f1e4 !important;
+  -webkit-text-fill-color: #f7f1e4 !important;
+}
+html.dark .trial-ended-block .text-muted-foreground,
+html.dark .trial-ended-block .trial-ended-note,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .text-muted-foreground,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ended-note {
+  color: #e4dccb !important;
+  -webkit-text-fill-color: #e4dccb !important;
+}
+.trial-ended-block .btn.gold,
+.trial-ended-block .btn.gold:hover {
+  color: #1b1300 !important;
+  -webkit-text-fill-color: #1b1300 !important;
 }
 .trial-ended-block .btn.ghost {
-  color: var(--foreground);
-  -webkit-text-fill-color: var(--foreground);
-  border-color: var(--border);
+  color: var(--paywall-ink);
+  -webkit-text-fill-color: var(--paywall-ink);
+  border-color: var(--paywall-line);
+  background: transparent;
+}
+.trial-ended-block .btn.ghost:hover {
+  color: #1b1608;
+  -webkit-text-fill-color: #1b1608;
+  border-color: #8a6508;
+}
+html.dark .trial-ended-block .btn.ghost,
+html.dark .trial-ended-block .btn.ghost:hover,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .btn.ghost,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .btn.ghost:hover {
+  color: #f7f1e4 !important;
+  -webkit-text-fill-color: #f7f1e4 !important;
+  border-color: rgba(212, 175, 55, 0.55);
+  background: transparent;
+}
+.trial-ended-block input,
+.trial-ended-block textarea,
+.trial-ended-block select {
+  background-color: #fffdf8;
+  color: #1b1608;
+  border: 1px solid rgba(140, 110, 10, 0.28);
+}
+html.dark .trial-ended-block input,
+html.dark .trial-ended-block textarea,
+html.dark .trial-ended-block select,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block input,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block textarea,
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block select {
+  background-color: #0a0a10 !important;
+  color: #f7f1e4 !important;
+  -webkit-text-fill-color: #f7f1e4 !important;
+  border-color: rgba(212, 175, 55, 0.35) !important;
 }
 .trial-ended-title {
   margin: 0 0 12px;
   font-size: 15px;
   font-weight: 700;
-  color: var(--foreground);
+  color: var(--paywall-ink);
 }
 .trial-ended-note {
   margin: 8px 0 0;
   font-size: 12px;
-  color: var(--muted-foreground);
+  color: var(--paywall-muted);
+}
+/* Band picker outside the trial card (Settings → Plan, Add client).
+   Portal ink, not Tailwind foreground, so prices stay readable on the dark board. */
+.accountant-portal .firm-band-upgrade {
+  color: var(--ink);
+}
+.accountant-portal .firm-band-upgrade .text-foreground {
+  color: var(--ink);
+  -webkit-text-fill-color: var(--ink);
+}
+.accountant-portal .firm-band-upgrade .text-muted-foreground {
+  color: var(--ink-dim);
+  -webkit-text-fill-color: var(--ink-dim);
+}
+html[data-theme="light"] .accountant-portal .firm-band-upgrade,
+html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-foreground {
+  color: #1b1608;
+  -webkit-text-fill-color: #1b1608;
+}
+html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreground {
+  color: #4a4030;
+  -webkit-text-fill-color: #4a4030;
+}
+.accountant-portal .firm-band-upgrade .btn.gold,
+.accountant-portal .firm-band-upgrade .btn.gold:hover {
+  color: #1b1300;
+  -webkit-text-fill-color: #1b1300;
 }
 .trial-ended-action {
   margin-top: 12px;
