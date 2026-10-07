@@ -299,9 +299,7 @@ const cases: TestCase[] = [
   {
     name: "InterventionPriority / with items",
     async build() {
-      const { InterventionPriorityPDF } = await import(
-        "../src/reports/intervention-priority.js"
-      );
+      const { InterventionPriorityPDF } = await import("../src/reports/intervention-priority.js");
       return createElement(InterventionPriorityPDF, {
         smeData: SME,
         accountantProfile: ACCOUNTANT,
@@ -313,8 +311,7 @@ const cases: TestCase[] = [
             health_tier: "critical" as const,
             step_number: 1,
             step_title: "Reduce debtor days",
-            step_description:
-              "Implement a 14-day follow-up process for all overdue invoices.",
+            step_description: "Implement a 14-day follow-up process for all overdue invoices.",
             timeframe: "30 days",
             effort: "Medium",
             impact: "High",
@@ -326,8 +323,7 @@ const cases: TestCase[] = [
             health_tier: "at_risk" as const,
             step_number: 2,
             step_title: "Review pricing strategy",
-            step_description:
-              "Benchmark prices against competitors and identify margin leakage.",
+            step_description: "Benchmark prices against competitors and identify margin leakage.",
             timeframe: "60 days",
             effort: "High",
             impact: "High",
@@ -340,9 +336,7 @@ const cases: TestCase[] = [
   {
     name: "InterventionPriority / empty (no interventions)",
     async build() {
-      const { InterventionPriorityPDF } = await import(
-        "../src/reports/intervention-priority.js"
-      );
+      const { InterventionPriorityPDF } = await import("../src/reports/intervention-priority.js");
       return createElement(InterventionPriorityPDF, {
         smeData: SME,
         accountantProfile: ACCOUNTANT,
@@ -355,9 +349,7 @@ const cases: TestCase[] = [
   {
     name: "LaborProductivity / demo",
     async build() {
-      const { LaborProductivityPDF } = await import(
-        "../src/reports/labor-productivity.js"
-      );
+      const { LaborProductivityPDF } = await import("../src/reports/labor-productivity.js");
       return createElement(LaborProductivityPDF, {
         smeData: SME,
         accountantProfile: ACCOUNTANT,
@@ -403,8 +395,18 @@ const cases: TestCase[] = [
           drawings: 120_000,
           prior_equity: 3_240_000,
           debt_lines: [
-            { label: "FNB Term Loan", amount: 1_500_000, annual_rate_pct: 11.5, maturity_year: 2027 },
-            { label: "Overdraft Facility", amount: 500_000, annual_rate_pct: 14.0, maturity_year: 2025 },
+            {
+              label: "FNB Term Loan",
+              amount: 1_500_000,
+              annual_rate_pct: 11.5,
+              maturity_year: 2027,
+            },
+            {
+              label: "Overdraft Facility",
+              amount: 500_000,
+              annual_rate_pct: 14.0,
+              maturity_year: 2025,
+            },
             { label: "Asset Finance", amount: 400_000, annual_rate_pct: 10.0, maturity_year: 2028 },
           ],
           health_scores: {
@@ -448,9 +450,8 @@ const cases: TestCase[] = [
   {
     name: "ProfitabilityWaterfall / with prior period",
     async build() {
-      const { ProfitabilityWaterfallPDF } = await import(
-        "../src/reports/profitability-waterfall.js"
-      );
+      const { ProfitabilityWaterfallPDF } =
+        await import("../src/reports/profitability-waterfall.js");
       return createElement(ProfitabilityWaterfallPDF, {
         smeData: SME,
         accountantProfile: ACCOUNTANT,
@@ -493,9 +494,8 @@ const cases: TestCase[] = [
   {
     name: "ProfitabilityWaterfall / single period (no prior)",
     async build() {
-      const { ProfitabilityWaterfallPDF } = await import(
-        "../src/reports/profitability-waterfall.js"
-      );
+      const { ProfitabilityWaterfallPDF } =
+        await import("../src/reports/profitability-waterfall.js");
       return createElement(ProfitabilityWaterfallPDF, {
         smeData: SME,
         accountantProfile: ACCOUNTANT,
@@ -592,7 +592,8 @@ const cases: TestCase[] = [
     name: "BudgetVariance / draft with one month actual",
     async build() {
       const { BudgetVariancePDF } = await import("../src/reports/budget-variance.js");
-      const { buildBudgetPdfModel, illustrativeBudgetPack } = await import("../src/lib/budget-pdf.js");
+      const { buildBudgetPdfModel, illustrativeBudgetPack } =
+        await import("../src/lib/budget-pdf.js");
       const { ZA_MARKET } = await import("../src/lib/market/resolve.js");
       const pack = illustrativeBudgetPack("2026-01");
       return createElement(BudgetVariancePDF, {
@@ -608,7 +609,8 @@ const cases: TestCase[] = [
     name: "BudgetVariance / signed, budget only",
     async build() {
       const { BudgetVariancePDF } = await import("../src/reports/budget-variance.js");
-      const { buildBudgetPdfModel, illustrativeBudgetPack } = await import("../src/lib/budget-pdf.js");
+      const { buildBudgetPdfModel, illustrativeBudgetPack } =
+        await import("../src/lib/budget-pdf.js");
       const { ZA_MARKET } = await import("../src/lib/market/resolve.js");
       const pack = illustrativeBudgetPack("2026-01");
       return createElement(BudgetVariancePDF, {
@@ -643,6 +645,48 @@ const cases: TestCase[] = [
             status: "not_started",
             dueDate: "2026-10-19",
             outcomeWhy: "Overview runway is 4 weeks. Cash on file is $7,430.",
+          },
+        ],
+      });
+    },
+  },
+  {
+    name: "AdvisoryPack / draft disclosure",
+    async build() {
+      const { AdvisoryPackPDF } = await import("../src/reports/advisory-pack.js");
+      return createElement(AdvisoryPackPDF, {
+        smeData: { name: "QA US Test LLC", period: "v1 · Draft · Sep 2026" },
+        accountantProfile: { ...ACCOUNTANT, signatureDataUrl: null },
+        draftDisclosure: "Draft for accountant review. Not sent.",
+        sections: [
+          {
+            title: "In one line",
+            body: "Prepared by MILŌN from the current figures.",
+            bullets: ["Cash runway is the number to move"],
+          },
+        ],
+      });
+    },
+  },
+  {
+    name: "AdvisoryPack / signed stamp",
+    async build() {
+      const { AdvisoryPackPDF } = await import("../src/reports/advisory-pack.js");
+      return createElement(AdvisoryPackPDF, {
+        smeData: { name: "QA US Test LLC", period: "v1 · Signed off · Sep 2026" },
+        accountantProfile: { ...ACCOUNTANT, signatureDataUrl: null },
+        reviewSignoff: {
+          signedOffByName: "Jane Doe",
+          signedOffByInitials: "JD",
+          signedOffByTitle: null,
+          firmName: "Test Accounting Co",
+          signedOffAt: "2026-10-07T15:04:00.000Z",
+          signatureData: null,
+        },
+        sections: [
+          {
+            title: "In one line",
+            body: "QA US Test LLC is healthy at 80/100.",
           },
         ],
       });

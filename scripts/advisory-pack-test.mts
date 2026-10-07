@@ -598,6 +598,25 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     studio.includes('audience="accountant"\n                    canGenerate={hasFigures}'),
     "studio pack panel is the accountant seat",
   );
+
+  assert(panel.includes('id="advisory-pack-export-pdf"'), "pack panel mounts Export PDF");
+  assert(panel.includes("Export PDF"), "export control uses the shared Export PDF label");
+  assert(
+    panel.includes("downloadAdvisoryPackPdf"),
+    "pack export reuses the advisory pack PDF path",
+  );
+  const pdfLib = readFileSync(resolve("src/lib/advisory-pack-pdf.ts"), "utf8");
+  const pdfReport = readFileSync(resolve("src/reports/advisory-pack.tsx"), "utf8");
+  assert(
+    pdfLib.includes("Draft for accountant review. Not sent."),
+    "draft packs carry the accountant-review disclosure",
+  );
+  assert(pdfReport.includes("reviewSignoff"), "signed packs use the report footer stamp");
+  assert(pdfReport.includes("PDFDocument"), "pack PDF uses the shared report shell");
+  assert(
+    !/claude|anthropic/i.test(pdfLib + pdfReport + panel.slice(panel.indexOf("exportPdf"))),
+    "no vendor name on the export path",
+  );
 }
 
 console.log("advisory-pack: all checks passed");

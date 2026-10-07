@@ -15,6 +15,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Download,
   FileText,
   History,
   Loader2,
@@ -26,8 +27,19 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { useMarket } from "@/contexts/market";
+import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
+import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
+import {
+  hashFigures,
+  recordDelivery,
+  warnIfDeliveryFailed,
+  warnIfPdfArchiveFailed,
+} from "@/lib/advisory-deliveries";
 import {
   HIGH_EDIT_RATE,
   computeEditStats,
@@ -108,6 +120,9 @@ export function AdvisoryPackPanel({
   currentFigures = null,
 }: Props) {
   const track = useTrack();
+  const { user } = useAuth();
+  const { market } = useMarket();
+  const { profile } = useAccountantProfile();
   const fetchLatest = useServerFn(getLatestAdvisoryPack);
   const generate = useServerFn(generateAdvisoryPack);
   const review = useServerFn(reviewAdvisoryPack);
@@ -128,6 +143,7 @@ export function AdvisoryPackPanel({
   const [showTrail, setShowTrail] = useState(false);
   const [showDraft, setShowDraft] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState(true);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
 
@@ -307,6 +323,53 @@ export function AdvisoryPackPanel({
           : "Changes requested",
     );
 
+  const exportPdf = async () => {
+    if (!clientId || !pack || exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const { blob, filename, signed } = await downloadAdvisoryPackPdf({
+        pack,
+        profile,
+        userId: user?.id ?? null,
+        user,
+        market,
+      });
+      track("advisory_pack_pdf_exported", {
+        clientId,
+        audience,
+        status: pack.status,
+        signed,
+        filename,
+      });
+      toast.success("Advisory pack PDF downloaded");
+      if (user) {
+        const logged = await recordDelivery({
+          clientId,
+          firmId,
+          channel: "pdf_download",
+          kind: signed ? "report_pdf" : "advisory_draft",
+          reportKey: "advisory_pack",
+          subject: `${pack.content.clientName || "Client"} advisory pack v${pack.version}`,
+          snapshotId: pack.snapshot_id,
+          figuresHash: hashFigures({
+            version: pack.version,
+            status: pack.status,
+            sections: pack.content.sections.map((s) => s.body),
+          }),
+          periodLabel: pack.period_label,
+          createdBy: user.id,
+          pdfBlob: blob,
+        });
+        warnIfDeliveryFailed(logged.error);
+        warnIfPdfArchiveFailed(logged.pdfError);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "PDF export failed");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const comment = () =>
     run(
       "comment",
@@ -417,6 +480,25 @@ export function AdvisoryPackPanel({
               )}
               {pack ? "Regenerate" : "Generate pack"}
             </button>
+          ) : null}
+          {pack ? (
+            <Button
+              id="advisory-pack-export-pdf"
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+              disabled={exportingPdf || busy !== null}
+              onClick={() => void exportPdf()}
+              data-export-pdf
+            >
+              {exportingPdf ? (
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+              ) : (
+                <Download className="h-3 w-3" aria-hidden />
+              )}
+              {exportingPdf ? "Preparing…" : "Export PDF"}
+            </Button>
           ) : null}
           {pack ? (
             <button
