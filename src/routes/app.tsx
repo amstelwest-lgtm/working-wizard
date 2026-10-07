@@ -2516,6 +2516,7 @@ function Index() {
   const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
   const budgetSignoff = reviewSignoffs.budget ?? null;
   const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
+  const advisorySignoff = reviewSignoffs.advisory ?? null;
   useEffect(() => {
     if (!effectiveClientId) {
       setReviewSignoffs({});
@@ -5185,6 +5186,7 @@ function Index() {
                     className="mb-5"
                     clientId={effectiveClientId}
                     firmId={clientMeta?.firm_id ?? null}
+                    signoff={advisorySignoff}
                     audience="owner"
                     canGenerate={hasRealFinancials}
                     hasFirm={Boolean(clientMeta?.firm_id)}

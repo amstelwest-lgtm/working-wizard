@@ -35,6 +35,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatSignedOffDateTime } from "@/lib/market";
+import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
 import type { ResolvedMarket } from "@/lib/market";
 import {
   hashFigures,
@@ -71,6 +72,12 @@ type Props = {
   /** Firm that owns the client, so a trial block can open the plan picker. */
   firmId?: string | null;
   className?: string;
+  /** Advisory sign-off row. The held line names this signer and firm. */
+  signoff?: {
+    signed_off_by_name: string;
+    firm_name: string | null;
+    signed_off_at: string;
+  } | null;
   /** Live Overview figures. A stored pack that disagrees shows a regenerate note. */
   currentFigures?: {
     runwayLabel: string | null;
@@ -135,6 +142,7 @@ export function AdvisoryPackPanel({
   firmId = null,
   className,
   currentFigures = null,
+  signoff = null,
 }: Props) {
   const track = useTrack();
   const { user } = useAuth();
@@ -494,6 +502,25 @@ export function AdvisoryPackPanel({
   if (!clientId || !loaded || !migrated) return null;
   if (!pack && audience === "owner" && !canGenerate) return null;
 
+  const heldSignoffLine = (() => {
+    if (!pack || !signOffGate.signOffHolds) return null;
+    const when = (iso: string | null | undefined) => fmtWhen(iso, market, profile.timeZone);
+    const extras = `${pack.delivered_at ? ` · read ${when(pack.delivered_at)}` : ""}${
+      liveStats ? ` · edit rate ${Math.round(liveStats.edit_rate * 100)}%` : ""
+    }`;
+    if (pack.reviewed_by_kind === "owner") {
+      return `Accepted by the owner ${when(pack.reviewed_at)}${extras}`;
+    }
+    const named = inAppAccountantSignoffLine({
+      name: signoff?.signed_off_by_name,
+      firmName: signoff?.firm_name,
+      signedOffAt: signoff?.signed_off_at,
+      market,
+      firmTimeZone: profile.timeZone,
+    });
+    return named ? `${named}${extras}` : null;
+  })();
+
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
     className,
@@ -537,23 +564,16 @@ export function AdvisoryPackPanel({
             )}
           </h3>
           <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
-            {pack
-              ? signOffGate.signOffHolds
-                ? `${pack.reviewed_by_kind === "accountant" ? "Signed off by the accountant" : "Accepted by the owner"} ${fmtWhen(
-                    pack.reviewed_at,
-                    market,
-                    profile.timeZone,
-                  )}${pack.delivered_at ? ` · read ${fmtWhen(pack.delivered_at, market, profile.timeZone)}` : ""}${
-                    liveStats ? ` · edit rate ${Math.round(liveStats.edit_rate * 100)}%` : ""
-                  }`
-                : audience === "accountant"
+            {heldSignoffLine ??
+              (pack
+                ? audience === "accountant"
                   ? "Diagnosis, forecast, moves and gaps in one place. Edit what you disagree with — the client only reads what you sign off."
                   : hasFirm
                     ? "Your accountant reviews this before you act on it."
                     : "Built from your figures. Read it, then accept it to move on to the recommendations."
-              : audience === "accountant"
-                ? "Wrap the current diagnosis, forecast and proposed moves into one reviewable pack."
-                : "MILŌN can turn the current figures into a short, plain-language pack."}
+                : audience === "accountant"
+                  ? "Wrap the current diagnosis, forecast and proposed moves into one reviewable pack."
+                  : "MILŌN can turn the current figures into a short, plain-language pack.")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

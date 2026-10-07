@@ -7,6 +7,8 @@
 
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
+import { formatSignedOffDateTime } from "@/lib/market";
+import type { ResolvedMarket } from "@/lib/market";
 
 export type SignoffStampContext = {
   /** Firm row name for this client. A stamp that names a different firm is dropped. */
@@ -23,10 +25,39 @@ export function isSamplePracticeSignoff(input: {
   firmName?: string | null;
 }): boolean {
   const name = (input.name ?? "").trim();
-  const firm = normFirm(input.firmName);
-  if (firm === "sample practice" || firm.startsWith("sample practice ")) return true;
-  if (/^a\.?\s+sample$/i.test(name)) return true;
+  const firm = (input.firmName ?? "").trim();
+  if (/^sample practice\b/i.test(firm)) return true;
+  if (/^a\.?\s*sample\b/i.test(name)) return true;
   return false;
+}
+
+/**
+ * In-app accountant sign-off line. Name and firm come from the sign-off row.
+ * A sample persona is not a sign-off. The clock is the shared zoned formatter.
+ */
+export function inAppAccountantSignoffLine(input: {
+  name?: string | null;
+  firmName?: string | null;
+  signedOffAt?: string | null;
+  market?: Pick<ResolvedMarket, "locale" | "timezone">;
+  firmTimeZone?: string | null;
+}): string | null {
+  const name = (input.name ?? "").trim();
+  const firm = (input.firmName ?? "").trim();
+  const signedOffAt = (input.signedOffAt ?? "").trim();
+  if (!name || !signedOffAt) return null;
+  if (isSamplePracticeSignoff({ name, firmName: firm || null })) return null;
+  const when = formatSignedOffDateTime(signedOffAt, input.market, {
+    firmTimeZone: input.firmTimeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  if (!when || when === "—") return null;
+  return firm ? `Signed off by ${name} · ${firm} · ${when}` : `Signed off by ${name} · ${when}`;
 }
 
 function firmMatchesClient(stampFirm: string | null, clientFirmName: string | null | undefined): boolean {
