@@ -93,8 +93,23 @@ assert(widget.includes("lastQuestion"), "the link keeps the question that produc
 assert(widget.includes('err.role = "alert"'), "reply failures stay visible");
 assert(studio.includes("data-ask-bot"), "Overview has a Bot entry");
 assert(studio.includes("Ask Milōn Bot"), "the entry is labelled Ask Milōn Bot");
-assert(studio.includes('selectRail("ask")'), "the entry opens the Bot tab for this client");
+assert(studio.includes('writeAccountantTab("ask")'), "the entry opens the Bot tab for this client");
 assert(studio.includes("data-bot-entry"), "the entry is marked");
+assert(studio.includes("data-bot-rail"), "with figures, Bot leads the rail");
+assert(studio.includes("bot-primary"), "the lead Bot control is the primary rail action");
+const rail = studio.slice(studio.indexOf('className="deliverable-rail"'));
+const nextAt = rail.indexOf('rail-kicker">Next');
+const clientKickerAt = rail.indexOf('rail-kicker">Client');
+assert(
+  nextAt >= 0 && clientKickerAt > nextAt && rail.slice(0, nextAt).includes("hasFigures"),
+  "when figures are on file, Next / Milōn Bot sits above the rest of the rail",
+);
+assert(
+  studio.includes('t.id !== "ask"'),
+  "Bot is not listed twice once it leads the rail",
+);
+const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+assert(portalCss.includes(".tab.bot-primary"), "the lead Bot control is gold on first paint");
 assert(studio.includes("onOpenDeliverable"), "Bot still deep-links through the existing coach");
 assert(
   portfolio.includes("waiting for your sign-off"),

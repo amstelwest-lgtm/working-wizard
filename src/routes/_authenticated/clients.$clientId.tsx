@@ -528,20 +528,23 @@ function ClientRailButton({
   star,
   active,
   clientId,
+  primary,
 }: {
   id: ActiveTab;
   label: string;
   star?: boolean;
   active: boolean;
   clientId: string;
+  primary?: boolean;
 }) {
   return (
     <Link
       to="/clients/$clientId"
       params={{ clientId }}
       search={(prev) => accountantClientTabSearch(prev, id)}
-      className={`tab${active ? " on" : ""}`}
+      className={`tab${active ? " on" : ""}${primary ? " bot-primary" : ""}`}
       data-tab={id}
+      data-bot-rail={primary ? "true" : undefined}
       aria-current={active ? "page" : undefined}
       replace
     >
@@ -2420,6 +2423,18 @@ function ClientView() {
 
             <div className="client-workspace">
               <nav className="deliverable-rail" aria-label="Client workspace">
+                {hasFigures ? (
+                  <>
+                    <span className="rail-kicker">Next</span>
+                    <ClientRailButton
+                      id="ask"
+                      label="Milōn Bot"
+                      active={activeTab === "ask"}
+                      clientId={clientId}
+                      primary
+                    />
+                  </>
+                ) : null}
                 <span className="rail-kicker">Client</span>
                 {CLIENT_RAIL.map((t) => (
                   <ClientRailButton
@@ -2432,7 +2447,7 @@ function ClientView() {
                   />
                 ))}
                 <span className="rail-kicker rail-kicker-split">Deliverables</span>
-                {DELIVERABLE_RAIL.map((t) => (
+                {DELIVERABLE_RAIL.filter((t) => !hasFigures || t.id !== "ask").map((t) => (
                   <ClientRailButton
                     key={t.id}
                     id={t.id}
@@ -2458,7 +2473,7 @@ function ClientView() {
                       type="button"
                       className="btn gold mini"
                       data-ask-bot
-                      onClick={() => selectRail("ask")}
+                      onClick={() => writeAccountantTab("ask")}
                     >
                       Ask Milōn Bot
                     </button>
