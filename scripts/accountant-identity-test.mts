@@ -11,6 +11,7 @@ import {
   resolvePersistedAccountantIdentity,
 } from "../src/lib/accountant-identity";
 import { practiceGreeting } from "../src/lib/portfolio-dashboard";
+import { inAppAccountantSignoffLine, isSamplePracticeSignoff } from "../src/lib/review-signoff-stamp";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -90,5 +91,52 @@ assert(fnSrc.includes("persistedSignoffFirmName"), "sign-off firm is derived fro
 assert(fnSrc.includes("persistedSignerName"), "sign-off name prefers the profile");
 assert(!fnSrc.includes("firmFromMeta"), "metadata firm name is not a sign-off firm");
 assert(!fnSrc.includes("data.firmName?.trim()"), "client-sent firm name is not written");
+
+assert(isSamplePracticeSignoff({ name: "A. Sample, CA(SA)" }), "CA(SA) suffix is still the sample persona");
+assert(isSamplePracticeSignoff({ name: "A. Sample, CPA" }), "CPA suffix is still the sample persona");
+assert(isSamplePracticeSignoff({ name: "A.Sample" }), "initials can sit against the sample surname");
+assert(isSamplePracticeSignoff({ firmName: "Sample Practice" }), "Sample Practice is a sample firm");
+assert(isSamplePracticeSignoff({ firmName: "SAMPLE PRACTICE" }), "sample firm match ignores case");
+assert(
+  !isSamplePracticeSignoff({ name: "James Fleming", firmName: "Ben Accountants" }),
+  "a real accountant is not a sample",
+);
+
+const namedLine = inAppAccountantSignoffLine({
+  name: "James Fleming",
+  firmName: "Ben Accountants",
+  signedOffAt: "2026-10-08T01:15:46.000Z",
+  market: { locale: "en-US", timezone: "America/New_York" },
+});
+assert(
+  namedLine?.startsWith("Signed off by James Fleming · Ben Accountants · ") === true,
+  `sign-off line names the row, got ${namedLine}`,
+);
+assert(namedLine != null && /EDT|UTC-4/.test(namedLine), `sign-off line keeps the zone, got ${namedLine}`);
+assert(
+  inAppAccountantSignoffLine({
+    name: "A. Sample, CA(SA)",
+    firmName: "Sample Practice",
+    signedOffAt: "2026-10-08T01:15:46.000Z",
+    market: { locale: "en-ZA", timezone: "Africa/Johannesburg" },
+  }) === null,
+  "a sample sign-off row is not named",
+);
+assert(
+  inAppAccountantSignoffLine({
+    name: "A. Sample, CPA",
+    firmName: "sample practice",
+    signedOffAt: "2026-10-08T01:15:46.000Z",
+  }) === null,
+  "a lowercase sample firm is not named",
+);
+
+assert(
+  dashSrc.includes("title={greetingSource || user?.email || \"\"}"),
+  "chip tooltip uses the same name as the greeting",
+);
+const panelSrc = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
+assert(panelSrc.includes("inAppAccountantSignoffLine"), "pack line names the sign-off row");
+assert(!panelSrc.includes("Signed off by the accountant"), "pack line no longer hides the signer");
 
 console.log("accountant-identity ok");

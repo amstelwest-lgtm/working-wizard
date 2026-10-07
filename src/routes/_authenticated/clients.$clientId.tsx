@@ -3678,6 +3678,7 @@ function ClientView() {
                     className="mb-5"
                     clientId={client.id}
                     firmId={client.firm_id ?? null}
+                    signoff={advisorySignoff}
                     audience="accountant"
                     canGenerate={hasFigures}
                     hasFirm={Boolean(client.firm_id)}
