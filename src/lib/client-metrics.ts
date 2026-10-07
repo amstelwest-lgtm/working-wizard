@@ -220,7 +220,11 @@ export function assessClientMetrics(input: {
   const fin = asRecord(input.financials);
   const cf = asRecord(input.cashflow);
   const prior = asRecord(input.priorFinancials);
-  const seededAt = typeof cf?.seededFromBanksAt === "string" ? cf.seededFromBanksAt : null;
+  // A budget push used to stamp seededFromBanksAt. That is not a bank balance.
+  const seededAt =
+    cf && cashflowIsRealBankSeed(cf) && typeof cf.seededFromBanksAt === "string"
+      ? cf.seededFromBanksAt
+      : null;
   const cash = resolveClientCash({
     publishedBankBalance: seededAt ? finiteNum(cf?.openingBalance) : null,
     bankPublishedAt: seededAt,
@@ -749,9 +753,7 @@ export function plBankDisagreement(input: {
   cashflow?: unknown;
 }): PlBankDisagreement | null {
   const cf = asRecord(input.cashflow);
-  if (!cf || typeof cf.seededFromBanksAt !== "string" || cf.seededFromBanksAt.length === 0) {
-    return null;
-  }
+  if (!cashflowIsRealBankSeed(cf)) return null;
   const fin = asRecord(input.financials);
   if (!fin) return null;
   const months = periodMonthsOf(fin);
@@ -858,6 +860,29 @@ export function distributeForecastLine(
 function asForecastLines(value: unknown): StoredForecastLine[] {
   if (!Array.isArray(value)) return [];
   return value.filter((row) => row && typeof row === "object") as StoredForecastLine[];
+}
+
+function forecastLineNames(cf: Record<string, unknown>): string[] {
+  return [...asForecastLines(cf.revenue), ...asForecastLines(cf.expenses), ...asForecastLines(cf.other)].map(
+    (line) => line.name ?? "",
+  );
+}
+
+/** Budget bridge stamps this on every seeded line. */
+function cashflowNamedFromBudget(cf: Record<string, unknown> | null | undefined): boolean {
+  if (!cf) return false;
+  return forecastLineNames(cf).some((name) => /\(from budget\)/i.test(name));
+}
+
+/**
+ * A bank publish. `seededFromBanksAt` alone is not enough: budget pushes
+ * used to set that flag, and those lines are not bank movements.
+ */
+function cashflowIsRealBankSeed(cf: Record<string, unknown> | null | undefined): boolean {
+  if (!cf) return false;
+  const seeded = typeof cf.seededFromBanksAt === "string" && cf.seededFromBanksAt.length > 0;
+  if (!seeded || cashflowNamedFromBudget(cf)) return false;
+  return true;
 }
 
 function moneyString(n: number): string {
@@ -1224,16 +1249,24 @@ export function resolveThirteenWeekForecast(input: {
         };
       }
       const weeklyNet = weeklyNetFromStored(cf);
-      const opening =
-        weeklyNet == null
+      // Budget lines, including ones that still carry seededFromBanksAt, are
+      // not a bank balance. With statement cash on file, leave that figure
+      // and skip the roll-forward banner. A real bank publish still rolls.
+      const realBankSeed = bankSeeded && !cashflowNamedFromBudget(cf);
+      const statementCash = finiteNum(fin?.cash);
+      const preferStatement = statementCash != null && !realBankSeed;
+      const opening = preferStatement
+        ? statementCash
+        : weeklyNet == null
           ? rolled.opening
           : Math.round((rolled.opening + (weeklyNet / 7) * gapDays) * 100) / 100;
       const closing = reclose(opening, rolled.inflow, rolled.outflow);
       const totals = seriesTotals(rolled.inflow, rolled.outflow, closing);
       const showShortfall =
         totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
-      const anchorNote =
-        gapDays <= 0
+      const anchorNote = preferStatement
+        ? null
+        : gapDays <= 0
           ? null
           : weeklyNet == null
             ? `${gapDays} days sit between ${startRaw} and this week (${anchor}). Opening cash is still the balance on ${startRaw}.`

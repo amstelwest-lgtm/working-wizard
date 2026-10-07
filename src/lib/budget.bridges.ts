@@ -432,10 +432,30 @@ function lineId(prefix: string): string {
 }
 
 /**
+ * Monday of the UTC week containing `now`.
+ * Budget cash starts on that day. The FY month (`fyStart`) is not a cash date:
+ * statement cash parked on 1 Sep and then rolled with budget P&L invents a balance.
+ */
+export function budgetForecastStartDate(now = new Date()): string {
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const mondayOffset = (utc.getUTCDay() + 6) % 7;
+  utc.setUTCDate(utc.getUTCDate() - mondayOffset);
+  const y = utc.getUTCFullYear();
+  const m = String(utc.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(utc.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Build a cash-forecast publish payload from the first ~13 weeks of the budget
  * (months 1–3 recurring monthly lines + WC-derived collection delay).
+ * `openingBalance` stays the statement / opening cash. Week 1 is this week,
+ * not the first day of the financial year. This is not a bank publish.
  */
-export function budgetToCashForecastPayload(doc: BudgetDocument): CashForecastPublishPayload {
+export function budgetToCashForecastPayload(
+  doc: BudgetDocument,
+  now = new Date(),
+): CashForecastPublishPayload {
   const months = fyMonths(doc.fyStart);
   const near = months.slice(0, 3);
   const rows = computeBudgetMonths(doc, doc.activeScenario);
@@ -494,8 +514,7 @@ export function budgetToCashForecastPayload(doc: BudgetDocument): CashForecastPu
       .filter((l) => parseFloat(l.amount) > 0),
   ];
 
-  const [y, m] = doc.fyStart.split("-").map(Number);
-  const startDate = `${y}-${String(m).padStart(2, "0")}-01`;
+  const startDate = budgetForecastStartDate(now);
   // Debtor days already lag budget cash. They must not turn a forecast
   // scenario on — collection delay stays off until someone moves the slider.
   const collectDelay = 0;
@@ -535,7 +554,6 @@ export function budgetToCashForecastPayload(doc: BudgetDocument): CashForecastPu
     revGrowthPct: 0,
     capexAmount: "0",
     capexWeek: 1,
-    seededFromBanksAt: new Date().toISOString(),
   };
 }
 
