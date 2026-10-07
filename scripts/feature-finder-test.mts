@@ -26,6 +26,7 @@ import {
   clientFileHref,
   includeClientGroup,
   paletteEmptyCopy,
+  searchClientSectionJumps,
   searchClients,
   type FinderClient,
 } from "../src/lib/feature-finder-clients.ts";
@@ -142,6 +143,11 @@ assert(
   collections?.synonyms.includes("ar") && collections.synonyms.includes("aged receivables"),
   "AR synonyms",
 );
+const budgetVocab = featureIndex("accountant").find((row) => row.id === "budget");
+assert(
+  budgetVocab?.synonyms.includes("budget") && budgetVocab.synonyms.includes("budget variance"),
+  "Budget is in the palette search vocabulary",
+);
 const payables = featureIndex("accountant").find((row) => row.id === "payables");
 assert(payables?.synonyms.includes("ap"), "AP synonym");
 const data = featureIndex("accountant").find((row) => row.id === "data-sync");
@@ -227,6 +233,67 @@ assert(
 );
 assert(searchClients("cash", BOOK).length === 1, "cash still finds the client");
 
+const cashJumps = searchClientSectionJumps("cash", BOOK);
+assert(
+  cashJumps.length === BOOK.length,
+  "cash lists a jump for every client on the firm dashboard",
+);
+assert(
+  cashJumps.every((row) => row.label.startsWith("Cash for ") && row.href.includes("tab=cash")),
+  "cash jumps open that client's Cash tab",
+);
+assert(
+  cashJumps.some((row) => row.label === "Cash for New York Yankees" && row.hint === "MLN-004821"),
+  "cash jump names the client and keeps the client code",
+);
+assert(
+  cashJumps.every((row) => row.id.startsWith("cash:") && !row.id.startsWith("client:")),
+  "section jump ids do not collide with client rows",
+);
+const budgetJumps = searchClientSectionJumps("budget", BOOK);
+assert(
+  budgetJumps.length === BOOK.length && budgetJumps.every((row) => row.group === "Budget"),
+  "budget lists Budget for each client even when no client is named budget",
+);
+assert(
+  budgetJumps.every(
+    (row) => row.href.includes("tab=budget") && row.label.startsWith("Budget for "),
+  ),
+  "budget jumps deep-link to the Budget tab",
+);
+const yankeesBudget = searchClientSectionJumps("budget yankees", BOOK);
+assert(
+  yankeesBudget.length === 1 && yankeesBudget[0]?.label === "Budget for New York Yankees",
+  "a client name after the section narrows the jump",
+);
+assert(
+  searchClientSectionJumps("yankees budget", BOOK)[0]?.href.endsWith("tab=budget"),
+  "section word can follow the client name",
+);
+assert(
+  searchClientSectionJumps("budget for yankees", BOOK)[0]?.label === "Budget for New York Yankees",
+  "the word for in Budget for {client} is not part of the client name",
+);
+const healthJumps = searchClientSectionJumps("health", BOOK);
+assert(
+  healthJumps[0]?.href.includes("tab=ratios") && healthJumps[0]?.href.includes("focus=health"),
+  "health jumps keep the coach focus",
+);
+assert(
+  searchClientSectionJumps("collections", BOOK)[0]?.href.includes("tab=collections"),
+  "collections jumps open Collections",
+);
+assert(
+  searchClientSectionJumps("yankees", BOOK).length === 0,
+  "a client name alone stays a client row, not a section jump",
+);
+assert(searchClientSectionJumps("", BOOK).length === 0, "an empty query does not expand sections");
+assert(searchClientSectionJumps("budget", []).length === 0, "an empty book has no section jumps");
+assert(
+  searchClientSectionJumps("13 week cash", BOOK).every((row) => row.href.includes("tab=cash")),
+  "cash synonyms still open Cash for each client",
+);
+
 assert(includeClientGroup("accountant"), "accountants get the Clients group");
 assert(!includeClientGroup("owner"), "owner accounts hide the Clients group");
 
@@ -254,8 +321,12 @@ assert(
 );
 assert(
   paletteEmptyCopy({ ...noHits, needsClient: true }) ===
-    "Open a client to jump to Health, Cash, Collections, and the rest.",
+    "Open a client to jump to Health, Cash, Budget, Collections, and the rest.",
   "a studio feature with no client and no client hit still explains why",
+);
+assert(
+  paletteEmptyCopy({ ...noHits, needsClient: true, clientsLoading: true }) === "Searching clients…",
+  "a section keyword waits for the client list instead of the empty hint",
 );
 assert(
   paletteEmptyCopy({ ...noHits, needsClient: true, clientCount: 1 }) === "",
@@ -287,6 +358,10 @@ const finderSrc = readFileSync(
 );
 assert(finderSrc.includes("CLIENTS_GROUP"), "palette renders a Clients group");
 assert(finderSrc.includes("searchClients"), "palette filters the loaded client list");
+assert(
+  finderSrc.includes("searchClientSectionJumps"),
+  "firm dashboard turns section keywords into per-client jumps",
+);
 assert(
   finderSrc.includes('to: "/clients/$clientId"') && finderSrc.includes("search: {}"),
   "selecting a client opens the dashboard client route",
