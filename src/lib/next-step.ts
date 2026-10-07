@@ -19,6 +19,7 @@
  * pairs in `notes-tabs.ts`.
  */
 import { ADVISORY_STATE_LABELS, type AdvisoryState } from "./advisory-state.ts";
+import { dataChaseCopy } from "./data-requests.ts";
 
 export const NEXT_STEP_AUDIENCES = ["owner", "accountant"] as const;
 export type NextStepAudience = (typeof NEXT_STEP_AUDIENCES)[number];
@@ -77,6 +78,11 @@ export type NextStepFacts = {
   actionedUnmeasured: number;
   /** `data_requests` with status open|sent (P0.6). */
   openDataRequests: number;
+  /**
+   * Kinds behind `openDataRequests`. Empty when the count is the only fact
+   * (older callers). Aged debtors/creditors are not worded as missing statements.
+   */
+  openDataRequestKinds?: readonly string[];
   /** Latest non-superseded advisory pack (P1). Absent/null = no pack yet. */
   packStatus?: "draft" | "in_review" | "changes_requested" | "approved" | "rejected" | null;
   packVersion?: number | null;
@@ -121,6 +127,8 @@ export type NextStep = {
   outstanding: NextStepOutstanding;
   /** Days until next review while monitoring; null otherwise. */
   daysToReview: number | null;
+  /** Kinds echoed so chips use the same wording as the step title. */
+  openDataRequestKinds: readonly string[];
 };
 
 // ── Routes ───────────────────────────────────────────────────────────────────
@@ -250,12 +258,12 @@ function blockerStep(f: NextStepFacts, audience: NextStepAudience): Draft | null
   if (preData) return null;
 
   if (f.openDataRequests > 0) {
+    const chase = dataChaseCopy(f.openDataRequests, f.openDataRequestKinds ?? []);
     return {
       key: "data_request",
       urgency: "blocking",
-      title: `Send the ${plural(f.openDataRequests, "missing document")}`,
-      reason:
-        "MILŌN asked for data it needs to keep the diagnosis and forecast honest. Until it arrives, everything downstream is weaker than it looks.",
+      title: chase.title,
+      reason: chase.reason,
       ctaLabel: "See what's missing",
     };
   }
@@ -585,6 +593,7 @@ export function resolveNextStep(facts: NextStepFacts, audience: NextStepAudience
       openDataRequests: facts.openDataRequests,
     },
     daysToReview,
+    openDataRequestKinds: facts.openDataRequestKinds ?? [],
   };
 }
 
@@ -616,13 +625,14 @@ export type OutstandingChip = {
 export function outstandingChips(
   o: NextStepOutstanding,
   audience: NextStepAudience,
+  openDataRequestKinds: readonly string[] = [],
 ): OutstandingChip[] {
   const acct = audience === "accountant";
   const out: OutstandingChip[] = [];
   if (o.openDataRequests > 0)
     out.push({
       key: "openDataRequests",
-      label: plural(o.openDataRequests, "document missing", "documents missing"),
+      label: dataChaseCopy(o.openDataRequests, openDataRequestKinds).chip,
       target: "data_request",
     });
   if (o.overdueActions > 0)

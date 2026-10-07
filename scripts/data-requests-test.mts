@@ -16,7 +16,9 @@ import {
   DATA_REQUEST_STATUSES,
   DEBTOR_DAYS_AGEING_THRESHOLD,
   STALE_FIGURES_DAYS,
+  dataChaseCopy,
   dataRequestEmail,
+  dataSectionStatus,
   daysOld,
   detectDataGaps,
   isMissingDataRequestRelation,
@@ -523,8 +525,12 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
 
   const nextFns = readFileSync(resolve("src/lib/next-step.functions.ts"), "utf8");
   assert(
-    nextFns.includes('count(sb, "data_requests", data.clientId'),
-    "Next Step counts open requests",
+    nextFns.includes("openDataRequestFacts"),
+    "Next Step reads open requests with their kinds",
+  );
+  assert(
+    nextFns.includes('openDataRequestKinds: openDataRequests.kinds'),
+    "Next Step passes request kinds into the resolver",
   );
   assert(!nextFns.includes("openDataRequests: 0"), "hard-coded zero removed");
 
@@ -631,6 +637,44 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
   } as HTMLElement;
   revealDataRequestsElement(el);
   eq(calls.join("|"), "data-called=true|scroll:nearest|focus:true", "reveal marks, scrolls, and focuses");
+}
+
+{
+  const fresh = "Snapshot on file · Sep 2026";
+  const ageing = dataSectionStatus({
+    freshness: fresh,
+    openKinds: ["aged_debtors", "aged_creditors"],
+  });
+  eq(ageing.title, "Data up to date", "current statements stay up to date");
+  assert(
+    ageing.note?.includes("aged debtors and aged creditors reports") === true,
+    "ageing gap is named on the Data card",
+  );
+  assert(!ageing.note?.includes("missing document"), "ageing note is not a generic missing-document line");
+  const chase = dataChaseCopy(2, ["aged_debtors", "aged_creditors"]);
+  eq(chase.title, "Send the aged debtors and aged creditors reports", "overview names the ageing reports");
+  assert(!chase.title.includes("missing document"), "overview does not call ageing reports missing documents");
+  assert(chase.reason.includes("Statements on file are current"), "overview agrees the statements are current");
+  eq(
+    dataChaseCopy(2, ["aged_debtors", "aged_creditors"]).chip,
+    "Aged debtors and creditors still missing",
+    "chip names the ageing reports",
+  );
+  const stale = dataSectionStatus({
+    freshness: fresh,
+    openKinds: ["management_accounts", "aged_debtors"],
+  });
+  eq(stale.title, "Data is not up to date", "a statement gap is not up to date");
+  const empty = dataSectionStatus({
+    freshness: "No sync yet. Connect Xero or QuickBooks, or upload statements.",
+    openKinds: [],
+  });
+  eq(empty.title, "Data is not up to date", "no statement is not up to date");
+  const generic = dataChaseCopy(2, []);
+  eq(generic.title, "Send the 2 missing documents", "unknown kinds keep the document count");
+  const card = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");
+  assert(card.includes("dataSectionStatus"), "Data tab uses the shared status");
+  assert(!card.includes("Data up to date</h2>"), "Data title is not a hardcoded up-to-date claim");
 }
 
 console.log("data-requests: all checks passed");

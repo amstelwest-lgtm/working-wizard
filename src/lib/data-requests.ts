@@ -303,6 +303,132 @@ function ratio(r: Record<string, number> | null, key: string): number | null {
 }
 
 /**
+ * These asks mean the statements themselves are incomplete.
+ * Aged debtors/creditors (and payroll) sit on top of a current statement.
+ */
+const STATEMENT_COMPLETENESS_KINDS: ReadonlySet<DataRequestKind> = new Set([
+  "bank_statement",
+  "management_accounts",
+  "bank_balance",
+  "accounting_connection",
+]);
+
+export function isStatementCompletenessGap(kind: string): boolean {
+  return STATEMENT_COMPLETENESS_KINDS.has(kind as DataRequestKind);
+}
+
+/** Freshness from `dataFreshnessLine`. "No sync yet…" is not a current statement. */
+export function statementsLookCurrent(freshness: string): boolean {
+  return !/^\s*no sync yet\b/i.test(freshness);
+}
+
+function depthPhrase(kinds: readonly string[]): { phrase: string; plural: boolean } | null {
+  const depth = [...new Set(kinds.filter((kind) => !isStatementCompletenessGap(kind)))];
+  if (depth.length === 0) return null;
+  const ageing =
+    depth.includes("aged_debtors") && depth.includes("aged_creditors") && depth.length === 2;
+  if (ageing) return { phrase: "aged debtors and aged creditors reports", plural: true };
+  const phrases = depth.map((kind) => {
+    switch (kind) {
+      case "aged_debtors":
+        return "aged debtors report";
+      case "aged_creditors":
+        return "aged creditors report";
+      case "payroll":
+        return "payroll summary";
+      default:
+        return "requested document";
+    }
+  });
+  if (phrases.length === 1) return { phrase: phrases[0], plural: false };
+  if (phrases.length === 2) return { phrase: `${phrases[0]} and ${phrases[1]}`, plural: true };
+  return {
+    phrase: `${phrases.slice(0, -1).join(", ")}, and ${phrases[phrases.length - 1]}`,
+    plural: true,
+  };
+}
+
+export type DataSectionStatus = {
+  /** Data-tab title. "Data up to date" only when statements are current. */
+  title: string;
+  /**
+   * Extra line when statements are current but a depth report is still open,
+   * or when a statement-completeness ask is still open.
+   */
+  note: string | null;
+};
+
+/**
+ * One reading of "up to date" vs "still missing".
+ * Statement completeness drives the title. Aged debtors/creditors do not
+ * flip a current statement to "not up to date", and they are named in `note`
+ * so the card does not pretend those reports are on file.
+ */
+export function dataSectionStatus(input: {
+  freshness: string;
+  openKinds: readonly string[];
+}): DataSectionStatus {
+  const statementGaps = input.openKinds.filter(isStatementCompletenessGap);
+  const current = statementsLookCurrent(input.freshness) && statementGaps.length === 0;
+  if (!current) {
+    return {
+      title: "Data is not up to date",
+      note: statementGaps.length
+        ? "Statements or the accounting connection are still missing."
+        : null,
+    };
+  }
+  const depth = depthPhrase(input.openKinds);
+  return {
+    title: "Data up to date",
+    note: depth
+      ? `Statements are current. The ${depth.phrase} ${depth.plural ? "are" : "is"} still missing.`
+      : null,
+  };
+}
+
+export type DataChaseCopy = {
+  title: string;
+  reason: string;
+  chip: string;
+};
+
+/**
+ * Overview next-step wording for open data requests.
+ * Depth-only asks (aged debtors/creditors) must not say "missing documents"
+ * while the Data tab says the statements are up to date.
+ * Unknown kinds (count without a kind list) keep the generic sentence.
+ */
+export function dataChaseCopy(count: number, kinds: readonly string[]): DataChaseCopy {
+  const known = kinds.filter((kind) =>
+    (DATA_REQUEST_KINDS as readonly string[]).includes(kind),
+  );
+  const statementGaps = known.filter(isStatementCompletenessGap);
+  const depth = known.length > 0 && statementGaps.length === 0 ? depthPhrase(known) : null;
+  if (depth) {
+    const chip =
+      depth.phrase === "aged debtors and aged creditors reports"
+        ? "Aged debtors and creditors still missing"
+        : `${depth.phrase.charAt(0).toUpperCase()}${depth.phrase.slice(1)} still missing`;
+    return {
+      title: `Send the ${depth.phrase}`,
+      reason: `Statements on file are current. The ${depth.phrase} ${
+        depth.plural ? "are" : "is"
+      } still missing, so the totals cannot name who is behind.`,
+      chip,
+    };
+  }
+  const n = count > 0 ? count : known.length;
+  const title = `Send the ${n} missing document${n === 1 ? "" : "s"}`;
+  return {
+    title,
+    reason:
+      "MILŌN asked for data it needs to keep the diagnosis and forecast honest. Until it arrives, everything downstream is weaker than it looks.",
+    chip: `${n} document${n === 1 ? "" : "s"} missing`,
+  };
+}
+
+/**
  * Deterministic gap rules. Pre-data states return nothing: "upload your
  * numbers" is already the whole Next Step there, and a request on top would
  * be noise. Every rule names the consequence of ignoring it.
