@@ -403,6 +403,18 @@ html[data-theme="light"] .accountant-portal .deliverable-rail .rail-kicker{
   background-size:200% auto;
   box-shadow:0 4px 16px rgba(212,175,55,.28);
 }
+.accountant-portal .deliverable-rail .tab.bot-primary{
+  margin-bottom:8px;
+}
+.accountant-portal .deliverable-rail .tab.bot-primary:not(.on){
+  color:#1b1300;
+  background:#d4a550;
+  box-shadow:0 4px 16px rgba(212,175,55,.28);
+}
+.accountant-portal .deliverable-rail .tab.bot-primary:not(.on):hover{
+  color:#1b1300;
+  background:#e0b85c;
+}
 .accountant-portal .deliverable-rail .tab .star{flex:none;margin-left:0;margin-top:1px}
 .accountant-portal .deliverable-rail .tab.on .star{color:#1b1300}
 @media(max-width:860px){
