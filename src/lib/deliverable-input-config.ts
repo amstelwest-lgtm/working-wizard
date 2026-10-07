@@ -12,6 +12,7 @@ import {
 import { periodMonthsOf } from "@/lib/ratios";
 import type { BudgetSeasonality } from "@/lib/budget.types";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
+import type { StatementWorkingCapital } from "@/lib/collections";
 
 export const DELIVERABLE_INPUT_IDS = [
   "cash",
@@ -183,7 +184,12 @@ function hasArAp(financials: DeliverableInputContext["financials"]): boolean {
   return hasField(financials, "receivables") || hasField(financials, "payables");
 }
 
-/** Debtor days from the period P&L + AR, same annualisation as the ratio engine. */
+/**
+ * Days AR / Days AP shown on the Ratios tab.
+ * Uses the stored figures-cover (`periodMonthsOf`), not the health score's
+ * effective period. A shorter effective cover annualises harder and yields
+ * different days (19/28 instead of 25/37 on the QA US file).
+ */
 export function computedDaysAr(financials: DeliverableInputContext["financials"]): number | null {
   const rec = num(financials?.receivables);
   const rev = num(financials?.revenue);
@@ -202,6 +208,29 @@ export function computedDaysAp(financials: DeliverableInputContext["financials"]
   const annualCogs = months > 0 && months < 12 ? cogs * (12 / months) : cogs;
   if (annualCogs <= 0) return null;
   return Math.round((pay / annualCogs) * 365);
+}
+
+/** Blank stocks stay off the tile. A real zero is kept. Same parser as the day formulas. */
+function statementStockAmount(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (typeof raw === "string" && raw.trim() === "") return null;
+  const n = num(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * The four Ratios statement figures: Days AR, Days AP, accounts receivable, accounts payable.
+ * Collections statement-fallback tiles call this so they cannot drift onto the health-score path.
+ */
+export function ratiosStatementFigures(
+  financials: DeliverableInputContext["financials"],
+): StatementWorkingCapital {
+  return {
+    receivables: statementStockAmount(financials?.receivables),
+    payables: statementStockAmount(financials?.payables),
+    debtorDays: computedDaysAr(financials),
+    creditorDays: computedDaysAp(financials),
+  };
 }
 
 export function defaultDaysAr(ctx: DeliverableInputContext): number {
@@ -784,10 +813,16 @@ export function defaultAssumptionValues(
   for (const a of def.assumptions) {
     switch (a.id) {
       case "daysAr":
-        out[a.id] = defaultDaysAr(ctx);
+        out[a.id] =
+          def.id === "ratios"
+            ? (ratiosStatementFigures(ctx.financials).debtorDays ?? DEFAULT_DAYS_AR)
+            : defaultDaysAr(ctx);
         break;
       case "daysAp":
-        out[a.id] = defaultDaysAp(ctx);
+        out[a.id] =
+          def.id === "ratios"
+            ? (ratiosStatementFigures(ctx.financials).creditorDays ?? DEFAULT_DAYS_AP)
+            : defaultDaysAp(ctx);
         break;
       case "inventoryDays":
         out[a.id] = ctx.budgetWc?.inventoryDays ?? 0;
@@ -839,7 +874,16 @@ export function liveAssumptionOverlay(
   ctx: DeliverableInputContext,
 ): Record<string, string | number | boolean> {
   const out: Record<string, string | number | boolean> = {};
+  const ratiosFigures = def.id === "ratios" ? ratiosStatementFigures(ctx.financials) : null;
   for (const a of def.assumptions) {
+    if (ratiosFigures && a.id === "daysAr" && ratiosFigures.debtorDays != null) {
+      out[a.id] = ratiosFigures.debtorDays;
+      continue;
+    }
+    if (ratiosFigures && a.id === "daysAp" && ratiosFigures.creditorDays != null) {
+      out[a.id] = ratiosFigures.creditorDays;
+      continue;
+    }
     if (!a.engineBound) continue;
     if (a.id === "collectDelay" && ctx.collectDelay != null) out[a.id] = ctx.collectDelay;
     if (a.id === "revGrowthPct" && ctx.revGrowthPct != null) out[a.id] = ctx.revGrowthPct;
@@ -921,6 +965,11 @@ export function onlyLiveEngineValuesChanged(
     .map((k) => [k, Boolean(next.checkedSources[k])]);
   if (JSON.stringify(prevSrc) !== JSON.stringify(nextSrc)) return false;
   const engineIds = new Set(def.assumptions.filter((a) => a.engineBound).map((a) => a.id));
+  // Ratios Days AR / Days AP are live statement figures, not a saved assumption.
+  if (def.id === "ratios") {
+    engineIds.add("daysAr");
+    engineIds.add("daysAp");
+  }
   const keys = new Set([
     ...Object.keys(prev.assumptionValues),
     ...Object.keys(next.assumptionValues),

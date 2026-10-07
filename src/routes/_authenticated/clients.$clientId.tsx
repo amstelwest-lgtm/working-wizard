@@ -10,7 +10,6 @@ import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
-import { readStatementAmount, readStatementDays } from "@/lib/collections";
 import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
@@ -199,7 +198,7 @@ import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
-import { bankAccountsFromDraft } from "@/lib/deliverable-input-config";
+import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel(
@@ -3375,18 +3374,13 @@ function ClientView() {
                   <DeliverableTabHead
                     eyebrow="Collections"
                     title="Who to chase this week"
-                    lede="Named contacts and age buckets when an aged receivables report is on file. Until then, this tab shows the receivables, payables, and day counts already on Overview and Ratios. Upload the aged report, or connect Xero or QuickBooks, for the chase list."
+                    lede="Named contacts and age buckets when an aged receivables report is on file. Until then, this tab shows the same Days AR, Days AP, accounts receivable, and accounts payable as Ratios. Upload the aged report, or connect Xero or QuickBooks, for the chase list."
                   />
                   <CollectionsPanel
                     clientId={client.id}
                     market={clientMarket}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
-                    position={{
-                      receivables: readStatementAmount(financials.receivables),
-                      payables: readStatementAmount(financials.payables),
-                      debtorDays: readStatementDays(ratios["Debtor Days"]),
-                      creditorDays: readStatementDays(ratios["Creditor Days"]),
-                    }}
+                    position={ratiosStatementFigures(financials)}
                     onUploadAged={() => {
                       setUploadPurpose("aged");
                       setUploadOpen(true);
@@ -3406,12 +3400,20 @@ function ClientView() {
                   <DeliverableTabHead
                     eyebrow="Payables"
                     title="Who to pay, delay, or renegotiate"
-                    lede="Named suppliers and age buckets from the aged payables report, read against the cash runway already on file. Xero and QuickBooks stay the books. Milōn drafts the move; it does not send a payment or record the bill."
+                    lede="Named suppliers and age buckets when an aged payables report is on file. Until then, this tab shows the same Days AR, Days AP, accounts receivable, and accounts payable as Ratios. Upload the aged report, or connect Xero or QuickBooks, for the supplier list."
                   />
                   <PayablesPanel
                     clientId={client.id}
                     market={clientMarket}
                     runwayWeeks={effectiveRunway}
+                    periodLabel={statementDated ? statementMeta.periodLabel : null}
+                    position={ratiosStatementFigures(financials)}
+                    onUploadAged={() => {
+                      setUploadPurpose("aged");
+                      setUploadOpen(true);
+                    }}
+                    onConnectXero={() => setShowXeroDialog(true)}
+                    onConnectQbo={() => setShowQboDialog(true)}
                     onOpenDrafts={() => setActiveTab("advisory")}
                     onOpenActions={() => setActiveTab("plan")}
                   />
