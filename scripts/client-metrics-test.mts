@@ -116,8 +116,10 @@ assert(Math.abs(ratios["Net Margin"] - 0.275) < 0.0001, `NM 27.5%, got ${ratios[
 
 const waterfall = derivePeriodWaterfallFallback(mapped);
 assert(waterfall.fixedCosts === 42_000, `waterfall opex, got ${waterfall.fixedCosts}`);
-const operatingProfit = waterfall.revenue - waterfall.cogs - waterfall.fixedCosts;
+const operatingProfit =
+  waterfall.revenue - waterfall.cogs - waterfall.fixedCosts - (waterfall.depreciation ?? 0);
 assert(operatingProfit === 33_000, `operating profit 33k, got ${operatingProfit}`);
+assert((waterfall.depreciation ?? 0) === 0, "reconciled opex has no depreciation plug");
 
 const onFile = assessClientMetrics({ financials: mapped });
 assert(onFile.cash.amount === 25_000 && onFile.cash.source === "period", "TB cash is the cash source");

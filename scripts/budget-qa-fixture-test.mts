@@ -17,9 +17,12 @@ import {
   budgetActualsBadge,
   budgetToCashForecastPayload,
   mergeMonthActuals,
+  repairUntouchedSeededBudget,
   seedBudgetFromFinancials,
   statementMonthActuals,
 } from "../src/lib/budget.bridges";
+import { periodProfitBridge } from "../src/lib/period-profit";
+import { derivePeriodWaterfallFallback } from "../src/lib/weekly-inputs";
 import {
   assessClientMetrics,
   forecastInTheBlack,
@@ -101,6 +104,83 @@ assert(Math.abs(overheads - 42000) < 1, `FY overheads match opex, got ${overhead
 assert(Math.abs(ebit - 33000) < 1, `FY EBIT matches operating profit, got ${ebit}`);
 assert(Math.abs(rows[0].revenue - 10000) < 0.02, `monthly revenue ${rows[0].revenue}`);
 assert(Math.abs(rows[0].cogs - 3750) < 0.02, `monthly COGS ${rows[0].cogs}`);
+assert((seeded.doc.statementDepreciation ?? 0) === 0, "a reconciled P&L does not invent depreciation");
+
+// QA US Test LLC: revenue 700k, COGS 280k, operating expenses 351k, EBITDA 69k, EBIT 60k.
+// Budget overheads, the waterfall operating-expense step, and FY EBIT have to match.
+const US = {
+  revenue: "700000",
+  cogs: "280000",
+  fixedCosts: "351000",
+  ebit: "60000",
+  ebitda: "69000",
+  ebt: "60000",
+  netIncome: "60000",
+};
+const usBridge = periodProfitBridge(US);
+assert(usBridge.operatingExpenses === 351_000, `bridge opex ${usBridge.operatingExpenses}`);
+assert(usBridge.depreciation === 9_000, `bridge depreciation ${usBridge.depreciation}`);
+assert(usBridge.ebit === 60_000, `bridge EBIT ${usBridge.ebit}`);
+assert(
+  Math.abs(usBridge.ebit / usBridge.revenue - 0.085714) < 0.0001,
+  "operating margin stays on the EBIT path (8.6%)",
+);
+const usFall = derivePeriodWaterfallFallback(US);
+assert(
+  usFall.fixedCosts === usBridge.operatingExpenses && usFall.depreciation === usBridge.depreciation,
+  "waterfall reads the same bridge as the budget seed",
+);
+const usSeeded = seedBudgetFromFinancials(fresh, US);
+assert(usSeeded.doc.statementDepreciation === 9_000, "seed stores statement depreciation");
+const usRows = computeBudgetMonths(usSeeded.doc, "base");
+const usOverheads = usRows.reduce((sum, row) => sum + row.overheads, 0);
+const usEbit = usRows.reduce((sum, row) => sum + row.ebit, 0);
+const usEbitda = usRows.reduce((sum, row) => sum + row.ebitda, 0);
+const usDep = usRows.reduce((sum, row) => sum + row.depreciation, 0);
+assert(Math.abs(usOverheads - 351_000) < 1, `FY overheads stay 351k, got ${usOverheads}`);
+assert(Math.abs(usDep - 9_000) < 1, `FY depreciation is 9k, got ${usDep}`);
+assert(Math.abs(usEbitda - 69_000) < 1, `FY EBITDA is 69k, got ${usEbitda}`);
+assert(Math.abs(usEbit - 60_000) < 1, `FY EBIT matches operating profit, got ${usEbit}`);
+const withoutDep = computeBudgetMonths({ ...usSeeded.doc, statementDepreciation: 0 }, "base");
+assert(
+  Math.abs(withoutDep[withoutDep.length - 1].closingCash - usRows[usRows.length - 1].closingCash) < 0.05,
+  "statement depreciation does not move cash",
+);
+const covered = computeBudgetMonths(
+  {
+    ...usSeeded.doc,
+    capex: [
+      {
+        id: "cx-da",
+        name: "Existing assets",
+        month: usRows[0].month,
+        amount: 9_000,
+        funding: "finance",
+        usefulLifeMonths: 12,
+        residual: 0,
+      },
+    ],
+  },
+  "base",
+);
+const coveredDep = covered.reduce((sum, row) => sum + row.depreciation, 0);
+assert(Math.abs(coveredDep - 9_000) < 1, `capex depreciation counts toward statement D&A, got ${coveredDep}`);
+const untouched = {
+  ...usSeeded.doc,
+  statementDepreciation: 0,
+  notes: [],
+  qualification: { ...usSeeded.doc.qualification, confirmedAt: "1970-01-01T00:00:00.000Z" },
+};
+const repaired = repairUntouchedSeededBudget(untouched, US);
+assert(repaired.statementDepreciation === 9_000, "an untouched seed picks up statement depreciation");
+const edited = repairUntouchedSeededBudget(
+  {
+    ...untouched,
+    qualification: { ...untouched.qualification, confirmedAt: "2026-10-06T00:00:00.000Z" },
+  },
+  US,
+);
+assert((edited.statementDepreciation ?? 0) === 0, "an edited budget is not reseeded");
 
 const month = statementMonthActuals(
   { revenue: "120000", cogs: "45000", operating_expenses: "42000" },
