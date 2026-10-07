@@ -1,12 +1,10 @@
 /**
- * Accountant reading-path coach — step order and Continue targets.
+ * Accountant reading-path targets. The horizontal strip is gone; these
+ * tests lock tab resolution and the left rail without rendering that chrome.
  * Run: pnpm test:workflow-coach
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { WorkflowCoachStrip } from "../src/components/workflow-coach.tsx";
 import {
   COACH_STEPS,
   coachPageForTab,
@@ -193,35 +191,46 @@ assert(snapLine.includes("Aug 2026"), "a snapshot period stands in when nothing 
 const emptyLine = dataFreshnessLine({ xero: null, qbo: null, snapshotPeriod: null });
 assert(emptyLine.includes("No sync yet"), "empty data says so");
 
-const stripHtml = renderToStaticMarkup(
-  createElement(WorkflowCoachStrip, {
-    page: "data",
-    done: { data: true },
-    onOpen: () => {},
-  }),
+assert(
+  !existsSync(resolve("src/components/workflow-coach.tsx")),
+  "reading path strip component is not in the client shell",
 );
-assert(stripHtml.includes("Reading path"), "strip names the reading path");
-assert(stripHtml.includes('data-current="true"'), "current step is highlighted");
-assert(stripHtml.includes("Data"), "data is the first step on the strip");
-assert(stripHtml.includes("Continue → Health"), "strip continue goes to Health");
-assert((stripHtml.match(/data-coach-continue/g) ?? []).length === 1, "the strip has one Continue");
-assert(!stripHtml.includes("here because"), "the strip does not repeat the landing line");
-assert(!stripHtml.includes("data-coach-arrival"), "the strip is not the old arrival bar");
-
-const coachUi = readFileSync(resolve("src/components/workflow-coach.tsx"), "utf8");
-assert(!coachUi.includes("WorkflowArrival"), "arrival bar component is gone");
-assert(!coachUi.includes("You're here because"), "arrival copy is gone");
 
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-assert(studio.includes("<WorkflowCoachStrip"), "client shell mounts the sticky coach");
+assert(!studio.includes("WorkflowCoachStrip"), "client shell does not mount the reading path strip");
+assert(!studio.includes('aria-label="Reading path"'), "no reading path landmark in the shell");
+assert(!studio.includes("data-workflow-coach"), "no reading path coach marker in the shell");
+assert(!studio.includes("data-coach-continue"), "no Continue reading-path button in the shell");
 assert(!studio.includes("WorkflowArrival"), "client shell does not mount the arrival bar");
 assert(!studio.includes("You're here because"), "client shell has no duplicate landing line");
 assert(!studio.includes("coachArrival"), "no per-deliverable arrival helper remains");
 assert(studio.includes("<DataUpToDate"), "Client Brain opens with the data section");
-assert(studio.includes("dataStepDone"), "Data done follows sync or snapshot");
 assert(studio.includes("onOpenDeliverable"), "Milōn Bot can open a deliverable with intent");
-assert(studio.includes('className="deliverable-rail"'), "left rail stays");
+assert(studio.includes('className="deliverable-rail"'), "left rail stays the one nav");
+assert(studio.includes('{ id: "summary", label: "Client Brain" }'), "left rail still reaches Data");
+assert(studio.includes('{ id: "ratios", label: "Health & Ratios" }'), "left rail still reaches Health");
+assert(studio.includes('{ id: "profit", label: "Profitability" }'), "left rail still reaches Profitability");
+assert(
+  studio.includes('{ id: "cash", label: "13-Week Cash Forecast"'),
+  "left rail still reaches Cash",
+);
+assert(studio.includes('{ id: "budget", label: "Budget" }'), "left rail still reaches Budget");
+assert(studio.includes('{ id: "plan", label: "Action Plan"'), "left rail still reaches Actions");
 assert(studio.includes("evidenceForPillar"), "weak pillars link to evidence");
+assert(
+  studio.includes("normalizeAccountantClientTab(search.tab)"),
+  "?tab= aliases still resolve before the studio paints",
+);
+assert(
+  studio.includes('resolveAccountantTab(search.tab) ?? "overview"'),
+  "a deep link still selects its panel on first paint",
+);
+for (const step of COACH_STEPS) {
+  assert(
+    studio.includes(`"${step.tab}"`),
+    `${step.label} still resolves to a studio tab (${step.tab})`,
+  );
+}
 
 const dataSection = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");
 assert(dataSection.includes("Data up to date"), "section title");
@@ -236,11 +245,11 @@ assert(widget.includes("ask-ai-handoff"), "handoff is a button, not only prose")
 
 const css = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
 assert(!css.includes("workflow-arrival"), "arrival bar styles are gone");
-assert(css.includes(".accountant-portal .workflow-coach{"), "sticky strip styles stay");
-assert(css.includes("color:#1b1608"), "coach copy is dark text");
-assert(css.includes("background:#fffdf6"), "coach sits on a light surface");
-assert(css.includes("color:#1b1300"), "continue button uses dark text on gold");
+assert(!css.includes(".workflow-coach"), "reading path strip styles are gone");
+assert(css.includes(".ask-ai-handoff{"), "bot handoff button keeps its styles");
+assert(css.includes("color:#1b1300"), "handoff button uses dark text on gold");
 assert(css.includes(".accountant-portal .data-fresh{"), "data section is styled");
-assert(css.includes("#data-up-to-date"), "data section can scroll under the sticky strip");
+assert(css.includes("#data-up-to-date"), "data section anchor still clears the top bar");
+assert(!css.includes("scroll-margin-top:150px"), "scroll offset no longer reserves the strip");
 
 console.log("workflow-coach-test: all assertions passed");
