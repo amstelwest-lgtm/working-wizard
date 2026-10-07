@@ -192,7 +192,7 @@ import {
 import { draftMilonWorkflow, type BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
-import { ClientBrainSummary } from "@/components/client-brain-summary";
+import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
 import {
@@ -1291,6 +1291,12 @@ function ClientView() {
     (statementDated ? statementMeta.periodLabel?.trim() : "") ||
     pickCurrentSnapshot(snapshots)?.period_label?.trim() ||
     null;
+  const statementFigureFacts = {
+    grossMargin: ratios["Gross Margin"],
+    operatingMargin: ratios["Operating Margin"],
+    netMargin: ratios["Net Margin"],
+    periodLabel: figuresPeriodLabel,
+  };
   const strategicMoves = rankStrategicMoves({
     healthByKey: healthMap,
     profile: briefingProfile,
@@ -2852,6 +2858,7 @@ function ClientView() {
                 <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
                   {activeTab === "summary" && (
                     <>
+                      <StatementFigures facts={statementFigureFacts} />
                       <DataUpToDate
                         clientId={clientId}
                         returnPath={`/clients/${clientId}`}
@@ -2878,11 +2885,7 @@ function ClientView() {
                         onOpenUpload={() => setUploadOpen(true)}
                         onOpenTab={(tab) => setActiveTab(tab)}
                         onAnswerProfile={() => setProfileOpen(true)}
-                        figureFacts={{
-                          grossMargin: ratios["Gross Margin"],
-                          operatingMargin: ratios["Operating Margin"],
-                          periodLabel: figuresPeriodLabel,
-                        }}
+                        figureFacts={statementFigureFacts}
                       />
                     </>
                   )}

@@ -7,8 +7,34 @@
 export type StatementFigureFacts = {
   grossMargin?: number | null;
   operatingMargin?: number | null;
+  /** Shown with gross and operating when the ratio engine has a net margin. */
+  netMargin?: number | null;
   periodLabel?: string | null;
 };
+
+export type StatementFigureLine = {
+  key: "gross" | "operating" | "net";
+  label: string;
+  value: string;
+};
+
+/**
+ * The margin lines Overview prints, in the same order, plus net when it exists.
+ * Client Brain renders these in the summary viewport. Hidden tab panes are not
+ * a substitute — an accountant on `?tab=summary` has to see the percentages.
+ */
+export function visibleStatementFigures(
+  facts: StatementFigureFacts | null | undefined,
+): StatementFigureLine[] {
+  const lines: StatementFigureLine[] = [];
+  const gross = formatStatementMargin(facts?.grossMargin);
+  const operating = formatStatementMargin(facts?.operatingMargin);
+  const net = formatStatementMargin(facts?.netMargin);
+  if (gross) lines.push({ key: "gross", label: "Gross margin", value: gross });
+  if (operating) lines.push({ key: "operating", label: "Operating margin", value: operating });
+  if (net) lines.push({ key: "net", label: "Net margin", value: net });
+  return lines;
+}
 
 const MARGIN_NAMES = new Set(["grossmargin", "operatingmargin", "netmargin", "gm", "om"]);
 
