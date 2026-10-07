@@ -17,6 +17,7 @@ import { profileIndustryLabel } from "@/lib/profile-signals";
 import { coerceMarketSelection, usState } from "@/lib/market";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
+import { portalButtonClass } from "@/lib/client-chrome";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
@@ -114,7 +115,7 @@ type FillDialog =
 
 function AnswerButton({ onClick, label = "Answer" }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" className="btn gold mini" onClick={onClick}>
+    <button type="button" className={portalButtonClass("secondary")} onClick={onClick}>
       {label}
     </button>
   );
@@ -511,7 +512,7 @@ export function ClientBrainSummary({
         <div className="brain-actions">
           <button
             type="button"
-            className="btn gold mini"
+            className={portalButtonClass("primary")}
             onClick={() => void proposeFromBrain()}
             disabled={proposing || drafting || loading}
           >
@@ -519,14 +520,14 @@ export function ClientBrainSummary({
           </button>
           <button
             type="button"
-            className="btn gold mini"
+            className={portalButtonClass("secondary")}
             onClick={() => void draftAdvisoryFromBrain()}
             disabled={proposing || drafting || loading}
           >
             {drafting ? "Drafting…" : "Draft advisory from brain"}
           </button>
           {onOpenTab && (
-            <button type="button" className="btn ghost mini" onClick={() => onOpenTab("plan")}>
+            <button type="button" className={portalButtonClass("secondary")} onClick={() => onOpenTab("plan")}>
               Open Action Plan
             </button>
           )}

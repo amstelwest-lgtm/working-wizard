@@ -31,6 +31,7 @@ import {
   type AssumptionItem,
   type DeliverableDraft,
 } from "@/lib/client-brain";
+import { portalButtonClass } from "@/lib/client-chrome";
 import {
   assumptionsAsJson,
   bodyWithAssumptionFooter,
@@ -200,7 +201,7 @@ export function ClientBrainDrafts({
           {onOpenAdvisory ? (
             <>
               {" "}
-              <button type="button" className="btn gold mini" style={{ marginLeft: 8 }} onClick={onOpenAdvisory}>
+              <button type="button" className={portalButtonClass("secondary")} style={{ marginLeft: 8 }} onClick={onOpenAdvisory}>
                 Open Advisory
               </button>
             </>

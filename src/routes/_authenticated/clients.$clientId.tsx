@@ -170,6 +170,7 @@ import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
+import { headerShortcutClass, portalButtonClass } from "@/lib/client-chrome";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { focusTrapTabIndex, listFocusable } from "@/lib/dialog-focus";
 import {
@@ -2457,7 +2458,7 @@ function ClientView() {
                     navigate({ to: "/settings" });
                   }}
                 />
-                <button type="button" className="tb-btn gold" onClick={openReportsStudio}>
+                <button type="button" className={headerShortcutClass()} onClick={openReportsStudio}>
                   <svg viewBox="0 0 24 24">
                     <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                     <path d="M14 3v6h6" />
@@ -2541,14 +2542,14 @@ function ClientView() {
                   id="pane-overview"
                 >
                 {hasFigures ? (
-                  <div className="card hero-card action-bar" data-bot-entry>
+                  <div className="card action-bar" data-bot-entry>
                     <span className="lbl">
                       <b>Milōn Bot</b> — drafts the next steps from the figures on file. You sign
                       them off.
                     </span>
                     <button
                       type="button"
-                      className="btn gold mini"
+                      className={portalButtonClass("secondary")}
                       data-ask-bot
                       onClick={() => writeAccountantTab("ask")}
                     >
@@ -2693,11 +2694,11 @@ function ClientView() {
                     <div className="ff-actions">
                       {isUsCopy(clientMarket) ? (
                         <>
-                          <button className="btn gold mini" onClick={() => setUploadOpen(true)}>
+                          <button className={portalButtonClass("secondary")} onClick={() => setUploadOpen(true)}>
                             Upload P&amp;L / balance sheet
                           </button>
                           <button
-                            className="btn ghost mini"
+                            className={portalButtonClass("secondary")}
                             onClick={() => setShowBankDrafter(true)}
                           >
                             Draft from bank statements
@@ -2706,17 +2707,17 @@ function ClientView() {
                       ) : (
                         <>
                           <button
-                            className="btn gold mini"
+                            className={portalButtonClass("secondary")}
                             onClick={() => setShowBankDrafter(true)}
                           >
                             Draft from bank statements
                           </button>
-                          <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
+                          <button className={portalButtonClass("secondary")} onClick={() => setUploadOpen(true)}>
                             Upload P&amp;L / balance sheet
                           </button>
                         </>
                       )}
-                      <button className="btn ghost mini" onClick={jumpToFinancials}>
+                      <button className={portalButtonClass("secondary")} onClick={jumpToFinancials}>
                         Type figures by hand
                       </button>
                     </div>
@@ -2732,37 +2733,39 @@ function ClientView() {
 
                 {/* ===== DELIVERABLES ACTION BAR — nothing to export before figures ===== */}
                 {hasFigures && (
-                  <div className="card hero-card action-bar">
-                    <span className="lbl">
+                  <details className="card deliverables-more">
+                    <summary>
                       <b>Deliverables</b> — export, send, or draft for this client
-                    </span>
-                    <button className="btn gold mini" onClick={handleGenerateReport}>
-                      <svg viewBox="0 0 24 24">
-                        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                        <path d="M14 3v6h6" />
-                      </svg>
-                      Generate report
-                    </button>
-                    <button className="btn ghost mini" onClick={handleExportPDF}>
-                      <svg viewBox="0 0 24 24">
-                        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-                      </svg>
-                      Export PDF
-                    </button>
-                    <button className="btn ghost mini" onClick={handleEmailDraft}>
-                      <svg viewBox="0 0 24 24">
-                        <rect x="3" y="5" width="18" height="14" rx="2" />
-                        <path d="M3 7l9 6 9-6" />
-                      </svg>
-                      Email draft
-                    </button>
-                    <button className="btn ghost mini" onClick={handleWhatsApp}>
-                      <svg viewBox="0 0 24 24">
-                        <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
-                      </svg>
-                      WhatsApp
-                    </button>
-                  </div>
+                    </summary>
+                    <div className="deliverables-more__actions">
+                      <button className={portalButtonClass("secondary")} onClick={handleGenerateReport}>
+                        <svg viewBox="0 0 24 24">
+                          <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                          <path d="M14 3v6h6" />
+                        </svg>
+                        Generate report
+                      </button>
+                      <button className={portalButtonClass("secondary")} onClick={handleExportPDF}>
+                        <svg viewBox="0 0 24 24">
+                          <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+                        </svg>
+                        Export PDF
+                      </button>
+                      <button className={portalButtonClass("secondary")} onClick={handleEmailDraft}>
+                        <svg viewBox="0 0 24 24">
+                          <rect x="3" y="5" width="18" height="14" rx="2" />
+                          <path d="M3 7l9 6 9-6" />
+                        </svg>
+                        Email draft
+                      </button>
+                      <button className={portalButtonClass("secondary")} onClick={handleWhatsApp}>
+                        <svg viewBox="0 0 24 24">
+                          <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
+                        </svg>
+                        WhatsApp
+                      </button>
+                    </div>
+                  </details>
                 )}
                 </div>
 

@@ -371,9 +371,19 @@ const css = read("src/styles/accountant-portal.css");
 assert(css.includes(".briefing-status") && css.includes(".briefing-brief"), "briefing styles present");
 assert(css.includes(".briefing-actions"), "actions sit in a button row, not underline links");
 assert(css.includes("Cormorant Garamond"), "client name keeps the serif");
-assert(comp.includes("btn gold mini"), "primary actions are gold pills");
+const briefingFirstPaint = comp.slice(0, comp.indexOf("<Dialog"));
+assert(!briefingFirstPaint.includes("btn gold"), "briefing first paint has no competing gold CTA");
+assert(
+  briefingFirstPaint.includes('portalButtonClass("secondary")'),
+  "briefing actions stay reachable as secondary",
+);
+assert(
+  !briefingFirstPaint.includes('portalButtonClass("primary")'),
+  "the briefing does not mint its own primary",
+);
+assert(comp.includes("btn gold mini"), "the profile dialog keeps a single edit action");
 assert(!comp.includes("briefing-link"), "underline-style briefing links are gone");
-assert(comp.includes("Create report") || comp.includes("Open Reports"), "reports CTA is a gold button");
+assert(comp.includes("Create report") || comp.includes("Open Reports"), "reports CTA stays reachable");
 assert(read("supabase/migrations/20260913090000_clients_briefing_workflow.sql").includes("briefing_workflow JSONB"), "migration");
 assert(read("src/integrations/supabase/types.ts").includes("briefing_workflow: Json | null"), "types");
 

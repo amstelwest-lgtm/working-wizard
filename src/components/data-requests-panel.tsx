@@ -29,6 +29,7 @@ import {
   sendDataRequestEmail,
 } from "@/lib/data-requests.functions";
 import { revealDataRequestsElement, subscribeDataRequestsReveal } from "@/lib/reveal-data-requests";
+import { trackedAskClass } from "@/lib/client-chrome";
 
 type Props = {
   clientId: string | null;
@@ -263,7 +264,7 @@ export function DataRequestsPanel({
                 type="button"
                 onClick={() => void email()}
                 disabled={sending}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+                className={trackedAskClass(audience)}
                 data-email-owner
               >
                 {sending ? (
@@ -367,7 +368,7 @@ export function DataRequestsPanel({
                       <button
                         type="button"
                         onClick={onOpenForecast}
-                        className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300]"
+                        className={trackedAskClass(audience)}
                         data-open-forecast
                       >
                         Enter balance
@@ -376,7 +377,7 @@ export function DataRequestsPanel({
                       <button
                         type="button"
                         onClick={onUpload}
-                        className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300]"
+                        className={trackedAskClass(audience)}
                         data-upload
                       >
                         <FileUp className="h-3.5 w-3.5" aria-hidden /> Upload

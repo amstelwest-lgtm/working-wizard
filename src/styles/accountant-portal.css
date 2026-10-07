@@ -431,6 +431,10 @@ html[data-theme="light"] .accountant-portal .deliverable-rail .rail-kicker{
 .accountant-portal .action-bar{display:flex;align-items:center;gap:12px;padding:18px 24px;margin-bottom:22px;flex-wrap:wrap}
 .accountant-portal .action-bar .lbl{font-size:13px;color:var(--ink-dim);margin-right:auto}
 .accountant-portal .action-bar .lbl b{color:var(--ink)}
+.accountant-portal .deliverables-more{padding:16px 24px;margin-bottom:22px}
+.accountant-portal .deliverables-more summary{cursor:pointer;font-size:13px;color:var(--ink-dim)}
+.accountant-portal .deliverables-more summary b{color:var(--ink)}
+.accountant-portal .deliverables-more__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 
 /* first-figures — empty-state card shown until the client has any number */
 .accountant-portal .first-figures{display:flex;align-items:center;gap:24px;padding:22px 26px;margin-bottom:22px;flex-wrap:wrap}
@@ -737,6 +741,7 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   .accountant-portal .client-head .meta{gap:16px}
   .accountant-portal .tab{padding:10px 12px;font-size:12.5px}
   .accountant-portal .action-bar{padding:14px 16px}
+  .accountant-portal .deliverables-more{padding:14px 16px}
   .accountant-portal .crumb{flex-wrap:wrap;gap:8px;margin-bottom:14px}
 }
 
@@ -832,17 +837,17 @@ html[data-theme="light"] .accountant-portal .data-fresh__line{color:#1b1608}
 }
 .accountant-portal .data-fresh__upload{
   margin-top:12px;
-  border:none;
+  border:1px solid var(--line);
   border-radius:999px;
-  background:#d4a550;
-  color:#1b1300;
+  background:transparent;
+  color:var(--ink);
   font-family:'Noto Sans',sans-serif;
   font-size:13px;
-  font-weight:700;
+  font-weight:600;
   padding:8px 16px;
   cursor:pointer;
 }
-.accountant-portal .data-fresh__upload:hover{background:#e0b85c}
+.accountant-portal .data-fresh__upload:hover{border-color:var(--gold);color:var(--gold)}
 .accountant-portal .pillar-evidence{
   align-self:flex-start;
   margin-top:8px;
