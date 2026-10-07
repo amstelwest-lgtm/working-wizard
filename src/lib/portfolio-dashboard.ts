@@ -55,11 +55,35 @@ export function timeGreeting(now = new Date()): string {
   return "Good evening";
 }
 
-/** First name from a display name, falling back to the full string. */
+/**
+ * A token that is only an initial: "A", "A.", "J.R.".
+ * "A. Sample" must not greet as "A." (the template period then reads "A..").
+ */
+function isNameInitial(token: string): boolean {
+  if (token.length === 1 && /^[A-Za-z]$/.test(token)) return true;
+  if (!token.includes(".")) return false;
+  return (
+    /^[A-Za-z](?:\.[A-Za-z])*\.?$/.test(token) && token.replace(/[^A-Za-z]/g, "").length <= 3
+  );
+}
+
+/**
+ * Short name for the practice greeting.
+ * Uses the first real given-name token. Leading initials ("A. Sample") are
+ * skipped so the line is "Sample", not "A.".
+ */
 export function firstNameOf(name: string | null | undefined): string {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return "there";
-  return trimmed.split(/\s+/)[0] ?? trimmed;
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  const given = tokens.find((token) => !isNameInitial(token));
+  const chosen = (given ?? tokens[tokens.length - 1] ?? trimmed).replace(/\.+$/, "");
+  return chosen || "there";
+}
+
+/** "Good morning, Sample." — one period, never "A..". */
+export function practiceGreeting(name: string | null | undefined, now = new Date()): string {
+  return `${timeGreeting(now)}, ${firstNameOf(name)}.`;
 }
 
 /** Format "Data as of 16 Aug 2026". */
@@ -266,6 +290,100 @@ export function buildAttentionItems(
   const rank = { critical: 0, high: 1, medium: 2 };
   items.sort((a, b) => rank[a.severity] - rank[b.severity] || a.name.localeCompare(b.name));
   return items.slice(0, limit);
+}
+
+export type NeedsAttentionSource = {
+  clientId: string;
+  name: string;
+  exceptions: ReadonlyArray<{
+    severity: number;
+    label: string;
+    tab: string;
+  }>;
+};
+
+/** One row in the practice Needs attention queue (health and sign-off together). */
+export type MergedAttention = {
+  clientId: string;
+  name: string;
+  reason: string;
+  detail: string;
+  /** Studio tab that resolves the most urgent fact on the row. */
+  tab?: string;
+  openPlan: boolean;
+  openQueries: boolean;
+  overdue: boolean;
+};
+
+function attentionRank(severity: AttentionSeverity | number): number {
+  if (severity === "critical" || severity === 1) return 0;
+  if (severity === "high" || severity === 2) return 1;
+  return 2;
+}
+
+function uniqueJoin(parts: readonly string[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    const text = part.trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text);
+  }
+  return out.join(" · ");
+}
+
+/**
+ * One queue. Health alerts and pack sign-off (and other portfolio exceptions)
+ * for the same client collapse into a single row instead of two piles.
+ */
+export function mergeNeedsAttention(
+  health: readonly AttentionItem[],
+  portfolio: readonly NeedsAttentionSource[],
+): MergedAttention[] {
+  type Acc = MergedAttention & { rank: number };
+  const byId = new Map<string, Acc>();
+
+  for (const item of health) {
+    const overdue = /overdue/i.test(item.detail);
+    byId.set(item.clientId, {
+      clientId: item.clientId,
+      name: item.name,
+      reason: item.reason,
+      detail: item.detail,
+      tab: item.openPlan ? "plan" : undefined,
+      openPlan: Boolean(item.openPlan),
+      openQueries: Boolean(item.openQueries),
+      overdue,
+      rank: attentionRank(item.severity),
+    });
+  }
+
+  for (const row of portfolio) {
+    const urgent = row.exceptions.filter((exception) => exception.severity <= 2);
+    if (urgent.length === 0) continue;
+    const top = [...urgent].sort((a, b) => a.severity - b.severity)[0];
+    const existing = byId.get(row.clientId);
+    const reason = uniqueJoin([
+      ...(existing ? [existing.reason] : []),
+      ...urgent.map((exception) => exception.label),
+    ]);
+    byId.set(row.clientId, {
+      clientId: row.clientId,
+      name: existing?.name || row.name,
+      reason,
+      detail: existing?.detail ?? "",
+      tab: top.tab,
+      openPlan: existing?.openPlan ?? top.tab === "plan",
+      openQueries: existing?.openQueries ?? false,
+      overdue: existing?.overdue ?? /overdue/i.test(top.label),
+      rank: Math.min(attentionRank(top.severity), existing?.rank ?? 9),
+    });
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
+    .map(({ rank: _rank, ...row }) => row);
 }
 
 /** Rule-based portfolio insight chips. */

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { openPracticeSettings } from "@/lib/user-roles";
 import { useEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
@@ -60,7 +60,6 @@ import {
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
-  healthBandLabel,
   scoreTier,
 } from "@/lib/ratios";
 import type { RatioInputs, HealthTier } from "@/lib/ratios";
@@ -70,15 +69,11 @@ import {
   healthFromRatioInputs,
   healthMapFromRatios,
   pillarForRatioName,
-  PILLAR_RATIO_NAMES,
-  PILLAR_LABELS,
-  type HealthPillarId,
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
 import {
   countOpenRatioQueries,
-  openQueryCountForRatio,
   ratioQueryLabel,
 } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
@@ -120,7 +115,11 @@ import { clientIndustryLabel } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
-import { normalizeAccountantClientTab } from "@/lib/client-route-search";
+import {
+  accountantClientTabSearch,
+  normalizeAccountantClientTab,
+} from "@/lib/client-route-search";
+import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
@@ -161,7 +160,6 @@ import {
   dataFreshnessLine,
   evidenceForBriefingTab,
   evidenceForPillar,
-  pillarIsWeak,
   type CoachDestination,
 } from "@/lib/workflow-coach";
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
@@ -303,12 +301,6 @@ function tierToBand(tier: HealthTier): "ok" | "warn" | "risk" {
   if (tier === "healthy") return "ok";
   if (tier === "at_risk") return "warn";
   return "risk";
-}
-
-function bandLabel(band: "ok" | "warn" | "risk"): string {
-  if (band === "ok") return healthBandLabel("healthy");
-  if (band === "warn") return healthBandLabel("at_risk");
-  return healthBandLabel("critical");
 }
 
 function bandColor(band: "ok" | "warn" | "risk"): string {
@@ -535,25 +527,27 @@ function ClientRailButton({
   label,
   star,
   active,
-  onSelect,
+  clientId,
 }: {
   id: ActiveTab;
   label: string;
   star?: boolean;
   active: boolean;
-  onSelect: (id: ActiveTab) => void;
+  clientId: string;
 }) {
   return (
-    <button
-      type="button"
+    <Link
+      to="/clients/$clientId"
+      params={{ clientId }}
+      search={(prev) => accountantClientTabSearch(prev, id)}
       className={`tab${active ? " on" : ""}`}
       data-tab={id}
       aria-current={active ? "page" : undefined}
-      onClick={() => onSelect(id)}
+      replace
     >
       {label}
       {star ? <span className="star">✦</span> : null}
-    </button>
+    </Link>
   );
 }
 
@@ -718,6 +712,12 @@ function ClientView() {
     });
   }, [search.onboard, clientId, navigate]);
 
+  const [actingAsThisClient, setActingAsThisClient] = useState(false);
+  useEffect(() => {
+    const stored =
+      typeof sessionStorage !== "undefined" ? sessionStorage.getItem("acting_as_client_id") : null;
+    setActingAsThisClient(isActingAsThisClient(stored, clientId));
+  }, [clientId]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
@@ -1178,6 +1178,20 @@ function ClientView() {
       .filter(([, n]) => n > 0)
       .map(([key]) => ratioQueryLabel(key));
     return [...new Set(labels)];
+  }, [ratioQueryCounts]);
+  /** Ratios with an open client question. One health view still badges them. */
+  const openRatioQueryRows = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: Array<{ key: string; label: string; count: number }> = [];
+    for (const [key, count] of Object.entries(ratioQueryCounts)) {
+      if (count <= 0) continue;
+      const label = ratioQueryLabel(key);
+      if (seen.has(label)) continue;
+      seen.add(label);
+      rows.push({ key, label, count });
+    }
+    rows.sort((a, b) => a.label.localeCompare(b.label));
+    return rows;
   }, [ratioQueryCounts]);
   const deliverableInputContext = useMemo(
     () => ({
@@ -1878,18 +1892,38 @@ function ClientView() {
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
 
-  const revealTab = useCallback((tab: ActiveTab, paneId?: string) => {
-    setActiveTab(tab);
-    const id = paneId ?? `pane-${tab}`;
-    window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
-  }, []);
+  const writeAccountantTab = useCallback(
+    (tab: ActiveTab, filter?: string) => {
+      setActiveTab(tab);
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = accountantClientTabSearch(prev, tab);
+          if (filter) (next as { filter?: string }).filter = filter;
+          return next;
+        },
+        replace: true,
+      });
+    },
+    [clientId, navigate],
+  );
+
+  const revealTab = useCallback(
+    (tab: ActiveTab, paneId?: string, filter?: string) => {
+      writeAccountantTab(tab, filter);
+      const id = paneId ?? `pane-${tab}`;
+      window.setTimeout(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    },
+    [writeAccountantTab],
+  );
 
   const openCoach = useCallback(
     (dest: CoachDestination) => {
       if (dest.assign) {
-        setActiveTab("plan");
+        writeAccountantTab("plan");
         window.setTimeout(() => {
           document.getElementById("action-plan-work")?.scrollIntoView({
             behavior: "smooth",
@@ -1926,28 +1960,9 @@ function ClientView() {
         document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
     },
-    [clientId, navigate],
+    [clientId, navigate, writeAccountantTab],
   );
   openFromBotRef.current = openCoach;
-
-  const selectRail = useCallback(
-    (id: ActiveTab) => {
-      setActiveTab(id);
-      navigate({
-        to: "/clients/$clientId",
-        params: { clientId },
-        search: (prev) => {
-          const next = { ...prev, tab: id };
-          delete next.coach;
-          delete next.why;
-          delete next.focus;
-          return next;
-        },
-        replace: true,
-      });
-    },
-    [clientId, navigate],
-  );
 
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
@@ -2221,16 +2236,18 @@ function ClientView() {
     const note = clientNotes.find((n) => n.id === focusNoteId);
     if (!note?.ratioKey) return;
     setActiveTab("ratios");
-    setViewMode("complex");
     openDrawerFromUiKey(note.ratioKey);
   }, [focusNoteId, clientNotes, openDrawerFromUiKey]);
 
   // ── Report navigation ─────────────────────────────────────────────────────
 
-  const handleTourTabChange = useCallback((tab: string) => {
-    const next = resolveAccountantTab(tab);
-    if (next) setActiveTab(next);
-  }, []);
+  const handleTourTabChange = useCallback(
+    (tab: string) => {
+      const next = resolveAccountantTab(tab);
+      if (next) writeAccountantTab(next);
+    },
+    [writeAccountantTab],
+  );
 
   // ── Next Step (P0.4) — the card resolves; the studio performs the CTA ─────
   const handleNextStepAct = useCallback(
@@ -2249,20 +2266,12 @@ function ClientView() {
         default: {
           const route = nextStepRoute(key, "accountant", clientId);
           const tab = resolveAccountantTab(route.tab ?? undefined) ?? "overview";
-          revealTab(tab);
-          // Action Plan reads ?filter= for overdue / blocked deep links.
-          if (route.search.filter) {
-            navigate({
-              to: "/clients/$clientId",
-              params: { clientId },
-              search: (prev) => ({ ...prev, tab, filter: route.search.filter }),
-              replace: true,
-            });
-          }
+          const nextSearch = { tab, filter: route.search.filter };
+          revealTab(tab, undefined, nextSearch.filter);
         }
       }
     },
-    [clientId, hasFigures, navigate, revealTab],
+    [clientId, hasFigures, revealTab],
   );
 
   // ── Loading / error states ────────────────────────────────────────────────
@@ -2402,7 +2411,9 @@ function ClientView() {
               </a>
               <span>/</span>
               <span>
-                Acting as client: <b style={{ color: "var(--ink)" }}>{client.name}</b>
+                <b style={{ color: "var(--ink)" }}>
+                  {firmClientCrumbLabel(client.name, actingAsThisClient)}
+                </b>
               </span>
               <span className="aud">Audited</span>
             </div>
@@ -2417,7 +2428,7 @@ function ClientView() {
                     label={t.label}
                     star={t.star}
                     active={activeTab === t.id}
-                    onSelect={selectRail}
+                    clientId={clientId}
                   />
                 ))}
                 <span className="rail-kicker rail-kicker-split">Deliverables</span>
@@ -2428,7 +2439,7 @@ function ClientView() {
                     label={t.label}
                     star={t.star}
                     active={activeTab === t.id}
-                    onSelect={selectRail}
+                    clientId={clientId}
                   />
                 ))}
               </nav>
@@ -2647,21 +2658,13 @@ function ClientView() {
                 )}
                 </div>
 
-                {/* Simplified / Complex — Health, Profit, Budget only */}
+                {/* Budget keeps one complexity control. Health is a single view. */}
                 <div
+                  data-view-mode-toggle=""
                   style={{
-                    display:
-                      activeTab === "overview" ||
-                      activeTab === "ask" ||
-                      activeTab === "summary" ||
-                      activeTab === "cash" ||
-                      activeTab === "plan" ||
-                      activeTab === "reports" ||
-                      activeTab === "advisory"
-                        ? "none"
-                        : "flex",
+                    display: activeTab === "budget" ? "flex" : "none",
                     justifyContent: "flex-start",
-                    margin: "0 0 16px",
+                    margin: activeTab === "budget" ? "0 0 16px" : 0,
                   }}
                 >
                   <div
@@ -2790,9 +2793,8 @@ function ClientView() {
                       }
                     }}
                   />
-                  {/* Simplified view — health orb + pillar cards */}
-                  {viewMode === "simplified" && (
-                    <div style={{ marginBottom: 32 }}>
+                  {/* One Health view — orb and pillar cards. No Simplified/Complex switch. */}
+                  <div style={{ marginBottom: 32 }}>
                       {/* Orb — always-dark container so sphere colours read correctly */}
                       <div
                         style={{
@@ -2838,7 +2840,7 @@ function ClientView() {
                           })()}
                         />
                       </div>
-                      {/* Pillar summary cards */}
+                      {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
                       <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
                         <SimplifiedRatios
                           sections={simplifiedSections}
@@ -2850,8 +2852,26 @@ function ClientView() {
                           }}
                         />
                       </div>
-                    </div>
-                  )}
+                      {openRatioQueryRows.length > 0 ? (
+                        <div className="ratio-rows" style={{ marginTop: 16 }}>
+                          {openRatioQueryRows.map((row) => (
+                            <button
+                              key={row.key}
+                              type="button"
+                              className="ratio-row"
+                              onClick={() => openDrawerFromUiKey(row.key)}
+                            >
+                              <span className="rn">
+                                {row.label}
+                                <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+                                  {row.count === 1 ? "1 query" : `${row.count} queries`}
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                  </div>
 
                   {/* Accounting connections — visible on Health & Ratios without opening Financials */}
                   <div
@@ -3000,117 +3020,6 @@ function ClientView() {
                     </div>
                   </div>
 
-                  {/* Ratio rows — complex mode only */}
-                  {viewMode === "complex" && (
-                    <div style={{ marginTop: 26 }} id="coach-pillars">
-                      <span className="eyebrow">Ratios — accountant summary</span>
-                      <p className="sub">
-                        All {Object.keys(ratios).length} computed ratios from the period figures.
-                        Tap a row for the formula, the actuals that feed it, and the repair
-                        playbook. Debt-to-equity uses extracted total liabilities. Current ratio
-                        still needs current assets and current liabilities.
-                      </p>
-                      {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
-                        const names = PILLAR_RATIO_NAMES[pillarId];
-                        const evidence = pillarIsWeak(pillarHealths[pillarId])
-                          ? evidenceForPillar(pillarId)
-                          : null;
-                        return (
-                          <div key={pillarId} className="ratio-group">
-                            <span className="eyebrow">{PILLAR_LABELS[pillarId]}</span>
-                            {evidence ? (
-                              <button
-                                type="button"
-                                className="pillar-evidence"
-                                onClick={() => {
-                                  openCoach(evidence);
-                                }}
-                              >
-                                {evidence.label}
-                              </button>
-                            ) : null}
-                            <div className="ratio-rows">
-                              {names.map((name) => {
-                                const val = (ratios as Record<string, number>)[name];
-                                const presented =
-                                  name === "Return on Equity" || name === "Return on Assets"
-                                    ? presentReturn({
-                                        ratioName: name,
-                                        value: val,
-                                        equity: equityAmount,
-                                        currency: clientMarket.currency,
-                                        periodMonths,
-                                        partMonth,
-                                      })
-                                    : null;
-                                const scoredValue = presented ? presented.scoredValue : val;
-                                const score =
-                                  presented?.unscored || scoredValue == null || !Number.isFinite(scoredValue)
-                                    ? Number.NaN
-                                    : Math.round(ratioHealthScore(name, scoredValue, clientMarket));
-                                const finiteScore = Number.isFinite(score);
-                                const tier = finiteScore ? scoreTier(score) : "at_risk";
-                                const band = tierToBand(tier);
-                                const color = finiteScore ? bandColor(band) : "var(--muted, #94a3b8)";
-                                const formattedVal = presented
-                                  ? presented.text
-                                  : formatRatioValue(name, val, clientMarket);
-                                const actual = ratioActualLine(name, ratioInputs, (n) =>
-                                  formatMoneyCompact(n, clientMarket),
-                                );
-                                const qCount = openQueryCountForRatio(ratioQueryCounts, name);
-                                return (
-                                  <button
-                                    key={name}
-                                    className="ratio-row"
-                                    onClick={() => openDrawer(name, score)}
-                                  >
-                                    <span>
-                                      <span className="rn">
-                                        {name}
-                                        {qCount > 0 ? (
-                                          <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
-                                            {qCount === 1 ? "1 query" : `${qCount} queries`}
-                                          </span>
-                                        ) : null}
-                                      </span>
-                                      <span className="ra">{actual.formula}</span>
-                                      <span className="ra-calc">
-                                        {actual.calculation ??
-                                          (actual.missing.length
-                                            ? `Need: ${actual.missing.join(", ")}`
-                                            : "—")}
-                                      </span>
-                                    </span>
-                                    <span className="rv" style={{ color }}>
-                                      {formattedVal}
-                                    </span>
-                                    <span className="bar">
-                                      <i
-                                        style={{
-                                          width: `${Number.isFinite(score) ? score : 0}%`,
-                                          background: color,
-                                        }}
-                                      />
-                                    </span>
-                                    <span className={`chip ${finiteScore ? band : ""}`}>
-                                      <i />
-                                      {presented?.unscored
-                                        ? "Not scored"
-                                        : finiteScore
-                                          ? bandLabel(band)
-                                          : "No data"}
-                                    </span>
-                                    <span className="arr">→</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
 
                 {/* ===== PROFIT TAB ===== */}

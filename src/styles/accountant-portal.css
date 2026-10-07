@@ -210,10 +210,15 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .cell-health{display:flex;align-items:center;gap:12px}
 .accountant-portal .spark{width:84px;height:26px}
 .accountant-portal .spark path{fill:none;stroke-width:1.8;stroke-linecap:round}
-.accountant-portal .row-actions{display:flex;gap:8px;justify-content:flex-end}
+.accountant-portal .row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .accountant-portal .icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;transition:all .25s}
+.accountant-portal .row-actions .icon-btn{width:auto;height:auto;min-height:32px;padding:5px 8px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1}
+.accountant-portal .row-actions .icon-btn span{white-space:nowrap}
 .accountant-portal .icon-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
 .accountant-portal .icon-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.accountant-portal .dash-trial-banner{margin:0 0 12px;font-size:13px;line-height:1.4}
+.accountant-portal .dash-trial-banner__link{color:var(--gold);font-weight:700;text-decoration:none}
+.accountant-portal .dash-trial-banner__link:hover{text-decoration:underline}
 @media(max-width:860px){.accountant-portal .hide-sm{display:none}}
 
 /* ===== playbook library ===== */

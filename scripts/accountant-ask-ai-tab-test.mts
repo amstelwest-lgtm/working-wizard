@@ -56,21 +56,8 @@ assert(clientSrc.includes('variant: "studio"'), "accountant widget uses the larg
 assert(clientSrc.includes('audience: "accountant"'), "accountant questions send accountant audience");
 assert(clientSrc.includes("functions/v1/milon-bot"), "studio widget can call brain tools");
 assert(
-  /activeTab === "overview"[\s\S]{0,700}"none"/.test(clientSrc) &&
-    /activeTab === "ask"[\s\S]{0,700}"none"/.test(clientSrc),
-  "simple/complex toggle is hidden on Overview and Milōn Bot",
-);
-assert(
-  clientSrc.includes('activeTab === "cash"'),
-  "simple/complex toggle is also hidden on Cash",
-);
-assert(
-  clientSrc.includes('activeTab === "plan"'),
-  "simple/complex toggle is also hidden on Action Plan",
-);
-assert(
-  clientSrc.includes('activeTab === "reports"'),
-  "simple/complex toggle is also hidden on Reports",
+  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc),
+  "simple/complex toggle is budget-only, so Overview, Milōn Bot, Health, Cash, and Reports do not show it",
 );
 assert(
   !/id="pane-ratios"[\s\S]{0,400}id="ask-ai-accountant"/.test(clientSrc),

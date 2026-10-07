@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,10 +28,10 @@ import {
   dataAsOfLabel,
   derivePriority,
   firstNameOf,
+  practiceGreeting,
   portfolioSummaryLine,
   revenueOf,
   summarizePortfolioAttention,
-  timeGreeting,
   trendDelta30d,
   type PriorityLevel,
   type ScoreHistoryPoint,
@@ -46,6 +46,7 @@ import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { FirmStarterTrialBanner } from "@/components/firm-starter-trial-banner";
+import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/firm-starter-trial";
 import {
   UPGRADE_CANCELLED_MESSAGE,
   UPGRADE_FAILED_MESSAGE,
@@ -1489,7 +1490,7 @@ function Dashboard() {
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
-  const greeting = `${timeGreeting()}, ${greetName}.`;
+  const greeting = practiceGreeting(profile.accountantName || user?.email?.split("@")[0]);
   const bookLoading = loading || brandLoading;
   const attention = summarizePortfolioAttention(clientRows);
   const summaryLine = bookLoading
@@ -1861,47 +1862,24 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Thin strip only when something is actually urgent. No empty celebration. */}
-        {!bookLoading && attentionItems.length > 0 ? (
-          <section className="attn-strip" id="needs-attention" aria-label="Needs attention">
-            <h2>Needs attention</h2>
-            <ul>
-              {attentionItems.map((item) => (
-                <li key={item.clientId}>
-                  <button
-                    type="button"
-                    className={`attn-strip-row ${item.severity}`}
-                    onClick={() =>
-                      item.openPlan
-                        ? openClientPlan(item.clientId, item.detail.includes("overdue"))
-                        : item.openQueries
-                          ? openClientQueries(item.clientId)
-                          : navigate({
-                              to: "/clients/$clientId",
-                              params: { clientId: item.clientId },
-                              search: {},
-                            })
-                    }
-                  >
-                    <span className="attn-strip-name">{item.name}</span>
-                    <span className="attn-strip-reason">{item.reason}</span>
-                    <span className="attn-strip-detail">{item.detail}</span>
-                    <span className="attn-strip-go">{item.openPlan ? "Chase →" : "Open →"}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
+        {/* One queue: health alerts and pack sign-off, not two strips. */}
+        {!bookLoading ? (
+          <PortfolioExceptions
+            firmId={firmId}
+            refreshKey={clientRows.length}
+            hideWhenClear
+            healthItems={attentionItems}
+            className="mb-3"
+          />
         ) : null}
 
-        <PortfolioExceptions
-          firmId={firmId}
-          refreshKey={clientRows.length}
-          hideWhenClear
-          className="mb-3"
-        />
-
-        {trialAllowance?.starterTrial ? (
+        {trialAllowance?.starterTrial?.expired ? (
+          <p className="dash-trial-banner" role="status">
+            <Link to="/settings" className="dash-trial-banner__link">
+              {STARTER_TRIAL_ENDED_MESSAGE}
+            </Link>
+          </p>
+        ) : trialAllowance?.starterTrial ? (
           <FirmStarterTrialBanner
             trial={trialAllowance.starterTrial}
             upgrade={trialAllowance.upgrade}
@@ -2140,9 +2118,10 @@ function Dashboard() {
                       </td>
                       <td data-label="">
                         <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          {/* Reports */}
                           <button
                             className="icon-btn"
+                            type="button"
+                            aria-label="Generate report"
                             title="Generate report"
                             onClick={() =>
                               navigate({
@@ -2152,41 +2131,49 @@ function Dashboard() {
                               })
                             }
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                               <path d="M14 3v6h6" />
                             </svg>
+                            <span>Report</span>
                           </button>
-                          {/* Invite */}
                           <button
                             className="icon-btn"
+                            type="button"
+                            aria-label="Invite client management"
                             title="Invite client management — email + copy message"
                             onClick={() => void openOwnerInvite(c)}
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <rect x="3" y="5" width="18" height="14" rx="2" />
                               <path d="M3 7l9 6 9-6" />
                             </svg>
+                            <span>Invite</span>
                           </button>
                           <button
                             className="icon-btn"
+                            type="button"
+                            aria-label="Follow up on Action Plan"
                             title="Follow up on Action Plan"
                             onClick={() => openClientPlan(c.id, c.overdueActions > 0)}
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M9 11l3 3L22 4" />
                               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                             </svg>
+                            <span>Follow up</span>
                           </button>
-                          {/* Open / Enter as client */}
                           <button
                             className="icon-btn"
+                            type="button"
+                            aria-label="Enter as client"
                             title="Enter as client"
                             onClick={() => enterAsClient(c)}
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
                             </svg>
+                            <span>Enter as client</span>
                           </button>
                         </div>
                       </td>

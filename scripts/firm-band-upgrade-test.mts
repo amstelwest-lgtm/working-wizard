@@ -1032,7 +1032,12 @@ const trialBlock = readFileSync(resolve("src/components/trial-ended-plan-block.t
 assert(trialBlock.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the shared block uses the ended sentence");
 assert(trialBlock.includes("FirmBandUpgrade"), "the shared block embeds the band picker");
 const banner = readFileSync(resolve("src/components/firm-starter-trial-banner.tsx"), "utf8");
-assert(banner.includes("TrialEndedPlanBlock"), "the ended banner uses the shared block");
+assert(
+  !banner.includes("TrialEndedPlanBlock"),
+  "the dashboard countdown does not mount the plan card",
+);
+assert(settings.includes("TrialEndedPlanBlock"), "settings hosts the ended plan card");
+assert(dashboard.includes("dash-trial-banner"), "an ended trial is a thin settings link on the dashboard");
 assert(!banner.includes("FirmBandUpgrade"), "the banner does not mount a second picker");
 const migration = readFileSync(
   resolve("supabase/migrations/20261005190000_firm_starter_trial_enforced.sql"),

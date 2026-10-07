@@ -52,7 +52,10 @@ assert(insightsAt > clientsAt, "portfolio insights sit below the client list");
 assert(playAt > clientsAt, "playbooks sit below the client list");
 assert(dashSrc.includes("hideWhenClear"), "clear portfolio does not render an empty card");
 assert(!dashSrc.includes("nice work"), "empty needs-attention does not celebrate");
-assert(dashSrc.includes('id="needs-attention"'), "urgent items use a needs-attention strip");
+const exceptionsSrc = readFileSync(resolve("src/components/portfolio-exceptions.tsx"), "utf8");
+assert(exceptionsSrc.includes('id="needs-attention"'), "urgent items use one needs-attention strip");
+assert(exceptionsSrc.includes("mergeNeedsAttention"), "health and sign-off share that strip");
+assert(!dashSrc.includes('className="attn-strip"'), "dashboard does not render a second attention strip");
 assert(
   dashSrc.includes('<details className="home-fold" id="playbooks">'),
   "playbook library is collapsed by default",

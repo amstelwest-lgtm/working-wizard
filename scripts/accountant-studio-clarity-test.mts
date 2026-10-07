@@ -30,9 +30,9 @@ assert(
   studio.includes("const [finOpen, setFinOpen] = useState(false)"),
   "Financials starts closed",
 );
-assert(studio.includes("playbookKeyForRatioName"), "complex ratios open camelCase playbooks");
-assert(studio.includes("ratioActualLine"), "complex rows show mini actuals");
-assert(studio.includes("PILLAR_RATIO_NAMES"), "complex list is grouped by pillar");
+assert(studio.includes("playbookKeyForRatioName"), "ratio notes still open camelCase playbooks");
+assert(studio.includes("ratioActualLine"), "playbook drawer still shows mini actuals");
+assert(studio.includes("No Simplified/Complex switch"), "health is one presentation");
 assert(studio.includes("onAnswerProfile"), "summary can open the profile funnel");
 assert(studio.includes("upsertCurrentPeriodSnapshot"), "bank apply writes a snapshot for Ask AI");
 assert(!studio.includes("<WeeklyInputTable"), "weekly grid removed from accountant Profit");
@@ -112,10 +112,8 @@ const builder = readFileSync(resolve("supabase/functions/ask-ai/context-builder.
 assert(builder.includes("resolveRatioRecord"), "Ask AI derives ratios when the snapshot is empty");
 
 assert(
-  /activeTab === "cash"/.test(studio) &&
-    /activeTab === "ask"[\s\S]{0,220}activeTab === "plan"/.test(studio) &&
-    /activeTab === "reports" \|\|[\s\S]{0,40}activeTab === "advisory"/.test(studio),
-  "simple/complex toggle is hidden on Cash, Action Plan, Reports, and Advisory",
+  /activeTab === "budget" \? "flex" : "none"/.test(studio),
+  "simplified/complex toggle is budget-only; health, cash, reports, and action plan do not show it",
 );
 assert(
   !/id="wizard-profit-walk"[\s\S]{0,80}className="dark"/.test(studio),
