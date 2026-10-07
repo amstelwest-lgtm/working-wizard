@@ -14,9 +14,12 @@ import type { Database } from "@/integrations/supabase/types";
 import { callClaudeMessages } from "@/lib/claude-messages";
 import { rehydrateModelOutput } from "@/lib/redact-identifiers";
 import {
+  clipSnapshotHint,
   fallbackWorkflow,
   sanitizeWorkflowText,
   sealWorkflowPrompt,
+  SNAPSHOT_HINT_SCHEMA_MAX,
+  SNAPSHOT_METRIC_KEYS,
   workflowAgreesWithSnapshot,
   workflowInputsHash,
   type WorkflowContext,
@@ -30,7 +33,7 @@ export type BriefingWorkflow = {
 };
 
 const MetricSchema = z.object({
-  key: z.enum(["revenue", "gm", "om", "runway", "updated"]),
+  key: z.enum(SNAPSHOT_METRIC_KEYS),
   label: z.string().max(60),
   value: z.string().max(60),
   delta: z
@@ -40,8 +43,17 @@ const MetricSchema = z.object({
       good: z.boolean(),
     })
     .optional(),
-  hint: z.string().max(80).optional(),
+  // Clip before the length check so a long cash-anchor note cannot 400 the draft.
+  hint: z.preprocess(
+    (value) => (typeof value === "string" ? clipSnapshotHint(value, SNAPSHOT_HINT_SCHEMA_MAX) : value),
+    z.string().max(SNAPSHOT_HINT_SCHEMA_MAX).optional(),
+  ),
 });
+
+/** Snapshot array accepted by draft/propose. Exported so tests can hit the same schema. */
+export function parseWorkflowSnapshot(snapshot: unknown) {
+  return z.array(MetricSchema).max(8).parse(snapshot);
+}
 
 const ChipSchema = z.object({
   key: z.string().max(20),
