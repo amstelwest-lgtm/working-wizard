@@ -87,6 +87,7 @@ import {
   plBankDisagreement,
   runwayDisplayLabel,
   RUNWAY_INSUFFICIENT_LABEL,
+  RUNWAY_PROFITABLE_LABEL,
   resolveClientCash,
   resolveThirteenWeekForecast,
   weekDatesFrom,
@@ -1527,7 +1528,8 @@ export function CashForecastPanel({
                     ? "Not burning cash"
                     : direction.kind === "weeks"
                       ? "Forecast nets cash out"
-                      : direction.label === RUNWAY_INSUFFICIENT_LABEL
+                      : direction.label === RUNWAY_INSUFFICIENT_LABEL ||
+                          direction.label === RUNWAY_PROFITABLE_LABEL
                         ? "No cash-flow or bank data"
                         : `Above ${fmtCompact(minimumCash)} floor`
                 }

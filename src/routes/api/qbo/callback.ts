@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { exchangeCodeForTokens, fetchQboCompanyName, intuitTidFromError } from "@/lib/qbo";
 import {
+  qboDuplicateRealmClientName,
+  qboDuplicateRealmReason,
   qboOauthCallbackIssue,
   qboOauthStateIsFresh,
   readQboRealmId,
@@ -98,6 +100,58 @@ export const Route = createFileRoute("/api/qbo/callback")({
             qbo: "error",
             reason: "invalid_or_expired_state",
           });
+        }
+
+        const { data: subject, error: subjectErr } = await supabaseAdmin
+          .from("clients")
+          .select("firm_id")
+          .eq("id", clientId)
+          .maybeSingle();
+        if (subjectErr) {
+          console.error("[QBO callback] client lookup failed", { code: subjectErr.code });
+          await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+          return redirectTo(appOrigin, returnPath, { qbo: "error", reason: "realm_lookup_failed" });
+        }
+
+        const { data: realmRows, error: realmErr } = await supabaseAdmin
+          .from("qbo_connections")
+          .select("client_id")
+          .eq("realm_id", realmId);
+        if (realmErr) {
+          console.error("[QBO callback] realm lookup failed", { code: realmErr.code });
+          await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+          return redirectTo(appOrigin, returnPath, { qbo: "error", reason: "realm_lookup_failed" });
+        }
+
+        const otherClientIds = (realmRows ?? [])
+          .map((row) => row.client_id)
+          .filter((id): id is string => Boolean(id) && id !== clientId);
+        if (otherClientIds.length > 0) {
+          const { data: others, error: othersErr } = await supabaseAdmin
+            .from("clients")
+            .select("id, name, firm_id")
+            .in("id", otherClientIds);
+          if (othersErr) {
+            console.error("[QBO callback] realm owner lookup failed", { code: othersErr.code });
+            await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+            return redirectTo(appOrigin, returnPath, { qbo: "error", reason: "realm_lookup_failed" });
+          }
+          const clash = qboDuplicateRealmClientName({
+            clientId,
+            firmId: subject?.firm_id ?? null,
+            owners: (others ?? []).map((row) => ({
+              clientId: row.id,
+              clientName: row.name ?? "",
+              firmId: row.firm_id,
+            })),
+          });
+          if (clash) {
+            await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+            return redirectTo(appOrigin, returnPath, {
+              qbo: "error",
+              reason: qboDuplicateRealmReason(clash),
+            });
+          }
         }
 
         await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);

@@ -22,6 +22,12 @@ import {
 import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 import { parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
+import {
+  authDisplayName,
+  practiceGreetingName,
+  resolvePersistedAccountantIdentity,
+  type PersistedNameChain,
+} from "@/lib/accountant-identity";
 
 function firmTimeZoneFromMarket(market: unknown): string | null {
   const selection = parseMarketSelection(market);
@@ -87,6 +93,8 @@ type AccountantProfileContextValue = {
   refreshFirms: () => Promise<void>;
   /** Persist current profile to the firm row. */
   saveProfile: () => Promise<{ ok: boolean; error?: string }>;
+  /** Greeting name: firm contact, profile full name, auth full name, then email. */
+  greetingSource: string;
 };
 
 const AccountantProfileContext =
@@ -122,42 +130,56 @@ function saveToStorage(userId: string | null, profile: AccountantProfile) {
   }
 }
 
+/** Unsaved firm and person names must not survive a session load. */
+function dropUnsavedIdentity(cached: AccountantProfile): AccountantProfile {
+  return { ...cached, firmName: "", accountantName: "" };
+}
+
 function applyFirmToProfile(
   row: FirmBrandRow,
   userId: string,
   cached: AccountantProfile,
+  identity: PersistedNameChain,
 ): AccountantProfile {
   const fromDb = profileFromFirm(row);
   const timeZone = firmTimeZoneFromMarket(row.market);
-
-  if (firmBrandIsEmpty(row) && (cached.firmName || cached.logoUrl || cached.tagline)) {
-    const merged: AccountantProfile = {
-      ...fromDb,
-      firmName: cached.firmName || fromDb.firmName || row.name,
-      logoUrl: cached.logoUrl ?? fromDb.logoUrl,
-      primaryColor: cached.primaryColor || fromDb.primaryColor,
-      secondaryColor: cached.secondaryColor || fromDb.secondaryColor,
-      accentColor: cached.accentColor || fromDb.accentColor,
-      accountantName: cached.accountantName || fromDb.accountantName,
-      accountantEmail: cached.accountantEmail || fromDb.accountantEmail,
-      tagline: cached.tagline ?? fromDb.tagline,
-      signatureDataUrl: cached.signatureDataUrl ?? null,
-      timeZone,
-    };
-    saveToStorage(userId, merged);
-    return merged;
-  }
-
+  const persisted = resolvePersistedAccountantIdentity({
+    firmName: row.name,
+    brandContactName: row.brand_contact_name,
+    profileFullName: identity.profileFullName,
+    authFullName: identity.authFullName,
+  });
+  // Colours and logo may still draft an unbranded firm. Name fields never do.
+  const visuals = firmBrandIsEmpty(row) ? cached : null;
   const merged: AccountantProfile = {
     ...fromDb,
-    firmName: fromDb.firmName || cached.firmName,
-    accountantName: fromDb.accountantName || cached.accountantName,
-    accountantEmail: fromDb.accountantEmail || cached.accountantEmail,
+    firmName: persisted.firmName,
+    accountantName: persisted.accountantName,
+    logoUrl: visuals?.logoUrl ?? fromDb.logoUrl,
+    primaryColor: visuals?.primaryColor || fromDb.primaryColor,
+    secondaryColor: visuals?.secondaryColor || fromDb.secondaryColor,
+    accentColor: visuals?.accentColor || fromDb.accentColor,
+    accountantEmail: fromDb.accountantEmail || visuals?.accountantEmail || "",
+    tagline: visuals ? (visuals.tagline ?? fromDb.tagline) : fromDb.tagline,
     signatureDataUrl: cached.signatureDataUrl ?? null,
     timeZone,
   };
   saveToStorage(userId, merged);
   return merged;
+}
+
+async function readPersistedNameChain(user: {
+  id: string;
+  user_metadata?: unknown;
+}): Promise<PersistedNameChain> {
+  const authFullName = authDisplayName(
+    user.user_metadata as { full_name?: unknown; name?: unknown } | null | undefined,
+  );
+  const { data } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+  return {
+    profileFullName: data?.full_name?.trim() ?? "",
+    authFullName,
+  };
 }
 
 export function AccountantProfileProvider({
@@ -174,6 +196,10 @@ export function AccountantProfileProvider({
   const [brandLoading, setBrandLoading] = useState(true);
   const hydratedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
+  const [nameChain, setNameChain] = useState<PersistedNameChain>({
+    profileFullName: "",
+    authFullName: "",
+  });
   userIdRef.current = user?.id ?? null;
 
   useEffect(() => {
@@ -186,6 +212,7 @@ export function AccountantProfileProvider({
           setFirm(null);
           setFirms([]);
           setProfile(DEFAULT_PROFILE);
+          setNameChain({ profileFullName: "", authFullName: "" });
           setBrandLoading(false);
           hydratedRef.current = false;
         }
@@ -194,8 +221,13 @@ export function AccountantProfileProvider({
 
       setBrandLoading(true);
       // Soft cache for this user only — never cross-account.
-      const cached = loadFromStorage(user.id);
-      if (!cancelled && (cached.firmName || cached.logoUrl || cached.tagline)) {
+      // Drop unsaved firm/name edits before paint so a sample draft cannot flash.
+      const cachedRaw = loadFromStorage(user.id);
+      const cached = dropUnsavedIdentity(cachedRaw);
+      if (cachedRaw.firmName || cachedRaw.accountantName) {
+        saveToStorage(user.id, cached);
+      }
+      if (!cancelled && (cached.logoUrl || cached.tagline)) {
         setProfile(cached);
       } else if (!cancelled) {
         setProfile(DEFAULT_PROFILE);
@@ -219,10 +251,8 @@ export function AccountantProfileProvider({
           // written client_owner — "no roles yet" must not be read as "accountant",
           // or the owner is promoted to firm_admin and lands on /dashboard next login.
           if (!customerSignup && (roles.hasPracticeRole || practiceSignup)) {
-            const firmName =
-              cached.firmName ||
-              (user.user_metadata?.firm_name as string | undefined) ||
-              null;
+            const metaFirmName = typeof meta?.firm_name === "string" ? meta.firm_name.trim() : "";
+            const firmName = metaFirmName || cachedRaw.firmName || null;
             const { error: ensureErr } = await supabase.rpc("ensure_practice_firm", {
               p_name: firmName,
             });
@@ -238,12 +268,15 @@ export function AccountantProfileProvider({
         }
 
         if (cancelled) return;
+        const identity = await readPersistedNameChain(user);
+        if (cancelled) return;
+        setNameChain(identity);
         setFirms(all);
         setFirm(row);
 
         if (row) {
           writeActiveFirmId(user.id, row.id);
-          setProfile(applyFirmToProfile(row, user.id, cached));
+          setProfile(applyFirmToProfile(row, user.id, cached, identity));
         }
       } finally {
         if (!cancelled) {
@@ -283,8 +316,10 @@ export function AccountantProfileProvider({
     setFirm(row);
     if (row) {
       writeActiveFirmId(user.id, row.id);
-      const cached = loadFromStorage(user.id);
-      setProfile(applyFirmToProfile(row, user.id, cached));
+      const identity = await readPersistedNameChain(user);
+      setNameChain(identity);
+      const cached = dropUnsavedIdentity(loadFromStorage(user.id));
+      setProfile(applyFirmToProfile(row, user.id, cached, identity));
     }
   }, [user]);
 
@@ -298,9 +333,11 @@ export function AccountantProfileProvider({
       writeActiveFirmId(user.id, nextFirmId);
       setFirm(match);
       // Brand for the newly selected firm — don't bleed the previous firm's cache
-      // colours into an already-branded firm.
-      const cached = loadFromStorage(user.id);
-      setProfile(applyFirmToProfile(match, user.id, cached));
+      // colours into an already-branded firm. Name fields still come from the row.
+      const identity = await readPersistedNameChain(user);
+      setNameChain(identity);
+      const cached = dropUnsavedIdentity(loadFromStorage(user.id));
+      setProfile(applyFirmToProfile(match, user.id, cached, identity));
     },
     [user, firms, firm?.id],
   );
@@ -360,6 +397,12 @@ export function AccountantProfileProvider({
   }, [firm, user, profile]);
 
   const canEditBrand = Boolean(user && firm && firm.owner_user_id === user.id);
+  const greetingSource = practiceGreetingName({
+    accountantName: profile.accountantName,
+    profileFullName: nameChain.profileFullName,
+    authFullName: nameChain.authFullName,
+    email: user?.email,
+  });
 
   return (
     <AccountantProfileContext.Provider
@@ -374,6 +417,7 @@ export function AccountantProfileProvider({
         brandLoading,
         refreshFirms,
         saveProfile,
+        greetingSource,
       }}
     >
       {children}

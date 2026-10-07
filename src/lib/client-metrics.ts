@@ -38,6 +38,10 @@ export type RunwayKind = "unknown" | "zero" | "cash_generative" | "weeks";
 /** Shown when cash is on file but there is no cash-flow statement, bank publish, or prior cash movement. */
 export const RUNWAY_INSUFFICIENT_LABEL = "Not enough data";
 
+/** Cash is on file and the P&L is in profit, but there is still no cash movement to turn into weeks. */
+export const RUNWAY_PROFITABLE_LABEL =
+  "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway";
+
 export type ClientRunway = {
   /** Null when unknown or cash-generative. Do not score those as 0 weeks. */
   weeks: number | null;
@@ -180,6 +184,9 @@ export function clientRunway(input: {
       const expenses = finiteNum(input.periodExpenses);
       const burn = expenses != null && expenses > 0 ? expenses : Math.abs(net);
       return weeksFromBurn(cash, burn / span);
+    }
+    if (net != null && net > 0) {
+      return { weeks: null, kind: "unknown", label: RUNWAY_PROFITABLE_LABEL };
     }
     return { weeks: null, kind: "unknown", label: RUNWAY_INSUFFICIENT_LABEL };
   }
