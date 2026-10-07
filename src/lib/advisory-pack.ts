@@ -13,12 +13,16 @@
  * attached) is named on the pack.
  *
  * Vocabulary mirrors supabase/migrations/20260918160000_advisory_packs.sql
- * (test-guarded).
+ * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
 import type { Json } from "@/integrations/supabase/types";
+import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 import {
   type HealthPillarId,
   type OverallHealth,
+  type ScoreMarket,
+  flatToRatioInputs,
+  healthFromRatioInputs,
   pillarForRatioName,
   scoreRatio,
 } from "@/lib/health-score";
@@ -52,6 +56,7 @@ export const PACK_REVIEW_ACTIONS = [
   "deliver",
   "supersede",
   "read",
+  "invalidate",
 ] as const;
 export type PackReviewAction = (typeof PACK_REVIEW_ACTIONS)[number];
 
@@ -64,6 +69,7 @@ export const PACK_APP_ACTIONS = [
   "reject",
   "deliver",
   "read",
+  "invalidate",
 ] as const satisfies readonly PackReviewAction[];
 
 export const PACK_GENERATORS = ["rules", "rules+claude"] as const;
@@ -413,11 +419,14 @@ export const ADVISORY_PACK_STALE_NOTE =
  * longer matches the runway, cash, or health the screens show now.
  */
 export function advisoryPackFiguresChanged(
-  content: {
-    health?: { overall?: number | null } | null;
-    forecast?: { openingBalance?: number | null } | null;
-    sections?: Array<{ key?: string; body?: string }>;
-  } | null | undefined,
+  content:
+    | {
+        health?: { overall?: number | null } | null;
+        forecast?: { openingBalance?: number | null } | null;
+        sections?: Array<{ key?: string; body?: string }>;
+      }
+    | null
+    | undefined,
   current: { runwayLabel: string | null; cash: number | null; healthScore: number | null },
 ): boolean {
   if (!content) return false;
@@ -443,6 +452,100 @@ export function advisoryPackFiguresChanged(
     return true;
   }
   return false;
+}
+
+/** Live Overview figures the pack banner compares to the baked snapshot. */
+export type LivePackFigures = {
+  runwayLabel: string | null;
+  cash: number | null;
+  healthScore: number | null;
+};
+
+export type PackSignOffGate = {
+  /** Baked health, cash, or runway no longer matches Overview. */
+  figuresChanged: boolean;
+  /** Stored approval is still a true sign-off against Overview. */
+  signOffHolds: boolean;
+  /** Approve must be refused until the pack is regenerated. */
+  signOffBlocked: boolean;
+  /** Status to show. A stale approval reverts to the pre-sign-off status. */
+  presentedStatus: PackStatus;
+};
+
+/**
+ * Where a cleared sign-off lands. Firm packs go back to review; an owner-only
+ * pack goes back to draft. Regenerate then builds a new version from live figures.
+ */
+export function packStatusAfterStaleSignOff(
+  status: PackStatus,
+  requiresReview: boolean,
+): PackStatus {
+  if (status !== "approved") return status;
+  return requiresReview ? "in_review" : "draft";
+}
+
+/**
+ * Sign-off is valid only while the snapshot baked into the pack still matches
+ * Overview. The same comparison drives the regenerate banner, so the status
+ * cannot say signed off while that banner is up. Missing live figures do not
+ * count as drift.
+ */
+export function advisoryPackSignOffGate(
+  status: PackStatus | null | undefined,
+  requiresReview: boolean,
+  content: Parameters<typeof advisoryPackFiguresChanged>[0],
+  current: LivePackFigures | null | undefined,
+): PackSignOffGate {
+  const stored: PackStatus =
+    status && (PACK_STATUSES as readonly string[]).includes(status) ? status : "draft";
+  const figuresChanged = current ? advisoryPackFiguresChanged(content, current) : false;
+  const terminal = stored === "rejected" || stored === "superseded";
+  return {
+    figuresChanged,
+    signOffHolds: stored === "approved" && !figuresChanged,
+    signOffBlocked: figuresChanged && !terminal,
+    presentedStatus: figuresChanged ? packStatusAfterStaleSignOff(stored, requiresReview) : stored,
+  };
+}
+
+/**
+ * Overview health, cash, and runway from the client blobs the studio already
+ * scores. Pack generation stores those three on `content`; this is the live
+ * side of that snapshot.
+ */
+export function overviewFiguresForPackDrift(input: {
+  financials: Record<string, unknown> | null | undefined;
+  cashflow?: unknown;
+  financialsUpdatedAt?: string | null;
+  priorFinancials?: Record<string, unknown> | null;
+  market?: ScoreMarket | null;
+  fyStartMonth?: number | null;
+  timeZone?: string | null;
+  now?: Date;
+}): LivePackFigures {
+  const assessed = assessClientMetrics({
+    financials: input.financials ?? null,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+    priorFinancials: input.priorFinancials ?? null,
+    now: input.now,
+    timeZone: input.timeZone,
+  });
+  const runwayWeeks =
+    assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
+      ? assessed.runway.weeks
+      : null;
+  const health = healthFromRatioInputs(
+    flatToRatioInputs(input.financials, { fyStartMonth: input.fyStartMonth }),
+    runwayWeeks,
+    input.market ?? undefined,
+    assessed.outlook.shortfallWeek,
+  );
+  return {
+    runwayLabel: runwayDisplayLabel(assessed.runway),
+    cash: assessed.outlook.opening,
+    healthScore: health.overall,
+  };
 }
 
 // ── Builder ──────────────────────────────────────────────────────────────────

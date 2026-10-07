@@ -41,7 +41,9 @@ import {
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import {
+  ADVISORY_PACK_STALE_NOTE,
   HIGH_EDIT_RATE,
+  advisoryPackSignOffGate,
   computeEditStats,
   diffPackSections,
   packStatusLabel,
@@ -54,7 +56,6 @@ import {
   getLatestAdvisoryPack,
   reviewAdvisoryPack,
 } from "@/lib/advisory-pack.functions";
-import { ADVISORY_PACK_STALE_NOTE, advisoryPackFiguresChanged } from "@/lib/advisory-pack";
 
 type Props = {
   clientId: string | null;
@@ -101,6 +102,7 @@ const ACTION_LABEL: Record<PackReview["action"], string> = {
   edit: "edited",
   comment: "commented",
   approve: "signed off",
+  invalidate: "cleared the sign-off",
   request_changes: "requested changes",
   reject: "rejected",
   deliver: "delivered",
@@ -146,6 +148,25 @@ export function AdvisoryPackPanel({
   const [exportingPdf, setExportingPdf] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
+  const staleCleared = useRef<string | null>(null);
+
+  const signOffGate = useMemo(
+    () =>
+      advisoryPackSignOffGate(
+        pack?.status ?? null,
+        pack?.requires_review ?? false,
+        pack?.content ?? null,
+        currentFigures
+          ? {
+              runwayLabel: currentFigures.runwayLabel,
+              cash: currentFigures.cash,
+              healthScore: currentFigures.healthScore,
+            }
+          : null,
+      ),
+    [pack, currentFigures],
+  );
+  const shownStatus = pack ? signOffGate.presentedStatus : null;
 
   const load = useCallback(
     async (packId?: string) => {
@@ -175,8 +196,10 @@ export function AdvisoryPackPanel({
   }, [clientId, refreshKey, load]);
 
   // Owner opening an approved pack = delivery (recorded once per pack per mount).
+  // A stale sign-off is not delivery — the figures no longer match Overview.
   useEffect(() => {
     if (!clientId || !pack || audience !== "owner") return;
+    if (signOffGate.figuresChanged) return;
     if (pack.status !== "approved" || pack.delivered_at || readMarked.current === pack.id) return;
     readMarked.current = pack.id;
     void review({ data: { clientId, packId: pack.id, action: "read" } })
@@ -186,7 +209,39 @@ export function AdvisoryPackPanel({
         onChanged?.();
       })
       .catch(() => null);
-  }, [clientId, pack, audience, review, onChanged]);
+  }, [clientId, pack, audience, review, onChanged, signOffGate.figuresChanged]);
+
+  // Clear a stored SIGNED OFF once the baked snapshot drifts. Regenerate
+  // builds a new version; sign-off stays blocked until that snapshot matches.
+  useEffect(() => {
+    if (!signOffGate.figuresChanged) {
+      staleCleared.current = null;
+      return;
+    }
+    if (!clientId || !pack || pack.status !== "approved") return;
+    if (staleCleared.current === pack.id) return;
+    staleCleared.current = pack.id;
+    void review({
+      data: {
+        clientId,
+        packId: pack.id,
+        action: "invalidate",
+        liveFigures: currentFigures
+          ? {
+              runwayLabel: currentFigures.runwayLabel,
+              cash: currentFigures.cash,
+              healthScore: currentFigures.healthScore,
+            }
+          : undefined,
+      },
+    })
+      .then((res) => {
+        setPack(res.pack);
+        setReviews(res.reviews);
+        onChanged?.();
+      })
+      .catch(() => null);
+  }, [clientId, pack, currentFigures, review, onChanged, signOffGate.figuresChanged]);
 
   const isWriter = audience === "accountant" || !hasFirm;
   const canEdit =
@@ -196,13 +251,19 @@ export function AdvisoryPackPanel({
     pack!.status !== "rejected" &&
     pack!.status !== "superseded" &&
     (audience === "accountant" || !pack!.requires_review);
-  const canSignOff =
+  const seatCanSign =
     Boolean(pack) &&
-    pack!.status !== "approved" &&
-    pack!.status !== "rejected" &&
-    pack!.status !== "superseded" &&
     ((pack!.requires_review && audience === "accountant") ||
       (!pack!.requires_review && audience === "owner"));
+  const openStatus =
+    shownStatus === "draft" || shownStatus === "in_review" || shownStatus === "changes_requested";
+  const canSignOff = seatCanSign && openStatus;
+  const signOffBlocked = signOffGate.signOffBlocked;
+  const canOtherDecisions =
+    seatCanSign &&
+    pack!.status !== "approved" &&
+    pack!.status !== "rejected" &&
+    pack!.status !== "superseded";
 
   const diffs = useMemo(() => (pack ? diffPackSections(pack.ai_draft, pack.content) : []), [pack]);
   const changedByKey = useMemo(() => new Map(diffs.map((d) => [d.key, d])), [diffs]);
@@ -298,12 +359,28 @@ export function AdvisoryPackPanel({
       action,
       async () => {
         if (!clientId || !pack) return null;
+        if (action === "approve" && signOffGate.signOffBlocked) {
+          toast.message(ADVISORY_PACK_STALE_NOTE);
+          return null;
+        }
         if (action !== "approve" && !note.trim()) {
           toast.message("Add a short note so the trail explains why.");
           return null;
         }
         const res = await review({
-          data: { clientId, packId: pack.id, action, note: note.trim() || undefined },
+          data: {
+            clientId,
+            packId: pack.id,
+            action,
+            note: note.trim() || undefined,
+            liveFigures: currentFigures
+              ? {
+                  runwayLabel: currentFigures.runwayLabel,
+                  cash: currentFigures.cash,
+                  healthScore: currentFigures.healthScore,
+                }
+              : undefined,
+          },
         });
         track("advisory_pack_decided", {
           clientId,
@@ -327,8 +404,19 @@ export function AdvisoryPackPanel({
     if (!clientId || !pack || exportingPdf) return;
     setExportingPdf(true);
     try {
+      const exportPack =
+        pack.status === "approved" && signOffGate.figuresChanged && shownStatus
+          ? {
+              ...pack,
+              status: shownStatus,
+              reviewed_by: null,
+              reviewed_by_kind: null,
+              reviewed_at: null,
+              review_note: null,
+            }
+          : pack;
       const { blob, filename, signed } = await downloadAdvisoryPackPdf({
-        pack,
+        pack: exportPack,
         profile,
         userId: user?.id ?? null,
         user,
@@ -337,7 +425,7 @@ export function AdvisoryPackPanel({
       track("advisory_pack_pdf_exported", {
         clientId,
         audience,
-        status: pack.status,
+        status: exportPack.status,
         signed,
         filename,
       });
@@ -399,7 +487,8 @@ export function AdvisoryPackPanel({
       className={shell}
       id="advisory-pack"
       data-audience={audience}
-      data-status={pack?.status ?? "none"}
+      data-status={shownStatus ?? "none"}
+      data-signoff-blocked={signOffBlocked ? "true" : "false"}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -414,15 +503,11 @@ export function AdvisoryPackPanel({
                   {pack.period_label ? ` · ${pack.period_label}` : ""}
                 </span>
                 <span
-                  className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${STATUS_CLASS[pack.status]}`}
+                  className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${STATUS_CLASS[shownStatus ?? pack.status]}`}
                 >
-                  {packStatusLabel(pack.status, pack.requires_review)}
+                  {packStatusLabel(shownStatus ?? pack.status, pack.requires_review)}
                 </span>
-                {advisoryPackFiguresChanged(pack.content, {
-                  runwayLabel: currentFigures?.runwayLabel ?? null,
-                  cash: currentFigures?.cash ?? null,
-                  healthScore: currentFigures?.healthScore ?? null,
-                }) ? (
+                {signOffGate.figuresChanged ? (
                   <span className="text-[12px] font-semibold normal-case tracking-normal text-amber-700 dark:text-amber-300">
                     {ADVISORY_PACK_STALE_NOTE}
                   </span>
@@ -434,7 +519,7 @@ export function AdvisoryPackPanel({
           </h3>
           <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
             {pack
-              ? pack.status === "approved"
+              ? signOffGate.signOffHolds
                 ? `${pack.reviewed_by_kind === "accountant" ? "Signed off by the accountant" : "Accepted by the owner"} ${fmtWhen(
                     pack.reviewed_at,
                   )}${pack.delivered_at ? ` · read ${fmtWhen(pack.delivered_at)}` : ""}${
@@ -460,7 +545,8 @@ export function AdvisoryPackPanel({
             >
               {versions.map((v) => (
                 <option key={v.id} value={v.id}>
-                  v{v.version} · {v.status.replace("_", " ")}
+                  v{v.version} ·{" "}
+                  {(v.id === pack?.id && shownStatus ? shownStatus : v.status).replace("_", " ")}
                 </option>
               ))}
             </select>
@@ -652,7 +738,7 @@ export function AdvisoryPackPanel({
       {pack ? (
         <div className="mt-4 flex flex-col gap-2 rounded-xl border border-dashed border-[#b7872a]/35 p-3">
           <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-            {canSignOff && audience === "accountant"
+            {canSignOff && !signOffBlocked && audience === "accountant"
               ? "Note (required to request changes or reject; optional on sign-off)"
               : "Comment"}
             <textarea
@@ -677,10 +763,15 @@ export function AdvisoryPackPanel({
               <>
                 <button
                   type="button"
-                  onClick={() => void decide("approve")}
-                  disabled={busy !== null}
+                  onClick={() => {
+                    if (signOffBlocked) return;
+                    void decide("approve");
+                  }}
+                  disabled={busy !== null || signOffBlocked}
+                  title={signOffBlocked ? ADVISORY_PACK_STALE_NOTE : undefined}
                   className={GOLD_BTN}
                   data-approve
+                  data-signoff-blocked={signOffBlocked ? "true" : "false"}
                 >
                   {busy === "approve" ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -689,7 +780,7 @@ export function AdvisoryPackPanel({
                   )}
                   {hasFirm ? "Sign off pack" : "Accept pack"}
                 </button>
-                {audience === "accountant" ? (
+                {canOtherDecisions && audience === "accountant" ? (
                   <>
                     <button
                       type="button"
