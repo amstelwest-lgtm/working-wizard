@@ -71,6 +71,37 @@ const someoneElse = advisoryPackPdfStamp({
 assert(someoneElse?.signedOffByName === "Accountant", "another user is not named as the signer");
 assert(someoneElse?.signatureData == null, "another user's signature is not copied");
 
+const recorded = advisoryPackPdfStamp({
+  status: "approved",
+  reviewedAt: "2026-10-07T22:14:47.000Z",
+  reviewedBy: "user-1",
+  reviewedByKind: "accountant",
+  userId: "user-2",
+  signerName: "Someone Else",
+  firmName: "Viewer Firm",
+  signatureDataUrl: "data:image/png;base64,aaaa",
+  recordedSignerName: "James Fleming",
+  recordedFirmName: "Ben Accountants",
+});
+assert(recorded?.signedOffByName === "James Fleming", "a recorded signer is named for every viewer");
+assert(recorded?.signedOffByInitials === "JF", "recorded initials come from the signer");
+assert(recorded?.firmName === "Ben Accountants", "the recorded firm wins over the viewer firm");
+assert(recorded?.signatureData == null, "another viewer's signature is not copied onto a recorded sign-off");
+
+const sampleRecorded = advisoryPackPdfStamp({
+  status: "approved",
+  reviewedAt: "2026-10-07T22:14:47.000Z",
+  reviewedBy: "user-1",
+  reviewedByKind: "accountant",
+  userId: "user-2",
+  signerName: null,
+  firmName: "Ben Accountants",
+  signatureDataUrl: null,
+  recordedSignerName: "A. Sample, CA(SA)",
+  recordedFirmName: "Sample Practice",
+});
+assert(sampleRecorded?.signedOffByName === "Accountant", "a sample recorded name is not stamped");
+
 assert(
   advisoryPackPdfStamp({
     status: "draft",

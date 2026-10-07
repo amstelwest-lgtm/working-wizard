@@ -176,10 +176,10 @@ function summaryFigure(row: BudgetPdfRow, market: ResolvedMarket): HeadlineFigur
     row.signal === "inline" || Math.abs(row.delta) < 1 ? "flat" : row.delta > 0 ? "up" : "down";
   return {
     label: row.label,
-    value: signedMoney(row.delta, market),
+    value: fmtRand(row.actual, market),
     direction,
     good,
-    note: `${formatVariancePct(row.deltaPct)} vs budget`,
+    note: `Budget ${fmtRand(row.budget, market)} · ${signedMoney(row.delta, market)}`,
   };
 }
 

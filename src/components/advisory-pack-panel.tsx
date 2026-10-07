@@ -33,9 +33,14 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useMarket } from "@/contexts/market";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
+import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
-import { formatSignedOffDateTime } from "@/lib/market";
-import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
+import { formatReviewDateTime } from "@/lib/market";
+import {
+  isSamplePracticeSignoff,
+  packHeldSignoffLine,
+  reviewActorLabel,
+} from "@/lib/review-signoff-stamp";
 import type { ResolvedMarket } from "@/lib/market";
 import {
   hashFigures,
@@ -103,20 +108,11 @@ const GHOST_BTN =
 function fmtWhen(
   iso: string | null | undefined,
   market: Pick<ResolvedMarket, "locale" | "timezone">,
-  firmTimeZone?: string | null,
 ): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return iso;
-  return formatSignedOffDateTime(iso, market, {
-    firmTimeZone,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatReviewDateTime(iso, market);
 }
 
 const ACTION_LABEL: Record<PackReview["action"], string> = {
@@ -155,6 +151,7 @@ export function AdvisoryPackPanel({
 
   const [pack, setPack] = useState<AdvisoryPack | null>(null);
   const [reviews, setReviews] = useState<PackReview[]>([]);
+  const [actors, setActors] = useState<Record<string, RecordedActor>>({});
   const [versions, setVersions] = useState<Array<{ id: string; version: number; status: string }>>(
     [],
   );
@@ -201,6 +198,7 @@ export function AdvisoryPackPanel({
         setMigrated(res.migrated);
         setPack(res.pack);
         setReviews(res.reviews);
+        setActors(res.actors ?? {});
         setVersions(res.versions);
       } catch {
         if (mine !== seq.current) return;
@@ -229,6 +227,7 @@ export function AdvisoryPackPanel({
       .then((res) => {
         setPack(res.pack);
         setReviews(res.reviews);
+        if (res.actors) setActors(res.actors);
         onChanged?.();
       })
       .catch(() => null);
@@ -263,6 +262,7 @@ export function AdvisoryPackPanel({
         if (seq.current !== seen) return;
         setPack(res.pack);
         setReviews(res.reviews);
+        if (res.actors) setActors(res.actors);
         onChanged?.();
       })
       .catch(() => null);
@@ -310,6 +310,7 @@ export function AdvisoryPackPanel({
       if (res) {
         setPack(res.pack);
         setReviews(res.reviews);
+        if ("actors" in res && res.actors) setActors(res.actors);
       }
       if (done) toast.success(done);
       onChanged?.();
@@ -442,12 +443,14 @@ export function AdvisoryPackPanel({
               review_note: null,
             }
           : pack;
+      const recordedSigner = identityFor(exportPack.reviewed_by);
       const { blob, filename, signed } = await downloadAdvisoryPackPdf({
         pack: exportPack,
         profile,
         userId: user?.id ?? null,
         user,
         market,
+        recordedSigner,
       });
       track("advisory_pack_pdf_exported", {
         clientId,
@@ -502,24 +505,41 @@ export function AdvisoryPackPanel({
   if (!clientId || !loaded || !migrated) return null;
   if (!pack && audience === "owner" && !canGenerate) return null;
 
-  const heldSignoffLine = (() => {
-    if (!pack || !signOffGate.signOffHolds) return null;
-    const when = (iso: string | null | undefined) => fmtWhen(iso, market, profile.timeZone);
-    const extras = `${pack.delivered_at ? ` · read ${when(pack.delivered_at)}` : ""}${
-      liveStats ? ` · edit rate ${Math.round(liveStats.edit_rate * 100)}%` : ""
-    }`;
-    if (pack.reviewed_by_kind === "owner") {
-      return `Accepted by the owner ${when(pack.reviewed_at)}${extras}`;
+  const identityFor = (actorId: string | null | undefined): RecordedActor | null => {
+    if (!actorId) return null;
+    const recorded = actors[actorId];
+    if (recorded?.name) return recorded;
+    if (!user || user.id !== actorId) {
+      if (
+        signoff?.signed_off_by_name &&
+        pack?.reviewed_by === actorId &&
+        !isSamplePracticeSignoff({
+          name: signoff.signed_off_by_name,
+          firmName: signoff.firm_name,
+        })
+      ) {
+        return { name: signoff.signed_off_by_name, firmName: signoff.firm_name };
+      }
+      return null;
     }
-    const named = inAppAccountantSignoffLine({
-      name: signoff?.signed_off_by_name,
-      firmName: signoff?.firm_name,
-      signedOffAt: signoff?.signed_off_at,
-      market,
-      firmTimeZone: profile.timeZone,
+    const meta = (user.user_metadata ?? {}) as { full_name?: unknown; name?: unknown };
+    return recordedActorIdentity({
+      authFullName: typeof meta.full_name === "string" ? meta.full_name : null,
+      authName: typeof meta.name === "string" ? meta.name : null,
+      email: user.email,
+      clientFirmName: profile.firmName,
     });
-    return named ? `${named}${extras}` : null;
-  })();
+  };
+
+  const signerIdentity = identityFor(pack?.reviewed_by);
+  const headerSignoffLine = packHeldSignoffLine({
+    signedOff: signOffGate.signOffHolds,
+    reviewedByKind: pack?.reviewed_by_kind,
+    reviewedAt: pack?.reviewed_at,
+    name: signerIdentity?.name ?? signoff?.signed_off_by_name,
+    firmName: signerIdentity?.firmName ?? signoff?.firm_name,
+    market,
+  });
 
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
@@ -563,17 +583,24 @@ export function AdvisoryPackPanel({
               "No pack yet"
             )}
           </h3>
+          {headerSignoffLine ? (
+            <p
+              className="mt-1 text-[12.5px] font-semibold leading-snug text-slate-900 dark:text-[#f4e7c2]"
+              data-signoff-line
+            >
+              {headerSignoffLine}
+            </p>
+          ) : null}
           <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
-            {heldSignoffLine ??
-              (pack
-                ? audience === "accountant"
-                  ? "Diagnosis, forecast, moves and gaps in one place. Edit what you disagree with — the client only reads what you sign off."
-                  : hasFirm
-                    ? "Your accountant reviews this before you act on it."
-                    : "Built from your figures. Read it, then accept it to move on to the recommendations."
-                : audience === "accountant"
-                  ? "Wrap the current diagnosis, forecast and proposed moves into one reviewable pack."
-                  : "MILŌN can turn the current figures into a short, plain-language pack.")}
+            {pack
+              ? audience === "accountant"
+                ? "Diagnosis, forecast, moves and gaps in one place. Edit what you disagree with — the client only reads what you sign off."
+                : hasFirm
+                  ? "Your accountant reviews this before you act on it."
+                  : "Built from your figures. Read it, then accept it to move on to the recommendations."
+              : audience === "accountant"
+                ? "Wrap the current diagnosis, forecast and proposed moves into one reviewable pack."
+                : "MILŌN can turn the current figures into a short, plain-language pack."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -862,10 +889,14 @@ export function AdvisoryPackPanel({
         <ol className="mt-3 space-y-1.5 text-[12px] text-slate-600 dark:text-slate-300" data-trail>
           {reviews.map((r) => (
             <li key={r.id} className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-slate-400">
-                {fmtWhen(r.created_at, market, profile.timeZone)}
+              <span className="text-slate-400">{fmtWhen(r.created_at, market)}</span>
+              <span className="font-semibold">
+                {reviewActorLabel({
+                  name: identityFor(r.actor_id)?.name,
+                  firmName: identityFor(r.actor_id)?.firmName,
+                  actorKind: r.actor_kind,
+                })}
               </span>
-              <span className="font-semibold capitalize">{r.actor_kind}</span>
               <span>{ACTION_LABEL[r.action]}</span>
               {r.section ? (
                 <span className="text-slate-500">· {r.section.replace(/_/g, " ")}</span>

@@ -8,10 +8,17 @@ import {
   persistedSignoffFirmName,
   persistedSignerName,
   practiceGreetingName,
+  recordedActorIdentity,
   resolvePersistedAccountantIdentity,
 } from "../src/lib/accountant-identity";
 import { practiceGreeting } from "../src/lib/portfolio-dashboard";
-import { inAppAccountantSignoffLine, isSamplePracticeSignoff } from "../src/lib/review-signoff-stamp";
+import { formatReviewDateTime } from "../src/lib/market/format";
+import {
+  inAppAccountantSignoffLine,
+  isSamplePracticeSignoff,
+  packHeldSignoffLine,
+  reviewActorLabel,
+} from "../src/lib/review-signoff-stamp";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -114,6 +121,74 @@ assert(
 );
 assert(namedLine != null && /EDT|UTC-4/.test(namedLine), `sign-off line keeps the zone, got ${namedLine}`);
 assert(
+  namedLine === "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 9:15 PM EDT",
+  `sign-off line uses the shared clock, got ${namedLine}`,
+);
+assert(namedLine != null && !namedLine.includes(":15:"), `sign-off line has no seconds, got ${namedLine}`);
+assert(
+  formatReviewDateTime("2026-10-07T22:14:47.000Z", {
+    locale: "en-US",
+    timezone: "America/New_York",
+  }) === "Oct 7, 2026, 6:14 PM EDT",
+  "the shared clock drops the leading zero and the seconds",
+);
+assert(
+  recordedActorIdentity({
+    profileFullName: "James Fleming",
+    authFullName: "A. Sample",
+    clientFirmName: "Ben Accountants",
+  })?.name === "James Fleming",
+  "the profile name wins over a sample auth name",
+);
+assert(
+  recordedActorIdentity({
+    profileFullName: "A. Sample, CA(SA)",
+    authFullName: "James Fleming",
+    clientFirmName: "Ben Accountants",
+  })?.name === "James Fleming",
+  "a sample profile name is not the signer",
+);
+assert(
+  recordedActorIdentity({
+    profileFullName: "A. Sample",
+    authFullName: "A. Sample",
+    clientFirmName: "Sample Practice",
+  }) === null,
+  "a sample persona is not recorded",
+);
+assert(
+  reviewActorLabel({
+    name: "James Fleming",
+    firmName: "Ben Accountants",
+    actorKind: "accountant",
+  }) === "James Fleming · Ben Accountants",
+  "the trail names the actor and firm",
+);
+assert(
+  reviewActorLabel({ actorKind: "accountant" }) === "Accountant",
+  "the trail falls back to the role",
+);
+assert(
+  packHeldSignoffLine({
+    signedOff: true,
+    reviewedByKind: "accountant",
+    reviewedAt: "2026-10-07T22:14:47.000Z",
+    name: "James Fleming",
+    firmName: "Ben Accountants",
+    market: { locale: "en-US", timezone: "America/New_York" },
+  }) === "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 6:14 PM EDT",
+  "a signed pack names the reviewer next to the chip",
+);
+assert(
+  packHeldSignoffLine({
+    signedOff: false,
+    reviewedAt: "2026-10-07T22:14:47.000Z",
+    name: "James Fleming",
+    firmName: "Ben Accountants",
+  }) === null,
+  "an unsigned pack has no sign-off line",
+);
+assert(
   inAppAccountantSignoffLine({
     name: "A. Sample, CA(SA)",
     firmName: "Sample Practice",
@@ -136,7 +211,14 @@ assert(
   "chip tooltip uses the same name as the greeting",
 );
 const panelSrc = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
-assert(panelSrc.includes("inAppAccountantSignoffLine"), "pack line names the sign-off row");
+assert(panelSrc.includes("packHeldSignoffLine"), "pack line names the sign-off row");
+assert(panelSrc.includes("data-signoff-line"), "the sign-off line sits on the pack header");
+assert(panelSrc.includes("reviewActorLabel"), "the trail names the actor");
+assert(panelSrc.includes("formatReviewDateTime"), "the trail uses the shared clock");
+assert(!panelSrc.includes("second:"), "the trail clock has no seconds");
 assert(!panelSrc.includes("Signed off by the accountant"), "pack line no longer hides the signer");
+const fnSrcPack = readFileSync(resolve("src/lib/advisory-pack.functions.ts"), "utf8");
+assert(fnSrcPack.includes("loadPackActors"), "pack actors are resolved on the server");
+assert(fnSrcPack.includes("recordedActorIdentity"), "pack actors use the DB-first name");
 
 console.log("accountant-identity ok");

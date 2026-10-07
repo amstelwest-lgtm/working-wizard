@@ -16,7 +16,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
+import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import type { LooseSb } from "@/lib/advisory-state.functions";
+import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import {
   ADVISORY_PACK_STALE_NOTE,
@@ -77,6 +80,129 @@ function actorEmail(context: unknown): string {
   return claims?.email ?? "";
 }
 
+type AuthName = { fullName: string | null; name: string | null; email: string | null };
+
+function authNameFromMeta(
+  meta: Record<string, unknown> | null | undefined,
+  email: string | null | undefined,
+): AuthName {
+  return {
+    fullName: typeof meta?.full_name === "string" ? meta.full_name : null,
+    name: typeof meta?.name === "string" ? meta.name : null,
+    email: email ?? null,
+  };
+}
+
+async function readClientFirmName(sb: LooseSb, clientId: string): Promise<string | null> {
+  try {
+    const firmId = await firmIdOfClient(sb, clientId);
+    if (!firmId) return null;
+    const { data, error } = await sb.from("firms").select("name").eq("id", firmId).maybeSingle();
+    if (error) return null;
+    const name = (data as { name?: string | null } | null)?.name;
+    return typeof name === "string" ? name : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * DB-first name and the client's firm for each pack actor. Sample personas
+ * are omitted so the trail falls back to the role. Never throws.
+ */
+async function loadPackActors(
+  sb: LooseSb,
+  clientId: string,
+  actorIds: Array<string | null | undefined>,
+  viewerId: string,
+): Promise<Record<string, RecordedActor>> {
+  const ids = [...new Set(actorIds.filter((id): id is string => typeof id === "string" && id.length > 0))];
+  if (ids.length === 0) return {};
+  try {
+    let firmName = await readClientFirmName(sb, clientId);
+    const profiles = new Map<string, { full_name: string | null; email: string | null }>();
+    const authById = new Map<string, AuthName>();
+    const admin = getSupabaseAdminOrNull();
+    if (admin) {
+      const { data } = await admin.from("profiles").select("id, full_name, email").in("id", ids);
+      for (const row of data ?? []) {
+        profiles.set(row.id, { full_name: row.full_name, email: row.email });
+      }
+      if (!firmName) {
+        const { data: client } = await admin
+          .from("clients")
+          .select("firm_id")
+          .eq("id", clientId)
+          .maybeSingle();
+        if (client?.firm_id) {
+          const { data: firm } = await admin
+            .from("firms")
+            .select("name")
+            .eq("id", client.firm_id)
+            .maybeSingle();
+          firmName = firm?.name ?? null;
+        }
+      }
+      const needsAuth = ids.filter((id) => {
+        const profileName = profiles.get(id)?.full_name?.trim() ?? "";
+        return !profileName || isSamplePracticeSignoff({ name: profileName, firmName });
+      });
+      await Promise.all(
+        needsAuth.map(async (id) => {
+          try {
+            const { data: auth } = await admin.auth.admin.getUserById(id);
+            const meta = (auth.user?.user_metadata ?? {}) as Record<string, unknown>;
+            authById.set(id, authNameFromMeta(meta, auth.user?.email ?? profiles.get(id)?.email));
+          } catch {
+            /* auth lookup is optional when the profile row already has a name */
+          }
+        }),
+      );
+    }
+    if (ids.includes(viewerId) && !profiles.has(viewerId)) {
+      const { data } = await sb
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", viewerId)
+        .maybeSingle();
+      const row = data as { full_name?: string | null; email?: string | null } | null;
+      profiles.set(viewerId, { full_name: row?.full_name ?? null, email: row?.email ?? null });
+      if (!authById.has(viewerId)) {
+        try {
+          const authSb = sb as unknown as {
+            auth: {
+              getUser: () => Promise<{
+                data: { user: { email?: string | null; user_metadata?: Record<string, unknown> } | null };
+              }>;
+            };
+          };
+          const { data: userData } = await authSb.auth.getUser();
+          const meta = userData.user?.user_metadata ?? {};
+          authById.set(viewerId, authNameFromMeta(meta, userData.user?.email ?? row?.email));
+        } catch {
+          /* the viewer's own row is enough when auth metadata is unavailable */
+        }
+      }
+    }
+    const out: Record<string, RecordedActor> = {};
+    for (const id of ids) {
+      const profile = profiles.get(id);
+      const auth = authById.get(id);
+      const identity = recordedActorIdentity({
+        profileFullName: profile?.full_name,
+        authFullName: auth?.fullName,
+        authName: auth?.name,
+        email: profile?.email ?? auth?.email,
+        clientFirmName: firmName,
+      });
+      if (identity) out[id] = identity;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Server gate in front of a new pack or brain deliverable.
  * brain-deliverable-draft applies the same check itself.
@@ -135,6 +261,8 @@ export type LatestPackResult = {
   migrated: boolean;
   pack: AdvisoryPack | null;
   reviews: PackReview[];
+  /** DB-first name and firm for each actor id on this pack. Sample names are omitted. */
+  actors: Record<string, RecordedActor>;
   /** Versions available (newest first), for the version switcher. */
   versions: Array<
     Pick<AdvisoryPack, "id" | "version" | "status" | "generated_at" | "period_label">
@@ -150,13 +278,22 @@ export const getLatestAdvisoryPack = createServerFn({ method: "GET" })
     const sb = context.supabase as unknown as LooseSb;
     await assertClientAccess(sb, context.userId, data.clientId);
     const { rows, migrated } = await loadPackRows(sb, data.clientId, { limit: 25 });
-    if (!migrated || rows.length === 0) return { migrated, pack: null, reviews: [], versions: [] };
+    if (!migrated || rows.length === 0) {
+      return { migrated, pack: null, reviews: [], actors: {}, versions: [] };
+    }
     const pack = (data.packId ? rows.find((r) => r.id === data.packId) : null) ?? rows[0];
     const reviews = await loadReviews(sb, pack.id);
+    const actors = await loadPackActors(
+      sb,
+      data.clientId,
+      [pack.reviewed_by, pack.generated_by, ...reviews.map((review) => review.actor_id)],
+      context.userId,
+    );
     return {
       migrated,
       pack,
       reviews,
+      actors,
       versions: rows.map((r) => ({
         id: r.id,
         version: r.version,
@@ -458,7 +595,28 @@ const SectionPatch = z.object({
   bullets: z.array(z.string().max(500)).max(20).optional(),
 });
 
-export type ReviewPackResult = { ok: true; pack: AdvisoryPack; reviews: PackReview[] };
+export type ReviewPackResult = {
+  ok: true;
+  pack: AdvisoryPack;
+  reviews: PackReview[];
+  actors: Record<string, RecordedActor>;
+};
+
+async function reviewResult(
+  sb: LooseSb,
+  clientId: string,
+  viewerId: string,
+  pack: AdvisoryPack,
+  reviews: PackReview[],
+): Promise<ReviewPackResult> {
+  const actors = await loadPackActors(
+    sb,
+    clientId,
+    [pack.reviewed_by, pack.generated_by, ...reviews.map((review) => review.actor_id)],
+    viewerId,
+  );
+  return { ok: true, pack, reviews, actors };
+}
 
 function applySectionPatch(
   content: AdvisoryPackContent,
@@ -526,7 +684,7 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
       if (data.action === "invalidate") {
         if (!figuresChanged || pack.status !== "approved") {
           const reviews = await loadReviews(sb, data.packId);
-          return { ok: true, pack, reviews };
+          return reviewResult(sb, data.clientId, context.userId, pack, reviews);
         }
       } else if (figuresChanged) {
         throw new Error(ADVISORY_PACK_STALE_NOTE);
@@ -565,5 +723,11 @@ export const reviewAdvisoryPack = createServerFn({ method: "POST" })
       loadReviews(sb, data.packId),
     ]);
     if (e2) throw new Error(e2.message);
-    return { ok: true, pack: parsePackRow(row as Record<string, unknown>), reviews };
+    return reviewResult(
+      sb,
+      data.clientId,
+      context.userId,
+      parsePackRow(row as Record<string, unknown>),
+      reviews,
+    );
   });

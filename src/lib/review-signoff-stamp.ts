@@ -7,7 +7,7 @@
 
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { formatSignedOffDateTime } from "@/lib/market";
+import { formatReviewDateTime } from "@/lib/market";
 import type { ResolvedMarket } from "@/lib/market";
 
 export type SignoffStampContext = {
@@ -47,17 +47,59 @@ export function inAppAccountantSignoffLine(input: {
   const signedOffAt = (input.signedOffAt ?? "").trim();
   if (!name || !signedOffAt) return null;
   if (isSamplePracticeSignoff({ name, firmName: firm || null })) return null;
-  const when = formatSignedOffDateTime(signedOffAt, input.market, {
+  const when = formatReviewDateTime(signedOffAt, input.market, {
     firmTimeZone: input.firmTimeZone,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
   });
   if (!when || when === "—") return null;
   return firm ? `Signed off by ${name} · ${firm} · ${when}` : `Signed off by ${name} · ${when}`;
+}
+
+/**
+ * Line under the pack header when this version's sign-off still holds.
+ * Accountant packs name the recorded signer. Owner packs stay role-only.
+ */
+export function packHeldSignoffLine(input: {
+  signedOff: boolean;
+  reviewedByKind?: string | null;
+  reviewedAt?: string | null;
+  name?: string | null;
+  firmName?: string | null;
+  market?: Pick<ResolvedMarket, "locale" | "timezone">;
+  firmTimeZone?: string | null;
+}): string | null {
+  if (!input.signedOff) return null;
+  if (input.reviewedByKind === "owner") {
+    const when = (input.reviewedAt ?? "").trim();
+    if (!when) return null;
+    const clock = formatReviewDateTime(when, input.market, {
+      firmTimeZone: input.firmTimeZone,
+    });
+    if (!clock || clock === "—") return null;
+    return `Accepted by the owner ${clock}`;
+  }
+  return inAppAccountantSignoffLine({
+    name: input.name,
+    firmName: input.firmName,
+    signedOffAt: input.reviewedAt,
+    market: input.market,
+    firmTimeZone: input.firmTimeZone,
+  });
+}
+
+/** Trail actor. Name and firm when they were recorded; otherwise the role. */
+export function reviewActorLabel(input: {
+  name?: string | null;
+  firmName?: string | null;
+  actorKind?: string | null;
+}): string {
+  const name = (input.name ?? "").trim();
+  const firm = (input.firmName ?? "").trim();
+  if (name && !isSamplePracticeSignoff({ name, firmName: firm || null })) {
+    return firm ? `${name} · ${firm}` : name;
+  }
+  const kind = (input.actorKind ?? "system").trim().replace(/_/g, " ");
+  if (!kind) return "System";
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
 function firmMatchesClient(stampFirm: string | null, clientFirmName: string | null | undefined): boolean {

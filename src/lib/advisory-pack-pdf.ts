@@ -9,6 +9,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
 import type { AdvisoryPack, PackStatus } from "@/lib/advisory-pack";
 import { packStatusLabel } from "@/lib/advisory-pack";
+import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
 
 /** Same shape as the report footer stamp. Kept local so this module does not import react-pdf. */
 export type AdvisoryPackPdfStamp = {
@@ -89,27 +90,38 @@ export function advisoryPackPdfStamp(input: {
   reviewedBy: string | null;
   reviewedByKind: "accountant" | "owner" | null;
   userId: string | null;
-  /** Resolved person name. Used only when this user is the signer. */
+  /** Resolved person name. Used only when this user is the signer and no DB name was recorded. */
   signerName: string | null;
   firmName: string;
   signatureDataUrl: string | null;
+  /** DB-first name of the recorded signer. Wins over the viewer's profile. */
+  recordedSignerName?: string | null;
+  recordedFirmName?: string | null;
 }): AdvisoryPackPdfStamp | null {
   if (input.status !== "approved" || !input.reviewedAt) return null;
   if (input.reviewedByKind !== "accountant" && input.reviewedByKind !== "owner") return null;
 
   const isSigner = Boolean(input.userId && input.reviewedBy && input.userId === input.reviewedBy);
   const personal = input.signerName?.trim() ?? "";
-  const signedOffByName = pdfSafeText(
-    isSigner && personal ? personal : input.reviewedByKind === "owner" ? "Owner" : "Accountant",
-  );
+  const recordedName = input.recordedSignerName?.trim() ?? "";
+  const recordedFirm = input.recordedFirmName?.trim() ?? "";
+  const recordedOk =
+    Boolean(recordedName) &&
+    !isSamplePracticeSignoff({
+      name: recordedName,
+      firmName: recordedFirm || input.firmName,
+    });
+  const role = input.reviewedByKind === "owner" ? "Owner" : "Accountant";
+  const signedOffByName = pdfSafeText(recordedOk ? recordedName : isSigner && personal ? personal : role);
   const signature =
     isSigner && input.signatureDataUrl?.startsWith("data:image/") ? input.signatureDataUrl : null;
+  const firmRaw = recordedOk && recordedFirm ? recordedFirm : input.firmName.trim();
 
   return {
     signedOffByName,
     signedOffByInitials: initialsFromName(signedOffByName),
     signedOffByTitle: null,
-    firmName: input.firmName.trim() ? pdfSafeText(input.firmName.trim()) : null,
+    firmName: firmRaw ? pdfSafeText(firmRaw) : null,
     signedOffAt: input.reviewedAt,
     signatureData: signature,
   };
@@ -147,6 +159,7 @@ export async function downloadAdvisoryPackPdf(input: {
     user_metadata?: Record<string, unknown> | null;
   } | null;
   market?: ResolvedMarket;
+  recordedSigner?: { name: string; firmName: string | null } | null;
 }): Promise<{ blob: Blob; filename: string; signed: boolean }> {
   const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -164,6 +177,8 @@ export async function downloadAdvisoryPackPdf(input: {
     signerName: signerNameForPackStamp(input.user ?? null, input.profile.accountantName),
     firmName: input.profile.firmName,
     signatureDataUrl: input.profile.signatureDataUrl,
+    recordedSignerName: input.recordedSigner?.name ?? null,
+    recordedFirmName: input.recordedSigner?.firmName ?? null,
   });
   const sections: AdvisoryPackPdfSection[] = input.pack.content.sections.map((s) => ({
     title: s.title,

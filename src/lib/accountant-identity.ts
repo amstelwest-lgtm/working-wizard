@@ -93,3 +93,35 @@ export function persistedSignoffFirmName(input: {
   const name = trimmed(input.clientFirmName);
   return name || null;
 }
+
+export type RecordedActor = {
+  name: string;
+  firmName: string | null;
+};
+
+/**
+ * Person and firm to print for a pack actor. Profile full name wins, then
+ * auth metadata, then the email local-part. A sample persona is skipped so
+ * it cannot stand in for a real signer, and a sample firm is not printed.
+ */
+export function recordedActorIdentity(input: {
+  profileFullName?: string | null;
+  authFullName?: string | null;
+  authName?: string | null;
+  email?: string | null;
+  clientFirmName?: string | null;
+}): RecordedActor | null {
+  const firmName = persistedSignoffFirmName({ clientFirmName: input.clientFirmName });
+  const profile = trimmed(input.profileFullName);
+  const profileOk = profile && !isSamplePracticeSignoff({ name: profile, firmName });
+  const name = profileOk
+    ? profile
+    : persistedSignerName({
+        profileFullName: null,
+        authFullName: input.authFullName,
+        authName: input.authName,
+        email: input.email,
+      });
+  if (!name || isSamplePracticeSignoff({ name, firmName })) return null;
+  return { name, firmName };
+}
