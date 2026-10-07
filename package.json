@@ -125,6 +125,7 @@
     "test:health-score": "vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts",
     "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts",
     "test:client-route-search": "vite-node --config scripts/vite-test.config.ts scripts/client-route-search-test.mts",
+    "test:dmmt-polish": "vite-node --config scripts/vite-test.config.ts scripts/dmmt-polish-test.mts",
     "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",
     "test:report-direction": "vite-node --config scripts/vite-test.config.ts scripts/report-direction-test.mts",
     "test:report-coherence": "vite-node --config scripts/vite-test.config.ts scripts/report-coherence-test.mts",

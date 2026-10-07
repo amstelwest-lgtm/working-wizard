@@ -20,8 +20,8 @@ assert(!clientSrc.includes("REPORT_TEMPLATES"), "old report gallery catalogue is
 assert(!clientSrc.includes("rep-grid"), "old report gallery markup is gone");
 assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the client Reports tab and scrolls to it");
 assert(
-  /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc) ||
-    /activeTab === "reports" \|\|[\s\S]{0,80}activeTab === "advisory"/.test(clientSrc),
+  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc) ||
+    /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc),
   "simple/complex toggle is hidden on Reports — the studio does not change",
 );
 

@@ -18,13 +18,12 @@ import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
-import {
-  STARTER_TRIAL_ENDED_MESSAGE,
-  firmStarterTrialCountdownCopy,
-} from "@/lib/firm-starter-trial";
+import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import {
   createBillingPortalSession,
   getFirmPlanDisplay,
@@ -190,6 +189,39 @@ function SettingsPage() {
     }
   };
 
+  const handlePlanUpgrade = (
+    band: FirmCheckoutBand,
+    interval: FirmInterval,
+    voucherCode?: string | null,
+  ) => {
+    if (!firmId) return;
+    setUpgrading(true);
+    setUpgradeError(null);
+    void upgradeBand({
+      data: {
+        firmId,
+        band,
+        interval,
+        voucherCode: voucherCode?.trim() || undefined,
+      },
+    })
+      .then(async (result) => {
+        if (result.kind === "checkout") {
+          window.location.href = result.url;
+          return;
+        }
+        toast.success(result.message);
+        const next = await loadPlan({ data: { firmId } });
+        setPlan(next);
+      })
+      .catch((ex: unknown) => {
+        const message = ex instanceof Error ? ex.message : UPGRADE_FAILED_MESSAGE;
+        setUpgradeError(message);
+        toast.error(message);
+      })
+      .finally(() => setUpgrading(false));
+  };
+
   const handleRestartTour = () => {
     resetOnboardingTours(isPractice ? "accountant" : "owner");
     toast.success("Guided tour will show next time you open the board");
@@ -332,27 +364,45 @@ function SettingsPage() {
               ) : (
                 <>
                   <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
-                  {plan?.starterTrial?.expired ? (
-                    <p role="status" className="text-sm font-medium">
-                      {STARTER_TRIAL_ENDED_MESSAGE}
-                    </p>
-                  ) : plan?.starterTrial ? (
+                  {plan?.starterTrial && !plan.starterTrial.expired ? (
                     firmStarterTrialCountdownCopy(plan.starterTrial) ? (
                       <p role="status" className="text-sm">
                         {firmStarterTrialCountdownCopy(plan.starterTrial)}
                       </p>
                     ) : null
                   ) : null}
-                  {plan?.detail ? (
-                    <p className="text-xs text-[var(--ink-dim)]">{plan.detail}</p>
-                  ) : null}
-                  {plan?.usageLabel ? (
-                    <p className="text-xs text-[var(--ink-dim)]">{plan.usageLabel}</p>
-                  ) : null}
+                  {plan?.starterTrial?.expired ? null : (
+                    <>
+                      {plan?.detail ? (
+                        <p className="text-xs text-[var(--ink-dim)]">{plan.detail}</p>
+                      ) : null}
+                      {plan?.usageLabel ? (
+                        <p className="text-xs text-[var(--ink-dim)]">{plan.usageLabel}</p>
+                      ) : null}
+                    </>
+                  )}
                 </>
               )}
             </div>
-            {plan && plan.configured !== false ? (
+            {plan?.starterTrial?.expired && plan.configured !== false ? (
+              <div className="mb-3">
+                <TrialEndedPlanBlock
+                  firmId={firmId}
+                  upgrading={upgrading}
+                  upgrade={{
+                    band: plan.band,
+                    interval: plan.interval ?? "month",
+                    priceCurrency: plan.priceCurrency ?? "USD",
+                    zarByBand: plan.zarByBand ?? {},
+                    canUpgrade: plan.canUpgrade,
+                    clientCount: plan.clientCount,
+                    usageLabel: plan.usageLabel,
+                    saDiscount: plan.saDiscount,
+                  }}
+                  onUpgrade={handlePlanUpgrade}
+                />
+              </div>
+            ) : plan && plan.configured !== false ? (
               <div className="mb-3">
                 <FirmBandUpgrade
                   currentBand={plan.band}
@@ -364,41 +414,14 @@ function SettingsPage() {
                   saDiscount={plan.saDiscount}
                   upgrading={upgrading}
                   onValidateVoucher={onValidateVoucher}
-                  onUpgrade={(band, interval, voucherCode) => {
-                    if (!firmId) return;
-                    setUpgrading(true);
-                    setUpgradeError(null);
-                    void upgradeBand({
-                      data: {
-                        firmId,
-                        band,
-                        interval,
-                        voucherCode: voucherCode?.trim() || undefined,
-                      },
-                    })
-                      .then(async (result) => {
-                        if (result.kind === "checkout") {
-                          window.location.href = result.url;
-                          return;
-                        }
-                        toast.success(result.message);
-                        const next = await loadPlan({ data: { firmId } });
-                        setPlan(next);
-                      })
-                      .catch((ex: unknown) => {
-                        const message = ex instanceof Error ? ex.message : UPGRADE_FAILED_MESSAGE;
-                        setUpgradeError(message);
-                        toast.error(message);
-                      })
-                      .finally(() => setUpgrading(false));
-                  }}
+                  onUpgrade={handlePlanUpgrade}
                 />
-                {upgradeError ? (
-                  <p role="alert" className="mt-2 text-xs text-[var(--risk,#9b2c2c)]">
-                    {upgradeError}
-                  </p>
-                ) : null}
               </div>
+            ) : null}
+            {upgradeError ? (
+              <p role="alert" className="mt-2 text-xs text-[var(--risk,#9b2c2c)]">
+                {upgradeError}
+              </p>
             ) : null}
             <Link to="/settings/team" className="settings-row">
               <Users className="h-4 w-4" />

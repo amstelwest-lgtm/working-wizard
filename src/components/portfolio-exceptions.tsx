@@ -11,6 +11,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import type { PortfolioRow } from "@/lib/portfolio";
 import { getFirmPortfolio, type PortfolioResult } from "@/lib/portfolio.functions";
+import {
+  mergeNeedsAttention,
+  type AttentionItem,
+  type MergedAttention,
+} from "@/lib/portfolio-dashboard";
 
 type Props = {
   firmId: string | null;
@@ -21,6 +26,11 @@ type Props = {
    * client actually needs a human today.
    */
   hideWhenClear?: boolean;
+  /**
+   * Health alerts from the practice book. Merged with pack sign-off into the
+   * one Needs attention strip so the dashboard does not show two queues.
+   */
+  healthItems?: AttentionItem[];
 };
 
 const SEV_CLASS: Record<1 | 2 | 3, string> = {
@@ -29,7 +39,20 @@ const SEV_CLASS: Record<1 | 2 | 3, string> = {
   3: "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:border-white/15 dark:text-slate-300",
 };
 
-export function PortfolioExceptions({ firmId, refreshKey, className, hideWhenClear }: Props) {
+function attentionSearch(row: MergedAttention): Record<string, string> {
+  if (row.tab === "plan" && row.overdue) return { tab: "plan", filter: "overdue" };
+  if (row.tab) return { tab: row.tab };
+  if (row.openQueries) return { queries: "open" };
+  return {};
+}
+
+export function PortfolioExceptions({
+  firmId,
+  refreshKey,
+  className,
+  hideWhenClear,
+  healthItems,
+}: Props) {
   const fetch = useServerFn(getFirmPortfolio);
   const [data, setData] = useState<PortfolioResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,47 +76,40 @@ export function PortfolioExceptions({ firmId, refreshKey, className, hideWhenCle
     // refreshKey is intentionally a dependency.
   }, [firmId, refreshKey, fetch]);
 
-  if (!firmId || (!data && !loading)) return null;
-  if (data && data.rows.length === 0) return null;
-
-  const attention = data ? data.rows.filter((r) => r.exceptions.some((e) => e.severity <= 2)) : [];
-  const quiet = data ? data.rows.filter((r) => !r.exceptions.some((e) => e.severity <= 2)) : [];
-  const visible: PortfolioRow[] = showAll ? [...attention, ...quiet] : attention;
+  if (!firmId) return null;
 
   if (hideWhenClear) {
-    if (!data || attention.length === 0) return null;
-    const shown = attention.slice(0, 3);
-    const more = attention.length - shown.length;
+    const merged = mergeNeedsAttention(healthItems ?? [], data?.rows ?? []);
+    if ((!data && loading && merged.length === 0) || merged.length === 0) return null;
+    const shown = merged.slice(0, 6);
+    const more = merged.length - shown.length;
     return (
       <section
         className={["attn-strip", className].filter(Boolean).join(" ")}
-        id="portfolio-exceptions"
-        data-attention={attention.length}
+        id="needs-attention"
+        aria-label="Needs attention"
+        data-attention={merged.length}
       >
         <h2>Needs attention</h2>
         <ul>
-          {shown.map((r) => {
-            const reasons = r.exceptions
-              .filter((e) => e.severity <= 2)
-              .map((e) => e.label)
-              .join(" · ");
-            const first = r.exceptions.find((e) => e.severity <= 2);
-            return (
-              <li key={r.clientId}>
-                <Link
-                  to="/clients/$clientId"
-                  params={{ clientId: r.clientId }}
-                  search={{ tab: first?.tab } as never}
-                  className="attn-strip-row"
-                  data-client={r.clientId}
-                >
-                  <span className="attn-strip-name">{r.name}</span>
-                  <span className="attn-strip-reason">{reasons || r.stateLabel}</span>
-                  <span className="attn-strip-go">Open →</span>
-                </Link>
-              </li>
-            );
-          })}
+          {shown.map((row) => (
+            <li key={row.clientId}>
+              <Link
+                to="/clients/$clientId"
+                params={{ clientId: row.clientId }}
+                search={attentionSearch(row) as never}
+                className="attn-strip-row"
+                data-client={row.clientId}
+              >
+                <span className="attn-strip-name">{row.name}</span>
+                <span className="attn-strip-reason">{row.reason}</span>
+                {row.detail ? <span className="attn-strip-detail">{row.detail}</span> : null}
+                <span className="attn-strip-go">
+                  {row.tab === "plan" && (row.openPlan || row.overdue) ? "Chase →" : "Open →"}
+                </span>
+              </Link>
+            </li>
+          ))}
           {more > 0 ? (
             <li className="attn-strip-more">and {more} more in the client list</li>
           ) : null}
@@ -101,6 +117,13 @@ export function PortfolioExceptions({ firmId, refreshKey, className, hideWhenCle
       </section>
     );
   }
+
+  if (!data && !loading) return null;
+  if (data && data.rows.length === 0) return null;
+
+  const attention = data ? data.rows.filter((r) => r.exceptions.some((e) => e.severity <= 2)) : [];
+  const quiet = data ? data.rows.filter((r) => !r.exceptions.some((e) => e.severity <= 2)) : [];
+  const visible: PortfolioRow[] = showAll ? [...attention, ...quiet] : attention;
 
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
