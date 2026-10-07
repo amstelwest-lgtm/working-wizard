@@ -10,6 +10,11 @@ import { CASH_FORECAST_WEEKS } from "@/lib/cash-runway";
  * module wrote are marked `openingBalanceSource` and refresh on the next
  * sync, including when the other ledger takes the file.
  *
+ * QuickBooks with no bank accounts still seeds the 13-week forecast from
+ * balance-sheet cash. A typed opening is not overwritten; empty forecast
+ * lines are. Cash received and cash spent, when the activity report has
+ * them, stay the weekly lines even if the chart of accounts listed no banks.
+ *
  * Cash received and cash spent are one total for the window. When the
  * forecast has no typed amounts, they become two weekly lines (total ÷ 13).
  * Typed amounts are not overwritten. Lines this module wrote refresh until
@@ -118,6 +123,17 @@ export function applyQboOpeningCash(
   startDate: string,
 ): { cashflow: Record<string, unknown>; changed: boolean; reason: XeroOpeningApplyReason } {
   return applyLedgerOpeningCash(existing, cash, startDate, "qbo");
+}
+
+/** A non-zero opening the accountant typed. Ledger-owned openings refresh. */
+export function isTypedForecastOpening(existing: unknown): boolean {
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) return false;
+  const base = existing as Record<string, unknown>;
+  const raw = base.openingBalance;
+  const current = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+  const empty = raw == null || raw === "" || !Number.isFinite(current) || current === 0;
+  if (empty) return false;
+  return !LEDGER_OPENING_SOURCES.has(String(base.openingBalanceSource ?? ""));
 }
 
 /** Sentence for the Xero card and the client briefing after Sync. */
@@ -380,16 +396,125 @@ export function seedXeroBankForecastLines(
   return seedLedgerBankForecastLines(existing, flows, XERO_SEED_VOICE);
 }
 
-/** Same weekly run-rate as the Xero bank path, from QuickBooks bank activity. */
-export function seedQboBankForecastLines(
+/** Sentence stored on the cash forecast when bank accounts are missing. */
+export function qboBalanceSheetHoldNote(amount: number): string {
+  return `Forecast lines seeded from the balance sheet (${moneyString(amount)}). QuickBooks listed no bank accounts, so the 13-week forecast holds that cash.`;
+}
+
+export function isQboBalanceSheetHoldNote(note: string | null | undefined): boolean {
+  if (typeof note !== "string") return false;
+  return /balance sheet/i.test(note) && /no bank accounts/i.test(note) && /13-week/i.test(note);
+}
+
+function forecastLineKind(existing: Record<string, unknown>): "foreign" | "edited" | "empty" {
+  const revenue = asLines(existing.revenue);
+  const expenses = asLines(existing.expenses);
+  const other = asLines(existing.other);
+  const ownedByLedger = LEDGER_LINE_SOURCES.has(String(existing.forecastLinesSource ?? ""));
+  const all = [...revenue, ...expenses, ...other];
+  if (all.some((line) => lineAmount(line) !== 0 && !isLedgerBankLine(line))) return "foreign";
+  if (all.some((line) => lineAmount(line) !== 0 && isLedgerBankLine(line)) && !ownedByLedger) {
+    return "edited";
+  }
+  return "empty";
+}
+
+/**
+ * No bank accounts and no cash-in / cash-out. Hold balance-sheet cash for
+ * 13 weeks instead of leaving the cash tab with no forecast. A typed opening
+ * stays; empty lines are filled with a QuickBooks hold the next sync can replace.
+ */
+function seedQboBalanceSheetHold(
   existing: Record<string, unknown>,
   flows: XeroBankFlowSeed | null,
+  balanceSheetCash: number,
 ): {
   cashflow: Record<string, unknown>;
   changed: boolean;
   status: XeroForecastLineSeedStatus;
   reason: string;
 } {
+  const kind = forecastLineKind(existing);
+  if (kind === "foreign") {
+    return {
+      cashflow: existing,
+      changed: false,
+      status: "skipped",
+      reason: `Forecast lines skipped — the 13-week forecast already has typed amounts. ${QBO_SEED_VOICE.reportLabel} cash received and cash spent were not written over them.`,
+    };
+  }
+  if (kind === "edited") {
+    return {
+      cashflow: existing,
+      changed: false,
+      status: "skipped",
+      reason: `Forecast lines skipped — the ${QBO_SEED_VOICE.providerName} cash lines on the forecast were edited, so this Sync left them as they are.`,
+    };
+  }
+  const note = qboBalanceSheetHoldNote(balanceSheetCash);
+  const held: ForecastLine = {
+    id: QBO_BANK_RECEIVED_LINE_ID,
+    name: "Cash held (QuickBooks balance sheet)",
+    amount: "0",
+    frequency: "recurring-weekly",
+    startWeek: 1,
+    splitCount: 1,
+  };
+  const revenue = [held];
+  const expenses = asLines(existing.expenses).filter((line) => !LEDGER_SEED_LINE_IDS.has(line.id));
+  const same =
+    existing.forecastLinesSource === QBO_BANK_LINES_SOURCE &&
+    existing.forecastLinesNote === note &&
+    JSON.stringify(asLines(existing.revenue)) === JSON.stringify(revenue) &&
+    JSON.stringify(asLines(existing.expenses)) === JSON.stringify(expenses);
+  if (same) {
+    return {
+      cashflow: existing,
+      changed: false,
+      status: "unchanged",
+      reason: note,
+    };
+  }
+  const next: Record<string, unknown> = {
+    ...existing,
+    revenue,
+    expenses,
+    forecastLinesSource: QBO_BANK_LINES_SOURCE,
+    forecastLinesNote: note,
+  };
+  if ((typeof next.startDate !== "string" || !next.startDate) && flows?.to) {
+    next.startDate = flows.to;
+  }
+  return {
+    cashflow: next,
+    changed: true,
+    status: "seeded",
+    reason: note,
+  };
+}
+
+/** Same weekly run-rate as the Xero bank path, from QuickBooks bank activity. */
+export function seedQboBankForecastLines(
+  existing: Record<string, unknown>,
+  flows: XeroBankFlowSeed | null,
+  options?: { balanceSheetCash?: number | null },
+): {
+  cashflow: Record<string, unknown>;
+  changed: boolean;
+  status: XeroForecastLineSeedStatus;
+  reason: string;
+} {
+  const sheetRaw = options?.balanceSheetCash;
+  const sheet = typeof sheetRaw === "number" && Number.isFinite(sheetRaw) ? sheetRaw : null;
+  const received = flows && Number.isFinite(flows.cashReceived) ? flows.cashReceived : 0;
+  const spent = flows && Number.isFinite(flows.cashSpent) ? flows.cashSpent : 0;
+  const noBanks = !flows || flows.accountCount <= 0;
+  if (noBanks && flows && (received !== 0 || spent !== 0)) {
+    return seedLedgerBankForecastLines(existing, { ...flows, accountCount: 1 }, QBO_SEED_VOICE);
+  }
+  if (noBanks && sheet != null && sheet !== 0) {
+    return seedQboBalanceSheetHold(existing, flows, sheet);
+  }
   return seedLedgerBankForecastLines(existing, flows, QBO_SEED_VOICE);
 }
 

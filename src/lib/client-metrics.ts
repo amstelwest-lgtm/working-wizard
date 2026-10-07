@@ -8,6 +8,7 @@
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
+import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
 import { effectivePeriodMonths } from "./equity-coherence.ts";
 import {
   computeRatios,
@@ -1033,6 +1034,20 @@ function seriesTotals(inflow: number[], outflow: number[], closing: number[]) {
   };
 }
 
+function cashflowHasMovement(cf: Record<string, unknown> | null): boolean {
+  if (!cf) return false;
+  for (const key of ["revenue", "expenses", "other"]) {
+    const rows = cf[key];
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      const n = finiteNum((row as { amount?: unknown }).amount);
+      if (n != null && Math.abs(n) >= 0.5) return true;
+    }
+  }
+  return false;
+}
+
 function reclose(opening: number, inflow: number[], outflow: number[]): number[] {
   const closing: number[] = [];
   let bal = opening;
@@ -1163,7 +1178,10 @@ export function resolveThirteenWeekForecast(input: {
   const timingNote = cf ? storedTimingNote(cf) : null;
 
   const bankSeeded = typeof cf?.seededFromBanksAt === "string" && cf.seededFromBanksAt.length > 0;
-  const protectedLines = bankSeeded || cf?.forecastLinesSource === "xero-bank-summary";
+  const qboMovement = cf?.forecastLinesSource === "qbo-bank-activity" && cashflowHasMovement(cf);
+  // A zero-amount balance-sheet hold is not protected: a real P&L run-rate still replaces it.
+  const protectedLines =
+    bankSeeded || cf?.forecastLinesSource === "xero-bank-summary" || qboMovement;
 
   let storedCurrent = Boolean(rolled && startOk && openingOk);
   if (storedCurrent && rolled && !protectedLines && runway.kind === "cash_generative") {
@@ -1342,6 +1360,42 @@ export function resolveThirteenWeekForecast(input: {
         reanchored: false,
       };
     }
+  }
+
+  const holdNote = typeof cf?.forecastLinesNote === "string" ? cf.forecastLinesNote : "";
+  if (
+    cf?.forecastLinesSource === "qbo-bank-activity" &&
+    isQboBalanceSheetHoldNote(holdNote) &&
+    !cashflowHasMovement(cf) &&
+    opening !== 0 &&
+    !plHasRate
+  ) {
+    const inflow = new Array(weeks).fill(0);
+    const outflow = new Array(weeks).fill(0);
+    const closing = reclose(opening, inflow, outflow);
+    const totals = seriesTotals(inflow, outflow, closing);
+    return {
+      source: "stored",
+      startDate: anchor,
+      weekDates: weekDatesFrom(anchor, weeks),
+      opening,
+      inflow,
+      outflow,
+      closing,
+      totalInflow: totals.totalInflow,
+      totalOutflow: totals.totalOutflow,
+      floor: totals.floor,
+      dipsBelowFloorWeek: totals.dipsBelowFloorWeek,
+      shortfall: false,
+      shortfallWeek: null,
+      timingNote: null,
+      cycleNote,
+      replaceStored: false,
+      lines: { revenue: [], expenses: [] },
+      estimateLabel: null,
+      anchorNote: null,
+      reanchored: false,
+    };
   }
 
   return buildDerived();

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { forecastOpeningFromStored } from "@/lib/xero-opening";
+import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -1332,7 +1332,9 @@ export function CashForecastPanel({
   // No forecast lines yet. A flat $0 trajectory must not be badged "In the black",
   // even when a hand-entered opening balance is already on the file.
   const linesBlank = [...revenue, ...expenses, ...other].every((l) => !(parseFloat(l.amount) || 0));
-  const forecastEmpty = loaded && linesBlank && !plEstimateRef.current;
+  const balanceSheetHold =
+    isQboBalanceSheetHoldNote(xeroBankNote) && (parseFloat(openingBalance) || 0) !== 0;
+  const forecastEmpty = loaded && linesBlank && !plEstimateRef.current && !balanceSheetHold;
 
   const heroBadge = forecastEmpty ? (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-400/50 bg-slate-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
