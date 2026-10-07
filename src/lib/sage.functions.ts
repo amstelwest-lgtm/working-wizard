@@ -3,8 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
+import { encryptSagePassword } from "@/lib/sage-password";
 import {
-  encryptSagePassword,
   sageConnectionInsert,
   sageCredentialsConfigured,
   sageSyncWriteDecision,
@@ -145,7 +145,7 @@ export const connectSage = createServerFn({ method: "POST" })
     });
     if (!validated.ok) throw new Error(sageValidateError(validated.reason));
 
-    const passwordEnc = await encryptSagePassword(data.password);
+    const passwordEnc = encryptSagePassword(data.password);
     const row = sageConnectionInsert({
       clientId: data.clientId,
       username: data.username.trim(),

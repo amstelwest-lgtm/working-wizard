@@ -40,4 +40,4 @@ COMMENT ON TABLE public.sage_connections IS
 COMMENT ON TABLE public.sage_sync_data IS
   'Cached Sage report payloads for Eng1. Service-role only. Connect does not write figures here.';
 COMMENT ON COLUMN public.sage_connections.password_enc IS
-  'AES-GCM ciphertext (v1). Key derived from SESSION_SECRET. Never returned to the browser.';
+  'enc:v1 AES-256-GCM. Key is SAGE_SA_PASSWORD_KEY, or SAGE_SA_API_KEY when that is unset. Never returned to the browser.';

@@ -41,14 +41,6 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(value);
-  const buffer = new ArrayBuffer(binary.length);
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 /** Basic auth header. Unicode passwords are encoded as UTF-8, not Latin-1. */
 export function sageBasicAuthorization(username: string, password: string): string {
   const token = bytesToBase64(new TextEncoder().encode(`${username}:${password}`));
@@ -176,40 +168,25 @@ export function sageValidateError(reason: Exclude<SageValidateResult, { ok: true
   }
 }
 
-const PASSWORD_VERSION = "v1";
-
-async function sagePasswordKey(): Promise<CryptoKey> {
-  const secret = process.env.SESSION_SECRET?.trim() ?? "";
-  if (!secret) {
-    throw new Error("SESSION_SECRET is not set — refusing to store a Sage password.");
-  }
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`sage-sa:${secret}`));
-  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
-}
-
-/** AES-GCM ciphertext. The password is not stored in plaintext. */
-export async function encryptSagePassword(plain: string): Promise<string> {
-  const key = await sagePasswordKey();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cipher = new Uint8Array(
-    await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plain)),
+/**
+ * Fields worth handing to the board. Eng1's sync returns `fields` with a
+ * period and figures. The connect stub sets `populated: false` and empty
+ * fields, which must not auto-populate Health.
+ */
+export function sageSyncPopulatedFields(result: {
+  populated?: boolean;
+  fields?: Record<string, string> | null;
+} | null | undefined): Record<string, string> | null {
+  if (!result || result.populated === false) return null;
+  const fields = result.fields;
+  if (!fields) return null;
+  const hasFigure = ["revenue", "netIncome", "cash", "totalAssets", "equity", "periodStart", "periodEnd"].some(
+    (key) => {
+      const value = fields[key];
+      return value != null && String(value).trim() !== "";
+    },
   );
-  return `${PASSWORD_VERSION}.${bytesToBase64(iv)}.${bytesToBase64(cipher)}`;
-}
-
-/** Eng1 will decrypt this when a statement pull needs the stored login. */
-export async function decryptSagePassword(stored: string): Promise<string> {
-  const [version, ivPart, cipherPart] = stored.split(".");
-  if (version !== PASSWORD_VERSION || !ivPart || !cipherPart) {
-    throw new Error("Stored Sage password could not be read.");
-  }
-  const key = await sagePasswordKey();
-  const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: base64ToBytes(ivPart) },
-    key,
-    base64ToBytes(cipherPart),
-  );
-  return new TextDecoder().decode(plain);
+  return hasFigure ? fields : null;
 }
 
 export type SageConnectionInsert = {

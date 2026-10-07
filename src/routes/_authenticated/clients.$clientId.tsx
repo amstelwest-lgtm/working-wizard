@@ -1668,7 +1668,7 @@ function ClientView() {
   );
 
   const populateAfterSync = useCallback(
-    (inputs: Record<string, string>, provider: "QuickBooks" | "Xero") => {
+    (inputs: Record<string, string>, provider: "QuickBooks" | "Xero" | "Sage") => {
       void runSyncAutoPopulate({
         clientId,
         fields: inputs,
@@ -1717,6 +1717,23 @@ function ClientView() {
       setXeroRefresh((n) => n + 1);
       setCashForecastReloadToken((n) => n + 1);
       populateAfterSync(inputs, "Xero");
+    },
+    [populateAfterSync],
+  );
+
+  const onSageSyncComplete = useCallback(
+    (inputs: Record<string, string>) => {
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      const nextScalars = { ...financialsRef.current, ...inputs };
+      financialsRef.current = nextScalars;
+      setFinancials(nextScalars);
+      setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+      setSageRefresh((n) => n + 1);
+      setCashForecastReloadToken((n) => n + 1);
+      populateAfterSync(inputs, "Sage");
     },
     [populateAfterSync],
   );
@@ -2854,6 +2871,7 @@ function ClientView() {
                         onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
                         onXeroSyncComplete={onXeroSyncComplete}
                         onQboSyncComplete={onQboSyncComplete}
+                        onSageSyncComplete={onSageSyncComplete}
                         onUpload={() => setUploadOpen(true)}
                         freshness={dataFreshness}
                       />
@@ -3045,6 +3063,7 @@ function ClientView() {
                       clientId={clientId}
                       refreshToken={sageRefresh}
                       onConnectionChange={() => setSageRefresh((n) => n + 1)}
+                      onSyncComplete={onSageSyncComplete}
                     />
                   </div>
 
@@ -3889,6 +3908,10 @@ function ClientView() {
                 clientId={clientId}
                 refreshToken={sageRefresh}
                 onConnectionChange={() => setSageRefresh((n) => n + 1)}
+                onSyncComplete={(inputs) => {
+                  onSageSyncComplete(inputs);
+                  setShowSageDialog(false);
+                }}
               />
             </DialogContent>
           </Dialog>

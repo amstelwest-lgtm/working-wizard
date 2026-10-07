@@ -23,18 +23,17 @@ redirect URI, or a bearer token.
 Validate calls `GET /Company/Get/{companyId}` only. That confirms the login
 and the company. It does not request a profit and loss or a balance sheet.
 
-## Env (only this name)
+## Env
 
-Set it on the Vercel project **working-wizard2**, Production and Preview.
-Do not prefix `VITE_`. Do not commit the value. Redeploy after saving.
+Set these on the Vercel project **working-wizard2**, Production and Preview.
+Do not prefix `VITE_`. Do not commit the values. Redeploy after saving.
 
 | Name | Value |
 | --- | --- |
-| `SAGE_SA_API_KEY` | API key issued by Sage South Africa for this app |
+| `SAGE_SA_API_KEY` | API key issued by Sage South Africa for this app. Required for connect and for the password cipher when the dedicated key is unset. |
+| `SAGE_SA_PASSWORD_KEY` | Optional. When set, this is the only key for `password_enc`. When unset, the cipher uses `SAGE_SA_API_KEY`. |
 
-Passwords are encrypted before they are written to `sage_connections.password_enc`.
-The cipher key is derived from the existing `SESSION_SECRET`. No second secret.
-Rotating `SESSION_SECRET` means each Sage company must be connected again.
+`password_enc` is `enc:v1:` plus AES-256-GCM (12-byte iv, 16-byte tag, ciphertext, base64url). Connect writes it with `encryptSagePassword` in `src/lib/sage-password.ts`. Sync decrypts with the same module. The key is SHA-256 of `SAGE_SA_PASSWORD_KEY` if that is set, otherwise SHA-256 of `SAGE_SA_API_KEY`. Rotating the cipher key means each Sage company must be connected again.
 
 If `SAGE_SA_API_KEY` is missing, the connect card says Sage is not switched on
 and does not call Sage.
@@ -57,8 +56,8 @@ table.
 2. When the key arrives, paste it into Vercel → working-wizard2 → Settings →
    Environment Variables as `SAGE_SA_API_KEY` (Production and Preview).
    Do not put it in git.
-3. Confirm `SESSION_SECRET` is already set on that project (it is the session
-   signing secret). It encrypts the stored Sage password.
+3. Optional: set `SAGE_SA_PASSWORD_KEY` on the same project if the password
+   cipher should not be the API key. Leave it unset to use `SAGE_SA_API_KEY`.
 4. Apply the migration above on the Milon Supabase project.
 5. Redeploy working-wizard2.
 

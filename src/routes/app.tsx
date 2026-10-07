@@ -6042,7 +6042,37 @@ function Index() {
                   and stores it. Statement sync does not fill Health until figures are available.
                 </DialogDescription>
               </DialogHeader>
-              <SageConnectCard clientId={effectiveClientId} />
+              <SageConnectCard
+                clientId={effectiveClientId}
+                onSyncComplete={(inputs) => {
+                  setV((prev) => ({
+                    ...prev,
+                    ...inputs,
+                  }));
+                  setHasRealFinancials(true);
+                  void handleOwnerFirstRealFinancialsUpload();
+                  setCashForecastReloadToken((n) => n + 1);
+                  if (effectiveClientId) {
+                    void runSyncAutoPopulate({
+                      clientId: effectiveClientId,
+                      fields: inputs,
+                      chosen: autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                      firstUpload: autoPopulateState?.firstUpload ?? true,
+                      firstActualsMonth: inputs.periodStart?.slice(0, 7) ?? null,
+                      fallbackMarket: workspaceMarket,
+                      surface: "owner_app",
+                    })
+                      .then(applyAutoPopulateResult)
+                      .catch((e) => {
+                        console.warn("auto-populate after Sage sync:", e);
+                        toast.error(
+                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                        );
+                      });
+                  }
+                  setShowSageDialog(false);
+                }}
+              />
             </DialogContent>
           </Dialog>
 

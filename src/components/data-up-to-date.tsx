@@ -25,6 +25,7 @@ type Props = {
   sageRefresh?: number;
   onXeroSyncComplete?: (inputs: Record<string, string>, summary: XeroSyncResult["summary"]) => void;
   onQboSyncComplete?: (inputs: Record<string, string>, summary: SyncResult["summary"]) => void;
+  onSageSyncComplete?: (inputs: Record<string, string>) => void;
   onUpload: () => void;
   onSageConnectionChange?: () => void;
   /** Last sync or snapshot period. Computed by the shell from live status. */
@@ -39,6 +40,7 @@ export function DataUpToDate({
   sageRefresh = 0,
   onXeroSyncComplete,
   onQboSyncComplete,
+  onSageSyncComplete,
   onUpload,
   onSageConnectionChange,
   freshness,
@@ -98,6 +100,7 @@ export function DataUpToDate({
           clientId={clientId}
           refreshToken={sageRefresh}
           onConnectionChange={onSageConnectionChange}
+          onSyncComplete={onSageSyncComplete}
         />
       </div>
       <button type="button" className="data-fresh__upload" onClick={onUpload}>

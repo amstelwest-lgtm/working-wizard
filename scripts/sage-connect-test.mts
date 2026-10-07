@@ -13,17 +13,21 @@ import { describeLedgerLink } from "../src/lib/ledger-link-copy";
 import { isDatedLedgerSource } from "../src/lib/statement-period";
 import {
   SAGE_EMPTY_SYNC_MESSAGE,
-  decryptSagePassword,
-  encryptSagePassword,
   parseSageCompany,
   sageBasicAuthorization,
   sageCompanyValidateUrl,
   sageConnectionInsert,
   sageCredentialsConfigured,
+  sageSyncPopulatedFields,
   sageSyncWriteDecision,
   sageValidateError,
   validateSageLogin,
 } from "../src/lib/sage";
+import {
+  decryptSagePassword,
+  encryptSagePassword,
+  SAGE_PASSWORD_PREFIX,
+} from "../src/lib/sage-password";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -33,8 +37,8 @@ function read(path: string) {
   return readFileSync(resolve(path), "utf8");
 }
 
-process.env.SESSION_SECRET = "sage-test-session-secret";
 process.env.SAGE_SA_API_KEY = "test-api-key";
+delete process.env.SAGE_SA_PASSWORD_KEY;
 
 assert(sageCredentialsConfigured(), "API key marks Sage as configured");
 delete process.env.SAGE_SA_API_KEY;
@@ -115,10 +119,24 @@ assert(unconfigured.ok === false && unconfigured.reason === "not_configured", "b
 
 globalThis.fetch = originalFetch;
 
-const cipher = await encryptSagePassword("s3cret");
-assert(cipher.startsWith("v1."), "password is versioned ciphertext");
+const cipher = encryptSagePassword("s3cret");
+assert(cipher.startsWith(SAGE_PASSWORD_PREFIX), "password uses enc:v1");
+assert(SAGE_PASSWORD_PREFIX === "enc:v1:", "prefix matches the sync decrypt");
 assert(!cipher.includes("s3cret"), "ciphertext does not contain the password");
-assert((await decryptSagePassword(cipher)) === "s3cret", "ciphertext round-trips");
+assert(decryptSagePassword(cipher) === "s3cret", "ciphertext round-trips with the API key");
+process.env.SAGE_SA_PASSWORD_KEY = "dedicated-password-key";
+const dedicated = encryptSagePassword("s3cret");
+assert(decryptSagePassword(dedicated) === "s3cret", "dedicated key round-trips");
+assert(dedicated !== cipher, "dedicated key is not the API-key ciphertext");
+let rejectedOld = false;
+try {
+  decryptSagePassword(cipher);
+} catch {
+  rejectedOld = true;
+}
+assert(rejectedOld, "a dedicated key does not decrypt an API-key ciphertext");
+delete process.env.SAGE_SA_PASSWORD_KEY;
+assert(decryptSagePassword(cipher) === "s3cret", "clearing the dedicated key falls back to the API key");
 
 const row = sageConnectionInsert({
   clientId: "11111111-1111-1111-1111-111111111111",
@@ -143,6 +161,22 @@ if (!emptyDecision.write) {
   assert(!emptyDecision.error.includes("Xero"), "empty Sage sync is not labelled Xero");
 }
 assert(SAGE_EMPTY_SYNC_MESSAGE.includes("left unchanged"), "the sync stub tells the user nothing was written");
+assert(
+  sageSyncPopulatedFields({ populated: false, fields: { revenue: "10", periodStart: "2026-10-01" } }) ===
+    null,
+  "the connect stub does not hand empty-sync fields to the board",
+);
+const eng1Fields = {
+  revenue: "1200",
+  cash: "80",
+  periodStart: "2026-10-01",
+  periodEnd: "2026-10-07",
+};
+assert(
+  sageSyncPopulatedFields({ fields: eng1Fields })?.revenue === "1200",
+  "Eng1 fields without a populated flag still reach auto-populate",
+);
+assert(sageSyncPopulatedFields({ fields: {} }) === null, "blank fields are not a populate");
 
 const zeroSage: Record<string, string | number> = {
   statementSource: "sage",
@@ -188,7 +222,9 @@ assert(!/oauth|access_token|refresh_token|redirect_uri/i.test(migration), "no OA
 
 const fn = read("src/lib/sage.functions.ts");
 assert(fn.includes("validateSageLogin"), "connect validates with Sage");
+assert(fn.includes('from "@/lib/sage-password"'), "connect encrypts with the shared password module");
 assert(fn.includes("encryptSagePassword"), "connect encrypts the password");
+assert(!fn.includes("SESSION_SECRET"), "connect does not key the password off the session secret");
 assert(fn.includes("sage_connections"), "connect stores the connection");
 assert(fn.includes("sageSyncWriteDecision"), "sync uses the empty-sync guard");
 assert(fn.includes("TODO(Eng1)"), "sync leaves an Eng1 hook");
@@ -206,7 +242,12 @@ assert(card.includes('id="sage-empty-sync"'), "empty sync has a visible state");
 assert(card.includes(': "Sync"'), "connected card has Sync");
 assert(card.includes("Disconnect"), "connected card has Disconnect");
 assert(!card.includes("onSyncComplete?.(result.fields)") || card.includes("result.populated"), "sync completion waits for real figures");
-assert(card.includes("if (result.populated)"), "empty sync does not complete into the book");
+assert(card.includes("sageSyncPopulatedFields"), "sync completion waits for real figures");
+assert(!read("src/lib/sage.ts").includes("SESSION_SECRET"), "sage.ts does not encrypt with SESSION_SECRET");
+assert(read("src/lib/sage-password.ts").includes('SAGE_PASSWORD_PREFIX = "enc:v1:"'), "shared prefix is enc:v1");
+assert(read("docs/SAGE_SA.md").includes("SAGE_SA_PASSWORD_KEY"), "docs name the optional password key");
+assert(read("docs/SAGE_SA.md").includes("SAGE_SA_API_KEY"), "docs say the API key is the fallback cipher");
+assert(!read("docs/SAGE_SA.md").includes("SESSION_SECRET"), "docs do not use the session secret as the Sage key");
 
 const owner = read("src/routes/app.tsx");
 const studio = read("src/routes/_authenticated/clients.$clientId.tsx");
@@ -221,6 +262,10 @@ assert(studio.includes('label="Connect Sage"'), "accountant Other ways offers Sa
 assert(studio.includes('id="accounting-connect"'), "Sage sits on the accounting connect surface");
 assert(briefing.includes('id="client-connect-sage"'), "briefing shows Connect Sage");
 assert(fresh.includes("<SageConnectCard"), "data step shows Sage beside Xero and QuickBooks");
+assert(fresh.includes("onSageSyncComplete"), "data step can auto-populate after a Sage sync");
+assert(owner.includes("auto-populate after Sage sync:"), "owner Sage sync runs auto-populate");
+assert(owner.includes("runSyncAutoPopulate"), "owner sync runs auto-populate");
+assert(studio.includes('populateAfterSync(inputs, "Sage")'), "accountant Sage sync shares the populate path");
 assert(!existsSync(resolve("src/routes/api/sage/callback.ts")), "no Sage OAuth callback route");
 assert(!read("src/routeTree.gen.ts").includes("/api/sage/callback"), "route tree has no Sage callback");
 assert(!read(".env.example").includes("SAGE_CLIENT_SECRET"), "no OAuth client secret env");

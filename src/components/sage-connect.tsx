@@ -11,6 +11,7 @@ import {
 } from "@/lib/sage.functions";
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
+import { sageSyncPopulatedFields } from "@/lib/sage";
 
 type Props = {
   clientId: string | null;
@@ -100,11 +101,18 @@ export function SageConnectCard({
     setSyncing(true);
     try {
       const result = await doSync({ data: { clientId } });
-      if (result.populated) {
-        onSyncComplete?.(result.fields);
+      const fields = sageSyncPopulatedFields(result);
+      if (fields) {
+        setEmptySyncMessage(null);
+        onSyncComplete?.(fields);
+        toast.success("Sage sync complete — figures updated");
       } else {
-        setEmptySyncMessage(result.message);
-        toast.message(result.message);
+        const message =
+          "message" in result && typeof result.message === "string" && result.message.trim()
+            ? result.message
+            : "Sage is connected, but no statement has been synced. Overview figures were left unchanged.";
+        setEmptySyncMessage(message);
+        toast.message(message);
       }
       await load();
     } catch (err) {
