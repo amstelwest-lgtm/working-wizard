@@ -7,6 +7,7 @@ import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
 import { newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
+import { periodProfitBridge } from "@/lib/period-profit";
 import {
   annualiseFinancials,
   FLOW_FIELD_KEYS,
@@ -336,7 +337,8 @@ export function seedBudgetFromFinancials(
   const financials = annualiseBudgetFinancials(withCostAliases(periodFinancials));
   const revenue = presentNumber(financials.revenue);
   const cogs = presentNumber(financials.cogs);
-  const fixedCosts = presentNumber(financials.fixedCosts);
+  const bridge = periodProfitBridge(financials);
+  const fixedCosts = bridge.operatingExpenses;
   const laborCost = presentNumber(financials.laborCost);
   const receivables = num(financials.receivables);
   const payables = num(financials.payables);
@@ -345,6 +347,7 @@ export function seedBudgetFromFinancials(
   let next: BudgetDocument = {
     ...doc,
     updatedAt: new Date().toISOString(),
+    statementDepreciation: bridge.depreciation,
   };
 
   if (revenue != null && revenue > 0 && cogs != null && cogs >= 0) {
@@ -394,7 +397,11 @@ export function seedBudgetFromFinancials(
         };
       }),
     };
-    changes.push("Overheads seeded from fixed/labour costs across the FY");
+    changes.push(
+      bridge.depreciation > 0
+        ? "Overheads seeded from operating expenses; depreciation seeded from EBITDA − EBIT"
+        : "Overheads seeded from fixed/labour costs across the FY",
+    );
   }
 
   const wc = { ...next.wc };

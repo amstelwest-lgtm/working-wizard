@@ -29,8 +29,14 @@ type Props = {
   /**
    * Health alerts from the practice book. Merged with pack sign-off into the
    * one Needs attention strip so the dashboard does not show two queues.
+   * Ignored when `queue` is set.
    */
   healthItems?: AttentionItem[];
+  /**
+   * Practice home: the queue `practiceNeedsAttention` already counted.
+   * When set, the strip renders these rows and does not fetch a second book.
+   */
+  queue?: readonly MergedAttention[];
 };
 
 const SEV_CLASS: Record<1 | 2 | 3, string> = {
@@ -52,15 +58,17 @@ export function PortfolioExceptions({
   className,
   hideWhenClear,
   healthItems,
+  queue,
 }: Props) {
   const fetch = useServerFn(getFirmPortfolio);
   const [data, setData] = useState<PortfolioResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const seq = useRef(0);
+  const externalQueue = queue !== undefined;
 
   useEffect(() => {
-    if (!firmId) return;
+    if (externalQueue || !firmId) return;
     const mine = ++seq.current;
     setLoading(true);
     fetch({ data: { firmId } })
@@ -74,12 +82,12 @@ export function PortfolioExceptions({
         if (mine === seq.current) setLoading(false);
       });
     // refreshKey is intentionally a dependency.
-  }, [firmId, refreshKey, fetch]);
+  }, [externalQueue, firmId, refreshKey, fetch]);
 
   if (!firmId) return null;
 
   if (hideWhenClear) {
-    const merged = mergeNeedsAttention(healthItems ?? [], data?.rows ?? []);
+    const merged = queue ?? mergeNeedsAttention(healthItems ?? [], data?.rows ?? []);
     if ((!data && loading && merged.length === 0) || merged.length === 0) return null;
     const shown = merged.slice(0, 6);
     const more = merged.length - shown.length;

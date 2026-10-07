@@ -998,26 +998,31 @@ html:not([data-theme="light"]) .accountant-portal input[type="radio"]:checked::a
   max-width:72ch;
 }
 .accountant-portal .collections-actions,
-.accountant-portal .payables-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
-.accountant-portal .collections-position{
+.accountant-portal .payables-actions,
+.accountant-portal .statement-arap-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.accountant-portal .collections-position,
+.accountant-portal .statement-arap-position{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
   gap:10px;
   margin:0 0 16px;
 }
-.accountant-portal .collections-position div{
+.accountant-portal .collections-position div,
+.accountant-portal .statement-arap-position div{
   border:1px solid var(--line);
   border-radius:12px;
   padding:12px 14px;
 }
-.accountant-portal .collections-position dt{
+.accountant-portal .collections-position dt,
+.accountant-portal .statement-arap-position dt{
   font-size:11px;
   letter-spacing:.04em;
   text-transform:uppercase;
   color:var(--ink-dim);
   margin:0 0 4px;
 }
-.accountant-portal .collections-position dd{
+.accountant-portal .collections-position dd,
+.accountant-portal .statement-arap-position dd{
   margin:0;
   font-size:20px;
   font-weight:700;

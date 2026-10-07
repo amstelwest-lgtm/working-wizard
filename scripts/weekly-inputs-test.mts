@@ -119,8 +119,45 @@ const period = derivePeriodWaterfallFallback({
   netIncome: "120000",
 });
 assert(period.fixedCosts === 120000, "opex residual = GP − EBIT when fixedCosts blank");
+assert((period.depreciation ?? 0) === 0, "no depreciation when EBITDA is absent");
 assert(period.interest === 30000, "interest = EBIT − EBT");
 assert(period.tax === 30000, "tax = EBT − net");
+
+// QA US: operating expenses $351k, EBITDA $69k, EBIT $60k. The $9k is D&A,
+// not extra operating expenses. Waterfall opex stays $351k so it matches
+// the configure-inputs field; operating profit stays $60k.
+const us = derivePeriodWaterfallFallback({
+  revenue: "700000",
+  cogs: "280000",
+  fixedCosts: "351000",
+  ebit: "60000",
+  ebitda: "69000",
+  ebt: "60000",
+  netIncome: "60000",
+});
+assert(us.fixedCosts === 351_000, `US opex stays the entered 351k, got ${us.fixedCosts}`);
+assert(us.depreciation === 9_000, `US depreciation is EBITDA − EBIT, got ${us.depreciation}`);
+assert(
+  us.revenue - us.cogs - us.fixedCosts - (us.depreciation ?? 0) === 60_000,
+  "US operating profit equals EBIT",
+);
+const usResolved = resolveWaterfallFigures(emptyWeeklyInputs(), us);
+assert(usResolved.fixedCosts === 351_000 && usResolved.depreciation === 9_000, "period path keeps D&A");
+assert(usResolved.source === "period", "US figures are the period bridge");
+const usWeeklyHidesDa = resolveWaterfallFigures(
+  parseWeeklyInputs({ weeks: { "2026-W40": { revenue: 1, costOfSales: 0, fixedCosts: 0 } } }),
+  us,
+);
+assert(usWeeklyHidesDa.depreciation === 0, "a week grid does not invent statement depreciation");
+
+const unexplained = derivePeriodWaterfallFallback({
+  revenue: "200",
+  cogs: "0",
+  fixedCosts: "40",
+  ebit: "50",
+});
+assert(unexplained.fixedCosts === 150, "a gap that is not D&A still plugs opex so profit equals EBIT");
+assert((unexplained.depreciation ?? 0) === 0, "an unexplained gap is not booked as depreciation");
 
 const ownerFigures = resolveWaterfallFigures(weeks, period);
 const accountantFigures = resolveWaterfallFigures(weeks, period);

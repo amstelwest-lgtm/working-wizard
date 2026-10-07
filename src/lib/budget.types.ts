@@ -204,6 +204,11 @@ export type BudgetDocument = {
   overheads: BudgetOverheadLine[];
   wc: BudgetWc;
   capex: BudgetCapexLine[];
+  /**
+   * Annual depreciation from the statement (EBITDA − EBIT).
+   * Spread across the year and not a cash cost. Capex depreciation counts toward it.
+   */
+  statementDepreciation?: number;
   showInventoryDays: boolean;
   /** Participative challenge / note log (Phase 4). */
   notes?: Array<{

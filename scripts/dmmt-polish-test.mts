@@ -58,6 +58,16 @@ assert(firstNameOf("") === "there", "empty name falls back");
 assert(practiceGreeting("A. Sample", morning) === "Good morning, Sample.", "greeting uses the short name");
 assert(!practiceGreeting("A. Sample", morning).includes("A.."), "greeting is not A..");
 assert(practiceGreeting("Ben Accountants", morning) === "Good morning, Ben.", "given name greeting");
+const afternoon = new Date(2026, 9, 7, 15, 0, 0);
+assert(firstNameOf("Sample,") === "Sample", "a trailing comma is not part of the short name");
+assert(
+  practiceGreeting("Sample,", afternoon) === "Good afternoon, Sample.",
+  "greeting does not leave a comma before the period",
+);
+assert(
+  practiceGreeting("Sample, CPA", afternoon) === "Good afternoon, Sample.",
+  "a comma after the given name is dropped",
+);
 
 const health: AttentionItem = {
   clientId: yankees,
@@ -110,7 +120,8 @@ const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "u
 assert(dash.includes("practiceGreeting"), "the practice home uses the greeting helper");
 assert(dash.includes("dash-trial-banner"), "an ended trial is a thin banner");
 assert(dash.includes('to="/settings"'), "the thin banner links to Settings");
-assert(dash.includes("healthItems={attentionItems}"), "health alerts join the one queue");
+assert(dash.includes("practiceNeedsAttention"), "health alerts and the tile share one queue");
+assert(dash.includes("queue={attentionBook.items}"), "the strip renders the counted queue");
 assert(dash.includes('aria-label="Enter as client"'), "Enter as client is named");
 assert(dash.includes(">Enter as client<"), "Enter as client has a visible label");
 

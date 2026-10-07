@@ -9,6 +9,7 @@ import {
   catalogCopyIsClientFacing,
   computedDaysAp,
   computedDaysAr,
+  ratiosStatementFigures,
   configNeedsRefresh,
   countCheckedSources,
   defaultDaysAp,
@@ -242,6 +243,57 @@ const studio = read("src/routes/_authenticated/clients.$clientId.tsx");
 for (const id of ["ratios", "profit", "plan", "reports", "advisory", "summary"] as const) {
   assert(studio.includes(`deliverableId="${id}"`), `accountant ${id} tab is wired`);
 }
+const qaUs = {
+  revenue: "365000",
+  cogs: "365000",
+  receivables: "25000",
+  payables: "37000",
+  periodMonths: "12",
+};
+const qaFigures = ratiosStatementFigures(qaUs);
+assert(qaFigures.debtorDays === 25, "QA US Days AR is 25");
+assert(qaFigures.creditorDays === 37, "QA US Days AP is 37");
+assert(qaFigures.receivables === 25000, "AR dollars come from the same stock as Days AR");
+assert(qaFigures.payables === 37000, "AP dollars come from the same stock as Days AP");
+assert(computedDaysAr(qaUs) === qaFigures.debtorDays, "Days AR is computedDaysAr");
+assert(computedDaysAp(qaUs) === qaFigures.creditorDays, "Days AP is computedDaysAp");
+const nineMonthDaysAr = Math.round((25000 / (365000 * (12 / 9))) * 365);
+const nineMonthDaysAp = Math.round((37000 / (365000 * (12 / 9))) * 365);
+assert(nineMonthDaysAr === 19 && nineMonthDaysAp === 28, "9-month health cover is the 19/28 path");
+assert(
+  qaFigures.debtorDays !== nineMonthDaysAr && qaFigures.creditorDays !== nineMonthDaysAp,
+  "statement figures do not follow the health-score cover",
+);
+
+const ratiosDef = buildDeliverableInputDefinition("ratios", { financials: qaUs });
+const ratiosMerged = mergeDeliverableInputState(
+  ratiosDef,
+  { checkedSources: {}, assumptionValues: { daysAr: 19, daysAp: 28 } },
+  { financials: qaUs, operatingProfile: { debtorDaysDefault: 44 } as never },
+);
+assert(
+  ratiosMerged.assumptionValues.daysAr === 25,
+  "stored 19 and profile 44 do not replace Days AR",
+);
+assert(ratiosMerged.assumptionValues.daysAp === 37, "stored 28 does not replace Days AP");
+const ratiosLive = liveAssumptionOverlay(ratiosDef, { financials: qaUs });
+assert(ratiosLive.daysAr === 25 && ratiosLive.daysAp === 37, "Ratios overlay is the shared helper");
+assert(
+  defaultDaysAr({ financials: qaUs, operatingProfile: { debtorDaysDefault: 44 } as never }) === 44,
+  "cash Days AR still prefers the profile",
+);
+const ratiosApplied = markConfigApplied(
+  mergeDeliverableInputState(ratiosDef, null, { financials: qaUs }),
+);
+const ratiosAfterAr = mergeDeliverableInputState(ratiosDef, ratiosApplied, {
+  financials: { ...qaUs, receivables: "30000" },
+});
+assert(
+  onlyLiveEngineValuesChanged(ratiosApplied, ratiosAfterAr, ratiosDef),
+  "a Days AR movement stays a live Ratios figure",
+);
+assert(studio.includes("ratiosStatementFigures"), "Collections tiles call the Ratios helper");
+
 assert(!studio.includes('deliverableId="ask"'), "Ask / bot tab is not a configure-inputs surface");
 assert(!studio.includes('deliverableId="cash"'), "cash is not double-wired in the studio shell");
 assert(
