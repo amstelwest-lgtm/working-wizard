@@ -34,9 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import {
-  computeRatios,
   healthBandLabel,
   scoreTier,
   BUSINESS_TYPE_TO_BENCHMARK,
@@ -56,13 +54,7 @@ import {
   reportScalarInputs,
 } from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
-import type { RatioInputs } from "@/lib/ratios";
-import {
-  NOT_SCORED_LABEL,
-  scorePlaybookCatalogue,
-  scoreRatio,
-  pillarForRatioName,
-} from "@/lib/health-score";
+import { NOT_SCORED_LABEL, scorePlaybookCatalogue, scoreRatio } from "@/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
@@ -86,6 +78,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 
 import type { RatioResult } from "@/reports/health-scorecard";
+import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import type { Intervention } from "@/reports/intervention-priority";
 import type { CashForecastWeek } from "@/reports/cash-forecast";
 import type { WorkingCapitalData } from "@/reports/cash-cycle";
@@ -117,7 +110,6 @@ import { reportDataPeriodLabel, reportPeriodMonthYear, readStatementMeta } from 
 import {
   debtToEquityReading,
   presentReturn,
-  presentScorecardRatio,
   priorFiguresAreCopy,
   reportDownloadGate,
   scoredReturnHealth,
@@ -1214,66 +1206,6 @@ function scoreForRatio(name: string, val: number, market: ResolvedMarket = ZA_MA
   return scoreRatio(name, val, market);
 }
 
-function fmtRatioVal(name: string, val: number): string {
-  if (!Number.isFinite(val)) return "—";
-  if (name.includes("Days")) return `${Math.round(val)}d`;
-  if (
-    name === "Asset Turnover" ||
-    name === "Equity Multiplier" ||
-    name === "Debt-to-Equity" ||
-    name === "Degree of Operating Leverage" ||
-    name === "OCF / EBITDA"
-  )
-    return `${val.toFixed(2)}×`;
-  return `${(val * 100).toFixed(1)}%`;
-}
-
-function pillarForRatio(name: string): "profit" | "assets" | "financing" | "cash" {
-  return pillarForRatioName(name);
-}
-
-function buildRatioResults(
-  rawRatios: Record<string, number>,
-  market: ResolvedMarket = ZA_MARKET,
-  context?: {
-    equity?: number | null;
-    periodMonths?: number | null;
-    partMonth?: boolean;
-    cashFlowKnown?: boolean;
-  },
-): RatioResult[] {
-  const rows: RatioResult[] = [];
-  for (const [name, val] of Object.entries(rawRatios)) {
-    const presented = presentScorecardRatio({
-      name,
-      value: val,
-      equity: context?.equity,
-      currency: market.currency,
-      periodMonths: context?.periodMonths,
-      partMonth: context?.partMonth,
-      cashFlowKnown: context?.cashFlowKnown,
-    });
-    if (!presented.include) continue;
-    const scoredValue = presented.scoredValue;
-    const score =
-      presented.unscored || scoredValue == null
-        ? 0
-        : Math.round(scoreForRatio(name, scoredValue, market));
-    rows.push({
-      ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-      ratio_name: name,
-      pillar: pillarForRatio(name),
-      current_value: scoredValue ?? (Number.isFinite(val) ? val : Number.NaN),
-      health_score: score,
-      health_tier: presented.unscored ? "at_risk" : scoreTier(score),
-      formatted_value: presented.text ?? fmtRatioVal(name, scoredValue ?? val),
-      annotation: presented.note,
-      unscored: presented.unscored || undefined,
-    });
-  }
-  return rows;
-}
-
 /**
  * Live benchmark PDF rows come only from `industry_benchmarks` for the client's
  * sector. Invented ZA-SME medians (old BENCH_META) must never appear under a
@@ -2209,32 +2141,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   }
   if (!fin["revenue"] || fin["revenue"].trim() === "") return { ...baseEmpty, financials: fin };
 
-  const ratioInputs: RatioInputs = {
-    revenue: fin["revenue"] ?? "",
-    cogs: fin["cogs"] ?? "",
-    ebit: fin["ebit"] ?? "",
-    ebt: fin["ebt"] ?? "",
-    netIncome: fin["netIncome"] ?? "",
-    ebitda: fin["ebitda"] ?? "",
-    operatingCashflow: fin["operatingCashflow"] ?? "",
-    totalAssets: fin["totalAssets"] ?? "",
-    equity: fin["equity"] ?? "",
-    receivables: fin["receivables"] ?? "",
-    inventory: fin["inventory"] ?? "",
-    payables: fin["payables"] ?? "",
-    fixedCosts: fin["fixedCosts"] ?? "",
-    variableCosts: fin["variableCosts"] ?? "",
-    top5Revenue: fin["top5Revenue"] ?? "",
-    laborCost: fin["laborCost"] ?? "",
-    employees: fin["employees"] ?? "",
-    founderHours: fin["founderHours"] ?? "",
-    totalLiabilities: fin["totalLiabilities"] ?? "",
-    periodMonths: fin["periodMonths"] ?? "",
-  };
-  const rawRatios = withCanonicalDebtorCreditorDays(
-    computeRatios(ratioInputs),
-    rawFin as Record<string, unknown>,
-  );
+  const rawRatios = scorecardRatiosFromFinancials(rawFin as Record<string, unknown>, {
+    fyStartMonth,
+  });
   const statementMeta = readStatementMeta(rawFin);
   const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
   const periodMonths = effectivePeriodMonths(fin, { fyStartMonth });
@@ -2255,7 +2164,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     new Date(),
     { periodEnd: statementMeta.periodEnd, financials: rawFin as Record<string, unknown> },
   );
-  let ratioResults = buildRatioResults(rawRatios, market, {
+  let ratioResults = buildScorecardRatioResults(rawRatios, market, {
     equity: equityNow,
     periodMonths,
     partMonth,

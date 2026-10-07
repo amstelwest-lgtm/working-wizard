@@ -9,7 +9,7 @@
  * The panel never navigates; the host wires `onUpload` / `onOpenForecast`
  * to its own dialogs and tabs, exactly like the Next Step card.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, FileUp, Loader2, Mail, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
   DATA_REQUEST_KINDS,
   DATA_REQUEST_KIND_LABELS,
   displayedDataRequestReason,
+  overviewRequestCardRows,
   severityLabel,
   type DataRequest,
   type DataRequestKind,
@@ -42,6 +43,11 @@ type Props = {
   onChanged?: () => void;
   /** Change to refetch (e.g. after the Next Step card synced). */
   refreshKey?: string | number;
+  /**
+   * Live figures. Day-quote cards are rewritten from these at render time.
+   * A stored "44" or "73" is never shown.
+   */
+  financials?: Record<string, unknown> | null;
   className?: string;
 };
 
@@ -68,6 +74,7 @@ export function DataRequestsPanel({
   onOpenForecast,
   onChanged,
   refreshKey,
+  financials = null,
   className,
 }: Props) {
   const track = useTrack();
@@ -116,8 +123,10 @@ export function DataRequestsPanel({
   // host asks us to take focus and flash rather than scrolling the page.
   useEffect(() => subscribeDataRequestsReveal(() => setRevealTick((n) => n + 1)), []);
 
+  const shownRows = useMemo(() => overviewRequestCardRows(rows, financials), [rows, financials]);
+
   const sectionVisible =
-    Boolean(clientId) && loaded && migrated && (audience !== "owner" || rows.length > 0);
+    Boolean(clientId) && loaded && migrated && (audience !== "owner" || shownRows.length > 0);
   useEffect(() => {
     if (revealTick === 0 || !sectionVisible) return;
     const el = sectionRef.current;
@@ -203,7 +212,7 @@ export function DataRequestsPanel({
   };
 
   if (!clientId || !loaded || !migrated) return null;
-  if (rows.length === 0 && audience === "owner") return null;
+  if (shownRows.length === 0 && audience === "owner") return null;
 
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
@@ -219,7 +228,7 @@ export function DataRequestsPanel({
       id="data-requests"
       tabIndex={-1}
       data-audience={audience}
-      data-count={rows.length}
+      data-count={shownRows.length}
       data-called={called ? "true" : undefined}
       aria-labelledby="data-requests-heading"
     >
@@ -259,7 +268,7 @@ export function DataRequestsPanel({
             >
               <Plus className="h-3.5 w-3.5" aria-hidden /> Ask for a document
             </button>
-            {rows.length > 0 ? (
+            {shownRows.length > 0 ? (
               <button
                 type="button"
                 onClick={() => void email()}
@@ -322,9 +331,9 @@ export function DataRequestsPanel({
         </form>
       ) : null}
 
-      {rows.length > 0 ? (
+      {shownRows.length > 0 ? (
         <ul className="space-y-2">
-          {rows.map((r) => {
+          {shownRows.map((r) => {
             const busy = busyId === r.id;
             const kind = DATA_REQUEST_KIND_LABELS[r.kind];
             return (

@@ -34,6 +34,8 @@ import { useMarket } from "@/contexts/market";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
+import { formatSignedOffDateTime } from "@/lib/market";
+import type { ResolvedMarket } from "@/lib/market";
 import {
   hashFigures,
   recordDelivery,
@@ -91,10 +93,23 @@ const GOLD_BTN =
 const GHOST_BTN =
   "inline-flex items-center gap-1.5 rounded-lg border border-slate-300/70 px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/15 dark:text-slate-300";
 
-function fmtWhen(iso: string | null | undefined): string {
+function fmtWhen(
+  iso: string | null | undefined,
+  market: Pick<ResolvedMarket, "locale" | "timezone">,
+  firmTimeZone?: string | null,
+): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return Number.isFinite(d.getTime()) ? d.toLocaleString() : iso;
+  if (!Number.isFinite(d.getTime())) return iso;
+  return formatSignedOffDateTime(iso, market, {
+    firmTimeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 const ACTION_LABEL: Record<PackReview["action"], string> = {
@@ -526,7 +541,9 @@ export function AdvisoryPackPanel({
               ? signOffGate.signOffHolds
                 ? `${pack.reviewed_by_kind === "accountant" ? "Signed off by the accountant" : "Accepted by the owner"} ${fmtWhen(
                     pack.reviewed_at,
-                  )}${pack.delivered_at ? ` · read ${fmtWhen(pack.delivered_at)}` : ""}${
+                    market,
+                    profile.timeZone,
+                  )}${pack.delivered_at ? ` · read ${fmtWhen(pack.delivered_at, market, profile.timeZone)}` : ""}${
                     liveStats ? ` · edit rate ${Math.round(liveStats.edit_rate * 100)}%` : ""
                   }`
                 : audience === "accountant"
@@ -825,7 +842,9 @@ export function AdvisoryPackPanel({
         <ol className="mt-3 space-y-1.5 text-[12px] text-slate-600 dark:text-slate-300" data-trail>
           {reviews.map((r) => (
             <li key={r.id} className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-slate-400">{fmtWhen(r.created_at)}</span>
+              <span className="text-slate-400">
+                {fmtWhen(r.created_at, market, profile.timeZone)}
+              </span>
               <span className="font-semibold capitalize">{r.actor_kind}</span>
               <span>{ACTION_LABEL[r.action]}</span>
               {r.section ? (

@@ -12,6 +12,7 @@ import {
   signedDeliveryPdfUrl,
   type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
+import { scorecardDownloadShouldRenderLive } from "@/lib/scorecard-rows";
 
 function kindLabel(kind: AdvisoryDelivery["kind"]): string {
   if (kind === "advisory_draft") return "Advisory draft";
@@ -26,11 +27,14 @@ export function AdvisorySentHistory({
   clientId,
   refreshToken = 0,
   statementPeriodLabel = null,
+  liveScorecard = null,
 }: {
   clientId: string;
   refreshToken?: number;
   /** Statement span. Shown in place of a calendar month stored on the row. */
   statementPeriodLabel?: string | null;
+  /** Overview scorecard. A stored PDF is not re-opened. */
+  liveScorecard?: (() => Promise<Blob | null>) | null;
 }) {
   const { dateTime, market } = useMarketFormat();
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
@@ -62,6 +66,31 @@ export function AdvisorySentHistory({
   };
 
   const redownloadPdf = async (row: AdvisoryDelivery) => {
+    if (scorecardDownloadShouldRenderLive(row) && liveScorecard) {
+      setDownloadingId(row.id);
+      try {
+        const blob = await liveScorecard();
+        if (!blob) {
+          toast.error("Could not build the scorecard");
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "scorecard.pdf";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast.success("Scorecard downloaded");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not build the scorecard");
+      } finally {
+        setDownloadingId(null);
+      }
+      return;
+    }
     if (!row.pdf_storage_path) return;
     setDownloadingId(row.id);
     try {

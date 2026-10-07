@@ -77,16 +77,12 @@ import {
   healthMapFromRatios,
   overviewRatioInputs,
   overviewRatios,
-  pillarForRatioName,
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
-import {
-  countOpenRatioQueries,
-  ratioQueryLabel,
-} from "@/lib/ratio-queries";
+import { countOpenRatioQueries, ratioQueryLabel } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
-import { presentReturn, presentScorecardRatio } from "@/lib/report-coherence";
+import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import "@/styles/accountant-portal.css";
@@ -322,35 +318,6 @@ function bandColor(band: "ok" | "warn" | "risk"): string {
   if (band === "ok") return "var(--ok)";
   if (band === "warn") return "var(--warn)";
   return "var(--risk)";
-}
-
-/** Format a raw ratio value to display string */
-function formatRatioValue(
-  name: string,
-  val: number,
-  market?: Parameters<typeof formatMoneyCompact>[1],
-): string {
-  if (!Number.isFinite(val)) return "—";
-  // Days-based ratios
-  if (name.includes("Days") || name.includes("days")) {
-    return `${Math.round(val)}d`;
-  }
-  // Revenue per head is money, not a percentage (87 200 / 6 read as 1 453 333%).
-  if (name === "Sales-per-Employee Ratio") {
-    return `${formatMoneyCompact(val, market)} / head`;
-  }
-  // Multiplier ratios
-  if (
-    name === "Asset Turnover" ||
-    name === "Equity Multiplier" ||
-    name === "Debt-to-Equity" ||
-    name === "Degree of Operating Leverage" ||
-    name === "OCF / EBITDA"
-  ) {
-    return `${val.toFixed(2)}×`;
-  }
-  // Percentage ratios — most
-  return `${(val * 100).toFixed(1)}%`;
 }
 
 // Score from ratio value — delegated to the shared health-score module
@@ -2139,66 +2106,66 @@ function ClientView() {
     });
   }, [clientId, navigate]);
 
+  const overviewScorecardPeriodLabel = useCallback(() => {
+    return (
+      reportDataPeriodLabel(financials) ??
+      new Date().toLocaleString("en-US", {
+        month: "long",
+        year: "numeric",
+      })
+    );
+  }, [financials]);
+
+  /** Fresh scorecard. Never the archived blob from an earlier sign-off. */
+  const renderOverviewScorecard = useCallback(async (): Promise<Blob | null> => {
+    if (!client) return null;
+    const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
+    const { pdf } = await import("@react-pdf/renderer");
+    const periodLabel = overviewScorecardPeriodLabel();
+    const ratioResults = buildScorecardRatioResults(
+      scorecardRatiosFromFinancials(financials, { fyStartMonth }),
+      clientMarket,
+      {
+        equity: equityAmount,
+        periodMonths,
+        partMonth,
+        cashFlowKnown: cashFlowKnown(financials),
+      },
+    );
+    const financialsStamp = stampFromSignoff(
+      financialsSignoff,
+      computeIsStale(financialsSignoff, client.financials_updated_at ?? null),
+    );
+    return pdf(
+      HealthScorecardPDF({
+        smeData: { name: client.name, period: periodLabel },
+        ratioResults,
+        accountantProfile: profile,
+        cashRunwayWeeks: effectiveRunway,
+        reviewSignoff: financialsStamp,
+        market: clientMarket,
+      }) as Parameters<typeof pdf>[0],
+    ).toBlob();
+  }, [
+    client,
+    financials,
+    fyStartMonth,
+    clientMarket,
+    equityAmount,
+    periodMonths,
+    partMonth,
+    financialsSignoff,
+    profile,
+    effectiveRunway,
+    overviewScorecardPeriodLabel,
+  ]);
+
   const handleExportPDF = useCallback(async () => {
     if (!client) return;
     try {
-      const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
-      const { pdf } = await import("@react-pdf/renderer");
-      const periodLabel =
-        reportDataPeriodLabel(financials) ??
-        new Date().toLocaleString("en-US", {
-          month: "long",
-          year: "numeric",
-        });
-      // Build ratio results from computed ratios (shared scoring + pillars)
-      const ratioEntries = Object.entries(ratios)
-        .map(([name, val]) => {
-          const presented = presentScorecardRatio({
-            name,
-            value: val as number,
-            equity: equityAmount,
-            currency: clientMarket.currency,
-            periodMonths,
-            partMonth,
-            cashFlowKnown: cashFlowKnown(financials),
-          });
-          if (!presented.include) return null;
-          const scored = presented.scoredValue;
-          const score =
-            presented.unscored || scored == null
-              ? 0
-              : Math.round(scoreRatio(name, scored, clientMarket));
-          return {
-            ratio_key: playbookKeyForRatioName(name),
-            ratio_name: name,
-            pillar: pillarForRatioName(name),
-            current_value: scored ?? (Number.isFinite(val as number) ? (val as number) : Number.NaN),
-            health_score: score,
-            health_tier: presented.unscored ? ("at_risk" as const) : scoreTier(score),
-            formatted_value: presented.text ?? formatRatioValue(name, (scored ?? val) as number, clientMarket),
-            annotation: presented.note,
-            unscored: presented.unscored || undefined,
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => row != null);
-
-      const smeData = {
-        name: client.name,
-        period: periodLabel,
-      };
-      const financialsStamp = stampFromSignoff(
-        financialsSignoff,
-        computeIsStale(financialsSignoff, client.financials_updated_at ?? null),
-      );
-      const blob = await pdf(
-        HealthScorecardPDF({
-          smeData,
-          ratioResults: ratioEntries,
-          accountantProfile: profile,
-          cashRunwayWeeks: effectiveRunway,
-          reviewSignoff: financialsStamp,
-        }) as Parameters<typeof pdf>[0],
-      ).toBlob();
+      const periodLabel = overviewScorecardPeriodLabel();
+      const blob = await renderOverviewScorecard();
+      if (!blob) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -2235,17 +2202,12 @@ function ClientView() {
   }, [
     client,
     ratios,
-    profile,
     user,
     financials,
     debtSchedule,
-    financialsSignoff,
-    effectiveRunway,
     firmId,
-    periodMonths,
-    partMonth,
-    equityAmount,
-    clientMarket,
+    overviewScorecardPeriodLabel,
+    renderOverviewScorecard,
   ]);
 
   const handleEmailDraft = useCallback(async () => {
@@ -2643,6 +2605,7 @@ function ClientView() {
                   clientId={client.id}
                   audience="accountant"
                   refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                  financials={financials}
                   onUpload={() => setFirstDataOpen(true)}
                   onOpenForecast={() => setActiveTab("cash")}
                   onChanged={() => setAdvisoryBump((n) => n + 1)}
@@ -3734,6 +3697,7 @@ function ClientView() {
                     clientId={client.id}
                     refreshToken={deliveryRefresh}
                     statementPeriodLabel={reportDataPeriodLabel(financials)}
+                    liveScorecard={renderOverviewScorecard}
                   />
                 </div>
               </div>
