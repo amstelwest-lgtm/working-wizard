@@ -5,6 +5,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  inviteFromHeader,
+  inviteFromWhenSendable,
   invitePasteText,
   RESEND_SEND_TIMEOUT_MS,
   templateInviteDraft,
@@ -34,6 +36,35 @@ assert(draft.body.includes("West & Co"), "signed with firm");
 const paste = invitePasteText(draft.subject, draft.body);
 assert(paste.startsWith("Subject: "), "paste starts with Subject");
 assert(paste.includes(url), "paste still has URL");
+
+assert(inviteFromHeader("noreply@milon.co.za") === "MILŌN <noreply@milon.co.za>", "From header");
+assert(
+  inviteFromWhenSendable({ apiKey: "", fromEmail: "noreply@milon.co.za" }) == null,
+  "From is hidden when send is not configured",
+);
+assert(
+  inviteFromWhenSendable({ apiKey: "re_test", fromEmail: "MILŌN <hello@milon.co.za>" }) ===
+    "MILŌN <hello@milon.co.za>",
+  "From shows when send is configured",
+);
+
+const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const openStart = dash.indexOf("const openOwnerInvite");
+const copyStart = dash.indexOf("const copyInviteDraft");
+assert(openStart > 0 && copyStart > openStart, "invite open and copy are separate");
+const openFn = dash.slice(openStart, copyStart);
+assert(!openFn.includes("clipboard"), "opening the invite drawer does not copy");
+assert(!openFn.includes("Invite message copied"), "opening the invite drawer does not toast copied");
+assert(openFn.includes("sendEmail: false"), "opening the invite drawer does not send");
+assert(dash.includes("From {draft.from}"), "the invite drawer shows From when sendable");
+assert(
+  dash.includes("disabled={sending || !draft.email.trim() || !draft.from}"),
+  "Send stays disabled until an email is present and sending is configured",
+);
+const team = readFileSync(resolve("src/routes/_authenticated/settings.team.tsx"), "utf8");
+assert(!team.includes("Thandi Mokoena"), "team invite does not prefill Thandi Mokoena");
+assert(!team.includes("thandi@practice.co.za"), "team invite does not prefill the demo email");
+assert(team.includes('useState("")'), "team invite name and email start blank");
 
 assert(RESEND_SEND_TIMEOUT_MS <= 8_000, "Resend abort stays inside the gateway window");
 const sendSrc = readFileSync(resolve("src/lib/client-invite-email.ts"), "utf8");

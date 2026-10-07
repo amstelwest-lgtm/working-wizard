@@ -10,6 +10,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { mintOwnerInviteToken } from "@/lib/invite-tokens.functions";
 import {
   draftOwnerInviteEmail,
+  inviteFromWhenSendable,
   invitePasteText,
   inviteSiteUrl,
   sendInviteViaResend,
@@ -28,6 +29,8 @@ export type OwnerInviteResult = {
   emailed: boolean;
   email: string | null;
   sendError: string | null;
+  /** Present when Send can deliver. Null when email sending is not configured. */
+  from: string | null;
 };
 
 function claimsEmailOf(claims: unknown): string | null {
@@ -190,6 +193,10 @@ export const inviteClientOwner = createServerFn({ method: "POST" })
       emailed,
       email: toEmail,
       sendError,
+      from: inviteFromWhenSendable({
+        apiKey: process.env.RESEND_API_KEY,
+        fromEmail: process.env.RESEND_FROM_EMAIL,
+      }),
     };
   });
 

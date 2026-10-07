@@ -59,7 +59,11 @@ import {
 } from "../supabase/functions/_shared/app-origin.ts";
 import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
-import { decideFirmClientCreate } from "../src/lib/firm-client-cap";
+import {
+  decideFirmClientCreate,
+  showStarterTrialEndedCopy,
+  starterTrialForPlanState,
+} from "../src/lib/firm-client-cap";
 import {
   STARTER_TRIAL_ENDED_MESSAGE,
   starterTrialClock,
@@ -1003,19 +1007,53 @@ const storedEnd = starterTrialClock({
   now,
 });
 assert(storedEnd.expired, "a stored Stripe trial_end is the end");
-const endedCreate = decideFirmClientCreate({
+const currentStarter = decideFirmClientCreate({
   stripeConfigured: true,
   phase: "active",
   band: "starter",
   clientCount: 0,
   starterTrialExpired: true,
 });
+assert(currentStarter.allowed, "a current Starter plan is not an ended trial");
+const starterAtCap = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "active",
+  band: "starter",
+  clientCount: 3,
+  starterTrialExpired: true,
+});
 assert(
-  !endedCreate.allowed &&
-    endedCreate.code === "starter_trial_ended" &&
-    endedCreate.message === STARTER_TRIAL_ENDED_MESSAGE,
-  "an expired Starter cannot add a client",
+  !starterAtCap.allowed &&
+    starterAtCap.code === "band_client_cap" &&
+    starterAtCap.message.startsWith("You can't add another client on Starter.") &&
+    !starterAtCap.message.includes("trial has ended"),
+  "Starter at 3/3 explains the client limit and does not say the trial ended",
 );
+const trialingEnded = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "trialing",
+  band: "starter",
+  clientCount: 0,
+  starterTrialExpired: true,
+});
+assert(
+  !trialingEnded.allowed &&
+    trialingEnded.code === "starter_trial_ended" &&
+    trialingEnded.message === STARTER_TRIAL_ENDED_MESSAGE,
+  "a trial that has ended still uses the trial-ended sentence",
+);
+assert(!showStarterTrialEndedCopy("active", true), "CURRENT plan copy is not trial ended");
+assert(showStarterTrialEndedCopy("trialing", true), "an ended trial still uses that copy");
+const presented = starterTrialForPlanState(
+  "active",
+  starterTrialClock({
+    enforced: true,
+    band: "starter",
+    startedAt: "2026-09-01T12:00:00.000Z",
+    now,
+  }),
+);
+assert(!presented.expired && !presented.showCountdown, "an active Starter clock is not shown as ended");
 assert(
   decideFirmClientCreate({
     stripeConfigured: true,
@@ -1028,6 +1066,14 @@ assert(
 
 assert(dashboard.includes("FirmStarterTrialBanner"), "the practice dashboard shows the trial banner");
 assert(dashboard.includes("TrialEndedPlanBlock"), "the add-client panel uses the shared trial block");
+assert(
+  dashboard.includes("You can't add another client on Starter."),
+  "add client at the Starter cap says so",
+);
+assert(
+  dashboard.includes("showStarterTrialEndedCopy"),
+  "the dashboard banner does not claim trial ended for a current plan",
+);
 const trialBlock = readFileSync(resolve("src/components/trial-ended-plan-block.tsx"), "utf8");
 assert(trialBlock.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the shared block uses the ended sentence");
 assert(trialBlock.includes("FirmBandUpgrade"), "the shared block embeds the band picker");
@@ -1037,6 +1083,10 @@ assert(
   "the dashboard countdown does not mount the plan card",
 );
 assert(settings.includes("TrialEndedPlanBlock"), "settings hosts the ended plan card");
+assert(
+  settings.includes("showStarterTrialEndedCopy"),
+  "settings plan copy follows the subscription state",
+);
 assert(dashboard.includes("dash-trial-banner"), "an ended trial is a thin settings link on the dashboard");
 assert(!banner.includes("FirmBandUpgrade"), "the banner does not mount a second picker");
 const migration = readFileSync(

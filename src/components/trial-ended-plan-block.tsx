@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import { showStarterTrialEndedCopy, type FirmSubscriptionPhase } from "@/lib/firm-client-cap";
 import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/firm-starter-trial";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import type { FirmBandId, FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
@@ -18,6 +19,8 @@ export type TrialEndedUpgrade = {
   clientCount?: number | null;
   usageLabel?: string | null;
   saDiscount?: boolean;
+  /** Live subscription phase. Active / CURRENT is not an ended trial. */
+  phase?: FirmSubscriptionPhase | null;
 };
 
 /**
@@ -92,12 +95,16 @@ export function TrialEndedPlanBlock({
   const upgradeBand = useServerFn(upgradeFirmBand);
   const onValidateVoucher = useFirmVoucherCheck(firmId);
   const [fetched, setFetched] = useState<TrialEndedUpgrade | null>(null);
+  const [fetchedPhase, setFetchedPhase] = useState<FirmSubscriptionPhase | null | undefined>(
+    upgradeFromCaller ? (upgradeFromCaller.phase ?? null) : undefined,
+  );
   const [loading, setLoading] = useState(!upgradeFromCaller);
   const [localUpgrading, setLocalUpgrading] = useState(false);
   const callerUpgrade = upgradeFromCaller ?? null;
 
   useEffect(() => {
     if (callerUpgrade) {
+      setFetchedPhase(callerUpgrade.phase ?? null);
       setLoading(false);
       return;
     }
@@ -105,7 +112,11 @@ export function TrialEndedPlanBlock({
     setLoading(true);
     void loadPlan({ data: { firmId } })
       .then((plan) => {
-        if (cancelled || !plan || plan.configured === false) return;
+        if (cancelled || !plan || plan.configured === false) {
+          if (!cancelled) setFetchedPhase(null);
+          return;
+        }
+        setFetchedPhase(plan.phase);
         setFetched({
           band: plan.band,
           interval: plan.interval ?? "month",
@@ -118,7 +129,10 @@ export function TrialEndedPlanBlock({
         });
       })
       .catch(() => {
-        if (!cancelled) setFetched(null);
+        if (!cancelled) {
+          setFetched(null);
+          setFetchedPhase(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -129,6 +143,9 @@ export function TrialEndedPlanBlock({
   }, [callerUpgrade, firmId, loadPlan]);
 
   const upgrade = callerUpgrade ?? fetched;
+  const phase = callerUpgrade ? (callerUpgrade.phase ?? fetchedPhase ?? null) : fetchedPhase;
+  const phaseKnown = phase !== undefined;
+  if (!phaseKnown || !showStarterTrialEndedCopy(phase, true)) return null;
 
   const handleUpgrade = (
     band: FirmCheckoutBand,
