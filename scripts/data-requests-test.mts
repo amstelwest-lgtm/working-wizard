@@ -27,6 +27,12 @@ import {
   type DataGapFacts,
 } from "../src/lib/data-requests";
 import { resolveNextStep, type NextStepFacts } from "../src/lib/next-step";
+import {
+  requestRevealDataRequests,
+  resetDataRequestsRevealForTests,
+  revealDataRequestsElement,
+  subscribeDataRequestsReveal,
+} from "../src/lib/reveal-data-requests";
 import { creditorDaysHealthyBand } from "../src/lib/ratios";
 
 function assert(cond: boolean, msg: string) {
@@ -570,6 +576,61 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
     studio.includes('audience="accountant"\n                  refreshKey'),
     "studio panel uses accountant audience",
   );
+
+  const actStart = studio.indexOf("const handleNextStepAct");
+  const actEnd = studio.indexOf("// ── Loading / error states", actStart);
+  const act = studio.slice(actStart, actEnd);
+  const dataCase = act.slice(act.indexOf('case "data_request"'), act.indexOf("default:"));
+  assert(dataCase.includes("requestRevealDataRequests()"), "See what's missing reveals the panel");
+  assert(dataCase.includes("return;"), "data_request does not fall through to a tab change");
+  assert(!dataCase.includes("revealTab"), "data_request does not scroll the overview pane");
+  assert(act.includes("filter: route.search.filter"), "other CTAs still carry the plan filter");
+
+  assert(panel.includes('id="data-requests"'), "panel is the #data-requests target");
+  assert(panel.includes("tabIndex={-1}"), "panel can take programmatic focus");
+  assert(panel.includes("subscribeDataRequestsReveal"), "panel listens for the next-step call");
+  assert(panel.includes('role="status"'), "reveal announces itself");
+  assert(panel.includes("These are the missing documents."), "reveal is visible without scrolling");
+  assert(panel.includes("revealDataRequestsElement"), "reveal moves focus onto the panel");
+
+  const css = readFileSync(resolve("src/styles/primitives.css"), "utf8");
+  assert(css.includes('#data-requests[data-called="true"]'), "called panel is highlighted");
+  assert(css.includes(".data-requests-callout"), "callout is styled");
+}
+
+{
+  resetDataRequestsRevealForTests();
+  let queued = 0;
+  requestRevealDataRequests();
+  const stop = subscribeDataRequestsReveal(() => {
+    queued += 1;
+  });
+  eq(queued, 1, "a reveal issued before the panel mounts is delivered on subscribe");
+  requestRevealDataRequests();
+  eq(queued, 2, "a reveal while mounted is delivered immediately");
+  stop();
+  requestRevealDataRequests();
+  let late = 0;
+  subscribeDataRequestsReveal(() => {
+    late += 1;
+  })();
+  eq(late, 1, "a reveal after unmount waits for the next subscriber");
+  resetDataRequestsRevealForTests();
+
+  const calls: string[] = [];
+  const el = {
+    setAttribute(name: string, value: string) {
+      calls.push(`${name}=${value}`);
+    },
+    scrollIntoView(opts: ScrollIntoViewOptions) {
+      calls.push(`scroll:${opts.block}`);
+    },
+    focus(opts?: FocusOptions) {
+      calls.push(`focus:${String(opts?.preventScroll)}`);
+    },
+  } as HTMLElement;
+  revealDataRequestsElement(el);
+  eq(calls.join("|"), "data-called=true|scroll:nearest|focus:true", "reveal marks, scrolls, and focuses");
 }
 
 console.log("data-requests: all checks passed");

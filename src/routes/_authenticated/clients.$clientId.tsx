@@ -171,6 +171,8 @@ import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
+import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
+import { focusTrapTabIndex, listFocusable } from "@/lib/dialog-focus";
 import {
   buildFinancialSnapshot,
   describeBusiness,
@@ -958,6 +960,7 @@ function ClientView() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadPurpose, setUploadPurpose] = useState<"figures" | "aged">("figures");
+  const uploadDialogRef = useRef<HTMLDivElement>(null);
   const [pastPeriodOpen, setPastPeriodOpen] = useState(false);
   const historyOnlyUploadRef = useRef(false);
   useEffect(() => {
@@ -965,6 +968,41 @@ function ClientView() {
       historyOnlyUploadRef.current = false;
       setUploadPurpose("figures");
     }
+  }, [uploadOpen]);
+  useEffect(() => {
+    if (!uploadOpen) return;
+    const root = uploadDialogRef.current;
+    if (!root) return;
+    const previously =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusables = () => listFocusable(root);
+    const initial = focusables();
+    (initial[0] ?? root).focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setUploadOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      event.preventDefault();
+      const items = focusables();
+      if (items.length === 0) {
+        root.focus();
+        return;
+      }
+      const active = document.activeElement;
+      const activeIndex = active instanceof HTMLElement ? items.indexOf(active) : -1;
+      const next = focusTrapTabIndex(items.length, activeIndex, event.shiftKey);
+      if (next < 0) return;
+      items[next]?.focus();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      if (previously && document.contains(previously)) previously.focus();
+    };
   }, [uploadOpen]);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [firstDataOpen, setFirstDataOpen] = useState(false);
@@ -2270,6 +2308,11 @@ function ClientView() {
           // Same two doors the first-figures card offers.
           if (hasFigures) setUploadOpen(true);
           else setFirstDataOpen(true);
+          return;
+        case "data_request":
+          // The missing-documents panel is already on Overview, in the first
+          // viewport. Changing ?tab= or scrolling the pane is invisible.
+          requestRevealDataRequests();
           return;
         default: {
           const route = nextStepRoute(key, "accountant", clientId);
@@ -3637,10 +3680,13 @@ function ClientView() {
           {uploadOpen && (
             <div className="veil open" onClick={() => setUploadOpen(false)} role="presentation">
               <div
+                ref={uploadDialogRef}
                 className="drawer open"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
+                aria-labelledby="upload-statement-title"
+                tabIndex={-1}
                 style={{ overflowY: "auto", padding: "26px 30px" }}
               >
                 <div
@@ -3651,7 +3697,7 @@ function ClientView() {
                     marginBottom: 20,
                   }}
                 >
-                  <h3 style={{ fontSize: 20, fontWeight: 700 }}>
+                  <h3 id="upload-statement-title" style={{ fontSize: 20, fontWeight: 700 }}>
                     {uploadPurpose === "aged"
                       ? "Upload aged debtors and creditors"
                       : "Upload financial statement"}
