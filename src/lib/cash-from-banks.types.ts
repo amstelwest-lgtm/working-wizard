@@ -127,7 +127,12 @@ export type CashForecastPublishPayload = {
   revGrowthPct: number;
   capexAmount: string;
   capexWeek: number;
-  seededFromBanksAt: string;
+  /**
+   * Set only by a bank-statement publish. A budget push must omit it —
+   * the flag means the opening is a bank balance, and Overview will roll
+   * it forward.
+   */
+  seededFromBanksAt?: string;
 };
 
 export type CashFromBanksDraftResult = {

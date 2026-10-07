@@ -13,6 +13,7 @@ import {
 import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
+import { describeLedgerLink } from "@/lib/ledger-link-copy";
 
 type Props = {
   clientId: string | null;
@@ -20,17 +21,14 @@ type Props = {
   returnPath?: string;
   /** Bump to reload status after a sync started from another card. */
   refreshToken?: number;
-  onSyncComplete?: (
-    inputs: Record<string, string>,
-    summary: XeroSyncResult["summary"],
-  ) => void;
+  onSyncComplete?: (inputs: Record<string, string>, summary: XeroSyncResult["summary"]) => void;
 };
 
-function fmtDate(iso: string | null) {
-  if (!iso) return "never";
+function fmtDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -176,8 +174,8 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
       <div className="ledger-connect ledger-connect--dashed">
         <p className="ledger-connect__kicker">Xero</p>
         <p className="ledger-connect__body">
-          Xero sync isn&apos;t switched on for this workspace yet. Export a P&amp;L and
-          balance sheet from Xero and upload them — the board fills in the same way.
+          Xero sync isn&apos;t switched on for this workspace yet. Export a P&amp;L and balance
+          sheet from Xero and upload them — the board fills in the same way.
         </p>
         <p className="ledger-connect__meta">
           Admins: set <code className="ledger-connect__code">XERO_CLIENT_ID</code>,{" "}
@@ -199,8 +197,32 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
       openingNote: lastSync?.openingCashNote ?? status.openingCashNote,
       linesNote: lastSync?.forecastLinesNote ?? status.forecastLinesNote,
     });
+    const linkCopy = describeLedgerLink(
+      {
+        provider: "xero",
+        lastSyncedAt: status.lastSyncedAt,
+        syncStatus: isError ? "error" : status.syncStatus,
+        figuresFromThisSync: Boolean(lastSync) || status.figuresFromThisSync,
+        own: lastSync
+          ? {
+              periodLabel: lastSync.periodLabel,
+              revenue: lastSync.revenue,
+              ytdPeriodLabel: lastSync.ytdPeriodLabel,
+              ytdRevenue: lastSync.ytdRevenue,
+              ytdBasis: lastSync.ytdBasis,
+              cash: lastSync.cash,
+            }
+          : status.syncFigures,
+        board: status.boardFigures,
+      },
+      fmtDate,
+    );
+    const ownPeriod =
+      lastSync?.periodLabel ?? status.syncFigures?.periodLabel ?? status.periodLabel;
     return (
-      <div className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--xero"}`}>
+      <div
+        className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--xero"}`}
+      >
         <div className="ledger-connect__head">
           <div className="ledger-connect__identity">
             <div className="ledger-connect__title-row">
@@ -219,28 +241,37 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
             <p className="ledger-connect__meta ledger-connect__meta--flush">
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
-                : status.periodLabel
-                  ? `Last sync ${fmtDate(status.lastSyncedAt)} · Month to date ${status.periodLabel}${
-                      status.revenue != null ? ` · Revenue ${fmtExact(status.revenue)}` : ""
-                    }${
-                      status.ytdPeriodLabel
-                        ? ` · ${yearToDateTitle(status.ytdBasis)} ${status.ytdPeriodLabel}${
-                            status.ytdRevenue != null ? ` · Revenue ${fmtExact(status.ytdRevenue)}` : ""
-                          }`
-                        : ""
-                    }`
-                  : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
+                : linkCopy.statusLine}
+              {!isError && linkCopy.figuresLine ? (
+                <>
+                  <br />
+                  {linkCopy.figuresLine}
+                </>
+              ) : null}
             </p>
             <p id="xero-sync-proof" className="ledger-connect__meta">
-              {status.periodLabel ? `P&L month to date ${status.periodLabel}` : "P&L period not dated yet"}
-              {status.ytdPeriodLabel
-                ? ` · ${yearToDateTitle(status.ytdBasis)} ${status.ytdPeriodLabel}`
-                : ""}
-              <br />
-              {`Balance sheet as of ${
-                formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf) || "the last sync"
-              }`}
-              <br />
+              {linkCopy.showOwnStats && ownPeriod ? (
+                <>
+                  {`P&L month to date ${ownPeriod}`}
+                  {(lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel)
+                    ? ` · ${yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis)} ${
+                        lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel
+                      }`
+                    : ""}
+                  <br />
+                </>
+              ) : !linkCopy.figuresLine ? (
+                <>
+                  P&amp;L period not dated yet
+                  <br />
+                </>
+              ) : null}
+              {lastSync?.bsAsOf || status.bsAsOf ? (
+                <>
+                  {`Balance sheet as of ${formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf)}`}
+                  <br />
+                </>
+              ) : null}
               <span id="xero-bank-summary-status">
                 {bankLines.length
                   ? bankLines.map((line, index) => (
@@ -264,7 +295,11 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
               title="Sync now"
               className="ledger-connect__sync"
             >
-              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              {syncing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
               {syncing ? "Syncing…" : "Sync"}
             </button>
             <button
@@ -279,7 +314,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
           </div>
         </div>
 
-        {(lastSync || status.periodLabel) && (
+        {(lastSync || linkCopy.showOwnStats) && (
           <div className="ledger-connect__stats ledger-connect__stats--xero">
             {[
               {
@@ -319,7 +354,10 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                     : String(lastSync?.bankCount ?? status.bankCount),
               },
               { label: "Bank total", value: fmtExact(lastSync?.bankTotal ?? status.bankTotal) },
-              { label: "Total assets", value: fmtExact(lastSync?.totalAssets ?? status.totalAssets) },
+              {
+                label: "Total assets",
+                value: fmtExact(lastSync?.totalAssets ?? status.totalAssets),
+              },
               { label: "Equity", value: fmtExact(lastSync?.equity ?? status.equity) },
             ].map((item) => (
               <div key={item.label}>
@@ -340,7 +378,8 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
           Xero
         </p>
         <p className="ledger-connect__hint">
-          Connect to sync P&amp;L, the balance sheet and bank balances into this client&apos;s figures
+          Connect to sync P&amp;L, the balance sheet and bank balances into this client&apos;s
+          figures
         </p>
       </div>
       <BrandConnectButton brand="xero" busy={connecting} onClick={handleConnect} />

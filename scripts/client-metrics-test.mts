@@ -306,6 +306,66 @@ const yankeesBrief = buildOverviewBrief({
 });
 assert(yankeesMetrics.runway.kind === "cash_generative", "Yankees operating cash flow keeps cash generative");
 
+// Budget lines parked on the FY start must not be rolled into Overview cash.
+// Bot reads cash.amount; Overview reads outlook.opening. Both stay on the statement.
+const wednesday = new Date("2026-10-07T15:00:00Z");
+const budgetRolled = assessClientMetrics({
+  financials: yankees,
+  financialsUpdatedAt: "2026-09-21T21:27:35.406Z",
+  now: wednesday,
+  cashflow: {
+    startDate: "2026-09-01",
+    openingBalance: "7430.22",
+    seededFromBanksAt: "2026-10-06T00:00:00.000Z",
+    revenue: [{ name: "Primary revenue (from budget)", amount: "8000", frequency: "recurring-monthly", startWeek: 1 }],
+    expenses: [
+      { name: "COGS (from budget)", amount: "700", frequency: "recurring-monthly", startWeek: 1 },
+      { name: "People / salaries (from budget)", amount: "4000", frequency: "recurring-monthly", startWeek: 1 },
+    ],
+  },
+});
+assert(
+  budgetRolled.cash.amount === 7430.22 && budgetRolled.cash.source === "period",
+  `budget seed is not a bank balance, got ${budgetRolled.cash.source} ${budgetRolled.cash.amount}`,
+);
+assert(
+  budgetRolled.outlook.opening === 7430.22,
+  `Overview cash stays the statement, got ${budgetRolled.outlook.opening}`,
+);
+assert(
+  !/rolled forward/i.test(budgetRolled.outlook.anchorNote ?? ""),
+  budgetRolled.outlook.anchorNote ?? "budget roll banner should be absent",
+);
+
+// No bank publish at all: same rule. QA US Test LLC was $128,450 on the Bot
+// and ~$181k on Overview after the gap was filled with budget P&L.
+const statementOnly = assessClientMetrics({
+  financials: {
+    cash: "128450",
+    revenue: "50000",
+    cogs: "20000",
+    fixedCosts: "22000",
+    netIncome: "8000",
+    periodMonths: "1",
+  },
+  now: wednesday,
+  cashflow: {
+    startDate: "2026-09-01",
+    openingBalance: "128450",
+    revenue: [{ name: "Sales", amount: "40000", frequency: "recurring-monthly", startWeek: 1 }],
+    expenses: [{ name: "Payroll", amount: "25000", frequency: "recurring-monthly", startWeek: 1 }],
+  },
+});
+assert(statementOnly.cash.amount === 128450, `Bot cash ${statementOnly.cash.amount}`);
+assert(
+  statementOnly.outlook.opening === 128450,
+  `Overview invented cash, got ${statementOnly.outlook.opening}`,
+);
+assert(
+  !/rolled forward/i.test(statementOnly.outlook.anchorNote ?? ""),
+  statementOnly.outlook.anchorNote ?? "statement roll banner should be absent",
+);
+
 const plOnly = assessClientMetrics({
   financials: {
     revenue: "50000",

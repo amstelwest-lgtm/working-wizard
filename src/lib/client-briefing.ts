@@ -17,8 +17,22 @@ import { formatDate, formatMoneyCompact, type ResolvedMarket, ZA_MARKET } from "
 
 // ── Financial snapshot ────────────────────────────────────────────────────────
 
+/** Briefing row order. Draft/propose validation uses this same list. */
+export const SNAPSHOT_METRIC_KEYS = ["revenue", "gm", "om", "runway", "cash", "updated"] as const;
+
+export type SnapshotMetricKey = (typeof SNAPSHOT_METRIC_KEYS)[number];
+
+/** Shown under a snapshot metric. Longer copy is clipped so the row stays a helper. */
+export const SNAPSHOT_HINT_DISPLAY_MAX = 160;
+
+/**
+ * Server cap for the same hint. Above the display limit so a client that still
+ * sends the unclipped note (the old 80-character cap rejected those) does not 400.
+ */
+export const SNAPSHOT_HINT_SCHEMA_MAX = 200;
+
 export type SnapshotMetric = {
-  key: "revenue" | "gm" | "om" | "runway" | "cash" | "updated";
+  key: SnapshotMetricKey;
   label: string;
   value: string;
   /** Directional movement vs the prior period; omitted when there is none. */
@@ -26,6 +40,24 @@ export type SnapshotMetric = {
   /** Muted helper, e.g. the prior period label. */
   hint?: string;
 };
+
+/** Collapse whitespace and keep a snapshot hint inside `max`, on a word boundary when it fits. */
+export function clipSnapshotHint(raw: string, max: number): string {
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  if (max < 2) return text.slice(0, Math.max(0, max));
+  const room = max - 1;
+  const cut = text.slice(0, room);
+  const space = cut.lastIndexOf(" ");
+  const base = (space >= 40 ? cut.slice(0, space) : cut).trimEnd();
+  return `${base || cut}…`;
+}
+
+function snapshotHint(raw: string | null | undefined): string | undefined {
+  const text = raw?.replace(/\s+/g, " ").trim();
+  if (!text) return undefined;
+  return clipSnapshotHint(text, SNAPSHOT_HINT_DISPLAY_MAX);
+}
 
 const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
@@ -69,24 +101,52 @@ export function buildFinancialSnapshot(input: {
   financialsUpdatedAt?: string | null;
   lastForecastAt?: string | null;
   priorLabel?: string | null;
+  /**
+   * Statement range on the live figures, e.g. "1 Sep 2026 – 21 Sep 2026".
+   * Shown on revenue when there is no separate prior period.
+   */
+  periodLabel?: string | null;
+  /**
+   * False when the live statement has no from/to dates. Movement vs a prior
+   * snapshot is then hidden — "flat" would claim a month that is not dated.
+   * Omit to keep the previous behaviour for callers that have not opted in.
+   */
+  datedPeriod?: boolean;
   market?: ResolvedMarket;
 }): SnapshotMetric[] {
   const market = input.market ?? ZA_MARKET;
+  const periodKnown = input.datedPeriod !== false && Boolean(input.periodLabel?.trim());
+  const allowMovement = input.datedPeriod !== false;
   const byKey = new Map(input.chips.map((c) => [c.key, c]));
   const out: SnapshotMetric[] = [];
 
   const rev = byKey.get("revenue");
   if (rev?.current != null) {
+    const delta = allowMovement ? deltaFor(rev) : undefined;
     out.push({
       key: "revenue",
       label: "Revenue",
       value: formatMoneyCompact(rev.current, market),
-      delta: deltaFor(rev),
+      delta,
+      hint: !periodKnown
+        ? input.datedPeriod === false
+          ? "Period not dated"
+          : undefined
+        : delta
+          ? input.priorLabel
+            ? `vs ${input.priorLabel}`
+            : undefined
+          : input.periodLabel?.trim() || undefined,
     });
   }
   const gm = byKey.get("gm");
   if (gm?.current != null && Number.isFinite(gm.current)) {
-    out.push({ key: "gm", label: "Gross margin", value: fmtPct(gm.current), delta: deltaFor(gm) });
+    out.push({
+      key: "gm",
+      label: "Gross margin",
+      value: fmtPct(gm.current),
+      delta: allowMovement ? deltaFor(gm) : undefined,
+    });
   }
   const om = byKey.get("om");
   if (om?.current != null && Number.isFinite(om.current)) {
@@ -94,7 +154,7 @@ export function buildFinancialSnapshot(input: {
       key: "om",
       label: "Operating margin",
       value: fmtPct(om.current),
-      delta: deltaFor(om),
+      delta: allowMovement ? deltaFor(om) : undefined,
     });
   }
   if (input.runwayLabel) {
@@ -107,11 +167,7 @@ export function buildFinancialSnapshot(input: {
       value: `${Number.isInteger(w) ? w : w.toFixed(1)} ${w === 1 ? "week" : "weeks"}`,
     });
   }
-  if (
-    input.cash &&
-    Number.isFinite(input.cash.amount) &&
-    Number.isFinite(input.cash.floor)
-  ) {
+  if (input.cash && Number.isFinite(input.cash.amount) && Number.isFinite(input.cash.floor)) {
     const position =
       input.cash.dipsBelowFloorWeek == null
         ? "stays above floor"
@@ -120,7 +176,7 @@ export function buildFinancialSnapshot(input: {
       key: "cash",
       label: "Cash",
       value: `${formatMoneyCompact(input.cash.amount, market)} · floor ${formatMoneyCompact(input.cash.floor, market)} · ${position}`,
-      hint: input.cash.note?.trim() || undefined,
+      hint: snapshotHint(input.cash.note),
     });
   }
   const updated = [input.financialsUpdatedAt, input.lastForecastAt]
@@ -132,7 +188,7 @@ export function buildFinancialSnapshot(input: {
       key: "updated",
       label: "Last updated",
       value: formatDate(updated, market, { day: "numeric", month: "short", year: "numeric" }),
-      hint: input.priorLabel ? `vs ${input.priorLabel}` : undefined,
+      hint: snapshotHint(input.priorLabel ? `vs ${input.priorLabel}` : undefined),
     });
   }
   return out;
@@ -458,7 +514,10 @@ RULES:
 - British/South African spelling. Plain text only, no bullet points, no headings, no quotes.`;
 }
 
-export function sealWorkflowPrompt(ctx: WorkflowContext): { text: string; session: RedactionSession } {
+export function sealWorkflowPrompt(ctx: WorkflowContext): {
+  text: string;
+  session: RedactionSession;
+} {
   return redactForModel(workflowPromptBody(ctx), { clientName: ctx.clientName });
 }
 
@@ -510,14 +569,8 @@ export function sanitizeWorkflowText(raw: string): string | null {
 }
 
 function citedPercent(text: string, subject: RegExp): number | null {
-  const after = new RegExp(
-    `${subject.source}[^\\d%]{0,40}(\\d+(?:\\.\\d+)?)\\s*%`,
-    "i",
-  );
-  const before = new RegExp(
-    `(\\d+(?:\\.\\d+)?)\\s*%[^\\n.]{0,40}${subject.source}`,
-    "i",
-  );
+  const after = new RegExp(`${subject.source}[^\\d%]{0,40}(\\d+(?:\\.\\d+)?)\\s*%`, "i");
+  const before = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%[^\\n.]{0,40}${subject.source}`, "i");
   const match = text.match(before) ?? text.match(after);
   if (!match) return null;
   const n = parseFloat(match[1]);

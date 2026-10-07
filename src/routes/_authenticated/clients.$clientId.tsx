@@ -156,15 +156,11 @@ import {
 import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
 import { DataUpToDate } from "@/components/data-up-to-date";
-import { WorkflowCoachStrip } from "@/components/workflow-coach";
 import {
-  coachPageForTab,
   dataFreshnessLine,
-  dataStepDone,
   evidenceForBriefingTab,
   evidenceForPillar,
   type CoachDestination,
-  type CoachDone,
 } from "@/lib/workflow-coach";
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
@@ -417,7 +413,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     queries?: string;
     /** Coach intent from Milōn Bot or a weak pillar (`margin`, `liquidity`, …). */
     coach?: string;
-    /** Short reason shown on the destination (“Milōn Bot asked …”). */
+    /** Bot handoff reason. Kept on the URL; the shell does not paint a reading-path line from it. */
     why?: string;
     /** Health page sub-step: the score, or the pillar drill. */
     focus?: string;
@@ -727,8 +723,6 @@ function ClientView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search.tab) ?? "overview",
   );
-  const [healthSeen, setHealthSeen] = useState(false);
-  const [pillarsSeen, setPillarsSeen] = useState(false);
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const persistedCreateRef = useRef<
     (payload: {
@@ -819,11 +813,6 @@ function ClientView() {
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
   }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
-  useEffect(() => {
-    if (activeTab !== "ratios") return;
-    if (search.focus === "pillars") setPillarsSeen(true);
-    else setHealthSeen(true);
-  }, [activeTab, search.focus]);
   // Landing tab: Overview — the client explanation, profile, and upload.
   // Deliverables stay clean. Decided once per client, after load, and never
   // over a ?tab= deep link.
@@ -1071,7 +1060,12 @@ function ClientView() {
   }, []);
   const ratios = computeRatios(ratioInputs);
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
-  const priorSnapshot = resolvePriorSnapshot(snapshots);
+  const statementMeta = readStatementMeta(financials);
+  const statementDated = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
+  const priorSnapshot = resolvePriorSnapshot(snapshots, new Date(), {
+    periodEnd: statementMeta.periodEnd,
+    financials,
+  });
   const assessed = useMemo(
     () =>
       assessClientMetrics({
@@ -1229,6 +1223,8 @@ function ClientView() {
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
+    periodLabel: statementDated ? statementMeta.periodLabel : null,
+    datedPeriod: statementDated,
     market: clientMarket,
     cash:
       assessed.cash.amount != null
@@ -1939,7 +1935,6 @@ function ClientView() {
       const tab = resolveAccountantTab(dest.tab);
       if (!tab) return;
       setActiveTab(tab);
-      if (dest.focus === "pillars") setPillarsSeen(true);
       navigate({
         to: "/clients/$clientId",
         params: { clientId },
@@ -1969,19 +1964,6 @@ function ClientView() {
   );
   openFromBotRef.current = openCoach;
 
-  const coachDone: CoachDone = {
-    data: dataStepDone({
-      xero: xeroLink,
-      qbo: qboLink,
-      snapshotCount: snapshots.length,
-    }),
-    health: healthSeen,
-    pillars: pillarsSeen,
-    profit: Boolean(profitabilitySignoff),
-    cash: Boolean(cashForecastSignoff),
-    budget: Boolean(budgetSignoff),
-    actions: Boolean(actionPlanSignoff),
-  };
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
@@ -1999,7 +1981,6 @@ function ClientView() {
       : null,
     snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
   });
-  const coachPage = coachPageForTab(activeTab, search.focus);
 
   const handleGenerateReport = useCallback(() => {
     setStudioDeepLink({});
@@ -2463,13 +2444,6 @@ function ClientView() {
                 ))}
               </nav>
               <div className="deliverable-main">
-                <WorkflowCoachStrip
-                  page={coachPage}
-                  intent={search.coach}
-                  why={search.why}
-                  done={coachDone}
-                  onOpen={openCoach}
-                />
                 <div
                   className={`tabpane${activeTab === "overview" ? " on" : ""}`}
                   id="pane-overview"
@@ -2546,6 +2520,7 @@ function ClientView() {
                   onAddPastPeriod={() => setPastPeriodOpen(true)}
                   onOpenReports={() => revealTab("reports")}
                   hasFigures={hasFigures}
+                  figuresPeriodLabel={statementDated ? statementMeta.periodLabel : null}
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
@@ -2560,6 +2535,9 @@ function ClientView() {
                           ytdPeriodLabel: qboLink.ytdPeriodLabel,
                           ytdRevenue: qboLink.ytdRevenue,
                           ytdBasis: qboLink.ytdBasis,
+                          figuresFromThisSync: qboLink.figuresFromThisSync,
+                          syncFigures: qboLink.syncFigures,
+                          boardFigures: qboLink.boardFigures,
                         }
                       : null
                   }
@@ -2574,6 +2552,9 @@ function ClientView() {
                           ytdPeriodLabel: xeroLink.ytdPeriodLabel,
                           ytdRevenue: xeroLink.ytdRevenue,
                           ytdBasis: xeroLink.ytdBasis,
+                          figuresFromThisSync: xeroLink.figuresFromThisSync,
+                          syncFigures: xeroLink.syncFigures,
+                          boardFigures: xeroLink.boardFigures,
                           bsAsOf: xeroLink.bsAsOf,
                           bankCount: xeroLink.bankCount,
                           bankTotal: xeroLink.bankTotal,
@@ -2867,7 +2848,6 @@ function ClientView() {
                           onOpenEvidence={(id) => {
                             const evidence = evidenceForPillar(id);
                             if (!evidence) return;
-                            setPillarsSeen(true);
                             openCoach(evidence);
                           }}
                         />
@@ -3577,7 +3557,6 @@ function ClientView() {
                 label: evidence.label,
                 onOpen: () => {
                   setDrawerOpen(false);
-                  setPillarsSeen(true);
                   openCoach(evidence);
                 },
               };

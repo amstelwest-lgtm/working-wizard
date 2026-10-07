@@ -129,6 +129,18 @@ assert(LLMS_TXT.includes("/about"), "llms.txt includes about");
 assert(LLMS_TXT.includes("Primary: United States"), "llms.txt US-first");
 assert(!LLMS_TXT.includes("photographed"), "llms.txt does not claim photo ingest");
 assert(!LLMS_TXT.includes("Canada"), "llms.txt does not claim Canada");
+assert(!/white-label/i.test(LLMS_TXT), "llms.txt has no white-label");
+assert(
+  LLMS_TXT.includes(
+    "Generates client-ready advisory packs for accounting firms to review and sign off",
+  ),
+  "llms.txt describes client-ready advisory packs",
+);
+assert(!/white-label/i.test(graph), "schema graph has no white-label");
+assert(
+  graph.includes("Client-ready PDF advisory packs for review and sign-off"),
+  "schema feature list names client-ready advisory packs",
+);
 assert(!graph.includes("Canada"), "org schema does not claim Canada");
 assert(!graph.includes("photographed"), "schema does not claim photo ingest");
 assert(graph.includes("19 financial ratios"), "schema uses the real ratio count");
@@ -320,7 +332,18 @@ assert(
 const firms = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
 assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");
 assert(!firms.includes("South African accounting"), "firm page meta is not SA-first");
-assert(firms.includes("your colors"), "firm page uses US spelling");
+assert(!/white-label/i.test(firms), "firm page does not claim white-label");
+assert(firms.includes("Portfolio triage."), "firm page keeps portfolio triage");
+assert(firms.includes("Drafted advisory reports."), "firm page keeps drafted advisory reports");
+assert(firms.includes("A risk radar."), "firm page keeps the risk radar");
+assert(firms.includes("A recurring reason to talk."), "firm page keeps the recurring reason to talk");
+assert(firms.includes("14-day free trial · up to 3 clients."), "firm page keeps the trial line");
+assert(firms.includes("SA_FOUNDING_LINE"), "firm page keeps the SA founding line");
+assert(
+  SEO_PAGES.forAccountants.title ===
+    "Advisory drafts from QBO & Xero for accounting firms | MILŌN",
+  "firm page title names advisory drafts from QBO and Xero",
+);
 assert(firms.includes("Works with QuickBooks Online and Xero"), "firm page names both ledgers");
 assert(firms.includes("Connect QuickBooks Online or Xero"), "firm page says connect either ledger");
 assert(!firms.includes("certified"), "firm page does not claim certification");

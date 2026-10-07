@@ -116,8 +116,25 @@ assert(hiddenOpex?.fixedCosts === 3500, "a snapshot with no opex does not zero t
 assert(budgetActualsBadge(0, true) === "Statement pace", "statement pace is not 'no actuals'");
 assert(budgetActualsBadge(0, false) === "No actuals yet", "empty variance card still says so");
 
-const pushed = budgetToCashForecastPayload({ ...seeded.doc, wc: { ...seeded.doc.wc, debtorDays: 56 } });
+const pushed = budgetToCashForecastPayload(
+  { ...seeded.doc, wc: { ...seeded.doc.wc, debtorDays: 56 } },
+  new Date("2026-10-07T15:00:00Z"),
+);
 assert(pushed.collectDelay === 0, `budget push leaves the collection scenario off, got ${pushed.collectDelay}`);
+assert(
+  pushed.startDate === "2026-10-05",
+  `budget cash starts Monday of this week, got ${pushed.startDate}`,
+);
+assert(pushed.startDate !== `${seeded.doc.fyStart}-01`, "budget cash does not start on the first day of the FY");
+assert(pushed.openingBalance === "25000", `opening stays statement cash, got ${pushed.openingBalance}`);
+assert(
+  !("seededFromBanksAt" in pushed),
+  "a budget publish must not look like a bank seed",
+);
+assert(
+  pushed.revenue.every((line) => line.name.includes("(from budget)")),
+  "budget lines stay labelled",
+);
 
 const base = { weeks: null, kind: "cash_generative" as const, label: "Cash generative" };
 const direction = runwayFromForecastNet({

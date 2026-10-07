@@ -100,10 +100,6 @@ function ForAccountantsPage() {
           <strong>Drafted advisory reports.</strong> {ACCOUNTANTS_DRAFT_BULLET}
         </li>
         <li>
-          <strong>White-label output.</strong> Your logo, your colors, your name on the report.
-          Milōn is the engine, not the brand on the cover.
-        </li>
-        <li>
           <strong>A risk radar.</strong> Deteriorating clients surface before the crisis call, which
           is the difference between advisory and cleanup.
         </li>
@@ -202,9 +198,6 @@ function ForAccountantsPage() {
           14, paid Solo+ bills automatically.
         </li>
         {showSaPricing ? <li>{SA_FOUNDING_LINE}</li> : null}
-        <li>
-          White-label onboarding support is included. Your branding on every report and portal.
-        </li>
       </ul>
 
       <div className="mk-note">

@@ -21,7 +21,13 @@ import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { BrandConnectButton } from "@/components/brand-connect-button";
-import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
+import { formatIsoDateUTC } from "@/lib/statement-period";
+import {
+  describeLedgerLink,
+  type BoardFigures,
+  type LedgerProvider,
+  type LedgerSyncFigures,
+} from "@/lib/ledger-link-copy";
 
 export type LedgerLinkProof = {
   tenantName: string | null;
@@ -40,6 +46,12 @@ export type LedgerLinkProof = {
   bankTo?: string | null;
   openingCashNote?: string | null;
   forecastLinesNote?: string | null;
+  /** True when last_synced_at is set and the live blob was written by this link. */
+  figuresFromThisSync?: boolean;
+  /** This connection's own sync. Null when the link has not synced. */
+  syncFigures?: LedgerSyncFigures | null;
+  /** Figures the overview is showing, including upload / snapshot / the other ledger. */
+  boardFigures?: BoardFigures | null;
 };
 
 export type XeroLinkProof = LedgerLinkProof;
@@ -65,44 +77,54 @@ function fmtProofMoney(n: number | null) {
 function LedgerProof({
   id,
   title,
+  provider,
   link,
   fallbackName,
 }: {
   id: string;
   title: string;
+  provider: LedgerProvider;
   link: LedgerLinkProof;
   fallbackName: string;
 }) {
+  const copy =
+    link.syncStatus === "error"
+      ? null
+      : describeLedgerLink(
+          {
+            provider,
+            lastSyncedAt: link.lastSyncedAt,
+            syncStatus: link.syncStatus,
+            figuresFromThisSync:
+              link.figuresFromThisSync ?? Boolean(link.lastSyncedAt && link.periodLabel),
+            own:
+              link.syncFigures !== undefined
+                ? link.syncFigures
+                : link.periodLabel
+                  ? {
+                      periodLabel: link.periodLabel,
+                      revenue: link.revenue,
+                      ytdPeriodLabel: link.ytdPeriodLabel ?? null,
+                      ytdRevenue: link.ytdRevenue ?? null,
+                      ytdBasis: link.ytdBasis ?? null,
+                      cash: null,
+                    }
+                  : null,
+            board: link.boardFigures ?? null,
+          },
+          (iso) => fmtProofWhen(iso),
+        );
   return (
     <p className="briefing-muted" id={id} style={{ marginTop: 10 }}>
       <span className="briefing-kicker">{title}</span>
       <br />
       <b>{link.tenantName?.trim() || fallbackName}</b>
       {" · "}
-      {link.syncStatus === "error"
-        ? "Last sync needs attention"
-        : `Last sync ${fmtProofWhen(link.lastSyncedAt)}`}
-      {link.periodLabel ? (
+      {link.syncStatus === "error" ? "Last sync needs attention" : copy?.statusLine}
+      {copy?.figuresLine ? (
         <>
           <br />
-          Month to date · {link.periodLabel}
-          {fmtProofMoney(link.revenue) ? ` · Revenue ${fmtProofMoney(link.revenue)}` : ""}
-        </>
-      ) : (
-        <>
-          <br />
-          Sync again — the stored total has no period dates, so it is not this month.
-        </>
-      )}
-      {link.ytdPeriodLabel ? (
-        <>
-          <br />
-          {yearToDateTitle(link.ytdBasis ?? null)}
-          {" · "}
-          {link.ytdPeriodLabel}
-          {fmtProofMoney(link.ytdRevenue ?? null)
-            ? ` · Revenue ${fmtProofMoney(link.ytdRevenue ?? null)}`
-            : ""}
+          {copy.figuresLine}
         </>
       ) : null}
       {link.bsAsOf ? (
@@ -173,6 +195,11 @@ export type ClientBriefingProps = {
   onOpenReports?: () => void;
   onAddPastPeriod?: () => void;
   hasFigures: boolean;
+  /**
+   * Dated statement range for the figures on the board. When it is missing,
+   * the workflow kicker does not call the work "this month".
+   */
+  figuresPeriodLabel?: string | null;
   /** Primary upload — always in the briefing, not behind a tab. */
   onUpload?: () => void;
   onConnectQuickBooks?: () => void;
@@ -252,6 +279,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
             <LedgerProof
               id="qbo-link-proof"
               title="QuickBooks linked"
+              provider="qbo"
               link={p.qboLink}
               fallbackName="Company connected"
             />
@@ -260,6 +288,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
             <LedgerProof
               id="xero-link-proof"
               title="Xero linked"
+              provider="xero"
               link={p.xeroLink}
               fallbackName="Organisation connected"
             />
@@ -365,7 +394,9 @@ export function ClientBriefing(p: ClientBriefingProps) {
             </div>
           ) : null}
           <div>
-            <span className="briefing-kicker gold">This month&apos;s Milōn workflow</span>
+            <span className="briefing-kicker gold">
+              {p.figuresPeriodLabel ? "This month's Milōn workflow" : "Milōn workflow"}
+            </span>
             {p.workflow ? (
               <p>{p.workflow.text}</p>
             ) : p.workflowLoading ? (

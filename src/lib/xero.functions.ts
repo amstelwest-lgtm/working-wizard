@@ -7,6 +7,11 @@ import { agedArProofLine, readCollectionsSnapshot } from "@/lib/collections";
 import { agedApProofLine, readPayablesSnapshot, skippedPayables } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { calendarMonthStamp, readStatementMeta, XERO_YTD_FIELD_KEYS } from "@/lib/statement-period";
+import {
+  ledgerAttribution,
+  type BoardFigures,
+  type LedgerSyncFigures,
+} from "@/lib/ledger-link-copy";
 import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
 import {
   applyXeroOpeningCash,
@@ -123,6 +128,12 @@ export type XeroStatus = {
   agedArLine: string;
   /** Aged payables proof: applied, empty, or the skip reason. */
   agedApLine: string;
+  /** True when last_synced_at is set and the live blob was written by Xero. */
+  figuresFromThisSync: boolean;
+  /** This connection's sync. Null when Xero has not synced these figures. */
+  syncFigures: LedgerSyncFigures | null;
+  /** Overview figures, including a snapshot or upload that this link did not write. */
+  boardFigures: BoardFigures | null;
 } | null;
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
@@ -237,6 +248,9 @@ function statusFromRow(
     dataDepth: conn.data_depth ?? "statement",
     phase: derived.phase,
     ...proof,
+    figuresFromThisSync: false,
+    syncFigures: null,
+    boardFigures: null,
   };
 }
 
@@ -248,7 +262,7 @@ export const getXeroStatus = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, financials")
+      .select("id, financials, financials_updated_at")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
@@ -265,7 +279,8 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!conn) return null;
-    const status = statusFromRow(conn, (client as { financials?: unknown }).financials);
+    const financials = (client as { financials?: unknown }).financials;
+    const status = statusFromRow(conn, financials);
     const { data: caches } = await admin
       .from("xero_sync_data")
       .select("data_type, raw_data")
@@ -278,9 +293,48 @@ export const getXeroStatus = createServerFn({ method: "POST" })
     const agedAp = readPayablesSnapshot(
       (caches ?? []).find((row) => row.data_type === "aged_ap")?.raw_data,
     );
+    const { data: snapRows } = await admin
+      .from("client_financial_snapshots")
+      .select("source, created_at")
+      .eq("client_id", data.clientId)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    const attribution = ledgerAttribution({
+      provider: "xero",
+      lastSyncedAt: conn.last_synced_at ?? null,
+      financials,
+      financialsUpdatedAt:
+        (client as { financials_updated_at?: string | null }).financials_updated_at ?? null,
+      snapshots: snapRows ?? [],
+      ownFromBlob: {
+        periodLabel: status.periodLabel,
+        revenue: status.revenue,
+        ytdPeriodLabel: status.ytdPeriodLabel,
+        ytdRevenue: status.ytdRevenue,
+        ytdBasis: status.ytdBasis,
+        cash: status.cash,
+      },
+    });
+    const ownsFigures = attribution.figuresFromThisSync;
     return {
       ...status,
-      bsAsOf: coverage.bsAsOf ?? status.bsAsOf,
+      ...(ownsFigures
+        ? {}
+        : {
+            periodLabel: null,
+            periodStart: null,
+            periodEnd: null,
+            revenue: null,
+            netIncome: null,
+            cash: null,
+            totalAssets: null,
+            equity: null,
+            ytdRevenue: null,
+            ytdNetIncome: null,
+            ytdPeriodLabel: null,
+            ytdBasis: null,
+          }),
+      bsAsOf: ownsFigures ? (coverage.bsAsOf ?? status.bsAsOf) : (coverage.bsAsOf ?? null),
       bankCount: coverage.bankCount,
       bankTotal: coverage.bankTotal,
       bankWarning: coverage.bankWarning,
@@ -290,6 +344,9 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       forecastLinesNote: coverage.forecastLinesNote,
       agedArLine: aged ? agedArProofLine(aged) : status.agedArLine,
       agedApLine: agedAp ? agedApProofLine(agedAp) : status.agedApLine,
+      figuresFromThisSync: attribution.figuresFromThisSync,
+      syncFigures: attribution.syncFigures,
+      boardFigures: attribution.boardFigures,
     };
   });
 
@@ -536,7 +593,9 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         .eq("id", data.clientId)
         .maybeSingle();
       const prev =
-        existing?.financials && typeof existing.financials === "object" && !Array.isArray(existing.financials)
+        existing?.financials &&
+        typeof existing.financials === "object" &&
+        !Array.isArray(existing.financials)
           ? (existing.financials as Record<string, unknown>)
           : {};
       const merged: Record<string, unknown> = {
@@ -638,7 +697,12 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           } as never,
           synced_at: nowIso,
         },
-        { client_id: data.clientId, data_type: "bs", raw_data: { ...bs, asOf: ledger.to } as never, synced_at: nowIso },
+        {
+          client_id: data.clientId,
+          data_type: "bs",
+          raw_data: { ...bs, asOf: ledger.to } as never,
+          synced_at: nowIso,
+        },
         {
           client_id: data.clientId,
           data_type: "bank",
@@ -670,7 +734,9 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           synced_at: nowIso,
         },
       ];
-      await supabaseAdmin.from("xero_sync_data").upsert(cacheRows, { onConflict: "client_id,data_type" });
+      await supabaseAdmin
+        .from("xero_sync_data")
+        .upsert(cacheRows, { onConflict: "client_id,data_type" });
 
       const ok = reduceXeroConnection(started, { type: "sync_succeeded" });
       await supabaseAdmin

@@ -11,8 +11,11 @@ import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import {
   budgetIsImplausible,
+  budgetScaleBreak,
+  budgetWasRebuiltFromActuals,
   mergeMonthActuals,
   repairUntouchedSeededBudget,
+  reseedBudgetIfScaleBroken,
   seedBudgetFromFinancials,
   statementMonthActuals,
 } from "@/lib/budget.bridges";
@@ -129,7 +132,9 @@ export function BudgetPanel({
     let cancelled = false;
     supabase
       .from("clients")
-      .select("budget, budget_updated_at, financial_year_start_month, operating_profile, financials")
+      .select(
+        "budget, budget_updated_at, financial_year_start_month, operating_profile, financials",
+      )
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -148,12 +153,18 @@ export function BudgetPanel({
         const fromDb = parseOperatingProfile(row?.operating_profile);
         if (fromDb) setProfile(fromDb);
         if (budget && budget.version === 1) {
-          const repaired = repairUntouchedSeededBudget(budget, row?.financials ?? null);
-          const unchanged =
-            JSON.stringify(repaired) === JSON.stringify(normalizeBudgetDocument(budget));
-          skipAutosave.current = unchanged;
-          budgetDirty.current = false;
-          setDoc(repaired);
+          const financials = row?.financials ?? null;
+          const normalized = normalizeBudgetDocument(budget);
+          // An order-of-magnitude plan is replaced from the latest actuals.
+          // A smaller mismatch stays on screen and asks before a rebuild.
+          const broken = budgetScaleBreak(normalized, financials) != null;
+          const next = broken
+            ? reseedBudgetIfScaleBroken(normalized, financials)
+            : repairUntouchedSeededBudget(normalized, financials);
+          const persisted = broken && budgetScaleBreak(next, financials) == null;
+          skipAutosave.current = !persisted;
+          budgetDirty.current = persisted;
+          setDoc(next);
         } else {
           budgetDirty.current = false;
           setDoc(null);
@@ -436,16 +447,27 @@ export function BudgetPanel({
   }
 
   const implausible = budgetIsImplausible(doc, financials);
+  const rebuilt = budgetWasRebuiltFromActuals(doc);
 
   return (
     <>
       {budgetInputConfig}
+      {rebuilt && (
+        <div className="mb-4 rounded-xl border border-sky-300/80 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-50">
+          <p className="font-semibold">This budget was rebuilt from the latest actuals</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-sky-900/90 dark:text-sky-100/80">
+            The stored plan was more than ten times the annualised revenue or cost of sales. The
+            file note records the rebuild.
+          </p>
+        </div>
+      )}
       {implausible && (
         <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
           <p className="font-semibold">This budget does not line up with the latest actuals</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
-            Cost of sales is zero while the period has a cost of sales, or a full year of revenue
-            is more than three times the annualised actual. Nothing is overwritten until you rebuild.
+            Cost of sales is zero while the period has a cost of sales, or a full year of revenue or
+            cost of sales is more than three times the annualised actual. Nothing is overwritten
+            until you rebuild.
           </p>
           <Button
             type="button"
