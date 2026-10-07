@@ -673,6 +673,14 @@ async function sumQboEntity(
   }
 }
 
+/** Null when every part failed. A mix of failures and zeros still sums. */
+function sumNullable(parts: Array<number | null>): number | null {
+  if (parts.every((n) => n == null)) return null;
+  let total = 0;
+  for (const n of parts) total += n ?? 0;
+  return Math.round(total * 100) / 100;
+}
+
 /**
  * 13-week cash in and cash out, plus bank-account closing balances.
  * A failed query is null so a total outage does not look like a real zero.
@@ -688,14 +696,8 @@ export async function fetchQboBankActivity(
     ...QBO_CASH_IN.map((entity) => sumQboEntity(realmId, accessToken, entity, range.from, range.to)),
     ...QBO_CASH_OUT.map((entity) => sumQboEntity(realmId, accessToken, entity, range.from, range.to)),
   ]);
-  const receivedParts = [deposits, payments, sales];
-  const spentParts = [purchases, bills];
-  const received = receivedParts.every((n) => n == null)
-    ? null
-    : Math.round(receivedParts.reduce((sum, n) => sum + (n ?? 0), 0) * 100) / 100;
-  const spent = spentParts.every((n) => n == null)
-    ? null
-    : Math.round(spentParts.reduce((sum, n) => sum + (n ?? 0), 0) * 100) / 100;
+  const received = sumNullable([deposits, payments, sales]);
+  const spent = sumNullable([purchases, bills]);
   return qboBankActivityFromParts({
     accounts,
     balanceSheetCash,

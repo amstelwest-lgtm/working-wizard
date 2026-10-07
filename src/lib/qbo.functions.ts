@@ -189,8 +189,6 @@ function qboFigureProof(financials: unknown): {
     ytdBasis: meta.ytdBasis,
     agedArLine: "Aged receivables appear after the next Sync",
     agedApLine: "Aged payables appear after the next Sync",
-    openingCashNote: null,
-    forecastLinesNote: null,
   };
 }
 
