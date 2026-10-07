@@ -2524,38 +2524,6 @@ export type Database = {
           },
         ]
       }
-      xero_sync_data: {
-        Row: {
-          client_id: string
-          data_type: string
-          id: string
-          raw_data: Json | null
-          synced_at: string
-        }
-        Insert: {
-          client_id: string
-          data_type: string
-          id?: string
-          raw_data?: Json | null
-          synced_at?: string
-        }
-        Update: {
-          client_id?: string
-          data_type?: string
-          id?: string
-          raw_data?: Json | null
-          synced_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "xero_sync_data_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       sage_connections: {
         Row: {
           client_id: string
@@ -2628,6 +2596,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sage_sync_data_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_sync_data: {
+        Row: {
+          client_id: string
+          data_type: string
+          id: string
+          raw_data: Json | null
+          synced_at: string
+        }
+        Insert: {
+          client_id: string
+          data_type: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+        }
+        Update: {
+          client_id?: string
+          data_type?: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_sync_data_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"

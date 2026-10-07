@@ -4,20 +4,22 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { encryptSagePassword } from "@/lib/sage-password";
+import { executeSageSync } from "@/lib/sage-sync.server";
 import {
   sageConnectionInsert,
   sageCredentialsConfigured,
-  sageSyncWriteDecision,
   sageValidateError,
   validateSageLogin,
-  SAGE_EMPTY_SYNC_MESSAGE,
 } from "@/lib/sage";
 
 const connectInput = z.object({
   clientId: z.string().uuid(),
   username: z.string().trim().min(3).max(200),
   password: z.string().min(1).max(200),
-  companyId: z.string().trim().regex(/^\d{1,18}$/),
+  companyId: z
+    .string()
+    .trim()
+    .regex(/^\d{1,18}$/),
 });
 
 export const getSageConfig = createServerFn({ method: "POST" })
@@ -191,13 +193,10 @@ export type SageSyncStubResult = {
 };
 
 /**
- * Sync entry after connect.
- *
- * TODO(Eng1): map the Sage SA profit and loss and balance sheet into `fields`,
- * then keep sageSyncWriteDecision in front of any write to the client book.
- * Deliverable auto-populate stays on the owner board and the accountant studio,
- * and only after that write says the figures are real.
- * A connection with no statement must not invent health or ratios.
+ * Sync entry the connect card calls.
+ * Statement mapping lives in executeSageSync, which keeps sageSyncWriteDecision
+ * in front of any write. Deliverable auto-populate stays on the owner board
+ * and the accountant studio, and only after that write says the figures are real.
  */
 export const triggerSageSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -221,12 +220,13 @@ export const triggerSageSync = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!conn) throw new Error("Connect Sage before syncing.");
 
-    const fields: Record<string, string> = {};
-    const decision = sageSyncWriteDecision(fields, null);
-    if (!decision.write) {
-      return { populated: false, fields, message: SAGE_EMPTY_SYNC_MESSAGE };
-    }
-
-    // Unreachable until Eng1 supplies non-empty figures. Do not write the book here.
-    throw new Error("Sage statement populate is not implemented.");
+    const result = await executeSageSync({
+      clientId: data.clientId,
+      userId: context.userId ?? null,
+    });
+    return {
+      populated: result.populated,
+      fields: result.fields,
+      message: result.message,
+    };
   });

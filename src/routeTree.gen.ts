@@ -9,119 +9,64 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
-import { Route as ForOwnersRouteImport } from './routes/for-owners'
-import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
-import { Route as FaqRouteImport } from './routes/faq'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AppRouteImport } from './routes/app'
-import { Route as AiRouteImport } from './routes/ai'
-import { Route as AboutRouteImport } from './routes/about'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TTokenRouteImport } from './routes/t.$token'
-import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
-import { Route as JoinTokenRouteImport } from './routes/join.$token'
-import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
-import { Route as BillingSuccessRouteImport } from './routes/billing.success'
-import { Route as BillingStartRouteImport } from './routes/billing.start'
-import { Route as BillingRequiredRouteImport } from './routes/billing.required'
-import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
-import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
-import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
-import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
-import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
-import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
-import { Route as AckTokenRouteImport } from './routes/ack.$token'
-import { Route as AccessTokenRouteImport } from './routes/access.$token'
-import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as AiRouteImport } from './routes/ai'
+import { Route as AppRouteImport } from './routes/app'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as FaqRouteImport } from './routes/faq'
+import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
+import { Route as ForOwnersRouteImport } from './routes/for-owners'
+import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
-import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
-import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
-import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
-import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
-import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
-import { Route as ApiXeroCallbackRouteImport } from './routes/api/xero/callback'
-import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
-import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
-import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
-import { Route as AuthenticatedFounderMetricsRouteImport } from './routes/_authenticated/founder.metrics'
+import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
+import { Route as AccessTokenRouteImport } from './routes/access.$token'
+import { Route as AckTokenRouteImport } from './routes/ack.$token'
+import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
+import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
+import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
+import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
+import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
+import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
+import { Route as BillingRequiredRouteImport } from './routes/billing.required'
+import { Route as BillingStartRouteImport } from './routes/billing.start'
+import { Route as BillingSuccessRouteImport } from './routes/billing.success'
+import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as JoinTokenRouteImport } from './routes/join.$token'
+import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
+import { Route as TTokenRouteImport } from './routes/t.$token'
+import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
-import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients.index'
-import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
-import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
+import { Route as AuthenticatedFounderMetricsRouteImport } from './routes/_authenticated/founder.metrics'
+import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
+import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
+import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
+import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
+import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
+import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
+import { Route as ApiSageSyncRouteImport } from './routes/api/sage/sync'
+import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
+import { Route as ApiXeroCallbackRouteImport } from './routes/api/xero/callback'
+import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
+import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
 
-const UnsubscribeRoute = UnsubscribeRouteImport.update({
-  id: '/unsubscribe',
-  path: '/unsubscribe',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
-  id: '/robots.txt',
-  path: '/robots.txt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
-  id: '/llms.txt',
-  path: '/llms.txt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForOwnersRoute = ForOwnersRouteImport.update({
-  id: '/for-owners',
-  path: '/for-owners',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForAccountantsRoute = ForAccountantsRouteImport.update({
-  id: '/for-accountants',
-  path: '/for-accountants',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FaqRoute = FaqRouteImport.update({
-  id: '/faq',
-  path: '/faq',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppRoute = AppRouteImport.update({
-  id: '/app',
-  path: '/app',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AiRoute = AiRouteImport.update({
-  id: '/ai',
-  path: '/ai',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AboutRoute = AboutRouteImport.update({
@@ -129,78 +74,84 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
+const AiRoute = AiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TTokenRoute = TTokenRouteImport.update({
-  id: '/t/$token',
-  path: '/t/$token',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LhUnsubscribeRoute = LhUnsubscribeRouteImport.update({
-  id: '/lh/unsubscribe',
-  path: '/lh/unsubscribe',
+const FaqRoute = FaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
   getParentRoute: () => rootRouteImport,
 } as any)
-const JoinTokenRoute = JoinTokenRouteImport.update({
-  id: '/join/$token',
-  path: '/join/$token',
+const ForAccountantsRoute = ForAccountantsRouteImport.update({
+  id: '/for-accountants',
+  path: '/for-accountants',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
-  id: '/email/unsubscribe',
-  path: '/email/unsubscribe',
+const ForOwnersRoute = ForOwnersRouteImport.update({
+  id: '/for-owners',
+  path: '/for-owners',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BillingSuccessRoute = BillingSuccessRouteImport.update({
-  id: '/billing/success',
-  path: '/billing/success',
+const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
+  id: '/llms.txt',
+  path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BillingStartRoute = BillingStartRouteImport.update({
-  id: '/billing/start',
-  path: '/billing/start',
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BillingRequiredRoute = BillingRequiredRouteImport.update({
-  id: '/billing/required',
-  path: '/billing/required',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BillingCancelRoute = BillingCancelRouteImport.update({
-  id: '/billing/cancel',
-  path: '/billing/cancel',
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthVerifiedRoute = AuthVerifiedRouteImport.update({
-  id: '/auth_/verified',
-  path: '/auth/verified',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/auth_/callback',
-  path: '/auth/callback',
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTaskEngagedRoute = ApiTaskEngagedRouteImport.update({
-  id: '/api/task-engaged',
-  path: '/api/task-engaged',
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiMetricsDigestRoute = ApiMetricsDigestRouteImport.update({
-  id: '/api/metrics-digest',
-  path: '/api/metrics-digest',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
-  id: '/api/client-error',
-  path: '/api/client-error',
+const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
+  id: '/ops',
+  path: '/ops',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AccessTokenRoute = AccessTokenRouteImport.update({
+  id: '/access/$token',
+  path: '/access/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AckTokenRoute = AckTokenRouteImport.update({
@@ -208,80 +159,75 @@ const AckTokenRoute = AckTokenRouteImport.update({
   path: '/ack/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccessTokenRoute = AccessTokenRouteImport.update({
-  id: '/access/$token',
-  path: '/access/$token',
+const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
+  id: '/api/client-error',
+  path: '/api/client-error',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
-  id: '/ops',
-  path: '/ops',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedSettingsIndexRoute =
-  AuthenticatedSettingsIndexRouteImport.update({
-    id: '/settings/',
-    path: '/settings/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedReportsIndexRoute =
-  AuthenticatedReportsIndexRouteImport.update({
-    id: '/reports/',
-    path: '/reports/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
-  id: '/lovable/email/suppression',
-  path: '/lovable/email/suppression',
+const ApiMetricsDigestRoute = ApiMetricsDigestRouteImport.update({
+  id: '/api/metrics-digest',
+  path: '/api/metrics-digest',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiResendWebhookRoute = ApiResendWebhookRouteImport.update({
-  id: '/api/resend/webhook',
-  path: '/api/resend/webhook',
+const ApiTaskEngagedRoute = ApiTaskEngagedRouteImport.update({
+  id: '/api/task-engaged',
+  path: '/api/task-engaged',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
-  id: '/api/stripe/webhook',
-  path: '/api/stripe/webhook',
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth_/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
-  id: '/api/qbo/callback',
-  path: '/api/qbo/callback',
+const AuthVerifiedRoute = AuthVerifiedRouteImport.update({
+  id: '/auth_/verified',
+  path: '/auth/verified',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiXeroCallbackRoute = ApiXeroCallbackRouteImport.update({
-  id: '/api/xero/callback',
-  path: '/api/xero/callback',
+const BillingCancelRoute = BillingCancelRouteImport.update({
+  id: '/billing/cancel',
+  path: '/billing/cancel',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedSettingsTeamRoute =
-  AuthenticatedSettingsTeamRouteImport.update({
-    id: '/settings/team',
-    path: '/settings/team',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSettingsBrandRoute =
-  AuthenticatedSettingsBrandRouteImport.update({
-    id: '/settings/brand',
-    path: '/settings/brand',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedReportsDemoRoute =
-  AuthenticatedReportsDemoRouteImport.update({
-    id: '/reports/demo',
-    path: '/reports/demo',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedFounderMetricsRoute =
-  AuthenticatedFounderMetricsRouteImport.update({
-    id: '/founder/metrics',
-    path: '/founder/metrics',
+const BillingRequiredRoute = BillingRequiredRouteImport.update({
+  id: '/billing/required',
+  path: '/billing/required',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingStartRoute = BillingStartRouteImport.update({
+  id: '/billing/start',
+  path: '/billing/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingSuccessRoute = BillingSuccessRouteImport.update({
+  id: '/billing/success',
+  path: '/billing/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
+  id: '/email/unsubscribe',
+  path: '/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LhUnsubscribeRoute = LhUnsubscribeRouteImport.update({
+  id: '/lh/unsubscribe',
+  path: '/lh/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TTokenRoute = TTokenRouteImport.update({
+  id: '/t/$token',
+  path: '/t/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedClientsIndexRoute =
+  AuthenticatedClientsIndexRouteImport.update({
+    id: '/clients/',
+    path: '/clients/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedClientsClientIdRoute =
@@ -290,15 +236,76 @@ const AuthenticatedClientsClientIdRoute =
     path: '/clients/$clientId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedClientsRoute = AuthenticatedClientsRouteImport.update({
-  id: '/clients/',
-  path: '/clients/',
-  getParentRoute: () => AuthenticatedRoute,
+const AuthenticatedFounderMetricsRoute =
+  AuthenticatedFounderMetricsRouteImport.update({
+    id: '/founder/metrics',
+    path: '/founder/metrics',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReportsIndexRoute =
+  AuthenticatedReportsIndexRouteImport.update({
+    id: '/reports/',
+    path: '/reports/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReportsDemoRoute =
+  AuthenticatedReportsDemoRouteImport.update({
+    id: '/reports/demo',
+    path: '/reports/demo',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsBrandRoute =
+  AuthenticatedSettingsBrandRouteImport.update({
+    id: '/settings/brand',
+    path: '/settings/brand',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsTeamRoute =
+  AuthenticatedSettingsTeamRouteImport.update({
+    id: '/settings/team',
+    path: '/settings/team',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
+  id: '/api/qbo/callback',
+  path: '/api/qbo/callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const LovableEmailTransactionalSendRoute =
-  LovableEmailTransactionalSendRouteImport.update({
-    id: '/lovable/email/transactional/send',
-    path: '/lovable/email/transactional/send',
+const ApiResendWebhookRoute = ApiResendWebhookRouteImport.update({
+  id: '/api/resend/webhook',
+  path: '/api/resend/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSageSyncRoute = ApiSageSyncRouteImport.update({
+  id: '/api/sage/sync',
+  path: '/api/sage/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
+  id: '/api/stripe/webhook',
+  path: '/api/stripe/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiXeroCallbackRoute = ApiXeroCallbackRouteImport.update({
+  id: '/api/xero/callback',
+  path: '/api/xero/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
+  id: '/lovable/email/suppression',
+  path: '/lovable/email/suppression',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LovableEmailQueueProcessRoute =
+  LovableEmailQueueProcessRouteImport.update({
+    id: '/lovable/email/queue/process',
+    path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
 const LovableEmailTransactionalPreviewRoute =
@@ -307,10 +314,10 @@ const LovableEmailTransactionalPreviewRoute =
     path: '/lovable/email/transactional/preview',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LovableEmailQueueProcessRoute =
-  LovableEmailQueueProcessRouteImport.update({
-    id: '/lovable/email/queue/process',
-    path: '/lovable/email/queue/process',
+const LovableEmailTransactionalSendRoute =
+  LovableEmailTransactionalSendRouteImport.update({
+    id: '/lovable/email/transactional/send',
+    path: '/lovable/email/transactional/send',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -348,16 +355,17 @@ export interface FileRoutesByFullPath {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
-  '/clients/': typeof AuthenticatedClientsRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
-  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
+  '/api/sage/sync': typeof ApiSageSyncRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
+  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
+  '/clients/': typeof AuthenticatedClientsIndexRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -398,16 +406,17 @@ export interface FileRoutesByTo {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
-  '/clients': typeof AuthenticatedClientsRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
-  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
+  '/api/sage/sync': typeof ApiSageSyncRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
+  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
+  '/clients': typeof AuthenticatedClientsIndexRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -450,16 +459,17 @@ export interface FileRoutesById {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
-  '/_authenticated/clients/': typeof AuthenticatedClientsRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
-  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
+  '/api/sage/sync': typeof ApiSageSyncRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
+  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
+  '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -502,16 +512,17 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
-    | '/clients/'
     | '/founder/metrics'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
     | '/api/qbo/callback'
-    | '/api/xero/callback'
     | '/api/resend/webhook'
+    | '/api/sage/sync'
     | '/api/stripe/webhook'
+    | '/api/xero/callback'
     | '/lovable/email/suppression'
+    | '/clients/'
     | '/reports/'
     | '/settings/'
     | '/lovable/email/queue/process'
@@ -552,16 +563,17 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
-    | '/clients'
     | '/founder/metrics'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
     | '/api/qbo/callback'
-    | '/api/xero/callback'
     | '/api/resend/webhook'
+    | '/api/sage/sync'
     | '/api/stripe/webhook'
+    | '/api/xero/callback'
     | '/lovable/email/suppression'
+    | '/clients'
     | '/reports'
     | '/settings'
     | '/lovable/email/queue/process'
@@ -603,16 +615,17 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/_authenticated/clients/$clientId'
-    | '/_authenticated/clients/'
     | '/_authenticated/founder/metrics'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/team'
     | '/api/qbo/callback'
-    | '/api/xero/callback'
     | '/api/resend/webhook'
+    | '/api/sage/sync'
     | '/api/stripe/webhook'
+    | '/api/xero/callback'
     | '/lovable/email/suppression'
+    | '/_authenticated/clients/'
     | '/_authenticated/reports/'
     | '/_authenticated/settings/'
     | '/lovable/email/queue/process'
@@ -653,9 +666,10 @@ export interface RootRouteChildren {
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
-  ApiXeroCallbackRoute: typeof ApiXeroCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
+  ApiSageSyncRoute: typeof ApiSageSyncRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
+  ApiXeroCallbackRoute: typeof ApiXeroCallbackRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
@@ -664,102 +678,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/unsubscribe': {
-      id: '/unsubscribe'
-      path: '/unsubscribe'
-      fullPath: '/unsubscribe'
-      preLoaderRoute: typeof UnsubscribeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/robots.txt': {
-      id: '/robots.txt'
-      path: '/robots.txt'
-      fullPath: '/robots.txt'
-      preLoaderRoute: typeof RobotsDottxtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/llms.txt': {
-      id: '/llms.txt'
-      path: '/llms.txt'
-      fullPath: '/llms.txt'
-      preLoaderRoute: typeof LlmsDottxtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/for-owners': {
-      id: '/for-owners'
-      path: '/for-owners'
-      fullPath: '/for-owners'
-      preLoaderRoute: typeof ForOwnersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/for-accountants': {
-      id: '/for-accountants'
-      path: '/for-accountants'
-      fullPath: '/for-accountants'
-      preLoaderRoute: typeof ForAccountantsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/faq': {
-      id: '/faq'
-      path: '/faq'
-      fullPath: '/faq'
-      preLoaderRoute: typeof FaqRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/app': {
-      id: '/app'
-      path: '/app'
-      fullPath: '/app'
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ai': {
-      id: '/ai'
-      path: '/ai'
-      fullPath: '/ai'
-      preLoaderRoute: typeof AiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -769,102 +692,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/t/$token': {
-      id: '/t/$token'
-      path: '/t/$token'
-      fullPath: '/t/$token'
-      preLoaderRoute: typeof TTokenRouteImport
+    '/ai': {
+      id: '/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AiRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lh/unsubscribe': {
-      id: '/lh/unsubscribe'
-      path: '/lh/unsubscribe'
-      fullPath: '/lh/unsubscribe'
-      preLoaderRoute: typeof LhUnsubscribeRouteImport
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/join/$token': {
-      id: '/join/$token'
-      path: '/join/$token'
-      fullPath: '/join/$token'
-      preLoaderRoute: typeof JoinTokenRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/email/unsubscribe': {
-      id: '/email/unsubscribe'
-      path: '/email/unsubscribe'
-      fullPath: '/email/unsubscribe'
-      preLoaderRoute: typeof EmailUnsubscribeRouteImport
+    '/faq': {
+      id: '/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof FaqRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/billing/success': {
-      id: '/billing/success'
-      path: '/billing/success'
-      fullPath: '/billing/success'
-      preLoaderRoute: typeof BillingSuccessRouteImport
+    '/for-accountants': {
+      id: '/for-accountants'
+      path: '/for-accountants'
+      fullPath: '/for-accountants'
+      preLoaderRoute: typeof ForAccountantsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/billing/start': {
-      id: '/billing/start'
-      path: '/billing/start'
-      fullPath: '/billing/start'
-      preLoaderRoute: typeof BillingStartRouteImport
+    '/for-owners': {
+      id: '/for-owners'
+      path: '/for-owners'
+      fullPath: '/for-owners'
+      preLoaderRoute: typeof ForOwnersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/billing/required': {
-      id: '/billing/required'
-      path: '/billing/required'
-      fullPath: '/billing/required'
-      preLoaderRoute: typeof BillingRequiredRouteImport
+    '/llms.txt': {
+      id: '/llms.txt'
+      path: '/llms.txt'
+      fullPath: '/llms.txt'
+      preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/billing/cancel': {
-      id: '/billing/cancel'
-      path: '/billing/cancel'
-      fullPath: '/billing/cancel'
-      preLoaderRoute: typeof BillingCancelRouteImport
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth_/verified': {
-      id: '/auth_/verified'
-      path: '/auth/verified'
-      fullPath: '/auth/verified'
-      preLoaderRoute: typeof AuthVerifiedRouteImport
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth_/callback': {
-      id: '/auth_/callback'
-      path: '/auth/callback'
-      fullPath: '/auth/callback'
-      preLoaderRoute: typeof AuthCallbackRouteImport
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/task-engaged': {
-      id: '/api/task-engaged'
-      path: '/api/task-engaged'
-      fullPath: '/api/task-engaged'
-      preLoaderRoute: typeof ApiTaskEngagedRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/metrics-digest': {
-      id: '/api/metrics-digest'
-      path: '/api/metrics-digest'
-      fullPath: '/api/metrics-digest'
-      preLoaderRoute: typeof ApiMetricsDigestRouteImport
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/client-error': {
-      id: '/api/client-error'
-      path: '/api/client-error'
-      fullPath: '/api/client-error'
-      preLoaderRoute: typeof ApiClientErrorRouteImport
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ops': {
+      id: '/_authenticated/ops'
+      path: '/ops'
+      fullPath: '/ops'
+      preLoaderRoute: typeof AuthenticatedOpsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/access/$token': {
+      id: '/access/$token'
+      path: '/access/$token'
+      fullPath: '/access/$token'
+      preLoaderRoute: typeof AccessTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ack/$token': {
@@ -874,102 +818,102 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AckTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/access/$token': {
-      id: '/access/$token'
-      path: '/access/$token'
-      fullPath: '/access/$token'
-      preLoaderRoute: typeof AccessTokenRouteImport
+    '/api/client-error': {
+      id: '/api/client-error'
+      path: '/api/client-error'
+      fullPath: '/api/client-error'
+      preLoaderRoute: typeof ApiClientErrorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/ops': {
-      id: '/_authenticated/ops'
-      path: '/ops'
-      fullPath: '/ops'
-      preLoaderRoute: typeof AuthenticatedOpsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/settings/': {
-      id: '/_authenticated/settings/'
-      path: '/settings'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/reports/': {
-      id: '/_authenticated/reports/'
-      path: '/reports'
-      fullPath: '/reports/'
-      preLoaderRoute: typeof AuthenticatedReportsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/lovable/email/suppression': {
-      id: '/lovable/email/suppression'
-      path: '/lovable/email/suppression'
-      fullPath: '/lovable/email/suppression'
-      preLoaderRoute: typeof LovableEmailSuppressionRouteImport
+    '/api/metrics-digest': {
+      id: '/api/metrics-digest'
+      path: '/api/metrics-digest'
+      fullPath: '/api/metrics-digest'
+      preLoaderRoute: typeof ApiMetricsDigestRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/resend/webhook': {
-      id: '/api/resend/webhook'
-      path: '/api/resend/webhook'
-      fullPath: '/api/resend/webhook'
-      preLoaderRoute: typeof ApiResendWebhookRouteImport
+    '/api/task-engaged': {
+      id: '/api/task-engaged'
+      path: '/api/task-engaged'
+      fullPath: '/api/task-engaged'
+      preLoaderRoute: typeof ApiTaskEngagedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/stripe/webhook': {
-      id: '/api/stripe/webhook'
-      path: '/api/stripe/webhook'
-      fullPath: '/api/stripe/webhook'
-      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+    '/auth_/callback': {
+      id: '/auth_/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/qbo/callback': {
-      id: '/api/qbo/callback'
-      path: '/api/qbo/callback'
-      fullPath: '/api/qbo/callback'
-      preLoaderRoute: typeof ApiQboCallbackRouteImport
+    '/auth_/verified': {
+      id: '/auth_/verified'
+      path: '/auth/verified'
+      fullPath: '/auth/verified'
+      preLoaderRoute: typeof AuthVerifiedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/xero/callback': {
-      id: '/api/xero/callback'
-      path: '/api/xero/callback'
-      fullPath: '/api/xero/callback'
-      preLoaderRoute: typeof ApiXeroCallbackRouteImport
+    '/billing/cancel': {
+      id: '/billing/cancel'
+      path: '/billing/cancel'
+      fullPath: '/billing/cancel'
+      preLoaderRoute: typeof BillingCancelRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/settings/team': {
-      id: '/_authenticated/settings/team'
-      path: '/settings/team'
-      fullPath: '/settings/team'
-      preLoaderRoute: typeof AuthenticatedSettingsTeamRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/billing/required': {
+      id: '/billing/required'
+      path: '/billing/required'
+      fullPath: '/billing/required'
+      preLoaderRoute: typeof BillingRequiredRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/settings/brand': {
-      id: '/_authenticated/settings/brand'
-      path: '/settings/brand'
-      fullPath: '/settings/brand'
-      preLoaderRoute: typeof AuthenticatedSettingsBrandRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/billing/start': {
+      id: '/billing/start'
+      path: '/billing/start'
+      fullPath: '/billing/start'
+      preLoaderRoute: typeof BillingStartRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/reports/demo': {
-      id: '/_authenticated/reports/demo'
-      path: '/reports/demo'
-      fullPath: '/reports/demo'
-      preLoaderRoute: typeof AuthenticatedReportsDemoRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/billing/success': {
+      id: '/billing/success'
+      path: '/billing/success'
+      fullPath: '/billing/success'
+      preLoaderRoute: typeof BillingSuccessRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/founder/metrics': {
-      id: '/_authenticated/founder/metrics'
-      path: '/founder/metrics'
-      fullPath: '/founder/metrics'
-      preLoaderRoute: typeof AuthenticatedFounderMetricsRouteImport
+    '/email/unsubscribe': {
+      id: '/email/unsubscribe'
+      path: '/email/unsubscribe'
+      fullPath: '/email/unsubscribe'
+      preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lh/unsubscribe': {
+      id: '/lh/unsubscribe'
+      path: '/lh/unsubscribe'
+      fullPath: '/lh/unsubscribe'
+      preLoaderRoute: typeof LhUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/t/$token': {
+      id: '/t/$token'
+      path: '/t/$token'
+      fullPath: '/t/$token'
+      preLoaderRoute: typeof TTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/clients/': {
+      id: '/_authenticated/clients/'
+      path: '/clients'
+      fullPath: '/clients/'
+      preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/clients/$clientId': {
@@ -979,25 +923,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsClientIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/clients/': {
-      id: '/_authenticated/clients/'
-      path: '/clients'
-      fullPath: '/clients/'
-      preLoaderRoute: typeof AuthenticatedClientsRouteImport
+    '/_authenticated/founder/metrics': {
+      id: '/_authenticated/founder/metrics'
+      path: '/founder/metrics'
+      fullPath: '/founder/metrics'
+      preLoaderRoute: typeof AuthenticatedFounderMetricsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/lovable/email/transactional/send': {
-      id: '/lovable/email/transactional/send'
-      path: '/lovable/email/transactional/send'
-      fullPath: '/lovable/email/transactional/send'
-      preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
+    '/_authenticated/reports/': {
+      id: '/_authenticated/reports/'
+      path: '/reports'
+      fullPath: '/reports/'
+      preLoaderRoute: typeof AuthenticatedReportsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reports/demo': {
+      id: '/_authenticated/reports/demo'
+      path: '/reports/demo'
+      fullPath: '/reports/demo'
+      preLoaderRoute: typeof AuthenticatedReportsDemoRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/brand': {
+      id: '/_authenticated/settings/brand'
+      path: '/settings/brand'
+      fullPath: '/settings/brand'
+      preLoaderRoute: typeof AuthenticatedSettingsBrandRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/team': {
+      id: '/_authenticated/settings/team'
+      path: '/settings/team'
+      fullPath: '/settings/team'
+      preLoaderRoute: typeof AuthenticatedSettingsTeamRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/qbo/callback': {
+      id: '/api/qbo/callback'
+      path: '/api/qbo/callback'
+      fullPath: '/api/qbo/callback'
+      preLoaderRoute: typeof ApiQboCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lovable/email/transactional/preview': {
-      id: '/lovable/email/transactional/preview'
-      path: '/lovable/email/transactional/preview'
-      fullPath: '/lovable/email/transactional/preview'
-      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+    '/api/resend/webhook': {
+      id: '/api/resend/webhook'
+      path: '/api/resend/webhook'
+      fullPath: '/api/resend/webhook'
+      preLoaderRoute: typeof ApiResendWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sage/sync': {
+      id: '/api/sage/sync'
+      path: '/api/sage/sync'
+      fullPath: '/api/sage/sync'
+      preLoaderRoute: typeof ApiSageSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stripe/webhook': {
+      id: '/api/stripe/webhook'
+      path: '/api/stripe/webhook'
+      fullPath: '/api/stripe/webhook'
+      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/xero/callback': {
+      id: '/api/xero/callback'
+      path: '/api/xero/callback'
+      fullPath: '/api/xero/callback'
+      preLoaderRoute: typeof ApiXeroCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/suppression': {
+      id: '/lovable/email/suppression'
+      path: '/lovable/email/suppression'
+      fullPath: '/lovable/email/suppression'
+      preLoaderRoute: typeof LovableEmailSuppressionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lovable/email/queue/process': {
@@ -1007,6 +1014,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lovable/email/transactional/preview': {
+      id: '/lovable/email/transactional/preview'
+      path: '/lovable/email/transactional/preview'
+      fullPath: '/lovable/email/transactional/preview'
+      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lovable/email/transactional/send': {
+      id: '/lovable/email/transactional/send'
+      path: '/lovable/email/transactional/send'
+      fullPath: '/lovable/email/transactional/send'
+      preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1014,11 +1035,11 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
-  AuthenticatedClientsRoute: typeof AuthenticatedClientsRoute
   AuthenticatedFounderMetricsRoute: typeof AuthenticatedFounderMetricsRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
   AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
+  AuthenticatedClientsIndexRoute: typeof AuthenticatedClientsIndexRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
@@ -1027,11 +1048,11 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedOpsRoute: AuthenticatedOpsRoute,
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
-  AuthenticatedClientsRoute: AuthenticatedClientsRoute,
   AuthenticatedFounderMetricsRoute: AuthenticatedFounderMetricsRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
   AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
+  AuthenticatedClientsIndexRoute: AuthenticatedClientsIndexRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
@@ -1073,9 +1094,10 @@ const rootRouteChildren: RootRouteChildren = {
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
-  ApiXeroCallbackRoute: ApiXeroCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
+  ApiSageSyncRoute: ApiSageSyncRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,
+  ApiXeroCallbackRoute: ApiXeroCallbackRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,

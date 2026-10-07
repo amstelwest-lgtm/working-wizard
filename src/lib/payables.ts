@@ -12,7 +12,7 @@ import {
   type CollectionsInvoice,
 } from "./collections.ts";
 
-export type PayablesSource = "xero" | "qbo";
+export type PayablesSource = "xero" | "qbo" | "sage";
 export type PayablesStatus = "applied" | "empty" | "skipped";
 export type SupplierMove = "Pay" | "Delay" | "Renegotiate" | "Decide";
 
@@ -60,7 +60,7 @@ export type XeroSupplierCandidate = {
   hasBalances: boolean;
 };
 
-const SOURCES = new Set<PayablesSource>(["xero", "qbo"]);
+const SOURCES = new Set<PayablesSource>(["xero", "qbo", "sage"]);
 const STATUSES = new Set<PayablesStatus>(["applied", "empty", "skipped"]);
 
 export const XERO_AGED_AP_RECONNECT =
@@ -283,7 +283,9 @@ export function choosePayables(rows: Array<PayablesSnapshot | null | undefined>)
 }
 
 export function payablesSourceLabel(source: PayablesSource): string {
-  return source === "xero" ? "Xero" : "QuickBooks";
+  if (source === "xero") return "Xero";
+  if (source === "sage") return "Sage";
+  return "QuickBooks";
 }
 
 export function agedApProofLine(snap: PayablesSnapshot | null | undefined): string {
