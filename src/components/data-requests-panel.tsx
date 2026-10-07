@@ -28,6 +28,7 @@ import {
   resolveDataRequest,
   sendDataRequestEmail,
 } from "@/lib/data-requests.functions";
+import { revealDataRequestsElement, subscribeDataRequestsReveal } from "@/lib/reveal-data-requests";
 
 type Props = {
   clientId: string | null;
@@ -83,6 +84,9 @@ export function DataRequestsPanel({
   const [askKind, setAskKind] = useState<DataRequestKind>("aged_debtors");
   const [askNote, setAskNote] = useState("");
   const [askBusy, setAskBusy] = useState(false);
+  const [called, setCalled] = useState(false);
+  const [revealTick, setRevealTick] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -106,6 +110,22 @@ export function DataRequestsPanel({
     void load();
     // refreshKey is intentionally a dependency: hosts bump it after writes.
   }, [clientId, refreshKey, load]);
+
+  // Next Step "See what's missing" — the panel is already on screen, so the
+  // host asks us to take focus and flash rather than scrolling the page.
+  useEffect(() => subscribeDataRequestsReveal(() => setRevealTick((n) => n + 1)), []);
+
+  const sectionVisible =
+    Boolean(clientId) && loaded && migrated && (audience !== "owner" || rows.length > 0);
+  useEffect(() => {
+    if (revealTick === 0 || !sectionVisible) return;
+    const el = sectionRef.current;
+    if (!el) return;
+    setCalled(true);
+    revealDataRequestsElement(el);
+    const timer = window.setTimeout(() => setCalled(false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [revealTick, sectionVisible]);
 
   const afterWrite = async () => {
     await load();
@@ -192,13 +212,30 @@ export function DataRequestsPanel({
     .join(" ");
 
   return (
-    <section className={shell} id="data-requests" data-audience={audience} data-count={rows.length}>
+    <section
+      ref={sectionRef}
+      className={shell}
+      id="data-requests"
+      tabIndex={-1}
+      data-audience={audience}
+      data-count={rows.length}
+      data-called={called ? "true" : undefined}
+      aria-labelledby="data-requests-heading"
+    >
+      {called ? (
+        <p className="data-requests-callout" role="status">
+          These are the missing documents.
+        </p>
+      ) : null}
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#5b420e] dark:text-[#e1b85e]">
             {audience === "owner" ? "MILŌN needs" : "Data requests"}
           </span>
-          <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
+          <h3
+            id="data-requests-heading"
+            className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]"
+          >
             {rows.length === 0
               ? "Nothing outstanding"
               : rows.length === 1

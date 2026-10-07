@@ -1018,6 +1018,54 @@ html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="op
   opacity: 0.7;
 }
 
+/* Next Step "See what's missing" — the panel is already in view, so the
+   call has to change the card itself (banner + ring + focus), not the scroll
+   position. */
+#data-requests {
+  scroll-margin-top: 88px;
+}
+#data-requests:focus {
+  outline: 3px solid #d4a550;
+  outline-offset: 4px;
+}
+#data-requests[data-called="true"] {
+  outline: 3px solid #d4a550;
+  outline-offset: 4px;
+  box-shadow:
+    0 0 0 6px rgba(212, 165, 80, 0.55),
+    0 0 36px rgba(212, 165, 80, 0.65);
+  animation: data-requests-call 0.8s ease-in-out infinite;
+}
+.data-requests-callout {
+  margin: 0 0 12px;
+  border-radius: 10px;
+  border: 1px solid #b7872a;
+  background: #f3d98a;
+  color: #1b1300;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+@keyframes data-requests-call {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 4px rgba(212, 165, 80, 0.4),
+      0 0 18px rgba(212, 165, 80, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 10px rgba(212, 165, 80, 0.22),
+      0 0 42px rgba(212, 165, 80, 0.75);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #data-requests[data-called="true"] {
+    animation: none;
+  }
+}
+
 html[data-theme="light"] .accountant-portal .milon-next-step__foot {
   color: #3f2d0a;
   opacity: 1;

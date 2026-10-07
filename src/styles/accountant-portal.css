@@ -249,6 +249,12 @@ body:has(.settings-plan-card) #wizard-notes-pin{visibility:hidden;pointer-events
 .drawer-head h3{font-size:24px;margin:6px 0 4px}
 .drawer-head .close{position:absolute;top:20px;right:20px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;font-size:14px;transition:all .25s}
 .drawer-head .close:hover{color:var(--gold);border-color:var(--gold)}
+.drawer.open button.close:focus,
+.drawer.open button.close:focus-visible{
+  outline:2px solid var(--gold-bright);
+  outline-offset:3px;
+  box-shadow:0 0 0 4px rgba(253,238,121,.55);
+}
 .drawer-score{display:flex;align-items:center;gap:16px;margin-top:14px}
 .drawer-body{flex:1;overflow-y:auto;padding:24px 30px 40px}
 .def-block{border-left:2px solid var(--gold);background:rgba(212,175,55,.05);border-radius:0 12px 12px 0;padding:14px 18px;font-size:14px;color:var(--ink-dim);margin-bottom:12px}
