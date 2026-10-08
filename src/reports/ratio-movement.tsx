@@ -16,6 +16,7 @@ import { Sparkline } from "@/components/pdf/sparkline";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { movementNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { PILLAR_LABELS } from "@/lib/health-score";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import {
@@ -84,13 +85,6 @@ const VERDICT_META: Record<MovementVerdict, { label: string; fg: string; bg: str
   declining_most: { label: MOVEMENT_VERDICT_LABEL.declining_most, fg: C.amberDeep, bg: C.amberSoft },
   declining_all: { label: MOVEMENT_VERDICT_LABEL.declining_all, fg: C.redDeep, bg: C.redSoft },
   no_history: { label: MOVEMENT_VERDICT_LABEL.no_history, fg: C.muted, bg: C.soft },
-};
-
-const PILLAR_LABEL: Record<string, string> = {
-  profit: "Profit Drivers",
-  assets: "Asset Productivity",
-  financing: "Leverage & Finance",
-  cash: "Cash Flow",
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -223,7 +217,7 @@ export function RatioMovementPDF({
         const rows = withVerdicts.filter((x) => x.row.pillar === pillar);
         return (
           <View key={pillar}>
-            <SectionHeader title={PILLAR_LABEL[pillar]} color={theme.accent} />
+            <SectionHeader title={PILLAR_LABELS[pillar]} color={theme.accent} />
             {/* column headers */}
             <View style={S.headerRow}>
               <Text style={[S.headerCell, { flex: 2.2 }]}>Ratio</Text>

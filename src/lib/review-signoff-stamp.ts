@@ -54,6 +54,9 @@ export function inAppAccountantSignoffLine(input: {
   return firm ? `Signed off by ${name} · ${firm} · ${when}` : `Signed off by ${name} · ${when}`;
 }
 
+/** Appended when an approval is still on file but Overview has moved. */
+export const STALE_SIGNOFF_CLAUSE = "figures have changed since; regenerate and re-review";
+
 /**
  * Line under the pack header when this version's sign-off still holds.
  * Accountant packs name the recorded signer. Owner packs stay role-only.
@@ -84,6 +87,26 @@ export function packHeldSignoffLine(input: {
     market: input.market,
     firmTimeZone: input.firmTimeZone,
   });
+}
+
+/**
+ * Header and PDF line for a stored approval. A pack whose figures moved
+ * keeps the signer and says so. It is never relabelled as a plain draft.
+ */
+export function packDisplayedSignoffLine(input: {
+  signedOff: boolean;
+  figuresChanged?: boolean;
+  reviewedByKind?: string | null;
+  reviewedAt?: string | null;
+  name?: string | null;
+  firmName?: string | null;
+  market?: Pick<ResolvedMarket, "locale" | "timezone">;
+  firmTimeZone?: string | null;
+}): string | null {
+  const base = packHeldSignoffLine(input);
+  if (!base) return null;
+  if (!input.figuresChanged) return base;
+  return `${base} — ${STALE_SIGNOFF_CLAUSE}`;
 }
 
 /** Trail actor. Name and firm when they were recorded; otherwise the role. */

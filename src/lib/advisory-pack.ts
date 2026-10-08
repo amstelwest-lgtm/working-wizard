@@ -33,10 +33,14 @@ import {
   scoreRatio,
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
-import { forecastLowestPoint } from "@/lib/cash-forecast-parity";
+import {
+  forecastLowestPoint,
+  forecastRunwayHeadlineShared,
+  forecastStatusSentence,
+} from "@/lib/cash-forecast-parity";
 import { cashComfortThreshold } from "@/lib/cash-runway";
 import { humanizeInternalFieldNames } from "@/lib/client-brain-questions";
-import { formatMoney } from "@/lib/market";
+import { formatMoney, formatMoneyCompact } from "@/lib/market";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
@@ -476,31 +480,20 @@ export type PackSignOffGate = {
   signOffHolds: boolean;
   /** Approve must be refused until the pack is regenerated. */
   signOffBlocked: boolean;
-  /** Status to show. A stale approval reverts to the pre-sign-off status. */
+  /** Status to show. Always the stored status — a stale approval is not a draft. */
   presentedStatus: PackStatus;
 };
 
 /**
- * Where a cleared sign-off lands. Firm packs go back to review; an owner-only
- * pack goes back to draft. Regenerate then builds a new version from live figures.
- */
-export function packStatusAfterStaleSignOff(
-  status: PackStatus,
-  requiresReview: boolean,
-): PackStatus {
-  if (status !== "approved") return status;
-  return requiresReview ? "in_review" : "draft";
-}
-
-/**
  * Sign-off is valid only while the snapshot baked into the pack still matches
- * Overview. The same comparison drives the regenerate banner, so the status
- * cannot say signed off while that banner is up. Missing live figures do not
- * count as drift.
+ * Overview. A stored approval stays approved: the screen and the PDF keep the
+ * signer and say the figures have moved. Approve stays blocked until
+ * regenerate. Missing live figures do not count as drift.
+ * `requiresReview` is unused here; the chip label still uses it (`Signed off` vs `Accepted`).
  */
 export function advisoryPackSignOffGate(
   status: PackStatus | null | undefined,
-  requiresReview: boolean,
+  _requiresReview: boolean,
   content: Parameters<typeof advisoryPackFiguresChanged>[0],
   current: LivePackFigures | null | undefined,
 ): PackSignOffGate {
@@ -512,7 +505,7 @@ export function advisoryPackSignOffGate(
     figuresChanged,
     signOffHolds: stored === "approved" && !figuresChanged,
     signOffBlocked: figuresChanged && !terminal,
-    presentedStatus: figuresChanged ? packStatusAfterStaleSignOff(stored, requiresReview) : stored,
+    presentedStatus: stored,
   };
 }
 
@@ -525,6 +518,8 @@ export type LivePackMetrics = {
   openingBalance: number | null;
   closings: number[] | null;
   runwayLabel: string | null;
+  /** `forecastMinimumCash` for this series. The pack quotes this, not a fixed comfort line. */
+  floor: number;
 };
 
 /**
@@ -587,6 +582,7 @@ export function livePackMetrics(input: {
     openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
     closings: assessed.outlook.closing,
     runwayLabel,
+    floor: assessed.outlook.floor,
   };
 }
 
@@ -638,7 +634,7 @@ export type PackInputs = {
   closings: number[] | null;
   /**
    * Canonical minimum-cash floor (`forecastMinimumCash`). Omitted callers
-   * keep the currency comfort line (R50,000 / $50,000).
+   * fall back to the currency comfort amount, still described as that floor.
    */
   floor?: number | null;
   cashRunwayWeeks: number | null;
@@ -709,6 +705,14 @@ function packMoney(n: number, currency: string | null | undefined): string {
   return fmtMoney(n, "R");
 }
 
+/** Same compact form as the cash-tab floor and lowest-point tiles. */
+function packCompact(n: number, currency: string | null | undefined): string {
+  return formatMoneyCompact(
+    n,
+    packIsUsd(currency) ? { currency: "USD", locale: "en-US" } : { currency: "ZAR", locale: "en-ZA" },
+  );
+}
+
 /** Sentence shown once an accountant has signed the pack. */
 export function signedPackNextStep(firmName: string | null | undefined): string {
   const firm = firmName?.trim() || "Your accountant";
@@ -742,8 +746,10 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
 
 export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const usd = packIsUsd(input.currency);
+  const currencyCode = usd ? "USD" : "ZAR";
   const cur = usd ? "$" : "R";
-  const money = (n: number) => packMoney(n, usd ? "USD" : "ZAR");
+  const money = (n: number) => packMoney(n, currencyCode);
+  const compact = (n: number) => packCompact(n, currencyCode);
   const comfort =
     typeof input.floor === "number" && input.floor > 0
       ? input.floor
@@ -857,23 +863,26 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   } else {
     stateLines.push(`${name} has no scorable figures yet, so the health score is not available.`);
   }
-  if (forecast) {
-    const lowText = forecastLowPhrase(forecast.lowestClosing ?? 0, forecast.lowestWeek, money);
-    stateLines.push(
-      forecast.breachesZero
-        ? forecast.lowestWeek == null
-          ? `The opening balance is already below zero (lowest point ${lowText}).`
-          : `The 13-week cash forecast goes below zero in week ${forecast.lowestWeek} (lowest point ${money(
-              forecast.lowestClosing ?? 0,
-            )}).`
-        : forecast.breachesThreshold
-          ? forecast.lowestWeek == null
-            ? `The opening balance of ${money(forecast.lowestClosing ?? 0)} is under the ${money(comfort)} comfort line.`
-            : `The 13-week cash forecast stays positive but dips to ${money(
-                forecast.lowestClosing ?? 0,
-              )} in week ${forecast.lowestWeek}, under the ${money(comfort)} comfort line.`
-          : `The 13-week cash forecast stays above the ${money(comfort)} comfort line throughout (lowest ${lowText}).`,
-    );
+  const cashStory = forecast
+    ? forecastRunwayHeadlineShared({
+        opening: input.openingBalance ?? 0,
+        closings: input.closings ?? [],
+        floor: comfort,
+        runwayLabel: input.runwayLabel,
+      })
+    : null;
+  const cashStatus = forecast
+    ? forecastStatusSentence({
+        opening: input.openingBalance ?? 0,
+        closings: input.closings ?? [],
+        floor: comfort,
+        floorText: compact(comfort),
+        runwayLabel: input.runwayLabel,
+      })
+    : null;
+  if (forecast && cashStatus) {
+    const lowText = forecastLowPhrase(forecast.lowestClosing ?? 0, forecast.lowestWeek, compact);
+    stateLines.push(`${cashStatus} Lowest point ${lowText}.`);
   }
   if (input.openActions > 0) {
     stateLines.push(
@@ -918,7 +927,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   } else if (forecast?.breachesThreshold) {
     mattersBullets.push(
       forecast.lowestWeek == null
-        ? "The opening balance is already under the comfort line; a late debtor or an early supplier bill turns thin into negative."
+        ? "The opening balance is already under the floor; a late debtor or an early supplier bill turns thin into negative."
         : `Cash is thin in week ${forecast.lowestWeek}; a late debtor or an early supplier bill turns thin into negative.`,
     );
   }
@@ -928,30 +937,28 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     );
   }
 
-  const runwaySentence = packRunwayPhrase(input.runwayLabel);
+  const runwayHeadline = cashStory?.headline ?? null;
+  const runwayLabel = input.runwayLabel?.trim() ?? "";
+  const runwayExtra = runwayLabel && runwayLabel !== runwayHeadline ? ` ${runwayLabel}.` : "";
   const forecastBody = !forecast
     ? "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
     : forecast.openingBalance === null || forecast.openingBalance === 0
       ? `The forecast has no opening bank balance, so its runway starts from zero and the ${
           forecast.lowestWeek == null ? "opening" : `week-${forecast.lowestWeek}`
-        } low of ${money(forecast.lowestClosing ?? 0)} is understated by whatever is actually in the bank.${
-          runwaySentence ? ` ${runwaySentence}.` : ""
-        }`
+        } low of ${compact(forecast.lowestClosing ?? 0)} is understated by whatever is actually in the bank.${
+          runwayHeadline ? ` ${runwayHeadline}.` : ""
+        }${runwayExtra}${cashStatus ? ` ${cashStatus}` : ""}`
       : `Opening balance ${money(forecast.openingBalance)}; lowest point ${forecastLowPhrase(
           forecast.lowestClosing ?? 0,
           forecast.lowestWeek,
-          money,
+          compact,
         )}${
           forecast.lowestWeek == null
             ? `, across ${forecast.horizonWeeks} weeks`
             : ` of ${forecast.horizonWeeks}`
-        }${
-          runwaySentence
-            ? `. ${runwaySentence}`
-            : forecast.runwayWeeks !== null && forecast.runwayWeeks < forecast.horizonWeeks
-              ? `; runway ${forecast.runwayWeeks} week${forecast.runwayWeeks === 1 ? "" : "s"} before the comfort line`
-              : ""
-        }. The forecast uses the saved assumptions; change them in the cash tab and regenerate.`;
+        }.${runwayHeadline ? ` ${runwayHeadline}.` : ""}${runwayExtra}${
+          cashStatus ? ` ${cashStatus}` : ""
+        } The forecast uses the saved assumptions; change them in the cash tab and regenerate.`;
 
   const recBullets = recs.map(
     (r) =>

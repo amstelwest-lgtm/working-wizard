@@ -9,7 +9,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
 import { packSectionsForPdf, type AdvisoryPack, type PackStatus } from "@/lib/advisory-pack";
 import { packStatusLabel } from "@/lib/advisory-pack";
-import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
+import { isSamplePracticeSignoff, packDisplayedSignoffLine } from "@/lib/review-signoff-stamp";
 
 /** Same shape as the report footer stamp. Kept local so this module does not import react-pdf. */
 export type AdvisoryPackPdfStamp = {
@@ -43,7 +43,8 @@ export function pdfSafeText(value: string): string {
     .replace(/\u2212/g, "-")
     .replace(/\u2192/g, " - ")
     .replace(/\u2190/g, " - ")
-    .replace(/[\u2191\u2193\u25B2\u25BC]/g, "");
+    .replace(/[\u2191\u2193\u25B2\u25BC]/g, "")
+    .replace(/\u2014/g, " - ");
 }
 
 export function advisoryPackPdfFilename(clientName: string, version?: number | null): string {
@@ -162,6 +163,11 @@ export async function downloadAdvisoryPackPdf(input: {
   recordedSigner?: { name: string; firmName: string | null } | null;
   /** Fictional client. Stamps SAMPLE and keeps the live pack and the sign-off. */
   sample?: boolean;
+  /**
+   * Stored approval whose baked figures no longer match Overview.
+   * Page 1 keeps the signer and says the figures moved. The draft watermark stays off.
+   */
+  figuresChanged?: boolean;
 }): Promise<{ blob: Blob; filename: string; signed: boolean }> {
   const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -190,6 +196,18 @@ export async function downloadAdvisoryPackPdf(input: {
     body: s.body,
     bullets: s.bullets,
   }));
+  const staleNotice =
+    input.figuresChanged && stamp
+      ? packDisplayedSignoffLine({
+          signedOff: true,
+          figuresChanged: true,
+          reviewedByKind: input.pack.reviewed_by_kind,
+          reviewedAt: stamp.signedOffAt,
+          name: stamp.signedOffByName,
+          firmName: stamp.firmName,
+          market: input.market,
+        })
+      : null;
 
   const blob = await pdf(
     AdvisoryPackPDF({
@@ -197,6 +215,7 @@ export async function downloadAdvisoryPackPdf(input: {
       accountantProfile: input.profile,
       sections,
       draftDisclosure: stamp ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,
+      staleNotice,
       reviewSignoff: stamp,
       sample: input.sample,
       market: input.market,

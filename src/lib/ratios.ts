@@ -152,6 +152,42 @@ export function benchmarkPosition(input: {
   return "below_median";
 }
 
+export type MedianRelation = "above_median" | "below_median" | "at_median";
+
+/** Numeric side of the median. The words mean the number, not "better" or "worse". */
+export function medianRelation(value: number, median: number): MedianRelation {
+  if (!Number.isFinite(value) || !Number.isFinite(median)) return "at_median";
+  if (value > median) return "above_median";
+  if (value < median) return "below_median";
+  return "at_median";
+}
+
+export const MEDIAN_RELATION_LABEL: Record<MedianRelation, string> = {
+  above_median: "ABOVE MEDIAN",
+  below_median: "BELOW MEDIAN",
+  at_median: "AT MEDIAN",
+};
+
+export type BenchmarkTone = "better" | "worse" | "neutral";
+
+/**
+ * Colour for a median badge. Sweet-spot days (creditor days / DPO) stay
+ * neutral because paying faster and paying slower can both be wrong.
+ * Other metrics colour by whether that side of the median is the better one.
+ */
+export function benchmarkTone(input: {
+  value: number;
+  median: number;
+  direction: MetricDirection;
+}): BenchmarkTone {
+  if (input.direction === "sweet_spot") return "neutral";
+  const rel = medianRelation(input.value, input.median);
+  if (rel === "at_median") return "neutral";
+  const better =
+    input.direction === "lower_is_better" ? rel === "below_median" : rel === "above_median";
+  return better ? "better" : "worse";
+}
+
 /**
  * Bar track, 0–1, with the right-hand side always the healthier end.
  * Sweet-spot metrics use distance from the healthy range, so 329 creditor

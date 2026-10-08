@@ -21,6 +21,8 @@ export type AdvisoryPackPDFProps = {
   sections: AdvisoryPackPdfSection[];
   /** Exact draft sentence, or null once the pack is signed off. */
   draftDisclosure?: string | null;
+  /** Page-1 line for an approval whose figures have moved. Not a draft watermark. */
+  staleNotice?: string | null;
   reviewSignoff?: ReportSignoffStamp | null;
   sample?: boolean;
   market?: ResolvedMarket;
@@ -71,11 +73,13 @@ export function AdvisoryPackPDF({
   accountantProfile,
   sections,
   draftDisclosure,
+  staleNotice,
   reviewSignoff,
   sample,
   market,
 }: AdvisoryPackPDFProps) {
-  const disclosure = reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);
+  const notice = staleNotice?.trim() ? pdfSafeText(staleNotice.trim()) : null;
+  const disclosure = notice || reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);
   return (
     <PDFDocument
       title={`${smeData.name} advisory pack`}
@@ -88,7 +92,11 @@ export function AdvisoryPackPDF({
       market={market}
     >
       <ReportTitle kicker="Advisory" title="Advisory pack" subtitle={smeData.period} />
-      {disclosure ? (
+      {notice ? (
+        <View style={S.draft}>
+          <Text style={S.draftText}>{notice}</Text>
+        </View>
+      ) : disclosure ? (
         <View style={S.draft}>
           <Text style={S.draftText}>{disclosure}</Text>
         </View>

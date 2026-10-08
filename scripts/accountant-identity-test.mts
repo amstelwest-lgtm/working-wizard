@@ -211,7 +211,7 @@ assert(
   "chip tooltip uses the same name as the greeting",
 );
 const panelSrc = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
-assert(panelSrc.includes("packHeldSignoffLine"), "pack line names the sign-off row");
+assert(panelSrc.includes("packDisplayedSignoffLine"), "pack line names the sign-off row");
 assert(panelSrc.includes("data-signoff-line"), "the sign-off line sits on the pack header");
 assert(panelSrc.includes("reviewActorLabel"), "the trail names the actor");
 assert(panelSrc.includes("formatReviewDateTime"), "the trail uses the shared clock");
