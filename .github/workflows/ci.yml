@@ -46,6 +46,10 @@ jobs:
           deno-version: 2.9.7
       - name: deno check ask-ai
         run: deno check --no-lock supabase/functions/ask-ai/index.ts
+      - name: deno check brain-propose
+        run: deno check --no-lock supabase/functions/brain-propose/index.ts
+      - name: deno check brain-deliverable-draft
+        run: deno check --no-lock supabase/functions/brain-deliverable-draft/index.ts
 
   # Blocking: every test:* script that runs without a database.
   tests:

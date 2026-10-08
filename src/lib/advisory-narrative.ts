@@ -4,8 +4,8 @@
  * already say 25 days, 37 days, and 8.6%.
  * Qualitative claims follow the same score bands as the Scorecard.
  */
-import { scoreRatio } from "@/lib/health-score";
-import { healthBandLabel, scoreTier } from "@/lib/ratios";
+import { scoreRatio } from "./health-score.ts";
+import { healthBandLabel, scoreTier } from "./ratios.ts";
 
 const DAYS_RATIOS = new Set([
   "Debtor Days",
