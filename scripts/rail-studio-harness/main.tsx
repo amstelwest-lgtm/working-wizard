@@ -9,6 +9,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { applyPortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
+import { CurrentBotPage, MilonBotMockupPage } from "./milon-bot-mockup-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
@@ -80,7 +81,34 @@ const ownerRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute, ownerRoute]);
+const mockupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/milon-bot-mockup",
+  validateSearch: (search: Record<string, unknown>) => ({
+    fixture: search.fixture === "empty" ? "empty" : "populated",
+  }),
+  component: function MockupHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <MilonBotMockupPage />
+      </MarketProvider>
+    );
+  },
+});
+
+const currentBotRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/milon-bot-current",
+  component: function CurrentHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <CurrentBotPage />
+      </MarketProvider>
+    );
+  },
+});
+
+const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, mockupRoute, currentBotRoute]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),
