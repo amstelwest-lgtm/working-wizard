@@ -1,3 +1,4 @@
+import type { AdvisorySignoffGrounding } from "../../../src/lib/advisory-signoff.ts";
 import type { OverviewBrief } from "./overview-brief.ts";
 
 export type DisclosureTier = "none" | "summary" | "focused" | "full";
@@ -134,6 +135,8 @@ export interface AskAiContext {
   deliverables: DeliverableFill[];
   /** Live Overview health, cash, revenue, runway, and days. Not score history. */
   overview?: OverviewBrief | null;
+  /** Current advisory pack sign-off. Same reader as the pack strip. */
+  advisorySignoff?: AdvisorySignoffGrounding | null;
 }
 
 export interface AskAiRequest {

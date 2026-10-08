@@ -16,20 +16,22 @@
  *
  * `status` is `draft | in_review | signed | signed_stale`.
  */
-import { recordedActorIdentity } from "@/lib/accountant-identity";
+import { recordedActorIdentity } from "./accountant-identity.ts";
 import {
   advisoryPackSignOffGate,
   isMissingPackRelation,
   livePackMetrics,
   parsePackRow,
   type PackStatus,
-} from "@/lib/advisory-pack";
-import { parseOperatingProfile } from "@/lib/client-profile";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
-import { coerceMarketSelection } from "@/lib/market/parse";
-import { resolveMarket } from "@/lib/market/resolve";
-import { resolvePriorSnapshot } from "@/lib/prior-period";
-import { isSamplePracticeSignoff, packDisplayedSignoffLine } from "@/lib/review-signoff-stamp";
+} from "./advisory-pack.ts";
+import { parseOperatingProfile } from "./client-profile.ts";
+import { formatReviewDateTime } from "./market/format.ts";
+import { coerceMarketSelection } from "./market/parse.ts";
+import { resolveMarket, ZA_MARKET } from "./market/resolve.ts";
+import type { ResolvedMarket } from "./market/types.ts";
+import { resolvePriorSnapshot } from "./prior-period.ts";
+import { isSamplePracticeSignoff, packDisplayedSignoffLine } from "./review-signoff-stamp.ts";
+import { signoffStatusLine, type SignoffStatusKind } from "./signoff-status.ts";
 
 export const ADVISORY_SIGNOFF_STATUSES = ["draft", "in_review", "signed", "signed_stale"] as const;
 export type AdvisorySignoffStatus = (typeof ADVISORY_SIGNOFF_STATUSES)[number];
@@ -350,4 +352,73 @@ export async function getAdvisorySignoffState(
     reviewedByKind: pack.reviewed_by_kind,
     zone,
   });
+}
+
+export type AdvisorySignoffGrounding = {
+  status: AdvisorySignoffStatus;
+  version: number | null;
+  signedBy: string | null;
+  signedAt: string | null;
+  firmName: string | null;
+  /** Same words as the pack strip. */
+  line: string;
+};
+
+function signoffKind(status: AdvisorySignoffStatus): SignoffStatusKind {
+  if (status === "signed_stale") return "stale";
+  if (status === "signed") return "signed";
+  if (status === "in_review") return "ready";
+  return "draft";
+}
+
+function marketForSignoff(
+  state: AdvisorySignoffState,
+  market?: Pick<ResolvedMarket, "locale" | "timezone">,
+): Pick<ResolvedMarket, "locale" | "timezone"> {
+  if (market) return market;
+  const zone = state.zone ?? "UTC";
+  const locale = zone.startsWith("Africa/") ? "en-ZA" : "en-US";
+  return { locale, timezone: zone };
+}
+
+/**
+ * Prompt facts for ask-ai and milon-bot. The status line is `signoffStatusLine`,
+ * the same four words the pack strip uses. This does not read or write a pack.
+ */
+export function advisorySignoffGrounding(
+  state: AdvisorySignoffState,
+  market?: Pick<ResolvedMarket, "locale" | "timezone">,
+): AdvisorySignoffGrounding {
+  const kind = signoffKind(state.status);
+  const clock =
+    kind === "signed" && state.signedAt
+      ? formatReviewDateTime(state.signedAt, marketForSignoff(state, market), {
+          firmTimeZone: state.zone,
+        })
+      : null;
+  return {
+    status: state.status,
+    version: state.version,
+    signedBy: state.signedBy,
+    signedAt: state.signedAt,
+    firmName: state.firmName,
+    line: signoffStatusLine({
+      kind,
+      name: state.signedBy,
+      date: clock && clock !== "—" ? clock : null,
+    }),
+  };
+}
+
+/** Grounding block both bots append. Quote `Status`; the other lines are the fields. */
+export function formatAdvisorySignoffGrounding(grounding: AdvisorySignoffGrounding): string {
+  return [
+    "ADVISORY PACK SIGN-OFF — same source as the pack strip, card, and PDF. Quote the Status line. Do not say the pack is unsigned or that no version is on file when this block is present. Do not create or save a pack version while answering.",
+    `- Status: ${grounding.line}`,
+    `- status: ${grounding.status}`,
+    `- version: ${grounding.version ?? "none"}`,
+    `- signedBy: ${grounding.signedBy ?? "none"}`,
+    `- signedAt: ${grounding.signedAt ?? "none"}`,
+    `- firmName: ${grounding.firmName ?? "none"}`,
+  ].join("\n");
 }

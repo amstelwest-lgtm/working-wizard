@@ -128,6 +128,7 @@
     "test:recommendation-actions": "vite-node --config scripts/vite-test.config.ts scripts/recommendation-actions-test.mts",
     "test:advisory-pack": "vite-node --config scripts/vite-test.config.ts scripts/advisory-pack-test.mts",
     "test:advisory-signoff": "vite-node --config scripts/vite-test.config.ts scripts/advisory-signoff-test.mts",
+    "test:advisory-signoff-grounding": "vite-node --config scripts/vite-test.config.ts scripts/advisory-signoff-grounding-test.mts",
     "test:signoff-parity": "vite-node --config scripts/vite-test.config.ts scripts/signoff-parity-test.mts",
     "test:outreach-pdf-signoff": "vite-node --config scripts/vite-test.config.ts scripts/outreach-pdf-signoff-test.mts",
     "test:advisory-pack-pdf": "vite-node --config scripts/vite-test.config.ts scripts/advisory-pack-pdf-test.mts",

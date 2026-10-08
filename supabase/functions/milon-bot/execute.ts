@@ -32,6 +32,14 @@ import {
   persistedRunwayWeeks,
   runwayDisplayLabel,
 } from "../../../src/lib/client-metrics.ts";
+import {
+  groundBrainSummaryRecord,
+  ratiosForBrainProse,
+} from "../../../src/lib/advisory-narrative.ts";
+import {
+  advisorySignoffGrounding,
+  getAdvisorySignoffState,
+} from "../../../src/lib/advisory-signoff.ts";
 import type { NextStepFacts } from "../../../src/lib/next-step.ts";
 
 type Ctx = {
@@ -47,13 +55,31 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+type CountResult = { count: number | null; error: { message?: string } | null };
+
+/**
+ * `.select().eq()` is a filter builder. An untyped SupabaseClient types
+ * `from()` as the query builder, which has no filter methods, so Deno's
+ * check rejects the chain. The cast is type-only; the calls are unchanged.
+ */
+type CountFilter = PromiseLike<CountResult> & {
+  eq(column: string, value: unknown): CountFilter;
+  neq(column: string, value: unknown): CountFilter;
+  in(column: string, values: readonly unknown[]): CountFilter;
+  lt(column: string, value: unknown): CountFilter;
+  is(column: string, value: unknown): CountFilter;
+};
+
 async function countRows(
   client: SupabaseClient,
   table: string,
   clientId: string,
-  apply?: (q: ReturnType<SupabaseClient["from"]>) => ReturnType<SupabaseClient["from"]>,
+  apply?: (q: CountFilter) => CountFilter,
 ): Promise<number> {
-  let q = client.from(table).select("id", { count: "exact", head: true }).eq("client_id", clientId);
+  let q = client
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId) as unknown as CountFilter;
   if (apply) q = apply(q);
   const { count, error } = await q;
   if (error) return 0;
@@ -648,20 +674,38 @@ export async function executeAgentTool(
       financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
     });
     const cash = persistedRunwayWeeks(brainMetrics.runway);
-    return buildBrainAnswer({
-      facts,
-      brainSummary: clientRes.data?.brain_summary ?? null,
-      financials: snap
-        ? {
-            period_label:
-              (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
-            ratios: numericRatios(snap.ratios),
-            cash_runway_weeks: cash,
-          }
-        : cash != null
-          ? { period_label: null, ratios: {}, cash_runway_weeks: cash }
-          : null,
-    });
+    const fin =
+      clientRes.data?.financials && typeof clientRes.data.financials === "object"
+        ? (clientRes.data.financials as Record<string, unknown>)
+        : null;
+    let advisorySignoff = null;
+    try {
+      advisorySignoff = advisorySignoffGrounding(
+        await getAdvisorySignoffState(ctx.clientId, ctx.userClient),
+      );
+    } catch (err) {
+      console.warn("advisory sign-off:", (err as Error).message);
+    }
+    return {
+      ...buildBrainAnswer({
+        facts,
+        brainSummary: groundBrainSummaryRecord(
+          clientRes.data?.brain_summary ?? null,
+          ratiosForBrainProse(fin),
+        ),
+        financials: snap
+          ? {
+              period_label:
+                (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
+              ratios: numericRatios(snap.ratios),
+              cash_runway_weeks: cash,
+            }
+          : cash != null
+            ? { period_label: null, ratios: {}, cash_runway_weeks: cash }
+            : null,
+      }),
+      advisory_signoff: advisorySignoff,
+    };
   }
 
   if (name === "propose_next_steps") return invokeExisting("brain-propose", ctx);

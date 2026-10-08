@@ -5,11 +5,32 @@
  * No real sign-off means no line — the caller must not fill one from a profile.
  */
 
-import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { formatReviewDateTime } from "@/lib/market";
-import type { ResolvedMarket } from "@/lib/market";
-import { signoffStatusLine } from "@/lib/signoff-status";
+import { formatReviewDateTime } from "./market/format.ts";
+import type { ResolvedMarket } from "./market/types.ts";
+import { signoffStatusLine } from "./signoff-status.ts";
+
+/**
+ * Fields the stamp reads from a review sign-off row. Kept here so this module
+ * does not import the server function or the PDF document.
+ */
+type StampSignoff = {
+  signed_off_by_name: string;
+  signed_off_by_initials?: string | null;
+  signed_off_by_title?: string | null;
+  firm_name?: string | null;
+  signature_data?: string | null;
+  signed_off_at: string;
+};
+
+type StampResult = {
+  signedOffByName: string;
+  signedOffByInitials: string | null;
+  signedOffByTitle: string | null;
+  firmName: string | null;
+  signedOffAt: string;
+  signatureData?: string | null;
+  figuresChanged?: boolean;
+};
 
 export type SignoffStampContext = {
   /** Firm row name for this client. A stamp that names a different firm is dropped. */
@@ -126,7 +147,10 @@ export function reviewActorLabel(input: {
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
-function firmMatchesClient(stampFirm: string | null, clientFirmName: string | null | undefined): boolean {
+function firmMatchesClient(
+  stampFirm: string | null,
+  clientFirmName: string | null | undefined,
+): boolean {
   const client = normFirm(clientFirmName);
   if (!client) return true;
   const stamp = normFirm(stampFirm);
@@ -182,10 +206,10 @@ export function signoffFooterSegments(
 }
 
 export function stampFromSignoff(
-  signoff: ClientReviewSignoff | null | undefined,
+  signoff: StampSignoff | null | undefined,
   isStale: boolean,
   context?: SignoffStampContext,
-): ReportSignoffStamp | null {
+): StampResult | null {
   if (!signoff) return null;
   if (
     isSamplePracticeSignoff({
@@ -195,12 +219,12 @@ export function stampFromSignoff(
   ) {
     return null;
   }
-  if (!firmMatchesClient(signoff.firm_name, context?.clientFirmName)) return null;
+  if (!firmMatchesClient(signoff.firm_name ?? null, context?.clientFirmName)) return null;
   return {
     signedOffByName: signoff.signed_off_by_name,
     signedOffByInitials: signoff.signed_off_by_initials ?? null,
-    signedOffByTitle: signoff.signed_off_by_title,
-    firmName: signoff.firm_name,
+    signedOffByTitle: signoff.signed_off_by_title ?? null,
+    firmName: signoff.firm_name ?? null,
     signedOffAt: signoff.signed_off_at,
     signatureData: signoff.signature_data ?? null,
     figuresChanged: isStale,

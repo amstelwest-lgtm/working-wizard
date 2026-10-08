@@ -52,6 +52,7 @@ import {
   operatingProfileQuestionStates,
   productLineQuestionStates,
 } from "@/lib/client-brain-questions";
+import { groundBrainSummaryRecord, ratiosForBrainProse } from "@/lib/advisory-narrative";
 import {
   alignBrainFigureCopy,
   visibleStatementFigures,
@@ -214,6 +215,7 @@ export function ClientBrainSummary({
   const [loading, setLoading] = useState(true);
   const [queueReady, setQueueReady] = useState(false);
   const [brainSummary, setBrainSummary] = useState<unknown>(null);
+  const [financials, setFinancials] = useState<Record<string, unknown> | null>(null);
   const [brainSummaryUpdatedAt, setBrainSummaryUpdatedAt] = useState<string | null>(null);
   const [budget, setBudget] = useState<unknown>(null);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
@@ -236,7 +238,9 @@ export function ClientBrainSummary({
     const [clientRes, snapRes, artRes, factRes, draftRes, qRes] = await Promise.all([
       supabase
         .from("clients")
-        .select("brain_summary, brain_summary_updated_at, budget, budget_updated_at")
+        .select(
+          "brain_summary, brain_summary_updated_at, budget, budget_updated_at, financials",
+        )
         .eq("id", clientId)
         .maybeSingle(),
       supabase
@@ -273,6 +277,7 @@ export function ClientBrainSummary({
     ]);
 
     if (clientRes.error && !isMissingBrainRelation(clientRes.error)) {
+      setFinancials(null);
       const fallback = await supabase
         .from("clients")
         .select("budget, budget_updated_at")
@@ -285,6 +290,12 @@ export function ClientBrainSummary({
     } else {
       setBrainSummary(clientRes.data?.brain_summary ?? null);
       setBrainSummaryUpdatedAt(clientRes.data?.brain_summary_updated_at ?? null);
+      const fin = clientRes.data?.financials;
+      setFinancials(
+        fin && typeof fin === "object" && !Array.isArray(fin)
+          ? (fin as Record<string, unknown>)
+          : null,
+      );
       setBudget(clientRes.data?.budget ?? null);
       setBudgetUpdatedAt(clientRes.data?.budget_updated_at ?? null);
     }
@@ -304,7 +315,12 @@ export function ClientBrainSummary({
     void load();
   }, [load]);
 
-  const summary = parseBrainSummary(brainSummary);
+  const summary = parseBrainSummary(
+    groundBrainSummaryRecord(
+      brainSummary,
+      ratiosForBrainProse(financials, parsedProfile?.fyStartMonth),
+    ),
+  );
   const gapReport = parseGapReport(brainSummary);
   const competitors = parseCompetitors(brainSummary);
   const businessMap = (() => {

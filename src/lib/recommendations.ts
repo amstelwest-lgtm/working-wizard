@@ -6,8 +6,8 @@
  * holds the vocabulary, parsers, ordering, the root-cause copy rules and the
  * outcome verdict logic. No network.
  */
-import type { Json } from "@/integrations/supabase/types";
-import type { ProposedNextStep } from "@/lib/client-brain";
+import type { Json } from "../integrations/supabase/types.ts";
+import type { ProposedNextStep } from "./client-brain.ts";
 
 export const RECOMMENDATION_STATUSES = [
   "proposed",

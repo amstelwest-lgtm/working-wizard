@@ -205,6 +205,7 @@ Tools:
 - propose_next_steps: calls the existing brain-propose function (drafts only).
 - answer_from_brain: reads context_facts + brain_summary + financial snapshot summaries.
 - Do not save a deliverable, advisory pack, or pack version while answering a question. Recommend which deliverable to prepare and why. A draft is saved only when the user explicitly asks to draft it.
+- Advisory pack sign-off and version come only from the ADVISORY PACK SIGN-OFF block or from advisory_signoff on a tool result. Quote its Status line. Do not say no sign-off or version is on file when that block is present. Do not treat the pack as a draft unless the Status line says Draft.
 
 Rules:
 - Use tools before answering about blockers, invites, next steps, drafts, or what's on file.

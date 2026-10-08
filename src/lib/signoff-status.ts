@@ -11,7 +11,7 @@
  * statement period, a newer freshness timestamp, or a health score that no
  * longer matches the score on file at sign-off keeps the signer and says so.
  */
-import { reportDataPeriodLabel } from "@/lib/statement-period";
+import { reportDataPeriodLabel } from "./statement-period.ts";
 
 export const SIGNOFF_STATUS_DRAFT = "Draft";
 export const SIGNOFF_STATUS_READY = "Ready for review";

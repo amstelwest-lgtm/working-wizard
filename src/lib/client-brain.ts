@@ -3,7 +3,7 @@
  * Propose-from-brain writes proposed_next_steps and draft GAP/competitor stubs.
  */
 
-import type { Json } from "@/integrations/supabase/types";
+import type { Json } from "../integrations/supabase/types.ts";
 
 export const ARTIFACT_KINDS = [
   "financial_snapshot",

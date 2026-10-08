@@ -2,8 +2,8 @@
  * Prior-period helpers — resolve a comparable snapshot and build variance chips.
  */
 
-import { scoreRatio } from "@/lib/health-score";
-import { scoreTier } from "@/lib/ratios";
+import { scoreRatio } from "./health-score.ts";
+import { scoreTier } from "./ratios.ts";
 
 export type SnapshotRow = {
   id?: string;

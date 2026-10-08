@@ -15,14 +15,14 @@
  * Vocabulary mirrors supabase/migrations/20260918160000_advisory_packs.sql
  * plus 20261007120000_advisory_pack_stale_signoff.sql (test-guarded).
  */
-import { formatSnapshotRatio, groundAdvisoryNarrative } from "@/lib/advisory-narrative";
-import { ratiosStatementFigures } from "@/lib/deliverable-input-config";
-import type { Json } from "@/integrations/supabase/types";
+import { formatSnapshotRatio, groundAdvisoryNarrative } from "./advisory-narrative.ts";
+import { ratiosStatementFigures } from "./deliverable-input-config.ts";
+import type { Json } from "../integrations/supabase/types.ts";
 import {
   assessClientMetrics,
   RUNWAY_INSUFFICIENT_LABEL,
   runwayDisplayLabel,
-} from "@/lib/client-metrics";
+} from "./client-metrics.ts";
 import {
   type HealthPillarId,
   type OverallHealth,
@@ -31,24 +31,24 @@ import {
   pillarForRatioName,
   scorecardHealthFromFinancials,
   scoreRatio,
-} from "@/lib/health-score";
-import { periodMonthsOf } from "@/lib/ratios";
+} from "./health-score.ts";
+import { periodMonthsOf } from "./ratios.ts";
 import {
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
   forecastStatusSentence,
-} from "@/lib/cash-forecast-parity";
-import { cashComfortThreshold } from "@/lib/cash-runway";
-import { humanizeInternalFieldNames } from "@/lib/client-brain-questions";
-import { formatMoney, formatMoneyCompact } from "@/lib/market";
+} from "./cash-forecast-parity.ts";
+import { cashComfortThreshold } from "./cash-runway.ts";
+import { humanizeInternalFieldNames } from "./client-brain-questions.ts";
+import { formatMoney, formatMoneyCompact } from "./market/format.ts";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
   priorityLabel,
   type Recommendation,
-} from "@/lib/recommendations";
-import type { DataRequest } from "@/lib/data-requests";
-import type { OutcomeStory } from "@/lib/outcomes";
+} from "./recommendations.ts";
+import type { DataRequest } from "./data-requests.ts";
+import type { OutcomeStory } from "./outcomes.ts";
 
 export const PACK_STATUSES = [
   "draft",
