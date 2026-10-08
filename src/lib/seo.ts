@@ -22,18 +22,19 @@ const USD_LIST_PRICE = LIST_PRICES.us.firmSolo.replace(/[^0-9.]/g, "") || "99";
 export const SEO_PAGES = {
   home: {
     path: "/",
-    title: "AI Advisory Agent for QuickBooks Online & Xero | MILŌN",
+    title: "AI Bookkeeper & AI CFO for QuickBooks and Xero | MILŌN",
     description:
-      "Milōn Bot reads QuickBooks Online or Xero, diagnoses the business and drafts the advisory. You review and sign off. 14-day free trial · up to 3 clients.",
+      "Milōn Bookkeeper, Analyst and Advisor: your AI finance team in Milōn Bot for QuickBooks Online & Xero. You sign off. 14-day free trial · up to 3 clients.",
     imageAlt:
-      "Milōn Bot drafts client advisory from QuickBooks Online and Xero for accountant sign-off",
+      "Milōn Bookkeeper, Milōn Analyst and Milōn Advisor draft client advisory from QuickBooks Online and Xero for accountant sign-off",
   },
   forAccountants: {
     path: "/for-accountants",
-    title: "Advisory drafts from QBO & Xero for accounting firms | MILŌN",
+    title: "AI Finance Team for Accountants on QBO & Xero | MILŌN",
     description:
-      "Launch advisory without extra headcount. Connect QuickBooks Online or Xero — MILŌN drafts the analysis; your team reviews and signs off.",
-    imageAlt: "MILŌN for accounting firms — advisory delivery without extra headcount",
+      "Not an AI accountant that replaces you: an AI bookkeeper, analyst and CFO-style advisor drafting from QBO or Xero. Your firm signs off.",
+    imageAlt:
+      "MILŌN for accounting firms: an AI finance team for every client, signed off by your firm",
   },
   forOwners: {
     path: "/for-owners",

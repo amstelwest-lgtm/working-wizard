@@ -5,7 +5,7 @@ import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { readRequestGeoCountry } from "@/lib/geo-country.functions";
 import { isSaPricingCountry } from "@/lib/geo-country";
-import { ACCOUNTANTS_DRAFT_BULLET, SA_FOUNDING_LINE, SA_ZAR_LINE } from "@/lib/landing-copy";
+import { FIRM_TEAM_BULLETS, SA_FOUNDING_LINE, SA_ZAR_LINE } from "@/lib/landing-copy";
 import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
@@ -89,16 +89,18 @@ function ForAccountantsPage() {
         </div>
       </div>
 
-      <h2>What changes in the practice</h2>
+      <h2>An AI finance team for accountants, not instead of them</h2>
       <ul className="mk-list">
         <li>
           <strong>Portfolio triage.</strong> Live health across every client on one screen, so the
           question becomes &ldquo;who needs me this month&rdquo; rather than &ldquo;who has phoned
           me.&rdquo;
         </li>
-        <li>
-          <strong>Drafted advisory reports.</strong> {ACCOUNTANTS_DRAFT_BULLET}
-        </li>
+        {FIRM_TEAM_BULLETS.map((bullet) => (
+          <li key={bullet.title}>
+            <strong>{bullet.title}</strong> {bullet.body}
+          </li>
+        ))}
         <li>
           <strong>A risk radar.</strong> Deteriorating clients surface before the crisis call, which
           is the difference between advisory and cleanup.
