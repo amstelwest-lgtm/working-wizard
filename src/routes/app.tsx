@@ -312,8 +312,20 @@ export const Route = createFileRoute("/app")({
   // dropping them makes a finished connect look like it never returned.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { tab?: string; qbo?: string; xero?: string; reason?: string; view?: "13week" } => {
-    const out: { tab?: string; qbo?: string; xero?: string; reason?: string; view?: "13week" } = {};
+  ): {
+    tab?: string;
+    qbo?: string;
+    xero?: string;
+    reason?: string;
+    view?: "chart" | "table" | "13week";
+  } => {
+    const out: {
+      tab?: string;
+      qbo?: string;
+      xero?: string;
+      reason?: string;
+      view?: "chart" | "table" | "13week";
+    } = {};
     if (
       typeof search.tab === "string" &&
       (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
@@ -329,7 +341,9 @@ export const Route = createFileRoute("/app")({
     ) {
       out.reason = search.reason;
     }
-    if (search.view === "13week") out.view = "13week";
+    if (search.view === "table" || search.view === "chart" || search.view === "13week") {
+      out.view = search.view;
+    }
     return out;
   },
   pendingComponent: AppBootSpinner,
