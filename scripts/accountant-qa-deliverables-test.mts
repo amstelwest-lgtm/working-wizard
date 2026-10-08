@@ -238,7 +238,7 @@ assert(budgetWasRebuiltFromActuals(rebuilt), "the rebuild is a file note");
 assert(budgetScaleBreak(rebuilt, yankeesPeriod) == null, "the rebuilt plan matches the annualised actuals");
 const rebuiltAgain = reseedBudgetIfScaleBroken(rebuilt, yankeesPeriod);
 const rebuildNotes = (rebuiltAgain.notes ?? []).filter((note) =>
-  (note.text ?? "").startsWith("Rebuilt from the latest actuals."),
+  (note.text ?? "").startsWith("Rebuilt from the saved statement."),
 );
 assert(rebuildNotes.length === 1, "reseed does not stack a second rebuild note");
 
@@ -282,7 +282,7 @@ assert(Number(lockedYear.cogs) === 13_500, "locked-year COGS is not scaled again
 
 const budgetPanel = read("src/components/budget/budget-panel.tsx");
 assert(
-  budgetPanel.includes("Rebuild budget from latest actuals"),
+  budgetPanel.includes("Rebuild from the saved statement"),
   "implausible budgets offer a rebuild",
 );
 assert(
@@ -298,7 +298,7 @@ assert(
   "an order-of-magnitude plan is not replaced on load",
 );
 assert(
-  budgetPanel.includes("This budget was rebuilt from the latest actuals"),
+  budgetPanel.includes("This budget was rebuilt from the saved statement"),
   "the rebuild is visible on the budget tab",
 );
 const reportsIndex = read("src/routes/_authenticated/reports.index.tsx");

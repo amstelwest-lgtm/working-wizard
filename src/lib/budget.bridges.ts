@@ -57,7 +57,17 @@ export const BUDGET_BROKEN_SCALE_MULTIPLE = 10;
 
 /** File note written when an order-of-magnitude plan is replaced. */
 export const BUDGET_REBUILT_NOTE =
-  "Rebuilt from the latest actuals. The stored plan was more than 10× annualised revenue or cost of sales, so it was not kept.";
+  "Rebuilt from the saved statement. The stored plan was more than 10× annualised revenue or cost of sales, so it was not kept.";
+
+const BUDGET_REBUILT_PREFIXES = [
+  "Rebuilt from the saved statement.",
+  "Rebuilt from the latest actuals.",
+] as const;
+
+/** One phrase on the tab, the file note, and the PDF partner notes. */
+export function presentBudgetRebuildNote(text: string): string {
+  return text.replace(/^Rebuilt from the latest actuals\./, "Rebuilt from the saved statement.");
+}
 
 /** Inclusive day count of a statement span. Null when either date is missing. */
 export function inclusivePeriodDays(
@@ -308,7 +318,7 @@ export function budgetScaleBreak(
 
 export function budgetWasRebuiltFromActuals(doc: BudgetDocument): boolean {
   return (doc.notes ?? []).some((note) =>
-    (note.text ?? "").startsWith("Rebuilt from the latest actuals."),
+    BUDGET_REBUILT_PREFIXES.some((prefix) => (note.text ?? "").startsWith(prefix)),
   );
 }
 
@@ -705,6 +715,43 @@ export function publishBudgetDocument(
   });
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Jan–Sep 2026" for the months a statement comparison actually covers. */
+export function budgetCoverWindowLabel(months: string[]): string {
+  const stamp = (ym: string) => {
+    const match = /^(\d{4})-(\d{2})$/.exec(ym);
+    if (!match) return null;
+    const idx = Number(match[2]) - 1;
+    if (idx < 0 || idx > 11) return null;
+    return { mon: MONTH_SHORT[idx], year: match[1] };
+  };
+  const first = stamp(months[0] ?? "");
+  const last = stamp(months[months.length - 1] ?? "");
+  if (!first || !last) return "Statement";
+  if (months.length === 1 || (first.mon === last.mon && first.year === last.year)) {
+    return `${first.mon} ${first.year}`;
+  }
+  if (first.year === last.year) return `${first.mon}–${last.mon} ${last.year}`;
+  return `${first.mon} ${first.year}–${last.mon} ${last.year}`;
+}
+
+/** A statement comparison that is the seed itself is not a performance verdict. */
+export function budgetSeededFromStatement(
+  actuals: {
+    chip?: string | null;
+    revenue: number;
+    budgetRevenue?: number;
+    ebit?: number;
+    budgetEbit?: number;
+  } | null | undefined,
+): boolean {
+  if (!actuals || actuals.chip !== "Statement pace, prorated") return false;
+  if (actuals.budgetRevenue == null || actuals.ebit == null || actuals.budgetEbit == null) return false;
+  const flat = (actual: number, budget: number) => Math.abs(actual - budget) < 1;
+  return flat(actuals.revenue, actuals.budgetRevenue) && flat(actuals.ebit, actuals.budgetEbit);
+}
+
 function coverMonths(fy: string[], endMonth: string, periodMonths: number): string[] {
   const n = Math.max(1, Math.min(fy.length, Math.round(periodMonths) || fy.length));
   if (n >= fy.length) return fy.slice();
@@ -747,6 +794,7 @@ export function budgetVersusStatement(
   let budgetCogs = 0;
   let budgetOverheads = 0;
   let budgetEbit = 0;
+  let label = "Statement, prorated";
   if (days != null && days < 28 && months <= 1 && rows.length) {
     const row = (endInFy ? rows.find((r) => r.month === endMonth) : null) ?? rows[0];
     const frac = days / 30;
@@ -754,6 +802,10 @@ export function budgetVersusStatement(
     budgetCogs = row.cogs * frac;
     budgetOverheads = row.overheads * frac;
     budgetEbit = row.ebit * frac;
+    const dated = meta.periodLabel?.trim();
+    label = dated
+      ? `${dated}, prorated`
+      : `${endInFy ? budgetCoverWindowLabel([endMonth]) : "Statement"}, prorated`;
   } else {
     const keys = coverMonths(fy, endInFy ? endMonth : "", months);
     for (const row of rows) {
@@ -763,9 +815,10 @@ export function budgetVersusStatement(
       budgetOverheads += row.overheads;
       budgetEbit += row.ebit;
     }
+    label = `${budgetCoverWindowLabel(keys)}, prorated`;
   }
   return {
-    label: meta.periodLabel || "Statement",
+    label,
     revenue: bridge.revenue,
     cogs: bridge.cogs,
     fixedCosts: bridge.operatingExpenses,

@@ -12,7 +12,13 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarket } from "@/contexts/market";
 import type { BudgetDocument } from "@/lib/budget.types";
-import { buildBudgetPdfModel, type BudgetPdfActual } from "@/lib/budget-pdf";
+import {
+  budgetDraftMark,
+  budgetReviewLine,
+  buildBudgetPdfModel,
+  type BudgetPdfActual,
+} from "@/lib/budget-pdf";
+import { getDeliverableWorkflow } from "@/lib/review-signoffs.functions";
 import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeIsStale } from "@/components/review-signoff";
@@ -42,6 +48,7 @@ export function BudgetPdfExportButton({
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const listActuals = useServerFn(listBudgetMonthActuals);
+  const loadWorkflow = useServerFn(getDeliverableWorkflow);
   const [exporting, setExporting] = useState(false);
 
   const exportPDF = async () => {
@@ -63,7 +70,24 @@ export function BudgetPdfExportButton({
 
       const model = buildBudgetPdfModel(doc, actuals, market);
       const stale = computeIsStale(signoff ?? null, budgetUpdatedAt ?? doc.updatedAt);
-      const stamp = stampFromSignoff(signoff, stale);
+      let workflowStatus: "draft" | "ready_for_review" | "signed_off" | null = null;
+      if (clientId) {
+        try {
+          const workflow = await loadWorkflow({ data: { clientId, scope: "budget" } });
+          workflowStatus = workflow.status;
+        } catch (e) {
+          console.warn("budget pdf review status:", e);
+        }
+      }
+      const review = budgetReviewLine({
+        name: signoff?.signed_off_by_name,
+        firmName: signoff?.firm_name,
+        signedOffAt: signoff?.signed_off_at,
+        isStale: stale,
+        workflowStatus,
+        market,
+      });
+      const stamp = review.unsigned ? null : stampFromSignoff(signoff, stale);
       const [{ pdf }, { BudgetVariancePDF }] = await Promise.all([
         import("@react-pdf/renderer"),
         import("@/reports/budget-variance"),
@@ -76,7 +100,10 @@ export function BudgetPdfExportButton({
           model,
           accountantProfile: profile,
           isDemo: false,
-          draft: !stamp,
+          draft: review.unsigned,
+          reviewLine: review.text,
+          draftLabel: review.unsigned ? review.text : undefined,
+          draftMark: review.unsigned ? budgetDraftMark(review.text) : undefined,
           reviewSignoff: stamp,
           market,
         }) as Parameters<typeof pdf>[0],

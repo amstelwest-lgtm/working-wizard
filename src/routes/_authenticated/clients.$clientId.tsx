@@ -3536,7 +3536,7 @@ function ClientView() {
                     <DeliverableTabHead
                       eyebrow="12-month Budget"
                       title="On or off the plan"
-                      lede="The strip is this period against the budget. Simplified and Complex open on the same month. The year grid stays closed until you need it."
+                      lede="This period's financial statements compared against the FY budget plan."
                       signoff={
                         <ReviewSignoffButton
                           compact

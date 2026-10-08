@@ -97,6 +97,7 @@ import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
 import {
   budgetActualFromFinancials,
+  budgetDraftMark,
   budgetReviewLine,
   buildBudgetPdfModel,
   illustrativeBudgetPack,
@@ -2795,6 +2796,8 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         sample,
         draft: !isDemo && review.unsigned,
         reviewLine: isDemo ? null : review.text,
+        draftLabel: !isDemo && review.unsigned ? review.text : undefined,
+        draftMark: !isDemo && review.unsigned ? budgetDraftMark(review.text) : undefined,
         reviewSignoff: budgetStamp,
         market,
       });

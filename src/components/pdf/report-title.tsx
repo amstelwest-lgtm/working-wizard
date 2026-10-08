@@ -9,7 +9,7 @@ import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import { pdfSignoffBadgeLine } from "@/lib/review-signoff-stamp";
 import { C, T } from "./theme";
 import { DemoNotice, DraftNotice, SampleNotice, SignedNotice } from "./watermark";
-import { usePdfDraft, usePdfSample, usePdfSignoff } from "./pdf-frame";
+import { usePdfDraft, usePdfDraftLabel, usePdfSample, usePdfSignoff } from "./pdf-frame";
 import { usePdfMarket } from "./pdf-market";
 
 type Props = {
@@ -33,6 +33,7 @@ export function ReportTitle({ kicker, title, subtitle, isDemo }: Props) {
   const signoff = usePdfSignoff();
   const sample = usePdfSample();
   const draft = usePdfDraft();
+  const draftLabel = usePdfDraftLabel();
   const market = usePdfMarket();
   return (
     <View style={styles.wrap}>
@@ -45,7 +46,7 @@ export function ReportTitle({ kicker, title, subtitle, isDemo }: Props) {
       {sample ? <SampleNotice /> : null}
       {signoff || (draft && !isDemo) ? (
         <View style={styles.badges}>
-          {draft && !isDemo ? <DraftNotice /> : null}
+          {draft && !isDemo ? <DraftNotice text={draftLabel} /> : null}
           {signoff ? <SignedNotice line={pdfSignoffBadgeLine(signoff, market)} /> : null}
         </View>
       ) : null}
