@@ -54,7 +54,7 @@ function Frame({
                 key={item.id}
                 id={item.id}
                 landing={item.landing}
-                label={item.label}
+                label={item.id === "ask" ? "Milōn Bot" : item.label}
                 active={item.id === "ask"}
                 clientId={CLIENT_ID}
                 primary={item.id === "ask"}
