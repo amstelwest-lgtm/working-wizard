@@ -1,5 +1,5 @@
-import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
-import { coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
+import { withCanonicalDebtorCreditorDays } from "./deliverable-input-config.ts";
+import { coherentEquity, effectivePeriodMonths } from "./equity-coherence.ts";
 import {
   bandedPillarStatus,
   computeRatios,
@@ -7,15 +7,15 @@ import {
   scoreTier,
   type HealthTier,
   type RatioInputs,
-} from "@/lib/ratios";
-import { salesPerEmployeeHealthy } from "@/lib/market/benchmarks";
-import type { ResolvedMarket } from "@/lib/market/types";
+} from "./ratios.ts";
+import { salesPerEmployeeHealthy } from "./market/benchmarks.ts";
+import type { ResolvedMarket } from "./market/types.ts";
 import {
   scoreCreditorDays,
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
   scoreWorkingCapitalFunding,
-} from "@/lib/client-metrics";
+} from "./client-metrics.ts";
 
 export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
 

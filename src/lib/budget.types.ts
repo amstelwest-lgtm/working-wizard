@@ -174,7 +174,7 @@ export type BudgetQualification = {
   confirmedAt: string;
 };
 
-import type { IndirectTaxProfile } from "@/lib/market/types";
+import type { IndirectTaxProfile } from "./market/types.ts";
 
 export type BudgetDocument = {
   version: 1;

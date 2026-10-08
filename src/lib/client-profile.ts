@@ -12,9 +12,9 @@ import type {
   BudgetQualification,
   BudgetTemplateId,
   BudgetCapexMode,
-} from "@/lib/budget.types";
-import { resolveTemplateId } from "@/lib/budget.templates";
-import { findVolumeOption } from "@/lib/budget.taxonomy";
+} from "./budget.types.ts";
+import { resolveTemplateId } from "./budget.templates.ts";
+import { findVolumeOption } from "./budget.taxonomy.ts";
 
 export type InventoryIntensity = "none" | "light" | "heavy";
 

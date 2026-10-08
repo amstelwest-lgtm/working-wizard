@@ -8,7 +8,7 @@ import type {
   BudgetPayMotion,
   BudgetTemplateId,
   BudgetVolumeUnit,
-} from "@/lib/budget.types";
+} from "./budget.types.ts";
 
 export type FunnelOption<T extends string> = {
   id: T;

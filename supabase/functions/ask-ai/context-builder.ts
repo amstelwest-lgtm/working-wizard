@@ -108,7 +108,9 @@ export async function buildContext(
         .select("id, name, business_type, financials, operating_profile, cashflow")
         .eq("id", clientId)
         .maybeSingle();
-      data = retry.data;
+      // Older databases lack market / cash_runway_weeks. Callers read those
+      // fields as optional, so the narrower row is the same value at runtime.
+      data = retry.data as typeof data;
       error = retry.error;
     }
     if (error) {

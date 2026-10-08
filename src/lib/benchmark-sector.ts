@@ -14,7 +14,7 @@
  * model there (distribution, product, logistics, and the wholesale labels
  * that mean distribution).
  */
-import { BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import { BUSINESS_TYPE_TO_BENCHMARK } from "./ratios.ts";
 
 export const BENCHMARK_BUSINESS_TYPES = [
   "retail",

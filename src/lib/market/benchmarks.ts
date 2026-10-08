@@ -9,9 +9,9 @@
  * an SMB rule of thumb, not a PPP conversion of the ZA heuristic.
  */
 
-import { formatMoneyCompact } from "./format";
-import { ZA_MARKET } from "./resolve";
-import type { ResolvedMarket } from "./types";
+import { formatMoneyCompact } from "./format.ts";
+import { ZA_MARKET } from "./resolve.ts";
+import type { ResolvedMarket } from "./types.ts";
 
 export type BenchmarkMarket = Pick<ResolvedMarket, "country" | "copyPack" | "currency" | "locale">;
 
