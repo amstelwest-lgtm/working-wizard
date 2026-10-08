@@ -37,7 +37,7 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
     us,
   );
   assert(
-    line === "Reviewed & signed off · James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT",
+    line === "Signed off by James Fleming · Oct 7, 2026, 7:01 PM EDT",
     line,
   );
 }

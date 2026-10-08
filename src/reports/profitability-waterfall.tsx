@@ -607,6 +607,7 @@ export function ProfitabilityWaterfallPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
+      draft={!isDemo && !sample && !reviewSignoff}
       reviewSignoff={reviewSignoff}
       market={m}
     >

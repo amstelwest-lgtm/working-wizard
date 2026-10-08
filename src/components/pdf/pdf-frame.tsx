@@ -23,7 +23,7 @@ export function usePdfDraft(): boolean {
 }
 
 /** Notice under the title when the deliverable is unsigned. Budget passes its tab status. */
-export const PdfDraftLabelContext = createContext("Draft — not signed off");
+export const PdfDraftLabelContext = createContext("Draft");
 export function usePdfDraftLabel(): string {
   return useContext(PdfDraftLabelContext);
 }

@@ -1,4 +1,5 @@
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import type { ActionPlanPdfItem } from "@/reports/action-plan";
 
 export type DeliverablePdfSource = {
@@ -45,6 +46,7 @@ export async function downloadActionPlanPdf(input: {
   outcomeGoal?: string | null;
   items: ActionPlanPdfItem[];
   profile: AccountantProfile;
+  reviewSignoff?: ReportSignoffStamp | null;
 }): Promise<void> {
   const [{ pdf }, { ActionPlanPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -59,6 +61,7 @@ export async function downloadActionPlanPdf(input: {
       headline: input.headline,
       outcomeGoal: input.outcomeGoal,
       items: input.items,
+      reviewSignoff: input.reviewSignoff ?? null,
     }) as Parameters<typeof pdf>[0],
   ).toBlob();
   const url = URL.createObjectURL(blob);

@@ -9,7 +9,7 @@ import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { formatReviewDateTime } from "@/lib/market";
 import { SAMPLE_STAMP_LINE, SAMPLE_STAMP_WORD } from "@/lib/pdf-sample";
-import { signoffFooterSegments } from "@/lib/review-signoff-stamp";
+import { pdfSignoffBadgeLine, signoffFooterSegments } from "@/lib/review-signoff-stamp";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
 import type { ReportSignoffStamp } from "./pdf-document";
@@ -80,7 +80,10 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
                 />
               ) : null}
               <View>
-                {signoffFooterSegments(reviewSignoff, signoffDate ?? "").map((line, index) => (
+                {(reviewSignoff.figuresChanged
+                  ? [pdfSignoffBadgeLine(reviewSignoff, market)]
+                  : signoffFooterSegments(reviewSignoff, signoffDate ?? "")
+                ).map((line, index) => (
                   <Text key={`${index}-${line}`} style={styles.signoff}>
                     {line}
                   </Text>

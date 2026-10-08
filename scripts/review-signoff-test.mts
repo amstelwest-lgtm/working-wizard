@@ -69,7 +69,9 @@ assert(
 
 const healthStamp = stampFromSignoff(indexed.financials, false);
 assert(healthStamp?.signatureData === "data:image/png;base64,AAA", "stamp copies signature");
-assert(stampFromSignoff(indexed.financials, true) === null, "stale sign-off is not stamped");
+const staleStamp = stampFromSignoff(indexed.financials, true);
+assert(staleStamp?.signedOffByName === "Ada Lovelace", "a stale sign-off keeps the signer");
+assert(staleStamp?.figuresChanged === true, "a stale sign-off says the figures moved");
 assert(
   stampFromSignoff(indexed.profitability, false)?.signatureData == null,
   "profit stamp has no health signature",

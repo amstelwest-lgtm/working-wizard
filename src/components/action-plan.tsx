@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
+import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
@@ -166,6 +167,8 @@ interface Props {
   onFocusHandled?: () => void;
   /** Accountant dashboard Chase links land with `?tab=plan&filter=overdue`. */
   initialFilter?: ActionPlanFilter;
+  /** Same stamp the tab sign-off prints. Unsigned exports say Draft. */
+  reviewSignoff?: ReportSignoffStamp | null;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -445,6 +448,7 @@ export default function ActionPlanPanel({
   focusMoveKey,
   onFocusHandled,
   initialFilter,
+  reviewSignoff = null,
 }: Props) {
   const { date } = useMarketFormat();
   const { profile } = useAccountantProfile();
@@ -617,6 +621,7 @@ export default function ActionPlanPanel({
           ownerName: item.owner_name,
         })),
         profile,
+        reviewSignoff,
       });
       toast.success("Action Plan PDF downloaded");
     } catch (e) {

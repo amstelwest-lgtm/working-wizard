@@ -8,6 +8,8 @@
  * in what order. Deterministic; `now` is injected.
  */
 import { ADVISORY_STATE_LABELS, type AdvisoryState } from "@/lib/advisory-state";
+import { resolveAdvisorySignoffState } from "@/lib/advisory-signoff";
+import { PAGE_FIGURES_CHANGED_CLAUSE } from "@/lib/signoff-status";
 
 export type PortfolioClientFacts = {
   clientId: string;
@@ -90,8 +92,20 @@ const RESTING_STATES = new Set<AdvisoryState>([
 export function exceptionsFor(f: PortfolioClientFacts, now: string): PortfolioException[] {
   const out: PortfolioException[] = [];
 
-  if (f.packStatus === "in_review" || f.packStatus === "changes_requested") {
-    const version = f.packVersion ?? 1;
+  const version = f.packVersion ?? 1;
+  const advisory = resolveAdvisorySignoffState({
+    version: f.packVersion,
+    packStatus: f.packStatus,
+    figuresChanged: f.packStatus === "approved" && f.packFiguresStale === true,
+  });
+  if (advisory.status === "signed_stale") {
+    out.push({
+      kind: "pack_waiting",
+      severity: 1,
+      label: `Pack v${version} ${PAGE_FIGURES_CHANGED_CLAUSE}`,
+      tab: "advisory",
+    });
+  } else if (advisory.status === "in_review") {
     out.push({
       kind: "pack_waiting",
       severity: 1,

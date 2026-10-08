@@ -229,6 +229,7 @@ export function LaborProductivityPDF({
         accountantProfile={accountantProfile}
         isDemo={isDemo}
         sample={sample}
+        draft={!isDemo && !sample && !reviewSignoff}
         reviewSignoff={reviewSignoff}
         market={m}
       >
@@ -334,6 +335,7 @@ export function LaborProductivityPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
+      draft={!isDemo && !sample && !reviewSignoff}
       reviewSignoff={reviewSignoff}
       market={m}
     >

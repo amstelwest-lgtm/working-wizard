@@ -429,6 +429,7 @@ export function CashForecastPanel({
   canSign,
   hideReadOnlyStamp,
   hideInlineSignOff,
+  signoffStale,
   signoff: signoffProp,
   onSignoffChange,
   reloadToken,
@@ -447,6 +448,8 @@ export function CashForecastPanel({
   hideReadOnlyStamp?: boolean;
   /** Parent already renders Sign off in the tab header. */
   hideInlineSignOff?: boolean;
+  /** Parent's figure check. Falls back to the forecast timestamp. */
+  signoffStale?: boolean;
   signoff?: ClientReviewSignoff | null;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   /** Bump to re-load cashflow from Supabase (e.g. after bank→cash publish). */
@@ -1380,7 +1383,7 @@ export function CashForecastPanel({
         .filter(Boolean)
         .join("; ")
     : null;
-  const forecastStale = computeIsStale(forecastSignoff, lastForecastAt);
+  const forecastStale = signoffStale ?? computeIsStale(forecastSignoff, lastForecastAt);
   // No forecast lines yet. A flat $0 trajectory must not be badged "In the black",
   // even when a hand-entered opening balance is already on the file.
   const linesBlank = [...revenue, ...expenses, ...other].every((l) => !(parseFloat(l.amount) || 0));
@@ -1662,7 +1665,7 @@ export function CashForecastPanel({
           {disagreeNotice}
           {emptyNotice}
           {forecastNotes}
-          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Stat
               label="Opening bank"
               value={fmtCompact(baseCalc.opening)}
@@ -1685,20 +1688,6 @@ export function CashForecastPanel({
               value={forecastEmpty ? "—" : publishedStory.headline}
               tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
               sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
-            />
-            <Stat
-              label="Review"
-              value={
-                !forecastSignoff ? "Not signed off" : forecastStale ? "Stale" : "Signed off"
-              }
-              tone={!forecastSignoff || forecastStale ? "bad" : "good"}
-              sub={
-                forecastStale
-                  ? "Inputs changed after sign-off"
-                  : forecastSignoff?.signed_off_by_name
-                    ? forecastSignoff.signed_off_by_name
-                    : "Review the inputs, then sign off"
-              }
             />
           </div>
           {!forecastEmpty ? (

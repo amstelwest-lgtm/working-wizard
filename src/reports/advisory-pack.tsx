@@ -24,6 +24,10 @@ export type AdvisoryPackPDFProps = {
   /** Page-1 line for an approval whose figures have moved. Not a draft watermark. */
   staleNotice?: string | null;
   reviewSignoff?: ReportSignoffStamp | null;
+  /** Title status when unsigned. Defaults to Draft. */
+  draftLabel?: string | null;
+  /** Page watermark when unsigned. */
+  draftMark?: string | null;
   sample?: boolean;
   market?: ResolvedMarket;
 };
@@ -75,19 +79,26 @@ export function AdvisoryPackPDF({
   draftDisclosure,
   staleNotice,
   reviewSignoff,
+  draftLabel,
+  draftMark,
   sample,
   market,
 }: AdvisoryPackPDFProps) {
   const notice = staleNotice?.trim() ? pdfSafeText(staleNotice.trim()) : null;
   const disclosure = notice || reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);
+  const stamp = reviewSignoff
+    ? { ...reviewSignoff, figuresChanged: reviewSignoff.figuresChanged || Boolean(notice) }
+    : null;
   return (
     <PDFDocument
       title={`${smeData.name} advisory pack`}
       subject="Advisory pack"
       smeData={smeData}
       accountantProfile={accountantProfile}
-      draft={!reviewSignoff}
-      reviewSignoff={reviewSignoff}
+      draft={!stamp}
+      draftLabel={draftLabel ?? undefined}
+      draftMark={draftMark ?? undefined}
+      reviewSignoff={stamp}
       sample={sample}
       market={market}
     >

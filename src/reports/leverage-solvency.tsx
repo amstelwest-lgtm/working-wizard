@@ -327,6 +327,7 @@ export function LeverageSolvencyPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
+      draft={!isDemo && !sample && !reviewSignoff}
       reviewSignoff={reviewSignoff}
       market={m}
     >
