@@ -29,8 +29,7 @@ assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the cl
   assert(!openFn.includes('to: "/reports"'), "client-header does not leave for the picker");
 }
 assert(
-  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc) ||
-    /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc),
+  !clientSrc.includes("data-view-mode-toggle"),
   "simple/complex toggle is hidden on Reports — the studio does not change",
 );
 

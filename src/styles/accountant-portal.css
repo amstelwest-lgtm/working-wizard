@@ -1278,3 +1278,63 @@ html[data-theme="dark"] .reports-studio .reports-settings{
   .accountant-portal .home-fold > summary{flex-wrap:wrap}
 }
 
+.answer-strip{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:10px;
+  margin:0 0 16px;
+}
+.answer-strip__sentence{
+  margin:0;
+  max-width:68ch;
+  font-size:15px;
+  line-height:1.45;
+  color:var(--ink,#f2ecdc);
+}
+.answer-strip__meta{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+}
+.answer-strip__chip,
+.answer-strip__status{
+  margin:0;
+  border-radius:999px;
+  border:1px solid var(--line,rgba(212,175,55,.16));
+  padding:4px 10px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  color:var(--ink-dim,#9b958a);
+}
+.answer-strip__status{color:var(--gold,#d4af37)}
+.answer-strip__actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+}
+.review-inputs{
+  width:100%;
+  border:1px solid var(--line,rgba(212,175,55,.16));
+  border-radius:14px;
+  background:color-mix(in srgb, var(--glass,rgba(13,13,20,.78)) 88%, transparent);
+}
+.review-inputs__summary{
+  cursor:pointer;
+  padding:12px 14px;
+  font-size:13px;
+  font-weight:700;
+  color:var(--ink,#f2ecdc);
+  list-style:none;
+}
+.review-inputs__summary::-webkit-details-marker{display:none}
+.review-inputs__body{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  padding:0 14px 14px;
+}
+

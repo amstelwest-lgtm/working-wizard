@@ -64,15 +64,24 @@ assert(appSrc.includes('<TabErrorBoundary label="Action Plan">'), "founder board
 assert(appSrc.includes('<TabErrorBoundary label="Cash Forecast">'), "founder board wraps Cash Forecast");
 assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "founder board wraps Budget");
 assert(
-  appSrc.includes('["today", "cash", "budget", "next"].includes(activeTab)'),
+  appSrc.includes('["today", "cash", "next"].includes(activeTab)'),
   "owner view-mode toggle only renders on tabs that actually change",
 );
 {
-  const toggleGate = appSrc.match(/\[["']today["'],\s*["']cash["'],\s*["']budget["'],\s*["']next["']\]\.includes\(activeTab\)/);
-  assert(!!toggleGate, "view-mode toggle gate lists Health, Cash, Budget, Next moves");
+  const toggleGate = appSrc.match(
+    /\[["']today["'],\s*["']cash["'],\s*["']next["']\]\.includes\(activeTab\)/,
+  );
+  assert(!!toggleGate, "view-mode toggle gate lists Health, Cash, and Next moves");
+  assert(!toggleGate![0].includes("budget"), "Budget's toggle lives in its drawer");
   assert(!toggleGate![0].includes("waterfall"), "Profit tab is not in the view-mode toggle gate");
   assert(!toggleGate![0].includes("tasks"), "Action Plan tab is not in the view-mode toggle gate");
 }
+assert(
+  readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
+    "data-view-mode-toggle",
+  ),
+  "the budget drawer still has the view toggle",
+);
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('lazyPanel(() => import("@/components/action-plan")'), "client board uses lazyPanel");
@@ -94,8 +103,7 @@ assert(
   "accountant remounts Action Plan when the tab is opened so owner edits are not stale",
 );
 assert(
-  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc) ||
-    /activeTab === "plan"[\s\S]{0,220}"none"/.test(clientSrc),
+  !clientSrc.includes("data-view-mode-toggle"),
   "accountant simple/complex toggle is hidden on Action Plan — the panel does not change",
 );
 assert(

@@ -254,7 +254,7 @@ export function BudgetVariancePanel({
 
   const imported = rows.length;
   const accountantEmpty = statementPace
-    ? "The strip above is the statement, prorated. Upload a month’s management accounts when that file exists."
+    ? "The line above uses the saved statement spread across the year. Upload a month’s management accounts when that file exists."
     : "Closed until a month’s management accounts are on file — until then there is nothing to compare, and that is expected.";
   const accountantLoaded = `${imported} month${imported === 1 ? "" : "s"} of management accounts on file. Open to see where the plan is off.`;
 
@@ -379,8 +379,8 @@ export function BudgetVariancePanel({
               <strong className="text-slate-900 dark:text-slate-100">
                 {formatMonthLabel(focusMonth, market)}
               </strong>
-              . The comparison above is the statement, prorated to that window — not this month’s
-              management accounts.
+              . The comparison above uses the saved statement spread across that window, not this
+              month’s management accounts.
             </>
           ) : role === "accountant" ? (
             <>

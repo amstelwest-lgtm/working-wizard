@@ -4379,8 +4379,8 @@ function Index() {
                 ))}
               </TabsList>
 
-              {/* View mode only changes Health, Cash, Budget, and Next moves. */}
-              {["today", "cash", "budget", "next"].includes(activeTab) && (
+              {/* View mode only changes Health, Cash, and Next moves. Budget's control is in its drawer. */}
+              {["today", "cash", "next"].includes(activeTab) && (
                 <div className="relative z-10 mb-4 mt-1 flex justify-center">
                   <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
                     {(["simplified", "complex"] as const).map((m) => (
@@ -5306,15 +5306,6 @@ function Index() {
 
               <TabsContent value="cash">
                 <div id="wizard-cash-panel">
-                  <OwnerTabSignoffRow
-                    label="Cash Forecast"
-                    signoff={cashForecastSignoff}
-                    scope="cash_forecast"
-                    isStale={computeIsStale(
-                      cashForecastSignoff,
-                      clientMeta?.last_forecast_at ?? null,
-                    )}
-                  />
                   {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
                     <NoFiguresBanner
                       tabLabel="Cash Forecast"
@@ -5346,12 +5337,6 @@ function Index() {
 
               <TabsContent value="budget">
                 <div id="wizard-budget-panel">
-                  <OwnerTabSignoffRow
-                    label="Budget"
-                    signoff={budgetSignoff}
-                    scope="budget"
-                    isStale={computeIsStale(budgetSignoff, clientMeta?.budget_updated_at ?? null)}
-                  />
                   <TabErrorBoundary label="Budget">
                     <Suspense
                       fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
@@ -5360,6 +5345,7 @@ function Index() {
                         clientId={effectiveClientId ?? undefined}
                         clientName={actingClientName ?? undefined}
                         simplified={viewMode === "simplified"}
+                        onViewModeChange={setViewMode}
                         role={
                           userRole === "accountant" || userRole === "firm_admin"
                             ? "accountant"

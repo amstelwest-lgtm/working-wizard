@@ -160,7 +160,7 @@ assert(
   Math.abs(versus!.budgetRevenue - 700000) < 50,
   `9 months of the plan match the cover, got ${versus!.budgetRevenue}`,
 );
-assert(versus!.chip === "Statement pace, prorated", versus!.chip);
+assert(versus!.chip === "Estimated from statement pace", versus!.chip);
 assert(versus!.label === "Jan–Sep 2026, prorated", versus!.label);
 assert(
   budgetSeededFromStatement(versus),
@@ -182,7 +182,7 @@ assert(
   Math.abs(yankeesVersus!.revenue - 8633.6) < 0.05,
   `Yankees revenue actual matches Overview ${yankeesVersus!.revenue}, not the annualised pace`,
 );
-assert(yankeesVersus!.chip === "Statement pace, prorated", yankeesVersus!.chip);
+assert(yankeesVersus!.chip === "Estimated from statement pace", yankeesVersus!.chip);
 
 const miss = varianceLine("revenue", "Revenue", 58333, 4167, true);
 assert(miss.delta < 0 && miss.signal === "adverse", "a revenue miss is signed and adverse");

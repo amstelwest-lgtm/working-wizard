@@ -7,8 +7,8 @@ import { MarketProvider } from "@/contexts/market";
 import { AuthProvider } from "@/hooks/use-auth";
 import { applyPortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
-import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
-import { RailStudio } from "./studio";
+import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
+import { OwnerCashBoard, RailStudio } from "./studio";
 
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
 // palette, which is what a dark signed-in session does.
@@ -20,6 +20,7 @@ const sheetHrefs = [
   "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
   appCss,
   ...authenticatedLayoutLinks.flatMap((link) => (link.rel === "stylesheet" ? [link.href] : [])),
+  ...founderPortalLinks.map((link) => link.href),
 ];
 for (const href of sheetHrefs) {
   const el = document.createElement("link");
@@ -48,7 +49,19 @@ const clientRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute]);
+const ownerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app",
+  component: function OwnerHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <OwnerCashBoard clientId="harness-client" />
+      </MarketProvider>
+    );
+  },
+});
+
+const routeTree = rootRoute.addChildren([clientRoute, ownerRoute]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),

@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { BudgetWorkspace } from "@/components/budget/budget-workspace";
+import { BudgetScenarioPills, BudgetWorkspace, UnmappedReviewBlock } from "@/components/budget/budget-workspace";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
@@ -34,11 +35,7 @@ import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import {
-  ReviewSignoffButton,
-  ReviewSignoffBadge,
-  computeIsStale,
-} from "@/components/review-signoff";
+import { computeIsStale } from "@/components/review-signoff";
 import {
   parseOperatingProfile,
   profileToBudgetQualification,
@@ -68,6 +65,7 @@ export function BudgetPanel({
   firstActualsMonth,
   reloadToken,
   onReviewStale,
+  onViewModeChange,
 }: {
   clientId?: string;
   clientName?: string;
@@ -94,6 +92,7 @@ export function BudgetPanel({
   reloadToken?: number;
   /** Header sign-off uses the same stale clock as the PDF. */
   onReviewStale?: (stale: boolean) => void;
+  onViewModeChange?: (mode: "simplified" | "complex") => void;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -391,7 +390,7 @@ export function BudgetPanel({
       setDoc(result.next);
       setUnmapped(result.unmapped.length ? result.unmapped : null);
       toast.success(
-        `Budget model updated · ${result.mappedCount} drivers carried across (${result.overlapPct.toFixed(0)}% overlap)`,
+        `Budget model updated · ${result.mappedCount} lines carried across`,
       );
     },
     [doc, fyDefault, startFresh, firstActualsMonth],
@@ -449,7 +448,7 @@ export function BudgetPanel({
   if (!doc) {
     return (
       <>
-        {budgetInputConfig}
+        <ReviewInputsDrawer>{budgetInputConfig}</ReviewInputsDrawer>
         <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-6 text-sm dark:border-slate-700">
           <p className="font-semibold text-slate-800 dark:text-slate-100">
             Budget needs your business profile
@@ -476,19 +475,84 @@ export function BudgetPanel({
   const scaleBroken = budgetScaleBreak(doc, figureSource) != null;
   const rebuilt = budgetWasRebuiltFromActuals(doc);
 
+  const reviewDrawer = (
+    <ReviewInputsDrawer>
+      {onViewModeChange ? (
+        <div data-view-mode-toggle="" className="flex flex-wrap gap-2">
+          {(
+            [
+              ["simplified", "Summary"],
+              ["complex", "Full year by month"],
+            ] as const
+          ).map(([mode, label]) => {
+            const on = (mode === "simplified") === Boolean(simplified);
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => onViewModeChange(mode)}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                  on ? "bg-[#d4a550] text-[#0a0e1a]" : "border border-slate-300 text-slate-600"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <BudgetScenarioPills
+        doc={doc}
+        onChange={(next) => {
+          budgetDirty.current = true;
+          setDoc(next);
+        }}
+      />
+      {budgetInputConfig}
+      {!(simplified && role === "owner") ? (
+        <BudgetAdvancedPanel
+          doc={doc}
+          onChange={(next) => {
+            budgetDirty.current = true;
+            setDoc(next);
+          }}
+          financials={financials}
+          businessTypeId={businessTypeId}
+          role={role}
+          clientId={clientId}
+          onPushedToCash={onPushedToCash}
+        />
+      ) : null}
+      {unmapped && unmapped.length > 0 ? (
+        <UnmappedReviewBlock
+          items={unmapped}
+          doc={doc}
+          onChange={(next) => {
+            budgetDirty.current = true;
+            setDoc(next);
+          }}
+          onClear={() => setUnmapped(null)}
+        />
+      ) : null}
+      <Button type="button" variant="outline" size="sm" onClick={beginModelChange}>
+        Change model
+      </Button>
+    </ReviewInputsDrawer>
+  );
+
   return (
     <>
-      {budgetInputConfig}
       {scaleBroken && (
         <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
           <p className="font-semibold">Rebuild is a suggestion — nothing has been replaced</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
-            The stored plan is more than ten times the annualised revenue or cost of sales. It is
-            still the plan on file. Rebuild only if you want it to follow the saved statement.
+            The stored plan is more than ten times a full year of the saved revenue or cost of sales.
+            It is still the plan on file. Rebuild only if you want it to follow the saved statement.
           </p>
           <Button
             type="button"
-            className="mt-3 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+            variant="outline"
+            className="mt-3"
             onClick={rebuildFromActuals}
           >
             Rebuild from the saved statement
@@ -499,8 +563,8 @@ export function BudgetPanel({
         <div className="mb-4 rounded-xl border border-sky-300/80 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-50">
           <p className="font-semibold">This budget was rebuilt from the saved statement</p>
           <p className="mt-1 text-[13px] leading-relaxed text-sky-900/90 dark:text-sky-100/80">
-            The stored plan was more than ten times the annualised revenue or cost of sales. The
-            file note records the rebuild.
+            The stored plan was more than ten times a full year of the saved revenue or cost of sales.
+            The file note records the rebuild.
           </p>
         </div>
       )}
@@ -509,12 +573,13 @@ export function BudgetPanel({
           <p className="font-semibold">This budget does not line up with the saved statement</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
             Cost of sales is zero while the period has a cost of sales, or a full year of revenue or
-            cost of sales is more than three times the annualised actual. Nothing is overwritten
-            until you rebuild.
+            cost of sales is more than three times a full year of the saved figures. Nothing is
+            overwritten until you rebuild.
           </p>
           <Button
             type="button"
-            className="mt-3 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+            variant="outline"
+            className="mt-3"
             onClick={rebuildFromActuals}
           >
             Rebuild from the saved statement
@@ -543,58 +608,23 @@ export function BudgetPanel({
         onChangeModel={beginModelChange}
         role={role}
         clientId={clientId}
+        clientName={clientName}
+        signoff={budgetSignoff}
+        isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
+        canSign={Boolean(canSign && clientId)}
+        onSignoffChange={patchBudgetSignoff}
+        drawer={reviewDrawer}
       />
-
-      <div className="mt-6 space-y-4">
-        {clientId && (canSign || role === "accountant") && !hideInlineSignOff && (
-          <div className="flex justify-end">
-            <ReviewSignoffButton
-              clientId={clientId}
-              clientName={clientName}
-              scope="budget"
-              signoff={budgetSignoff}
-              isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
-              onChange={patchBudgetSignoff}
-            />
-          </div>
-        )}
-        {clientId && !hideReadOnlyStamp && !(canSign || role === "accountant") && (
-          <div className="flex justify-end">
-            <ReviewSignoffBadge
-              signoff={budgetSignoff}
-              scope="budget"
-              isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
-              placement="corner"
-            />
-          </div>
-        )}
-        {/* Seed and push sit under sign-off so they are not the gold action. */}
-        {!(simplified && role === "owner") && (
-          <BudgetAdvancedPanel
-            doc={doc}
-            onChange={(next) => {
-              budgetDirty.current = true;
-              setDoc(next);
-            }}
-            financials={financials}
-            businessTypeId={businessTypeId}
-            role={role}
-            clientId={clientId}
-            onPushedToCash={onPushedToCash}
-          />
-        )}
-      </div>
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>
         <DialogContent className="bg-[#0d1117] border-slate-800 text-slate-100">
           <DialogHeader>
-            <DialogTitle>Low driver overlap</DialogTitle>
+            <DialogTitle>Most lines do not match</DialogTitle>
             <DialogDescription className="text-slate-400">
-              Less than 30% of your drivers carry across
               {pendingChange
-                ? ` (${pendingChange.result.overlapPct.toFixed(0)}% overlap, ${pendingChange.result.mappedCount} matched)`
-                : ""}
-              . Start fresh or review the mapped result manually? We never wipe silently.
+                ? `${pendingChange.result.mappedCount} lines match the new model. The rest do not.`
+                : "Most lines do not match the new model."}{" "}
+              Start fresh, or look at the matches yourself. Nothing is removed until you choose.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -616,7 +646,7 @@ export function BudgetPanel({
               Start fresh
             </Button>
             <Button
-              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              variant="outline"
               onClick={() => {
                 if (!pendingChange) return;
                 budgetDirty.current = true;
@@ -626,7 +656,7 @@ export function BudgetPanel({
                 );
                 setPendingChange(null);
                 setLowOverlapOpen(false);
-                toast.message("Review unmapped drivers before discarding");
+                toast.message("Check the lines that did not match before you discard them");
               }}
             >
               Review manually

@@ -9,6 +9,7 @@ import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { BudgetPanel } from "@/components/budget/budget-panel";
 import { ClientBriefing } from "@/components/client-briefing";
 import { FeatureFinder } from "@/components/feature-finder";
 import { OutcomesPanel } from "@/components/outcomes-panel";
@@ -117,6 +118,7 @@ export function RailStudio() {
             {pane === "ask" ? <BotPane /> : null}
             {pane === "overview" ? <BriefingPane /> : null}
             {pane === "cash" ? <CashPane clientId={clientId} /> : null}
+            {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} /> : null}
             {pane === "plan" ? <PlanPane clientId={clientId} /> : null}
           </div>
@@ -173,27 +175,57 @@ function CashPane({ clientId }: { clientId: string }) {
       <div className="card cf-wrap" id="wizard-cash-panel">
         <div className="cf-head">
           <div>
-            <span className="eyebrow">Signature view</span>
             <div className="h-sec">13-week cash forecast</div>
-          </div>
-          <div className="deliverable-tab-head__sign">
-            <PaneBoundary label="Cash sign-off">
-              <ReviewSignoffButton
-                compact
-                clientId={clientId}
-                clientName="Harbour Glass"
-                scope="cash_forecast"
-                signoff={null}
-                isStale={false}
-                onChange={() => {}}
-              />
-            </PaneBoundary>
           </div>
         </div>
         <PaneBoundary label="Cash forecast">
-          <CashForecastPanel clientId={clientId} clientName="Harbour Glass" canSign hideReadOnlyStamp hideInlineSignOff />
+          <CashForecastPanel clientId={clientId} clientName="Harbour Glass" canSign hideReadOnlyStamp />
         </PaneBoundary>
       </div>
+    </div>
+  );
+}
+
+export function OwnerCashBoard({ clientId }: { clientId: string }) {
+  const tabs = ["Business Health", "Profit", "Cash Forecast", "Budget", "Next moves", "Action Plan"];
+  return (
+    <div data-owner-board="true" data-rail-ready="true" className="mx-auto max-w-5xl px-3 py-4">
+      <div className="mb-3 flex gap-2 overflow-x-auto border-b border-[#b7872a]/20">
+        {tabs.map((label) => (
+          <span
+            key={label}
+            className={`shrink-0 border-b-2 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+              label === "Cash Forecast"
+                ? "border-[#d4a550] text-[#d4a550]"
+                : "border-transparent text-slate-500"
+            }`}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+      <PaneBoundary label="Owner cash">
+        <CashForecastPanel clientId={clientId} clientName="Harbour Glass" canSign={false} hideReadOnlyStamp />
+      </PaneBoundary>
+    </div>
+  );
+}
+
+function BudgetPane({ clientId }: { clientId: string }) {
+  return (
+    <div className="tabpane on" id="pane-budget">
+      <PaneBoundary label="Budget">
+        <BudgetPanel
+          clientId={clientId}
+          clientName="Harbour Glass"
+          role="accountant"
+          canSign
+          hideInlineSignOff
+          simplified={false}
+          financials={{ revenue: "420000", cogs: "80000", fixedCosts: "140000", cash: "186000" }}
+          fyStartMonthDefault={3}
+        />
+      </PaneBoundary>
     </div>
   );
 }

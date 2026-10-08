@@ -2,7 +2,7 @@
  * Budget workspace — drivers, monthly P&L, cash, scenarios, actuals compare.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.mo
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import {
   COLLAPSIBLE_GOLD_RULE,
@@ -45,7 +46,12 @@ export function BudgetWorkspace({
   onChangeModel,
   role = "owner",
   clientId,
-  reviewStatus = "",
+  clientName,
+  signoff = null,
+  isStale = false,
+  canSign = false,
+  onSignoffChange,
+  drawer = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -56,26 +62,28 @@ export function BudgetWorkspace({
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
   clientId?: string;
-  reviewStatus?: string;
+  clientName?: string;
+  signoff?: ClientReviewSignoff | null;
+  isStale?: boolean;
+  canSign?: boolean;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  drawer?: ReactNode;
 }) {
   if (simplified) {
     return (
       <div className="space-y-4">
-        {unmappedReview && unmappedReview.length > 0 && (
-          <UnmappedReviewBlock
-            items={unmappedReview}
-            doc={doc}
-            onChange={onChange}
-            onClear={onClearUnmapped}
-          />
-        )}
         <BudgetSimpleView
           doc={doc}
           onChange={onChange}
           actuals={actuals}
-          onChangeModel={onChangeModel}
           role={role}
-          reviewStatus={reviewStatus}
+          clientId={clientId}
+          clientName={clientName}
+          signoff={signoff}
+          isStale={isStale}
+          canSign={canSign}
+          onSignoffChange={onSignoffChange}
+          drawer={drawer}
         />
         <BudgetVariancePanel
           clientId={clientId}
@@ -97,12 +105,46 @@ export function BudgetWorkspace({
       onChangeModel={onChangeModel}
       role={role}
       clientId={clientId}
-      reviewStatus={reviewStatus}
+      clientName={clientName}
+      signoff={signoff}
+      isStale={isStale}
+      canSign={canSign}
+      onSignoffChange={onSignoffChange}
+      drawer={drawer}
     />
   );
 }
 
-function UnmappedReviewBlock({
+export function BudgetScenarioPills({
+  doc,
+  onChange,
+}: {
+  doc: BudgetDocument;
+  onChange: (next: BudgetDocument) => void;
+}) {
+  return (
+    <div className="flex flex-wrap rounded-full border border-slate-200 p-0.5 dark:border-slate-700">
+      {SCENARIOS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() =>
+            onChange({ ...doc, activeScenario: id, updatedAt: new Date().toISOString() })
+          }
+          className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+            doc.activeScenario === id
+              ? "bg-[#d4a550] text-[#0a0e1a]"
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          }`}
+        >
+          {doc.scenarios[id].label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function UnmappedReviewBlock({
   items,
   doc,
   onChange,
@@ -116,11 +158,11 @@ function UnmappedReviewBlock({
   return (
     <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
       <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-        Review unmapped drivers
+        Lines from the previous model
       </div>
       <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/70">
-        These came from your previous model and have no matching key. Reassign or keep as an extra
-        line — we never silently discard.
+        These lines were on the previous model and do not match a line here. Move each one onto a
+        line, or keep it as an extra line. Nothing is removed until you choose.
       </p>
       <ul className="mt-3 space-y-2">
         {items.map((u) => (
@@ -128,9 +170,7 @@ function UnmappedReviewBlock({
             key={u.id}
             className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-white/60 px-3 py-2 dark:bg-slate-950/40"
           >
-            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              {u.name} <span className="text-xs text-slate-500">({u.driverKey})</span>
-            </span>
+            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{u.name}</span>
             <select
               className="rounded border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
               defaultValue=""
@@ -159,7 +199,7 @@ function UnmappedReviewBlock({
         ))}
       </ul>
       <Button type="button" variant="ghost" size="sm" className="mt-2 text-xs" onClick={onClear}>
-        Discard remaining unmapped
+        Discard the rest
       </Button>
     </div>
   );
@@ -174,7 +214,12 @@ function BudgetComplexWorkspace({
   onChangeModel,
   role = "owner",
   clientId,
-  reviewStatus = "",
+  clientName,
+  signoff = null,
+  isStale = false,
+  canSign = false,
+  onSignoffChange,
+  drawer = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -184,7 +229,12 @@ function BudgetComplexWorkspace({
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
   clientId?: string;
-  reviewStatus?: string;
+  clientName?: string;
+  signoff?: ClientReviewSignoff | null;
+  isStale?: boolean;
+  canSign?: boolean;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  drawer?: ReactNode;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -254,54 +304,18 @@ function BudgetComplexWorkspace({
         profitBudget={compared?.budgetEbit ?? focus?.ebit ?? 0}
         profitActual={compared ? (compared.ebit ?? null) : null}
         chip={compared?.chip ?? "None"}
-        status={reviewStatus}
         market={market}
+        clientId={clientId}
+        clientName={clientName}
+        signoff={signoff}
+        isStale={isStale}
+        canSign={canSign}
+        onSignoffChange={onSignoffChange}
       />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-          {tpl.label} · {budgetWindowLabel(doc, market)}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-full border border-slate-200 p-0.5 dark:border-slate-700">
-            {SCENARIOS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() =>
-                  onChange({ ...doc, activeScenario: id, updatedAt: new Date().toISOString() })
-                }
-                className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-                  doc.activeScenario === id
-                    ? "bg-[#d4a550] text-[#0a0e1a]"
-                    : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                }`}
-              >
-                {doc.scenarios[id].label}
-              </button>
-            ))}
-          </div>
-          {onChangeModel && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={onChangeModel}
-            >
-              Change model
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {unmappedReview && unmappedReview.length > 0 && (
-        <UnmappedReviewBlock
-          items={unmappedReview}
-          doc={doc}
-          onChange={onChange}
-          onClear={onClearUnmapped}
-        />
-      )}
+      {drawer}
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+        {tpl.label} · {budgetWindowLabel(doc, market)}
+      </p>
 
       <BudgetVariancePanel
         clientId={clientId}
@@ -316,8 +330,8 @@ function BudgetComplexWorkspace({
           <Label className="text-[10px] uppercase tracking-wider text-slate-500">
             Opening cash
             {budgetOpeningSourceLabel(doc.openingCashSource) ? (
-              <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
-                {budgetOpeningSourceLabel(doc.openingCashSource)}
+              <span className="ml-1 font-medium normal-case tracking-normal text-slate-400">
+                · {budgetOpeningSourceLabel(doc.openingCashSource)}
               </span>
             ) : null}
           </Label>
@@ -356,8 +370,8 @@ function BudgetComplexWorkspace({
         <div>
           <Label className="text-[10px] uppercase tracking-wider text-slate-500">
             Debtor days
-            <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
-              {budgetDaysSourceLabel(doc.wcDaysSource)}
+            <span className="ml-1 font-medium normal-case tracking-normal text-slate-400">
+              · {budgetDaysSourceLabel(doc.wcDaysSource)}
             </span>
             {budgetDaysNeedReview(doc.wc.debtorDays) ? (
               <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
@@ -382,8 +396,8 @@ function BudgetComplexWorkspace({
         <div>
           <Label className="text-[10px] uppercase tracking-wider text-slate-500">
             Creditor days
-            <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
-              {budgetDaysSourceLabel(doc.wcDaysSource)}
+            <span className="ml-1 font-medium normal-case tracking-normal text-slate-400">
+              · {budgetDaysSourceLabel(doc.wcDaysSource)}
             </span>
             {budgetDaysNeedReview(doc.wc.creditorDays) ? (
               <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
@@ -623,9 +637,6 @@ function BudgetComplexWorkspace({
                 }
                 className="h-7 max-w-xs border-0 bg-transparent px-0 text-sm font-semibold shadow-none"
               />
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                {line.driverKey}
-              </span>
               {doc.revenueLines.length > 1 && (
                 <button
                   type="button"
@@ -1216,8 +1227,7 @@ function BudgetComplexWorkspace({
         </ScrollableTable>
         {role === "accountant" && (
           <p className="text-[11px] text-slate-500">
-            Accountant view: full FY grid in complex mode. Challenge driver assumptions against
-            benchmarks before sign-off.
+            Full year, month by month. Check the assumptions before you sign off.
           </p>
         )}
       </section>

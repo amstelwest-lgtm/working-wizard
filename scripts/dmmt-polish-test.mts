@@ -141,7 +141,7 @@ assert(
   "Reports still opens through revealTab",
 );
 assert(
-  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc),
+  !clientSrc.includes("data-view-mode-toggle"),
   "health has no complexity toggle",
 );
 assert(!clientSrc.includes('viewMode === "complex"'), "health complex mode is gone");

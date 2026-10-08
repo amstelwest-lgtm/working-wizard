@@ -194,7 +194,7 @@ const hiddenOpex = mergeMonthActuals(
 );
 assert(hiddenOpex?.fixedCosts === 3500, "a snapshot with no opex does not zero the live overheads");
 assert(
-  budgetActualsBadge(0, true) === "Statement pace, prorated",
+  budgetActualsBadge(0, true) === "Estimated from statement pace",
   "statement pace is not 'no actuals'",
 );
 assert(budgetActualsBadge(0, false) === "None", "empty variance card still says so");

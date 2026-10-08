@@ -20,6 +20,18 @@ export const PAGE_FIGURES_CHANGED_CLAUSE = "figures have changed since; re-revie
 
 export type SignoffStatusKind = "draft" | "ready" | "signed" | "stale";
 
+/** Which of the four lines applies. Does not format the sentence. */
+export function signoffStatusKind(input: {
+  hasSignoff: boolean;
+  isStale: boolean;
+  readyForReview: boolean;
+}): SignoffStatusKind {
+  if (input.hasSignoff && input.isStale) return "stale";
+  if (input.hasSignoff) return "signed";
+  if (input.readyForReview) return "ready";
+  return "draft";
+}
+
 export function signoffStatusLine(input: {
   kind: SignoffStatusKind;
   name?: string | null;

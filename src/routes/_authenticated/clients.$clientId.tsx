@@ -849,7 +849,7 @@ function ClientView() {
     import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null
   >(null);
   const [budgetReloadToken, setBudgetReloadToken] = useState(0);
-  const [budgetReviewStale, setBudgetReviewStale] = useState(false);
+  const [, setBudgetReviewStale] = useState(false);
   const [autoPopulateState, setAutoPopulateState] = useState<AutoPopulateState | null>(null);
   const refreshAutoPopulateState = useCallback(async () => {
     try {
@@ -2879,60 +2879,6 @@ function ClientView() {
                 )}
                 </div>
 
-                {/* Budget keeps one complexity control. Health is a single view. */}
-                <div
-                  data-view-mode-toggle=""
-                  style={{
-                    display: activeTab === "budget" ? "flex" : "none",
-                    justifyContent: "flex-start",
-                    margin: activeTab === "budget" ? "0 0 16px" : 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 2,
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,0.05)",
-                      padding: 3,
-                      border: "1px solid var(--line)",
-                    }}
-                  >
-                    {(["simplified", "complex"] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => {
-                          setViewMode(m);
-                          track("view_mode_toggled", {
-                            mode: m,
-                            surface: "accountant_portal",
-                            clientId,
-                            firmId,
-                          });
-                        }}
-                        style={{
-                          borderRadius: 999,
-                          padding: "5px 18px",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          letterSpacing: "0.08em",
-                          textTransform: "uppercase",
-                          transition: "all 0.18s",
-                          border: "none",
-                          cursor: "pointer",
-                          background: viewMode === m ? "#d4a550" : "transparent",
-                          color: viewMode === m ? "#0a0e1a" : "var(--ink-dim)",
-                          boxShadow: viewMode === m ? "0 2px 8px rgba(212,165,80,0.35)" : "none",
-                        }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* ===== SUMMARY TAB ===== */}
                 <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
                   {activeTab === "summary" && (
@@ -3480,29 +3426,7 @@ function ClientView() {
                   <div className="card cf-wrap" id="wizard-cash-panel">
                     <div className="cf-head">
                       <div>
-                        <span className="eyebrow">Signature view</span>
                         <div className="h-sec">13-week cash forecast</div>
-                      </div>
-                      <div className="deliverable-tab-head__sign">
-                        <ReviewSignoffButton
-                          compact
-                          clientId={clientId}
-                          clientName={client?.name}
-                          scope="cash_forecast"
-                          signoff={cashForecastSignoff}
-                          isStale={pageSignoffStale(
-                            cashForecastSignoff,
-                            client?.last_forecast_at ?? null,
-                          )}
-                          onChange={patchSignoff("cash_forecast")}
-                        />
-                        <button
-                          type="button"
-                          className="btn ghost mini"
-                          onClick={() => setCashBankUploadToken((n) => n + 1)}
-                        >
-                          Upload bank statements
-                        </button>
                       </div>
                     </div>
                     <CashForecastPanel
@@ -3601,22 +3525,7 @@ function ClientView() {
                 {/* ===== BUDGET TAB ===== */}
                 <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
                   <div id="wizard-budget-panel">
-                    <DeliverableTabHead
-                      eyebrow="12-month Budget"
-                      title="On or off the plan"
-                      lede="This period's financial statements compared against the FY budget plan."
-                      signoff={
-                        <ReviewSignoffButton
-                          compact
-                          clientId={clientId}
-                          clientName={client?.name}
-                          scope="budget"
-                          signoff={budgetSignoff}
-                          isStale={budgetReviewStale}
-                          onChange={patchSignoff("budget")}
-                        />
-                      }
-                    />
+                    <DeliverableTabHead eyebrow="12-month Budget" title="On or off the plan" />
                     {/* Follow the portal theme. A nested `.dark` island made Tailwind
                 light-on-dark copy and `color-scheme: dark` inputs fire while
                 budget cards stayed cream/white — revenue and totals vanished. */}
@@ -3627,6 +3536,15 @@ function ClientView() {
                       role="accountant"
                       reloadToken={budgetReloadToken}
                       onReviewStale={setBudgetReviewStale}
+                      onViewModeChange={(mode) => {
+                        setViewMode(mode);
+                        track("view_mode_toggled", {
+                          mode,
+                          surface: "accountant_portal",
+                          clientId,
+                          firmId,
+                        });
+                      }}
                       canSign
                       hideInlineSignOff
                       signoff={budgetSignoff}
