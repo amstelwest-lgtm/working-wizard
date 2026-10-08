@@ -12,6 +12,7 @@ import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { scoreRatio } from "@/lib/health-score";
+import { derivedProfitStepsAreFacts } from "@/lib/period-profit";
 import { interestBurdenRatio, metricDirection, scoreTier, taxBurdenRatio } from "@/lib/ratios";
 import { NO_PRIOR_PERIOD, priorMarginsDiffer } from "@/lib/report-coherence";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
@@ -137,6 +138,12 @@ function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
   const opex = d.gross_profit - d.operating_profit - depreciation;
   const afterOpex = d.gross_profit - opex;
   const interest = d.operating_profit - d.ebt;
+  const stepsAreFacts = derivedProfitStepsAreFacts({
+    operatingProfit: d.operating_profit,
+    interest,
+    tax: d.tax,
+    netIncome: d.net_profit,
+  });
 
   const steps: BridgeStep[] = [
     { label: "Revenue", delta: d.revenue, runningEnd: d.revenue, kind: "total" },
@@ -164,8 +171,12 @@ function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
       runningEnd: d.operating_profit,
       kind: "subtotal",
     },
-    { label: "Interest", delta: -interest, runningEnd: d.ebt, kind: "decrease" },
-    { label: "Tax", delta: -d.tax, runningEnd: d.net_profit, kind: "decrease" },
+    ...(stepsAreFacts
+      ? [
+          { label: "Interest", delta: -interest, runningEnd: d.ebt, kind: "decrease" as const },
+          { label: "Tax", delta: -d.tax, runningEnd: d.net_profit, kind: "decrease" as const },
+        ]
+      : []),
     { label: "Net\nProfit", delta: d.net_profit, runningEnd: d.net_profit, kind: "subtotal" },
   ];
 

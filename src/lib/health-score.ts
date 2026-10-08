@@ -351,6 +351,8 @@ export function scorecardHealthFromFinancials(input: {
   /** Stored figures cover. Reports pass `periodMonthsOf`. Omitted on the Ratios page. */
   periodMonths?: number | null;
   cashRunwayWeeks?: number | null;
+  /** Null when the client has no cash line. Runway then stays out of the cash pillar. */
+  cashBalance?: number | null;
   market?: ScoreMarket;
   shortfallWeek?: number | null;
 }): OverallHealth {
@@ -360,6 +362,7 @@ export function scorecardHealthFromFinancials(input: {
       periodMonths: input.periodMonths,
     }),
     cashRunwayWeeks: input.cashRunwayWeeks,
+    cashBalance: input.cashBalance,
     market: input.market,
     shortfallWeek: input.shortfallWeek,
   });
@@ -499,6 +502,12 @@ export type ComputeOverallHealthInput = {
   }>;
   cashRunwayWeeks?: number | null;
   /**
+   * Cash on the balance sheet or a published bank balance.
+   * `null` means there is no cash figure — runway must not score the cash pillar.
+   * Omit the field to keep the previous behaviour for callers that only have runway.
+   */
+  cashBalance?: number | null;
+  /**
    * First forecast week that closes below zero. Week 1 cannot display Healthy.
    * Zero weeks of runway cannot display Healthy either — the chip is Critical.
    */
@@ -536,7 +545,8 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
     }
   }
 
-  if (input.cashRunwayWeeks != null && Number.isFinite(input.cashRunwayWeeks)) {
+  const cashKnown = input.cashBalance === undefined || input.cashBalance != null;
+  if (cashKnown && input.cashRunwayWeeks != null && Number.isFinite(input.cashRunwayWeeks)) {
     bucket.cash.push(scoreCashRunway(input.cashRunwayWeeks));
   }
 

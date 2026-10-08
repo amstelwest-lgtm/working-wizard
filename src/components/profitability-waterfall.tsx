@@ -224,12 +224,19 @@ export function ProfitabilityWaterfall({
   const depreciation = figures.depreciation;
   const interest = figures.interest;
   const tax = figures.tax;
+  const interestIsFact = figures.interestIsFact;
+  const taxIsFact = figures.taxIsFact;
 
   const grossProfit = revenue - costOfSales;
   const afterOverheads = grossProfit - fixedCosts;
   const operatingProfit = afterOverheads - depreciation;
   const ebt = operatingProfit - interest;
-  const netProfit = ebt - tax;
+  const computedNet = ebt - tax;
+  const statedNet = figures.statedNetIncome;
+  const netProfit =
+    (!interestIsFact || !taxIsFact) && statedNet != null && Number.isFinite(statedNet)
+      ? statedNet
+      : computedNet;
   const taxNote = estimatedTaxNote({ clientName, tax, operatingProfit });
   const showDepreciation = Math.abs(depreciation) >= 0.5;
 
@@ -275,8 +282,28 @@ export function ProfitabilityWaterfall({
       kind: "subtotal",
       showStatus: true,
     },
-    { label: "Interest", delta: -interest, runningEnd: ebt, kind: "decrease", showStatus: false },
-    { label: "Tax", delta: -tax, runningEnd: netProfit, kind: "decrease", showStatus: false },
+    ...(interestIsFact
+      ? [
+          {
+            label: "Interest",
+            delta: -interest,
+            runningEnd: ebt,
+            kind: "decrease" as const,
+            showStatus: false,
+          },
+        ]
+      : []),
+    ...(taxIsFact
+      ? [
+          {
+            label: "Tax",
+            delta: -tax,
+            runningEnd: netProfit,
+            kind: "decrease" as const,
+            showStatus: false,
+          },
+        ]
+      : []),
     {
       label: "Net Profit",
       delta: netProfit,

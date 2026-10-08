@@ -357,9 +357,12 @@ export function rankStrategicMoves(input: {
   healthByKey?: Record<string, number | null | undefined> | null;
   profile?: ClientOperatingProfile | null;
   entries?: readonly StrategicMoveEntry[];
+  /** Drop moves that would be ranked on a figure the bridge does not trust. */
+  suppressKeys?: readonly string[];
   limit?: number;
 }): RankedStrategicMove[] {
-  const entries = input.entries ?? STRATEGIC_MOVE_CATALOG;
+  const suppressed = new Set(input.suppressKeys ?? []);
+  const entries = (input.entries ?? STRATEGIC_MOVE_CATALOG).filter((entry) => !suppressed.has(entry.key));
   const healthByKey = input.healthByKey ?? {};
   const limit = input.limit ?? 10;
   return entries

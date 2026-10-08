@@ -62,6 +62,44 @@ export function defaultAutoPopulatePrefs(): AutoPopulatePrefs {
   return { profitability: true, cash_forecast: true, budget: true, remember: true };
 }
 
+export type StatementUploadKind = "income_statement" | "balance_sheet" | "mixed" | "unknown";
+
+/**
+ * Cross-statement deliverables start off. A balance sheet does not refresh
+ * profitability or the budget. A P&L does not refresh the cash forecast.
+ * Same-statement targets keep the stored choice.
+ */
+export function statementAutoPopulatePrefs(
+  stored: AutoPopulatePrefs,
+  kind: StatementUploadKind,
+): AutoPopulatePrefs {
+  if (kind === "balance_sheet") {
+    return { ...stored, profitability: false, budget: false };
+  }
+  if (kind === "income_statement") {
+    return { ...stored, cash_forecast: false };
+  }
+  return { ...stored };
+}
+
+/**
+ * Persist the choice the user actually made. A toggle we forced off because
+ * the file is the other statement must not overwrite the stored preference.
+ */
+export function prefsToRemember(
+  displayed: AutoPopulatePrefs,
+  kind: StatementUploadKind,
+  stored: AutoPopulatePrefs,
+): AutoPopulatePrefs {
+  if (kind === "balance_sheet") {
+    return { ...displayed, profitability: stored.profitability, budget: stored.budget };
+  }
+  if (kind === "income_statement") {
+    return { ...displayed, cash_forecast: stored.cash_forecast };
+  }
+  return displayed;
+}
+
 export function allOnPlan(): AutoPopulatePlan {
   return { profitability: true, cash_forecast: true, budget: true };
 }
@@ -272,7 +310,7 @@ export function buildAutoPopulateWrites(
   }
 
   if (plan.cash_forecast) {
-    let payload: CashForecastPublishPayload | null = null;
+    let payload: CashForecastPublishPayload | ExistingCashflow | null = null;
     if (!ctx.cashDraft && ledgerSeededCashflow(ctx.existingCashflow)) {
       update.last_forecast_at = now;
       applied.push("cash_forecast");
@@ -292,10 +330,21 @@ export function buildAutoPopulateWrites(
         payload = { ...payload, openingBalance: String(openingCash) };
       }
       changes.push("Cash forecast drafted from the budget's first three months");
+    } else if (ctx.existingCashflow && !isTypedForecastOpening(ctx.existingCashflow)) {
+      // A later balance sheet has cash but no P&L to reseed. The forecast
+      // already exists (often opening 0). Write the cash line onto it so the
+      // board and the bank-balance prompt stop treating cash as missing.
+      const openingCash =
+        parseFloat(String(ctx.fields.cash ?? "").replace(/[^0-9.-]/g, "")) || 0;
+      const current = parseFloat(String(ctx.existingCashflow.openingBalance ?? ""));
+      if (openingCash > 0 && (!Number.isFinite(current) || Math.abs(current - openingCash) >= 0.5)) {
+        payload = { ...ctx.existingCashflow, openingBalance: String(openingCash) };
+        changes.push("Cash forecast opening set from the statement cash balance");
+      }
     }
     if (payload) {
       update.cashflow = payload;
-      update.cashflow_bank_draft = ctx.cashDraft ?? payload;
+      if (ctx.cashDraft || seededDoc) update.cashflow_bank_draft = ctx.cashDraft ?? payload;
       update.last_forecast_at = now;
       applied.push("cash_forecast");
     } else if (!applied.includes("cash_forecast")) {

@@ -199,6 +199,7 @@ import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
+import { periodProfitBridge } from "@/lib/period-profit";
 import {
   hashFigures,
   latestSnapshotId,
@@ -1125,11 +1126,15 @@ function ClientView() {
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
+  const cashText = String(financials.cash ?? "").trim();
+  const cashBalance = cashText === "" ? null : Number(cashText);
+  const cashKnown = cashBalance != null && Number.isFinite(cashBalance);
   const overallHealth: OverallHealth = scorecardHealthFromFinancials({
     financials,
     fyStartMonth,
     periodMonths: statementMonths,
-    cashRunwayWeeks: effectiveRunway,
+    cashRunwayWeeks: cashKnown ? effectiveRunway : null,
+    cashBalance: cashKnown ? cashBalance : null,
     market: clientMarket,
     shortfallWeek: cashOutlook.shortfallWeek,
   });
@@ -1271,9 +1276,11 @@ function ClientView() {
     netMargin: ratios["Net Margin"],
     periodLabel: figuresPeriodLabel,
   };
+  const clientProfitBridge = periodProfitBridge(financials);
   const strategicMoves = rankStrategicMoves({
     healthByKey: healthMap,
     profile: briefingProfile,
+    suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
   });
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
