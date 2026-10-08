@@ -19,11 +19,14 @@ export function SignoffStatusChip({
   scope,
   signoff,
   isStale,
+  known = true,
 }: {
   clientId?: string;
   scope: ReviewScope;
   signoff: ClientReviewSignoff | null;
   isStale: boolean;
+  /** False until the sign-off row has loaded. Draft is not the loading state. */
+  known?: boolean;
 }) {
   const { market } = useMarketFormat();
   const loadWorkflow = useServerFn(getDeliverableWorkflow);
@@ -51,6 +54,18 @@ export function SignoffStatusChip({
       cancelled = true;
     };
   }, [clientId, scope, shown, loadWorkflow]);
+
+  if (!known) {
+    return (
+      <p
+        data-signoff-status
+        data-signoff-scope={scope}
+        data-signoff-pending="true"
+        className="answer-strip__status"
+        aria-busy="true"
+      />
+    );
+  }
 
   const kind = signoffStatusKind({
     hasSignoff: Boolean(shown),

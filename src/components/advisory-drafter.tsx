@@ -204,7 +204,7 @@ export function AdvisoryDrafter({
   const downloadedPack = (lastSent?.subject ?? "").match(/advisory pack v(\d+)/i);
   const sentence =
     lastSent?.channel === "pdf_download" && sentOn && sentOn !== "—"
-      ? `Last shared: ${
+      ? `Last downloaded: ${
           downloadedPack
             ? `Advisory pack v${downloadedPack[1]} PDF downloaded`
             : lastSent.report_key === "advisory_pack"

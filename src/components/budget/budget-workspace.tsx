@@ -69,6 +69,7 @@ export function BudgetWorkspace({
   isStale = false,
   canSign = false,
   onSignoffChange,
+  signoffKnown = true,
   drawer = null,
   lens,
   onLensChange,
@@ -88,6 +89,7 @@ export function BudgetWorkspace({
   isStale?: boolean;
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  signoffKnown?: boolean;
   drawer?: ReactNode;
   lens?: BudgetLens;
   onLensChange?: (next: BudgetLens) => void;
@@ -116,6 +118,7 @@ export function BudgetWorkspace({
           isStale={isStale}
           canSign={canSign}
           onSignoffChange={onSignoffChange}
+          signoffKnown={signoffKnown}
           drawer={nestInDrawer(drawer, "Budget vs actuals", variance)}
           lens={lens}
           onLensChange={onLensChange}
@@ -140,6 +143,7 @@ export function BudgetWorkspace({
       isStale={isStale}
       canSign={canSign}
       onSignoffChange={onSignoffChange}
+      signoffKnown={signoffKnown}
       drawer={drawer}
       variance={variance}
       lens={lens}
@@ -253,6 +257,7 @@ function BudgetComplexWorkspace({
   isStale = false,
   canSign = false,
   onSignoffChange,
+  signoffKnown = true,
   drawer = null,
   variance = null,
   lens,
@@ -272,6 +277,7 @@ function BudgetComplexWorkspace({
   isStale?: boolean;
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  signoffKnown?: boolean;
   drawer?: ReactNode;
   variance?: ReactNode;
   lens?: BudgetLens;
@@ -360,6 +366,7 @@ function BudgetComplexWorkspace({
         isStale={isStale}
         canSign={canSign}
         onSignoffChange={onSignoffChange}
+        signoffKnown={signoffKnown}
         extraActions={
           <BudgetPdfExportButton
             quiet

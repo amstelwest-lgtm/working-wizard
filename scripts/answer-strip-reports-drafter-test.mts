@@ -115,6 +115,8 @@ assert.equal(drafter.includes("share opened"), false, "the share-opened aside is
 assert.ok(drafter.includes("<PrecardCapCard"), "the drafter still renders PrecardCapCard");
 assert.ok(drafter.includes("data-draft"), "Draft stays the gold control");
 assert.ok(drafter.includes("placeholder="), "the steer input stays");
+assert.ok(drafter.includes("Last downloaded:"), "a PDF download is not a share");
+assert.equal(drafter.includes("Last shared:"), false, "a download is not labelled Last shared");
 
 const precardSites = [
   "src/components/advisory-pack-panel.tsx",

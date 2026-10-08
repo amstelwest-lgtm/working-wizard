@@ -50,6 +50,28 @@ export function booksSyncSubline(stamp: string | null | undefined): string | nul
   return `Synced ${date}`;
 }
 
+const LEDGER_SYNC_SOURCES = new Set(["xero", "qbo", "sage"]);
+
+/**
+ * Books tile source line. Same source as the figure chips.
+ * "Synced" is only for a ledger sync. An upload says "Uploaded statement".
+ */
+export function booksTileLines(input: {
+  period?: string | null;
+  source?: string | null;
+  sourceLabel?: string | null;
+  syncedStamp?: string | null;
+}): { figure: string | null; detail: string | null } {
+  const period = input.period?.trim() || null;
+  const source = input.source?.trim() || "";
+  if (LEDGER_SYNC_SOURCES.has(source)) {
+    return { figure: period, detail: booksSyncSubline(input.syncedStamp) };
+  }
+  const label = input.sourceLabel?.trim() || null;
+  if (period && label) return { figure: `${period} · ${label}`, detail: null };
+  return { figure: period ?? label, detail: null };
+}
+
 /** Same flag as the gold button: statements look current and no statement gap is open. */
 export function booksAreCurrent(input: {
   freshness: string;

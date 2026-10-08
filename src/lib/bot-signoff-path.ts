@@ -122,7 +122,7 @@ export function botSignoffDestination(
   cta: BotSignoffCta,
   why?: string | null,
 ): { tab: string; section?: "pack"; coach?: "actions"; why?: string } {
-  // Pack sign-off stays on the pack section. ?tab=advisory now opens the drafter.
+  // Pack sign-off stays on the pack section. ?tab=advisory opens that pack.
   const dest: { tab: string; section?: "pack"; coach?: "actions"; why?: string } =
     cta.tab === "advisory" ? { tab: "deliverables", section: "pack" } : { tab: cta.tab };
   if (cta.coach) dest.coach = cta.coach;

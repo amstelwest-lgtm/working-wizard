@@ -470,6 +470,7 @@ export function CashForecastPanel({
   hideInlineSignOff,
   signoffStale,
   signoff: signoffProp,
+  signoffKnown = true,
   onSignoffChange,
   reloadToken,
   openBankUploadToken,
@@ -491,6 +492,8 @@ export function CashForecastPanel({
   /** Parent's figure check. Falls back to the forecast timestamp. */
   signoffStale?: boolean;
   signoff?: ClientReviewSignoff | null;
+  /** False until the parent sign-off fetch has settled. */
+  signoffKnown?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   /** Bump to re-load cashflow from Supabase (e.g. after bank→cash publish). */
   reloadToken?: number;
@@ -1632,6 +1635,7 @@ export function CashForecastPanel({
           scope="cash_forecast"
           signoff={forecastSignoff}
           isStale={forecastStale}
+          known={signoffKnown}
         />
       </div>
     </section>

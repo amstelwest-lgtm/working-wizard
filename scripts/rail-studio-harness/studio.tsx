@@ -2,7 +2,7 @@
  * Mounts the accountant studio shell from the client route, with fixture panes.
  * Supabase is the local stub. Nothing here has a project URL.
  */
-import { Component, useRef, useState, type ReactNode } from "react";
+import { Component, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
@@ -49,7 +49,9 @@ import { planAnswerSentence, type PackAnswerStatus } from "@/lib/plan-pack-copy"
 import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { buildFinancialSnapshot, healthHeadline } from "@/lib/client-briefing";
 import { buildVarianceChips } from "@/lib/prior-period";
-import { booksCoverPeriod, booksSyncSubline } from "@/lib/books-answer";
+import { booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
+import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
+import { overviewCashTileFigure } from "@/lib/cash-forecast-parity";
 import { statementArApMoney } from "@/components/statement-arap-fallback";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import { createBudgetDocument } from "@/lib/budget.months";
@@ -69,7 +71,7 @@ import {
 import { NextStepCard } from "@/components/next-step-card";
 import { NoteLayer } from "@/components/note-layer";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
-import { currencySymbol, ZA_MARKET } from "@/lib/market";
+import { currencySymbol, formatMoneyCompact, ZA_MARKET } from "@/lib/market";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { preferStatementPeriod, readStatementMeta } from "@/lib/statement-period";
 import { derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
@@ -77,7 +79,12 @@ import { FeatureFinder } from "@/components/feature-finder";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { SectionCard } from "@/components/primitives";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
-import { accountantClientTabSearch, legacyPaneForSearch } from "@/lib/client-route-search";
+import {
+  accountantClientTabSearch,
+  legacyHashDestination,
+  legacyPaneForSearch,
+  routerHash,
+} from "@/lib/client-route-search";
 import {
   CLIENT_RAIL,
   ClientRailButton,
@@ -127,6 +134,18 @@ export function RailStudio() {
     view?: string;
   };
   const navigate = useNavigate();
+  useLayoutEffect(() => {
+    const hash = window.location.hash;
+    const next = legacyHashDestination({ tab: search.tab, section: search.section }, hash);
+    if (!next) return;
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => accountantClientTabSearch(prev, next.tab, { section: next.section }),
+      hash: routerHash(hash),
+      replace: true,
+    });
+  }, [search.tab, search.section, clientId, navigate]);
   const pane = legacyPaneForSearch(search) ?? "overview";
   const group = railGroup(pane);
 
@@ -309,6 +328,7 @@ function BriefingPane() {
         clientId={CLIENT_ID}
         clientName="Harbour Glass"
         signoff={null}
+        signoffKnown={false}
         isStale={false}
         onSignoffChange={() => {}}
         extraActions={
@@ -435,6 +455,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
         clientId={clientId}
         clientName="Harbour Glass"
         signoff={null}
+        signoffKnown={false}
         isStale={false}
         onSignoffChange={() => {}}
         canSign
@@ -508,6 +529,7 @@ function ProfitPane({ clientId }: { clientId: string }) {
         clientId={clientId}
         clientName="Harbour Glass"
         signoff={null}
+        signoffKnown={false}
         isStale={false}
         onSignoffChange={() => {}}
         canSign
@@ -639,16 +661,28 @@ function harnessOverviewCards(snapshot: readonly { key: string; value: string }[
     periodStart: "2026-09-01",
     periodEnd: "2026-09-30",
   });
-  let budget: string | null = null;
-  if (compared && budgetSeededFromStatement(compared)) {
-    budget = "Budget seeded from these figures";
-  } else if (compared) {
-    budget = `Revenue ${fmtBudgetMoney(compared.revenue, ZA_MARKET)} vs budget ${fmtBudgetMoney(compared.budgetRevenue, ZA_MARKET)}`;
-  }
+  const budget = overviewBudgetTileFigure({
+    budgetRevenue: compared?.budgetRevenue,
+    actualRevenue: compared?.revenue,
+    seeded: budgetSeededFromStatement(compared),
+    money: (amount) => fmtBudgetMoney(amount, ZA_MARKET),
+  });
+  const books = booksTileLines({
+    period: booksPeriod ?? snapshotFigure(marginSnapshot, "updated"),
+    source: HARNESS_FINANCIALS.statementSource,
+    sourceLabel: figureSourceChipLabel(HARNESS_FINANCIALS.statementSource),
+    syncedStamp: snapshotFigure(marginSnapshot, "updated"),
+  });
   return overviewSectionCards(
     {
       health: healthHeadline(72, "Stable"),
-      cash: snapshotFigure(snapshot, "runway") ?? snapshotFigure(snapshot, "cash"),
+      cash: overviewCashTileFigure({
+        headline: "No shortfall",
+        opening: Number(HARNESS_FINANCIALS.cash),
+        lowest: Number(HARNESS_FINANCIALS.cash),
+        lowestIsOpening: true,
+        money: (amount) => formatMoneyCompact(amount, ZA_MARKET),
+      }),
       profit: snapshotFigure(marginSnapshot, "om"),
       collections: storedAmountFigure(HARNESS_ARAP.receivables, (amount) =>
         statementArApMoney(amount, ZA_MARKET),
@@ -658,11 +692,9 @@ function harnessOverviewCards(snapshot: readonly { key: string; value: string }[
       ),
       budget,
       moves: harnessMoves()[0]?.title ?? null,
-      books: booksPeriod ?? snapshotFigure(marginSnapshot, "updated"),
+      books: books.figure,
     },
-    booksPeriod
-      ? { books: booksSyncSubline(snapshotFigure(marginSnapshot, "updated")) }
-      : undefined,
+    books.detail ? { books: books.detail } : undefined,
   );
 }
 
@@ -812,6 +844,7 @@ function CashPane({ clientId }: { clientId: string }) {
             clientName="Harbour Glass"
             canSign
             hideReadOnlyStamp
+            signoffKnown={false}
             statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
           />
         </PaneBoundary>
@@ -884,6 +917,7 @@ function BudgetPane({ clientId }: { clientId: string }) {
           role="accountant"
           canSign
           hideInlineSignOff
+          signoffKnown={false}
           simplified={false}
           financials={{ revenue: "420000", cogs: "80000", fixedCosts: "140000", cash: "186000" }}
           fyStartMonthDefault={3}

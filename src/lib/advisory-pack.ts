@@ -21,6 +21,7 @@ import type { Json } from "../integrations/supabase/types.ts";
 import {
   assessClientMetrics,
   RUNWAY_INSUFFICIENT_LABEL,
+  RUNWAY_PROFITABLE_LABEL,
   runwayDisplayLabel,
 } from "./client-metrics.ts";
 import {
@@ -684,9 +685,22 @@ export function packRunwayPhrase(label: string | null | undefined): string | nul
 }
 
 function forecastBodyMentionsRunway(body: string, label: string): boolean {
-  if (body.includes(label)) return true;
+  if (label && body.includes(label)) return true;
   const phrase = packRunwayPhrase(label);
-  return phrase != null && body.includes(phrase);
+  if (phrase != null && body.includes(phrase)) return true;
+  // The cash strip replaces the long P&L sentence with "No shortfall".
+  // A pack that uses that same headline still matches the live label.
+  if (label === RUNWAY_PROFITABLE_LABEL || label === RUNWAY_INSUFFICIENT_LABEL) {
+    return (
+      body.includes("No shortfall") ||
+      body.includes("Cash generative") ||
+      body.includes("Below floor") ||
+      /\bProfitable\b/.test(body) ||
+      /\d+ weeks? below/.test(body) ||
+      /\d+\+ wks/.test(body)
+    );
+  }
+  return false;
 }
 
 function forecastLowPhrase(amount: number, week: number | null, money: (n: number) => string): string {
@@ -982,17 +996,16 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     );
   }
 
-  const runwayHeadline = cashStory?.headline ?? null;
-  const runwayLabel = input.runwayLabel?.trim() ?? "";
-  const runwayExtra = runwayLabel && runwayLabel !== runwayHeadline ? ` ${runwayLabel}.` : "";
+  const runwayHeadline = cashStory?.headline?.trim() ?? "";
+  const runwayClause = runwayHeadline ? ` ${runwayHeadline}.` : "";
   const forecastBody = !forecast
     ? "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
     : forecast.openingBalance === null || forecast.openingBalance === 0
       ? `The forecast has no opening bank balance, so its runway starts from zero and the ${
           forecast.lowestWeek == null ? "opening" : `week-${forecast.lowestWeek}`
-        } low of ${compact(forecast.lowestClosing ?? 0)} is understated by whatever is actually in the bank.${
-          runwayHeadline ? ` ${runwayHeadline}.` : ""
-        }${runwayExtra}${cashStatus ? ` ${cashStatus}` : ""}`
+        } low of ${compact(forecast.lowestClosing ?? 0)} is understated by whatever is actually in the bank.${runwayClause}${
+          cashStatus ? ` ${cashStatus}` : ""
+        }`
       : `Opening balance ${money(forecast.openingBalance)}; lowest point ${forecastLowPhrase(
           forecast.lowestClosing ?? 0,
           forecast.lowestWeek,
@@ -1001,9 +1014,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
           forecast.lowestWeek == null
             ? `, across ${forecast.horizonWeeks} weeks`
             : ` of ${forecast.horizonWeeks}`
-        }.${runwayHeadline ? ` ${runwayHeadline}.` : ""}${runwayExtra}${
-          cashStatus ? ` ${cashStatus}` : ""
-        } The forecast uses the saved assumptions; change them in the cash tab and regenerate.`;
+        }.${runwayClause}${cashStatus ? ` ${cashStatus}` : ""} The forecast uses the saved assumptions; change them in the cash tab and regenerate.`;
 
   const recBullets = recs.map(
     (r) =>

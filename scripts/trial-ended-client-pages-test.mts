@@ -33,9 +33,14 @@ assert(
 
 const gateSrc = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
 assert(gateSrc.includes("applyPortalTheme(resolvePortalTheme())"), "the billing check applies the saved theme");
+const billingGate = gateSrc.slice(gateSrc.indexOf('data-billing-gate="pending"') - 80, gateSrc.indexOf('data-billing-gate="pending"') + 280);
 assert(
-  gateSrc.includes("Checking billing…") && gateSrc.includes("bg-background"),
+  gateSrc.includes('data-billing-gate="pending"') && billingGate.includes("bg-background"),
   "the billing check uses the theme surface",
+);
+assert(
+  !gateSrc.includes("Checking billing…") && !billingGate.includes("min-h-screen"),
+  "a paid firm does not get a full-screen billing flash",
 );
 
 const settingsSrc = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");

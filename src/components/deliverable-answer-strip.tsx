@@ -32,6 +32,7 @@ export function DeliverableAnswerStrip({
   canSign = false,
   extraActions = null,
   signoffVerbOnly = false,
+  signoffKnown = true,
 }: {
   heading: string;
   sentence: string;
@@ -46,6 +47,8 @@ export function DeliverableAnswerStrip({
   extraActions?: ReactNode;
   /** "Sign off" without the scope name. */
   signoffVerbOnly?: boolean;
+  /** False while the sign-off fetch is still in flight. */
+  signoffKnown?: boolean;
 }) {
   return (
     <section className="answer-strip" data-answer-strip>
@@ -74,7 +77,13 @@ export function DeliverableAnswerStrip({
             {chip}
           </span>
         ) : null}
-        <SignoffStatusChip clientId={clientId} scope={scope} signoff={signoff} isStale={isStale} />
+        <SignoffStatusChip
+          clientId={clientId}
+          scope={scope}
+          signoff={signoff}
+          isStale={isStale}
+          known={signoffKnown}
+        />
       </div>
     </section>
   );
