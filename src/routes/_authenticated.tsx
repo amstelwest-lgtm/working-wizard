@@ -9,6 +9,7 @@ import {
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
+import { loadFirmClientGateContext } from "@/lib/firm-client-gate";
 import { decideFirmBillingPathGate, isFirmProductPath } from "@/lib/stripe-entitlement";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -80,12 +81,16 @@ function AuthGate() {
       } catch {
         if (cancelled) return;
       }
+      const clients = await loadFirmClientGateContext();
+      if (cancelled) return;
       const gate = decideFirmBillingPathGate({
         pathname,
         isAccountantFirmUser: true,
         isMilonItMember: false,
         entitled,
         insightSeen: readInsightSeen(),
+        firmClientCount: clients.firmClientCount,
+        firstClientId: clients.firstClientId,
       });
       if (gate === "allow") {
         setFirmGate("allow");

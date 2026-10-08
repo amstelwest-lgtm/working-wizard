@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import {
@@ -110,12 +111,13 @@ function BillingRequiredPage() {
           >
             Resume Checkout
           </Link>
-          <Link
-            to="/"
+          <a
+            href="/#pricing"
             className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
           >
             Back to pricing
-          </Link>
+          </a>
+          <BillingSignOutButton />
         </div>
       </div>
     </div>

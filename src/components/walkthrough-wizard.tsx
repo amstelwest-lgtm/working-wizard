@@ -215,6 +215,13 @@ const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
 
 const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
+    tab: "overview",
+    targetId: "overview-health",
+    section: "Figures",
+    title: "These are the figures",
+    body: "The health score is on screen, from the statement you imported. Review it here. A card starts the 14-day free trial when you want it.",
+  },
+  {
     tab: "ask",
     targetId: "ask-ai-accountant",
     section: "Milōn Bot",

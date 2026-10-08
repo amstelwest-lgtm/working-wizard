@@ -478,43 +478,27 @@ function LandingPage() {
       // cannot race the invite effect and dump the user onto /dashboard — and
       // so a Google return to `/` still keeps the owner-seat invite.
       if (pendingInviteTokenFromUrl() || inviteClientId || peekPendingOwnerInvite()) return;
+      const hash = window.location.hash.replace(/^#/, "");
       const pendingCheckout =
         peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
+      if (pendingCheckout) stashPendingCheckout(pendingCheckout);
+      // Pricing must stay on this page. A signed-in firm is not forwarded into Checkout.
+      if (hash === "pricing") return;
       if (pendingCheckout) {
-        stashPendingCheckout(pendingCheckout);
         if (!cancelled) {
-          if (readInsightSeen()) {
-            navigate({
-              to: "/billing/start",
-              search: billingStartSearch(pendingCheckout),
-              replace: true,
-            });
-          } else {
-            setPortalIntent("accountant");
-            navigate({ to: "/dashboard", replace: true });
-          }
+          setPortalIntent("accountant");
+          navigate({ to: "/dashboard", replace: true });
         }
         return;
       }
-      const hash = window.location.hash.replace(/^#/, "");
-      if (hash === "register" || hash === "pricing") {
+      if (hash === "register") {
         try {
           const { listUserFirms } = await import("@/lib/firm-brand");
           const firms = await listUserFirms(user.id);
           if (firms.some((f) => f.owner_user_id === user.id)) {
-            const pending = firmSignupCheckoutIntent();
-            stashPendingCheckout(pending);
             if (!cancelled) {
-              if (readInsightSeen()) {
-                navigate({
-                  to: "/billing/start",
-                  search: billingStartSearch(pending),
-                  replace: true,
-                });
-              } else {
-                setPortalIntent("accountant");
-                navigate({ to: "/dashboard", replace: true });
-              }
+              setPortalIntent("accountant");
+              navigate({ to: "/dashboard", replace: true });
             }
             return;
           }
