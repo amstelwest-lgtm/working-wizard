@@ -544,6 +544,8 @@ export function ReviewSignoffButton({
           {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
           {workflow.changeComment ? ` · ${workflow.changeComment}` : ""}
         </p>
+      ) : !shownSignoff ? (
+        <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Not signed off</p>
       ) : null}
       <div className="flex flex-wrap justify-end gap-2">
         {workflow == null ||

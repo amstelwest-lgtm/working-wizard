@@ -87,6 +87,6 @@ const mergedPub = buildCashflowPublishPayload({
 });
 assert(mergedPub.openingBalance === "999", "merge can keep old opening");
 assert(mergedPub.revenue.some((r) => r.name === "Old sales"), "merge keeps old revenue");
-assert(mergedPub.revAdj === 90, "merge keeps scenario knobs");
+assert(mergedPub.revAdj === 100 && mergedPub.collectDelay === 0, "merge does not keep scenario knobs");
 
 console.log("ok — workspace merge/split/move + publish policies");

@@ -50,6 +50,7 @@ export {
   formatSignedOffDateTime,
   signedOffTimeZone,
   formatMoney,
+  formatMoneyChartTick,
   formatMoneyCompact,
   formatMoneyUnit,
   formatMonthLabel,

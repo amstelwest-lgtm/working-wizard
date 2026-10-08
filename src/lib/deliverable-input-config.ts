@@ -116,6 +116,10 @@ export type DeliverableInputContext = {
   collectDelay?: number;
   revGrowthPct?: number;
   openingBalance?: number | string | null;
+  /** Known line-item source for the cash checklist. Blank when unknown. */
+  cashLineSource?: "Statement" | "Bank" | "Sync" | "Manual" | "Estimate" | null;
+  /** Live floor sentence. Null hides the noted-only R50,000 threshold row. */
+  liveFloorLabel?: string | null;
   openRatioQueryLabels?: string[];
   productMixIncomplete?: boolean;
   hasPriorPeriod?: boolean;
@@ -310,6 +314,21 @@ export function defaultDaysAp(ctx: DeliverableInputContext): number {
 
 function source(id: string, label: string, available: boolean, hint?: string): DeliverableSource {
   return { id, label, available, hint };
+}
+
+/** Chip for a cash checklist row when the source is actually known. */
+export function cashChecklistSourceChip(
+  sourceId: string,
+  ctx: DeliverableInputContext,
+): "Statement" | "Bank" | "Sync" | "Manual" | "Estimate" | null {
+  if (sourceId.startsWith("bank:")) return "Bank";
+  if (sourceId === "bank_accounts") {
+    if (ctx.cashLineSource === "Bank" || ctx.cashLineSource === "Sync") return ctx.cashLineSource;
+    if (ctx.hasBankDraft || (ctx.bankAccounts?.length ?? 0) > 0) return "Bank";
+  }
+  if (sourceId === "pl" && ctx.cashLineSource === "Statement") return "Statement";
+  if (sourceId === "pl" && ctx.cashLineSource === "Estimate") return "Estimate";
+  return null;
 }
 
 function cashSources(ctx: DeliverableInputContext): DeliverableSource[] {
@@ -1098,6 +1117,8 @@ export function deliverableInputContextKey(
     collectDelay: ctx.collectDelay ?? null,
     revGrowthPct: ctx.revGrowthPct ?? null,
     opening: ctx.openingBalance ?? null,
+    cashLineSource: ctx.cashLineSource ?? null,
+    liveFloorLabel: ctx.liveFloorLabel ?? null,
     wc: ctx.budgetWc ?? null,
     budgetSeasonality: ctx.budgetSeasonality ?? null,
     season: ctx.operatingProfile?.seasonality ?? null,

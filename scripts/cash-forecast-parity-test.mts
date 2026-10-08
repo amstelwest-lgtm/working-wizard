@@ -15,12 +15,18 @@ import {
 import {
   canonicalForecastFloor,
   forecastFloorPosition,
+  forecastLinesSourceLabel,
+  forecastWeeksBelowReadout,
   cashEmptyPresentation,
   forecastLowestPoint,
   forecastPositionPhrase,
   forecastRunwayHeadlineShared,
   openingSourceLabel,
 } from "../src/lib/cash-forecast-parity";
+import { formatMoneyChartTick } from "../src/lib/market/format.ts";
+import { resolveMarket } from "../src/lib/market/resolve.ts";
+import { cashForecastNarrative } from "../src/reports/narrative.ts";
+import { cashChecklistSourceChip } from "../src/lib/deliverable-input-config.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -141,5 +147,91 @@ const cashTab = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8"
 const nothingPhrases = cashTab.split("Nothing is forecast yet").length - 1;
 assert(nothingPhrases === 1, `empty copy is said once, found ${nothingPhrases}`);
 assert(cashTab.includes("cashEmptyPresentation"), "the tab uses the empty-state helper");
+assert(!cashTab.includes("baseResetRef"), "reset to base does not schedule a database write");
+assert(!cashTab.includes("storedCollectDelay"), "opening the tab does not restore a saved collection delay");
+assert(cashTab.includes("baseCashflow({})"), "a real base save writes base knobs, not the session scenario");
+
+const pdfSrc = readFileSync(resolve("src/reports/cash-forecast.tsx"), "utf8");
+assert(pdfSrc.includes("forecastFloorPosition"), "PDF uses the shared floor position");
+assert(pdfSrc.includes("forecastWeeksBelowReadout"), "PDF weeks-below uses the shared readout");
+assert(pdfSrc.includes('label: "Base forecast"'), "base export is not labelled a scenario");
+assert(
+  pdfSrc.includes("draft={!isDemo && !sample && !reviewSignoff}"),
+  "unsigned cash PDF gets the draft treatment",
+);
+const reportsSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+assert(reportsSrc.includes('scenario: "base"'), "the reports studio exports the base forecast");
+const signoffSrc = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
+assert(signoffSrc.includes("Not signed off"), "the reports list shows an unsigned forecast");
+
+const us = resolveMarket({ country: "US", regionCode: "NY" });
+const yankeesCopy = cashForecastNarrative(
+  {
+    runwayWeeks: null,
+    cashGenerative: true,
+    minBalance: 7430,
+    threshold: 7500,
+    weeksBelow: 0,
+    firstBreachWeek: null,
+    opensBelow: true,
+  },
+  undefined,
+  us,
+);
+assert(/below the \$7\.5k minimum/i.test(yankeesCopy), yankeesCopy);
+assert(!/above the \$7\.5k minimum/i.test(yankeesCopy), yankeesCopy);
+assert(!/cash generative/i.test(yankeesCopy), yankeesCopy);
+assert(/\$7\.4k/.test(yankeesCopy), yankeesCopy);
+
+const yankeesWeeks = forecastWeeksBelowReadout(
+  forecastFloorPosition({ opening: 7430, closings: [8000, 8200], floor: 7500 }),
+);
+assert(yankeesWeeks.value === "Below floor", yankeesWeeks.value);
+assert(yankeesWeeks.note === "opening is under the floor", yankeesWeeks.note);
+assert(!/none projected/i.test(yankeesWeeks.note), yankeesWeeks.note);
+
+const clearWeeks = forecastWeeksBelowReadout(
+  forecastFloorPosition({ opening: 128450, closings: [130000, 140000], floor: 7600 }),
+);
+assert(clearWeeks.value === "0" && clearWeeks.note === "none projected", JSON.stringify(clearWeeks));
+
+const aboveFloor = forecastRunwayHeadlineShared({
+  opening: 128450,
+  closings: [130000, 140000],
+  floor: 7600,
+  runwayLabel: RUNWAY_PROFITABLE_LABEL,
+  cashGenerative: false,
+});
+assert(aboveFloor.headline === "No shortfall", aboveFloor.headline);
+assert(aboveFloor.note === "above the floor", aboveFloor.note);
+assert(!aboveFloor.headline.includes("Profitable"), aboveFloor.headline);
+
+const generativeTile = forecastRunwayHeadlineShared({
+  opening: 128450,
+  closings: [130000],
+  floor: 7600,
+  cashGenerative: true,
+  runwayLabel: RUNWAY_PROFITABLE_LABEL,
+});
+assert(generativeTile.headline === "Cash generative", generativeTile.headline);
+
+assert(forecastLinesSourceLabel({ seededFromBanksAt: "2026-10-01" }) === "Bank", "bank lines");
+assert(forecastLinesSourceLabel({ forecastLinesSource: "qbo-bank-activity" }) === "Sync", "sync lines");
+assert(forecastLinesSourceLabel({ openingBalance: "10" }) === null, "untagged lines stay blank");
+assert(
+  cashChecklistSourceChip("bank:operating", { cashLineSource: "Sync" }) === "Bank",
+  "a named bank account is Bank",
+);
+assert(
+  cashChecklistSourceChip("bank_accounts", { cashLineSource: "Sync" }) === "Sync",
+  "the bank checklist uses the known line source",
+);
+assert(cashChecklistSourceChip("pl", {}) === null, "an unknown P&L source stays blank");
+
+const zaTick = formatMoneyChartTick(30000);
+assert(zaTick === "R30.0k", zaTick);
+assert(!zaTick.includes(" "), "axis tick has no breakable space");
+const usTick = formatMoneyChartTick(30000, us);
+assert(usTick === "$30.0k", usTick);
 
 console.log("cash-forecast-parity-test: all assertions passed");

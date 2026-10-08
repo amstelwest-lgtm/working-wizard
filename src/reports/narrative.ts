@@ -180,21 +180,30 @@ export function cashForecastNarrative(
     weeksBelow: number;
     /** 1-based week of the first closing under the minimum. */
     firstBreachWeek?: number | null;
+    /** Opening itself is under the floor. Closings may still clear it. */
+    opensBelow?: boolean;
   },
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
-  const runwayBit = d.cashGenerative
-    ? `The business is cash generative, so runway is not counted down to zero`
-    : d.runwayWeeks == null
-      ? `Runway cannot be read from the figures yet`
-      : d.runwayWeeks >= 13
-        ? `Projected runway covers the full 13-week horizon`
-        : `Projected runway is ${d.runwayWeeks} week${d.runwayWeeks === 1 ? "" : "s"}`;
   const floor = fmtRandCompact(d.threshold, market);
   const trough = fmtRandCompact(d.minBalance, market);
-  const lowBit =
-    d.weeksBelow > 0 && d.firstBreachWeek != null
+  const closingDip = d.weeksBelow > 0 && d.firstBreachWeek != null;
+  const openingUnderFloor =
+    !closingDip &&
+    (d.opensBelow === true || (d.opensBelow !== false && d.minBalance < d.threshold));
+  const runwayBit = openingUnderFloor
+    ? `The opening balance is under the ${floor} minimum`
+    : d.cashGenerative
+      ? `The business is cash generative, so runway is not counted down to zero`
+      : d.runwayWeeks == null
+        ? `Runway cannot be read from the figures yet`
+        : d.runwayWeeks >= 13
+          ? `Projected runway covers the full 13-week horizon`
+          : `Projected runway is ${d.runwayWeeks} week${d.runwayWeeks === 1 ? "" : "s"}`;
+  const lowBit = openingUnderFloor
+    ? ` The lowest projected balance is ${trough}, below the ${floor} minimum.`
+    : closingDip
       ? ` The balance first dips below the ${floor} minimum in week ${d.firstBreachWeek} and sits under that line for ${d.weeksBelow} week${d.weeksBelow === 1 ? "" : "s"}, bottoming out at ${trough}.`
       : ` The lowest projected balance is ${trough}, above the ${floor} minimum across the horizon.`;
   return withCoda(`${runwayBit}.${lowBit}`, profile, "forecast", market);

@@ -19,6 +19,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   buildDeliverableInputDefinition,
+  cashChecklistSourceChip,
   computedDaysAp,
   computedDaysAr,
   configNeedsRefresh,
@@ -38,6 +39,8 @@ import {
 } from "@/lib/deliverable-input-config.store";
 
 const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
+const SOURCE_CHIP_CLS =
+  "ml-2 rounded-full border border-[#d4a550]/40 bg-[#d4a550]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]";
 const INPUT_CLS =
   "h-8 border-amber-900/15 bg-white/80 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100";
 
@@ -173,6 +176,7 @@ export function DeliverableInputConfig({
           <ul className="grid gap-2 sm:grid-cols-2">
             {def.sources.map((src) => {
               const checked = state.checkedSources[src.id] !== false;
+              const chip = deliverableId === "cash" ? cashChecklistSourceChip(src.id, context) : null;
               return (
                 <li
                   key={src.id}
@@ -190,6 +194,7 @@ export function DeliverableInputConfig({
                   >
                     <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">
                       {src.label}
+                      {chip ? <span className={SOURCE_CHIP_CLS}>{chip}</span> : null}
                     </span>
                     <span className="mt-0.5 block text-[11px] leading-snug text-slate-500 dark:text-slate-400">
                       {src.available
@@ -234,6 +239,28 @@ export function DeliverableInputConfig({
             <ul className="space-y-3">
               {def.assumptions.map((a) => {
                 const value = state.assumptionValues[a.id];
+                if (a.id === "runwayThreshold") {
+                  if (!context.liveFloorLabel) return null;
+                  return (
+                    <li
+                      key={a.id}
+                      className="rounded-lg border border-amber-900/10 bg-white/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/40"
+                    >
+                      <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        Minimum cash
+                      </div>
+                      <p className="mt-1 text-[11px] leading-snug text-slate-600 dark:text-slate-300">
+                        {context.liveFloorLabel}
+                      </p>
+                    </li>
+                  );
+                }
+                const sessionChip =
+                  (a.id === "collectDelay" || a.id === "revGrowthPct") &&
+                  typeof value === "number" &&
+                  value !== 0
+                    ? "Manual"
+                    : null;
                 return (
                   <li
                     key={a.id}
@@ -267,6 +294,8 @@ export function DeliverableInputConfig({
                               return daysNeedReview(n) ? `${source} · Review` : source;
                             })()}
                           </span>
+                        ) : sessionChip ? (
+                          <span className={SOURCE_CHIP_CLS}>{sessionChip}</span>
                         ) : null}
                       </Label>
                       {a.kind === "number" ? (

@@ -78,6 +78,14 @@ export function formatMoneyCompact(n: number, market: MoneyMarket = ZA_MARKET): 
 }
 
 /**
+ * Chart axis tick. Compact, and with no breakable space, so "R" and "30.0k"
+ * stay on one line. Recharts wraps tick text on ordinary spaces.
+ */
+export function formatMoneyChartTick(n: number, market: MoneyMarket = ZA_MARKET): string {
+  return formatMoneyCompact(n, market).replace(/ /g, "");
+}
+
+/**
  * Format a calendar day (YYYY-MM-DD) without the firm timezone.
  * `formatDate` applies `market.timezone` to a local or UTC midnight Date,
  * which prints the previous day in the Americas (Oct 5 → Oct 4).

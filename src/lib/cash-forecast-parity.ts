@@ -4,7 +4,11 @@
  * which point is the low, whether cash is under the floor, and the sentence
  * those surfaces share.
  */
-import { forecastMinimumCash } from "./client-metrics.ts";
+import {
+  forecastMinimumCash,
+  RUNWAY_INSUFFICIENT_LABEL,
+  RUNWAY_PROFITABLE_LABEL,
+} from "./client-metrics.ts";
 
 export function canonicalForecastFloor(input: {
   configured?: number | null;
@@ -92,8 +96,10 @@ export function forecastPositionPhrase(input: {
 }
 
 /**
- * Runway tile. Under the floor, every surface says how many weeks sit below
- * it. Above the floor, they use the shared burn / cash-generative label.
+ * Runway tile. The value stays short ("No shortfall", "Cash generative",
+ * "N weeks", "Below floor"). The long "add a cash-flow statement" sentence
+ * is not the value, and it is not used once an opening is set and the
+ * forecast never goes under the floor.
  * A floor dip does not replace that label with "weeks until the first dip".
  */
 export function forecastRunwayHeadlineShared(input: {
@@ -116,10 +122,32 @@ export function forecastRunwayHeadlineShared(input: {
     return { headline: "Below floor", note: "opening is under the floor" };
   }
   if (input.cashGenerative) return { headline: "Cash generative", note: "above the floor" };
-  const label = input.runwayLabel?.trim();
+  const openingSet = Number.isFinite(input.opening) && input.opening !== 0;
+  const label = input.runwayLabel?.trim() ?? "";
+  const asksForData =
+    !label ||
+    label === "—" ||
+    label === RUNWAY_PROFITABLE_LABEL ||
+    label === RUNWAY_INSUFFICIENT_LABEL;
+  if (openingSet && asksForData) return { headline: "No shortfall", note: "above the floor" };
   if (label && label !== "—") return { headline: label, note: "above the floor" };
   const horizon = input.closings.length > 0 ? input.closings.length : 13;
   return { headline: `${horizon}+ wks`, note: "above the floor" };
+}
+
+/**
+ * Weeks-below readout shared by the cash PDF and the tab.
+ * An opening under the floor is not "0 / none projected".
+ */
+export function forecastWeeksBelowReadout(pos: {
+  opensBelow: boolean;
+  firstDipWeek: number | null;
+  weeksBelow: number;
+  staysAbove: boolean;
+}): { value: string; note: string; clear: boolean } {
+  if (pos.staysAbove) return { value: "0", note: "none projected", clear: true };
+  if (pos.weeksBelow > 0) return { value: String(pos.weeksBelow), note: "action required", clear: false };
+  return { value: "Below floor", note: "opening is under the floor", clear: false };
 }
 
 /**
@@ -164,5 +192,22 @@ export function openingSourceLabel(
   }
   if (opening === "statement") return "Statement";
   if (opening === "manual" || opening === "accountant") return "Manual";
+  return null;
+}
+
+/**
+ * Chip for the forecast lines, when the stored source is known.
+ * Untagged lines stay blank — a missing source is not "Manual".
+ */
+export function forecastLinesSourceLabel(
+  cf: Record<string, unknown> | null | undefined,
+): OpeningSourceChip | null {
+  if (!cf) return null;
+  const lines = typeof cf.forecastLinesSource === "string" ? cf.forecastLinesSource : "";
+  if (lines === "pl-estimate") return "Estimate";
+  if (lines === "xero-bank-summary" || lines === "qbo-bank-activity") return "Sync";
+  if (typeof cf.seededFromBanksAt === "string" && cf.seededFromBanksAt.length > 0) return "Bank";
+  if (lines === "statement") return "Statement";
+  if (lines === "manual" || lines === "accountant") return "Manual";
   return null;
 }
