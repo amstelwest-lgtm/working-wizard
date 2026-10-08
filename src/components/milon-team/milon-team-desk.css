@@ -1,0 +1,676 @@
+/* Team desk. Opaque cards on the portal's near-black / gold glass.
+   Layout rules apply only while a desk is actually mounted. */
+
+.milon-desk [data-desk-jobs="true"] {
+  scroll-margin-top: 88px;
+}
+
+.milon-desk-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+}
+
+.accountant-portal:has(.milon-desk) #pane-ask.on {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.milon-desk {
+  --desk-card: rgba(16, 16, 24, 0.94);
+  --desk-ink: var(--ink, #f2ecdc);
+  --desk-dim: var(--ink-dim, #9b958a);
+  --desk-gold: #d4af37;
+  --desk-plate: #101018;
+  font-family: "Noto Sans", "Inter", sans-serif;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  color: var(--desk-ink);
+  min-width: 0;
+}
+
+.milon-desk-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.accountant-portal:has(.milon-desk) .shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  box-sizing: border-box;
+  padding-bottom: 12px;
+  overflow: hidden;
+}
+
+.accountant-portal:has(.milon-desk) .client-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.accountant-portal:has(.milon-desk) .deliverable-main {
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Phone: the segmented rail is its own row. The team header sits below it. */
+@media (max-width: 860px) {
+  .accountant-portal:has(.milon-desk) .client-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 16px;
+    align-content: start;
+  }
+
+  .accountant-portal:has(.milon-desk) .deliverable-rail {
+    grid-row: 1;
+    grid-column: 1;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: auto;
+    min-width: 0;
+  }
+
+  .accountant-portal:has(.milon-desk) .deliverable-main {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .accountant-portal:has(.milon-desk) .deliverable-rail .tab {
+    padding: 8px 6px;
+    font-size: 12px;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+.milon-desk-card {
+  background: var(--desk-card);
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.milon-desk-kicker {
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--desk-gold);
+}
+
+.milon-desk-team {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.milon-desk-team-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.milon-desk-team-bar .milon-desk-kicker {
+  margin: 0;
+}
+
+.milon-desk-all {
+  appearance: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--desk-dim);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.milon-desk-all[aria-checked="true"] {
+  color: #1b1300;
+  background: var(--desk-gold);
+  border-color: var(--desk-gold);
+}
+
+.milon-desk-agents {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.milon-desk-agent {
+  appearance: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+  background: var(--desk-card);
+  border: 1px solid rgba(212, 175, 55, 0.22);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.milon-desk-agent[aria-checked="true"] {
+  border-color: var(--desk-gold);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35), 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.milon-desk-team:has(.milon-desk-agent[aria-checked="true"]) .milon-desk-agent[aria-checked="false"] {
+  opacity: 0.58;
+}
+
+.milon-desk-agent-copy {
+  min-width: 0;
+}
+
+.milon-desk-agent-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.milon-desk-agent-short {
+  display: none;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.milon-desk-ran {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--desk-dim);
+}
+
+.milon-desk-mark {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--desk-gold);
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  box-shadow: 0 0 18px rgba(212, 175, 55, 0.16);
+}
+
+.milon-desk-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.milon-desk-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--desk-dim);
+}
+
+.milon-desk-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: #5ccf8a;
+  box-shadow: 0 0 0 3px rgba(92, 207, 138, 0.18);
+  flex: none;
+}
+
+.milon-desk-status.is-watch i {
+  background: var(--desk-gold);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+}
+
+.milon-desk-status.is-idle i {
+  background: var(--desk-dim);
+  box-shadow: none;
+}
+
+.milon-desk-tag,
+.milon-desk-source {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 99px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: var(--desk-gold);
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.milon-desk-tag {
+  flex: none;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.milon-desk-job-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.milon-desk-signoff {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--desk-card);
+  border: 1px solid var(--desk-gold);
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.12), 0 10px 28px rgba(0, 0, 0, 0.22);
+}
+
+.milon-desk-signoff p {
+  margin: 0;
+  color: var(--desk-gold);
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.milon-desk-row,
+.milon-desk-activity li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.milon-desk-job {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: 8px;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.milon-desk-briefing,
+.milon-desk-jobs,
+.milon-desk-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milon-desk-row {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.milon-desk-figure {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.milon-desk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.milon-desk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+}
+
+.milon-desk-btn {
+  appearance: none;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  width: auto;
+}
+
+.milon-desk-btn.primary {
+  border: none;
+  color: #1b1300;
+  background: linear-gradient(120deg, #ac8400, #d4af37 45%, #fdee79 70%, #d4af37);
+  box-shadow: 0 6px 18px rgba(212, 175, 55, 0.32);
+}
+
+.milon-desk-btn.outline,
+.milon-desk-btn.approve {
+  color: var(--desk-gold);
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+}
+
+.milon-desk-btn.approve {
+  border-color: rgba(212, 175, 55, 0.38);
+  color: rgba(212, 175, 55, 0.92);
+}
+
+.milon-desk-btn.ghost {
+  color: var(--desk-dim);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.milon-desk-btn:focus-visible,
+.milon-desk-all:focus-visible,
+.milon-desk-agent:focus-visible {
+  outline: 2px solid var(--desk-gold);
+  outline-offset: 2px;
+}
+
+.milon-desk-job-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+
+.milon-desk-job .milon-desk-actions {
+  width: 100%;
+  margin-left: 0;
+  justify-content: flex-end;
+}
+
+.milon-desk-job p,
+.milon-desk-job-line p {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.milon-desk-why,
+.milon-desk-muted {
+  margin: 4px 0 0;
+  color: var(--desk-dim);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.milon-desk-ready {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.milon-desk-draft-link {
+  margin-left: 8px;
+  color: var(--desk-gold);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.milon-desk-confirm {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--desk-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.milon-desk-error {
+  margin: 0;
+  color: #e7b4b4;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.milon-desk-spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 99px;
+  border: 2px solid rgba(212, 175, 55, 0.25);
+  border-top-color: var(--desk-gold);
+  animation: milon-desk-spin 0.8s linear infinite;
+}
+
+@keyframes milon-desk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.milon-desk-skel {
+  height: 72px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(212, 175, 55, 0.12);
+}
+
+.milon-desk-activity li {
+  justify-content: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--desk-dim);
+}
+
+.milon-desk-activity time {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+}
+
+.milon-desk-activity a {
+  color: inherit;
+}
+
+.milon-desk-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+html[data-theme="light"] .milon-desk {
+  --desk-card: rgba(255, 252, 245, 0.96);
+  --desk-plate: #f6f3ea;
+}
+
+@media (max-width: 720px) {
+  .milon-desk-card {
+    padding: 14px;
+  }
+
+  .milon-desk-agents {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    gap: 6px;
+  }
+
+  .milon-desk-agent {
+    align-items: center;
+    gap: 6px;
+    border-radius: 14px;
+    padding: 8px 6px;
+    box-shadow: none;
+  }
+
+  .milon-desk-agent .milon-desk-mark,
+  .milon-desk-agent .milon-desk-ran,
+  .milon-desk-agent .milon-desk-status span,
+  .milon-desk-agent-name {
+    display: none;
+  }
+
+  .milon-desk-agent-short {
+    display: block;
+    white-space: nowrap;
+  }
+
+  .milon-desk-agent .milon-desk-status {
+    margin: 0;
+  }
+
+  .milon-desk-job-line {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .milon-desk-job .milon-desk-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .milon-desk-signoff {
+    align-items: flex-start;
+  }
+}
+
+/* The widget under the desk is the composer. Hero copy stays in ask-ai.css. */
+.milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+  background: #101018;
+  border-top: 1px solid rgba(212, 175, 55, 0.32);
+  padding: 8px 2px 2px;
+  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.milon-desk-host #ask-ai-accountant.ask-ai-studio-shell::before {
+  content: none;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-brand,
+.milon-desk-host #ask-ai-accountant .ask-ai-subtitle,
+.milon-desk-host #ask-ai-accountant .ask-ai-blurb,
+.milon-desk-host #ask-ai-accountant .ask-ai-chips,
+.milon-desk-host #ask-ai-accountant .ask-ai-note {
+  display: none;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding: 0;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-thread {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-textarea {
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 44px;
+  max-height: 88px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  border-radius: 14px;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-actions {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-thinking,
+.milon-desk-host #ask-ai-accountant .ask-ai-error {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-send,
+.milon-desk-host #ask-ai-accountant .ask-ai-cancel {
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
+  background: #f6f3ea;
+}
+
+@media (max-width: 767px) {
+  body:has(#pane-ask.on) button[aria-label="Share Milōn"] {
+    display: none !important;
+  }
+}

@@ -28,5 +28,8 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 4179,
     strictPort: true,
+    fs: {
+      allow: [resolve(root, "../..")],
+    },
   },
 });
