@@ -1,7 +1,13 @@
-import type { AgentKey, TeamActivityKind, TeamAgentStatus, TeamBriefingItem } from "@/components/milon-team/types";
+import {
+  AGENT_KEYS,
+  type AgentKey,
+  type TeamActivityKind,
+  type TeamAgentStatus,
+  type TeamBriefingItem,
+} from "@/lib/milon-team-feed";
 
-/** Display order for the team row, the filter, and keyboard movement. */
-export const AGENT_ORDER: readonly AgentKey[] = ["bookkeeper", "analyst", "advisor"];
+/** Display order follows Eng1's key list. Names for those keys live only here. */
+export const AGENT_ORDER: readonly AgentKey[] = AGENT_KEYS;
 
 const DISPLAY_NAME: Record<AgentKey, string> = {
   bookkeeper: "Milōn Bookkeeper",

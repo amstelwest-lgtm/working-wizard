@@ -258,7 +258,7 @@ import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { reviewFiguresChanged, signedHealthFromHistory } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
-import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
+import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 
@@ -1554,7 +1554,7 @@ function ClientView() {
     if (!client) return;
     let cancelled = false;
     const el = document.getElementById("ask-ai-accountant");
-    if (!el) return;
+    if (!el || el.dataset.teamDesk === "1") return;
     // Always refresh the client context — submit() reads dataset.clientId at
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
@@ -3163,14 +3163,9 @@ function ClientView() {
 
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-                  <MilonTeamPane
-                    clientId={clientId}
-                    fallback={
-                      <SectionCard className="card hero-card ask-ai-studio-shell">
-                        <div id="ask-ai-accountant" />
-                      </SectionCard>
-                    }
-                  />
+                  <div id="ask-ai-accountant" data-team-desk="1" className="ask-ai-studio-shell">
+                    <MilonTeamPane clientId={clientId} />
+                  </div>
                 </div>
 
                 {/* ===== RATIOS TAB ===== */}

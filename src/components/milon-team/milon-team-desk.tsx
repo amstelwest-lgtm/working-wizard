@@ -11,7 +11,8 @@ import {
   formatAgo,
   teamAgentHeaderStatus,
 } from "@/lib/milon-team";
-import type { AgentKey, MilonTeamFeedApi, TeamJob } from "./types";
+import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
+import type { AgentKey, TeamJob } from "@/lib/milon-team-feed";
 import "./milon-team-desk.css";
 
 type FilterKey = "all" | AgentKey;
@@ -49,6 +50,8 @@ export function MilonTeamDesk({
   const [held, setHeld] = useState(false);
   const [blocked, setBlocked] = useState<Record<string, "precard_cap">>({});
   const [failures, setFailures] = useState<Record<string, string>>({});
+  const [opened, setOpened] = useState<Record<string, string>>({});
+  const [dropped, setDropped] = useState<Record<string, true>>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
 
@@ -86,12 +89,24 @@ export function MilonTeamDesk({
       return next;
     });
     const result = await feed.approveJob(job.id);
-    if (result.ok) return;
+    if (result.ok) {
+      setOpened((current) => ({ ...current, [job.id]: result.href ?? "" }));
+      return;
+    }
     if (result.reason === "precard_cap") {
       setBlocked((current) => ({ ...current, [job.id]: "precard_cap" }));
       return;
     }
     setFailures((current) => ({ ...current, [job.id]: result.message }));
+  }
+
+  async function dismiss(job: TeamJob) {
+    const result = await feed.dismissJob(job.id);
+    if (result.ok) {
+      setDropped((current) => ({ ...current, [job.id]: true }));
+      return;
+    }
+    if (result.message) setFailures((current) => ({ ...current, [job.id]: result.message as string }));
   }
 
   function submitTask(event: FormEvent<HTMLFormElement>) {
@@ -104,8 +119,13 @@ export function MilonTeamDesk({
   }
 
   const briefing = feed.briefing.filter((item) => matches(item.agent, filter));
-  const jobs = feed.jobs.filter((job) => job.status !== "dismissed" && matches(job.agent, filter));
+  const jobs = feed.jobs.filter(
+    (job) => job.status !== "dismissed" && !dropped[job.id] && matches(job.agent, filter),
+  );
   const activity = feed.activity.filter((event) => matches(event.agent, filter));
+  const emptyFeed = briefing.length === 0 && jobs.length === 0 && activity.length === 0 && !feed.signoffLine;
+  const waiting = feed.loading && !feed.error && emptyFeed;
+  const quietError = Boolean(feed.error) && emptyFeed;
 
   return (
     <div className="milon-desk" ref={rootRef} data-desk-ready="true" aria-busy={feed.loading || undefined}>
@@ -119,13 +139,14 @@ export function MilonTeamDesk({
               </button>
             </div>
           </section>
-        ) : feed.loading ? (
+        ) : null}
+        {waiting ? (
           <div className="milon-desk-briefing" aria-hidden="true">
             <div className="milon-desk-skel" />
             <div className="milon-desk-skel" />
             <div className="milon-desk-skel" />
           </div>
-        ) : (
+        ) : quietError ? null : (
           <>
             <div className="milon-desk-team" role="radiogroup" aria-label="Team" onKeyDown={onFilterKey}>
               <div className="milon-desk-team-bar">
@@ -209,10 +230,14 @@ export function MilonTeamDesk({
                 <p className="milon-desk-kicker">Offered</p>
                 <ul className="milon-desk-jobs">
                   {jobs.map((job) => {
+                    const readyHref = opened[job.id];
+                    const ready = job.status === "draft_ready" || readyHref !== undefined;
+                    const href = job.href || readyHref || undefined;
                     const showCap =
-                      blocked[job.id] === "precard_cap" ||
-                      (job.status === "proposed" && !job.canApprove && job.blockedReason === "precard_cap");
-                    const noData = job.status === "proposed" && !job.canApprove && job.blockedReason === "no_data";
+                      !ready &&
+                      (blocked[job.id] === "precard_cap" ||
+                        (job.status === "proposed" && !job.canApprove && job.blockedReason === "precard_cap"));
+                    const noData = !ready && job.status === "proposed" && !job.canApprove && job.blockedReason === "no_data";
                     return (
                       <li key={job.id} className="milon-desk-job" data-job={job.id} data-job-status={job.status}>
                         <div className="milon-desk-job-line">
@@ -221,12 +246,12 @@ export function MilonTeamDesk({
                             <p>{job.title}</p>
                             {job.summary ? <p className="milon-desk-why">{job.summary}</p> : null}
                           </div>
-                          {job.status === "proposed" && job.canApprove && !blocked[job.id] ? (
+                          {job.status === "proposed" && job.canApprove && !blocked[job.id] && !ready ? (
                             <div className="milon-desk-actions">
                               <button type="button" className="milon-desk-btn approve" data-approve={job.id} onClick={() => void approve(job)}>
                                 Approve
                               </button>
-                              <button type="button" className="milon-desk-btn ghost" data-dismiss={job.id} onClick={() => void feed.dismissJob(job.id)}>
+                              <button type="button" className="milon-desk-btn ghost" data-dismiss={job.id} onClick={() => void dismiss(job)}>
                                 Dismiss
                               </button>
                             </div>
@@ -235,11 +260,11 @@ export function MilonTeamDesk({
                         </div>
                         {showCap ? <PrecardCapCard /> : null}
                         {noData ? <p className="milon-desk-muted">Not enough on file to draft this.</p> : null}
-                        {job.status === "draft_ready" ? (
+                        {ready ? (
                           <p className="milon-desk-ready">
                             Draft ready. Nothing was sent.
-                            {job.href ? (
-                              <a className="milon-desk-draft-link" href={job.href}>
+                            {href ? (
+                              <a className="milon-desk-draft-link" href={href}>
                                 Open
                               </a>
                             ) : null}

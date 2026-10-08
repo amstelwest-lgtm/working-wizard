@@ -4,24 +4,18 @@
  * reads those from src/lib/milon-team.ts.
  */
 import { useState } from "react";
-import type {
-  AgentKey,
-  ApproveResult,
-  MilonTeamFeed,
-  MilonTeamFeedApi,
-  TeamAgentStatus,
-  TeamJob,
-} from "@/components/milon-team/types";
+import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
+import {
+  emptyMilonTeamFeed,
+  type ApproveResult,
+  type MilonTeamFeed,
+  type TeamJob,
+} from "@/lib/milon-team-feed";
 
 export const DESK_NOW = new Date("2026-10-08T12:00:00.000Z");
 
-const IDLE: Record<AgentKey, TeamAgentStatus> = {
-  bookkeeper: { agent: "bookkeeper", lastRunAt: null, lastRunKind: null },
-  analyst: { agent: "analyst", lastRunAt: null, lastRunKind: null },
-  advisor: { agent: "advisor", lastRunAt: null, lastRunKind: null },
-};
-
 const POPULATED: MilonTeamFeed = {
+  ...emptyMilonTeamFeed(),
   briefing: [
     {
       id: "close",
@@ -107,16 +101,7 @@ const POPULATED: MilonTeamFeed = {
   error: null,
 };
 
-const EMPTY: MilonTeamFeed = {
-  briefing: [],
-  jobs: [],
-  activity: [],
-  agents: IDLE,
-  signoffLine: null,
-  precard: { capped: false, remaining: null, limit: null },
-  loading: false,
-  error: null,
-};
+const EMPTY: MilonTeamFeed = emptyMilonTeamFeed();
 
 function feedFor(clientId: string): MilonTeamFeed {
   return clientId === "empty" ? EMPTY : POPULATED;

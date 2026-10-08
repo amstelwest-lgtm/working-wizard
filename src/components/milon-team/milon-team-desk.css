@@ -5,6 +5,15 @@
   scroll-margin-top: 88px;
 }
 
+#ask-ai-accountant[data-team-desk="1"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: visible;
+}
+
 .milon-desk {
   --desk-card: rgba(16, 16, 24, 0.94);
   --desk-ink: var(--ink, #f2ecdc);

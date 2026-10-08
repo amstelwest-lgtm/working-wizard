@@ -7,7 +7,9 @@ import { join, relative } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MilonTeamDesk } from "../src/components/milon-team/milon-team-desk";
-import type { AgentKey, MilonTeamFeed, MilonTeamFeedApi, TeamAgentStatus, TeamJob } from "../src/components/milon-team/types";
+import type { MilonTeamFeedApi } from "../src/hooks/use-milon-team-feed";
+import type { AgentKey, MilonTeamFeed, TeamAgentStatus, TeamJob } from "../src/lib/milon-team-feed";
+import { AGENT_KEYS, emptyMilonTeamFeed } from "../src/lib/milon-team-feed";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
 import { agentAriaLabel, agentDisplayName, agentInitial, agentShortName, teamAgentHeaderStatus } from "../src/lib/milon-team";
 
@@ -44,10 +46,9 @@ const config = readFileSync("src/lib/milon-team.ts", "utf8");
 for (const name of NAMES) assert(config.includes(name), `config is missing ${name}`);
 assert(!config.includes(BOT_ROLE), "the config does not name the old bookkeeping role");
 assert(!config.includes("accountant"), "the agent key is bookkeeper");
-assert(
-  readFileSync("src/components/milon-team/types.ts", "utf8").includes('"bookkeeper" | "analyst" | "advisor"'),
-  "the feed mirror uses the bookkeeper key",
-);
+assert(!existsSync("src/components/milon-team/types.ts"), "the local type mirror is gone");
+assert(AGENT_KEYS.join(",") === "bookkeeper,analyst,advisor", "keys come from the feed");
+assert(emptyMilonTeamFeed().agents.bookkeeper.lastRunAt === null, "an empty feed has no invented last run");
 assert(agentShortName("bookkeeper") === "Bookkeeper", "short name is Bookkeeper");
 assert(agentInitial("bookkeeper") === "B", "avatar letter is B");
 assert(agentAriaLabel("bookkeeper", "Books clean ✓") === `${NAMES[0]}. Books clean ✓`, "aria label uses the display name");
@@ -56,7 +57,7 @@ const botSurfaces = [
   "src/lib/milon-team.ts",
   "src/components/milon-team/milon-team-desk.tsx",
   "src/components/milon-team/milon-team-pane.tsx",
-  "src/components/milon-team/types.ts",
+  "src/lib/milon-team-feed.ts",
   "src/components/milon-team/milon-team-desk.css",
   "scripts/rail-studio-harness/milon-team-stub.tsx",
   "scripts/rail-studio-harness/milon-team-desk-page.tsx",
@@ -66,14 +67,13 @@ for (const file of botSurfaces) {
   assert(!readFileSync(file, "utf8").includes(BOT_ROLE), `${file} still says ${BOT_ROLE}`);
 }
 
-assert(!existsSync("src/lib/milon-team-feed.ts"), "Eng1's feed module is not ours to create");
-assert(!existsSync("src/hooks/use-milon-team-feed.ts"), "Eng1's hook is not ours to create");
+assert(existsSync("src/lib/milon-team-feed.ts"), "the feed module is on this branch");
+assert(existsSync("src/hooks/use-milon-team-feed.ts"), "the feed hook is on this branch");
 
 const pane = readFileSync("src/components/milon-team/milon-team-pane.tsx", "utf8");
-const seam = pane.slice(pane.indexOf("export function useProductionTeamFeed"), pane.indexOf("export function MilonTeamPane"));
-assert(seam.includes("return null"), "production feed stays empty until Eng1's hook lands");
-assert(!seam.includes("useMilonTeamFeed"), "the seam does not call a missing hook");
-assert(!/from\s+["']@\/hooks\/use-milon-team-feed["']/.test(pane), "pane does not import Eng1's hook yet");
+assert(pane.includes("useMilonTeamFeed(clientId)"), "the desk reads the real feed");
+assert(!pane.includes("return null"), "production no longer stubs an empty feed");
+assert(/from\s+["']@\/hooks\/use-milon-team-feed["']/.test(pane), "pane imports Eng1's hook");
 
 let prodImportsStub = false;
 walk("src", (file, text) => {
@@ -263,11 +263,19 @@ assert(!empty.includes(">Today<"), "an empty briefing hides Today");
 assert(!empty.includes(">Offered<"), "an empty job list hides Offered");
 assert(!empty.includes(">Activity<"), "an empty activity log hides Activity");
 assert(empty.includes("Not run yet"), "an empty client still shows the team as not run");
+assert(!empty.includes("Last run"), "a null last run does not invent a time");
 
-const loading = html(api({ loading: true, briefing: [{ id: "x", agent: "advisor", title: "Hidden while loading", severity: "info", source: { label: "Cash", asOf: null } }] }));
+const loading = html(api({ loading: true }));
 assert(loading.includes('aria-busy="true"'), "loading marks the desk busy");
-assert(loading.includes("milon-desk-skel"), "loading shows skeletons");
-assert(!loading.includes("Hidden while loading"), "loading does not flash briefing copy");
+assert(loading.includes("milon-desk-skel"), "an empty load shows skeletons");
+assert(!loading.includes(">Today<"), "an empty load hides the sections");
+const refreshing = html(
+  api({
+    loading: true,
+    briefing: [{ id: "x", agent: "advisor", title: "Still on the desk", severity: "info", source: { label: "Cash", asOf: null } }],
+  }),
+);
+assert(refreshing.includes("Still on the desk"), "a refresh keeps the briefing that is already there");
 
 const broken = html(api({ error: "The desk could not load." }));
 assert(broken.includes("The desk could not load."), "an error shows the feed message");
