@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader, SectionCard } from "@/components/primitives";
 import { SettingsShell } from "@/components/settings-shell";
+import { settingsPortalLinks } from "@/styles/app-route-styles";
 import { LogoUploader } from "@/components/logo-uploader";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +18,10 @@ import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-pe
 
 export const Route = createFileRoute("/_authenticated/settings/brand")({
   component: BrandSettingsPage,
-  head: () => ({ meta: [{ title: "Brand Settings — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Brand Settings — Milōn" }],
+    links: settingsPortalLinks,
+  }),
 });
 
 function ColorSwatch({

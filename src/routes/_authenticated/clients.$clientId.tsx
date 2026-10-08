@@ -88,7 +88,7 @@ import { ratioActualLine } from "@/lib/ratio-actuals";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib/scorecard-rows";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
-import "@/styles/accountant-portal.css";
+import { accountantPortalLinks } from "@/styles/app-route-styles";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsNavButton } from "@/components/settings-nav-button";
 import { FeatureFinder } from "@/components/feature-finder";
@@ -448,6 +448,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     return out;
   },
   component: ClientView,
+  head: () => ({ links: accountantPortalLinks }),
 });
 
 type Client = {

@@ -6,8 +6,8 @@
  * client-detail route so their look stays pixel-identical to the approved
  * design and consistent with each other.
  *
- * Import this once per route (e.g. `import "@/styles/accountant-portal.css"`)
- * in `dashboard.tsx` and `clients.$clientId.tsx`.
+ * Linked from the accountant routes via `app-route-styles.ts` (`?url`),
+ * not as a side-effect import, so it stays out of the public entry CSS.
  */
 :root{
   --bg:#050507; --bg-2:#0a0a10; --bg-3:#101018;

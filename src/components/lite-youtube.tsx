@@ -23,8 +23,13 @@ function preconnectYouTube() {
  */
 export function LiteYouTube({ videoId, title, accessibleName }: Props) {
   const [active, setActive] = useState(false);
-  const poster = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
-  const fallback = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  const poster = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  const fallback = poster;
+  const srcSet = [
+    `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg 480w`,
+    `https://i.ytimg.com/vi/${videoId}/sddefault.jpg 640w`,
+    `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg 1280w`,
+  ].join(", ");
 
   if (active) {
     return (
@@ -48,16 +53,25 @@ export function LiteYouTube({ videoId, title, accessibleName }: Props) {
       onPointerOver={preconnectYouTube}
       onClick={() => setActive(true)}
     >
+      {/* Phone slot stays on hqdefault (480w). 92vw at 412px × 1.75dpr
+          crosses 640w and downloads maxresdefault; 81vw still selects the
+          4:3 sddefault frame (~32KB, ~20KB waste against the 16:9 crop). */}
       <img
         src={poster}
+        srcSet={srcSet}
+        sizes="(max-width: 767px) 260px, 560px"
         alt=""
         width={1280}
         height={720}
         loading="lazy"
         decoding="async"
+        style={{ aspectRatio: "16 / 9", objectFit: "cover" }}
         onError={(event) => {
           const img = event.currentTarget;
-          if (img.src !== fallback) img.src = fallback;
+          if (img.dataset.ytFallback === "1") return;
+          img.dataset.ytFallback = "1";
+          img.srcset = "";
+          img.src = fallback;
         }}
       />
       <span className="yt-play" aria-hidden="true" />

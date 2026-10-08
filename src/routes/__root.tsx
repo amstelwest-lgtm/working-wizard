@@ -91,10 +91,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     // Unmatched paths (including /blog and /pricing, which are not routes)
     // must not inherit that metadata — they are real 404s.
     const missing = match._notFound ? notFoundHead() : null;
-    // Landing self-hosts Bebas, Cormorant italic, and Noto. Skip the shared
+    // `/` self-hosts Bebas, Cormorant italic, and Noto. The other public
+    // marketing pages use the system stack in marketing.css. Skip the shared
     // Google Fonts sheet (Inter, Instrument Serif, Cormorant, Noto) and
-    // Ask-AI's Inter stylesheet on `/`.
-    const onLanding = matches.some((entry) => String(entry.routeId) === "/");
+    // Ask-AI's Inter stylesheet on those routes.
+    const PUBLIC_MARKETING = [
+      "/",
+      "/for-accountants",
+      "/for-owners",
+      "/about",
+      "/faq",
+      "/privacy",
+      "/terms",
+      "/ai",
+    ];
+    const onLanding = matches.some(
+      (entry) =>
+        PUBLIC_MARKETING.includes(String(entry.routeId)) || String(entry.routeId) === "/",
+    );
     const jsonLd = {
       type: "application/ld+json",
       children: organizationGraphJson(),

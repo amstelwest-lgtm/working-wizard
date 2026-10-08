@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, ClientOnly } from "@tanstack/react-router";
-import "@/styles/founder-portal.css";
+import { founderPortalLinks } from "@/styles/app-route-styles";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
@@ -331,7 +331,10 @@ export const Route = createFileRoute("/app")({
       </ClientOnly>
     );
   },
-  head: () => pageHead(SEO_PAGES.app),
+  head: () => {
+    const seo = pageHead(SEO_PAGES.app);
+    return { ...seo, links: [...seo.links, ...founderPortalLinks] };
+  },
 });
 
 type Inputs = {

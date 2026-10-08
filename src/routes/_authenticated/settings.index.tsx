@@ -64,10 +64,14 @@ import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerPracticeAccessCard } from "@/components/owner-practice-access";
 import { pickOwnedSettingsClient, readStoredOwnerClientId } from "@/lib/owner-workspaces";
 import { SettingsShell } from "@/components/settings-shell";
+import { settingsPortalLinks } from "@/styles/app-route-styles";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
-  head: () => ({ meta: [{ title: "Settings — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Settings — Milōn" }],
+    links: settingsPortalLinks,
+  }),
 });
 
 function SettingsPage() {

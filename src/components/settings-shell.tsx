@@ -1,6 +1,4 @@
 import type { ReactNode } from "react";
-import "@/styles/accountant-portal.css";
-import "@/styles/settings-portal.css";
 
 type Width = "md" | "lg" | "xl";
 
