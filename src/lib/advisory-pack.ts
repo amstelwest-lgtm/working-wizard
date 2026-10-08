@@ -28,7 +28,9 @@ import {
   pillarForRatioName,
   scoreRatio,
 } from "@/lib/health-score";
-import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
+import { cashComfortThreshold } from "@/lib/cash-runway";
+import { humanizeInternalFieldNames } from "@/lib/client-brain-questions";
+import { formatMoney } from "@/lib/market";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
@@ -356,15 +358,15 @@ const MULTIPLE_RATIOS = new Set([
   "Current Ratio",
 ]);
 
-export function fmtRatio(name: string, v: number): string {
+export function fmtRatio(name: string, v: number, money: (n: number) => string = (n) => fmtMoney(n)): string {
   if (!Number.isFinite(v)) return "—";
-  if (name === "Sales-per-Employee Ratio") return fmtMoney(v);
+  if (name === "Sales-per-Employee Ratio") return money(v);
   return formatSnapshotRatio(name, v);
 }
 
-function fmtDelta(name: string, delta: number): string {
+function fmtDelta(name: string, delta: number, money: (n: number) => string): string {
   if (DAYS_RATIOS.has(name)) return `${Math.abs(Math.round(delta))} days`;
-  if (name === "Sales-per-Employee Ratio") return fmtMoney(Math.abs(delta));
+  if (name === "Sales-per-Employee Ratio") return money(Math.abs(delta));
   if (MULTIPLE_RATIOS.has(name)) return `${Math.abs(delta).toFixed(2)}×`;
   return `${Math.abs(delta * 100).toFixed(1)}pp`;
 }
@@ -633,8 +635,53 @@ export type PackInputs = {
 const MOVE_THRESHOLD = 0.05;
 const WEAK_SCORE = 40;
 
+function packIsUsd(currency: string | null | undefined): boolean {
+  const code = (currency ?? "").trim().toUpperCase();
+  return code === "USD" || currency === "$";
+}
+
+/** ZAR stays on the space-grouped `R50 000` form. USD uses the shared formatter. */
+function packMoney(n: number, currency: string | null | undefined): string {
+  if (packIsUsd(currency)) return formatMoney(n, { currency: "USD", locale: "en-US" });
+  return fmtMoney(n, "R");
+}
+
+/** Sentence shown once an accountant has signed the pack. */
+export function signedPackNextStep(firmName: string | null | undefined): string {
+  const firm = firmName?.trim() || "Your accountant";
+  return `${firm} has signed this pack off. You decide which recommendations become actions, and MILŌN turns each one into a dated, owned task and chases it.`;
+}
+
+/**
+ * Sections for the PDF and the panel. Empty recommendations stay in the
+ * stored content (so generation tests still see the section) and are hidden
+ * here. A signed pack rewrites "reviews this pack first" at display time,
+ * because the body was frozen before sign-off.
+ */
+export function packSectionsForPdf<T extends { key?: string; title: string; body: string; bullets?: string[] }>(
+  sections: T[],
+  opts?: { signed?: boolean; firmName?: string | null },
+): T[] {
+  return sections
+    .filter((section) => {
+      const recommendations = section.key === "recommendations" || section.title === "Recommendations";
+      if (!recommendations) return true;
+      return Boolean(section.bullets && section.bullets.length > 0);
+    })
+    .map((section) => {
+      const nextStep = section.key === "next_step" || section.title === "What happens now";
+      if (opts?.signed && nextStep && /reviews this pack first/i.test(section.body)) {
+        return { ...section, body: signedPackNextStep(opts.firmName) };
+      }
+      return section;
+    });
+}
+
 export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
-  const cur = input.currency ?? "R";
+  const usd = packIsUsd(input.currency);
+  const cur = usd ? "$" : "R";
+  const money = (n: number) => packMoney(n, usd ? "USD" : "ZAR");
+  const comfort = cashComfortThreshold(usd ? "USD" : "ZAR");
   const name = input.clientName.trim() || "This business";
 
   // ── data blocks ──
@@ -664,7 +711,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
         value: v,
         prior: typeof prior === "number" && Number.isFinite(prior) ? prior : null,
         score: Number.isFinite(score) ? Math.round(score) : null,
-        formatted: fmtRatio(n, v),
+        formatted: fmtRatio(n, v, money),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -684,7 +731,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
       lowestClosing: lowest,
       lowestWeek,
       breachesZero: lowest < 0,
-      breachesThreshold: lowest < CASH_RUNWAY_THRESHOLD_RAND,
+      breachesThreshold: lowest < comfort,
       runwayWeeks: input.cashRunwayWeeks,
       horizonWeeks: input.closings.length,
     };
@@ -752,19 +799,16 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   if (forecast) {
     stateLines.push(
       forecast.breachesZero
-        ? `The 13-week cash forecast goes below zero in week ${forecast.lowestWeek} (lowest point ${fmtMoney(
+        ? `The 13-week cash forecast goes below zero in week ${forecast.lowestWeek} (lowest point ${money(
             forecast.lowestClosing ?? 0,
-            cur,
           )}).`
         : forecast.breachesThreshold
-          ? `The 13-week cash forecast stays positive but dips to ${fmtMoney(
+          ? `The 13-week cash forecast stays positive but dips to ${money(
               forecast.lowestClosing ?? 0,
-              cur,
-            )} in week ${forecast.lowestWeek}, under the ${fmtMoney(CASH_RUNWAY_THRESHOLD_RAND, cur)} comfort line.`
-          : `The 13-week cash forecast stays above the ${fmtMoney(
-              CASH_RUNWAY_THRESHOLD_RAND,
-              cur,
-            )} comfort line throughout (lowest ${fmtMoney(forecast.lowestClosing ?? 0, cur)} in week ${
+            )} in week ${forecast.lowestWeek}, under the ${money(comfort)} comfort line.`
+          : `The 13-week cash forecast stays above the ${money(
+              comfort,
+            )} comfort line throughout (lowest ${money(forecast.lowestClosing ?? 0)} in week ${
               forecast.lowestWeek
             }).`,
     );
@@ -780,9 +824,10 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const changedBullets = moves.slice(0, 6).map((m) => {
     const dir = m.delta > 0 ? "up" : "down";
     const good = isImprovement(m.r.name, m.delta);
-    return `${m.r.name}: ${fmtRatio(m.r.name, m.r.prior as number)} → ${m.r.formatted} (${dir} ${fmtDelta(
+    return `${m.r.name}: ${fmtRatio(m.r.name, m.r.prior as number, money)} → ${m.r.formatted} (${dir} ${fmtDelta(
       m.r.name,
       m.delta,
+      money,
     )}${good ? ", better" : ", worse"})`;
   });
   const whatChangedBody = !input.priorRatios
@@ -820,15 +865,13 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const forecastBody = !forecast
     ? "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
     : forecast.openingBalance === null || forecast.openingBalance === 0
-      ? `The forecast has no opening bank balance, so its runway starts from zero and the week-${forecast.lowestWeek} low of ${fmtMoney(
+      ? `The forecast has no opening bank balance, so its runway starts from zero and the week-${forecast.lowestWeek} low of ${money(
           forecast.lowestClosing ?? 0,
-          cur,
         )} is understated by whatever is actually in the bank.${
           input.runwayLabel ? ` Runway ${input.runwayLabel}.` : ""
         }`
-      : `Opening balance ${fmtMoney(forecast.openingBalance, cur)}; lowest point ${fmtMoney(
+      : `Opening balance ${money(forecast.openingBalance)}; lowest point ${money(
           forecast.lowestClosing ?? 0,
-          cur,
         )} in week ${forecast.lowestWeek} of ${forecast.horizonWeeks}${
           input.runwayLabel
             ? `. Runway ${input.runwayLabel}`
@@ -889,6 +932,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
             missedCount ? `, ${missedCount} missed` : ""
           }${measuredStories.length - deliveredCount - missedCount ? `, ${measuredStories.length - deliveredCount - missedCount} partly` : ""}. Expected versus actual, from the statements, not from memory.`;
 
+  const scrub = (value: string) => humanizeInternalFieldNames(value);
   const sections: PackSection[] = [
     { key: "headline", title: "In one line", body: headline },
     {
@@ -941,8 +985,13 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     ratios,
     forecast,
     recommendations: recs,
-    dataGaps: gaps,
-    sections,
+    dataGaps: gaps.map((gap) => ({ ...gap, title: scrub(gap.title) })),
+    sections: sections.map((section) => ({
+      ...section,
+      title: scrub(section.title),
+      body: scrub(section.body),
+      bullets: section.bullets?.map(scrub),
+    })),
   };
 }
 

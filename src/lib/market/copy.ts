@@ -83,6 +83,43 @@ export function laborProductivityFileStem(
   return market?.copyPack === "us" ? "LaborProductivity" : "LabourProductivity";
 }
 
+/**
+ * US reports use -ize / -ization. SA and every other pack keep the -ise
+ * spelling the playbook was written in.
+ */
+const US_SPELLING: Array<[RegExp, string]> = [
+  [/\bprioritises\b/g, "prioritizes"],
+  [/\bPrioritises\b/g, "Prioritizes"],
+  [/\bprioritised\b/g, "prioritized"],
+  [/\bPrioritised\b/g, "Prioritized"],
+  [/\bStabilise\b/g, "Stabilize"],
+  [/\bstabilise\b/g, "stabilize"],
+  [/\bStabilised\b/g, "Stabilized"],
+  [/\bstabilised\b/g, "stabilized"],
+  [/\bCategorise\b/g, "Categorize"],
+  [/\bcategorise\b/g, "categorize"],
+  [/\bAnalyse\b/g, "Analyze"],
+  [/\banalyse\b/g, "analyze"],
+  [/\bFormalise\b/g, "Formalize"],
+  [/\bformalise\b/g, "formalize"],
+  [/\brationalisation\b/g, "rationalization"],
+  [/\bRationalisation\b/g, "Rationalization"],
+  [/\bfulfilment\b/g, "fulfillment"],
+  [/\bFulfilment\b/g, "Fulfillment"],
+];
+
+export function spellForMarket(
+  text: string,
+  market: { copyPack?: string | null } | null | undefined,
+): string {
+  const labor = spellLabor(text, market);
+  if (!labor || market?.copyPack !== "us") return labor;
+  return US_SPELLING.reduce((out, [pattern, replacement]) => {
+    pattern.lastIndex = 0;
+    return out.replace(pattern, replacement);
+  }, labor);
+}
+
 /** US copy says Labor. SA, UK, and every other pack say Labour. */
 export function spellLabor(
   text: string,

@@ -5,7 +5,7 @@
 
 import { fmtPct, fmtRandCompact } from "@/components/pdf/theme";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { formatMoney, formatMoneyUnit, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMoney, formatMoneyUnit, spellForMarket, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportProfileCoda, type ReportNarrativeKind } from "@/lib/profile-signals";
 import { scoreRatio } from "@/lib/health-score";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
@@ -358,10 +358,13 @@ export function interventionNarrative(
   market: MoneyMarket = ZA_MARKET,
 ): string {
   if (d.total === 0) {
-    return withCoda(
-      "No intervention steps are required at present — all tracked ratios are healthy.",
-      profile,
-      "intervention",
+    return spellForMarket(
+      withCoda(
+        "No intervention steps are required at present — all tracked ratios are healthy.",
+        profile,
+        "intervention",
+        market,
+      ),
       market,
     );
   }
@@ -372,7 +375,7 @@ export function interventionNarrative(
   const base =
     `This roadmap prioritises ${d.total} action step${d.total > 1 ? "s" : ""} by severity and impact: ${urgency}` +
     `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`;
-  return withCoda(base, profile, "intervention", market);
+  return spellForMarket(withCoda(base, profile, "intervention", market), market);
 }
 
 export function assetNarrative(

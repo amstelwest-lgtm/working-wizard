@@ -2,7 +2,10 @@
  * Quoted days and margins in advisory copy. One formatter, shared with the
  * pack, so a stored sentence cannot keep 43.8 / 73 / 0.16 after live Ratios
  * already say 25 days, 37 days, and 8.6%.
+ * Qualitative claims follow the same score bands as the Scorecard.
  */
+import { scoreRatio } from "@/lib/health-score";
+import { healthBandLabel, scoreTier } from "@/lib/ratios";
 
 const DAYS_RATIOS = new Set([
   "Debtor Days",
@@ -179,14 +182,36 @@ function groundLabeled(text: string, ratios: Record<string, number>): string {
 }
 
 /**
+ * "Stretching payables significantly" is a critical-band claim. Days inside
+ * the Scorecard healthy band (30–60, score 100) must not keep it after the
+ * figure is rewritten from 73 to 37.
+ */
+function alignPayablesJudgment(text: string, ratios: Record<string, number>): string {
+  if (!/stretching payables/i.test(text)) return text;
+  const days = ratioValue(ratios, "Creditor Days");
+  if (days == null) return text;
+  const tier = scoreTier(scoreRatio("Creditor Days", days));
+  const band = healthBandLabel(tier).toLowerCase();
+  if (tier === "critical" && days > 60) return text;
+  const phrase =
+    tier === "healthy"
+      ? "paying suppliers inside the healthy band"
+      : days > 60
+        ? `stretching payables past the ${band} band`
+        : `paying suppliers faster than the ${band} band`;
+  return text.replace(/stretching payables significantly/gi, phrase);
+}
+
+/**
  * Rewrite debtor/creditor day counts and gross/operating margin quotes so they
  * match `ratios`. Benchmark bands ("30–60") and horizons ("90 days") stay.
- * Text with no cited figure is returned unchanged.
+ * Text with no cited figure is returned unchanged. Payables wording follows
+ * the same rating band as the Scorecard.
  */
 export function groundAdvisoryNarrative(
   text: string,
   ratios: Record<string, number> | null | undefined,
 ): string {
   if (!text || !ratios) return text;
-  return groundLabeled(groundDayPair(text, ratios), ratios);
+  return alignPayablesJudgment(groundLabeled(groundDayPair(text, ratios), ratios), ratios);
 }

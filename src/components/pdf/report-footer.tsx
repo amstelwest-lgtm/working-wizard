@@ -8,10 +8,13 @@
 import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { formatReviewDateTime } from "@/lib/market";
+import { SAMPLE_STAMP_LINE, SAMPLE_STAMP_WORD } from "@/lib/pdf-sample";
+import { signoffFooterSegments } from "@/lib/review-signoff-stamp";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
 import type { ReportSignoffStamp } from "./pdf-document";
 import { usePdfMarket } from "./pdf-market";
+import { usePdfSample } from "./pdf-frame";
 
 type Props = {
   profile: AccountantProfile;
@@ -36,7 +39,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confidential: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, flex: 2 },
-  signoff: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted, flex: 2, marginTop: 2 },
+  signoff: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted, marginTop: 2 },
+  signoffRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 2 },
+  sampleLine: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.amberDeep, marginTop: 2 },
   pageNumber: {
     fontSize: 7,
     fontFamily: "Helvetica",
@@ -53,6 +58,7 @@ const styles = StyleSheet.create({
 export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
   const market = usePdfMarket();
+  const sample = usePdfSample();
   // Zone is the client's market (the PDF context), never the viewer's profile zone.
   const signoffDate = reviewSignoff
     ? formatReviewDateTime(reviewSignoff.signedOffAt, market)
@@ -73,17 +79,25 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
                   style={{ height: 16, width: 64, objectFit: "contain", marginBottom: 2 }}
                 />
               ) : null}
-              <Text style={styles.signoff}>
-                Reviewed & signed off by{" "}
-                {reviewSignoff.signedOffByInitials ? `${reviewSignoff.signedOffByInitials} · ` : ""}
-                {reviewSignoff.signedOffByName}
-                {reviewSignoff.signedOffByTitle ? `, ${reviewSignoff.signedOffByTitle}` : ""}
-                {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
-              </Text>
+              <View style={styles.signoffRow}>
+                {signoffFooterSegments(reviewSignoff, signoffDate ?? "").map((segment, index) => (
+                  <Text
+                    key={`${index}-${segment}`}
+                    style={index === 0 ? styles.signoff : [styles.signoff, { marginLeft: 3 }]}
+                  >
+                    {segment}
+                  </Text>
+                ))}
+              </View>
             </View>
           ) : (
             <Text style={styles.signoff}>Prepared {preparedAt}</Text>
           )}
+          {sample ? (
+            <Text style={styles.sampleLine}>
+              {SAMPLE_STAMP_WORD} — {SAMPLE_STAMP_LINE}
+            </Text>
+          ) : null}
         </View>
 
         <Text

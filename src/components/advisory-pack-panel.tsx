@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { supabase } from "@/integrations/supabase/client";
 import { useMarket } from "@/contexts/market";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
@@ -54,6 +55,7 @@ import {
   advisoryPackSignOffGate,
   computeEditStats,
   diffPackSections,
+  packSectionsForPdf,
   packStatusLabel,
   type AdvisoryPack,
   type PackReview,
@@ -448,6 +450,11 @@ export function AdvisoryPackPanel({
             }
           : pack;
       const recordedSigner = identityFor(exportPack.reviewed_by);
+      const { data: demoRow } = await supabase
+        .from("clients")
+        .select("is_demo")
+        .eq("id", clientId)
+        .maybeSingle();
       const { blob, filename, signed } = await downloadAdvisoryPackPdf({
         pack: exportPack,
         profile,
@@ -455,6 +462,7 @@ export function AdvisoryPackPanel({
         user,
         market,
         recordedSigner,
+        sample: Boolean(demoRow?.is_demo),
       });
       track("advisory_pack_pdf_exported", {
         clientId,
@@ -697,7 +705,10 @@ export function AdvisoryPackPanel({
 
       {pack && expanded ? (
         <ol className="mt-4 space-y-3">
-          {pack.content.sections.map((s) => {
+          {packSectionsForPdf(pack.content.sections, {
+            signed: pack.status === "approved",
+            firmName: signoff?.firm_name ?? profile.firmName,
+          }).map((s) => {
             const diff = changedByKey.get(s.key);
             const isEditing = editing === s.key;
             return (

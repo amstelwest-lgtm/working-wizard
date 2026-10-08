@@ -11,7 +11,6 @@ import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
-import { DraftNotice } from "@/components/pdf/watermark";
 import { C, fmtRand, resolveTheme } from "@/components/pdf/theme";
 import { formatVariancePct } from "@/lib/budget.variance";
 import type { BudgetPdfModel, BudgetPdfRow } from "@/lib/budget-pdf";
@@ -23,6 +22,8 @@ export type BudgetVariancePDFProps = {
   model: BudgetPdfModel;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   /** Live client with no current budget sign-off. */
   draft?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
@@ -188,6 +189,7 @@ export function BudgetVariancePDF({
   model,
   accountantProfile,
   isDemo,
+  sample,
   draft,
   reviewSignoff,
   market = ZA_MARKET,
@@ -208,6 +210,7 @@ export function BudgetVariancePDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       draft={draft}
       reviewSignoff={reviewSignoff}
       market={market}
@@ -218,8 +221,6 @@ export function BudgetVariancePDF({
         subtitle={subtitle}
         isDemo={isDemo}
       />
-      {draft && !isDemo ? <DraftNotice /> : null}
-
       <ExecSummary figures={figures} narrative={model.headline} />
 
       <Text style={styles.yearNote}>

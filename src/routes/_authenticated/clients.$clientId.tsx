@@ -463,6 +463,7 @@ type Client = {
   market?: unknown;
   /** P1: firm attached → the accountant seat signs off advisory packs. */
   firm_id?: string | null;
+  is_demo?: boolean | null;
 };
 
 type ActiveTab =
@@ -1425,7 +1426,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo",
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -2157,6 +2158,7 @@ function ClientView() {
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
         reviewSignoff: financialsStamp,
+        sample: Boolean(client.is_demo),
         market: clientMarket,
       }) as Parameters<typeof pdf>[0],
     ).toBlob();

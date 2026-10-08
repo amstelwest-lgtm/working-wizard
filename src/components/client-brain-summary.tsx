@@ -45,6 +45,7 @@ import {
   type DeliverableDraft,
 } from "@/lib/client-brain";
 import {
+  humanQuestionLabel,
   mergeOutstandingQuestions,
   operatingProfileQuestionStates,
   productLineQuestionStates,
@@ -1018,7 +1019,7 @@ export function ClientBrainSummary({
                     <div>
                       <div className="brain-row-title">{q.prompt}</div>
                       <div className="brain-row-meta">
-                        {q.key}
+                        {humanQuestionLabel(q.key)}
                         {q.audience !== "both" ? ` · ${q.audience}` : ""}
                       </div>
                     </div>

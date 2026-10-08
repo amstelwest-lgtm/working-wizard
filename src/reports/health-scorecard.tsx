@@ -54,6 +54,8 @@ export type HealthScorecardPDFProps = {
   ratioResults: RatioResult[];
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   /** When known, blended into the cash pillar (same rule as dashboard / client header). */
   cashRunwayWeeks?: number | null;
@@ -208,6 +210,7 @@ export function HealthScorecardPDF({
   ratioResults,
   accountantProfile,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   cashRunwayWeeks,
@@ -349,6 +352,7 @@ export function HealthScorecardPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
       market={market ?? ZA_MARKET}
     >

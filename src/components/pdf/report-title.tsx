@@ -1,13 +1,16 @@
 /**
  * ReportTitle — shared title block: gold-flanked kicker, headline, subtitle,
- * optional demo notice chip.
+ * sample caption, and the signed or draft badge.
  *
  * SSR safety: react-pdf primitives — only import via dynamic import().
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { pdfSignoffBadgeLine } from "@/lib/review-signoff-stamp";
 import { C, T } from "./theme";
-import { DemoNotice } from "./watermark";
+import { DemoNotice, DraftNotice, SampleNotice, SignedNotice } from "./watermark";
+import { usePdfDraft, usePdfSample, usePdfSignoff } from "./pdf-frame";
+import { usePdfMarket } from "./pdf-market";
 
 type Props = {
   kicker: string;
@@ -23,9 +26,14 @@ const styles = StyleSheet.create({
   kicker: { ...T.kicker },
   title: { ...T.h1, marginBottom: 4 },
   subtitle: { fontSize: 9, fontFamily: "Helvetica", color: C.muted },
+  badges: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 2 },
 });
 
 export function ReportTitle({ kicker, title, subtitle, isDemo }: Props) {
+  const signoff = usePdfSignoff();
+  const sample = usePdfSample();
+  const draft = usePdfDraft();
+  const market = usePdfMarket();
   return (
     <View style={styles.wrap}>
       <View style={styles.kickerRow}>
@@ -34,7 +42,14 @@ export function ReportTitle({ kicker, title, subtitle, isDemo }: Props) {
       </View>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      {isDemo ? (
+      {sample ? <SampleNotice /> : null}
+      {signoff || (draft && !isDemo) ? (
+        <View style={styles.badges}>
+          {draft && !isDemo ? <DraftNotice /> : null}
+          {signoff ? <SignedNotice line={pdfSignoffBadgeLine(signoff, market)} /> : null}
+        </View>
+      ) : null}
+      {isDemo && !sample ? (
         <View style={{ marginTop: 8 }}>
           <DemoNotice />
         </View>

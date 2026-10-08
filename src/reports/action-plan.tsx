@@ -22,6 +22,7 @@ export type ActionPlanPDFProps = {
   headline?: string | null;
   outcomeGoal?: string | null;
   items: ActionPlanPdfItem[];
+  sample?: boolean;
 };
 
 const S = StyleSheet.create({
@@ -59,6 +60,7 @@ export function ActionPlanPDF({
   headline,
   outcomeGoal,
   items,
+  sample,
 }: ActionPlanPDFProps) {
   return (
     <PDFDocument
@@ -67,6 +69,7 @@ export function ActionPlanPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       draft
+      sample={sample}
     >
       <ReportTitle kicker="Advisory" title="Action Plan" subtitle={smeData.period} />
       {outcomeGoal ? <Text style={S.goal}>{outcomeGoal}</Text> : null}

@@ -110,6 +110,54 @@ function firmMatchesClient(stampFirm: string | null, clientFirmName: string | nu
   return stamp === client;
 }
 
+/**
+ * Page-1 sign-off line. Name and firm from the stamp; the clock is the shared
+ * zoned formatter (no seconds, no leading zero on the hour).
+ * Example: "Reviewed & signed off · James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT"
+ */
+export function pdfSignoffBadgeLine(
+  stamp: {
+    signedOffByName: string;
+    firmName?: string | null;
+    signedOffAt: string;
+  },
+  market?: Pick<ResolvedMarket, "locale" | "timezone">,
+): string {
+  const name = stamp.signedOffByName.trim();
+  const when = formatReviewDateTime(stamp.signedOffAt, market);
+  const parts = ["Reviewed & signed off", name];
+  const firm = stamp.firmName?.trim();
+  if (firm) parts.push(firm);
+  if (when && when !== "—") parts.push(when);
+  return parts.join(" · ");
+}
+
+/**
+ * Footer segments. Each segment after the first carries its separator so a
+ * wrap starts with "· " instead of leaving a hanging dot at the end of the line.
+ */
+export function signoffFooterSegments(
+  stamp: {
+    signedOffByName: string;
+    signedOffByInitials?: string | null;
+    signedOffByTitle?: string | null;
+    firmName?: string | null;
+  },
+  when: string,
+): string[] {
+  const titled = stamp.signedOffByTitle?.trim()
+    ? `${stamp.signedOffByName.trim()}, ${stamp.signedOffByTitle.trim()}`
+    : stamp.signedOffByName.trim();
+  const parts = ["Reviewed & signed off by"];
+  const initials = stamp.signedOffByInitials?.trim();
+  if (initials) parts.push(initials);
+  parts.push(titled);
+  const firm = stamp.firmName?.trim();
+  if (firm) parts.push(firm);
+  if (when.trim()) parts.push(when.trim());
+  return parts.map((part, index) => (index === 0 ? part : `·\u00A0${part}`));
+}
+
 export function stampFromSignoff(
   signoff: ClientReviewSignoff | null | undefined,
   isStale: boolean,
