@@ -1,6 +1,8 @@
 import type { AskAiContext, DisclosureTier } from "./types.ts";
 import { fmtPct } from "./deliverable-summaries.ts";
+import { DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 import { formatOverviewForPrompt } from "./overview-brief.ts";
+import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   appendClientIdentity,
   applyRedaction,
@@ -28,10 +30,18 @@ Rules:
 - Creditor days use the healthy band named in OVERVIEW FIGURES (30–60 days). Do not call that a 40-day band. 40 is the health-score Watch floor, not a day count.
 - Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
+- Operating margin is EBIT divided by revenue. Net margin is net income divided by revenue. Use those names from OVERVIEW FIGURES. Do not relabel operating margin as EBIT, and do not quote a waterfall percentage in place of either.
+- When cash on file is listed, that balance is present. Never say there is no bank balance or that cash is missing. If runway cannot be estimated, say no cash-flow statement is on file.
+- When asked which deliverable to prepare first, recommend one deliverable and why, using OVERVIEW FIGURES. Do not say a draft or a pack version was saved.
 - Offer 1–2 concrete next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.
 ${locale}`;
+}
+
+const CAMEL_TO_DISPLAY: Record<string, string> = {};
+for (const [display, camel] of Object.entries(DISPLAY_TO_CAMEL)) {
+  CAMEL_TO_DISPLAY[camel] = display;
 }
 
 function formatRatio(
@@ -69,7 +79,8 @@ function formatRatio(
               : r.p50.toFixed(2)
         })`
       : "";
-  return `${r.key}: ${fmtVal}${bench}`;
+  const label = CAMEL_TO_DISPLAY[r.key] ?? r.key;
+  return `${label}: ${fmtVal}${bench}`;
 }
 
 export function buildPrompt(
@@ -195,15 +206,29 @@ export function buildPrompt(
   }
 
   if (ctx.waterfall?.hasData) {
-    lines.push(`\nProfitability waterfall (${ctx.waterfall.source} figures, % of revenue):`);
+    lines.push(
+      `\nProfitability waterfall (${ctx.waterfall.source} figures, % of revenue). Not a substitute for Operating margin or Net margin:`,
+    );
     for (const step of ctx.waterfall.steps) {
+      if (step.label === "EBIT" && ctx.overview?.operatingMargin != null) {
+        const shown = formatStatementMargin(ctx.overview.operatingMargin) ?? "n/a";
+        lines.push(`  Operating margin: ${shown} (Overview — do not quote a reconstructed EBIT instead)`);
+        continue;
+      }
+      if (step.label === "Net income" && ctx.overview?.netMargin != null) {
+        const shown = formatStatementMargin(ctx.overview.netMargin) ?? "n/a";
+        lines.push(`  Net margin: ${shown} (Overview — net income divided by revenue)`);
+        continue;
+      }
       lines.push(`  ${step.label}: ${fmtPct(step.pctOfRevenue)}`);
     }
   }
 
   if (ctx.cashForecast?.hasData) {
     const c = ctx.cashForecast;
-    lines.push("\nCash forecast outlook (13-week, no raw balances):");
+    lines.push(
+      "\nCash forecast outlook (13-week trajectory). Cash on file, when listed under OVERVIEW FIGURES, is not missing:",
+    );
     lines.push(
       `  ${
         c.shortfall

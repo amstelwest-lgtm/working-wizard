@@ -11,7 +11,10 @@ import {
   MILON_BOT_OWNER_CHIPS,
   MILON_BOT_SUBTITLE,
   MILON_BOT_TITLE,
+  DRAFT_ADVISORY_PACK_COMMAND,
+  DRAFT_ADVISORY_PACK_LABEL,
   deriveMilonBotEndpoint,
+  isDeliverableRecommendationQuestion,
   parseAgentObjective,
   persistedCreateIntent,
   routeMilonIntent,
@@ -206,6 +209,74 @@ export function mountAskAi(container, options) {
   let history = [];
   let signoffCtas = [];
   let lastQuestion = "";
+  let boundClientId = null;
+
+  const THREAD_PREFIX = "milon-bot-thread:";
+
+  function currentClientId() {
+    return (
+      container.dataset.clientId ||
+      (typeof window !== "undefined" && window.__askAiClientId) ||
+      ""
+    );
+  }
+
+  function sessionStore() {
+    try {
+      const store = globalThis.sessionStorage;
+      if (!store || typeof store.getItem !== "function") return null;
+      return store;
+    } catch {
+      return null;
+    }
+  }
+
+  function readThread(clientId) {
+    if (!clientId) return [];
+    try {
+      const store = sessionStore();
+      if (!store) return [];
+      const raw = store.getItem(THREAD_PREFIX + clientId);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter(
+          (turn) =>
+            turn &&
+            (turn.role === "user" || turn.role === "assistant") &&
+            typeof turn.content === "string" &&
+            turn.content.trim(),
+        )
+        .slice(-16);
+    } catch {
+      return [];
+    }
+  }
+
+  function writeThread(clientId, turns) {
+    if (!clientId) return;
+    try {
+      const store = sessionStore();
+      if (!store) return;
+      const key = THREAD_PREFIX + clientId;
+      if (!turns.length) {
+        store.removeItem(key);
+        return;
+      }
+      store.setItem(key, JSON.stringify(turns.slice(-16)));
+    } catch {
+      /* private mode or a full store — the in-memory thread still shows */
+    }
+  }
+
+  function syncThreadClient() {
+    const id = String(currentClientId() || "");
+    if (id === boundClientId) return;
+    if (boundClientId) writeThread(boundClientId, history);
+    boundClientId = id;
+    history = readThread(id);
+  }
 
   function render() {
     container.innerHTML = "";
@@ -299,8 +370,10 @@ export function mountAskAi(container, options) {
       });
       panel.appendChild(ta);
 
-      // Suggestion chips (before answer)
-      if (!answer) {
+      syncThreadClient();
+
+      // Suggestion chips only before the first turn of this session.
+      if (!answer && history.length === 0 && !loading) {
         const chips = document.createElement("div");
         chips.className = "ask-ai-chips";
         suggestionChips.forEach((c) => {
@@ -336,6 +409,7 @@ export function mountAskAi(container, options) {
         workingObjective = false;
         pendingIntent = null;
         history = [];
+        writeThread(boundClientId || currentClientId(), []);
         errorMsg = "";
         signoffCtas = [];
         lastQuestion = "";
@@ -368,101 +442,135 @@ export function mountAskAi(container, options) {
         panel.appendChild(err);
       }
 
-      // Answer
-      if (answer) {
-        const answerEl = document.createElement("div");
-        answerEl.className = "ask-ai-answer";
-        answerEl.innerHTML = renderMarkdown(answer);
-
-        if (agentRun && agentRun.objective) {
-          answerEl.appendChild(renderAgentTrace(agentRun));
+      const shown = history.slice();
+      if (loading && lastQuestion) {
+        const last = shown[shown.length - 1];
+        if (!last || last.role !== "user" || last.content !== lastQuestion) {
+          shown.push({ role: "user", content: lastQuestion });
         }
+      }
 
-        if (toolHints.length > 0) {
-          const hint = document.createElement("p");
-          hint.className = "ask-ai-tools";
-          hint.textContent = toolHints.join(" · ");
-          answerEl.appendChild(hint);
-        }
-
-        if (answerChips.length > 0) {
-          const chipRow = document.createElement("div");
-          chipRow.className = "ask-ai-answer-chips";
-          answerChips.forEach((c) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "ask-ai-chip";
-            btn.textContent = c;
-            btn.addEventListener("click", () => {
-              question = c;
-              answer = "";
-              answerChips = [];
-              toolHints = [];
-              errorMsg = "";
-              render();
-              // auto-submit
-              submit();
-            });
-            chipRow.appendChild(btn);
-          });
-          answerEl.appendChild(chipRow);
-        }
-
-        if (signoffCtas.length && typeof onOpenDeliverable === "function") {
-          const row = document.createElement("div");
-          row.className = "ask-ai-signoff-row";
-          const note = document.createElement("p");
-          note.className = "ask-ai-signoff-state";
-          note.dataset.signoffState = "1";
-          note.textContent = botSignoffStateLine(signoffCtas);
-          row.appendChild(note);
-          signoffCtas.forEach((cta) => {
-            const go = document.createElement("button");
-            go.type = "button";
-            go.className = "ask-ai-handoff ask-ai-signoff";
-            go.dataset.signoff = cta.kind;
-            go.dataset.tab = cta.tab;
-            go.textContent = cta.label;
-            go.addEventListener("click", () => {
-              onOpenDeliverable(botSignoffDestination(cta, lastQuestion));
-            });
-            row.appendChild(go);
-          });
-          answerEl.appendChild(row);
-        }
-
-        const handoff =
-          signoffCtas.length || typeof onOpenDeliverable !== "function"
-            ? null
-            : deliverableHandoff(lastQuestion);
-        if (handoff) {
-          const go = document.createElement("button");
-          go.type = "button";
-          go.className = "ask-ai-handoff";
-          go.dataset.coach = handoff.coach || "";
-          go.dataset.tab = handoff.tab;
-          go.textContent = `${handoff.label} →`;
-          go.addEventListener("click", () => {
-            onOpenDeliverable({
-              tab: handoff.tab,
-              focus: handoff.focus,
-              coach: handoff.coach,
-              why: handoff.why,
-            });
-          });
-          answerEl.appendChild(go);
-        }
-
-        panel.appendChild(answerEl);
+      if (shown.length > 0) {
+        const thread = document.createElement("div");
+        thread.className = "ask-ai-thread";
+        thread.role = "log";
+        shown.forEach((turn, index) => {
+          const latestAssistant =
+            turn.role === "assistant" && index === shown.length - 1 && !loading && Boolean(answer);
+          const bubble = document.createElement("div");
+          bubble.className =
+            turn.role === "user" ? "ask-ai-turn ask-ai-turn-user" : "ask-ai-turn ask-ai-answer";
+          if (latestAssistant) bubble.dataset.latest = "1";
+          if (turn.role === "user") bubble.textContent = turn.content;
+          else bubble.innerHTML = renderMarkdown(turn.content);
+          if (latestAssistant) decorateLatestAnswer(bubble);
+          thread.appendChild(bubble);
+        });
+        panel.appendChild(thread);
+        thread.scrollTop = thread.scrollHeight;
       }
 
       widget.appendChild(panel);
 
       // Focus textarea after render
-      requestAnimationFrame(() => ta.focus());
+      requestAnimationFrame(() => ta && ta.focus());
     }
 
     container.appendChild(widget);
+  }
+
+  function decorateLatestAnswer(answerEl) {
+    if (agentRun && agentRun.objective) {
+      answerEl.appendChild(renderAgentTrace(agentRun));
+    }
+
+    if (toolHints.length > 0) {
+      const hint = document.createElement("p");
+      hint.className = "ask-ai-tools";
+      hint.textContent = toolHints.join(" · ");
+      answerEl.appendChild(hint);
+    }
+
+    if (answerChips.length > 0) {
+      const chipRow = document.createElement("div");
+      chipRow.className = "ask-ai-answer-chips";
+      answerChips.forEach((c) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ask-ai-chip";
+        btn.textContent = c;
+        btn.addEventListener("click", () => {
+          question = c;
+          answer = "";
+          answerChips = [];
+          toolHints = [];
+          errorMsg = "";
+          render();
+          submit();
+        });
+        chipRow.appendChild(btn);
+      });
+      answerEl.appendChild(chipRow);
+    }
+
+    if (isDeliverableRecommendationQuestion(lastQuestion)) {
+      const draft = document.createElement("button");
+      draft.type = "button";
+      draft.className = "ask-ai-handoff ask-ai-draft-pack";
+      draft.dataset.draftPack = "1";
+      draft.textContent = DRAFT_ADVISORY_PACK_LABEL;
+      draft.addEventListener("click", () => {
+        if (loading) return;
+        question = DRAFT_ADVISORY_PACK_COMMAND;
+        submit();
+      });
+      answerEl.appendChild(draft);
+    }
+
+    if (signoffCtas.length && typeof onOpenDeliverable === "function") {
+      const row = document.createElement("div");
+      row.className = "ask-ai-signoff-row";
+      const note = document.createElement("p");
+      note.className = "ask-ai-signoff-state";
+      note.dataset.signoffState = "1";
+      note.textContent = botSignoffStateLine(signoffCtas);
+      row.appendChild(note);
+      signoffCtas.forEach((cta) => {
+        const go = document.createElement("button");
+        go.type = "button";
+        go.className = "ask-ai-handoff ask-ai-signoff";
+        go.dataset.signoff = cta.kind;
+        go.dataset.tab = cta.tab;
+        go.textContent = cta.label;
+        go.addEventListener("click", () => {
+          onOpenDeliverable(botSignoffDestination(cta, lastQuestion));
+        });
+        row.appendChild(go);
+      });
+      answerEl.appendChild(row);
+    }
+
+    const handoff =
+      signoffCtas.length || typeof onOpenDeliverable !== "function"
+        ? null
+        : deliverableHandoff(lastQuestion);
+    if (handoff) {
+      const go = document.createElement("button");
+      go.type = "button";
+      go.className = "ask-ai-handoff";
+      go.dataset.coach = handoff.coach || "";
+      go.dataset.tab = handoff.tab;
+      go.textContent = `${handoff.label} →`;
+      go.addEventListener("click", () => {
+        onOpenDeliverable({
+          tab: handoff.tab,
+          focus: handoff.focus,
+          coach: handoff.coach,
+          why: handoff.why,
+        });
+      });
+      answerEl.appendChild(go);
+    }
   }
 
   function renderAgentTrace(run) {
@@ -572,6 +680,7 @@ export function mountAskAi(container, options) {
   }
 
   async function submit() {
+    syncThreadClient();
     const q = question.trim();
     if (!q || loading) return;
     // Keep the draft in the composer until a reply is actually in hand.
@@ -654,6 +763,7 @@ export function mountAskAi(container, options) {
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
       history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
       if (history.length > 16) history = history.slice(-16);
+      writeThread(boundClientId || currentClientId(), history);
       signoffCtas = botSignoffCtas({
         tools: turn.tools,
         created: turn.created,

@@ -203,8 +203,8 @@ Tools:
 - get_invite_status: owner-handoff / staff invite status. Never invent a token or a link.
 - list_blockers: outstanding client_brain_questions only.
 - propose_next_steps: calls the existing brain-propose function (drafts only).
-- draft_deliverable: calls the existing brain-deliverable-draft function (draft only, never sent).
 - answer_from_brain: reads context_facts + brain_summary + financial snapshot summaries.
+- Do not save a deliverable, advisory pack, or pack version while answering a question. Recommend which deliverable to prepare and why. A draft is saved only when the user explicitly asks to draft it.
 
 Rules:
 - Use tools before answering about blockers, invites, next steps, drafts, or what's on file.

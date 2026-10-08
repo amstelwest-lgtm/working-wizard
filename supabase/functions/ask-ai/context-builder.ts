@@ -174,11 +174,9 @@ export async function buildContext(
   let scores: ScoreRow | null = null;
 
   // ── Ratios ────────────────────────────────────────────────────────────────
-  // client_financial_snapshots.ratios stores a flat Record<string, number>
-  // with *display-name* keys as returned by computeRatios()
-  // (e.g. "Gross Margin", "Debtor Days", "Sales-per-Employee Ratio").
-  // industry_benchmarks.metric_key uses camelCase (e.g. "grossMargin").
-  // We translate via DISPLAY_TO_CAMEL before the benchmark join.
+  // Live `overviewRatios` on `periodMonthsOf`, the same cover as Overview.
+  // A snapshot is only used when live financials yield nothing. Display-name
+  // keys ("Gross Margin", "Creditor Days") map to camelCase benchmark keys.
   let ratios: RatioRow[] = [];
   let rankingRatios: RatioRow[] = [];
   let snapPeriod: string | null = null;
@@ -199,7 +197,9 @@ export async function buildContext(
       snap?.ratios && typeof snap.ratios === "object" && !Array.isArray(snap.ratios)
         ? (snap.ratios as Record<string, unknown>)
         : null;
-    const rawRatios = resolveRatioRecord(snapRatios, financials);
+    const rawRatios = resolveRatioRecord(snapRatios, financials, {
+      fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
+    });
     fallbackRatios = rawRatios;
 
     if (Object.keys(rawRatios).length > 0) {
