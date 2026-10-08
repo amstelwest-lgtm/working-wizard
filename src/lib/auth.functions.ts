@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { acceptOwnerInviteForUser, signUpInvitedMember } from "@/lib/invite-member.server";
+import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
 import { US_STATE_CODES } from "@/lib/market/types";
 import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
 
@@ -138,6 +139,12 @@ export const adminSignUp = createServerFn({ method: "POST" })
         await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "client_owner" });
       }
     }
+
+    // Invite signups returned above. This is a new firm owner or business owner.
+    await welcomeWithoutBlockingSignup(async () => {
+      const { sendSignupWelcomeForUser } = await import("@/lib/welcome-email.server");
+      await sendSignupWelcomeForUser(userId);
+    });
 
     return { userId, email: authData.user.email ?? data.email };
   });

@@ -2305,6 +2305,9 @@ export type Database = {
           full_name: string | null
           id: string
           updated_at: string
+          welcome_email_attempts: number
+          welcome_email_last_attempt_at: string | null
+          welcome_email_sent_at: string | null
         }
         Insert: {
           created_at?: string
@@ -2312,6 +2315,9 @@ export type Database = {
           full_name?: string | null
           id: string
           updated_at?: string
+          welcome_email_attempts?: number
+          welcome_email_last_attempt_at?: string | null
+          welcome_email_sent_at?: string | null
         }
         Update: {
           created_at?: string
@@ -2319,6 +2325,9 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string
+          welcome_email_attempts?: number
+          welcome_email_last_attempt_at?: string | null
+          welcome_email_sent_at?: string | null
         }
         Relationships: []
       }

@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { notifySignup } from "@/lib/signup-notify";
+import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
+import { sendSignupWelcome } from "@/lib/welcome-email.functions";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
 import {
   forcePortal,
@@ -111,6 +113,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const { next, signup, plan, interval } = Route.useSearch();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
+  const doSendWelcome = useServerFn(sendSignupWelcome);
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   // URL owns the tab. signup=true (or a plan query) opens Create Firm even if
   // state was initialized on Sign in. A tab click sets an override, then rewrites the URL.
@@ -383,6 +386,7 @@ function AuthPage() {
             p_market: market ? marketToJson(market) : null,
           });
           if (firmErr) toast.error(firmErr.message);
+          await welcomeWithoutBlockingSignup(() => doSendWelcome());
         }
         forcePortal("accountant");
         await ensurePractice().catch(() => undefined);

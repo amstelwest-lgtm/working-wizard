@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { notifySignup } from "@/lib/signup-notify";
+import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
+import { sendSignupWelcome } from "@/lib/welcome-email.functions";
 import { adminSignUp, acceptOwnerInvite } from "@/lib/auth.functions";
 import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
@@ -241,6 +243,7 @@ function LandingPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
+  const doSendWelcome = useServerFn(sendSignupWelcome);
   const doAcceptOwnerInvite = useServerFn(acceptOwnerInvite);
   const doPreviewInvite = useServerFn(previewOwnerInvite);
   const doUnlockOps = useServerFn(unlockOwnerOps);
@@ -1194,6 +1197,7 @@ function LandingPage() {
             p_market: marketToJson(market),
           });
           if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
+          await welcomeWithoutBlockingSignup(() => doSendWelcome());
           forcePortal("accountant");
           if (readInsightSeen()) {
             navigate({
@@ -1270,6 +1274,7 @@ function LandingPage() {
           // Don't block navigation — the /app effectiveClientId flow will retry.
           console.error("[signup] ensure_own_client failed:", rpcErr.message);
         }
+        await welcomeWithoutBlockingSignup(() => doSendWelcome());
         const pendingCheckout = peekPendingCheckout();
         if (pendingCheckout) {
           navigate({
