@@ -21,8 +21,19 @@ import {
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
 import { friendlyReachMessage } from "./reach-error.ts";
-import { parseAskAiBody, parseAskAiPayload } from "./ask-ai-response.ts";
-import { PRECARD_CAP_MESSAGE, precardBotRemainingLabel } from "./precard-cap.ts";
+import {
+  ASK_EMPTY_REPLY,
+  ASK_TIMEOUT_REPLY,
+  parseAskAiBody,
+  parseAskAiPayload,
+} from "./ask-ai-response.ts";
+import {
+  PRECARD_CAP_MESSAGE,
+  isPrecardLimitKind,
+  normalizePrecardTurnId,
+  precardBotRemainingLabel,
+  precardCapReason,
+} from "./precard-cap.ts";
 import { billingStartPath, peekPendingCheckout } from "./pending-checkout.ts";
 import { firmSignupCheckoutIntent } from "./stripe-plans.ts";
 import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
@@ -215,6 +226,7 @@ export function mountAskAi(container, options) {
   let signoffCtas = [];
   let lastQuestion = "";
   let boundClientId = null;
+  let requestGen = 0;
 
   const THREAD_PREFIX = "milon-bot-thread:";
 
@@ -253,6 +265,18 @@ export function mountAskAi(container, options) {
             typeof turn.content === "string" &&
             turn.content.trim(),
         )
+        .map((turn) => {
+          const next = { role: turn.role, content: turn.content };
+          const turnId = normalizePrecardTurnId(turn.turnId);
+          if (turnId) next.turnId = turnId;
+          if (turn.precardCap && isPrecardLimitKind(turn.precardCap.limit)) {
+            next.precardCap = { limit: turn.precardCap.limit };
+          }
+          if (typeof turn.error === "string" && turn.error.trim()) {
+            next.error = turn.error.trim().slice(0, 400);
+          }
+          return next;
+        })
         .slice(-16);
     } catch {
       return [];
@@ -288,7 +312,9 @@ export function mountAskAi(container, options) {
 
     const widget = document.createElement("div");
     widget.className = studio ? "ask-ai-widget ask-ai-studio" : "ask-ai-widget";
-    widget.dataset.askState = loading ? "thinking" : errorMsg ? "error" : answer ? "answer" : "idle";
+    const unanswered =
+      !loading && history.length > 0 && history[history.length - 1]?.role === "user";
+    widget.dataset.askState = loading ? "thinking" : unanswered || errorMsg ? "error" : answer ? "answer" : "idle";
 
     if (!open) {
       const trigger = document.createElement("button");
@@ -340,7 +366,9 @@ export function mountAskAi(container, options) {
       sendBtn.className = "ask-ai-send";
       sendBtn.disabled = loading || !question.trim();
       sendBtn.innerHTML = `${SEND_SVG} ${loading ? "Thinking…" : "Ask"}`;
-      sendBtn.addEventListener("click", submit);
+      sendBtn.addEventListener("click", () => {
+        submit();
+      });
 
       // Textarea
       const ta = document.createElement("textarea");
@@ -462,18 +490,23 @@ export function mountAskAi(container, options) {
         thread.className = "ask-ai-thread";
         thread.role = "log";
         shown.forEach((turn, index) => {
+          const capLimit = capLimitForTurn(turn);
+          const latest =
+            index === shown.length - 1 && !loading;
           const latestAssistant =
-            turn.role === "assistant" && index === shown.length - 1 && !loading && Boolean(answer);
-          const capBubble = Boolean(latestAssistant && precardCap);
+            turn.role === "assistant" && latest && Boolean(answer) && !capLimit;
           const bubble = document.createElement("div");
           bubble.className = turn.role === "user"
             ? "ask-ai-turn ask-ai-turn-user"
-            : capBubble
+            : capLimit
               ? "ask-ai-turn ask-ai-answer precard-cap-card"
               : "ask-ai-turn ask-ai-answer";
-          if (latestAssistant) bubble.dataset.latest = "1";
-          if (capBubble) {
-            bubble.dataset.precardCap = precardCap.limit || "bot";
+          if (latestAssistant || (turn.role === "assistant" && latest)) bubble.dataset.latest = "1";
+          if (capLimit) {
+            bubble.dataset.precardCap = capLimit;
+            const reason = document.createElement("p");
+            reason.className = "precard-cap-reason";
+            reason.textContent = precardCapReason(capLimit);
             const title = document.createElement("p");
             title.className = "precard-cap-title";
             title.textContent = PRECARD_CAP_MESSAGE;
@@ -481,6 +514,7 @@ export function mountAskAi(container, options) {
             link.className = "precard-cap-button";
             link.href = billingStartPath(peekPendingCheckout() ?? firmSignupCheckoutIntent());
             link.textContent = "Add a card";
+            bubble.appendChild(reason);
             bubble.appendChild(title);
             bubble.appendChild(link);
           } else if (turn.role === "user") {
@@ -488,7 +522,7 @@ export function mountAskAi(container, options) {
           } else {
             bubble.innerHTML = renderMarkdown(turn.content);
           }
-          if (latestAssistant && !capBubble) {
+          if (latestAssistant) {
             decorateLatestAnswer(bubble);
             const left =
               typeof precardRemaining === "number" ? precardBotRemainingLabel(precardRemaining) : null;
@@ -500,6 +534,9 @@ export function mountAskAi(container, options) {
             }
           }
           thread.appendChild(bubble);
+          if (turn.role === "user" && latest) {
+            thread.appendChild(inlineTurnError(turn));
+          }
         });
         panel.appendChild(thread);
         thread.scrollTop = thread.scrollHeight;
@@ -684,15 +721,91 @@ export function mountAskAi(container, options) {
     return parseAskAiPayload(status, "", ok);
   }
 
+  function capLimitForTurn(turn) {
+    if (!turn || turn.role !== "assistant") return null;
+    if (turn.precardCap && isPrecardLimitKind(turn.precardCap.limit)) return turn.precardCap.limit;
+    if (typeof turn.content === "string" && turn.content.trim() === PRECARD_CAP_MESSAGE) return "bot";
+    return null;
+  }
+
+  function newTurnId() {
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+    } catch {
+      /* private context */
+    }
+    return `turn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+
+  function askTimeoutMs() {
+    const raw = Number(options && options.timeoutMs);
+    return Number.isFinite(raw) && raw > 0 ? raw : 90000;
+  }
+
+  function priorTurns(turnId) {
+    return history
+      .filter(
+        (turn) =>
+          turn &&
+          turn.turnId !== turnId &&
+          (turn.role === "user" || turn.role === "assistant") &&
+          typeof turn.content === "string",
+      )
+      .slice(-8)
+      .map((turn) => ({ role: turn.role, content: turn.content }));
+  }
+
+  function inlineTurnError(turn) {
+    const err = document.createElement("div");
+    err.className = "ask-ai-error ask-ai-inline-error";
+    err.role = "alert";
+    err.textContent = turn.error || ASK_EMPTY_REPLY;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "ask-ai-retry";
+    retry.dataset.retry = "1";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => {
+      if (turn.turnId) submit(turn.turnId);
+      else {
+        question = turn.content;
+        submit();
+      }
+    });
+    err.appendChild(retry);
+    return err;
+  }
+
   function paintBareError(message) {
     const text = message || "Something went wrong.";
     try {
       container.innerHTML = "";
+      if (lastQuestion) {
+        const echo = document.createElement("p");
+        echo.className = "ask-ai-turn ask-ai-turn-user";
+        echo.textContent = lastQuestion;
+        container.appendChild(echo);
+      }
       const err = document.createElement("div");
       err.className = "ask-ai-error";
       err.role = "alert";
       err.textContent = text;
       container.appendChild(err);
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "ask-ai-retry";
+      retry.textContent = "Retry";
+      retry.addEventListener("click", () => {
+        const last = [...history].reverse().find((turn) => turn.role === "user" && turn.turnId);
+        if (last) submit(last.turnId);
+        else {
+          if (lastQuestion && !String(question || "").trim()) question = lastQuestion;
+          submit();
+        }
+      });
+      container.appendChild(retry);
     } catch {
       /* last-resort paint failed; nothing safer to do */
     }
@@ -714,16 +827,32 @@ export function mountAskAi(container, options) {
     }
   }
 
-  async function submit() {
+  async function submit(retryTurnId) {
     syncThreadClient();
-    const q = question.trim();
+    const retryId = normalizePrecardTurnId(retryTurnId);
+    const existing = retryId
+      ? history.find((turn) => turn.role === "user" && turn.turnId === retryId)
+      : null;
+    const q = String(existing ? existing.content : question || "").trim();
     if (!q || loading) return;
-    // Keep the draft in the composer until a reply is actually in hand.
+    const turnId = retryId || newTurnId();
     const objective = parseAgentObjective(q);
     const createIntent = persistedCreateIntent(q);
     creatingDeliverable = Boolean(createIntent);
     workingObjective = Boolean(objective) && !createIntent;
     pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
+    if (!existing) {
+      history = [...history, { role: "user", content: q, turnId }];
+      if (history.length > 16) history = history.slice(-16);
+    } else {
+      history = history.map((turn) =>
+        turn.role === "user" && turn.turnId === turnId
+          ? { role: "user", content: turn.content, turnId }
+          : turn,
+      );
+    }
+    writeThread(boundClientId || currentClientId(), history);
+    question = "";
     loading = true;
     answer = "";
     precardCap = null;
@@ -734,13 +863,15 @@ export function mountAskAi(container, options) {
     errorMsg = "";
     signoffCtas = [];
     lastQuestion = q;
+    const gen = ++requestGen;
     safeRender(q);
 
-    try {
+    const controller = new AbortController();
+    let timer = 0;
+    const pending = (async () => {
       const token = await getToken();
       if (!token) throw new Error("Not signed in — please reload and try again.");
 
-      // Extract clientId from URL or container dataset
       const clientId =
         container.dataset.clientId ||
         new URLSearchParams(window.location.search).get("clientId") ||
@@ -752,8 +883,10 @@ export function mountAskAi(container, options) {
       const useCreate = Boolean(createIntent) && Boolean(botEndpoint);
       const useBot = (useAgent || useCreate || pendingIntent === "milon-bot") && botEndpoint;
       const url = useBot ? botEndpoint : endpoint;
-      const res = await fetch(url, {
+      const prior = priorTurns(turnId);
+      return fetch(url, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -764,6 +897,7 @@ export function mountAskAi(container, options) {
                 clientId,
                 mode: "create",
                 message: q,
+                turnId,
                 audience: accountant ? "accountant" : "owner",
               }
             : useAgent
@@ -771,24 +905,42 @@ export function mountAskAi(container, options) {
                 clientId,
                 mode: "agent",
                 objective,
+                turnId,
                 audience: accountant ? "accountant" : "owner",
               }
             : useBot
               ? {
                   clientId,
                   message: q,
-                  history: history.slice(-8),
+                  turnId,
+                  history: prior,
                   audience: accountant ? "accountant" : "owner",
                 }
               : {
                   clientId,
                   question: q,
+                  turnId,
                   ...(accountant ? { audience: "accountant" } : {}),
                 },
         ),
       });
+    })();
+    pending.catch(() => {});
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        const err = new Error(ASK_TIMEOUT_REPLY);
+        err.name = "AbortError";
+        reject(err);
+      }, askTimeoutMs());
+      if (timer && typeof timer.unref === "function") timer.unref();
+    });
 
+    try {
+      const res = await Promise.race([pending, timeout]);
+      if (gen !== requestGen) return;
       const turn = await readTurn(res);
+      if (gen !== requestGen) return;
       if (!turn.ok) throw new Error(turn.error || "Something went wrong.");
 
       answer = turn.answer;
@@ -800,7 +952,21 @@ export function mountAskAi(container, options) {
       answerChips = precardCap ? [] : turn.chips;
       agentRun = turn.run;
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
-      history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
+      const assistant = {
+        role: "assistant",
+        content: answer,
+        ...(turn.precardCap && isPrecardLimitKind(turn.precardCap.limit)
+          ? { precardCap: { limit: turn.precardCap.limit } }
+          : {}),
+      };
+      history = [
+        ...history.map((item) =>
+          item.role === "user" && item.turnId === turnId
+            ? { role: "user", content: item.content, turnId }
+            : item,
+        ),
+        assistant,
+      ];
       if (history.length > 16) history = history.slice(-16);
       writeThread(boundClientId || currentClientId(), history);
       signoffCtas = botSignoffCtas({
@@ -808,7 +974,6 @@ export function mountAskAi(container, options) {
         created: turn.created,
         run: turn.run,
       });
-      question = "";
       try {
         if (turn.created && typeof onPersistedCreate === "function") {
           onPersistedCreate({ question: q, created: turn.created });
@@ -817,7 +982,19 @@ export function mountAskAi(container, options) {
         /* a side effect must not hide the reply */
       }
     } catch (e) {
-      question = q;
+      if (gen !== requestGen) return;
+      const timedOut = Boolean(e && e.name === "AbortError");
+      const message = timedOut
+        ? ASK_TIMEOUT_REPLY
+        : friendlyReachMessage(e, "Something went wrong.") || "Something went wrong.";
+      const echoed = history.some((item) => item.role === "user" && item.turnId === turnId);
+      history = history.map((item) =>
+        item.role === "user" && item.turnId === turnId
+          ? { role: "user", content: item.content, turnId, error: message }
+          : item,
+      );
+      writeThread(boundClientId || currentClientId(), history);
+      if (!echoed && !String(question || "").trim()) question = q;
       answer = "";
       precardCap = null;
       precardRemaining = null;
@@ -825,8 +1002,10 @@ export function mountAskAi(container, options) {
       toolHints = [];
       agentRun = null;
       signoffCtas = [];
-      errorMsg = friendlyReachMessage(e, "Something went wrong.") || "Something went wrong.";
+      errorMsg = "";
     } finally {
+      clearTimeout(timer);
+      if (gen !== requestGen) return;
       loading = false;
       pendingIntent = null;
       workingObjective = false;

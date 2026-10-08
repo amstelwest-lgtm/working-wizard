@@ -426,4 +426,41 @@ assert(
   "owner health scores the same debtor and creditor days as Ratios",
 );
 
+// Stored net income is 38,200. A 9.3% margin times 412,000 revenue is 38,316.
+// The prompt must quote the stored headline, not invite that recomputation.
+const storedNi = {
+  revenue: "412000",
+  cogs: "200000",
+  grossProfit: "212000",
+  ebit: "52000",
+  ebt: "48400",
+  netIncome: "38200",
+};
+const niBrief = buildOverviewBrief({
+  financials: storedNi,
+  copyPack: "us",
+  clientName: "QA Net Profit",
+});
+assert(niBrief.netProfit === 38200, `stored net profit ${niBrief.netProfit}`);
+assert(niBrief.grossProfit === 212000, "stored gross profit");
+assert(niBrief.operatingProfit === 52000, "stored operating profit");
+const niPrompt = formatOverviewForPrompt(niBrief, "owner");
+assert(niPrompt.includes("Net profit: $38,200"), niPrompt);
+assert(niPrompt.includes("do not multiply net margin by revenue"), niPrompt);
+assert(niPrompt.includes("Gross profit: $212,000"), niPrompt);
+assert(niPrompt.includes("Operating profit: $52,000"), niPrompt);
+assert(niPrompt.includes("Profit before tax: $48,400"), niPrompt);
+assert(niPrompt.includes("Do not recreate them by multiplying a margin by revenue"), niPrompt);
+assert(!niPrompt.includes("38,316"), "prompt does not contain margin times revenue");
+assert(!niPrompt.includes("38316"), "prompt does not contain the unformatted recomputation");
+const niAsk = buildPrompt("What is net profit?", { ...ctx, overview: niBrief, copyPack: "us" }, "full", "owner");
+assert(niAsk.user.includes("Net profit: $38,200"), "ask-ai prompt quotes stored net profit");
+assert(niAsk.system.includes("Do not multiply a margin by revenue"), "ask-ai system forbids recreating net profit");
+const noHeadline = buildOverviewBrief({
+  financials: { revenue: "412000", cash: "1000" },
+  copyPack: "us",
+});
+assert(noHeadline.netProfit == null, "missing net income is not invented");
+assert(!formatOverviewForPrompt(noHeadline, "owner").includes("Net profit:"), "no stored net profit, no net-profit line");
+
 console.log("ask-ai-context-test: all assertions passed");

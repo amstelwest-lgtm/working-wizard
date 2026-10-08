@@ -125,6 +125,31 @@ export function precardBotRemainingLabel(remaining: number): string | null {
   return `${Math.floor(remaining)} Bot messages left before trial`;
 }
 
+/**
+ * Why the cap card is showing. The count is the configured allowance
+ * (`PRECARD_BOT_LIMIT` and the pack / email limits), not a literal in the UI.
+ */
+export function precardCapReason(kind: PrecardLimitKind): string {
+  const limit = precardLimitFor(kind);
+  if (kind === "bot") return `You've used your ${limit} free Bot questions.`;
+  if (kind === "email") {
+    return limit === 1
+      ? "You've used your free client email."
+      : `You've used your ${limit} free client emails.`;
+  }
+  return limit === 1
+    ? "You've used your free advisory pack."
+    : `You've used your ${limit} free advisory packs.`;
+}
+
+/** Client retry token. Same id must not consume a second allowance. */
+export function normalizePrecardTurnId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const token = value.trim();
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(token)) return null;
+  return token;
+}
+
 export function precardCapError(limit: PrecardLimitKind): PrecardCapError {
   const err = new Error(PRECARD_CAP_MESSAGE) as PrecardCapError;
   err.code = PRECARD_CAP_CODE;

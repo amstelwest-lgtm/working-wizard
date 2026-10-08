@@ -69,10 +69,13 @@ assert(submit.includes("parseAskAiPayload") || widget.includes("parseAskAiPayloa
 assert(submit.includes("readTurn"), "submit reads a turn instead of assuming JSON");
 assert(!submit.includes("data.answer ||"), "a missing answer is not replaced with a fake success");
 assert(
-  submit.indexOf("await fetch") < submit.indexOf('question = ""'),
-  "composer clear stays after the request",
+  submit.indexOf("role: \"user\"") < submit.indexOf("return fetch") ||
+    submit.indexOf("{ role: \"user\"") < submit.indexOf("return fetch"),
+  "the question is echoed before the request",
 );
-assert(submit.includes("question = q"), "a failed send restores the draft");
+assert(submit.includes("turnId"), "a send carries a turn id so a retry can reuse it");
+assert(widget.includes("ask-ai-retry"), "a failed send offers Retry");
+assert(widget.includes("ASK_TIMEOUT_REPLY"), "a timeout is an inline error, not a silent clear");
 assert(submit.includes("safeRender"), "a paint failure cannot end the turn with an empty box");
 assert(widget.includes('err.role = "alert"'), "the failure is an alert in the thread");
 
