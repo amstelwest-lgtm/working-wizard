@@ -46,8 +46,13 @@ assert(noteTabLabel("moves") === "Moves", "Moves badge says Moves");
 assert(!noteTabsMatch("next", "moves"), "owner Next moves is not the accountant Moves tab");
 assert(accountantWorkspaceTab("ask") === "ask", "Milōn Bot stays on the studio");
 assert(accountantWorkspaceTab("summary") === "summary", "Summary stays Summary");
-assert(accountantWorkspaceTab("data") === "summary", "?tab=data is Client Brain");
-assert(accountantWorkspaceTab("brain") === "summary", "?tab=brain is Client Brain");
+assert(accountantWorkspaceTab("data") === "summary", "?tab=data is Books");
+assert(accountantWorkspaceTab("brain") === "summary", "?tab=brain is Books");
+assert(accountantWorkspaceTab("books") === "summary", "books opens the same pane as Client Brain");
+assert(accountantWorkspaceTab("pack") === "advisory", "pack opens the advisory pane");
+assert(noteTabsMatch("books", "summary"), "books and Client Brain are one page");
+assert(noteTabsMatch("pack", "advisory"), "pack and advisory are one page");
+assert(!noteTabsMatch("next", "books"), "owner Next is not Books");
 assert(accountantWorkspaceTab("pillars") === "ratios", "?tab=pillars is Health");
 assert(ownerWorkspaceTab("data") === null, "Client Brain has no owner page");
 
@@ -59,10 +64,16 @@ assert(ownerWorkspaceTab("advisory") === null, "Advisory has no owner page");
 assert(ownerWorkspaceTab("ask") === null, "Milōn Bot has no owner page");
 assert(ownerWorkspaceTab("next") === "next", "Next moves stays on the owner board");
 
-assert(destinationTab("waterfall", "accountant") === "profit", "destination helper matches accountant map");
+assert(
+  destinationTab("waterfall", "accountant") === "profit",
+  "destination helper matches accountant map",
+);
 assert(noteTabLabel("waterfall") === "Profit", "badge copy is Profit not waterfall");
 assert(noteTabLabel("today") === "Health", "badge copy is Health not Today");
-assert(showOnPageLabel("waterfall", "accountant") === "Show on Profit", "CTA names the accountant tab");
+assert(
+  showOnPageLabel("waterfall", "accountant") === "Show on Profit",
+  "CTA names the accountant tab",
+);
 assert(showOnPageLabel("profit", "owner") === "Show on Profit", "CTA names the owner tab");
 assert(showOnPageLabel("next", "accountant") === null, "no fake jump for Next moves");
 assert(showOnPageLabel("reports", "owner") === null, "no fake jump for Reports");
@@ -87,7 +98,10 @@ assert(ctx.includes("workspace"), "surface records which workspace registered it
 const layer = readFileSync(resolve("src/components/note-layer.tsx"), "utf8");
 assert(layer.includes("noteTabsMatch"), "pins compare equivalent tabs, not raw IDs");
 assert(layer.includes("destinationTab"), "deep links switch to the workspace tab");
-assert(layer.includes("highlightNoteId") || layer.includes("data-note-focus"), "focused pin is visually marked");
+assert(
+  layer.includes("highlightNoteId") || layer.includes("data-note-focus"),
+  "focused pin is visually marked",
+);
 
 const client = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(client.includes("accountantWorkspaceTab"), "accountant deep links map owner tab IDs");

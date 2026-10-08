@@ -21,12 +21,12 @@ assert(!clientSrc.includes("rep-grid"), "old report gallery markup is gone");
 assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the client Reports tab and scrolls to it");
 {
   const header = clientSrc.slice(clientSrc.indexOf("topbar-actions"), clientSrc.indexOf("BREADCRUMB"));
-  assert(header.includes("openReportsStudio"), "client-header Reports studio leaves the client page");
-  assert(!header.includes("handleGenerateReport"), "client-header Reports studio does not stay on ?tab=reports");
+  assert(header.includes("openReportsStudio"), "client-header Reports studio opens reports");
+  assert(!header.includes("handleGenerateReport"), "client-header Reports studio is not the in-page generate action");
   const openFn = clientSrc.slice(clientSrc.indexOf("const openReportsStudio"), clientSrc.indexOf("const handleExportPDF"));
-  assert(openFn.includes('to: "/reports"'), "client-header Reports studio opens /reports");
-  assert(openFn.includes("clientId,"), "client-header Reports studio passes this client's id");
-  assert(openFn.includes("client: undefined"), "client-header URL is /reports?clientId= only");
+  assert(openFn.includes('to: "/clients/$clientId"'), "client-header Reports studio stays on this client");
+  assert(openFn.includes('accountantClientTabSearch(prev, "reports")'), "client-header opens Deliverables reports");
+  assert(!openFn.includes('to: "/reports"'), "client-header does not leave for the picker");
 }
 assert(
   /activeTab === "budget" \? "flex" : "none"/.test(clientSrc) ||
@@ -36,6 +36,9 @@ assert(
 
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");
+assert(studioSrc.includes('to: "/clients/$clientId"'), "/reports with a client redirects into that file");
+assert(studioSrc.includes('section: "reports"'), "/reports redirect keeps the reports section");
+assert(studioSrc.includes("search.report"), "/reports redirect carries the report deep link");
 assert(!studioSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
 assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");

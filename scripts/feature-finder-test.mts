@@ -74,30 +74,40 @@ assert(ids("sign-off", studio)[0] === "action-plan", "sign-off opens Action Plan
 assert(ids("paybles", studio)[0] === "payables", "fuzzy paybles opens Payables");
 
 assert(
-  href("health", studio) === `/clients/${CLIENT}?tab=${coach("health").tab}&focus=health`,
-  "Health uses the coach ratios tab and health focus",
+  href("health", studio) ===
+    `/clients/${CLIENT}?tab=${coach("health").tab}&section=${coach("health").section}&focus=health`,
+  "Health uses the Overview health section",
 );
 assert(
-  href("pillars", studio) === `/clients/${CLIENT}?tab=${coach("pillars").tab}&focus=pillars`,
-  "Pillars uses the coach focus",
+  href("pillars", studio) ===
+    `/clients/${CLIENT}?tab=${coach("pillars").tab}&section=${coach("pillars").section}&focus=pillars`,
+  "Pillars uses the Overview pillars section",
 );
-assert(href("profitability", studio).endsWith("tab=profit"), "Profitability tab");
-assert(href("cash", studio).endsWith("tab=cash"), "Cash tab");
-assert(href("budget", studio).endsWith("tab=budget"), "Budget tab");
-assert(href("collections", studio).endsWith("tab=collections"), "Collections tab");
-assert(href("payables", studio).endsWith("tab=payables"), "Payables tab");
+assert(href("profitability", studio).includes("section=profit"), "Profitability section");
+assert(href("cash", studio).includes("section=cash"), "Cash section");
+assert(href("budget", studio).includes("section=budget"), "Budget section");
+assert(href("collections", studio).includes("section=collections"), "Collections section");
+assert(href("payables", studio).includes("section=payables"), "Payables section");
 assert(href("bot", studio).endsWith("tab=ask"), "Bot tab");
+assert(href("overview", studio).endsWith("tab=overview"), "Overview briefing");
+assert(href("moves", studio).includes("section=moves"), "Moves section");
+assert(href("reports", studio).includes("section=reports"), "Reports section");
+assert(href("advisory pack", studio).includes("section=pack"), "Advisory pack section");
+assert(href("drafter", studio).includes("section=pack"), "Advisory drafter stays on the pack");
 assert(
-  href("actions", studio) === `/clients/${CLIENT}?tab=${coach("actions").tab}`,
-  "Action Plan uses the coach actions tab",
+  href("actions", studio) ===
+    `/clients/${CLIENT}?tab=${coach("actions").tab}&section=${coach("actions").section}`,
+  "Action Plan uses the Deliverables plan section",
 );
 assert(
-  href("sync", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}`,
-  "Data & sync uses the coach data tab",
+  href("sync", studio) ===
+    `/clients/${CLIENT}?tab=${coach("data").tab}&section=${coach("data").section}`,
+  "Data & sync uses Overview Books",
 );
 assert(
-  href("upload", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}&onboard=1`,
-  "Upload reuses the onboard deep link on Client Brain",
+  href("upload", studio) ===
+    `/clients/${CLIENT}?tab=${coach("data").tab}&section=${coach("data").section}&onboard=1`,
+  "Upload reuses the onboard deep link on Books",
 );
 assert(href("clients", studio) === "/dashboard", "Clients opens the practice list");
 assert(href("billing", studio) === "/settings", "Billing opens Settings");
@@ -121,6 +131,7 @@ assert(ids("billing", owner).length === 0, "billing stays on the practice side")
 
 const accountantIds = featureIndex("accountant").map((row) => row.id);
 for (const id of [
+  "overview",
   "health",
   "pillars",
   "profitability",
@@ -128,8 +139,12 @@ for (const id of [
   "budget",
   "collections",
   "payables",
+  "moves",
   "bot",
   "action-plan",
+  "reports",
+  "advisory-pack",
+  "advisory-drafter",
   "data-sync",
   "upload",
   "clients",
@@ -177,7 +192,7 @@ assert(featureFinderShortcutLabel(false) === "Ctrl+K", "other label");
 const sample: FeatureDestination = {
   kind: "client",
   clientId: CLIENT,
-  search: { tab: "ratios", focus: "health" },
+  search: { tab: "overview", section: "health", focus: "health" },
 };
 assert(featureHref(sample).includes("focus=health"), "href keeps focus");
 
@@ -239,7 +254,7 @@ assert(
   "cash lists a jump for every client on the firm dashboard",
 );
 assert(
-  cashJumps.every((row) => row.label.startsWith("Cash for ") && row.href.includes("tab=cash")),
+  cashJumps.every((row) => row.label.startsWith("Cash for ") && row.href.includes("section=cash")),
   "cash jumps open that client's Cash tab",
 );
 assert(
@@ -257,7 +272,7 @@ assert(
 );
 assert(
   budgetJumps.every(
-    (row) => row.href.includes("tab=budget") && row.label.startsWith("Budget for "),
+    (row) => row.href.includes("section=budget") && row.label.startsWith("Budget for "),
   ),
   "budget jumps deep-link to the Budget tab",
 );
@@ -267,7 +282,7 @@ assert(
   "a client name after the section narrows the jump",
 );
 assert(
-  searchClientSectionJumps("yankees budget", BOOK)[0]?.href.endsWith("tab=budget"),
+  searchClientSectionJumps("yankees budget", BOOK)[0]?.href.includes("section=budget"),
   "section word can follow the client name",
 );
 assert(
@@ -276,11 +291,11 @@ assert(
 );
 const healthJumps = searchClientSectionJumps("health", BOOK);
 assert(
-  healthJumps[0]?.href.includes("tab=ratios") && healthJumps[0]?.href.includes("focus=health"),
+  healthJumps[0]?.href.includes("section=health") && healthJumps[0]?.href.includes("focus=health"),
   "health jumps keep the coach focus",
 );
 assert(
-  searchClientSectionJumps("collections", BOOK)[0]?.href.includes("tab=collections"),
+  searchClientSectionJumps("collections", BOOK)[0]?.href.includes("section=collections"),
   "collections jumps open Collections",
 );
 assert(
@@ -290,7 +305,7 @@ assert(
 assert(searchClientSectionJumps("", BOOK).length === 0, "an empty query does not expand sections");
 assert(searchClientSectionJumps("budget", []).length === 0, "an empty book has no section jumps");
 assert(
-  searchClientSectionJumps("13 week cash", BOOK).every((row) => row.href.includes("tab=cash")),
+  searchClientSectionJumps("13 week cash", BOOK).every((row) => row.href.includes("section=cash")),
   "cash synonyms still open Cash for each client",
 );
 

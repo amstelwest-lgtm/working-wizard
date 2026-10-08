@@ -21,15 +21,34 @@ function assert(cond: boolean, msg: string) {
 }
 
 const fromPlan = accountantClientTabSearch(
-  { tab: "plan", filter: "overdue", coach: "margin", why: "because", focus: "health", qbo: "connected" },
+  {
+    tab: "plan",
+    filter: "overdue",
+    coach: "margin",
+    why: "because",
+    focus: "health",
+    qbo: "connected",
+  },
   "reports",
 );
-assert(fromPlan.tab === "reports", "Reports replaces ?tab=plan");
+assert(
+  fromPlan.tab === "deliverables" && fromPlan.section === "reports",
+  "Reports replaces ?tab=plan",
+);
 assert(!("filter" in fromPlan), "an Action Plan filter does not stick to Reports");
-assert(!("coach" in fromPlan) && !("why" in fromPlan) && !("focus" in fromPlan), "coach crumbs clear");
+assert(
+  !("coach" in fromPlan) && !("why" in fromPlan) && !("focus" in fromPlan),
+  "coach crumbs clear",
+);
 assert(fromPlan.qbo === "connected", "unrelated search keys stay");
-assert(accountantClientTabSearch({ tab: "plan" }, "report").tab === "reports", "report alias sticks as reports");
-assert(normalizeAccountantClientTab("reports") === "reports", "direct ?tab=reports is already reports");
+assert(
+  accountantClientTabSearch({ tab: "plan" }, "report").section === "reports",
+  "report alias sticks as reports",
+);
+assert(
+  normalizeAccountantClientTab("reports") === "deliverables",
+  "direct ?tab=reports is Deliverables",
+);
 assert(
   accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan").filter === "overdue",
   "opening Action Plan keeps an overdue filter",
@@ -40,7 +59,10 @@ assert(!isActingAsThisClient(null, yankees), "a normal firm open is not acting a
 assert(!isActingAsThisClient("", yankees), "an empty impersonation id is not acting");
 assert(!isActingAsThisClient("other-client", yankees), "acting as someone else is not this client");
 assert(isActingAsThisClient(yankees, yankees), "Enter as client matches this client");
-assert(firmClientCrumbLabel("New York Yankees", false) === "New York Yankees", "firm crumb is the client name");
+assert(
+  firmClientCrumbLabel("New York Yankees", false) === "New York Yankees",
+  "firm crumb is the client name",
+);
 assert(
   !firmClientCrumbLabel("New York Yankees", false).includes("Acting as client"),
   "firm open does not say Acting as client",
@@ -55,9 +77,15 @@ assert(firstNameOf("A. Sample") === "Sample", "an initial is not the short name"
 assert(firstNameOf("Ben Accountants") === "Ben", "a given name stays the first token");
 assert(firstNameOf("A.") === "A", "a lone initial drops the trailing dot");
 assert(firstNameOf("") === "there", "empty name falls back");
-assert(practiceGreeting("A. Sample", morning) === "Good morning, Sample.", "greeting uses the short name");
+assert(
+  practiceGreeting("A. Sample", morning) === "Good morning, Sample.",
+  "greeting uses the short name",
+);
 assert(!practiceGreeting("A. Sample", morning).includes("A.."), "greeting is not A..");
-assert(practiceGreeting("Ben Accountants", morning) === "Good morning, Ben.", "given name greeting");
+assert(
+  practiceGreeting("Ben Accountants", morning) === "Good morning, Ben.",
+  "given name greeting",
+);
 const afternoon = new Date(2026, 9, 7, 15, 0, 0);
 assert(firstNameOf("Sample,") === "Sample", "a trailing comma is not part of the short name");
 assert(
@@ -84,16 +112,12 @@ const merged = mergeNeedsAttention(
     {
       clientId: yankees,
       name: "New York Yankees",
-      exceptions: [
-        { severity: 1, label: "Pack v1 waiting for your sign-off", tab: "advisory" },
-      ],
+      exceptions: [{ severity: 1, label: "Pack v1 waiting for your sign-off", tab: "advisory" }],
     },
     {
       clientId: "22222222-2222-4222-8222-222222222222",
       name: "QA Test Co",
-      exceptions: [
-        { severity: 1, label: "Pack v2 waiting for your sign-off", tab: "advisory" },
-      ],
+      exceptions: [{ severity: 1, label: "Pack v2 waiting for your sign-off", tab: "advisory" }],
     },
   ],
 );
@@ -112,8 +136,14 @@ const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clien
 assert(clientSrc.includes("accountantClientTabSearch"), "the studio writes tab through the helper");
 assert(clientSrc.includes("firmClientCrumbLabel"), "the crumb uses the acting-as helper");
 assert(!clientSrc.includes("Acting as client: <b"), "the crumb is not hard-coded as acting");
-assert(clientSrc.includes('revealTab("reports")') || clientSrc.includes("revealTab(tab"), "Reports still opens through revealTab");
-assert(/activeTab === "budget" \? "flex" : "none"/.test(clientSrc), "health has no complexity toggle");
+assert(
+  clientSrc.includes('revealTab("reports")') || clientSrc.includes("revealTab(tab"),
+  "Reports still opens through revealTab",
+);
+assert(
+  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc),
+  "health has no complexity toggle",
+);
 assert(!clientSrc.includes('viewMode === "complex"'), "health complex mode is gone");
 
 const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");

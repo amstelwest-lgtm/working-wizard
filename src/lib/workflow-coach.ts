@@ -16,13 +16,13 @@
 import { scoreTier } from "@/lib/ratios";
 
 export const COACH_STEPS = [
-  { id: "data", label: "Data", tab: "summary" },
-  { id: "health", label: "Health", tab: "ratios", focus: "health" },
-  { id: "pillars", label: "Pillars", tab: "ratios", focus: "pillars" },
-  { id: "profit", label: "Profitability", tab: "profit" },
-  { id: "cash", label: "Cash", tab: "cash" },
-  { id: "budget", label: "Budget", tab: "budget" },
-  { id: "actions", label: "Actions", tab: "plan" },
+  { id: "data", label: "Data", tab: "overview", section: "books" },
+  { id: "health", label: "Health", tab: "overview", section: "health", focus: "health" },
+  { id: "pillars", label: "Pillars", tab: "overview", section: "pillars", focus: "pillars" },
+  { id: "profit", label: "Profitability", tab: "overview", section: "profit" },
+  { id: "cash", label: "Cash", tab: "overview", section: "cash" },
+  { id: "budget", label: "Budget", tab: "overview", section: "budget" },
+  { id: "actions", label: "Actions", tab: "deliverables", section: "plan" },
 ] as const;
 
 export type CoachStepId = (typeof COACH_STEPS)[number]["id"];
@@ -36,6 +36,7 @@ export type CoachDone = Partial<Record<CoachStepId, boolean>>;
 
 export type CoachDestination = {
   tab: string;
+  section?: string;
   focus?: "health" | "pillars";
   /** Intent token the destination reads (`?coach=`). */
   coach?: string;
@@ -78,7 +79,8 @@ const DEFAULT_BECAUSE: Record<CoachPage, string> = {
   profit: "the waterfall is the evidence for margin — how revenue becomes profit",
   cash: "the 13-week forecast is the evidence for liquidity",
   collections: "the chase list names who owes what, from the aged receivables report",
-  payables: "the payables list names who to pay, delay, or renegotiate, from the aged payables report",
+  payables:
+    "the payables list names who to pay, delay, or renegotiate, from the aged payables report",
   budget: "the budget tests whether the plan fits the numbers",
   actions: "the read is done — these are the moves to assign",
   ask: "Milōn Bot drafts the next read from what is already on file",
@@ -119,7 +121,39 @@ export function isCoachSurface(tab: string): boolean {
   return DELIVERABLE_TABS.has(tab);
 }
 
-export function coachPageForTab(tab: string, focus?: string | null): CoachPage | null {
+export function coachPageForTab(
+  tab: string,
+  focus?: string | null,
+  section?: string | null,
+): CoachPage | null {
+  if (tab === "overview") {
+    switch (section) {
+      case "books":
+        return "data";
+      case "health":
+        return "health";
+      case "pillars":
+        return "pillars";
+      case "profit":
+        return "profit";
+      case "cash":
+        return "cash";
+      case "collections":
+        return "collections";
+      case "payables":
+        return "payables";
+      case "budget":
+        return "budget";
+      default:
+        return null;
+    }
+  }
+  if (tab === "deliverables") {
+    if (section === "plan") return "actions";
+    if (section === "reports") return "reports";
+    if (section === "pack") return "advisory";
+    return null;
+  }
   switch (tab) {
     case "summary":
       return "data";
@@ -157,27 +191,36 @@ export function pillarIsWeak(score: number | null | undefined): boolean {
 
 export type PillarEvidenceId = "profit" | "assets" | "financing" | "cash";
 
-const PILLAR_EVIDENCE: Record<PillarEvidenceId, { coach: string; label: string; tab: string }> = {
-  profit: { coach: "margin", label: "See it on Profitability", tab: "profit" },
-  assets: { coach: "assets", label: "See it on Profitability", tab: "profit" },
-  cash: { coach: "liquidity", label: "See it on Cash", tab: "cash" },
-  financing: { coach: "financing", label: "See it on Budget", tab: "budget" },
+const PILLAR_EVIDENCE: Record<
+  PillarEvidenceId,
+  { coach: string; label: string; tab: string; section: string }
+> = {
+  profit: { coach: "margin", label: "See it on Profitability", tab: "overview", section: "profit" },
+  assets: { coach: "assets", label: "See it on Profitability", tab: "overview", section: "profit" },
+  cash: { coach: "liquidity", label: "See it on Cash", tab: "overview", section: "cash" },
+  financing: { coach: "financing", label: "See it on Budget", tab: "overview", section: "budget" },
 };
 
 export function evidenceForPillar(id: string): (CoachDestination & { label: string }) | null {
   const row = PILLAR_EVIDENCE[id as PillarEvidenceId];
   if (!row) return null;
-  return { tab: row.tab, coach: row.coach, label: row.label };
+  return { tab: row.tab, section: row.section, coach: row.coach, label: row.label };
 }
 
 /** Owner briefing tabs → accountant deliverable + coach intent. */
 export function evidenceForBriefingTab(
   tab: "cash" | "waterfall" | "budget",
 ): CoachDestination & { label: string } {
-  if (tab === "cash") return { tab: "cash", coach: "liquidity", label: "See it on Cash" };
+  if (tab === "cash")
+    return { tab: "overview", section: "cash", coach: "liquidity", label: "See it on Cash" };
   if (tab === "waterfall")
-    return { tab: "profit", coach: "margin", label: "See it on Profitability" };
-  return { tab: "budget", coach: "budget", label: "See it on Budget" };
+    return {
+      tab: "overview",
+      section: "profit",
+      coach: "margin",
+      label: "See it on Profitability",
+    };
+  return { tab: "overview", section: "budget", coach: "budget", label: "See it on Budget" };
 }
 
 export function clipCoachWhy(text: string): string {
@@ -210,6 +253,7 @@ function becauseFor(page: CoachPage, intent: string | null, why: string | null):
 export function destinationForStep(step: CoachStep): CoachDestination {
   return {
     tab: step.tab,
+    ...("section" in step ? { section: step.section } : {}),
     ...("focus" in step ? { focus: step.focus } : {}),
   };
 }
@@ -238,7 +282,7 @@ export function coachView(input: {
       because,
       nextCue: "assign each move to an owner",
       cta: "Assign a move",
-      destination: { tab: "plan", assign: true },
+      destination: { tab: "deliverables", section: "plan", assign: true },
     };
   }
   return {
@@ -262,15 +306,32 @@ type HandoffKind =
   | "actions";
 
 const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
-  data: { tab: "summary", coach: "data", label: "Open Data" },
-  health: { tab: "ratios", focus: "health", coach: "health", label: "Open Health" },
-  pillars: { tab: "ratios", focus: "pillars", coach: "pillars", label: "Open Pillars" },
-  profit: { tab: "profit", coach: "margin", label: "Open Profitability" },
-  cash: { tab: "cash", coach: "liquidity", label: "Open Cash" },
-  collections: { tab: "collections", coach: "collections", label: "Open Collections" },
-  payables: { tab: "payables", coach: "payables", label: "Open Payables" },
-  budget: { tab: "budget", coach: "budget", label: "Open Budget" },
-  actions: { tab: "plan", coach: "actions", label: "Open Actions" },
+  data: { tab: "overview", section: "books", coach: "data", label: "Open Data" },
+  health: {
+    tab: "overview",
+    section: "health",
+    focus: "health",
+    coach: "health",
+    label: "Open Health",
+  },
+  pillars: {
+    tab: "overview",
+    section: "pillars",
+    focus: "pillars",
+    coach: "pillars",
+    label: "Open Pillars",
+  },
+  profit: { tab: "overview", section: "profit", coach: "margin", label: "Open Profitability" },
+  cash: { tab: "overview", section: "cash", coach: "liquidity", label: "Open Cash" },
+  collections: {
+    tab: "overview",
+    section: "collections",
+    coach: "collections",
+    label: "Open Collections",
+  },
+  payables: { tab: "overview", section: "payables", coach: "payables", label: "Open Payables" },
+  budget: { tab: "overview", section: "budget", coach: "budget", label: "Open Budget" },
+  actions: { tab: "deliverables", section: "plan", coach: "actions", label: "Open Actions" },
 };
 
 /**

@@ -313,8 +313,9 @@ const chosen = chooseCollections([newerEmpty, snap]);
 eq(chosen?.source, "xero", "an applied chase list beats a newer empty pull");
 
 const handoff = deliverableHandoff("Who is on the aged receivables chase list?");
-eq(handoff?.tab, "collections", "bot hands collections questions to the chase list");
-eq(deliverableHandoff("Will the 13-week cash forecast go negative?")?.tab, "cash", "cash questions stay on cash");
+eq(handoff?.tab, "overview", "bot hands collections questions to Overview");
+eq(handoff?.section, "collections", "bot hands collections questions to the chase list");
+eq(deliverableHandoff("Will the 13-week cash forecast go negative?")?.section, "cash", "cash questions stay on cash");
 
 assert(xeroScopes().includes("accounting.reports.aged.read"), "aged scope requested");
 assert(xeroScopes().includes("accounting.contacts.read"), "contacts read requested");

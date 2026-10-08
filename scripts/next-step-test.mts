@@ -142,14 +142,24 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   );
   eq(
     acct(facts({ state: "forecasting" })).cta.route.tab,
+    "overview",
+    "forecast lands on Overview (accountant)",
+  );
+  eq(
+    acct(facts({ state: "forecasting" })).cta.route.search.section,
     "cash",
-    "forecast lands on cash (accountant)",
+    "forecast lands on the cash section",
   );
   eq(owner(facts({ state: "recommendations" })).key, "recommend", "recommendations");
   eq(
     acct(facts({ state: "recommendations" })).cta.route.tab,
-    "advisory",
-    "accountant drafts in advisory",
+    "deliverables",
+    "accountant drafts in Deliverables",
+  );
+  eq(
+    acct(facts({ state: "recommendations" })).cta.route.search.section,
+    "pack",
+    "accountant drafts on the pack section",
   );
   eq(owner(facts({ state: "recommendations" })).cta.route.tab, "next", "owner reads next moves");
 
@@ -157,7 +167,8 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   // P1: with no pack yet the accountant builds one; the pack is the review unit.
   const ar = facts({ state: "accountant_review", hasFirm: true, proposedRecommendations: 2 });
   eq(acct(ar).key, "generate_pack", "accountant generates the pack first");
-  eq(acct(ar).cta.route.tab, "advisory", "pack lives on the advisory tab");
+  eq(acct(ar).cta.route.tab, "deliverables", "pack lives on Deliverables");
+  eq(acct(ar).cta.route.search.section, "pack", "pack lives on the pack section");
   eq(owner(ar).key, "wait", "owner waits");
   eq(owner(ar).urgency, "info", "waiting is informational, not a CTA to hammer");
   const arPack = facts({ ...ar, packStatus: "in_review", packVersion: 3 });
@@ -235,8 +246,13 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   );
   eq(
     acct(facts({ state: "client_decision", approvedWithoutAction: 1 })).cta.route.tab,
+    "deliverables",
+    "accountant starts actions from Deliverables",
+  );
+  eq(
+    acct(facts({ state: "client_decision", approvedWithoutAction: 1 })).cta.route.search.section,
     "plan",
-    "accountant starts actions from the plan",
+    "accountant starts actions from the plan section",
   );
   eq(
     owner(facts({ state: "client_decision", hasFirm: true, proposedRecommendations: 1 })).key,
@@ -261,8 +277,13 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   );
   eq(
     acct(facts({ state: "action_execution", openActions: 4 })).cta.route.tab,
-    "plan",
+    "deliverables",
     "accountant plan tab",
+  );
+  eq(
+    acct(facts({ state: "action_execution", openActions: 4 })).cta.route.search.section,
+    "plan",
+    "accountant plan section",
   );
   eq(
     owner(facts({ state: "action_execution", approvedWithoutAction: 2 })).key,
@@ -396,7 +417,11 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
 
 {
   const r = nextStepRoute("chase", "accountant", CLIENT);
-  eq(r.href, `/clients/${CLIENT}?tab=plan&filter=overdue`, "href includes tab and filter");
+  eq(
+    r.href,
+    `/clients/${CLIENT}?tab=deliverables&section=plan&filter=overdue`,
+    "href includes tab, section, and filter",
+  );
   const o = nextStepRoute("chase", "owner", CLIENT);
   eq(o.href, "/app", "owner href is the board");
   eq(o.tab, "tasks", "owner tab carried for the in-app switch");

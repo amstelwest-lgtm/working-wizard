@@ -128,7 +128,10 @@ import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import {
   accountantClientTabSearch,
-  normalizeAccountantClientTab,
+  canonicalizeAccountantSearch,
+  DELIVERABLE_SECTIONS,
+  legacyPaneForSearch,
+  OVERVIEW_SECTIONS,
 } from "@/lib/client-route-search";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
@@ -411,6 +414,11 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     why?: string;
     /** Health page sub-step: the score, or the pillar drill. */
     focus?: string;
+    /** Overview or Deliverables sub-tab (`health`, `cash`, `reports`, `pack`, …). */
+    section?: string;
+    /** Reports studio deep link, carried from `/reports`. */
+    report?: string;
+    action?: "preview" | "download";
     /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
     profile?: number;
   } => {
@@ -421,11 +429,14 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       onboard?: string;
       note?: string;
       tab?: string;
+      section?: string;
       filter?: string;
       queries?: string;
       coach?: string;
       why?: string;
       focus?: string;
+      report?: string;
+      action?: "preview" | "download";
       profile?: number;
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
@@ -433,14 +444,21 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
-    if (typeof search.tab === "string") {
-      if (search.tab === "pillars" && search.focus !== "health") out.focus = "pillars";
-      out.tab = normalizeAccountantClientTab(search.tab);
+    if (typeof search.tab === "string" || typeof search.section === "string") {
+      const canonical = canonicalizeAccountantSearch({
+        tab: typeof search.tab === "string" ? search.tab : undefined,
+        section: typeof search.section === "string" ? search.section : undefined,
+        focus: typeof search.focus === "string" ? search.focus : undefined,
+      });
+      out.tab = canonical.tab;
+      if (canonical.section) out.section = canonical.section;
+      if (canonical.focus) out.focus = canonical.focus;
     }
     if (typeof search.queries === "string") out.queries = search.queries;
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
-    if (search.focus === "health" || search.focus === "pillars") out.focus = search.focus;
+    if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
+    if (search.action === "preview" || search.action === "download") out.action = search.action;
     if (search.profile === 1 || search.profile === "1") out.profile = 1;
     if (
       search.filter === "overdue" ||
@@ -505,36 +523,54 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "advisory",
 ];
 
-const CLIENT_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "summary", label: "Client Brain" },
-  { id: "moves", label: "Moves" },
+const CLIENT_RAIL: { id: "ask" | "overview" | "deliverables"; label: string; landing: string }[] = [
+  { id: "ask", label: "Bot", landing: "ask" },
+  { id: "overview", label: "Overview", landing: "overview" },
+  { id: "deliverables", label: "Deliverables", landing: "reports" },
 ];
 
-const DELIVERABLE_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
-  { id: "ask", label: "Milōn Bot", star: true },
-  { id: "ratios", label: "Health & Ratios" },
-  { id: "profit", label: "Profitability" },
-  { id: "cash", label: "13-Week Cash Forecast", star: true },
+const OVERVIEW_SECTION_TABS: { id: (typeof OVERVIEW_SECTIONS)[number]; label: string }[] = [
+  { id: "health", label: "Health" },
+  { id: "pillars", label: "Pillars" },
+  { id: "cash", label: "Cash" },
+  { id: "profit", label: "Profit" },
   { id: "collections", label: "Collections" },
   { id: "payables", label: "Payables" },
   { id: "budget", label: "Budget" },
-  { id: "reports", label: "Reports", star: true },
-  { id: "plan", label: "Action Plan", star: true },
-  { id: "advisory", label: "Advisory Drafter" },
+  { id: "moves", label: "Moves" },
+  { id: "books", label: "Books" },
 ];
+
+const DELIVERABLE_SECTION_TABS: { id: (typeof DELIVERABLE_SECTIONS)[number]; label: string }[] = [
+  { id: "reports", label: "Reports" },
+  { id: "pack", label: "Advisory pack" },
+  { id: "plan", label: "Action plan" },
+];
+
+function railGroup(tab: ActiveTab): "ask" | "overview" | "deliverables" {
+  if (tab === "ask") return "ask";
+  if (tab === "reports" || tab === "plan" || tab === "advisory") return "deliverables";
+  return "overview";
+}
+
+function selectedSectionId(tab: ActiveTab, section: string | undefined): string | null {
+  if (railGroup(tab) === "deliverables") {
+    return DELIVERABLE_SECTION_TABS.some((row) => row.id === section) ? (section ?? "reports") : "reports";
+  }
+  return OVERVIEW_SECTION_TABS.some((row) => row.id === section) ? (section ?? null) : null;
+}
 
 function ClientRailButton({
   id,
+  landing,
   label,
-  star,
   active,
   clientId,
   primary,
 }: {
-  id: ActiveTab;
+  id: "ask" | "overview" | "deliverables";
+  landing: string;
   label: string;
-  star?: boolean;
   active: boolean;
   clientId: string;
   primary?: boolean;
@@ -543,7 +579,7 @@ function ClientRailButton({
     <Link
       to="/clients/$clientId"
       params={{ clientId }}
-      search={(prev) => accountantClientTabSearch(prev, id)}
+      search={(prev) => accountantClientTabSearch(prev, landing)}
       className={`tab${active ? " on" : ""}${primary ? " bot-primary" : ""}`}
       data-tab={id}
       data-bot-rail={primary ? "true" : undefined}
@@ -551,8 +587,66 @@ function ClientRailButton({
       replace
     >
       {label}
-      {star ? <span className="star">✦</span> : null}
     </Link>
+  );
+}
+
+function SectionTabList({
+  label,
+  sections,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  sections: readonly { id: string; label: string }[];
+  selected: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key !== "ArrowLeft" &&
+      event.key !== "ArrowRight" &&
+      event.key !== "Home" &&
+      event.key !== "End"
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const ids = sections.map((section) => section.id);
+    const current = selected && ids.includes(selected) ? selected : ids[0];
+    let index = Math.max(0, ids.indexOf(current ?? ""));
+    if (event.key === "ArrowRight") index = (index + 1) % ids.length;
+    if (event.key === "ArrowLeft") index = (index - 1 + ids.length) % ids.length;
+    if (event.key === "Home") index = 0;
+    if (event.key === "End") index = ids.length - 1;
+    const next = ids[index];
+    if (!next) return;
+    onSelect(next);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`section-tab-${next}`)?.focus();
+    });
+  };
+  return (
+    <div className="section-tablist" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
+      {sections.map((section, index) => {
+        const on = selected === section.id;
+        const roving = on || (selected == null && index === 0);
+        return (
+          <button
+            key={section.id}
+            type="button"
+            role="tab"
+            id={`section-tab-${section.id}`}
+            className="section-tab"
+            aria-selected={on}
+            tabIndex={roving ? 0 : -1}
+            onClick={() => onSelect(section.id)}
+          >
+            {section.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -615,11 +709,17 @@ function FirstDataChoice({
   );
 }
 
-function resolveAccountantTab(tab: string | undefined): ActiveTab | null {
-  if (!tab) return null;
-  const mapped = accountantWorkspaceTab(tab);
-  if (mapped && ACCOUNTANT_TABS.includes(mapped as ActiveTab)) return mapped as ActiveTab;
-  return ACCOUNTANT_TABS.includes(tab as ActiveTab) ? (tab as ActiveTab) : null;
+function resolveAccountantTab(
+  input: string | { tab?: string; section?: string; focus?: string } | undefined,
+): ActiveTab | null {
+  if (input == null) return null;
+  const search = typeof input === "string" ? { tab: input } : input;
+  const fromNotes = search.tab ? accountantWorkspaceTab(search.tab) : null;
+  const pane =
+    legacyPaneForSearch(search) ??
+    (fromNotes && ACCOUNTANT_TABS.includes(fromNotes as ActiveTab) ? (fromNotes as ActiveTab) : null);
+  if (pane && ACCOUNTANT_TABS.includes(pane)) return pane;
+  return null;
 }
 
 // Friendly labels for SphereHero drivers
@@ -727,7 +827,7 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
-    () => resolveAccountantTab(search.tab) ?? "overview",
+    () => resolveAccountantTab(search) ?? "overview",
   );
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const persistedCreateRef = useRef<
@@ -813,13 +913,19 @@ function ClientView() {
     action?: "preview" | "download";
   }>({});
   useEffect(() => {
-    // ?tab=actions and ?tab=health are rewritten in validateSearch.
-    const next = resolveAccountantTab(search.tab);
+    // Old ?tab= values are rewritten to tab + section in validateSearch.
+    const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
+    if (search.report || search.action) {
+      setStudioDeepLink({
+        report: search.report,
+        action: search.action,
+      });
+    }
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
-  }, [search.note, search.tab, search.queries, search.profile, requestOpenNote, openArchive]);
+  }, [search, requestOpenNote, openArchive]);
   // Landing tab: Overview — the client explanation, profile, and upload.
   // Deliverables stay clean. Decided once per client, after load, and never
   // over a ?tab= deep link.
@@ -836,10 +942,10 @@ function ClientView() {
       landingTabDecidedFor.current = clientId;
       const figures = FIELD_LABELS.some(({ key }) => (scalars[key] ?? "").trim() !== "");
       setTourVariant(figures ? "accountant-client" : "accountant-client-empty");
-      if (resolveAccountantTab(search.tab)) return;
+      if (resolveAccountantTab(search)) return;
       setActiveTab("overview");
     },
-    [clientId, search.tab],
+    [clientId, search],
   );
   useEffect(() => {
     track("tab_viewed", {
@@ -2095,26 +2201,32 @@ function ClientView() {
         }, 60);
         return;
       }
-      const tab = resolveAccountantTab(dest.tab);
+      const canonical = canonicalizeAccountantSearch({
+        tab: dest.tab,
+        section: dest.section,
+        focus: dest.focus,
+      });
+      const tab = resolveAccountantTab(canonical);
       if (!tab) return;
       setActiveTab(tab);
       navigate({
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => {
-          const next = { ...prev, tab };
+          const next = accountantClientTabSearch(prev, canonical.tab, {
+            section: canonical.section,
+          });
           if (dest.coach) next.coach = dest.coach;
           else delete next.coach;
           if (dest.why) next.why = dest.why;
           else delete next.why;
-          if (dest.focus) next.focus = dest.focus;
-          else delete next.focus;
+          if (canonical.focus) next.focus = canonical.focus;
           return next;
         },
         replace: true,
       });
       const targetId =
-        dest.focus === "pillars"
+        canonical.section === "pillars" || canonical.focus === "pillars"
           ? "coach-pillars"
           : tab === "summary"
             ? "data-up-to-date"
@@ -2150,17 +2262,15 @@ function ClientView() {
     revealTab("reports");
   }, [revealTab]);
 
-  /** Standalone suite (client combobox + Preview PDF). The in-page Reports tab stays on ?tab=reports. */
+  /** Reports studio for this client: Deliverables → Reports. */
   const openReportsStudio = useCallback(() => {
     setMobileNavOpen(false);
+    const pane = resolveAccountantTab("reports") ?? "reports";
+    setActiveTab(pane);
     void navigate({
-      to: "/reports",
-      search: {
-        client: undefined,
-        clientId,
-        report: undefined,
-        action: undefined,
-      },
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => accountantClientTabSearch(prev, "reports"),
     });
   }, [clientId, navigate]);
 
@@ -2449,8 +2559,12 @@ function ClientView() {
           return;
         default: {
           const route = nextStepRoute(key, "accountant", clientId);
-          const tab = resolveAccountantTab(route.tab ?? undefined) ?? "overview";
-          const nextSearch = { tab, filter: route.search.filter };
+          const tab =
+            resolveAccountantTab({
+              tab: route.tab ?? undefined,
+              section: route.search.section,
+            }) ?? "overview";
+          const nextSearch = { tab, section: route.search.section, filter: route.search.filter };
           revealTab(tab, undefined, nextSearch.filter);
         }
       }
@@ -2603,42 +2717,43 @@ function ClientView() {
 
             <div className="client-workspace">
               <nav className="deliverable-rail" aria-label="Client workspace">
-                {hasFigures ? (
-                  <>
-                    <span className="rail-kicker">Next</span>
-                    <ClientRailButton
-                      id="ask"
-                      label="Milōn Bot"
-                      active={activeTab === "ask"}
-                      clientId={clientId}
-                      primary
-                    />
-                  </>
-                ) : null}
-                <span className="rail-kicker">Client</span>
                 {CLIENT_RAIL.map((t) => (
                   <ClientRailButton
                     key={t.id}
                     id={t.id}
+                    landing={t.landing}
                     label={t.label}
-                    star={t.star}
-                    active={activeTab === t.id}
+                    active={railGroup(activeTab) === t.id}
                     clientId={clientId}
-                  />
-                ))}
-                <span className="rail-kicker rail-kicker-split">Deliverables</span>
-                {DELIVERABLE_RAIL.filter((t) => !hasFigures || t.id !== "ask").map((t) => (
-                  <ClientRailButton
-                    key={t.id}
-                    id={t.id}
-                    label={t.label}
-                    star={t.star}
-                    active={activeTab === t.id}
-                    clientId={clientId}
+                    primary={t.id === "ask"}
                   />
                 ))}
               </nav>
               <div className="deliverable-main">
+                {railGroup(activeTab) !== "ask" ? (
+                  <SectionTabList
+                    label={
+                      railGroup(activeTab) === "deliverables" ? "Deliverables" : "Overview sections"
+                    }
+                    sections={
+                      railGroup(activeTab) === "deliverables"
+                        ? DELIVERABLE_SECTION_TABS
+                        : OVERVIEW_SECTION_TABS
+                    }
+                    selected={selectedSectionId(activeTab, search.section)}
+                    onSelect={(section) => {
+                      const rail = railGroup(activeTab) === "deliverables" ? "deliverables" : "overview";
+                      const pane = resolveAccountantTab({ tab: rail, section });
+                      if (pane) setActiveTab(pane);
+                      void navigate({
+                        to: "/clients/$clientId",
+                        params: { clientId },
+                        search: (prev) => accountantClientTabSearch(prev, rail, { section }),
+                        replace: true,
+                      });
+                    }}
+                  />
+                ) : null}
                 <div
                   className={`tabpane${activeTab === "overview" ? " on" : ""}`}
                   id="pane-overview"

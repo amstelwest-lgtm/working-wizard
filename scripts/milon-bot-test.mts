@@ -188,7 +188,7 @@ assert(!appSrc.includes("MilonBotPanel"), "owner board no longer mounts a second
 assert(appSrc.includes('id="ask-ai-overview"'), "owner board keeps the unified widget mount");
 assert(appSrc.includes("OwnerBrainDrip"), "owner drip unchanged");
 assert(studioSrc.includes('id="ask-ai-accountant"'), "studio still mounts the widget");
-assert(studioSrc.includes('{ id: "ask", label: "Milōn Bot"'), "studio tab is labeled Milōn Bot");
+assert(studioSrc.includes('{ id: "ask", label: "Bot"'), "studio rail is labeled Bot");
 assert(studioSrc.includes("functions/v1/milon-bot"), "studio widget can call milon-bot");
 assert(clientSrc.includes("/functions/v1/milon-bot"), "client posts to milon-bot");
 assert(!appSrc.toLowerCase().includes("agent api"), "no public Agent API");

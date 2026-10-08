@@ -360,9 +360,10 @@ const chosen = choosePayables([newerEmpty, snap]);
 eq(chosen?.source, "xero", "an applied payables list beats a newer empty pull");
 
 const handoff = deliverableHandoff("Who should we pay on the aged payables list?");
-eq(handoff?.tab, "payables", "bot hands payables questions to the supplier list");
-eq(deliverableHandoff("Who is on the aged receivables chase list?")?.tab, "collections", "collections stays collections");
-eq(deliverableHandoff("Will the 13-week cash forecast go negative?")?.tab, "cash", "cash questions stay on cash");
+eq(handoff?.tab, "overview", "bot hands payables questions to Overview");
+eq(handoff?.section, "payables", "bot hands payables questions to the supplier list");
+eq(deliverableHandoff("Who is on the aged receivables chase list?")?.section, "collections", "collections stays collections");
+eq(deliverableHandoff("Will the 13-week cash forecast go negative?")?.section, "cash", "cash questions stay on cash");
 
 assert(xeroScopes().includes("accounting.reports.aged.read"), "aged scope already requested");
 assert(xeroScopes().includes("accounting.contacts.read"), "contacts read already requested");

@@ -157,28 +157,50 @@ const OWNER_TAB: Record<NextStepTarget, string | null> = {
   wait: "today",
 };
 
-/** Accountant studio (`/clients/:id`) tab per target. */
+/** Accountant studio (`/clients/:id`) rail tab per target. */
 const ACCOUNTANT_TAB: Record<NextStepTarget, string> = {
-  profile: "summary",
-  questions: "summary",
-  upload: "ratios",
-  validate: "ratios",
-  diagnosis: "ratios",
+  profile: "overview",
+  questions: "overview",
+  upload: "overview",
+  validate: "overview",
+  diagnosis: "overview",
+  forecast: "overview",
+  recommend: "deliverables",
+  review: "deliverables",
+  decide: "deliverables",
+  start_actions: "deliverables",
+  actions: "deliverables",
+  chase: "deliverables",
+  unblock: "deliverables",
+  data_request: "overview",
+  generate_pack: "deliverables",
+  review_pack: "deliverables",
+  read_pack: "deliverables",
+  outcome: "deliverables",
+  restart: "overview",
+  wait: "overview",
+};
+
+/** Section on that rail. Omitted for the Overview briefing and for waiting. */
+const ACCOUNTANT_SECTION: Partial<Record<NextStepTarget, string>> = {
+  profile: "books",
+  questions: "books",
+  upload: "health",
+  validate: "health",
+  diagnosis: "health",
   forecast: "cash",
-  recommend: "advisory",
-  review: "advisory",
-  decide: "advisory",
+  recommend: "pack",
+  review: "pack",
+  decide: "pack",
   start_actions: "plan",
   actions: "plan",
   chase: "plan",
   unblock: "plan",
-  data_request: "overview",
-  generate_pack: "advisory",
-  review_pack: "advisory",
-  read_pack: "advisory",
+  generate_pack: "pack",
+  review_pack: "pack",
+  read_pack: "pack",
   outcome: "plan",
-  restart: "ratios",
-  wait: "overview",
+  restart: "health",
 };
 
 /** Extra query params the accountant studio already reacts to. */
@@ -214,7 +236,10 @@ export function nextStepRoute(
   }
   const path = `/clients/${clientId}`;
   const tab = ACCOUNTANT_TAB[target];
-  const search = { tab, ...accountantSearch(target) };
+  const section = ACCOUNTANT_SECTION[target];
+  const search: Record<string, string> = { tab };
+  if (section) search.section = section;
+  Object.assign(search, accountantSearch(target));
   return { path, tab, search, href: buildHref(path, search) };
 }
 
@@ -683,9 +708,10 @@ export function outstandingChips(
 /** Tab ids each surface can activate; the test asserts every route lands on one. */
 export const OWNER_BOARD_TABS = ["today", "waterfall", "cash", "budget", "next", "tasks"] as const;
 export const ACCOUNTANT_STUDIO_TABS = [
-  "overview",
-  "summary",
   "ask",
+  "overview",
+  "deliverables",
+  "summary",
   "ratios",
   "profit",
   "cash",
