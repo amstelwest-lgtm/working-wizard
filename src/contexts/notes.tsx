@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -106,9 +107,18 @@ function toastEmailResult(
   toast.success("Note saved");
 }
 
-export function NotesProvider({ children }: { children: ReactNode }) {
+export function NotesProvider({
+  children,
+  previewNotes,
+}: {
+  children: ReactNode;
+  /** Harness only. Skips the notes fetch and shows these rows. */
+  previewNotes?: ClientNote[];
+}) {
+  const previewNotesRef = useRef(previewNotes);
+  previewNotesRef.current = previewNotes;
   const [surface, setSurface] = useState<NotesSurface | null>(null);
-  const [notes, setNotes] = useState<ClientNote[]>([]);
+  const [notes, setNotes] = useState<ClientNote[]>(previewNotes ?? []);
   const [collaborators, setCollaborators] = useState<NoteCollaborator[]>([]);
   const [clientName, setClientName] = useState("Client");
   const [loading, setLoading] = useState(false);
@@ -163,6 +173,12 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (previewNotesRef.current) {
+      setNotes(previewNotesRef.current);
+      setCollaborators([]);
+      setLoading(false);
+      return;
+    }
     if (!surface?.clientId) {
       setNotes([]);
       setCollaborators([]);
