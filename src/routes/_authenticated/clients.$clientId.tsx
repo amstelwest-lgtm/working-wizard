@@ -3020,25 +3020,6 @@ function ClientView() {
                   {activeTab === "summary" && (
                     <>
                       <StatementFigures facts={statementFigureFacts} />
-                      <DataUpToDate
-                        clientId={clientId}
-                        returnPath={`/clients/${clientId}`}
-                        xeroRefresh={xeroRefresh}
-                        qboRefresh={qboRefresh}
-                        sageRefresh={sageRefresh}
-                        onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
-                        onXeroSyncComplete={onXeroSyncComplete}
-                        onQboSyncComplete={onQboSyncComplete}
-                        onSageSyncComplete={onSageSyncComplete}
-                        onUpload={() => setUploadOpen(true)}
-                        freshness={dataFreshness}
-                      />
-                      <DeliverableInputConfig
-                        className="mb-5"
-                        clientId={clientId}
-                        deliverableId="summary"
-                        context={deliverableInputContext}
-                      />
                       <ClientBrainSummary
                         clientId={client.id}
                         clientName={client.name}
@@ -3050,6 +3031,37 @@ function ClientView() {
                         onOpenTab={(tab) => setActiveTab(tab)}
                         onAnswerProfile={() => setProfileOpen(true)}
                         figureFacts={statementFigureFacts}
+                        renderFrame={({ inputs, body }) => (
+                          <>
+                            <DataUpToDate
+                              clientId={clientId}
+                              returnPath={`/clients/${clientId}`}
+                              xeroRefresh={xeroRefresh}
+                              qboRefresh={qboRefresh}
+                              sageRefresh={sageRefresh}
+                              onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
+                              onXeroSyncComplete={onXeroSyncComplete}
+                              onQboSyncComplete={onQboSyncComplete}
+                              onSageSyncComplete={onSageSyncComplete}
+                              onUpload={() => setUploadOpen(true)}
+                              freshness={dataFreshness}
+                              chip={figureSourceChipLabel(statementMeta.statementSource)}
+                              openQueries={openQueriesCount}
+                              onOpenQueries={() =>
+                                openArchive(openQueriesCount > 0 ? "open" : "resolved")
+                              }
+                            >
+                              <DeliverableInputConfig
+                                className="mb-5"
+                                clientId={clientId}
+                                deliverableId="summary"
+                                context={deliverableInputContext}
+                              />
+                              {inputs}
+                            </DataUpToDate>
+                            {body}
+                          </>
+                        )}
                       />
                     </>
                   )}
