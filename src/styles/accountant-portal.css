@@ -401,6 +401,7 @@ body:has(.settings-plan-card) #wizard-notes-pin{visibility:hidden;pointer-events
 .budget-lens .milon-scroll-table__hint{text-transform:none;letter-spacing:0;font-size:12px;font-weight:500}
 .budget-lens .budget-grid thead th{position:sticky;top:0;z-index:2;height:32px;background:#fffdf8}
 .budget-lens .budget-grid thead tr:nth-child(2) th{top:32px;height:28px}
+.budget-lens .budget-grid__money{white-space:nowrap;min-width:5.75rem;text-align:right;font-variant-numeric:tabular-nums}
 .budget-lens .budget-grid__line{position:sticky;left:0;z-index:3;min-width:8.5rem;background:#fffdf8}
 .budget-lens .budget-grid thead .budget-grid__line{z-index:4}
 .budget-lens .budget-grid__sub td{font-weight:600;background:rgba(212,165,80,.08)}
