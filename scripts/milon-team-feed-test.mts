@@ -46,12 +46,12 @@ assert(agentFor("deliverable", "action_plan") === "advisor", "action plan is the
 assert(agentFor("deliverable", "advisory") === "advisor", "advisory draft is the advisor");
 assert(agentFor("deliverable", "client_email") === "advisor", "client email draft is the advisor");
 assert(agentFor("deliverable", "plan") === "advisor", "plan deliverable is the advisor");
-assert(agentFor("deliverable", "reconciliation") === "accountant", "reconciliation is the accountant");
-assert(agentFor("deliverable", "upload") === "accountant", "upload is the accountant");
-assert(agentFor("deliverable", "sync") === "accountant", "sync is the accountant");
-assert(agentFor("deliverable", "data_request") === "accountant", "data request is the accountant");
-assert(agentFor("deliverable", "query") === "accountant", "query is the accountant");
-assert(agentFor("deliverable", "signoff") === "accountant", "sign-off is the accountant");
+assert(agentFor("deliverable", "reconciliation") === "bookkeeper", "reconciliation is the bookkeeper");
+assert(agentFor("deliverable", "upload") === "bookkeeper", "upload is the bookkeeper");
+assert(agentFor("deliverable", "sync") === "bookkeeper", "sync is the bookkeeper");
+assert(agentFor("deliverable", "data_request") === "bookkeeper", "data request is the bookkeeper");
+assert(agentFor("deliverable", "query") === "bookkeeper", "query is the bookkeeper");
+assert(agentFor("deliverable", "signoff") === "bookkeeper", "sign-off is the bookkeeper");
 
 assert(agentFor("proposal", "debtor_days") === "advisor", "debtor-day proposal is the advisor");
 assert(agentFor("proposal", "cash") === "advisor", "cash-move proposal is the advisor");
@@ -59,15 +59,15 @@ assert(agentFor("proposal", "other") === "advisor", "untyped next move is the ad
 assert(agentFor("proposal", "gross_margin") === "analyst", "margin proposal is the analyst");
 assert(agentFor("proposal", "budget") === "analyst", "budget proposal is the analyst");
 assert(agentFor("proposal", "revenue") === "analyst", "revenue proposal is the analyst");
-assert(agentFor("proposal", "sync") === "accountant", "sync proposal is the accountant");
-assert(agentFor("proposal", "data_request") === "accountant", "data-request proposal is the accountant");
+assert(agentFor("proposal", "sync") === "bookkeeper", "sync proposal is the bookkeeper");
+assert(agentFor("proposal", "data_request") === "bookkeeper", "data-request proposal is the bookkeeper");
 
-assert(agentFor("event", "sync") === "accountant", "sync event is the accountant");
-assert(agentFor("event", "upload") === "accountant", "upload event is the accountant");
-assert(agentFor("event", "query") === "accountant", "query event is the accountant");
-assert(agentFor("event", "data_request") === "accountant", "data-request event is the accountant");
-assert(agentFor("event", "signoff") === "accountant", "sign-off event is the accountant");
-assert(agentFor("event", "review.signed_off") === "accountant", "pack sign-off event is the accountant");
+assert(agentFor("event", "sync") === "bookkeeper", "sync event is the bookkeeper");
+assert(agentFor("event", "upload") === "bookkeeper", "upload event is the bookkeeper");
+assert(agentFor("event", "query") === "bookkeeper", "query event is the bookkeeper");
+assert(agentFor("event", "data_request") === "bookkeeper", "data-request event is the bookkeeper");
+assert(agentFor("event", "signoff") === "bookkeeper", "sign-off event is the bookkeeper");
+assert(agentFor("event", "review.signed_off") === "bookkeeper", "pack sign-off event is the bookkeeper");
 assert(agentFor("event", "diagnosis.reviewed") === "analyst", "diagnosis review is the analyst");
 assert(agentFor("event", "forecast.published") === "analyst", "forecast publish is the analyst");
 assert(agentFor("event", "proposal") === "advisor", "proposal event is the advisor");
@@ -211,13 +211,13 @@ assert(
     ].join(","),
   `activity is newest first, got ${order.join(",")}`,
 );
-assert(activity[0].kind === "signoff" && activity[0].agent === "accountant", "latest event is the accountant sign-off");
+assert(activity[0].kind === "signoff" && activity[0].agent === "bookkeeper", "latest event is the bookkeeper sign-off");
 assert(activity.find((event) => event.id === "approved:p1")?.agent === "analyst", "budget approval is the analyst");
 assert(activity.find((event) => event.kind === "sync")?.text === "Xero sync · Jan 2026", "sync text uses the ledger and period");
 
 const agents = agentStatusesFromActivity(activity);
-assert(agents.accountant.lastRunAt === "2026-07-01T00:00:00.000Z", "accountant last run is the latest real event");
-assert(agents.accountant.lastRunKind === "signoff", "accountant last run kind");
+assert(agents.bookkeeper.lastRunAt === "2026-07-01T00:00:00.000Z", "bookkeeper last run is the latest real event");
+assert(agents.bookkeeper.lastRunKind === "signoff", "bookkeeper last run kind");
 assert(agents.analyst.lastRunAt === "2026-06-01T00:00:00.000Z", "analyst last run is the budget approval");
 assert(agents.analyst.lastRunKind === "approved", "analyst last run kind");
 assert(agents.advisor.lastRunAt === null && agents.advisor.lastRunKind === null, "advisor with no events stays null");
@@ -287,6 +287,8 @@ assert(!/Claude/i.test(combined), "no model vendor name");
 assert(!/\bDana\b/.test(combined), "no Dana");
 assert(!/replaces accountants/i.test(combined), "no replaces-accountants copy");
 assert(!/one bot/i.test(combined), "three agents, not one bot");
+assert(!/Milōn Accountant|Milon Accountant/.test(combined), "display names stay out of the feed");
+assert(!/"accountant"/.test(libSrc) && !/"accountant"/.test(hookSrc), "agent key is bookkeeper");
 assert(!/advisory_packs/.test(hookSrc), "sign-off is not read from the pack table in the hook");
 assert(!/client_review_signoffs/.test(hookSrc), "sign-off is not read from page stamps");
 assert(/getAdvisorySignoffState/.test(hookSrc), "sign-off uses getAdvisorySignoffState");

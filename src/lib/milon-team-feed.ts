@@ -1,11 +1,13 @@
 /**
- * Milōn team feed — typed view-model for three agents.
+ * Team feed — typed view-model for three agents: bookkeeper, analyst, advisor.
  *
- * Milōn Accountant closes and cleans the books.
- * Milōn Analyst owns the budget, the 13-week forecast, variances, and the board report.
- * Milōn Advisor owns the cash floor, debtors and collections, covenants, tax dates, and next moves.
+ * bookkeeper closes and cleans the books: syncs, uploads, reconciliation,
+ * data requests, queries, and sign-off state.
+ * analyst owns the budget, the 13-week forecast, variances, and the board report.
+ * advisor owns the cash floor, debtors and collections, covenants, tax dates, and next moves.
  *
- * Pure builders only. The hook in `use-milon-team-feed` loads rows. Nothing here invents a figure.
+ * Display names live in src/lib/milon-team.ts. Pure builders only.
+ * The hook in `use-milon-team-feed` loads rows. Nothing here invents a figure.
  */
 
 import { advisorySignoffGrounding, type AdvisorySignoffState } from "./advisory-signoff";
@@ -35,9 +37,9 @@ import {
 } from "./precard-cap";
 import { periodMonthsOf, scoreTier } from "./ratios";
 
-export type AgentKey = "accountant" | "analyst" | "advisor";
+export type AgentKey = "bookkeeper" | "analyst" | "advisor";
 
-export const AGENT_KEYS = ["accountant", "analyst", "advisor"] as const;
+export const AGENT_KEYS = ["bookkeeper", "analyst", "advisor"] as const;
 
 export type AgentMapKind = "deliverable" | "proposal" | "event";
 
@@ -159,7 +161,7 @@ const ADVISOR_DELIVERABLES = [
   "agenda",
 ] as const;
 
-const ACCOUNTANT_DELIVERABLES = [
+const BOOKKEEPER_DELIVERABLES = [
   "reconciliation",
   "recon",
   "upload",
@@ -236,7 +238,7 @@ const ANALYST_PROPOSALS = [
   "board",
 ] as const;
 
-const ACCOUNTANT_PROPOSALS = [
+const BOOKKEEPER_PROPOSALS = [
   "sync",
   "upload",
   "query",
@@ -272,7 +274,7 @@ const ADVISOR_EVENTS = [
   "action.blocked",
 ] as const;
 
-const ACCOUNTANT_EVENTS = [
+const BOOKKEEPER_EVENTS = [
   "sync",
   "upload",
   "query",
@@ -387,31 +389,31 @@ function matches(key: string, tokens: readonly string[]): boolean {
 
 /**
  * One map from a deliverable type, a proposal type, or an event type onto an agent.
- * Unknown deliverables and proposals stay with Milōn Advisor. Unknown events stay
- * with Milōn Accountant (books traffic) only when they are not a move.
+ * Unknown deliverables and proposals stay on advisor. Unknown events stay on
+ * bookkeeper (books traffic) only when they are not a move.
  */
 export function agentFor(kind: AgentMapKind, type: string | null | undefined): AgentKey {
   const key = norm(type);
   if (!key) {
-    if (kind === "event") return "accountant";
+    if (kind === "event") return "bookkeeper";
     return "advisor";
   }
   if (kind === "deliverable") {
     if (matches(key, ADVISOR_DELIVERABLES)) return "advisor";
-    if (matches(key, ACCOUNTANT_DELIVERABLES)) return "accountant";
+    if (matches(key, BOOKKEEPER_DELIVERABLES)) return "bookkeeper";
     if (matches(key, ANALYST_DELIVERABLES)) return "analyst";
     return "advisor";
   }
   if (kind === "proposal") {
-    if (matches(key, ACCOUNTANT_PROPOSALS)) return "accountant";
+    if (matches(key, BOOKKEEPER_PROPOSALS)) return "bookkeeper";
     if (matches(key, ANALYST_PROPOSALS)) return "analyst";
     if (matches(key, ADVISOR_PROPOSALS)) return "advisor";
     return "advisor";
   }
   if (matches(key, ANALYST_EVENTS)) return "analyst";
   if (matches(key, ADVISOR_EVENTS)) return "advisor";
-  if (matches(key, ACCOUNTANT_EVENTS)) return "accountant";
-  return "accountant";
+  if (matches(key, BOOKKEEPER_EVENTS)) return "bookkeeper";
+  return "bookkeeper";
 }
 
 function finiteNum(value: unknown): number | null {
@@ -636,7 +638,7 @@ export function buildTeamJobs(input: {
     if (!title) continue;
     const agent = agentFor("proposal", step.type);
     const blockedReason = blockedReasonFor(status, input.precard, input.hasData);
-    const section = agent === "accountant" ? "books" : agent === "analyst" ? "budget" : "moves";
+    const section = agent === "bookkeeper" ? "books" : agent === "analyst" ? "budget" : "moves";
     jobs.push({
       id: step.id,
       agent,
@@ -853,7 +855,7 @@ export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEve
 
 export function emptyAgentStatuses(): Record<AgentKey, TeamAgentStatus> {
   return {
-    accountant: { agent: "accountant", lastRunAt: null, lastRunKind: null },
+    bookkeeper: { agent: "bookkeeper", lastRunAt: null, lastRunKind: null },
     analyst: { agent: "analyst", lastRunAt: null, lastRunKind: null },
     advisor: { agent: "advisor", lastRunAt: null, lastRunKind: null },
   };
