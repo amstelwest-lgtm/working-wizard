@@ -10,6 +10,7 @@ import { applyPortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
 import { StaffInvitePreview } from "./invite-preview";
+import { ImportLowsPreview } from "./import-lows-preview";
 import { OwnerCashBoard, RailStudio } from "./studio";
 
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
@@ -99,7 +100,19 @@ const inviteRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, inviteRoute]);
+const importLowsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/import-lows",
+  component: function ImportLowsHarness() {
+    return (
+      <MarketProvider selection={{ country: "US", regionCode: "NY" }}>
+        <ImportLowsPreview />
+      </MarketProvider>
+    );
+  },
+});
+
+const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, inviteRoute, importLowsRoute]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),

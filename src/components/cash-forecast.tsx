@@ -77,6 +77,7 @@ import type {
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
 import { periodMonthsOf } from "@/lib/ratios";
+import { balanceSheetCashAsOf } from "@/lib/statement-parse";
 import { formatCalendarDay, formatMoneyChartTick } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
@@ -985,8 +986,14 @@ export function CashForecastPanel({
     [weekIsos, market],
   );
   // Same formatter as the week axis, so the start cannot read as an ISO date
-  // beside a timezone-shifted week label.
+  // beside a timezone-shifted week label. The forecast week stays on that
+  // axis. Opening cash that came from a balance sheet is labelled with the
+  // statement date (cashAsOf), not the Monday the 13 weeks begin.
   const startLabel = weeks[0] ?? formatCalendarDay(startDate, market, WEEK_DAY_LABEL);
+  const openingAsOf = balanceSheetCashAsOf(inputFinancials, parseFloat(openingBalance) || 0);
+  const openingLabel = openingAsOf
+    ? formatCalendarDay(openingAsOf, market, WEEK_DAY_LABEL)
+    : startLabel;
 
   const horizonLabel =
     weekIsos.length >= WEEKS
@@ -2017,7 +2024,7 @@ export function CashForecastPanel({
           </>
         ) : (
           <>
-            <Stat label="Opening bank" value={fmtCompact(baseCalc.opening)} sub={startLabel} />
+            <Stat label="Opening bank" value={fmtCompact(baseCalc.opening)} sub={openingLabel} />
             <Stat
               label="Lowest point"
               value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}

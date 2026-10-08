@@ -355,11 +355,17 @@ export function buildAutoPopulateWrites(
       }
       if (adoptedStatementCash && openingDate) payload = { ...payload, startDate: openingDate };
       changes.push("Cash forecast drafted from the budget's first three months");
-    } else if (ctx.existingCashflow && !isTypedForecastOpening(ctx.existingCashflow)) {
+    } else if (
+      ctx.existingCashflow &&
+      (!isTypedForecastOpening(ctx.existingCashflow) || ctx.statementKind === "balance_sheet")
+    ) {
       // A later balance sheet has cash but no P&L to reseed. The forecast
       // already exists (often opening 0). Write the cash line onto it so the
       // board and the bank-balance prompt stop treating cash as missing.
       // The opening is dated on the balance sheet, not the week of the upload.
+      // A ticked Cash forecast box on a balance sheet is a request to refresh
+      // that opening. A non-zero opening is left alone only when this is not
+      // a balance sheet (a ledger sync must not clobber a typed figure).
       const openingCash =
         parseFloat(String(ctx.fields.cash ?? "").replace(/[^0-9.-]/g, "")) || 0;
       const current = parseFloat(String(ctx.existingCashflow.openingBalance ?? ""));
@@ -395,7 +401,19 @@ export function buildAutoPopulateWrites(
       update.last_forecast_at = now;
       applied.push("cash_forecast");
     } else if (!applied.includes("cash_forecast")) {
-      skipped.push({ target: "cash_forecast", reason: "Nothing to forecast from yet" });
+      const openingCash =
+        parseFloat(String(ctx.fields.cash ?? "").replace(/[^0-9.-]/g, "")) || 0;
+      const current = parseFloat(String(ctx.existingCashflow?.openingBalance ?? ""));
+      const dateOk = !openingDate || ctx.existingCashflow?.startDate === openingDate;
+      const amountOk = Number.isFinite(current) && Math.abs(current - openingCash) < 0.5;
+      const already =
+        ctx.statementKind === "balance_sheet" && openingCash > 0 && amountOk && dateOk;
+      skipped.push({
+        target: "cash_forecast",
+        reason: already
+          ? "Cash forecast already matched this balance sheet"
+          : "Nothing to forecast from yet",
+      });
     }
   }
 
@@ -410,7 +428,18 @@ export function buildAutoPopulateWrites(
 
 /** One-line toast copy for what just happened. */
 export function summariseAutoPopulate(w: AutoPopulateWrites, firstUpload: boolean): string {
-  if (!w.applied.length) return "Figures saved. Nothing else was updated.";
+  if (!w.applied.length) {
+    // The Cash forecast box was ticked and the opening already agreed with
+    // the balance sheet, so there was nothing to write. Say that, instead of
+    // claiming nothing was considered.
+    const already = w.skipped?.some(
+      (row) =>
+        row.target === "cash_forecast" &&
+        row.reason === "Cash forecast already matched this balance sheet",
+    );
+    if (already) return "Figures saved. Cash forecast already matched this balance sheet.";
+    return "Figures saved. Nothing else was updated.";
+  }
   const names = AUTO_POPULATE_TARGETS.filter((t) => w.applied.includes(t)).map((t) =>
     AUTO_POPULATE_LABEL[t].toLowerCase(),
   );

@@ -97,6 +97,8 @@ assert(cashSrc.includes('value: "13week"'), "13-week is a view value");
 assert(cashSrc.includes("detailed-forecast"), "old detailed-forecast anchor still resolves");
 assert(cashSrc.includes("hashIsCashDetailAnchor"), "anchor hashes redirect onto the card");
 assert(cashSrc.includes("const startLabel = weeks[0]"), "forecast start uses the week-axis label");
+assert(cashSrc.includes("sub={openingLabel}"), "opening tile can use the balance-sheet date");
+assert(cashSrc.includes("balanceSheetCashAsOf"), "opening label reads the statement cash date");
 assert(!cashSrc.includes("`Start ${startDate}`"), "opening stat does not print the raw ISO start");
 assert(!cashSrc.includes("`Forecast starts ${startDate}"), "PDF assumption does not print the raw ISO start");
 
