@@ -118,6 +118,7 @@
     "test:firm-voucher": "vite-node --config scripts/vite-test.config.ts scripts/firm-voucher-test.mts",
     "test:starter-trial-generation": "vite-node --config scripts/vite-test.config.ts scripts/starter-trial-generation-test.mts",
     "test:precard-cap": "vite-node --config scripts/vite-test.config.ts scripts/precard-cap-test.mts",
+    "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",

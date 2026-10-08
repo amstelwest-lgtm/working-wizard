@@ -257,6 +257,7 @@ import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { reviewFiguresChanged, signedHealthFromHistory } from "@/lib/signoff-status";
+import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
@@ -3162,9 +3163,14 @@ function ClientView() {
 
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-                  <SectionCard className="card hero-card ask-ai-studio-shell">
-                    <div id="ask-ai-accountant" />
-                  </SectionCard>
+                  <MilonTeamPane
+                    clientId={clientId}
+                    fallback={
+                      <SectionCard className="card hero-card ask-ai-studio-shell">
+                        <div id="ask-ai-accountant" />
+                      </SectionCard>
+                    }
+                  />
                 </div>
 
                 {/* ===== RATIOS TAB ===== */}
