@@ -81,14 +81,21 @@ export async function recordPrecardUse(
 ): Promise<number | null> {
   const id = firmId.trim();
   if (!id) return null;
-  const rpc = (db as GateDb).rpc;
-  if (!rpc) return null;
-  const { data, error } = await rpc("increment_precard_usage", {
-    p_firm_id: id,
-    p_kind: kind,
-  });
-  if (error) return null;
-  return typeof data === "number" && Number.isFinite(data) ? data : null;
+  try {
+    const gate = db as GateDb;
+    if (!gate.rpc) return null;
+    // Method call keeps `this` on the SupabaseClient. A detached
+    // `const rpc = db.rpc; rpc(...)` throws reading `this.rest`.
+    const { data, error } = await gate.rpc("increment_precard_usage", {
+      p_firm_id: id,
+      p_kind: kind,
+    });
+    if (error) return null;
+    return typeof data === "number" && Number.isFinite(data) ? data : null;
+  } catch (err) {
+    console.error("recordPrecardUse failed", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 export function precardMessagesLeft(nextCount: number | null, fallbackRemaining: number | null): number | null {

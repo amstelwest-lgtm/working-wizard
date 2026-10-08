@@ -103,7 +103,19 @@ function ratioLines(raw: unknown): string[] {
   return out;
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve((req: Request) =>
+  handleBrainPropose(req).catch((err) => {
+    const cors = buildCorsHeaders(req.headers.get("Origin"));
+    console.error("brain-propose failed", err instanceof Error ? err.message : err);
+    return json(
+      { error: err instanceof Error && err.message ? err.message : "Something went wrong" },
+      500,
+      cors,
+    );
+  }),
+);
+
+async function handleBrainPropose(req: Request): Promise<Response> {
   const cors = buildCorsHeaders(req.headers.get("Origin"));
   const respond = (body: unknown, status = 200) => json(body, status, cors);
 
@@ -593,14 +605,18 @@ Deno.serve(async (req: Request) => {
   }
 
   if (precard.firmId) {
-    await finishPrecardAttempt({
-      decision: precard,
-      succeeded:
-        !skippedReason && (stepsInserted > 0 || patched.gapAdded > 0 || patched.competitorAdded > 0),
-      record: async () => {
-        await recordPrecardUse(adminClient, precard.firmId!, "pack");
-      },
-    });
+    try {
+      await finishPrecardAttempt({
+        decision: precard,
+        succeeded:
+          !skippedReason && (stepsInserted > 0 || patched.gapAdded > 0 || patched.competitorAdded > 0),
+        record: async () => {
+          await recordPrecardUse(adminClient, precard.firmId!, "pack");
+        },
+      });
+    } catch (err) {
+      console.error("precard record failed", err instanceof Error ? err.message : err);
+    }
   }
 
   return respond({
@@ -612,4 +628,4 @@ Deno.serve(async (req: Request) => {
     drip: drip ? { key: drip.key, prompt: drip.prompt } : null,
     skippedReason: skippedReason,
   });
-});
+}
