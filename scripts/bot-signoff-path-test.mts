@@ -130,14 +130,14 @@ assert(studio.includes('writeAccountantTab("ask")'), "the entry opens the Bot ta
 assert(studio.includes("data-bot-entry"), "the entry is marked");
 assert(studio.includes("data-bot-rail"), "Bot stays on the rail");
 assert(studio.includes("bot-primary"), "Bot stays the primary rail action");
-assert(studio.includes('{ id: "ask", label: "Bot"'), "the rail names Bot");
+assert(studio.includes('{ id: "ask", label: "Milōn Bot"'), "the rail names Bot");
 assert(studio.includes('{ id: "overview", label: "Overview"'), "the rail names Overview");
 assert(
   studio.includes('{ id: "deliverables", label: "Deliverables"'),
   "the rail names Deliverables",
 );
 assert(
-  studio.indexOf('{ id: "ask", label: "Bot"') <
+  studio.indexOf('{ id: "ask", label: "Milōn Bot"') <
     studio.indexOf('{ id: "overview", label: "Overview"') &&
     studio.indexOf('{ id: "overview", label: "Overview"') <
       studio.indexOf('{ id: "deliverables", label: "Deliverables"'),

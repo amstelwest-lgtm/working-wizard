@@ -31,6 +31,29 @@ export function cashForecastSearchWithView(
   return next;
 }
 
+/** Tile copy for weeks under the floor. The runway readout stays off this tile. */
+export function weeksBelowFloorCopy(input: {
+  empty: boolean;
+  weeksBelow: number;
+  horizon: number;
+  firstDipWeek: number | null;
+  firstDipDate: string | null;
+  opensBelow: boolean;
+}): { value: string; sub: string } {
+  if (input.empty) return { value: "—", sub: "Add a bank balance or lines" };
+  const horizon = input.horizon > 0 ? input.horizon : 13;
+  const value = `${input.weeksBelow} of ${horizon}`;
+  if (input.firstDipWeek != null) {
+    const date = input.firstDipDate?.trim();
+    return {
+      value,
+      sub: date ? `first dip W${input.firstDipWeek} · ${date}` : `first dip W${input.firstDipWeek}`,
+    };
+  }
+  if (input.opensBelow) return { value, sub: "opening is under the floor" };
+  return { value, sub: "stays above the floor" };
+}
+
 /**
  * Recharts `interval` for the cash graph. `0` shows every week. `2` keeps
  * W1, W4, W7, W10 and W13 (every third tick, both ends included).

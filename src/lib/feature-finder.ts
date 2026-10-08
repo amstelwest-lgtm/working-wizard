@@ -210,7 +210,7 @@ const FEATURES: readonly FeatureDef[] = [
   },
   {
     id: "bot",
-    label: "Bot",
+    label: "Milōn Bot",
     hint: "Drafts",
     order: 80,
     scope: "client",

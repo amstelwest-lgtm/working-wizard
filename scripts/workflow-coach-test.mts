@@ -242,7 +242,7 @@ assert(!studio.includes("coachArrival"), "no per-deliverable arrival helper rema
 assert(studio.includes("<DataUpToDate"), "Client Brain opens with the data section");
 assert(studio.includes("onOpenDeliverable"), "Milōn Bot can open a deliverable with intent");
 assert(studio.includes('className="deliverable-rail"'), "left rail stays the one nav");
-assert(studio.includes('{ id: "ask", label: "Bot"'), "left rail reaches Bot");
+assert(studio.includes('{ id: "ask", label: "Milōn Bot"'), "left rail reaches Bot");
 assert(studio.includes('{ id: "overview", label: "Overview"'), "left rail reaches Overview");
 assert(
   studio.includes('{ id: "deliverables", label: "Deliverables"'),

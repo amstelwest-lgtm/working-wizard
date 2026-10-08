@@ -148,7 +148,7 @@ assert.ok(!data.includes("SignoffStatusChip"), "books does not invent a sign-off
 assert.ok(!data.includes("<DeliverableAnswerStrip"), "books does not use the scoped strip");
 assert.ok(!booksPane.includes('figureSourceChipLabel("statement")'), "books does not invent a Statement chip");
 assert.ok(
-  booksPane.includes("figureSourceChipLabel(statementMeta.statementSource)"),
+  booksPane.includes("chip={healthChip}"),
   "books chips the statement source already on the file",
 );
 assert.ok(data.includes("booksAnswerSentence({ freshness, openKinds })"), "the sentence uses the same current flag as the button");

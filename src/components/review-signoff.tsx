@@ -564,13 +564,7 @@ export function ReviewSignoffButton({
           placement={compact ? "compact" : "block"}
         />
       )}
-      {!workflowLoaded ? (
-        <div
-          className="h-8 w-40 animate-pulse rounded-md bg-slate-200/80 dark:bg-slate-800"
-          aria-busy="true"
-          aria-label="Loading review status"
-        />
-      ) : (
+      {!workflowLoaded ? null : (
         <>
           {!shownSignoff && !hideStatus ? (
             <p className="text-[11px] font-semibold text-slate-500">

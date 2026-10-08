@@ -34,6 +34,26 @@ export function signoffStatusKind(input: {
   return "draft";
 }
 
+/** Short scope for the status pill. The status words themselves stay below. */
+export function signoffScopeLabel(scope: string | null | undefined): string | null {
+  switch ((scope ?? "").trim()) {
+    case "financials":
+      return "Financials";
+    case "profitability":
+      return "Profit";
+    case "cash_forecast":
+      return "Cash";
+    case "budget":
+      return "Budget";
+    case "action_plan":
+      return "Action plan";
+    case "advisory":
+      return "Advisory";
+    default:
+      return null;
+  }
+}
+
 export function signoffStatusLine(input: {
   kind: SignoffStatusKind;
   name?: string | null;
@@ -43,6 +63,20 @@ export function signoffStatusLine(input: {
    * `short` is the pill when the sentence already says who signed and that
    * the figures changed. Other kinds ignore it.
    */
+  variant?: "full" | "short";
+  /** Optional prefix, e.g. "Financials: signed off · figures changed". */
+  scopeLabel?: string | null;
+}): string {
+  const line = signoffStatusBody(input);
+  const scope = input.scopeLabel?.trim() || "";
+  if (!scope) return line;
+  return `${scope}: ${line.charAt(0).toLowerCase()}${line.slice(1)}`;
+}
+
+function signoffStatusBody(input: {
+  kind: SignoffStatusKind;
+  name?: string | null;
+  date?: string | null;
   variant?: "full" | "short";
 }): string {
   if (input.kind === "ready") return SIGNOFF_STATUS_READY;

@@ -1,17 +1,15 @@
 /**
  * Tab-head sign-off for Advisory. One gold button, and it approves the
- * current pack version. The sentence is the pack's own line. A leftover
- * page stamp is quoted as a mismatch, never as SIGNED next to a draft pack.
+ * current pack version. The sentence is the pack's own line from
+ * resolveAdvisorySignoffState. A leftover page stamp is not repeated here.
  */
 import { Check, Loader2 } from "lucide-react";
 import { SIGNOFF_GOLD_BTN } from "@/components/review-signoff";
-import { useMarketFormat } from "@/contexts/market";
 import { ADVISORY_PACK_STALE_NOTE } from "@/lib/advisory-pack";
-import { advisoryLegacyMismatchLine, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
+import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
 
 export function AdvisoryTabSignoff({
   action,
-  pageSignoff,
   hideLine = false,
 }: {
   action: AdvisorySignoffAction | null;
@@ -23,22 +21,11 @@ export function AdvisoryTabSignoff({
   /** The strip sentence already carries the sign-off line. */
   hideLine?: boolean;
 }) {
-  const { market } = useMarketFormat();
   if (!action) return null;
   const { state } = action;
   const approved = state.status === "signed" || state.status === "signed_stale";
-  const mismatch = approved
-    ? null
-    : advisoryLegacyMismatchLine({
-        status: state.status,
-        version: state.version,
-        pageSignedAt: pageSignoff?.signed_off_at,
-        pageSignedBy: pageSignoff?.signed_off_by_name,
-        pageFirmName: pageSignoff?.firm_name,
-        market,
-      });
 
-  if (hideLine && !mismatch && !action.canSignOff) return null;
+  if (hideLine && !action.canSignOff) return null;
 
   return (
     <div
@@ -52,14 +39,6 @@ export function AdvisoryTabSignoff({
           data-signoff-line
         >
           {action.line}
-        </p>
-      ) : null}
-      {mismatch ? (
-        <p
-          className="text-right text-[12px] font-semibold leading-snug text-amber-800 dark:text-amber-200"
-          data-advisory-mismatch
-        >
-          {mismatch}
         </p>
       ) : null}
       {action.canSignOff ? (

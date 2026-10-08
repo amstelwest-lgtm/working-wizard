@@ -221,14 +221,22 @@ export function accountantClientTabSearch<T extends object>(
 const DRAFTER_HASHES = new Set(["drafter", "sent", "sent-history", "advisory-drafter"]);
 
 /**
+ * Hash to hand the router. `window.location.hash` already includes `#`.
+ * Passing that string through again writes `##drafter`.
+ *
  * `section=pack#drafter` and a sent-history hash land on the drafter section.
  * A hash that is already on that section stays put.
  */
+export function routerHash(hash: string | null | undefined): string | undefined {
+  const bare = (hash ?? "").replace(/^#+/, "").split("?")[0].trim();
+  return bare || undefined;
+}
+
 export function drafterSectionForHash(
   section: string | null | undefined,
   hash: string | null | undefined,
 ): "drafter" | null {
-  const id = (hash ?? "").replace(/^#/, "").split("?")[0].trim().toLowerCase();
+  const id = (routerHash(hash) ?? "").toLowerCase();
   if (!DRAFTER_HASHES.has(id)) return null;
   if ((section ?? "").trim() === "drafter") return null;
   return "drafter";

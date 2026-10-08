@@ -160,7 +160,7 @@ assert(overviewPane.includes('scope="financials"'), "overview uses the existing 
 assert(!overviewPane.includes("canSign"), "overview does not put Sign off on the strip");
 assert(deliverable.includes("<SignoffStatusChip"), "the financials strip shows the shared status");
 assert(statusChip.includes("data-signoff-status"), "the shared status uses the one vocabulary");
-assert(overviewPane.includes("figureSourceChipLabel(statementMeta.statementSource)"), "overview chips the statement source");
+assert(overviewPane.includes("chip={healthChip}"), "overview chips the statement source");
 assert(!overviewPane.includes('figureSourceChipLabel("statement")'), "overview does not invent a Statement chip");
 assert(overviewPane.includes("sentence={overviewSentence}"), "the overview sentence is the existing what-matters line");
 assert(route.includes("overviewAnswerSentence({"), "that sentence is what matters, or the health headline");

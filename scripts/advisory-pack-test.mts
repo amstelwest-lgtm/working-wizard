@@ -12,6 +12,7 @@ import {
   PACK_REVIEW_ACTIONS,
   PACK_SECTION_KEYS,
   PACK_STATUSES,
+  alignPackFloorCopy,
   buildAdvisoryPack,
   computeEditStats,
   diffPackSections,
@@ -1619,5 +1620,21 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   const inventory = pack.ratios.find((row) => row.name === "Inventory Days");
   eq(inventory ? Math.round(inventory.value) : null, 81, "regenerated pack stores inventory days 81");
 }
+
+assert(
+  alignPackFloorCopy("Cash dips in week 4 (floor $50.0k). Action needed.", 64700, "USD") ===
+    "Cash dips in week 4 (floor $64.7k). Action needed.",
+  "a stored $50.0k floor becomes the live cash floor",
+);
+assert(
+  alignPackFloorCopy("Well under the $50,000 comfort line.", 64700, "USD") ===
+    "Well under the $64,700 comfort line.",
+  "a stored $50,000 comfort line becomes the live cash floor",
+);
+assert(
+  alignPackFloorCopy("Revenue was $50,000 this month.", 64700, "USD") ===
+    "Revenue was $50,000 this month.",
+  "an unrelated $50,000 is left alone",
+);
 
 console.log("advisory-pack: all checks passed");

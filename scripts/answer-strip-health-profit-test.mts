@@ -76,6 +76,16 @@ assert(
   profitAnswerSentence({ currency: "R" }) === "How R1 of revenue becomes profit",
   "the profit sentence stands alone when there is no period",
 );
+assert(
+  profitAnswerSentence({
+    currency: "$",
+    periodLabel: "Sep 2026",
+    revenueText: "$700k",
+    netMarginPct: 8.6,
+    grossMarginPct: 60,
+  }) === "Net margin 8.6% on $700k revenue for Sep 2026. Gross margin 60.0%.",
+  "the profit sentence leads with the loaded margins",
+);
 for (const banned of ["the ledger", "aggregated weekly data", "period inputs"]) {
   assert(!month.includes(banned), `profit sentence omits ${banned}`);
 }
@@ -120,7 +130,12 @@ assert(strip.includes("data-source-chip"), "the strip can show one source chip")
 assert(strip.includes("{chip ?"), "a blank chip is omitted");
 assert(route.includes("const healthChip = figureSourceChipLabel"), "health uses the chip label");
 assert(ratiosPane.includes("chip={healthChip}"), "health strip receives that chip");
-assert(profitPane.includes("figureSourceChipLabel"), "profit uses the chip label");
+assert(profitPane.includes("chip={healthChip}"), "profit uses the chip label");
+assert(
+  profitPane.includes("Period dates missing; this may cover more than one month."),
+  "a missing period does not tell the user to sync",
+);
+assert(!profitPane.includes("Sync QuickBooks again"), "profit does not ask for another sync");
 assert(ratiosPane.includes('search.focus === "pillars" ? null'), "pillars skip the orb");
 assert(profitPane.includes('aria-label="Export PDF"'), "profit export sits on the strip");
 assert(profitPane.includes("hideCardExport"), "the waterfall card does not repeat export");

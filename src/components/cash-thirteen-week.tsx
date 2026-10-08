@@ -135,9 +135,10 @@ const TONE_BG: Record<RowTone, string> = {
   floor: "bg-[#f6f3ea] dark:bg-[#141a22]",
 };
 
-const TIGHT_BG = "bg-[#fde8e6] dark:bg-[#3c1c22]";
+const TIGHT_BG = "bg-[#c0392b]/[0.045] dark:bg-[#e05c5c]/[0.08]";
 const HEAD_BG = "bg-[#f3ecdc] dark:bg-[#1b170f]";
-const HEAD_TIGHT = "bg-[#f6d2cf] dark:bg-[#4a2228]";
+const HEAD_TIGHT =
+  "bg-[#f8e8e4] shadow-[inset_0_3px_0_#c0392b] dark:bg-[#2a1a1c] dark:shadow-[inset_0_3px_0_#ef6b6b]";
 
 function tightOf(closing: number, floor: number): "negative" | "floor" | null {
   if (closing < 0) return "negative";
@@ -227,7 +228,7 @@ export function CashThirteenWeekGrid({
         {
           key: "total-receipts",
           name: "Total receipts",
-          chip: flowChip,
+          chip: "",
           values: inflow,
           total: sum(inflow),
           kind: "in",
@@ -244,7 +245,7 @@ export function CashThirteenWeekGrid({
         {
           key: "total-payments",
           name: "Total payments",
-          chip: flowChip,
+          chip: "",
           values: outflow,
           total: sum(outflow),
           kind: "out",
@@ -260,7 +261,7 @@ export function CashThirteenWeekGrid({
         {
           key: "net",
           name: "Net cash flow",
-          chip: flowChip,
+          chip: "",
           values: net,
           total: sum(net),
           kind: "signed",
@@ -271,7 +272,7 @@ export function CashThirteenWeekGrid({
         {
           key: "closing",
           name: "Closing cash",
-          chip: openingChip,
+          chip: "",
           values: closing,
           total: closing[WEEKS - 1] ?? null,
           kind: "signed",
@@ -282,7 +283,7 @@ export function CashThirteenWeekGrid({
         {
           key: "floor",
           name: "Runway floor",
-          chip: "assumption",
+          chip: "",
           values: Array.from({ length: WEEKS }, () => floor),
           total: floor,
           kind: "balance",
@@ -312,7 +313,7 @@ export function CashThirteenWeekGrid({
             are marked.
           </caption>
           <thead>
-            <tr>
+            <tr data-cash-head="">
               <th
                 scope="col"
                 className={cn(
@@ -341,20 +342,10 @@ export function CashThirteenWeekGrid({
                       flag ? HEAD_TIGHT : HEAD_BG,
                     )}
                   >
-                    <span
-                      className={cn(
-                        "block text-[11px] font-semibold tabular-nums",
-                        flag ? "text-[#9b2c2c] dark:text-[#ffb4b4]" : "text-slate-800 dark:text-slate-100",
-                      )}
-                    >
+                    <span className="block text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100">
                       {label}
                     </span>
-                    <span
-                      className={cn(
-                        "mt-0.5 block text-[9px] font-medium uppercase tracking-wider",
-                        flag ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-slate-400 dark:text-slate-500",
-                      )}
-                    >
+                    <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       W{index + 1}
                     </span>
                   </th>
@@ -433,20 +424,20 @@ function SectionRows({
         </tr>
       ) : null}
       {rows.map((row) => (
-        <tr key={row.key}>
+        <tr key={row.key} data-cash-row={row.key}>
           <th
             scope="row"
             className={cn(
               "sticky left-0 z-30 min-w-[148px] border-b border-amber-900/10 px-3 py-1.5 text-left align-top shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-800",
               TONE_BG[row.tone],
-              row.strong && "font-bold",
+              row.strong ? "font-bold" : "font-normal",
             )}
           >
             <span className="flex max-w-[11.5rem] flex-col items-start gap-1 py-0.5">
               <span
                 className={cn(
                   "whitespace-normal text-left text-[12px] leading-snug text-slate-800 dark:text-slate-100",
-                  row.strong && "font-bold",
+                  row.strong ? "font-bold" : "font-normal",
                   row.tone === "floor" && "font-medium text-slate-600 dark:text-slate-300",
                 )}
               >

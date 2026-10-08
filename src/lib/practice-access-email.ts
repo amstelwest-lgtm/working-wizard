@@ -150,14 +150,19 @@ export function firmInviteEmail(opts: {
   inviterName: string;
   roleLabel: string;
   url: string;
+  /** Address already has a Milōn login. New invites omit this and ask them to create an account. */
+  accountExists?: boolean;
 }): { subject: string; html: string; text: string } {
   const subject = `Join ${opts.firmName} on Milōn`;
+  const intro = opts.accountExists
+    ? `${opts.firmName} invited you to join their Milōn workspace as ${opts.roleLabel}. Sign in with this email address to accept; it takes a minute.`
+    : `${opts.firmName} invited you to join their Milōn workspace as ${opts.roleLabel}. Open the link to create your account with this email address; it takes a minute.`;
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#0f172a">
   <p>Hi ${escapeHtml(opts.recipientName || "there")},</p>
-  <p><strong>${escapeHtml(opts.inviterName)}</strong> invited you to the ${escapeHtml(opts.firmName)} practice as ${escapeHtml(opts.roleLabel)}.</p>
-  <p>You will see the client files a firm admin assigns to you. The business owner already approved this practice.</p>
+  <p>${escapeHtml(intro)}</p>
   <p><a href="${escapeHtml(opts.url)}" style="color:#b8860b">Accept this invitation</a></p>
+  <p style="color:#94a3b8;font-size:12px">${escapeHtml(opts.inviterName)} · ${escapeHtml(opts.firmName)} · Milōn</p>
   </body></html>`;
-  const text = `${opts.inviterName} invited you to ${opts.firmName} as ${opts.roleLabel}.\n\nAccept: ${opts.url}\n`;
+  const text = `${intro}\n\nAccept: ${opts.url}\n`;
   return { subject, html, text };
 }

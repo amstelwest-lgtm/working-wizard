@@ -131,6 +131,7 @@ function TeamAccessPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [busyInvite, setBusyInvite] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 
   const [grantUser, setGrantUser] = useState("");
   const [clientSearch, setClientSearch] = useState("");
@@ -291,6 +292,7 @@ function TeamAccessPage() {
     setBusyInvite(row.id);
     try {
       await revokeInvite({ data: { inviteId: row.id } });
+      setConfirmRevokeId((current) => (current === row.id ? null : current));
       setUnsentInvite((current) => (current?.email === row.email ? null : current));
       await refresh();
     } catch (e) {
@@ -559,14 +561,40 @@ function TeamAccessPage() {
                             >
                               Resend
                             </button>
-                            <button
-                              type="button"
-                              className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-rose-300"
-                              disabled={busyInvite === row.id}
-                              onClick={() => void revokePending(row)}
-                            >
-                              Revoke
-                            </button>
+                            {confirmRevokeId === row.id ? (
+                              <div className="flex flex-col items-end gap-2" role="alertdialog" aria-label="Revoke invite">
+                                <p className="max-w-[16rem] text-right text-xs leading-relaxed text-rose-200">
+                                  Revoke invite for {row.name || row.email}? Their link will stop working.
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-200"
+                                    disabled={busyInvite === row.id}
+                                    onClick={() => setConfirmRevokeId(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-rose-300"
+                                    disabled={busyInvite === row.id}
+                                    onClick={() => void revokePending(row)}
+                                  >
+                                    Revoke invite
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-rose-300"
+                                disabled={busyInvite === row.id}
+                                onClick={() => setConfirmRevokeId(row.id)}
+                              >
+                                Revoke
+                              </button>
+                            )}
                           </div>
                         ) : null}
                       </li>

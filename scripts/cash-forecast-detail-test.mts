@@ -16,6 +16,7 @@ import {
   cashGraphWeekTickInterval,
   forecastChipSource,
   hashIsCashDetailAnchor,
+  weeksBelowFloorCopy,
 } from "../src/lib/cash-forecast-view";
 
 function assert(cond: boolean, msg: string) {
@@ -43,6 +44,27 @@ assert(cashGraphWeekTickInterval(439) === 2, "a narrow chart thins the week tick
 assert(cashGraphWeekTickInterval(440) === 0, "a chart that fits shows every week");
 assert(cashGraphWeekTickInterval(1280) === 0, "a wide chart shows every week");
 assert(cashGraphWeekTickInterval(0) === 0, "an unmeasured chart shows every week");
+const below = weeksBelowFloorCopy({
+  empty: false,
+  weeksBelow: 6,
+  horizon: 13,
+  firstDipWeek: 8,
+  firstDipDate: "23 Nov",
+  opensBelow: false,
+});
+assert(below.value === "6 of 13", "weeks below floor counts the horizon");
+assert(below.sub === "first dip W8 · 23 Nov", "the first dip names the week and date");
+assert(
+  weeksBelowFloorCopy({
+    empty: false,
+    weeksBelow: 0,
+    horizon: 13,
+    firstDipWeek: null,
+    firstDipDate: null,
+    opensBelow: false,
+  }).sub === "stays above the floor",
+  "a clear forecast does not invent a dip",
+);
 assert(hashIsCashDetailAnchor("#detailed-forecast"), "detailed-forecast is a legacy anchor");
 assert(hashIsCashDetailAnchor("wizard-cash-table"), "the old table id is a legacy anchor");
 assert(!hashIsCashDetailAnchor("#wizard-cash-outlook"), "the outlook anchor is not the table");

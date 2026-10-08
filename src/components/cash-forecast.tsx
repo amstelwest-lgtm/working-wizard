@@ -39,6 +39,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Line,
+  ReferenceDot,
   ReferenceLine,
 } from "recharts";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
@@ -67,6 +69,7 @@ import {
   cashGraphWeekTickInterval,
   forecastChipSource,
   hashIsCashDetailAnchor,
+  weeksBelowFloorCopy,
   type CashForecastView,
 } from "@/lib/cash-forecast-view";
 import type {
@@ -100,6 +103,7 @@ import {
 } from "@/lib/client-metrics";
 import {
   cashEmptyPresentation,
+  forecastFloorPosition,
   forecastLinesSourceLabel,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
@@ -189,6 +193,25 @@ const GOLD = "#d4a550";
 const GOLD_DARK = "#b8860b";
 const RED = "#e05c5c";
 
+function CashNegativeDot({
+  cx,
+  cy,
+  payload,
+  index,
+  lowestWeek,
+}: {
+  cx?: number;
+  cy?: number;
+  payload?: { closing?: number };
+  index?: number;
+  lowestWeek?: number;
+}) {
+  if (cx == null || cy == null || payload?.closing == null) return <g />;
+  const week = (index ?? -1) + 1;
+  if (!(payload.closing < 0) || week === lowestWeek) return <g />;
+  return <circle cx={cx} cy={cy} r={3.5} fill={RED} stroke="#fff" strokeWidth={1.5} />;
+}
+
 // ── Shared card shell — light + dark, gold top rule ─────────────────────────
 const CARD_SHELL = COLLAPSIBLE_GOLD_SHELL;
 const GOLD_RULE = COLLAPSIBLE_GOLD_RULE;
@@ -264,6 +287,24 @@ function ForecastAmountCell({
     >
       {display}
     </button>
+  );
+}
+
+function CashTileSkeletons({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-slate-200/70 p-3 dark:border-white/10"
+          aria-hidden="true"
+        >
+          <div className="h-3 w-24 animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          <div className="mt-2 h-7 w-28 animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-200/70 dark:bg-slate-800" />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -435,6 +476,7 @@ export function CashForecastPanel({
   onPendingBankFileConsumed,
   onBankPublish,
   initialBankDraft = null,
+  statementChip = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -460,6 +502,8 @@ export function CashForecastPanel({
   onBankPublish?: (payload: CashForecastPublishPayload) => void;
   /** Pre-built cash draft from shared bank onboarding — skip re-upload. */
   initialBankDraft?: CashFromBanksDraftResult | null;
+  /** QuickBooks / Uploaded statement / Xero / Sage chip from the statement file. */
+  statementChip?: string | null;
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
@@ -1139,11 +1183,16 @@ export function CashForecastPanel({
     revGrowthPct !== 0 ||
     (parseFloat(capexAmount) || 0) !== 0;
 
-  const chartData = weeks.map((w, i) => ({
-    week: `W${i + 1}`,
-    label: w,
-    closing: Math.round(baseCalc.closing[i]),
-  }));
+  const chartData = weeks.map((w, i) => {
+    const closing = Math.round(baseCalc.closing[i] ?? 0);
+    const floor = Math.round(minimumCash);
+    return {
+      week: `W${i + 1}`,
+      label: w,
+      closing,
+      underFloor: closing < floor ? closing : floor,
+    };
+  });
 
   /**
    * Professional PDF export — the base forecast, same series as Overview.
@@ -1271,7 +1320,7 @@ export function CashForecastPanel({
       className="w-full min-w-0 max-w-full"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 22, right: 12, left: 0, bottom: 8 }}>
           <defs>
             <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
@@ -1322,15 +1371,55 @@ export function CashForecastPanel({
           <Area
             type="monotone"
             dataKey="closing"
-            name="closing"
-            stroke={GOLD}
-            strokeWidth={2.5}
+            name="closing-fill"
+            stroke="none"
             fill="url(#cfGoldFill)"
+            tooltipType="none"
             dot={false}
-            activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
+            activeDot={false}
             isAnimationActive
             animationDuration={mounted ? 700 : 1100}
           />
+          <Area
+            type="monotone"
+            dataKey="underFloor"
+            className="cash-floor-breach"
+            stroke="none"
+            fill="rgba(224, 92, 92, 0.28)"
+            baseValue={Math.round(minimumCash)}
+            tooltipType="none"
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="closing"
+            name="Closing"
+            stroke={GOLD}
+            strokeWidth={2.5}
+            dot={<CashNegativeDot lowestWeek={lowestWeek} />}
+            activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
+            isAnimationActive={false}
+          />
+          {lowestWeek > 0 && (lowestBal < minimumCash || lowestBal < 0) ? (
+            <ReferenceDot
+              x={`W${lowestWeek}`}
+              y={Math.round(lowestBal)}
+              r={5}
+              fill={RED}
+              stroke="#fff"
+              strokeWidth={1.5}
+              ifOverflow="extendDomain"
+              label={{
+                value: fmtCompact(lowestBal),
+                position: "top",
+                fill: RED,
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            />
+          ) : null}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -1466,22 +1555,28 @@ export function CashForecastPanel({
     />
   );
 
-  const answerSentence = forecastEmpty
-    ? null
-    : forecastStatusSentence({
-        opening: baseCalc.opening,
-        closings: baseCalc.closing,
-        floor: minimumCash,
-        floorText: fmtCompact(minimumCash),
-        runwayLabel: runwayDisplayLabel(publishedDirection),
-        cashGenerative: publishedGenerative,
-      });
+  const answerSentence =
+    !loaded || forecastEmpty
+      ? null
+      : forecastStatusSentence({
+          opening: baseCalc.opening,
+          closings: baseCalc.closing,
+          floor: minimumCash,
+          floorText: fmtCompact(minimumCash),
+          runwayLabel: runwayDisplayLabel(publishedDirection),
+          cashGenerative: publishedGenerative,
+        });
+  const stripChip = !loaded ? null : shownLineSource === "Bank" ? "Bank" : statementChip?.trim() || null;
 
   const answerStrip = (
     <section className="answer-strip" data-answer-strip>
       <div className="answer-strip__lead">
         <h2 className="answer-strip__heading">13-week cash forecast</h2>
-        {answerSentence ? (
+        {!loaded ? (
+          <p className="answer-strip__sentence" data-answer-sentence aria-busy="true">
+            <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          </p>
+        ) : answerSentence ? (
           <p className="answer-strip__sentence" data-answer-sentence>
             {answerSentence}
           </p>
@@ -1520,9 +1615,9 @@ export function CashForecastPanel({
         </button>
       </div>
       <div className="answer-strip__meta">
-        {shownLineSource ? (
+        {stripChip ? (
           <span className="answer-strip__chip" data-source-chip>
-            {shownLineSource}
+            {stripChip}
           </span>
         ) : null}
         <SignoffStatusChip
@@ -1856,10 +1951,28 @@ export function CashForecastPanel({
         ? "bank_pack"
         : "assumption";
 
+  const floorPos = forecastFloorPosition({
+    opening: baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: minimumCash,
+  });
+  const weeksBelow = weeksBelowFloorCopy({
+    empty: forecastEmpty,
+    weeksBelow: floorPos.weeksBelow,
+    horizon: baseCalc.closing.length || WEEKS,
+    firstDipWeek: floorPos.firstDipWeek,
+    firstDipDate: floorPos.firstDipWeek != null ? (weeks[floorPos.firstDipWeek - 1] ?? null) : null,
+    opensBelow: floorPos.opensBelow,
+  });
+  const runwayAside =
+    !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
+
   const graphPane = (
     <>
       <div className={`mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
-        {simplified ? (
+        {!loaded ? (
+          <CashTileSkeletons count={simplified ? 4 : 3} />
+        ) : simplified ? (
           <>
             <Stat
               label="Closing · Week 13"
@@ -1890,12 +2003,10 @@ export function CashForecastPanel({
               }
             />
             <Stat
-              label="Cash runway"
-              value={forecastEmpty ? "—" : publishedStory.headline}
-              tone={
-                forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"
-              }
-              sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
+              label="Weeks below floor"
+              value={weeksBelow.value}
+              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
+              sub={weeksBelow.sub}
             />
             <Stat
               label="Net cash · next 4 weeks"
@@ -1920,10 +2031,10 @@ export function CashForecastPanel({
               }
             />
             <Stat
-              label="Runway"
-              value={forecastEmpty ? "—" : publishedStory.headline}
-              tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
-              sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
+              label="Weeks below floor"
+              value={weeksBelow.value}
+              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
+              sub={weeksBelow.sub}
             />
           </>
         )}
@@ -1937,6 +2048,7 @@ export function CashForecastPanel({
       )}
     </>
   );
+
 
   const forecastCard = (
     <Card
@@ -1957,7 +2069,7 @@ export function CashForecastPanel({
             <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
               {view === "13week"
                 ? "Double-click a figure to edit. Red weeks close under the runway floor."
-                : `Gold line is the ${fmtCompact(minimumCash)} floor`}
+                : `Gold line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
             </p>
           </div>
           <ViewToggle

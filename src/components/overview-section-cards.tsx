@@ -5,7 +5,12 @@ export function OverviewSectionCards({
   cards,
   onOpen,
 }: {
-  cards: readonly { id: OverviewCardId; label: string; figure: string | null }[];
+  cards: readonly {
+    id: OverviewCardId;
+    label: string;
+    figure: string | null;
+    detail?: string | null;
+  }[];
   onOpen: (id: OverviewCardId) => void;
 }) {
   return (
@@ -20,6 +25,7 @@ export function OverviewSectionCards({
         >
           <span className="overview-card__label">{card.label}</span>
           {card.figure ? <span className="overview-card__figure">{card.figure}</span> : null}
+          {card.detail ? <span className="overview-card__detail">{card.detail}</span> : null}
         </button>
       ))}
     </div>

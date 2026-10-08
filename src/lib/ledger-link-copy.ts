@@ -9,6 +9,25 @@
 
 import { readStatementMeta, yearToDateTitle, type YearBasis } from "@/lib/statement-period";
 
+/**
+ * Source the figure chips read.
+ * The mapper's `statementSource` wins. An uploaded snapshot still chips when
+ * that field was never written. A connected ledger is only used when the
+ * file itself has no statement source.
+ */
+export function resolveFigureSource(input: {
+  financials?: object | null;
+  snapshotSource?: string | null;
+  connectedLedger?: string | null;
+}): string | null {
+  const fromBlob = readStatementMeta(input.financials ?? null).statementSource?.trim() || "";
+  if (fromBlob) return fromBlob;
+  const snap = input.snapshotSource?.trim() || "";
+  if (snap && snap !== "autosave" && snap !== "manual") return snap;
+  const ledger = input.connectedLedger?.trim() || "";
+  return ledger || null;
+}
+
 export type LedgerProvider = "xero" | "qbo" | "sage";
 
 export type LedgerSyncFigures = {

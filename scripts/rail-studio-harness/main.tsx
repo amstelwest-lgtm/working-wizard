@@ -1,4 +1,4 @@
-import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter, useSearch } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { toast, Toaster } from "sonner";
@@ -9,6 +9,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { applyPortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
+import { StaffInvitePreview } from "./invite-preview";
 import { OwnerCashBoard, RailStudio } from "./studio";
 
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
@@ -83,7 +84,22 @@ const ownerRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute, ownerRoute]);
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/invite",
+  validateSearch: (search: Record<string, unknown>) => ({
+    view:
+      search.view === "create" || search.view === "revoked" || search.view === "workspace"
+        ? search.view
+        : "landing",
+  }),
+  component: function InviteHarness() {
+    const search = useSearch({ strict: false }) as { view?: "landing" | "create" | "revoked" | "workspace" };
+    return <StaffInvitePreview view={search.view ?? "landing"} />;
+  },
+});
+
+const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, inviteRoute]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),
