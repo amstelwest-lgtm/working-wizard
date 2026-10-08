@@ -1,3 +1,4 @@
+import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { LIST_PRICES } from "@/lib/market/marketing";
 import {
   HOMEPAGE_FAQ_ITEMS,
@@ -23,7 +24,6 @@ export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
 export const HERO_OWNER_PREFIX = "Business owner?";
-export const HERO_OWNER_LINK = "Spark is free during early access, no card needed →";
 
 /**
  * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can
@@ -121,7 +121,8 @@ export const PRICING_OWNER_CTA = "Start free on Spark";
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
 export const SOLO_CARD_NOTE = `${FIRM_TRIAL_SENTENCE}. Card on file after the first figures.`;
 
-export const NAV_TRIAL_LABEL = "Start free trial";
+/** Same label as /for-accountants. Do not fork a second trial string. */
+export const NAV_TRIAL_LABEL = FIRM_TRIAL_CTA_LABEL;
 export const NAV_TRIAL_ARIA = "Start my 14-day free trial";
 
 export const PROOF_EYEBROW = "Proof, not promises";

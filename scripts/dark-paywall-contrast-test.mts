@@ -40,19 +40,27 @@ assert(
   block.includes('html:not([data-theme="light"]) .accountant-portal .trial-ended-block'),
   "portal dark (not only html.dark) paints the card",
 );
-assert(block.includes("background-color: #101018 !important"), "dark surface is an explicit near-black");
+assert(
+  block.includes("background-color: #101018 !important"),
+  "dark surface is an explicit near-black",
+);
 assert(block.includes("--paywall-bg: #fffdf8"), "light theme keeps a cream card");
 assert(block.includes("#f7f1e4 !important"), "dark ink is pinned over Tailwind foreground");
 assert(block.includes("#e4dccb !important"), "dark muted copy is pinned over Tailwind muted");
 assert(block.includes("#1b1300 !important"), "gold CTAs keep near-black type");
-assert(block.includes("html[data-theme=\"light\"] .accountant-portal .firm-band-upgrade"), "light settings picker stays dark ink");
+assert(
+  block.includes('html[data-theme="light"] .accountant-portal .firm-band-upgrade'),
+  "light settings picker stays dark ink",
+);
 
 const pairs: Array<[string, string, string]> = [
   ["#101018", "#f7f1e4", "dark title and prices"],
   ["#101018", "#e4dccb", "dark limit lines"],
   ["#0a0a10", "#f7f1e4", "dark voucher field"],
+  ["#0a0a10", "#a39c8c", "dark voucher placeholder"],
   ["#fffdf8", "#1b1608", "light title and prices"],
   ["#fffdf8", "#4a4030", "light limit lines"],
+  ["#fffdf8", "#6b5f48", "light voucher placeholder"],
   ["#d4af37", "#1b1300", "gold CTA on mid gold"],
   ["#ac8400", "#1b1300", "gold CTA on deep gold"],
   ["#fdee79", "#1b1300", "gold CTA on bright gold"],
@@ -62,10 +70,28 @@ for (const [bg, fg, name] of pairs) {
   assert(ratio >= 4.5, `${name} contrast ${ratio.toFixed(2)} is below WCAG AA`);
 }
 
+const borders: Array<[string, string, string]> = [
+  ["#09090f", "#a08436", "dark voucher border"],
+  ["#fffdf8", "#8a6508", "light voucher border"],
+];
+for (const [bg, fg, name] of borders) {
+  const ratio = contrast(bg, fg);
+  assert(ratio >= 3, `${name} contrast ${ratio.toFixed(2)} is below 3:1`);
+}
+
 const picker = readFileSync(resolve("src/components/firm-band-upgrade.tsx"), "utf8");
-assert(picker.includes('className="firm-band-upgrade"'), "the shared picker is marked for portal ink");
+assert(
+  picker.includes('className="firm-band-upgrade"'),
+  "the shared picker is marked for portal ink",
+);
+assert(picker.includes('htmlFor="firm-voucher-code"'), "voucher field has a visible label");
+assert(css.includes("border-color: #a08436 !important"), "dark paywall input border is #a08436");
+assert(css.includes("#8a6508"), "light voucher border token is present");
 const card = readFileSync(resolve("src/components/trial-ended-plan-block.tsx"), "utf8");
 assert(card.includes("trial-ended-block"), "the trial card keeps its hook");
-assert(card.includes("FirmBandUpgrade"), "settings and add-client share this picker via the trial card");
+assert(
+  card.includes("FirmBandUpgrade"),
+  "settings and add-client share this picker via the trial card",
+);
 
 console.log("dark-paywall-contrast ok");

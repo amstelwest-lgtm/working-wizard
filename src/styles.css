@@ -1124,7 +1124,7 @@ html:not([data-theme="light"]) .accountant-portal .trial-ended-block select {
   background-color: #0a0a10 !important;
   color: #f7f1e4 !important;
   -webkit-text-fill-color: #f7f1e4 !important;
-  border-color: rgba(212, 175, 55, 0.35) !important;
+  border-color: #a08436 !important;
 }
 .trial-ended-title {
   margin: 0 0 12px;
@@ -1163,6 +1163,60 @@ html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreg
 .accountant-portal .firm-band-upgrade .btn.gold:hover {
   color: #1b1300;
   -webkit-text-fill-color: #1b1300;
+}
+.firm-band-upgrade .firm-voucher-label {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+}
+.firm-band-upgrade .firm-voucher-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.firm-band-upgrade .firm-voucher-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+html.dark .firm-band-upgrade .firm-voucher-input,
+html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-voucher-input {
+  background: #0a0a10;
+  color: #f7f1e4;
+  -webkit-text-fill-color: #f7f1e4;
+  border: 1px solid #a08436;
+}
+html.dark .firm-band-upgrade .firm-voucher-input::placeholder,
+html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-voucher-input::placeholder {
+  color: #a39c8c;
+  -webkit-text-fill-color: #a39c8c;
+  opacity: 1;
+}
+html.dark .firm-band-upgrade .firm-voucher-input:focus,
+html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-voucher-input:focus {
+  outline: 2px solid #fdee79;
+  outline-offset: 2px;
+}
+html[data-theme="light"] .firm-band-upgrade .firm-voucher-input {
+  background: #fffdf8 !important;
+  color: #1b1608 !important;
+  -webkit-text-fill-color: #1b1608 !important;
+  border: 1px solid #8a6508 !important;
+}
+html[data-theme="light"] .firm-band-upgrade .firm-voucher-input::placeholder {
+  color: #6b5f48 !important;
+  -webkit-text-fill-color: #6b5f48 !important;
+  opacity: 1 !important;
+}
+html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
+  outline: 2px solid #8a6508;
+  outline-offset: 2px;
 }
 .trial-ended-action {
   margin-top: 12px;

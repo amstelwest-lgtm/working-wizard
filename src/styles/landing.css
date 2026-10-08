@@ -470,7 +470,8 @@ html[data-landing="1"] .trust .item svg{flex-shrink:0}
 html[data-landing="1"] .trust b{color:var(--ink);font-weight:600;letter-spacing:.14em}
 
 html[data-landing="1"] .persona-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:48px}
-html[data-landing="1"] .persona-card{position:relative;border:1px solid var(--line);border-radius:22px;padding:44px 38px;background:var(--card);cursor:pointer;transition:transform .4s var(--ease),border-color .4s,box-shadow .4s;overflow:hidden}
+html[data-landing="1"] .persona-card{position:relative;display:block;width:100%;text-align:left;font:inherit;color:inherit;-webkit-text-fill-color:inherit;appearance:none;border:1px solid var(--line);border-radius:22px;padding:44px 38px;background:var(--card);cursor:pointer;transition:transform .4s var(--ease),border-color .4s,box-shadow .4s;overflow:hidden}
+html[data-landing="1"] button.persona-card:focus-visible{outline:2px solid var(--gold-bright);outline-offset:3px}
 html[data-landing="1"] .persona-card::before{content:"";position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),rgba(212,175,55,.09),transparent 65%);opacity:0;transition:opacity .4s}
 html[data-landing="1"] .persona-card:hover::before{opacity:1}
 html[data-landing="1"] .persona-card:hover{transform:translateY(-7px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
@@ -816,24 +817,29 @@ html[data-landing="1"] .hero-cta-note{
   color:var(--ink-dim);
   max-width:36em;
 }
-html[data-landing="1"] .hero-contact,
 html[data-landing="1"] .hero-owner{
-  margin:8px 0 0;
-  font-size:14px;
+  margin:14px 0 0;
+  font-size:13px;
   line-height:1.45;
-  color:var(--ink);
+  color:var(--ink-dim);
 }
-html[data-landing="1"] .hero-contact a,
 html[data-landing="1"] .hero-owner button,
 html[data-landing="1"] .hero-owner a{
-  color:inherit;
+  color:var(--ink-dim);
+  -webkit-text-fill-color:var(--ink-dim);
   text-decoration:underline;
   text-underline-offset:3px;
   background:none;
   border:none;
   padding:0;
   font:inherit;
+  font-size:13px;
   cursor:pointer;
+}
+html[data-landing="1"] .hero-owner button:hover,
+html[data-landing="1"] .hero-owner a:hover{
+  color:var(--gold-ink);
+  -webkit-text-fill-color:var(--gold-ink);
 }
 html[data-landing="1"] .hero-points{
   list-style:none;
@@ -1082,18 +1088,54 @@ html[data-landing="1"] body{font-family:"Noto Sans","Noto Sans Fallback",sans-se
   html[data-landing="1"] nav#topnav .links a:not(.btn){white-space:nowrap}
   html[data-landing="1"] nav#topnav .nav-signin{
     min-height:44px;
-    padding:0 18px;
+    padding:0 8px;
     font-size:14px;
-    border:1px solid var(--gold);
-    background:transparent;
+    border:0;
+    background:none;
+    box-shadow:none;
+    color:var(--ink-dim);
+    -webkit-text-fill-color:var(--ink-dim);
     white-space:nowrap;
   }
-  html[data-landing="1"] nav#topnav .nav-trial{
+  html[data-landing="1"] nav#topnav .nav-signin:hover{
+    border:0;
+    background:none;
+    box-shadow:none;
+    transform:none;
+    color:var(--gold-ink);
+    -webkit-text-fill-color:var(--gold-ink);
+  }
+  html[data-landing="1"] nav#topnav .links a.nav-trial{
     min-height:44px;
     padding:0 18px;
     font-size:14px;
     white-space:nowrap;
     flex-shrink:0;
+    background:transparent;
+    background-image:none;
+    border:1px solid var(--gold);
+    color:var(--gold-ink);
+    -webkit-text-fill-color:var(--gold-ink);
+    box-shadow:none;
+  }
+  html[data-landing="1"] nav#topnav .links a.nav-trial::after{
+    content:none;
+    display:none;
+  }
+  html[data-landing="1"] nav#topnav .links a.nav-trial:hover{
+    background:color-mix(in srgb,var(--gold) 12%,transparent);
+    background-image:none;
+    background-position:0 center;
+    border:1px solid var(--gold);
+    color:var(--gold-ink);
+    -webkit-text-fill-color:var(--gold-ink);
+    box-shadow:none;
+    transform:none;
+  }
+  html[data-landing="1"] nav#topnav .links a.nav-trial:hover::after{
+    content:none;
+    display:none;
+    left:-80%;
   }
   html[data-landing="1"] footer{padding-bottom:96px}
   html[data-landing="1"] #wizard-notes-pin.landing-safe{
@@ -1364,8 +1406,33 @@ html[data-landing="1"] main li a,
 html[data-landing="1"] .sub a,
 html[data-landing="1"] .home-faq a,
 html[data-landing="1"] footer .copy a,
-html[data-landing="1"] .hero-contact a,
-html[data-landing="1"] .reg-shell p a{
+html[data-landing="1"] .hero-owner button,
+html[data-landing="1"] .hero-owner a,
+html[data-landing="1"] .reg-shell p a,
+html[data-landing="1"] .reg-owner-link{
   text-decoration:underline;
   text-underline-offset:3px;
+}
+html[data-landing="1"] .reg-owner-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding:0 8px;
+  background:none;
+  border:0;
+  box-shadow:none;
+  font:inherit;
+  font-size:13px;
+  line-height:1.45;
+  color:var(--ink-dim);
+  -webkit-text-fill-color:var(--ink-dim);
+  cursor:pointer;
+}
+html[data-landing="1"] .reg-owner-link:hover{
+  color:var(--gold-ink);
+  -webkit-text-fill-color:var(--gold-ink);
+  background:none;
+  border:0;
+  transform:none;
 }

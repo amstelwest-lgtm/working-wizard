@@ -22,10 +22,11 @@ const USD_LIST_PRICE = LIST_PRICES.us.firmSolo.replace(/[^0-9.]/g, "") || "99";
 export const SEO_PAGES = {
   home: {
     path: "/",
-    title: "AI Finance Function for Accountants & Businesses | MILŌN",
+    title: "AI Advisory Agent for QuickBooks Online & Xero | MILŌN",
     description:
-      "Accountants run an AI finance function for clients in MILŌN. Works with QuickBooks Online and Xero. Your accountant reviews and signs off.",
-    imageAlt: "MILŌN — AI-powered finance function for accounting firms and businesses",
+      "Milōn Bot reads QuickBooks Online or Xero, diagnoses the business and drafts the advisory. You review and sign off. 14-day free trial · up to 3 clients.",
+    imageAlt:
+      "Milōn Bot drafts client advisory from QuickBooks Online and Xero for accountant sign-off",
   },
   forAccountants: {
     path: "/for-accountants",

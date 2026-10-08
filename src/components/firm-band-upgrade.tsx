@@ -283,9 +283,23 @@ export function FirmBandUpgrade({
           <summary className="text-muted-foreground" style={{ cursor: "pointer", fontSize: 13 }}>
             Have a voucher code?
           </summary>
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <label className="firm-voucher-label" htmlFor="firm-voucher-code">
+            Voucher code
+          </label>
+          <div className="firm-voucher-row">
             <input
-              aria-label="Voucher code"
+              id="firm-voucher-code"
+              name="voucher"
+              className="firm-voucher-input"
+              placeholder="Enter code"
+              autoCapitalize="characters"
+              aria-describedby={
+                voucherError
+                  ? "firm-voucher-error"
+                  : voucherPreview
+                    ? "firm-voucher-status"
+                    : undefined
+              }
               value={voucherCode}
               onChange={(event) => {
                 const next = event.target.value;
@@ -298,7 +312,6 @@ export function FirmBandUpgrade({
               disabled={upgrading || checkingVoucher}
               autoComplete="off"
               spellCheck={false}
-              style={{ flex: 1, fontSize: 13, padding: "6px 8px" }}
             />
             <button
               type="button"
@@ -311,6 +324,7 @@ export function FirmBandUpgrade({
           </div>
           {voucherError ? (
             <p
+              id="firm-voucher-error"
               role="alert"
               style={{ margin: "8px 0 0", fontSize: 12, color: "var(--risk, #9b2c2c)" }}
             >
@@ -319,6 +333,7 @@ export function FirmBandUpgrade({
           ) : null}
           {voucherPreview ? (
             <p
+              id="firm-voucher-status"
               role="status"
               className="text-foreground"
               style={{ margin: "8px 0 0", fontSize: 13 }}
