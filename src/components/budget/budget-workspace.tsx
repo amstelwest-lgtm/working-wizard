@@ -22,7 +22,7 @@ import {
   budgetOpeningSourceLabel,
 } from "@/lib/budget.bridges";
 import { useMarket } from "@/contexts/market";
-import { SALES_TAX_HONESTY, formatPercentRate, resolveMarket, t } from "@/lib/market";
+import { SALES_TAX_HONESTY, formatPercentRate, localizeCopy, resolveMarket, t } from "@/lib/market";
 import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.model-change";
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
@@ -655,7 +655,7 @@ function BudgetComplexWorkspace({
               </thead>
               <tbody>
                 <tr>
-                  <td className="px-3 py-1 text-slate-500">{line.volumeLabel}</td>
+                  <td className="px-3 py-1 text-slate-500">{localizeCopy(line.volumeLabel, market)}</td>
                   {focusMonths.map((m) => (
                     <td key={m} className="px-1 py-1">
                       <Input
@@ -670,7 +670,7 @@ function BudgetComplexWorkspace({
                   ))}
                 </tr>
                 <tr>
-                  <td className="px-3 py-1 text-slate-500">{line.priceLabel}</td>
+                  <td className="px-3 py-1 text-slate-500">{localizeCopy(line.priceLabel, market)}</td>
                   {focusMonths.map((m) => (
                     <td key={m} className="px-1 py-1">
                       <Input

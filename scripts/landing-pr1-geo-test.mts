@@ -28,7 +28,7 @@ function assert(cond: boolean, msg: string) {
 
 const LEAK = /FOUNDING|50% off|ZAR|Adaptive Pricing|claude|trymilon/i;
 const DISCLOSURE =
-  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
+  "Milōn Bot prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
 
 function count(haystack: string, needle: string): number {
   const text = haystack.replace(/\s+/g, " ");
@@ -117,7 +117,7 @@ const faqVisible = publicFaqItems(false)
 const faqJson = faqPageJson(publicFaqItems(false));
 assert(count(faqVisible, DISCLOSURE) === 1, "/faq visible answers contain the disclosure once");
 assert(count(faqJson, DISCLOSURE) === 1, "/faq JSON-LD contains the same disclosure once");
-assert((faqVisible.match(/claude/gi) ?? []).length === 1, "/faq answers name Claude only in the disclosure");
+assert((faqVisible.match(/claude/gi) ?? []).length === 0, "/faq answers do not name the model vendor");
 assert(!faqVisible.includes("the AI notice names the model provider"), "old provider sentence is gone");
 assert(!faqVisible.includes("It is powered by Claude"), "old powered-by sentence is gone");
 

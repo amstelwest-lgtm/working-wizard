@@ -97,7 +97,7 @@ const OWNER_STEPS: Step[] = [
     tab: "waterfall",
     targetId: "wizard-profit-walk",
     section: "Profit",
-    title: "Watch every rand go from a sale to what’s actually left",
+    title: "Watch the money go from a sale to what’s actually left",
     why: "Most owners only see a bank balance. This shows why it looks like that.",
     body: "This waterfall is the profit story in one picture — revenue, costs, and what stays. It is a working draft until your accountant reviews and signs it off. Don’t make a pricing or cost call on an unsigned number.",
   },

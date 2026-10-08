@@ -88,6 +88,7 @@ import {
   isDraftComplete,
   parseMarketSelection,
   resolveMarket,
+  t,
   type DraftMarket,
 } from "@/lib/market";
 import {
@@ -851,7 +852,9 @@ function AddClientDialog({
                     fontFamily: "inherit",
                     fontSize: 14,
                   }}
-                  placeholder="owner@business.co.za"
+                  placeholder={
+                    draftMarket.country === "US" ? "owner@business.com" : "owner@business.co.za"
+                  }
                 />
                 <p
                   style={{
@@ -903,6 +906,7 @@ type InviteDraftUi = {
 function InviteOwnerDialog({
   draft,
   sending,
+  emailPlaceholder,
   onClose,
   onEmailChange,
   onCopy,
@@ -910,6 +914,7 @@ function InviteOwnerDialog({
 }: {
   draft: InviteDraftUi;
   sending: boolean;
+  emailPlaceholder: string;
   onClose: () => void;
   onEmailChange: (email: string) => void;
   onCopy: () => void;
@@ -974,7 +979,7 @@ function InviteOwnerDialog({
                 fontFamily: "inherit",
                 fontSize: 14,
               }}
-              placeholder="owner@business.co.za"
+              placeholder={emailPlaceholder}
             />
           </div>
           <div style={{ marginBottom: 18 }}>
@@ -2424,6 +2429,14 @@ function Dashboard() {
         <InviteOwnerDialog
           draft={inviteDraft}
           sending={inviteSending}
+          emailPlaceholder={t(
+            "emailExample",
+            resolveMarket(
+              coerceMarketSelection(
+                firms.find((f) => f.id === (firm?.id ?? firmId))?.market ?? null,
+              ),
+            ),
+          )}
           onClose={() => setInviteDraft(null)}
           onEmailChange={(email) => setInviteDraft((d) => (d ? { ...d, email } : d))}
           onCopy={() => void copyInviteDraft()}

@@ -78,7 +78,8 @@ function FaqPage() {
       <Qa q="So what is the catch with free?">
         <p>
           You are early, and early users shape what gets built. Spark stays free during early
-          access. Accounting firms get a 14-day free trial · up to 3 clients, then pay a flat USD
+          access. Accounting firms see their first client&apos;s figures with no card, then add a
+          card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD
           band by active client count through Stripe Checkout.
         </p>
       </Qa>

@@ -337,7 +337,10 @@ assert(firms.includes("Portfolio triage."), "firm page keeps portfolio triage");
 assert(firms.includes("Drafted advisory reports."), "firm page keeps drafted advisory reports");
 assert(firms.includes("A risk radar."), "firm page keeps the risk radar");
 assert(firms.includes("A recurring reason to talk."), "firm page keeps the recurring reason to talk");
-assert(firms.includes("14-day free trial · up to 3 clients."), "firm page keeps the trial line");
+assert(
+  firms.includes("14-day free trial (up to 3 clients)."),
+  "firm page keeps the trial line",
+);
 assert(firms.includes("SA_FOUNDING_LINE"), "firm page keeps the SA founding line");
 assert(
   SEO_PAGES.forAccountants.title ===

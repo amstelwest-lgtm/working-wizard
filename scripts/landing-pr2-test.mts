@@ -108,7 +108,10 @@ const zaCost = homepageFaqItems(true).find((item) => item.question === HOMEPAGE_
 assert(usCost != null && zaCost != null, "cost answers exist");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
 assert(zaCost!.answer.endsWith(`${SA_ZAR_LINE} ${SA_FOUNDING_LINE}`), "ZA cost answer appends both lines once");
-assert(PRICING_TRIAL_AFTER.startsWith("Card on file."), "VERIFY-2 after-trial sentence");
+assert(
+  PRICING_TRIAL_AFTER.startsWith("See your first client's figures with no card."),
+  "VERIFY-2 after-trial sentence",
+);
 assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 3 clients", "trial sentence unchanged");
 
 assert(css.includes(".reveal,") && css.includes("opacity:1"), "reveal content is visible by default");

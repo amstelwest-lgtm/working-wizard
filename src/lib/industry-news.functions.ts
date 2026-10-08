@@ -6,6 +6,7 @@ import { redactIdentifiers } from "@/lib/redact-identifiers";
 import {
   formatDate,
   industryPulsePrompt,
+  isUsCopy,
   localizeCopy,
   marketInputSchema,
   newsSearchUrl,
@@ -148,14 +149,18 @@ function adaptPulseForMarket(
     headline: localizeCopy(payload.headline, market),
     items: payload.items.map((item) => ({
       ...item,
-      headline: localizeCopy(item.headline, market)
-        .replace(/\bSA\b/g, "US")
-        .replace(/South African/g, "US")
-        .replace(/South Africa/g, "the US"),
-      summary: localizeCopy(item.summary, market)
-        .replace(/\bSA\b/g, "US")
-        .replace(/South African/g, "US")
-        .replace(/South Africa/g, "the US"),
+      headline: stripSaPublishers(
+        localizeCopy(item.headline, market)
+          .replace(/\bSA\b/g, "US")
+          .replace(/South African/g, "US")
+          .replace(/South Africa/g, "the US"),
+      ),
+      summary: stripSaPublishers(
+        localizeCopy(item.summary, market)
+          .replace(/\bSA\b/g, "US")
+          .replace(/South African/g, "US")
+          .replace(/South Africa/g, "the US"),
+      ),
       tag:
         item.tag === "Rand" || item.tag === "Power" || item.tag === "Labour" ? "Costs" : item.tag,
       url:
@@ -169,11 +174,58 @@ function adaptPulseForMarket(
   };
 }
 
+function stripSaPublishers(text: string): string {
+  return text
+    .replace(/\bMoneyweb\b/g, "Trade press")
+    .replace(/\bBusinessLive\b/g, "Trade press")
+    .replace(/\bNews24\b/g, "Trade press");
+}
+
+/** US workspaces do not inherit the South African publisher pack. */
+function usNeutralPulse(): IndustryPulsePayload {
+  return {
+    headline: "Demand is holding, but costs and payment timing are tighter.",
+    metrics: [
+      { label: "How fast customers pay", value: "Slower", direction: "up", sentiment: "bad" },
+      { label: "Input costs", value: "Up", direction: "up", sentiment: "bad" },
+      { label: "Customer demand", value: "Steady", direction: "flat", sentiment: "neutral" },
+    ],
+    items: [
+      {
+        headline: "Small firms are waiting longer to get paid",
+        summary:
+          "Trade reports say invoice terms are stretching, so owners fund more of the gap between a sale and the cash.",
+        tag: "Cash",
+        tagColor: "amber",
+        url: null,
+      },
+      {
+        headline: "Input costs are still rising faster than many prices",
+        summary:
+          "Business coverage says materials, wages and insurance are squeezing margin even where sales hold.",
+        tag: "Costs",
+        tagColor: "red",
+        url: null,
+      },
+      {
+        headline: "Software buyers are stretching renewals",
+        summary:
+          "Vendors report smaller firms delaying non-critical renewals and asking for shorter proof periods.",
+        tag: "Demand",
+        tagColor: "blue",
+        url: null,
+      },
+    ],
+    source: "fallback",
+  };
+}
+
 /** Plain-English SME pulse — used when AI keys are missing or the model fails. */
 export function fallbackIndustryPulse(
   industry: string,
   market: ResolvedMarket = ZA_MARKET,
 ): IndustryPulsePayload {
+  if (isUsCopy(market)) return usNeutralPulse();
   const key = industry.toLowerCase();
   const sector =
     key.includes("retail") || key.includes("ecom")
@@ -608,7 +660,7 @@ export const fetchIndustryNews = createServerFn({ method: "POST" })
     try {
       const raw = await callClaude(anthropicKey, redactIdentifiers(prompt));
       const parsed = parseAiPayload(raw, industry, market);
-      if (parsed) return parsed;
+      if (parsed) return adaptPulseForMarket(parsed, market);
     } catch {
       // Prefer curated baseline over a blank/error panel.
     }

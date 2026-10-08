@@ -303,7 +303,8 @@ export function UploadFinancials({
               <div className="text-center">
                 <p className="text-sm font-medium">Drop a financial statement</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Income statement + balance sheet — {UPLOAD_FORMATS_LABEL}, up to 32 MB
+                  Upload your income statement or balance sheet, one file at a time.{" "}
+                  {UPLOAD_FORMATS_LABEL}, up to 32 MB
                 </p>
                 <p className="text-[11px] text-muted-foreground/80 mt-2 max-w-sm mx-auto">
                   {UPLOAD_QUALITY_DISCLAIMER}

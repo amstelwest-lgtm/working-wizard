@@ -185,6 +185,25 @@ function BrandSettingsPage() {
     useAccountantProfile();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [emailPlaceholder, setEmailPlaceholder] = useState("jane@clarity.co.za");
+
+  useEffect(() => {
+    if (!firmId) return;
+    let cancelled = false;
+    void supabase
+      .from("firms")
+      .select("market")
+      .eq("id", firmId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const market = resolveMarket(coerceMarketSelection(data?.market));
+        setEmailPlaceholder(market.copyPack === "us" ? "jane@clarity.com" : "jane@clarity.co.za");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [firmId]);
 
   const handleSave = async () => {
     if (!profile.firmName.trim()) {
@@ -293,7 +312,7 @@ function BrandSettingsPage() {
                     type="email"
                     value={profile.accountantEmail}
                     onChange={(e) => updateProfile({ accountantEmail: e.target.value })}
-                    placeholder="jane@clarity.co.za"
+                    placeholder={emailPlaceholder}
                     disabled={readOnly}
                   />
                 </div>

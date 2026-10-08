@@ -1,5 +1,6 @@
+import { FIRM_CARD_TIMING } from "./firm-signup-copy";
 import { LIST_PRICES } from "./market/marketing";
-import { FIRM_BAND_CATALOG, FIRM_TRIAL_SENTENCE } from "./stripe-plans";
+import { FIRM_BAND_CATALOG } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
@@ -21,7 +22,7 @@ export const AI_IDENTIFIERS_LINE =
 
 /** Approved disclosure. Visible /faq answer and FAQPage JSON-LD share this sentence. Not used on the homepage FAQ. */
 export const AI_MODEL_DISCLOSURE =
-  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
+  "Milōn Bot prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
 
 /** Monitoring seat, not a billed advisory client. Stripe does not line-item these. */
 export const WATCHLIST_DEFINITION =
@@ -39,7 +40,7 @@ export const SA_PRODUCT_QUESTION = "Is this built for South Africa or bolted on?
 export const SA_PRODUCT_ANSWER =
   "Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in the cost of doing business, and benchmarks drawn from South African context rather than from a US template with the currency symbol swapped.";
 
-const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. Firms start with a ${FIRM_TRIAL_SENTENCE}, card on file. Business owners can start free on Spark during early access, no card needed.`;
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${FIRM_CARD_TIMING} Business owners can start free on Spark during early access, no card needed.`;
 
 /**
  * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.
@@ -75,7 +76,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   },
   {
     question: "What happens when the trial ends?",
-    answer: `Your ${FIRM_TRIAL_SENTENCE} runs with a card on file. After day 14 your chosen band bills automatically through Stripe Checkout. Milōn never stores card details, and you can delete your account and its data from Settings.`,
+    answer: `${FIRM_CARD_TIMING} After day 14 your chosen band bills automatically through Stripe Checkout. Milōn never stores card details, and you can delete your account and its data from Settings.`,
   },
 ];
 
@@ -86,12 +87,12 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
+      answer: `Spark is free during early access and does not ask for a card. Accounting firms: ${FIRM_CARD_TIMING} Then they subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
       question: "So what is the catch with free?",
       answer:
-        "You are early, and early users shape what gets built. Spark stays free during early access. Accounting firms get a 14-day free trial · up to 3 clients, then pay a flat USD band by active client count through Stripe Checkout.",
+        "You are early, and early users shape what gets built. Spark stays free during early access. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.",
     },
     {
       question: "What happens if I stop using it?",

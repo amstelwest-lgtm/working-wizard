@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
 import { MarketPicker } from "@/components/market-picker";
-import { practiceLocationHint } from "@/lib/firm-signup-copy";
+import { FIRM_CARD_TIMING, practiceLocationHint } from "@/lib/firm-signup-copy";
 import {
   draftToSelection,
   isDraftComplete,
@@ -364,9 +364,9 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  Accounting firms subscribe on USD client-count bands through Stripe Checkout. AI
-                  prepares the analysis; you review and sign off. By creating an account you agree
-                  to the <a href="/terms">Terms</a>. <a href="/privacy">Privacy</a>
+                  {FIRM_CARD_TIMING} After day 14 the paid band bills automatically through Stripe
+                  Checkout. AI prepares the analysis; you review and sign off. By creating an
+                  account you agree to the <a href="/terms">Terms</a>. <a href="/privacy">Privacy</a>
                   {" · "}
                   <a href="/ai">AI notice</a>
                 </p>
@@ -470,9 +470,9 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  Spark is free and does not ask for a card. Accounting firms subscribe on USD
-                  client-count bands through Stripe Checkout after creating a firm account. By
-                  creating an account you agree to the <a href="/terms">Terms</a>. {AI_USE_LEAD}{" "}
+                  Spark is free during early access and does not ask for a card. Accounting firms:{" "}
+                  {FIRM_CARD_TIMING} By creating an account you agree to the <a href="/terms">Terms</a>.{" "}
+                  {AI_USE_LEAD}{" "}
                   <a href="/ai">AI notice</a>. <a href="/privacy">Privacy</a>
                 </p>
               </>

@@ -1,4 +1,4 @@
-import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { FIRM_CARD_TIMING, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { LIST_PRICES } from "@/lib/market/marketing";
 import {
   HOMEPAGE_FAQ_ITEMS,
@@ -7,7 +7,6 @@ import {
   publicFaqUsItems,
 } from "@/lib/marketing-faq";
 import type { FaqItem } from "@/lib/seo";
-import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
 export const WALKTHROUGH_URL = String(import.meta.env.VITE_WALKTHROUGH_URL ?? "").trim();
@@ -19,7 +18,7 @@ export const HERO_LEDE =
   "Milōn Bot reads the numbers, diagnoses the business, and drafts the advisory deliverables. The accountant reviews and signs off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
-export const HERO_CTA_NOTE = `${FIRM_TRIAL_SENTENCE}. See a client's figures first, then card on file. Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
+export const HERO_CTA_NOTE = `${FIRM_CARD_TIMING} Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
 export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
@@ -111,15 +110,14 @@ export const PRICING_INTRO =
  * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
  * Stripe bills that price when the trial ends and a card is on file.
  */
-export const PRICING_TRIAL_AFTER =
-  "Card on file. After you see a client's figures, day 14 bills the band you continue on.";
+export const PRICING_TRIAL_AFTER = `${FIRM_CARD_TIMING} After day 14 the paid band bills.`;
 export const PRICING_WATCHLIST_NOTE =
   "Watchlist clients are free and don't count toward your band until you open a full workspace for them.";
 export const PRICING_OWNER_BAR =
   "Business owners: Spark is free during early access, no card needed.";
 export const PRICING_OWNER_CTA = "Start free on Spark";
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
-export const SOLO_CARD_NOTE = `${FIRM_TRIAL_SENTENCE}. Card on file after the first figures.`;
+export const SOLO_CARD_NOTE = FIRM_CARD_TIMING;
 
 /** Same label as /for-accountants. Do not fork a second trial string. */
 export const NAV_TRIAL_LABEL = FIRM_TRIAL_CTA_LABEL;

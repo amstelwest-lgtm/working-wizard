@@ -1574,9 +1574,15 @@ export function CashForecastPanel({
               />
               <Stat
                 label="Cash runway"
-                value={publishedStory.headline}
-                tone={publishedStory.note === "above the floor" ? "good" : "bad"}
-                sub={publishedStory.note}
+                value={forecastEmpty ? "—" : publishedStory.headline}
+                tone={
+                  forecastEmpty
+                    ? "neutral"
+                    : publishedStory.note === "above the floor"
+                      ? "good"
+                      : "bad"
+                }
+                sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
               />
               <Stat
                 label="Net cash · next 4 weeks"

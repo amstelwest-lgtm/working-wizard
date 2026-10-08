@@ -1,11 +1,18 @@
-import { FIRM_TRIAL_SENTENCE, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+
+/**
+ * After #366: the first client's figures need no card. Adding a card starts
+ * the 14-day trial. Keep this sentence on landing, register, pricing, and footer.
+ */
+export const FIRM_CARD_TIMING =
+  "See your first client's figures with no card. Add a card to start a 14-day free trial (up to 3 clients).";
 
 /**
  * Paid-plan sentence on the homepage #register firm form.
  * Auth Create Firm must use this helper so the two surfaces cannot drift.
  */
 export function firmSignupTrialReminder(planLabel: string): string {
-  return `You will start on ${planLabel}. See the first client's figures, then a card starts the ${FIRM_TRIAL_SENTENCE}. After day 14 the paid band bills automatically.`;
+  return `You will start on ${planLabel}. ${FIRM_CARD_TIMING} After day 14 the paid band bills automatically.`;
 }
 
 /** Accountant nav / hero label. Firms need a card, so this is not "Start free". */

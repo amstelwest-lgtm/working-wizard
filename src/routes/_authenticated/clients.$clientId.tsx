@@ -14,6 +14,8 @@ import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { UploadFinancials } from "@/components/upload-financials";
+import { BalanceSheetPrompt } from "@/components/balance-sheet-prompt";
+import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
@@ -1282,13 +1284,15 @@ function ClientView() {
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
-    runwayLabel: forecastRunwayHeadlineShared({
-      opening: cashOutlook.opening,
-      closings: cashOutlook.closing,
-      floor: cashOutlook.floor,
-      runwayLabel: runwayDisplayLabel(metricRunway),
-      cashGenerative: metricRunway.kind === "cash_generative",
-    }).headline,
+    runwayLabel: hasFigures
+      ? forecastRunwayHeadlineShared({
+          opening: cashOutlook.opening,
+          closings: cashOutlook.closing,
+          floor: cashOutlook.floor,
+          runwayLabel: runwayDisplayLabel(metricRunway),
+          cashGenerative: metricRunway.kind === "cash_generative",
+        }).headline
+      : null,
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
@@ -1296,7 +1300,7 @@ function ClientView() {
     datedPeriod: statementDated,
     market: clientMarket,
     cash:
-      assessed.cash.amount != null
+      hasFigures && assessed.cash.amount != null
         ? {
             amount: cashOutlook.opening,
             floor: cashOutlook.floor,
@@ -2581,7 +2585,11 @@ function ClientView() {
                   {firmClientCrumbLabel(client.name, actingAsThisClient)}
                 </b>
               </span>
-              <span className="aud">Audited</span>
+              {hasFigures ? (
+                <span className="aud">Audited</span>
+              ) : (
+                <span className="crumb-empty">No data yet</span>
+              )}
             </div>
 
             <div className="client-workspace">
@@ -2651,6 +2659,9 @@ function ClientView() {
                   refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
                   onAct={handleNextStepAct}
                 />
+                {needsBalanceSheetPrompt(financials) ? (
+                  <BalanceSheetPrompt onUpload={() => setUploadOpen(true)} />
+                ) : null}
                 {/* P0.6 — tracked data asks (system + by hand); accountant can email the owner. */}
                 <DataRequestsPanel
                   className="mb-4"
@@ -2720,7 +2731,9 @@ function ClientView() {
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
-                  onConnectSage={() => setShowSageDialog(true)}
+                  onConnectSage={
+                    isUsCopy(clientMarket) ? undefined : () => setShowSageDialog(true)
+                  }
                   qboLink={
                     qboLink
                       ? {
@@ -3878,7 +3891,7 @@ function ClientView() {
                 >
                   {uploadPurpose === "aged"
                     ? "PDF, Excel or CSV of the aged debtors and creditors report. A balance sheet in the file updates the receivables and payables already on Overview. Named customers and age buckets come through when you connect Xero or QuickBooks."
-                    : "Upload a statement — PDF, Excel, OpenDocument or CSV. Figures are read from the income statement and balance sheet. Review every figure before confirming. The quality of the financial information we produce depends on the accuracy of the information you upload."}
+                    : "Upload your income statement or balance sheet, one file at a time. Figures are read from the file. PDF, Excel, OpenDocument or CSV. Review every figure before confirming. The quality of the financial information we produce depends on the accuracy of the information you upload."}
                 </p>
                 <UploadFinancials
                   onConfirm={(result, prefs, period) => {
@@ -4055,14 +4068,16 @@ function ClientView() {
                         setShowXeroDialog(true);
                       }}
                     />
-                    <FirstDataChoice
-                      label="Connect Sage"
-                      hint="Sage Business Cloud Accounting (South Africa)"
-                      onClick={() => {
-                        setFirstDataOpen(false);
-                        setShowSageDialog(true);
-                      }}
-                    />
+                    {!isUsCopy(clientMarket) ? (
+                      <FirstDataChoice
+                        label="Connect Sage"
+                        hint="Sage Business Cloud Accounting (South Africa)"
+                        onClick={() => {
+                          setFirstDataOpen(false);
+                          setShowSageDialog(true);
+                        }}
+                      />
+                    ) : null}
                     <FirstDataChoice
                       label="Type the figures by hand"
                       hint="Fill the financials grid yourself"

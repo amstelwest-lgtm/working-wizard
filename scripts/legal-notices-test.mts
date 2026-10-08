@@ -37,7 +37,8 @@ assert(LEGAL_ADDRESS.includes("Sunnyside"), "address is Sunnyside Pretoria");
 assert(!LEGAL_ENTITY.includes("MILŌN"), "product name is not the registered company");
 assert(/\d{4}/.test(LEGAL_EFFECTIVE), "effective date has a year");
 assert(privacy.includes("powered by"), "privacy says AI is used");
-assert(privacy.includes("Claude"), "privacy names Claude");
+assert(!privacy.includes("Claude"), "privacy does not name the model vendor");
+assert(!privacy.includes("Anthropic"), "privacy does not name the model supplier");
 assert(privacy.includes("AI_IDENTIFIERS_LINE") || privacy.includes("amounts stay"), "privacy says identifiers are stripped and amounts stay");
 assert(!privacy.includes("no raw amounts"), "privacy does not claim amounts are stripped");
 assert(privacy.includes("Protection of Personal Information"), "privacy mentions POPIA");
@@ -47,7 +48,8 @@ assert(privacy.includes("not in borrowed American boilerplate"), "ZA privacy kee
 assert(privacy.includes("mk-copy-us"), "privacy has a US pack");
 
 assert(terms.includes("not a substitute"), "terms: not a substitute");
-assert(terms.includes("Claude"), "terms name Claude");
+assert(!terms.includes("Claude"), "terms do not name the model vendor");
+assert(!terms.includes("Anthropic"), "terms do not name the model supplier");
 assert(terms.includes("AI_IDENTIFIERS_LINE") || terms.includes("amounts stay"), "terms: identifiers stripped, amounts stay");
 assert(!terms.includes("no raw amounts"), "terms do not claim amounts are stripped");
 assert(terms.includes("South Africa"), "terms sit under SA law");
@@ -58,9 +60,9 @@ assert(
 assert(terms.includes("IRS"), "US terms mention IRS");
 assert(terms.includes("choice of law"), "US terms do not invent a US venue");
 
-assert(ai.includes("Claude"), "AI notice names Claude");
-assert(ai.includes("Anthropic"), "AI notice names the supplier");
-assert(!ai.includes("mk-gold"), "AI notice does not gold-highlight Claude");
+assert(!ai.includes("Claude"), "AI notice does not name the model vendor");
+assert(!ai.includes("Anthropic"), "AI notice does not name the model supplier");
+assert(!ai.includes("mk-gold"), "AI notice does not gold-highlight a vendor");
 assert(ai.includes('heroTone="plain"'), "AI notice uses the quiet hero");
 assert(ai.includes("No company names"), "AI notice: no company names");
 assert(ai.includes("Amounts stay"), "AI notice: amounts stay");
@@ -72,7 +74,7 @@ assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 assert(faq.includes('href="/ai"'), "FAQ links to the AI notice");
 assert(faq.includes("publicFaqItems"), "FAQ answers come from the shared list");
 const disclosure =
-  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
+  "Milōn Bot prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
 const marketingFaq = readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").replace(/\s+/g, " ");
 const privacyText = privacy.replace(/\s+/g, " ");
 assert(marketingFaq.split(disclosure).length - 1 === 1, "FAQ copy defines the disclosure once");
