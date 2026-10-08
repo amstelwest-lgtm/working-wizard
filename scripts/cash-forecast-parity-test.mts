@@ -2,6 +2,8 @@
  * Cash figures the tab, Overview, the PDF, and the Bot must share.
  * Run: pnpm test:cash-forecast-parity
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { buildFinancialSnapshot } from "../src/lib/client-briefing";
 import {
   assessClientMetrics,
@@ -13,6 +15,7 @@ import {
 import {
   canonicalForecastFloor,
   forecastFloorPosition,
+  cashEmptyPresentation,
   forecastLowestPoint,
   forecastPositionPhrase,
   forecastRunwayHeadlineShared,
@@ -126,5 +129,17 @@ assert(
   (stressed.outlook.timingNote ?? "").includes("collections delayed") === false,
   "published series does not keep a saved collection delay",
 );
+
+const blank = cashEmptyPresentation({ opening: 0, linesBlank: true });
+assert(blank.showChart === false && blank.lowestBlank, "empty cash hides the chart and the $0 trough");
+const openingOnly = cashEmptyPresentation({ opening: 128450, linesBlank: true });
+assert(openingOnly.showChart === false && openingOnly.lowestBlank === false, "an opening is a real low, still no chart");
+const populated = cashEmptyPresentation({ opening: 128450, linesBlank: false });
+assert(populated.showChart && populated.lowestBlank === false, "lines draw the chart");
+
+const cashTab = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
+const nothingPhrases = cashTab.split("Nothing is forecast yet").length - 1;
+assert(nothingPhrases === 1, `empty copy is said once, found ${nothingPhrases}`);
+assert(cashTab.includes("cashEmptyPresentation"), "the tab uses the empty-state helper");
 
 console.log("cash-forecast-parity-test: all assertions passed");

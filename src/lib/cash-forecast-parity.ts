@@ -13,6 +13,22 @@ export function canonicalForecastFloor(input: {
   return forecastMinimumCash(input);
 }
 
+/**
+ * Empty cash tab. No lines means there is nothing to chart. A zero opening
+ * is not a trough under the floor — the lowest-point tile stays blank until
+ * an opening balance is entered.
+ */
+export function cashEmptyPresentation(input: {
+  opening: number;
+  linesBlank: boolean;
+}): { showChart: boolean; lowestBlank: boolean } {
+  const hasOpening = Number.isFinite(input.opening) && input.opening !== 0;
+  return {
+    showChart: !input.linesBlank,
+    lowestBlank: input.linesBlank && !hasOpening,
+  };
+}
+
 export function forecastLowestPoint(
   opening: number,
   closings: readonly number[],
