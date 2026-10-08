@@ -73,7 +73,11 @@ const packPane = clientSrc.slice(advisoryAt, drafterAt);
 const drafterPane = clientSrc.slice(drafterAt, clientSrc.indexOf('className="footer-note"', drafterAt));
 
 assert.ok(reportsPane.includes("ReportsStudioPanel"), "the reports tab still mounts the studio");
-assert.ok(reportsPane.includes("sourceChip={figureSourceChipLabel"), "the reports strip uses the figure chip");
+assert.ok(
+  reportsPane.includes("sourceChip={healthChip}") &&
+    clientSrc.includes("const healthChip = figureSourceChipLabel(figureSource)"),
+  "the reports strip uses the figure chip",
+);
 assert.equal(reportsPane.includes("DeliverableAnswerStrip"), false, "reports has no sign-off strip");
 assert.equal(reportsPane.includes("Board-ready"), false, "the reports lede leaves the tab");
 assert.equal(packPane.includes("AdvisoryDrafter"), false, "the pack page no longer stacks the drafter");

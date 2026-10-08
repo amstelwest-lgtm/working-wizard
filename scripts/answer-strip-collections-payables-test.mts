@@ -304,8 +304,25 @@ assert(payables.includes("payablesAnswerSentence"), "payables sentence comes fro
 assert(payables.includes('lead="creditors"'), "payables puts creditor cards first on the list");
 assert(payables.includes('cardLead="creditors"'), "payables puts creditor cards first when only totals are showing");
 assert(!collections.includes('lead="creditors"'), "collections keeps the debtor card order");
-assert(collectionsPane.includes("statementSource={statementMeta.statementSource}"), "collections receives the statement source");
-assert(payablesPane.includes("statementSource={statementMeta.statementSource}"), "payables receives the statement source");
+const figureSourceAt = route.indexOf("const figureSource = resolveFigureSource(");
+const healthChipAt = route.indexOf("const healthChip = figureSourceChipLabel(figureSource)", figureSourceAt);
+assert(figureSourceAt !== -1 && healthChipAt > figureSourceAt, "figure source is resolved before the chip");
+const figureSourceCall = route.slice(figureSourceAt, healthChipAt);
+assert(figureSourceCall.includes("financials,"), "figure source reads the statement file");
+const resolver = readFileSync(resolve("src/lib/ledger-link-copy.ts"), "utf8");
+const resolverFn = resolver.slice(
+  resolver.indexOf("export function resolveFigureSource"),
+  resolver.indexOf("export type LedgerProvider"),
+);
+const statementRead = resolverFn.indexOf("readStatementMeta(input.financials ?? null).statementSource");
+const snapshotRead = resolverFn.indexOf("input.snapshotSource");
+assert(statementRead !== -1 && snapshotRead > statementRead, "resolved figure source reads the statement source first");
+assert(
+  resolverFn.indexOf("if (fromBlob) return fromBlob;") < snapshotRead,
+  "a statement source is returned before the snapshot is considered",
+);
+assert(collectionsPane.includes("statementSource={figureSource}"), "collections receives the statement source");
+assert(payablesPane.includes("statementSource={figureSource}"), "payables receives the statement source");
 assert(collections.includes("<ReviewInputsDrawer"), "collections inputs sit in the drawer");
 assert(payables.includes("<ReviewInputsDrawer"), "payables inputs sit in the drawer");
 assert(collections.includes("collectionsStatementLead"), "the collections statement explanation stays available");
