@@ -7,6 +7,7 @@ import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
@@ -41,6 +42,8 @@ import {
   type HealthPillarId,
 } from "@/lib/health-score";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
+import { planAnswerSentence, type PackAnswerStatus } from "@/lib/plan-pack-copy";
+import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { healthHeadline } from "@/lib/client-briefing";
 import type { NextStep } from "@/lib/next-step";
 import {
@@ -58,7 +61,6 @@ import { FeatureFinder } from "@/components/feature-finder";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { SectionCard } from "@/components/primitives";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
-import { ReviewSignoffButton } from "@/components/review-signoff";
 import { accountantClientTabSearch, legacyPaneForSearch } from "@/lib/client-route-search";
 import {
   CLIENT_RAIL,
@@ -99,6 +101,7 @@ export function RailStudio() {
     section?: string;
     focus?: string;
     aged?: string | number;
+    packView?: string;
   };
   const navigate = useNavigate();
   const pane = legacyPaneForSearch(search) ?? "overview";
@@ -174,7 +177,7 @@ export function RailStudio() {
             {pane === "collections" ? <CollectionsPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "payables" ? <PayablesPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
-            {pane === "advisory" ? <PackPane clientId={clientId} /> : null}
+            {pane === "advisory" ? <PackPane clientId={clientId} packView={search.packView} /> : null}
             {pane === "plan" ? <PlanPane clientId={clientId} /> : null}
           </div>
         </div>
@@ -736,18 +739,42 @@ function BudgetPane({ clientId }: { clientId: string }) {
   );
 }
 
-function PackPane({ clientId }: { clientId: string }) {
+function harnessPackAction(status: PackAnswerStatus, signedBy: string | null): AdvisorySignoffAction {
+  return {
+    state: {
+      status,
+      version: 3,
+      signedBy,
+      firmName: "Harbour & Co",
+      signedAt: signedBy ? "2026-10-02T08:00:00.000Z" : null,
+      zone: "Africa/Johannesburg",
+      reviewedByKind: "accountant",
+    },
+    line: null,
+    canSignOff: status === "draft" || status === "in_review",
+    blocked: false,
+    busy: false,
+    signOff: () => {},
+  };
+}
+
+function PackPane({ clientId, packView }: { clientId: string; packView?: string }) {
+  const fixture =
+    packView === "draft"
+      ? { periodLabel: "September 2026", sectionCount: 6, status: "draft" as const, signedBy: null }
+      : packView === "ready"
+        ? { periodLabel: "September 2026", sectionCount: 6, status: "in_review" as const, signedBy: null }
+        : packView === "stale"
+          ? {
+              periodLabel: "September 2026",
+              sectionCount: 6,
+              status: "signed_stale" as const,
+              signedBy: "Ada Mbeki",
+              signedDate: "2 Oct 2026",
+            }
+          : null;
   return (
     <div className="tabpane on" id="pane-advisory">
-      <div className="deliverable-tab-head">
-        <div>
-          <span className="eyebrow">Advisory Drafter</span>
-          <div className="h-sec">Write the note</div>
-          <p className="sub" style={{ margin: "8px 0 0", maxWidth: "68ch" }}>
-            Draft the advisory pack or email from this client&apos;s figures. Sign it off when it is ready to send.
-          </p>
-        </div>
-      </div>
       <PaneBoundary label="Advisory pack">
         <AdvisoryPackPanel
           className="mb-5"
@@ -758,7 +785,24 @@ function PackPane({ clientId }: { clientId: string }) {
           canGenerate
           hasFirm={false}
           onChanged={() => {}}
-          onSignoffAction={() => {}}
+          chip={figureSourceChipLabel("upload")}
+          fixture={fixture}
+          primary={
+            fixture ? (
+              <AdvisoryTabSignoff
+                hideLine
+                action={harnessPackAction(fixture.status, fixture.signedBy ?? null)}
+                pageSignoff={null}
+              />
+            ) : null
+          }
+          inputs={
+            <DeliverableInputConfig
+              clientId={clientId}
+              deliverableId="advisory"
+              context={{ financials: HARNESS_FINANCIALS }}
+            />
+          }
           currentFigures={{ runwayLabel: "11 weeks", cash: 186000, healthScore: 72 }}
         />
       </PaneBoundary>
@@ -788,32 +832,31 @@ function PackPane({ clientId }: { clientId: string }) {
 }
 
 function PlanPane({ clientId }: { clientId: string }) {
+  const [sentence, setSentence] = useState("No actions in the plan yet.");
   return (
     <div className="tabpane on" id="pane-plan">
-      <div className="deliverable-tab-head">
-        <div>
-          <span className="eyebrow">Action Plan</span>
-          <div className="h-sec">What still needs doing</div>
-          <p className="sub" style={{ margin: "8px 0 0", maxWidth: "68ch" }}>
-            This is the shared work list for the engagement.
-          </p>
-        </div>
-        <div className="deliverable-tab-head__sign">
-          <PaneBoundary label="Plan sign-off">
-            <ReviewSignoffButton
-              compact
-              clientId={clientId}
-              clientName="Harbour Glass"
-              scope="action_plan"
-              signoff={null}
-              isStale={false}
-              onChange={() => {}}
-            />
-          </PaneBoundary>
-        </div>
-      </div>
+      <DeliverableAnswerStrip
+        heading="Action plan"
+        sentence={sentence}
+        scope="action_plan"
+        clientId={clientId}
+        clientName="Harbour Glass"
+        signoff={null}
+        isStale={false}
+        onSignoffChange={() => {}}
+        canSign
+      />
+      <ReviewInputsDrawer hint="Inputs">
+        <p className="sub">The work list stays below.</p>
+      </ReviewInputsDrawer>
       <PaneBoundary label="Action plan">
-        <ActionPlanPanel clientId={clientId} clientName="Harbour Glass" simplified isOwner />
+        <ActionPlanPanel
+          clientId={clientId}
+          clientName="Harbour Glass"
+          simplified
+          isOwner
+          onAnswer={(actions) => setSentence(planAnswerSentence(actions))}
+        />
       </PaneBoundary>
     </div>
   );

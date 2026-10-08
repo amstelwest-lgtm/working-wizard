@@ -12,6 +12,7 @@ import { advisoryLegacyMismatchLine, type AdvisorySignoffAction } from "@/lib/ad
 export function AdvisoryTabSignoff({
   action,
   pageSignoff,
+  hideLine = false,
 }: {
   action: AdvisorySignoffAction | null;
   pageSignoff?: {
@@ -19,6 +20,8 @@ export function AdvisoryTabSignoff({
     firm_name: string | null;
     signed_off_at: string;
   } | null;
+  /** The strip sentence already carries the sign-off line. */
+  hideLine?: boolean;
 }) {
   const { market } = useMarketFormat();
   if (!action) return null;
@@ -41,7 +44,7 @@ export function AdvisoryTabSignoff({
       data-advisory-signoff={state.status}
       data-advisory-version={state.version ?? ""}
     >
-      {approved && action.line ? (
+      {!hideLine && approved && action.line ? (
         <p
           className="text-right text-[12px] font-semibold leading-snug text-[#3d2e00] dark:text-[#f4e7c2]"
           data-signoff-line

@@ -108,6 +108,7 @@ import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
+import { planAnswerSentence } from "@/lib/plan-pack-copy";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
@@ -1023,6 +1024,10 @@ function ClientView() {
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
+  const [planSentence, setPlanSentence] = useState("No actions in the plan yet.");
+  const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
+    setPlanSentence(planAnswerSentence(actions));
+  }, []);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
 
   // Accountant sign-off — one stamp per deliverable tab
@@ -3738,28 +3743,25 @@ function ClientView() {
 
                 {/* ===== ACTION PLAN TAB ===== */}
                 <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
-                  <DeliverableTabHead
-                    eyebrow="Action Plan"
-                    title="What still needs doing"
-                    lede="This is the shared work list for the engagement. You put the next steps here so client management can see them, chase them, and mark them done. Sign the plan off when the list is right, then use it to follow up on outstanding items — that is the point of the tab."
-                    signoff={
-                      <ReviewSignoffButton
-                        compact
-                        clientId={clientId}
-                        clientName={client?.name}
-                        scope="action_plan"
-                        signoff={actionPlanSignoff}
-                        isStale={false}
-                        onChange={patchSignoff("action_plan")}
-                      />
-                    }
-                  />
-                  <DeliverableInputConfig
-                    className="mb-5"
+                  <DeliverableAnswerStrip
+                    heading="Action plan"
+                    sentence={planSentence}
+                    scope="action_plan"
                     clientId={clientId}
-                    deliverableId="plan"
-                    context={deliverableInputContext}
+                    clientName={client?.name}
+                    signoff={actionPlanSignoff}
+                    isStale={false}
+                    onSignoffChange={patchSignoff("action_plan")}
+                    canSign
                   />
+                  <ReviewInputsDrawer hint={deliverableDrawerHint("plan", deliverableInputContext)}>
+                    <DeliverableInputConfig
+                      className="mb-5"
+                      clientId={clientId}
+                      deliverableId="plan"
+                      context={deliverableInputContext}
+                    />
+                  </ReviewInputsDrawer>
                   {/* Follow the portal theme. A nested `.dark` island made Tailwind
               light-on-dark copy fire while accountant `--card` stayed a
               near-transparent cream — titles vanished in light mode. */}
@@ -3788,6 +3790,7 @@ function ClientView() {
                           }))}
                           focusMoveKey={planFocusMove}
                           onFocusHandled={() => setPlanFocusMove(null)}
+                          onAnswer={onPlanAnswer}
                         />
                       )}
                     </Suspense>
@@ -3800,15 +3803,7 @@ function ClientView() {
                   className={`tabpane${activeTab === "advisory" ? " on" : ""}`}
                   id="pane-advisory"
                 >
-                  <DeliverableTabHead
-                    eyebrow="Advisory Drafter"
-                    title="Write the note"
-                    lede="Draft the advisory pack or email from this client's figures. Sign it off when it is ready to send."
-                    signoff={
-                      <AdvisoryTabSignoff action={packSignoff} pageSignoff={advisorySignoff} />
-                    }
-                  />
-                  {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
+                  {/* Pack, recommendations, outcomes, drafter, and sent history stay stacked on section=pack. */}
                   <AdvisoryPackPanel
                     className="mb-5"
                     clientId={client.id}
@@ -3820,6 +3815,22 @@ function ClientView() {
                     refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                     onSignoffAction={setPackSignoff}
+                    chip={figureSourceChipLabel(statementMeta.statementSource)}
+                    primary={
+                      <AdvisoryTabSignoff
+                        hideLine
+                        action={packSignoff}
+                        pageSignoff={advisorySignoff}
+                      />
+                    }
+                    inputs={
+                      <DeliverableInputConfig
+                        className="mb-5"
+                        clientId={clientId}
+                        deliverableId="advisory"
+                        context={deliverableInputContext}
+                      />
+                    }
                     currentFigures={{
                       runwayLabel: runwayDisplayLabel(metricRunway),
                       cash: cashOutlook.opening,
@@ -3845,12 +3856,6 @@ function ClientView() {
                     audience="accountant"
                     refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
-                  />
-                  <DeliverableInputConfig
-                    className="mb-5"
-                    clientId={clientId}
-                    deliverableId="advisory"
-                    context={deliverableInputContext}
                   />
                   <AdvisoryDrafter
                     clientId={client.id}

@@ -49,6 +49,10 @@ const clientRoute = createRoute({
     section: typeof search.section === "string" ? search.section : undefined,
     focus: search.focus === "health" || search.focus === "pillars" ? search.focus : undefined,
     aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
+    packView:
+      search.packView === "draft" || search.packView === "ready" || search.packView === "stale"
+        ? search.packView
+        : undefined,
   }),
   component: function ClientHarness() {
     return (

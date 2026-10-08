@@ -169,6 +169,8 @@ interface Props {
   initialFilter?: ActionPlanFilter;
   /** Same stamp the tab sign-off prints. Unsigned exports say Draft. */
   reviewSignoff?: ReportSignoffStamp | null;
+  /** Titles already on the list, in stored order. The strip sentence uses them. */
+  onAnswer?: (actions: readonly { title: string }[]) => void;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -449,6 +451,7 @@ export default function ActionPlanPanel({
   onFocusHandled,
   initialFilter,
   reviewSignoff = null,
+  onAnswer,
 }: Props) {
   const { date } = useMarketFormat();
   const { profile } = useAccountantProfile();
@@ -975,6 +978,9 @@ export default function ActionPlanPanel({
 
   // ── Derived views ─────────────────────────────────────────────────────────────
   const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
+  useEffect(() => {
+    onAnswer?.(items.map((item) => ({ title: item.title })));
+  }, [items, onAnswer]);
   const filtered = useMemo(() => {
     let list = enriched;
     if (filter === "overdue") list = list.filter((i) => i.health === "overdue");
