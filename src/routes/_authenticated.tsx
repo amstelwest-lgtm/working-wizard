@@ -18,8 +18,12 @@ import {
   clearForcePortal,
   isMilonItMember,
 } from "@/lib/user-roles";
+import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
 
 export const Route = createFileRoute("/_authenticated")({
+  // Portal, finder, and settings sheets for every child. Preload plus
+  // stylesheet so a client navigation into this layout does not paint unstyled.
+  head: () => ({ links: authenticatedLayoutLinks }),
   component: AuthGate,
 });
 

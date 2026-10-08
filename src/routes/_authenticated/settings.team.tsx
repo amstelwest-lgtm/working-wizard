@@ -7,7 +7,6 @@ import { BackLink } from "@/components/back-link";
 import { PageHeader } from "@/components/primitives";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { SettingsShell } from "@/components/settings-shell";
-import { settingsPortalLinks } from "@/styles/app-route-styles";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -41,7 +40,6 @@ export const Route = createFileRoute("/_authenticated/settings/team")({
   component: TeamAccessPage,
   head: () => ({
     meta: [{ title: "Team & access — Milōn" }],
-    links: settingsPortalLinks,
   }),
 });
 

@@ -12,26 +12,27 @@ import opsConsoleHref from "./ops-console.css?url";
 import settingsPortalHref from "./settings-portal.css?url";
 
 type StylesheetLink = { rel: "stylesheet"; href: string };
+type PreloadLink = { rel: "preload"; href: string; as: "style" };
+type StyleLink = StylesheetLink | PreloadLink;
 
 function sheet(href: string): StylesheetLink {
   return { rel: "stylesheet", href };
 }
 
-export const accountantPortalLinks: StylesheetLink[] = [
-  sheet(accountantPortalHref),
-  sheet(featureFinderHref),
-];
+/** Download the sheet with the route, then apply it. The preload is in the
+ * layout head so a client navigation does not paint the portal unstyled. */
+function sheetWithPreload(href: string): StyleLink[] {
+  return [
+    { rel: "preload", href, as: "style" },
+    { rel: "stylesheet", href },
+  ];
+}
 
-export const reportsPortalLinks: StylesheetLink[] = [sheet(accountantPortalHref)];
-
-export const settingsPortalLinks: StylesheetLink[] = [
-  sheet(accountantPortalHref),
-  sheet(settingsPortalHref),
-];
-
+/** Owner board. Trial-ended blocks use accountant-portal rules (the pin hide). */
 export const founderPortalLinks: StylesheetLink[] = [
   sheet(founderPortalHref),
   sheet(featureFinderHref),
+  sheet(accountantPortalHref),
 ];
 
 export const founderMetricsLinks: StylesheetLink[] = [
@@ -40,3 +41,15 @@ export const founderMetricsLinks: StylesheetLink[] = [
 ];
 
 export const opsConsoleLinks: StylesheetLink[] = [sheet(opsConsoleHref)];
+
+/**
+ * Every signed-in route. These classes used to ship in the global entry, so a
+ * child that rendered them without its own import still looked right. The
+ * layout link restores that for `/_authenticated/*` and stays off `/` and
+ * `/for-accountants`.
+ */
+export const authenticatedLayoutLinks: StyleLink[] = [
+  ...sheetWithPreload(accountantPortalHref),
+  ...sheetWithPreload(featureFinderHref),
+  ...sheetWithPreload(settingsPortalHref),
+];
