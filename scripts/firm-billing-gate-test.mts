@@ -47,8 +47,10 @@ assert(isFirmProductPath("/dashboard"), "dashboard is firm product");
 assert(isFirmProductPath("/clients/abc"), "client workspace is firm product");
 assert(isFirmProductPath("/reports"), "reports is firm product");
 assert(isFirmProductPath("/settings/team"), "team settings is firm product");
-assert(isFirmProductPath("/settings/brand"), "brand settings is firm product");
+assert(!isFirmProductPath("/settings/brand"), "brand settings stay open before a card");
+assert(!isFirmProductPath("/settings/brand/"), "brand settings with a slash stay open");
 assert(!isFirmProductPath("/settings"), "shared settings is not gated");
+assert(!isFirmProductPath("/open"), "smart landing is not a firm-product path");
 assert(!isFirmProductPath("/app"), "/app is owner Spark");
 assert(!isFirmProductPath("/ops"), "/ops is Lighthouse");
 assert(!isFirmProductPath("/billing/start"), "billing start is exempt");
@@ -203,6 +205,30 @@ assert(
     firmClientCount: 1,
   }) === "require_billing",
   "team settings still bill before an insight",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/settings/brand",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "allow",
+  "brand settings stay open after an insight and before a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/settings",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "allow",
+  "account settings stay open so brand can be reached",
 );
 assert(
   decideFirmBillingPathGate({

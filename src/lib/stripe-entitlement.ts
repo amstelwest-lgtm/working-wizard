@@ -81,8 +81,9 @@ export function isOpsPath(pathname: string): boolean {
 
 /**
  * Accountant / firm product UI — gated until the firm owner has an
- * entitling Stripe subscription. Shared `/settings` stays open so owners
- * can still use Spark settings and so a firm can open Customer Portal.
+ * entitling Stripe subscription. Shared `/settings` and `/settings/brand`
+ * stay open so a firm can set the logo before a card, and so owners can
+ * still use Spark settings and Customer Portal. Team settings stay gated.
  */
 export function isFirmProductPath(pathname: string): boolean {
   return (
@@ -91,9 +92,7 @@ export function isFirmProductPath(pathname: string): boolean {
     pathname.startsWith("/clients") ||
     pathname.startsWith("/reports") ||
     pathname === "/settings/team" ||
-    pathname.startsWith("/settings/team/") ||
-    pathname === "/settings/brand" ||
-    pathname.startsWith("/settings/brand/")
+    pathname.startsWith("/settings/team/")
   );
 }
 
@@ -238,7 +237,8 @@ export function decideFirmBillingPathGate(input: {
   if (!input.isAccountantFirmUser) return "allow";
   if (input.entitled) return "allow";
   // First client's Overview and figures stay on screen without a card.
-  // Reports, the practice board (a second client), and settings still redirect.
+  // Reports, the practice board (a second client), and team settings still redirect.
+  // Brand settings are not a firm-product path, so they stay open with /settings.
   if (
     input.firmClientCount !== undefined &&
     isFirstClientFiguresPath({

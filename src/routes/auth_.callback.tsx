@@ -50,6 +50,7 @@ import {
 } from "@/lib/pending-checkout";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { readInsightSeen } from "@/lib/funnel-timing";
+import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { listUserFirms } from "@/lib/firm-brand";
 import {
@@ -300,6 +301,11 @@ function AuthCallbackPage() {
         );
       }
       if (pendingCheckout) stashPendingCheckout(pendingCheckout);
+      // The welcome link asked for the product, not Checkout.
+      if (isSmartLandingNext(next)) {
+        if (!cancelled) void navigate({ to: SMART_LANDING_PATH, replace: true });
+        return;
+      }
       // Checkout after insight. A fresh Solo stash still lands in the workspace.
       if (pendingCheckout && readInsightSeen()) {
         if (!cancelled) {

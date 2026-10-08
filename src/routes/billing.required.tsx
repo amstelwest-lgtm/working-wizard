@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
+import { loadFirstFirmClient, type FirstFirmClient } from "@/lib/firm-client-gate";
+import { firmWallBackLabel } from "@/lib/smart-landing";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import {
   billingStartPath,
@@ -46,10 +48,21 @@ function BillingRequiredPage() {
   const navigate = useNavigate();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const [checking, setChecking] = useState(true);
+  const [returnClient, setReturnClient] = useState<FirstFirmClient | null | undefined>(undefined);
 
   useEffect(() => {
     stashPendingCheckout(pending);
   }, [pending]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadFirstFirmClient().then((row) => {
+      if (!cancelled) setReturnClient(row);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -81,7 +94,9 @@ function BillingRequiredPage() {
 
   const planName = registerLabelForPlan(pending.plan);
 
-  if (loading || checking || !user) {
+  const backLabel = returnClient ? firmWallBackLabel(returnClient.name) : null;
+
+  if (loading || checking || !user || returnClient === undefined) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -98,16 +113,33 @@ function BillingRequiredPage() {
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
         <p className="mt-2 text-sm text-slate-400">
-          The figures stay. Checkout for {planName} ({priceLabel(pending.plan, pending.interval)})
-          starts the subscription. A card is required. A first subscription includes a{" "}
-          {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing resumes on the paid band without
-          another trial. Owner Spark stays free.
+          The figures stay.
+          {returnClient
+            ? ` ${returnClient.name} is still open. The firm dashboard and reports need a card. `
+            : " "}
+          Checkout for {planName} ({priceLabel(pending.plan, pending.interval)}) starts the
+          subscription. A card is required. A first subscription includes a {FIRM_TRIAL_SENTENCE}.
+          If a trial already ended, billing resumes on the paid band without another trial. Owner
+          Spark stays free.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
+          {returnClient && backLabel ? (
+            <Link
+              to="/clients/$clientId"
+              params={{ clientId: returnClient.id }}
+              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+            >
+              {backLabel}
+            </Link>
+          ) : null}
           <Link
             to="/billing/start"
             search={billingStartSearch(pending)}
-            className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+            className={
+              returnClient && backLabel
+                ? "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
+                : "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+            }
           >
             Resume Checkout
           </Link>
