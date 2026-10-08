@@ -442,8 +442,10 @@ export function presentScorecardRatio(input: {
 }): ScorecardPresentation {
   if (input.name === "OCF / EBITDA") {
     const unstatedZero = input.cashFlowKnown !== true && input.value === 0;
+    // No cash-flow statement: omit the row. A dash pair ("OCF / EBITDA — —")
+    // reads as a scored zero. A genuine zero from a statement still scores.
     if (!Number.isFinite(input.value) || unstatedZero) {
-      return { include: true, text: "—", headline: "—", scoredValue: null, note: null, unscored: true };
+      return { include: false, text: null, headline: null, scoredValue: null, note: null, unscored: true };
     }
   }
   if (input.name === "Return on Equity" || input.name === "Return on Assets") {

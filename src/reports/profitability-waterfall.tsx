@@ -62,6 +62,8 @@ export type ProfitabilityWaterfallPDFProps = {
   profitabilityData: ProfitabilityData;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
 };
@@ -452,6 +454,7 @@ export function ProfitabilityWaterfallPDF({
   profitabilityData: d,
   accountantProfile,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   market,
@@ -592,6 +595,7 @@ export function ProfitabilityWaterfallPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
       market={m}
     >

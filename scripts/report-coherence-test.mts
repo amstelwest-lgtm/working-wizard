@@ -167,7 +167,7 @@ assert(positiveCycle.sentence.includes("$2840") && positiveCycle.sentence.includ
 assert(!Number.isFinite(ocfToEbitdaRatio(Number.NaN, 100)), "missing operating cash flow is not a ratio");
 assert(!Number.isFinite(ocfToEbitdaRatio(0, 0)), "zero EBITDA is not 0.00×");
 const ocfRow = presentScorecardRatio({ name: "OCF / EBITDA", value: Number.NaN });
-assert(ocfRow.include && ocfRow.unscored && ocfRow.scoredValue === null, "OCF with no cash-flow data is Not scored");
+assert(!ocfRow.include && ocfRow.unscored && ocfRow.scoredValue === null, "OCF with no cash-flow data is omitted");
 assert(!Number.isFinite(scoreRatio("OCF / EBITDA", Number.NaN)), "a missing OCF ratio is not given a score");
 
 assert(interestBurdenRatio(100, 100) === 1, "no interest is a DuPont burden of 1");

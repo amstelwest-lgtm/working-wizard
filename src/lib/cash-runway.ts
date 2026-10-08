@@ -4,7 +4,20 @@
  */
 
 export const CASH_RUNWAY_THRESHOLD_RAND = 50_000;
+/** Same nominal floor in dollars. Not an FX conversion of the rand line. */
+export const CASH_RUNWAY_THRESHOLD_USD = 50_000;
 export const CASH_FORECAST_WEEKS = 13;
+
+/**
+ * Comfort line for narrative copy, in the client's currency units.
+ * A USD pack must not quote the rand constant, and a rand pack must not
+ * quote a dollar line. The number is the local floor, not a conversion.
+ */
+export function cashComfortThreshold(currency: string | null | undefined): number {
+  const code = (currency ?? "").trim().toUpperCase();
+  if (code === "USD" || currency === "$") return CASH_RUNWAY_THRESHOLD_USD;
+  return CASH_RUNWAY_THRESHOLD_RAND;
+}
 
 export type CashflowFrequency =
   | "recurring-weekly"

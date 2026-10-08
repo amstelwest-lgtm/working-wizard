@@ -115,6 +115,7 @@
     "test:dialog-focus": "vite-node --config scripts/vite-test.config.ts scripts/dialog-focus-test.mts",
     "test:recommendation-actions": "vite-node --config scripts/vite-test.config.ts scripts/recommendation-actions-test.mts",
     "test:advisory-pack": "vite-node --config scripts/vite-test.config.ts scripts/advisory-pack-test.mts",
+    "test:outreach-pdf-signoff": "vite-node --config scripts/vite-test.config.ts scripts/outreach-pdf-signoff-test.mts",
     "test:advisory-pack-pdf": "vite-node --config scripts/vite-test.config.ts scripts/advisory-pack-pdf-test.mts",
     "test:workflow-emails": "vite-node --config scripts/vite-test.config.ts scripts/workflow-emails-test.mts",
     "test:outcomes": "vite-node --config scripts/vite-test.config.ts scripts/outcomes-test.mts",

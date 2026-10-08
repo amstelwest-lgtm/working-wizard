@@ -43,6 +43,7 @@ import {
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { ZA_MARKET, resolveMarket } from "@/lib/market/resolve";
+import type { ResolvedMarket } from "@/lib/market";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { parseDataRequestRow, type DataRequest } from "@/lib/data-requests";
 import { overviewRatios } from "@/lib/health-score";
@@ -351,6 +352,7 @@ async function loadOverviewContext(
   prior: ReturnType<typeof resolvePriorSnapshot>;
   metrics: LivePackMetrics;
   fyStartMonth: number;
+  market: ResolvedMarket;
 }> {
   const { data, error } = await sb
     .from("clients")
@@ -402,7 +404,7 @@ async function loadOverviewContext(
     timeZone: market.timezone,
     now,
   });
-  return { row, snaps, prior, metrics, fyStartMonth };
+  return { row, snaps, prior, metrics, fyStartMonth, market };
 }
 
 export async function gatherPackInputs(
@@ -499,6 +501,7 @@ export async function gatherPackInputs(
       (outcomesRes.error ? [] : (outcomesRes.data ?? [])) as RecommendationOutcome[],
     ),
     now,
+    currency: overview.market.currency,
   };
 }
 

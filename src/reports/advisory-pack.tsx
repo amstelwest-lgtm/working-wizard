@@ -22,6 +22,7 @@ export type AdvisoryPackPDFProps = {
   /** Exact draft sentence, or null once the pack is signed off. */
   draftDisclosure?: string | null;
   reviewSignoff?: ReportSignoffStamp | null;
+  sample?: boolean;
   market?: ResolvedMarket;
 };
 
@@ -71,6 +72,7 @@ export function AdvisoryPackPDF({
   sections,
   draftDisclosure,
   reviewSignoff,
+  sample,
   market,
 }: AdvisoryPackPDFProps) {
   const disclosure = reviewSignoff ? null : (draftDisclosure ?? ADVISORY_PACK_DRAFT_DISCLOSURE);
@@ -82,6 +84,7 @@ export function AdvisoryPackPDF({
       accountantProfile={accountantProfile}
       draft={!reviewSignoff}
       reviewSignoff={reviewSignoff}
+      sample={sample}
       market={market}
     >
       <ReportTitle kicker="Advisory" title="Advisory pack" subtitle={smeData.period} />
@@ -94,7 +97,7 @@ export function AdvisoryPackPDF({
         <Text style={S.empty}>This pack has no sections yet.</Text>
       ) : (
         sections.map((section, i) => (
-          <View key={`${section.title}-${i}`}>
+          <View key={`${section.title}-${i}`} minPresenceAhead={88}>
             <SectionHeader title={pdfSafeText(section.title)} />
             {lines(section.body).map((line, li) => (
               <Text key={li} style={S.body}>

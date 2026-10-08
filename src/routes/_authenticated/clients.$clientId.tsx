@@ -78,6 +78,7 @@ import {
   healthMapFromRatios,
   overviewRatioInputs,
   overviewRatios,
+  PILLAR_LABELS,
   scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -464,6 +465,7 @@ type Client = {
   market?: unknown;
   /** P1: firm attached → the accountant seat signs off advisory packs. */
   firm_id?: string | null;
+  is_demo?: boolean | null;
 };
 
 type ActiveTab =
@@ -1049,14 +1051,20 @@ function ClientView() {
   );
   const fyStartMonth =
     parseOperatingProfile(client?.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
-  // Computed ratios. An unlocked stored 12 follows the statement's year-to-date.
+  // Health and the ratios under it use the stored figures cover, the same
+  // cover as the scorecard PDF. A year-span must not score different inventory
+  // or working-capital days than that PDF.
+  const statementMonths = periodMonthsOf(financials);
   const coverageMonths = effectivePeriodMonths(financials, { fyStartMonth });
   const partMonth = (reportDataPeriodLabel(financials) ?? "").includes("part month");
   const equityCheck = coherentEquity(financials);
   const parsedEquity = Number(equityCheck.equity);
   const equityAmount =
     equityCheck.equity.trim() !== "" && Number.isFinite(parsedEquity) ? parsedEquity : null;
-  const ratioInputs = overviewRatioInputs(financials, { fyStartMonth });
+  const ratioInputs = overviewRatioInputs(financials, {
+    fyStartMonth,
+    periodMonths: statementMonths,
+  });
   const periodMonths = coverageMonths;
   /** True once any P&L / balance-sheet figure exists — gates the empty-state card and Ask AI note. */
   const hasFigures = useMemo(
@@ -1081,7 +1089,10 @@ function ClientView() {
       document.querySelector<HTMLInputElement>("#finCollapse .fin-grid input")?.focus();
     }, 120);
   }, []);
-  const ratios = overviewRatios(financials, { fyStartMonth });
+  const ratios = overviewRatios(financials, {
+    fyStartMonth,
+    periodMonths: statementMonths,
+  });
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
   const statementMeta = readStatementMeta(financials);
   const statementDated = Boolean(statementMeta.periodStart && statementMeta.periodEnd);
@@ -1116,6 +1127,7 @@ function ClientView() {
   const overallHealth: OverallHealth = scorecardHealthFromFinancials({
     financials,
     fyStartMonth,
+    periodMonths: statementMonths,
     cashRunwayWeeks: effectiveRunway,
     market: clientMarket,
     shortfallWeek: cashOutlook.shortfallWeek,
@@ -1167,28 +1179,28 @@ function ClientView() {
   const simplifiedSections = [
     {
       id: "profit",
-      label: "Profitability",
+      label: PILLAR_LABELS.profit,
       health: pillarHealths.profit,
       status: pillarStatus.profit,
       series: [] as number[],
     },
     {
       id: "assets",
-      label: "Asset Efficiency",
+      label: PILLAR_LABELS.assets,
       health: pillarHealths.assets,
       status: pillarStatus.assets,
       series: [] as number[],
     },
     {
       id: "financing",
-      label: "Financing",
+      label: PILLAR_LABELS.financing,
       health: pillarHealths.financing,
       status: pillarStatus.financing,
       series: [] as number[],
     },
     {
       id: "cash",
-      label: "Cash & Working Capital",
+      label: PILLAR_LABELS.cash,
       health: pillarHealths.cash,
       status: pillarStatus.cash,
       series: [] as number[],
@@ -1432,7 +1444,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo",
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -1795,7 +1807,10 @@ function ClientView() {
     const now = new Date();
     const periodDate = now.toISOString().slice(0, 10);
     const periodLabel = now.toLocaleString("en-US", { month: "short", year: "numeric" });
-    const ratiosOut = overviewRatios(financials, { fyStartMonth });
+    const ratiosOut = overviewRatios(financials, {
+      fyStartMonth,
+      periodMonths: periodMonthsOf(financials),
+    });
 
     const { data: existing } = await supabase
       .from("client_financial_snapshots")
@@ -2164,6 +2179,7 @@ function ClientView() {
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
         reviewSignoff: financialsStamp,
+        sample: Boolean(client.is_demo),
         market: clientMarket,
       }) as Parameters<typeof pdf>[0],
     ).toBlob();
@@ -2992,12 +3008,7 @@ function ClientView() {
                                 description:
                                   "Add figures to see a health score and your highest-impact first move.",
                               };
-                            const labels: Record<string, string> = {
-                              profit: "Profitability",
-                              assets: "Asset Efficiency",
-                              financing: "Financing",
-                              cash: "Cash & Working Capital",
-                            };
+                            const labels: Record<string, string> = PILLAR_LABELS;
                             return {
                               title: `Improve ${labels[worst[0]] ?? worst[0]}`,
                               description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
@@ -4093,13 +4104,13 @@ function ClientView() {
                 financials: merged,
                 source: "upload",
               });
+              const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                computeOverallHealth({
-                  ratios: overviewRatios(
-                    { ...financials, ...asStrings } as Record<string, unknown>,
-                    { fyStartMonth },
-                  ),
+                scorecardHealthFromFinancials({
+                  financials: draftedFinancials,
+                  fyStartMonth,
+                  periodMonths: periodMonthsOf(draftedFinancials),
                   cashRunwayWeeks: effectiveRunway,
                   market: clientMarket,
                   shortfallWeek: cashOutlook.shortfallWeek,
