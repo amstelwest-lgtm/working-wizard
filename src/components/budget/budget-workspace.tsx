@@ -24,8 +24,10 @@ import {
 import { useMarket } from "@/contexts/market";
 import { SALES_TAX_HONESTY, formatPercentRate, localizeCopy, resolveMarket, t } from "@/lib/market";
 import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.model-change";
-import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
+import { BudgetChartTable } from "@/components/budget/budget-chart-table";
+import { BudgetSimpleView, MoneyField } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
+import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
@@ -68,6 +70,9 @@ export function BudgetWorkspace({
   canSign = false,
   onSignoffChange,
   drawer = null,
+  lens,
+  onLensChange,
+  actualMonths,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -84,6 +89,9 @@ export function BudgetWorkspace({
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   drawer?: ReactNode;
+  lens?: BudgetLens;
+  onLensChange?: (next: BudgetLens) => void;
+  actualMonths?: readonly BudgetActualMonth[];
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -109,6 +117,9 @@ export function BudgetWorkspace({
           canSign={canSign}
           onSignoffChange={onSignoffChange}
           drawer={nestInDrawer(drawer, "Budget vs actuals", variance)}
+          lens={lens}
+          onLensChange={onLensChange}
+          actualMonths={actualMonths}
         />
       </div>
     );
@@ -131,6 +142,9 @@ export function BudgetWorkspace({
       onSignoffChange={onSignoffChange}
       drawer={drawer}
       variance={variance}
+      lens={lens}
+      onLensChange={onLensChange}
+      actualMonths={actualMonths}
     />
   );
 }
@@ -241,6 +255,9 @@ function BudgetComplexWorkspace({
   onSignoffChange,
   drawer = null,
   variance = null,
+  lens,
+  onLensChange,
+  actualMonths,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -257,6 +274,9 @@ function BudgetComplexWorkspace({
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   drawer?: ReactNode;
   variance?: ReactNode;
+  lens?: BudgetLens;
+  onLensChange?: (next: BudgetLens) => void;
+  actualMonths?: readonly BudgetActualMonth[];
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -351,6 +371,13 @@ function BudgetComplexWorkspace({
           />
         }
       />
+      <BudgetChartTable
+        doc={doc}
+        clientId={clientId}
+        lens={lens}
+        onLensChange={onLensChange}
+        actualMonths={actualMonths}
+      />
       {nestInDrawer(
         drawer,
         drawerHint,
@@ -368,18 +395,19 @@ function BudgetComplexWorkspace({
               </span>
             ) : null}
           </Label>
-          <Input
-            type="number"
+          <MoneyField
             value={doc.openingCash ?? 0}
-            onChange={(e) =>
+            label="Opening cash"
+            market={market}
+            className="mt-1 h-8"
+            onChange={(openingCash) =>
               onChange({
                 ...doc,
-                openingCash: parseFloat(e.target.value) || 0,
+                openingCash,
                 openingCashSource: "manual",
                 updatedAt: new Date().toISOString(),
               })
             }
-            className="mt-1 h-8"
           />
         </div>
         <div>

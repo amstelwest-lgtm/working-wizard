@@ -450,6 +450,8 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     action?: "preview" | "download";
     /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
     profile?: number;
+    /** Budget chart or table under the answer strip. Absent means chart. */
+    view?: "chart" | "table";
   } => {
     const out: {
       qbo?: string;
@@ -467,6 +469,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       report?: string;
       action?: "preview" | "download";
       profile?: number;
+      view?: "chart" | "table";
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.xero === "string") out.xero = search.xero;
@@ -489,6 +492,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
     if (search.action === "preview" || search.action === "download") out.action = search.action;
     if (search.profile === 1 || search.profile === "1") out.profile = 1;
+    if (search.view === "table" || search.view === "chart") out.view = search.view;
     if (
       search.filter === "overdue" ||
       search.filter === "at_risk" ||
@@ -3723,6 +3727,18 @@ function ClientView() {
                       onPushedToCash={() => {
                         setCashForecastReloadToken((n) => n + 1);
                         setActiveTab("cash");
+                      }}
+                      lens={search.view === "table" ? "table" : "chart"}
+                      onLensChange={(next) => {
+                        void navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId },
+                          search: (prev) => ({
+                            ...prev,
+                            view: next === "table" ? "table" : undefined,
+                          }),
+                          replace: true,
+                        });
                       }}
                     />
                   </div>
