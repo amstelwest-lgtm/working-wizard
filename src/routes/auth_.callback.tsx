@@ -18,6 +18,12 @@ import {
 } from "@/lib/accountant-invite";
 import { notifySignup } from "@/lib/signup-notify";
 import {
+  signupWelcomeTrigger,
+  WELCOME_FRESH_WINDOW_MS,
+  welcomeWithoutBlockingSignup,
+} from "@/lib/welcome-email";
+import { sendSignupWelcome } from "@/lib/welcome-email.functions";
+import {
   consumePendingOwnerInvite,
   ownerInviteFromCallbackSearch,
   ownerInviteLandingPath,
@@ -83,6 +89,7 @@ function detectInviteFlow(): boolean {
 function AuthCallbackPage() {
   const navigate = useNavigate();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
+  const doSendWelcome = useServerFn(sendSignupWelcome);
   const doAcceptOwnerInvite = useServerFn(acceptOwnerInvite);
   const [error, setError] = useState("");
   const [inviteContinue, setInviteContinue] = useState<string | null>(null);
@@ -140,6 +147,10 @@ function AuthCallbackPage() {
         user.user_metadata as Record<string, unknown> | undefined,
         user.email,
       );
+      const joinToken =
+        accountantJoinFromCallbackSearch(window.location.search) ||
+        accountantJoinTokenFromNext(next) ||
+        accountantInviteTokenFromPath(next ?? "");
 
       // Owner invite always wins over the existing Google identity. Matching
       // amstel.west@gmail.com to the accountant login must still open the
@@ -181,6 +192,12 @@ function AuthCallbackPage() {
         return;
       }
 
+      const offerWelcome = signupWelcomeTrigger({
+        fresh: isFreshAuthUser(user.created_at, Date.now(), WELCOME_FRESH_WINDOW_MS),
+        ownerInvite: false,
+        staffJoin: Boolean(joinToken),
+      });
+
       if (intent === "owner") {
         try {
           await supabase.auth.updateUser({
@@ -207,6 +224,7 @@ function AuthCallbackPage() {
         if (isFreshAuthUser(user.created_at)) {
           notifySignup("Business owner (Google)", user.email ?? "", displayName);
         }
+        if (offerWelcome) await welcomeWithoutBlockingSignup(() => doSendWelcome());
       } else {
         const draft = consumeAccountantGoogleSignup();
         const provisionPractice = isFreshAuthUser(user.created_at) || Boolean(draft);
@@ -257,12 +275,9 @@ function AuthCallbackPage() {
         if (isFreshAuthUser(user.created_at)) {
           notifySignup("Accountant firm (Google)", user.email ?? "", displayName);
         }
+        if (offerWelcome) await welcomeWithoutBlockingSignup(() => doSendWelcome());
       }
 
-      const joinToken =
-        accountantJoinFromCallbackSearch(window.location.search) ||
-        accountantJoinTokenFromNext(next) ||
-        accountantInviteTokenFromPath(next ?? "");
       if (joinToken) {
         forcePortal("accountant");
         if (!cancelled) {
@@ -337,7 +352,7 @@ function AuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [doAcceptOwnerInvite, ensurePractice, navigate]);
+  }, [doAcceptOwnerInvite, doSendWelcome, ensurePractice, navigate]);
 
   const useInviteShell = isInviteFlow || Boolean(inviteContinue);
 
