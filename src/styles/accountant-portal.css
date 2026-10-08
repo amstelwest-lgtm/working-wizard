@@ -1399,4 +1399,38 @@ html[data-theme="dark"] .reports-studio .reports-settings{
   gap:14px;
   padding:0 14px 14px;
 }
+.overview-cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+  gap:8px;
+  margin:0 0 16px;
+  min-width:0;
+}
+.overview-card{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--line,rgba(212,175,55,.16));
+  background:transparent;
+  color:var(--ink,#f2ecdc);
+  text-align:left;
+  cursor:pointer;
+}
+.overview-card__label{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--ink-dim,#9b958a);
+}
+.overview-card__figure{
+  font-size:13px;
+  font-weight:650;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
 

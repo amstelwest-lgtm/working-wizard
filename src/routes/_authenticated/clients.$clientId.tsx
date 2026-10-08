@@ -104,6 +104,8 @@ import {
   type WaterfallExportApi,
 } from "@/components/profitability-waterfall";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
+import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
+import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { ProductMixPanel } from "@/components/product-mix-panel";
@@ -153,7 +155,7 @@ import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-clie
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
-import { StatementArApTiles } from "@/components/statement-arap-fallback";
+import { StatementArApTiles, statementArApMoney } from "@/components/statement-arap-fallback";
 import { hasStatementWorkingCapital } from "@/lib/collections";
 import { SageConnectCard } from "@/components/sage-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
@@ -187,6 +189,7 @@ import {
   emptyDebtSchedule,
   type DebtSchedule,
 } from "@/lib/debt-schedule";
+import { BrandConnectButton } from "@/components/brand-connect-button";
 import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
 import { DataUpToDate } from "@/components/data-up-to-date";
@@ -211,10 +214,17 @@ import {
   buildFinancialSnapshot,
   describeBusiness,
   fallbackWorkflow,
+  healthHeadline,
   whatMatters,
   workflowInputsHash,
   type WorkflowContext,
 } from "@/lib/client-briefing";
+import {
+  overviewAnswerSentence,
+  overviewSectionCards,
+  snapshotFigure,
+  storedAmountFigure,
+} from "@/lib/overview-moves-copy";
 import { draftMilonWorkflow, type BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
@@ -1360,6 +1370,29 @@ function ClientView() {
     ratios: ratios as Record<string, number>,
     forecastNet: assessed.forecastNet,
   });
+  const overviewSentence = overviewAnswerSentence({
+    whatMatters: briefingMatters,
+    score: hasFigures ? overallHealth.overall : null,
+    label: overallHealth.displayLabel,
+  });
+  const statementPosition = ratiosStatementFigures(financials);
+  const overviewCards = overviewSectionCards({
+    health: hasFigures ? healthHeadline(overallHealth.overall, overallHealth.displayLabel) : null,
+    cash: snapshotFigure(briefingSnapshot, "runway") ?? snapshotFigure(briefingSnapshot, "cash"),
+    profit: snapshotFigure(briefingSnapshot, "om"),
+    collections: storedAmountFigure(statementPosition.receivables, (amount) =>
+      statementArApMoney(amount, clientMarket),
+    ),
+    payables: storedAmountFigure(statementPosition.payables, (amount) =>
+      statementArApMoney(amount, clientMarket),
+    ),
+    moves: strategicMoves[0]?.title ?? null,
+    books: snapshotFigure(briefingSnapshot, "updated"),
+  });
+  const [overviewNextStep, setOverviewNextStep] = useState<NextStep | null>(null);
+  const onOverviewNextStep = useCallback((step: NextStep | null) => {
+    setOverviewNextStep(step);
+  }, []);
   const workflowCtx: WorkflowContext = {
     clientName: client?.name ?? "",
     profile: briefingProfile,
@@ -2129,6 +2162,20 @@ function ClientView() {
     [writeAccountantTab],
   );
 
+  const openOverviewCard = useCallback(
+    (section: string) => {
+      const pane = resolveAccountantTab({ tab: "overview", section });
+      if (pane) setActiveTab(pane);
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => accountantClientTabSearch(prev, "overview", { section }),
+        replace: true,
+      });
+    },
+    [clientId, navigate],
+  );
+
   const openCoach = useCallback(
     (dest: CoachDestination) => {
       if (dest.assign) {
@@ -2651,7 +2698,7 @@ function ClientView() {
                 </b>
               </span>
               {hasFigures ? (
-                <span className="aud">Audited</span>
+                <span className="aud">On file</span>
               ) : (
                 <span className="crumb-empty">No data yet</span>
               )}
@@ -2700,12 +2747,34 @@ function ClientView() {
                   className={`tabpane${activeTab === "overview" ? " on" : ""}`}
                   id="pane-overview"
                 >
-                {hasFigures ? (
-                  <div className="card action-bar" data-bot-entry>
-                    <span className="lbl">
-                      <b>Milōn Bot</b> — drafts the next steps from the figures on file. You sign
-                      them off.
-                    </span>
+                <DeliverableAnswerStrip
+                  heading="Overview"
+                  sentence={overviewSentence}
+                  chip={figureSourceChipLabel(statementMeta.statementSource)}
+                  scope="financials"
+                  clientId={clientId}
+                  clientName={client?.name}
+                  signoff={financialsSignoff}
+                  isStale={pageSignoffStale(
+                    financialsSignoff,
+                    client?.financials_updated_at ?? null,
+                  )}
+                  onSignoffChange={patchSignoff("financials")}
+                  extraActions={
+                    overviewNextStep ? (
+                      <button
+                        type="button"
+                        className={ARAP_GOLD_BTN}
+                        data-next-step-cta={overviewNextStep.key}
+                        onClick={() => handleNextStepAct(overviewNextStep)}
+                      >
+                        {overviewNextStep.cta.label}
+                      </button>
+                    ) : null
+                  }
+                />
+                <ReviewInputsDrawer hint="Connections, exports">
+                  <div className="briefing-actions deliverables-more" data-bot-entry>
                     <button
                       type="button"
                       className={portalButtonClass("secondary")}
@@ -2714,8 +2783,79 @@ function ClientView() {
                     >
                       Ask Milōn Bot
                     </button>
+                    <button
+                      type="button"
+                      id="client-upload-cta"
+                      className={portalButtonClass("secondary")}
+                      onClick={() => setUploadOpen(true)}
+                    >
+                      Upload
+                    </button>
+                    {isUsCopy(clientMarket) ? null : (
+                      <BrandConnectButton
+                        id="client-connect-sage"
+                        brand="sage"
+                        onClick={() => setShowSageDialog(true)}
+                      />
+                    )}
+                    <BrandConnectButton
+                      id="client-connect-qbo"
+                      brand="quickbooks"
+                      onClick={() => setShowQboDialog(true)}
+                    />
+                    <BrandConnectButton
+                      id="client-connect-xero"
+                      brand="xero"
+                      onClick={() => setShowXeroDialog(true)}
+                    />
+                    <button
+                      type="button"
+                      id="wizard-open-queries"
+                      className={portalButtonClass("secondary")}
+                      onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
+                    >
+                      {openQueriesCount > 0
+                        ? `${openQueriesCount} open ${openQueriesCount === 1 ? "query" : "queries"}`
+                        : "No open queries"}
+                    </button>
+                    {hasFigures && priorSnapshot ? (
+                      <button
+                        type="button"
+                        className={portalButtonClass("secondary")}
+                        onClick={() => {
+                          setStudioDeepLink({ report: "movement", action: "preview" });
+                          revealTab("reports");
+                        }}
+                      >
+                        Open movement report
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={portalButtonClass("secondary")}
+                      onClick={() => revealTab("reports")}
+                    >
+                      {reportsIssued > 0 ? "Open Reports" : "Create report"}
+                    </button>
+                    {hasFigures ? (
+                      <>
+                        <button className={portalButtonClass("secondary")} onClick={handleGenerateReport}>
+                          Generate report
+                        </button>
+                        <button className={portalButtonClass("secondary")} onClick={handleExportPDF}>
+                          Export PDF
+                        </button>
+                        <button className={portalButtonClass("secondary")} onClick={handleEmailDraft}>
+                          Email draft
+                        </button>
+                        <button className={portalButtonClass("secondary")} onClick={handleWhatsApp}>
+                          WhatsApp
+                        </button>
+                      </>
+                    ) : null}
                   </div>
-                ) : null}
+                </ReviewInputsDrawer>
+                <OverviewSectionCards cards={overviewCards} onOpen={openOverviewCard} />
                 {/* ===== NEXT STEP — one CTA, on Overview only (P0.4) ===== */}
                 <NextStepCard
                   className="mb-4"
@@ -2724,6 +2864,8 @@ function ClientView() {
                   surface="accountant_portal"
                   refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
                   onAct={handleNextStepAct}
+                  hideCta
+                  onResolved={onOverviewNextStep}
                 />
                 {needsBalanceSheetPrompt(financials) ? (
                   <BalanceSheetPrompt onUpload={() => setUploadOpen(true)} />
@@ -2769,12 +2911,13 @@ function ClientView() {
                   healthScore={hasFigures ? overallHealth.overall : null}
                   healthLabel={overallHealth.displayLabel}
                   healthStatus={hasFigures ? overallHealth.displayStatus : null}
-                  onViewBreakdown={() => revealTab("ratios")}
                   snapshot={briefingSnapshot}
                   about={briefingAbout}
                   profile={briefingProfile}
                   onEditProfile={() => setProfileOpen(true)}
                   whatMatters={briefingMatters}
+                  hideWhatMatters
+                  hideConnectionActions
                   workflow={workflow}
                   workflowLoading={workflowLoading}
                   onRefreshWorkflow={() => void requestWorkflow(true)}
@@ -2870,42 +3013,6 @@ function ClientView() {
                   </p>
                 ) : null}
 
-                {/* ===== DELIVERABLES ACTION BAR — nothing to export before figures ===== */}
-                {hasFigures && (
-                  <details className="card deliverables-more">
-                    <summary>
-                      <b>Deliverables</b> — export, send, or draft for this client
-                    </summary>
-                    <div className="deliverables-more__actions">
-                      <button className={portalButtonClass("secondary")} onClick={handleGenerateReport}>
-                        <svg viewBox="0 0 24 24">
-                          <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                          <path d="M14 3v6h6" />
-                        </svg>
-                        Generate report
-                      </button>
-                      <button className={portalButtonClass("secondary")} onClick={handleExportPDF}>
-                        <svg viewBox="0 0 24 24">
-                          <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-                        </svg>
-                        Export PDF
-                      </button>
-                      <button className={portalButtonClass("secondary")} onClick={handleEmailDraft}>
-                        <svg viewBox="0 0 24 24">
-                          <rect x="3" y="5" width="18" height="14" rx="2" />
-                          <path d="M3 7l9 6 9-6" />
-                        </svg>
-                        Email draft
-                      </button>
-                      <button className={portalButtonClass("secondary")} onClick={handleWhatsApp}>
-                        <svg viewBox="0 0 24 24">
-                          <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
-                        </svg>
-                        WhatsApp
-                      </button>
-                    </div>
-                  </details>
-                )}
                 </div>
 
                 {/* ===== SUMMARY TAB ===== */}
@@ -2950,11 +3057,6 @@ function ClientView() {
 
                 {/* ===== MOVES ===== */}
                 <div className={`tabpane${activeTab === "moves" ? " on" : ""}`} id="pane-moves">
-                  <DeliverableTabHead
-                    eyebrow="Strategic Moves"
-                    title="What to do next"
-                    lede="The same ranked list Action Plan cites as From strategic moves. Add a move to the plan when it is the next thing to chase."
-                  />
                   {activeTab === "moves" && (
                     <StrategicMovesPanel
                       moves={strategicMoves}
