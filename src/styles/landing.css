@@ -895,6 +895,10 @@ html[data-landing="1"] .fc-1 .tag{
   html[data-landing="1"] #hero > .wrap,
   html[data-landing="1"] #hero .wrap{grid-template-columns:1fr}
   html[data-landing="1"] .dash-stage{max-width:560px;margin-left:auto;margin-right:auto}
+  /* The glow used inset:-8% -6%. At 390 the stage is 358px inside 16px padding,
+     so 6% (21px) sticks ~5px past the viewport and documentElement.scrollWidth
+     becomes 395. Keep the vertical spill; don't let it widen the page. */
+  html[data-landing="1"] .dash-stage::before{left:0;right:0}
 }
 @media (max-width:767px){
   html[data-landing="1"] #hero{padding-top:96px;padding-bottom:28px}

@@ -61,12 +61,16 @@ for (const card of PROOF_CARDS) {
 assert(PROOF_RATIO_BODY.includes("says so instead of guessing"), "VERIFY-12 sentence shipped");
 assert(PROOF_SIGNOFF_BODY.includes("accountant's name and the sign-off date"), "VERIFY-11 sentence shipped");
 assert(PROOF_SIGNOFF_BODY.includes("old sign-off no longer applies"), "VERIFY-5 sentence shipped");
-assert(PROOF_BOT_BODY.includes("won't invent figures"), "VERIFY-9 sentence shipped");
+assert(
+  PROOF_BOT_BODY.includes("invents figures") &&
+    PROOF_BOT_BODY.includes("stops when a decision needs you"),
+  "VERIFY-9 sentence shipped",
+);
 assert(!PROOF_BOT_BODY.toLowerCase().includes("email"), "no email claim on the bot card");
 const planCard = PROOF_CARDS.find((card) => card.base === "action-plan-review");
 assert(planCard != null, "action plan capture is a proof card");
 assert(planCard!.id === "plan", "action plan card id");
-assert(planCard!.title === "An agent that knows its limits", "action plan card keeps its title");
+assert(planCard!.title === "Agents that know their limits", "action plan card keeps its title");
 assert(planCard!.body === PROOF_BOT_BODY, "action plan card keeps the bot body");
 assert(
   planCard!.alt ===

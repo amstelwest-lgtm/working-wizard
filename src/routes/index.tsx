@@ -78,6 +78,7 @@ import {
   HERO_WALKTHROUGH_LABEL,
   FAQ_MORE_LEAD,
   FAQ_MORE_LINK,
+  FINANCE_TEAM,
   HOW_STEP_03,
   NAV_TRIAL_ARIA,
   NAV_TRIAL_LABEL,
@@ -2042,7 +2043,7 @@ function LandingPage() {
               </div>
             </div>
             <div className="float-card fc-1">
-              <span className="tag">Milōn Bot draft · awaiting sign-off</span>
+              <span className="tag">Milōn Advisor draft · awaiting sign-off</span>
               <p>
                 <RegionCopy
                   pack={copyMarket.copyPack}
@@ -2408,9 +2409,20 @@ function LandingPage() {
             forecast cash, and turn analysis into action.
           </p>
           <p className="sub" style={{ marginTop: 18 }}>
-            MILŌN gives accountants a way to install that capability for their clients — using AI to
-            do the heavy analytical work while the accountant remains in control of the advice.
+            MILŌN gives accountants a way to install that capability for their clients: an AI
+            finance team that does the heavy analytical work, while the accountant stays in control
+            of the advice.
           </p>
+          <div className="bridge-facts stagger" aria-label="Your AI finance team">
+            {FINANCE_TEAM.map((r) => (
+              <div className="bridge-fact" key={r.name}>
+                <div className="was">{r.name}</div>
+                <div className="now">
+                  {r.body} <b>{r.bold}</b>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
