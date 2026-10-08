@@ -14,7 +14,12 @@ import { QboConnectCard } from "@/components/qbo-connect";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
-import { booksAnswerSentence, booksPrimaryKind, booksQueriesLabel } from "@/lib/books-answer";
+import {
+  booksAnswerSentence,
+  booksDrawerHint,
+  booksPrimaryKind,
+  booksQueriesLabel,
+} from "@/lib/books-answer";
 import { dataSectionStatus, isOpenDataRequest, type DataRequestKind } from "@/lib/data-requests";
 import { listDataRequests } from "@/lib/data-requests.functions";
 import type { SyncResult } from "@/lib/qbo.functions";
@@ -100,11 +105,11 @@ export function DataUpToDate({
     <section id="data-up-to-date" aria-label={status.title} data-data-fresh="">
       <ArapAnswerStrip
         heading="Books"
-        sentence={booksAnswerSentence(freshness)}
+        sentence={booksAnswerSentence({ freshness, openKinds })}
         chip={chip}
         primary={primary}
       />
-      <ReviewInputsDrawer hint="Connections, profile">
+      <ReviewInputsDrawer hint={booksDrawerHint(freshness)}>
         <div>
           <h2 className="data-fresh__title">{status.title}</h2>
           <p className="data-fresh__lede">

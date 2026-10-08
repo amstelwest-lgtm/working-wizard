@@ -5,25 +5,19 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
-import { booksAnswerSentence, booksPrimaryKind, booksQueriesLabel } from "../src/lib/books-answer";
+import {
+  booksAnswerSentence,
+  booksDrawerHint,
+  booksPrimaryKind,
+  booksQueriesLabel,
+} from "../src/lib/books-answer";
 import { factSourceLabel } from "../src/lib/client-brain";
 import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import { movesAnswerSentence } from "../src/lib/overview-moves-copy";
 import { STRATEGIC_MOVE_CATALOG, rankStrategicMoves } from "../src/lib/strategic-moves";
 import { dataFreshnessLine } from "../src/lib/workflow-coach";
 
-assert.equal(
-  booksAnswerSentence("Snapshot on file · September 2026"),
-  "Snapshot on file · September 2026.",
-);
-assert.equal(
-  booksAnswerSentence("No sync yet. Connect Xero or QuickBooks, or upload statements."),
-  "No sync yet. Connect Xero or QuickBooks, or upload statements.",
-);
-assert.equal(
-  booksAnswerSentence(""),
-  "No sync yet. Connect Xero or QuickBooks, or upload statements.",
-);
+const snapshotLine = "Snapshot on file · September 2026";
 const syncLine = dataFreshnessLine({
   xero: {
     lastSyncedAt: "2026-09-01T14:00:00.000Z",
@@ -31,9 +25,40 @@ const syncLine = dataFreshnessLine({
     periodLabel: "September 2026",
   },
 });
+assert.equal(syncLine, "Last sync Sep 1, 2026, 2:00 PM · Xero · September 2026");
+
 assert.equal(
-  booksAnswerSentence(syncLine),
-  "Last sync Sep 1, 2026, 2:00 PM · Xero · September 2026.",
+  booksAnswerSentence({ freshness: snapshotLine, openKinds: [] }),
+  "Books are up to date to September 2026.",
+);
+assert.equal(
+  booksAnswerSentence({ freshness: syncLine, openKinds: [] }),
+  "Books are synced from Xero up to September 2026.",
+);
+assert.equal(
+  booksAnswerSentence({ freshness: snapshotLine, openKinds: ["bank_statement"] }),
+  "Books stop at September 2026. Upload the latest statements to bring them up to date.",
+);
+assert.equal(
+  booksAnswerSentence({ freshness: syncLine, openKinds: ["management_accounts"] }),
+  "Books stop at September 2026. Upload the latest statements to bring them up to date.",
+);
+assert.equal(
+  booksAnswerSentence({
+    freshness: "No sync yet. Connect Xero or QuickBooks, or upload statements.",
+    openKinds: [],
+  }),
+  "No books on file yet. Connect Xero or QuickBooks, or upload statements.",
+);
+assert.equal(
+  booksAnswerSentence({ freshness: "", openKinds: [] }),
+  "No books on file yet. Connect Xero or QuickBooks, or upload statements.",
+);
+assert.equal(booksDrawerHint(snapshotLine), snapshotLine);
+assert.equal(booksDrawerHint(syncLine), syncLine);
+assert.equal(
+  booksDrawerHint("No sync yet. Connect Xero or QuickBooks, or upload statements."),
+  "Connections, profile",
 );
 
 assert.equal(
@@ -91,7 +116,7 @@ assert.equal(
 );
 assert.equal(
   movesAnswerSentence([{ title: "AI review of pricing" }]),
-  "1 move ready. First up: AI review of pricing.",
+  "1 move ready. Start with: AI review of pricing.",
 );
 for (const entry of STRATEGIC_MOVE_CATALOG) {
   assert.match(entry.title, /^[A-Z][a-z]/, entry.title);
@@ -126,7 +151,8 @@ assert.ok(
   booksPane.includes("figureSourceChipLabel(statementMeta.statementSource)"),
   "books chips the statement source already on the file",
 );
-assert.ok(data.includes("booksAnswerSentence(freshness)"), "the sentence is the freshness line");
+assert.ok(data.includes("booksAnswerSentence({ freshness, openKinds })"), "the sentence uses the same current flag as the button");
+assert.ok(data.includes("booksDrawerHint(freshness)"), "the freshness line is the drawer hint");
 assert.ok(data.includes("<ReviewInputsDrawer"), "connections and questions sit in the drawer");
 assert.ok(!data.includes("Then continue to Health."), "the lede no longer points at Health");
 assert.ok(data.includes("dataSectionStatus({ freshness, openKinds })"), "the tucked title still uses the shared status");

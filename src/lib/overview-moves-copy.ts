@@ -75,15 +75,14 @@ export const MOVES_EMPTY_SENTENCE =
  * first title.
  */
 /**
- * Ordinary catalogue titles start with a capital and a lowercase letter, so
- * the first letter can drop. An acronym or digit at the start stays as written.
+ * Every title uses "Start with:". A catalogue title that starts with a capital
+ * and a lowercase letter drops that first letter. An acronym stays as written.
  */
 function moveLeadIn(title: string): string {
-  if (/^[A-Z][a-z]/.test(title)) {
-    const lowered = `${title.charAt(0).toLowerCase()}${title.slice(1)}`;
-    return `Start with: ${lowered.endsWith(".") ? lowered : `${lowered}.`}`;
-  }
-  return `First up: ${title.endsWith(".") ? title : `${title}.`}`;
+  const shown = /^[A-Z][a-z]/.test(title)
+    ? `${title.charAt(0).toLowerCase()}${title.slice(1)}`
+    : title;
+  return `Start with: ${shown.endsWith(".") ? shown : `${shown}.`}`;
 }
 
 export function movesAnswerSentence(
