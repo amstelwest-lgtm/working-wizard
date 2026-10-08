@@ -29,6 +29,7 @@ export function AdvisorySentHistory({
   refreshToken = 0,
   statementPeriodLabel = null,
   liveScorecard = null,
+  variant = "default",
 }: {
   clientId: string;
   refreshToken?: number;
@@ -36,6 +37,11 @@ export function AdvisorySentHistory({
   statementPeriodLabel?: string | null;
   /** Overview scorecard. A stored PDF is not re-opened. */
   liveScorecard?: (() => Promise<Blob | null>) | null;
+  /**
+   * Reports tab: solid rows and wrapping actions.
+   * The drafter keeps the original sent-history row.
+   */
+  variant?: "default" | "reports";
 }) {
   const { dateTime } = useMarketFormat();
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
@@ -113,8 +119,15 @@ export function AdvisorySentHistory({
     }
   };
 
+  const reports = variant === "reports";
+
   return (
-    <div id="sent-history" className="card" style={{ marginTop: 16, padding: "14px 18px" }}>
+    <div
+      id="sent-history"
+      className={reports ? "sent-history sent-history--reports" : "card"}
+      data-report-history={reports ? "open" : undefined}
+      style={reports ? undefined : { marginTop: 16, padding: "14px 18px" }}
+    >
       <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Sent history</div>
       <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>{SENT_HISTORY_INTRO}</p>
       {loading ? (
@@ -124,21 +137,29 @@ export function AdvisorySentHistory({
           Nothing logged yet. Copy, email, WhatsApp, or download a PDF to start the trail.
         </p>
       ) : (
-        <div style={{ display: "grid", gap: 8 }}>
+        <div
+          className={reports ? "sent-history__list" : undefined}
+          style={reports ? undefined : { display: "grid", gap: 8 }}
+        >
           {rows.map((r) => (
             <div
               key={r.id}
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "space-between",
-                gap: 8,
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid var(--line)",
-              }}
+              className={reports ? "sent-history__row" : undefined}
+              style={
+                reports
+                  ? undefined
+                  : {
+                      display: "flex",
+                      flexWrap: "wrap",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid var(--line)",
+                    }
+              }
             >
-              <div>
+              <div className={reports ? "sent-history__copy" : undefined}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
                   {kindLabel(r.kind)}
                   {r.report_key ? ` · ${r.report_key}` : ""}
@@ -161,7 +182,10 @@ export function AdvisorySentHistory({
                   {r.pdf_storage_path ? " · PDF archived" : ""}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div
+                className={reports ? "sent-history__actions" : undefined}
+                style={reports ? undefined : { display: "flex", alignItems: "center", gap: 8 }}
+              >
                 {r.pdf_storage_path ? (
                   <button
                     type="button"

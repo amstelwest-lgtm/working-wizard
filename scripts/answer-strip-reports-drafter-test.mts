@@ -88,7 +88,19 @@ const studio = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx
 assert.ok(studio.includes("ArapAnswerStrip"), "the embedded reports tab uses the no-status strip");
 assert.ok(studio.includes("data-reports-primary"), "one gold control opens a report");
 assert.ok(studio.includes('aria-label="Export all reports"'), "export is the quiet icon");
-assert.ok(studio.includes("ReviewInputsDrawer"), "templates and settings sit in the drawer");
+assert.ok(studio.includes("ReviewInputsDrawer"), "settings stay in the drawer");
+{
+  const drawerStart = studio.indexOf("<ReviewInputsDrawer");
+  const drawerEnd = studio.indexOf("</ReviewInputsDrawer>");
+  const drawer = studio.slice(drawerStart, drawerEnd);
+  assert.ok(drawerStart > 0 && drawerEnd > drawerStart, "the reports drawer is present");
+  assert.equal(drawer.includes("{reportCatalogue}"), false, "templates stay in the page body");
+  assert.equal(drawer.includes("<AdvisorySentHistory"), false, "the generated list stays in the page body");
+  assert.ok(drawer.includes("<SettingsPanel"), "settings stay in the drawer");
+  assert.ok(drawer.includes("pin={false}"), "embedded settings are not sticky");
+  assert.ok(studio.indexOf('variant="reports"') < drawerStart, "the list renders above the drawer");
+  assert.ok(studio.indexOf("{reportCatalogue}") < drawerStart, "templates render above the drawer");
+}
 assert.ok(studio.includes("downloadOutline"), "card downloads are not a second gold primary");
 assert.ok(studio.includes("report-card__rule"), "the template cards stay");
 
