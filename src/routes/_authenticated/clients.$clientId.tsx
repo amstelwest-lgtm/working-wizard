@@ -107,7 +107,11 @@ import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deli
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
-import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
+import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
+import { booksCoverPeriod, booksSyncSubline } from "@/lib/books-answer";
+import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
+import { parseBudgetDocument } from "@/lib/budget-pdf";
+import { budgetSeededFromStatement, budgetVersusStatement } from "@/lib/budget.bridges";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
@@ -143,6 +147,7 @@ import {
   canonicalizeAccountantSearch,
   drafterSectionForHash,
   legacyPaneForSearch,
+  routerHash,
 } from "@/lib/client-route-search";
 import {
   CLIENT_RAIL,
@@ -519,6 +524,7 @@ type Client = {
   /** P1: firm attached → the accountant seat signs off advisory packs. */
   firm_id?: string | null;
   is_demo?: boolean | null;
+  budget?: unknown;
 };
 
 type ActiveTab =
@@ -838,7 +844,7 @@ function ClientView() {
       to: "/clients/$clientId",
       params: { clientId },
       search: (prev) => accountantClientTabSearch(prev, "deliverables", { section: next }),
-      hash: window.location.hash,
+      hash: routerHash(window.location.hash),
       replace: true,
     });
   }, [search.section, clientId, navigate]);
@@ -1238,7 +1244,21 @@ function ClientView() {
     pillars: healthPillarLines,
     includeScore: search.focus === "pillars",
   });
-  const healthChip = figureSourceChipLabel(statementMeta.statementSource);
+  const connectedLedger = qboLink?.figuresFromThisSync
+    ? "qbo"
+    : xeroLink?.figuresFromThisSync
+      ? "xero"
+      : qboLink
+        ? "qbo"
+        : xeroLink
+          ? "xero"
+          : null;
+  const figureSource = resolveFigureSource({
+    financials,
+    snapshotSource: pickCurrentSnapshot(snapshots)?.source,
+    connectedLedger,
+  });
+  const healthChip = figureSourceChipLabel(figureSource);
 
   const sphereRatioMeta = useMemo(
     () =>
@@ -1347,6 +1367,38 @@ function ClientView() {
     (statementDated ? statementMeta.periodLabel?.trim() : "") ||
     pickCurrentSnapshot(snapshots)?.period_label?.trim() ||
     null;
+  const dataFreshness = dataFreshnessLine({
+    xero: xeroLink
+      ? {
+          lastSyncedAt: xeroLink.lastSyncedAt,
+          syncStatus: xeroLink.syncStatus,
+          periodLabel: xeroLink.periodLabel,
+        }
+      : null,
+    qbo: qboLink
+      ? {
+          lastSyncedAt: qboLink.lastSyncedAt,
+          syncStatus: qboLink.syncStatus,
+          periodLabel: qboLink.periodLabel,
+        }
+      : null,
+    snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
+  });
+  const booksPeriod = booksCoverPeriod(dataFreshness);
+  const budgetDoc = parseBudgetDocument(client?.budget ?? null);
+  const budgetCompared = budgetDoc
+    ? budgetVersusStatement(budgetDoc, financials as Record<string, unknown>)
+    : null;
+  let budgetFigure: string | null = null;
+  if (budgetDoc && budgetCompared && budgetSeededFromStatement(budgetCompared)) {
+    budgetFigure = "Budget seeded from these figures";
+  } else if (budgetCompared) {
+    budgetFigure = `Revenue ${fmtBudgetMoney(budgetCompared.revenue, clientMarket)} vs budget ${fmtBudgetMoney(budgetCompared.budgetRevenue, clientMarket)}`;
+  } else if (budgetDoc) {
+    const rows = computeBudgetMonths(budgetDoc, budgetDoc.activeScenario);
+    const row = rows.find((entry) => entry.revenue > 0) ?? rows[0];
+    if (row && row.revenue > 0) budgetFigure = `Revenue ${fmtBudgetMoney(row.revenue, clientMarket)}`;
+  }
   const statementFigureFacts = {
     grossMargin: ratios["Gross Margin"],
     operatingMargin: ratios["Operating Margin"],
@@ -1414,9 +1466,10 @@ function ClientView() {
     payables: storedAmountFigure(statementPosition.payables, (amount) =>
       statementArApMoney(amount, clientMarket),
     ),
+    budget: budgetFigure,
     moves: strategicMoves[0]?.title ?? null,
-    books: snapshotFigure(briefingSnapshot, "updated"),
-  });
+    books: booksPeriod ?? snapshotFigure(briefingSnapshot, "updated"),
+  }, booksPeriod ? { books: booksSyncSubline(snapshotFigure(briefingSnapshot, "updated")) } : undefined);
   const [overviewNextStep, setOverviewNextStep] = useState<NextStep | null>(null);
   const onOverviewNextStep = useCallback((step: NextStep | null) => {
     setOverviewNextStep(step);
@@ -1554,7 +1607,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id, is_demo, budget",
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -2254,24 +2307,6 @@ function ClientView() {
   );
   openFromBotRef.current = openCoach;
 
-  const dataFreshness = dataFreshnessLine({
-    xero: xeroLink
-      ? {
-          lastSyncedAt: xeroLink.lastSyncedAt,
-          syncStatus: xeroLink.syncStatus,
-          periodLabel: xeroLink.periodLabel,
-        }
-      : null,
-    qbo: qboLink
-      ? {
-          lastSyncedAt: qboLink.lastSyncedAt,
-          syncStatus: qboLink.syncStatus,
-          periodLabel: qboLink.periodLabel,
-        }
-      : null,
-    snapshotPeriod: pickCurrentSnapshot(snapshots)?.period_label ?? null,
-  });
-
   const handleGenerateReport = useCallback(() => {
     setStudioDeepLink({});
     revealTab("reports");
@@ -2738,11 +2773,14 @@ function ClientView() {
                   <ClientRailButton
                     key={t.id}
                     id={t.id}
-                    landing={t.landing}
                     label={t.label}
                     active={railGroup(activeTab) === t.id}
-                    clientId={clientId}
                     primary={t.id === "ask"}
+                    onSelect={() => {
+                      setMobileNavOpen(false);
+                      const tab: ActiveTab = t.id === "deliverables" ? "reports" : t.id;
+                      writeAccountantTab(tab);
+                    }}
                   />
                 ))}
               </nav>
@@ -2778,7 +2816,7 @@ function ClientView() {
                 <DeliverableAnswerStrip
                   heading="Overview"
                   sentence={overviewSentence}
-                  chip={figureSourceChipLabel(statementMeta.statementSource)}
+                  chip={healthChip}
                   scope="financials"
                   clientId={clientId}
                   clientName={client?.name}
@@ -3073,7 +3111,7 @@ function ClientView() {
                               onSageSyncComplete={onSageSyncComplete}
                               onUpload={() => setUploadOpen(true)}
                               freshness={dataFreshness}
-                              chip={figureSourceChipLabel(statementMeta.statementSource)}
+                              chip={healthChip}
                               openQueries={openQueriesCount}
                               onOpenQueries={() =>
                                 openArchive(openQueriesCount > 0 ? "open" : "resolved")
@@ -3404,10 +3442,22 @@ function ClientView() {
                     heading="Profitability"
                     sentence={profitAnswerSentence({
                       currency: currencySymbol(clientMarket),
-                      periodLabel: statementMeta.periodLabel,
-                      preferPeriod: preferStatementPeriod(financials),
+                      periodLabel: figuresPeriodLabel,
+                      preferPeriod: statementDated || Boolean(figuresPeriodLabel),
+                      revenueText:
+                        Number(financials.revenue) > 0
+                          ? formatMoneyCompact(Number(financials.revenue), clientMarket)
+                          : null,
+                      netMarginPct:
+                        typeof ratios["Net Margin"] === "number" && Number.isFinite(ratios["Net Margin"])
+                          ? ratios["Net Margin"] * 100
+                          : null,
+                      grossMarginPct:
+                        typeof ratios["Gross Margin"] === "number" && Number.isFinite(ratios["Gross Margin"])
+                          ? ratios["Gross Margin"] * 100
+                          : null,
                     })}
-                    chip={figureSourceChipLabel(statementMeta.statementSource)}
+                    chip={healthChip}
                     scope="profitability"
                     clientId={clientId}
                     clientName={client?.name}
@@ -3572,18 +3622,14 @@ function ClientView() {
                       fallback={waterfallFallback}
                       clientName={client?.name}
                       clientId={client?.id}
-                      periodLabel={readStatementMeta(financials).periodLabel}
-                      preferPeriod={preferStatementPeriod(financials)}
+                      periodLabel={figuresPeriodLabel}
+                      preferPeriod={statementDated || Boolean(figuresPeriodLabel)}
                       yearToDate={statementYearLine(financials)}
-                      statementSource={readStatementMeta(financials).statementSource}
+                      statementSource={figureSource}
                       periodNote={
-                        preferStatementPeriod(financials) || (!qboLink && !xeroLink)
+                        statementDated || figuresPeriodLabel
                           ? null
-                          : qboLink && !xeroLink
-                            ? "This total has no period dates. Sync QuickBooks again — it is a multi-month figure, not this month."
-                            : !qboLink && xeroLink
-                              ? "This total has no period dates. Sync Xero again — it is a multi-month figure, not this month."
-                              : "This total has no period dates. Sync again — it is a multi-month figure, not this month."
+                          : "Period dates missing; this may cover more than one month."
                       }
                       reviewSignoff={stampFromSignoff(
                         profitabilitySignoff,
@@ -3617,6 +3663,7 @@ function ClientView() {
                       pendingBankFile={pendingBankFile}
                       onPendingBankFileConsumed={() => setPendingBankFile(null)}
                       initialBankDraft={bankCashDraft}
+                      statementChip={healthChip}
                       onBankPublish={(payload) => {
                         setBankCashDraft(null);
                         const published = assessClientMetrics({
@@ -3650,7 +3697,7 @@ function ClientView() {
                     market={clientMarket}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
                     position={ratiosStatementFigures(financials)}
-                    statementSource={statementMeta.statementSource}
+                    statementSource={figureSource}
                     onUploadAged={() => {
                       setUploadPurpose("aged");
                       setUploadOpen(true);
@@ -3673,7 +3720,7 @@ function ClientView() {
                     runwayWeeks={effectiveRunway}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
                     position={ratiosStatementFigures(financials)}
-                    statementSource={statementMeta.statementSource}
+                    statementSource={figureSource}
                     onUploadAged={() => {
                       setUploadPurpose("aged");
                       setUploadOpen(true);
@@ -3746,7 +3793,7 @@ function ClientView() {
                           report={studioDeepLink.report}
                           action={studioDeepLink.action}
                           embedded
-                          sourceChip={figureSourceChipLabel(statementMeta.statementSource)}
+                          sourceChip={healthChip}
                           inputs={
                             <DeliverableInputConfig
                               className="mb-5"
@@ -3851,7 +3898,9 @@ function ClientView() {
                     refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                     onSignoffAction={setPackSignoff}
-                    chip={figureSourceChipLabel(statementMeta.statementSource)}
+                    chip={healthChip}
+                    liveCashFloor={cashOutlook.floor}
+                    currency={clientMarket.currency}
                     primary={
                       <AdvisoryTabSignoff
                         hideLine

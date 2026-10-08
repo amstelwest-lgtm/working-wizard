@@ -94,6 +94,12 @@ type Props = {
    * button and this panel keeps comments, changes, and reject.
    */
   onSignoffAction?: (action: AdvisorySignoffAction | null) => void;
+  /**
+   * Floor the Cash tab is showing. A stored pack that still quotes the
+   * $50,000 comfort fallback is rewritten on screen to this number.
+   */
+  liveCashFloor?: number | null;
+  currency?: string | null;
   /** Live Overview figures. A stored pack that disagrees shows a regenerate note. */
   currentFigures?: {
     runwayLabel: string | null;
@@ -158,6 +164,8 @@ export function AdvisoryPackPanel({
   firmId = null,
   className,
   currentFigures = null,
+  liveCashFloor = null,
+  currency = null,
   signoff = null,
   onSignoffAction,
   chip = null,
@@ -801,6 +809,8 @@ export function AdvisoryPackPanel({
           {packSectionsForPdf(pack.content.sections, {
             signed: pack.status === "approved",
             firmName: signoff?.firm_name ?? profile.firmName,
+            liveFloor: liveCashFloor,
+            currency,
           }).map((s) => {
             const diff = changedByKey.get(s.key);
             const isEditing = editing === s.key;

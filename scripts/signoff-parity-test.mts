@@ -42,6 +42,23 @@ assert(
   signoffStatusLine({ kind: "draft", variant: "short" }) === "Draft",
   "short does not invent a draft word",
 );
+assert(
+  signoffStatusLine({
+    kind: "stale",
+    name: "James Fleming",
+    variant: "short",
+    scopeLabel: "Financials",
+  }) === "Financials: signed off · figures changed",
+  "a scope prefixes the short stale pill",
+);
+assert(
+  signoffStatusLine({ kind: "ready", scopeLabel: "Financials" }) === "Financials: ready for review",
+  "a scope prefixes ready for review",
+);
+assert(
+  signoffStatusLine({ kind: "draft", scopeLabel: "   " }) === "Draft",
+  "a blank scope is not a prefix",
+);
 
 const signedAt = "2026-10-07T23:01:00.000Z";
 assert(

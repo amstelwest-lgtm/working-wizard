@@ -20,8 +20,8 @@ const indexSrc = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "ut
 
 assert(/type ActiveTab =[\s\S]{0,80}"ask"/.test(clientSrc), "Milōn Bot is an accountant studio tab");
 assert(
-  clientSrc.includes('{ id: "ask", label: "Bot"') &&
-    clientSrc.indexOf('{ id: "ask", label: "Bot"') <
+  clientSrc.includes('{ id: "ask", label: "Milōn Bot"') &&
+    clientSrc.indexOf('{ id: "ask", label: "Milōn Bot"') <
       clientSrc.indexOf('{ id: "overview", label: "Overview"') &&
     clientSrc.indexOf('{ id: "overview", label: "Overview"') <
       clientSrc.indexOf('{ id: "deliverables", label: "Deliverables"'),
@@ -42,7 +42,7 @@ assert(
   "the client briefing lives only in the Overview pane",
 );
 assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
-assert(clientSrc.includes('{ id: "ask", label: "Bot"'), "Bot appears in the rail");
+assert(clientSrc.includes('{ id: "ask", label: "Milōn Bot"'), "Bot appears in the rail");
 assert(clientSrc.includes('className="deliverable-rail"'), "deliverables are a left stacked rail");
 assert(!clientSrc.includes('className="tabs"'), "horizontal mid-page tab strip is gone");
 assert(

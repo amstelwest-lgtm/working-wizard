@@ -41,10 +41,12 @@ export function overviewAnswerSentence(input: {
 
 export function overviewSectionCards(
   figures: Partial<Record<OverviewCardId, string | null | undefined>>,
-): { id: OverviewCardId; label: string; figure: string | null }[] {
+  details?: Partial<Record<OverviewCardId, string | null | undefined>>,
+): { id: OverviewCardId; label: string; figure: string | null; detail: string | null }[] {
   return OVERVIEW_CARD_ORDER.map((id) => {
     const figure = figures[id]?.trim() ?? "";
-    return { id, label: OVERVIEW_CARD_LABELS[id], figure: figure || null };
+    const detail = details?.[id]?.trim() ?? "";
+    return { id, label: OVERVIEW_CARD_LABELS[id], figure: figure || null, detail: detail || null };
   });
 }
 

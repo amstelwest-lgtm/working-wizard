@@ -162,14 +162,33 @@ async function exportPDF(opts: {
   }
 }
 
-/** The waterfall's existing subtitle, without a second source phrase. */
+/** The waterfall's existing subtitle, or the loaded margins when they are on the page. */
 export function profitAnswerSentence(input: {
   currency: string;
   periodLabel?: string | null;
   preferPeriod?: boolean;
+  /** Compact money already formatted, e.g. "$700k". */
+  revenueText?: string | null;
+  /** Net margin in percent, e.g. 8.6. */
+  netMarginPct?: number | null;
+  /** Gross margin in percent, e.g. 60. */
+  grossMarginPct?: number | null;
 }): string {
-  const how = `How ${input.currency}1 of revenue becomes profit`;
   const periodBit = input.periodLabel?.trim() || "";
+  const revenue = input.revenueText?.trim() || "";
+  const net =
+    typeof input.netMarginPct === "number" && Number.isFinite(input.netMarginPct)
+      ? input.netMarginPct
+      : null;
+  if (revenue && net != null) {
+    const when = periodBit ? ` for ${periodBit}` : "";
+    const gross =
+      typeof input.grossMarginPct === "number" && Number.isFinite(input.grossMarginPct)
+        ? ` Gross margin ${input.grossMarginPct.toFixed(1)}%.`
+        : "";
+    return `Net margin ${net.toFixed(1)}% on ${revenue} revenue${when}.${gross}`;
+  }
+  const how = `How ${input.currency}1 of revenue becomes profit`;
   if (!periodBit) return how;
   return input.preferPeriod ? `${how} · Month to date · ${periodBit}` : `${how} · ${periodBit}`;
 }

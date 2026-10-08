@@ -34,6 +34,22 @@ function freshnessParts(freshness: string | null | undefined): FreshnessParts {
   return { kind: "empty" };
 }
 
+/** Period the books cover. Same freshness line the Books sentence reads. */
+export function booksCoverPeriod(freshness: string | null | undefined): string | null {
+  const parts = freshnessParts(freshness);
+  if (parts.kind === "empty") return null;
+  return parts.period;
+}
+
+/** Sync clock for a muted sub-line. Drops the time of day. */
+export function booksSyncSubline(stamp: string | null | undefined): string | null {
+  const text = stamp?.trim() ?? "";
+  if (!text || text === "—") return null;
+  const parts = text.split(",");
+  const date = parts.length >= 2 ? `${parts[0]},${parts[1]}`.trim() : text;
+  return `Synced ${date}`;
+}
+
 /** Same flag as the gold button: statements look current and no statement gap is open. */
 export function booksAreCurrent(input: {
   freshness: string;

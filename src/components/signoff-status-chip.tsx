@@ -12,7 +12,7 @@ import {
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
-import { signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
+import { signoffScopeLabel, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 
 export function SignoffStatusChip({
   clientId,
@@ -65,6 +65,8 @@ export function SignoffStatusChip({
         kind,
         name: shown?.signed_off_by_name,
         date: kind === "signed" && when && when !== "—" ? when : null,
+        variant: "short",
+        scopeLabel: signoffScopeLabel(scope),
       })}
     </p>
   );

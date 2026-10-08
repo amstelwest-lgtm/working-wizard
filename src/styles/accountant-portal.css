@@ -1453,4 +1453,10 @@ html[data-theme="dark"] .reports-studio .reports-settings{
   line-height:1.35;
   overflow-wrap:anywhere;
 }
+.overview-card__detail{
+  font-size:11px;
+  font-weight:500;
+  line-height:1.35;
+  color:var(--ink-dim,#9b958a);
+}
 

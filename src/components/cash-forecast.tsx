@@ -257,6 +257,24 @@ function ForecastAmountCell({
   );
 }
 
+function CashTileSkeletons({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          className="rounded-xl border border-slate-200/70 p-3 dark:border-white/10"
+          aria-hidden="true"
+        >
+          <div className="h-3 w-24 animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          <div className="mt-2 h-7 w-28 animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          <div className="mt-2 h-3 w-32 animate-pulse rounded bg-slate-200/70 dark:bg-slate-800" />
+        </div>
+      ))}
+    </>
+  );
+}
+
 // ── KPI stat block ───────────────────────────────────────────────────────────
 function Stat({
   label,
@@ -425,6 +443,7 @@ export function CashForecastPanel({
   onPendingBankFileConsumed,
   onBankPublish,
   initialBankDraft = null,
+  statementChip = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -450,6 +469,8 @@ export function CashForecastPanel({
   onBankPublish?: (payload: CashForecastPublishPayload) => void;
   /** Pre-built cash draft from shared bank onboarding — skip re-upload. */
   initialBankDraft?: CashFromBanksDraftResult | null;
+  /** QuickBooks / Uploaded statement / Xero / Sage chip from the statement file. */
+  statementChip?: string | null;
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
@@ -1445,22 +1466,28 @@ export function CashForecastPanel({
     />
   );
 
-  const answerSentence = forecastEmpty
-    ? null
-    : forecastStatusSentence({
-        opening: baseCalc.opening,
-        closings: baseCalc.closing,
-        floor: minimumCash,
-        floorText: fmtCompact(minimumCash),
-        runwayLabel: runwayDisplayLabel(publishedDirection),
-        cashGenerative: publishedGenerative,
-      });
+  const answerSentence =
+    !loaded || forecastEmpty
+      ? null
+      : forecastStatusSentence({
+          opening: baseCalc.opening,
+          closings: baseCalc.closing,
+          floor: minimumCash,
+          floorText: fmtCompact(minimumCash),
+          runwayLabel: runwayDisplayLabel(publishedDirection),
+          cashGenerative: publishedGenerative,
+        });
+  const stripChip = !loaded ? null : shownLineSource === "Bank" ? "Bank" : statementChip?.trim() || null;
 
   const answerStrip = (
     <section className="answer-strip" data-answer-strip>
       <div className="answer-strip__lead">
         <h2 className="answer-strip__heading">13-week cash forecast</h2>
-        {answerSentence ? (
+        {!loaded ? (
+          <p className="answer-strip__sentence" data-answer-sentence aria-busy="true">
+            <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
+          </p>
+        ) : answerSentence ? (
           <p className="answer-strip__sentence" data-answer-sentence>
             {answerSentence}
           </p>
@@ -1499,9 +1526,9 @@ export function CashForecastPanel({
         </button>
       </div>
       <div className="answer-strip__meta">
-        {shownLineSource ? (
+        {stripChip ? (
           <span className="answer-strip__chip" data-source-chip>
-            {shownLineSource}
+            {stripChip}
           </span>
         ) : null}
         <SignoffStatusChip
@@ -1751,6 +1778,10 @@ export function CashForecastPanel({
             {emptyNotice}
             {forecastNotes}
             <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {!loaded ? (
+                <CashTileSkeletons count={4} />
+              ) : (
+              <>
               <Stat
                 label="Closing · Week 13"
                 value={fmtCompact(closingW13)}
@@ -1797,6 +1828,8 @@ export function CashForecastPanel({
                 tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
                 sub="Inflows minus outflows"
               />
+              </>
+              )}
             </div>
             {emptyPresentation.showChart ? (
               heroChart(180)
@@ -1827,6 +1860,10 @@ export function CashForecastPanel({
           {emptyNotice}
           {forecastNotes}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {!loaded ? (
+              <CashTileSkeletons count={3} />
+            ) : (
+            <>
             <Stat
               label="Opening bank"
               value={fmtCompact(baseCalc.opening)}
@@ -1850,6 +1887,8 @@ export function CashForecastPanel({
               tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
               sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
             />
+            </>
+            )}
           </div>
           {exportError ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">

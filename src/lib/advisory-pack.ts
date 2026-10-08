@@ -705,6 +705,39 @@ function packMoney(n: number, currency: string | null | undefined): string {
   return fmtMoney(n, "R");
 }
 
+/** The currency comfort constant. A live forecast floor replaces it at display time. */
+const DEFAULT_COMFORT_FLOOR = 50_000;
+
+/**
+ * Stored pack copy can still quote the $50,000 / R50 000 comfort fallback
+ * from a generation that had no weekly outflows. The Cash tab's floor is
+ * about four weeks of outflows. This rewrites only sentences that name a
+ * floor or a comfort line, and only when the live floor is a different number.
+ */
+export function alignPackFloorCopy(
+  text: string,
+  liveFloor: number | null | undefined,
+  currency: string | null | undefined,
+): string {
+  if (typeof liveFloor !== "number" || !Number.isFinite(liveFloor) || liveFloor <= 0) return text;
+  if (Math.abs(liveFloor - DEFAULT_COMFORT_FLOOR) < 1) return text;
+  const full = packMoney(liveFloor, currency);
+  const compact = packCompact(liveFloor, currency);
+  const defaults = packIsUsd(currency)
+    ? ["$50,000", "$50.0k", "$50k"]
+    : ["R50 000", "R50,000", "R50.0k", "R50k"];
+  let next = text;
+  for (const token of defaults) {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      `floor\\s*${escaped}|${escaped}(?=[\\s\\S]{0,32}(?:floor|comfort))|(?:floor|comfort)[\\s\\S]{0,32}${escaped}`,
+      "gi",
+    );
+    next = next.replace(re, (match) => match.split(token).join(token.includes("k") ? compact : full));
+  }
+  return next;
+}
+
 /** Same compact form as the cash-tab floor and lowest-point tiles. */
 function packCompact(n: number, currency: string | null | undefined): string {
   return formatMoneyCompact(
@@ -727,8 +760,15 @@ export function signedPackNextStep(firmName: string | null | undefined): string 
  */
 export function packSectionsForPdf<T extends { key?: string; title: string; body: string; bullets?: string[] }>(
   sections: T[],
-  opts?: { signed?: boolean; firmName?: string | null },
+  opts?: {
+    signed?: boolean;
+    firmName?: string | null;
+    /** Cash-tab floor. Replaces a stored $50,000 comfort line at display time. */
+    liveFloor?: number | null;
+    currency?: string | null;
+  },
 ): T[] {
+  const align = (text: string) => alignPackFloorCopy(text, opts?.liveFloor, opts?.currency);
   return sections
     .filter((section) => {
       const recommendations = section.key === "recommendations" || section.title === "Recommendations";
@@ -737,10 +777,15 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
     })
     .map((section) => {
       const nextStep = section.key === "next_step" || section.title === "What happens now";
-      if (opts?.signed && nextStep && /reviews this pack first/i.test(section.body)) {
-        return { ...section, body: signedPackNextStep(opts.firmName) };
-      }
-      return section;
+      const body =
+        opts?.signed && nextStep && /reviews this pack first/i.test(section.body)
+          ? signedPackNextStep(opts.firmName)
+          : align(section.body);
+      return {
+        ...section,
+        body,
+        bullets: section.bullets?.map(align),
+      };
     });
 }
 

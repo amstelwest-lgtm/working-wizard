@@ -15,6 +15,7 @@ import {
   redactSecrets,
 } from "../src/lib/qbo";
 import { periodMonthsBetween } from "../src/lib/xero";
+import { figureSourceChipLabel, resolveFigureSource } from "../src/lib/ledger-link-copy";
 import {
   qboOauthStateIsFresh,
   sanitizeQboOauthReason,
@@ -137,6 +138,30 @@ const mapped = mapQboToFinancialInputs(
   1500,
 );
 assert(mapped.statementSource === "qbo", "source tagged qbo");
+assert(
+  figureSourceChipLabel(resolveFigureSource({ financials: mapped })) === "QuickBooks",
+  "mapper output chips as QuickBooks",
+);
+assert(
+  figureSourceChipLabel(
+    resolveFigureSource({ financials: { revenue: "700000" }, snapshotSource: "pdf_upload" }),
+  ) === "Uploaded statement",
+  "an upload without statementSource still chips from the snapshot",
+);
+assert(
+  figureSourceChipLabel(
+    resolveFigureSource({
+      financials: { statementSource: "upload" },
+      snapshotSource: "pdf_upload",
+      connectedLedger: "qbo",
+    }),
+  ) === "Uploaded statement",
+  "a statement source on the file beats a connected ledger",
+);
+assert(
+  figureSourceChipLabel(resolveFigureSource({ financials: {}, connectedLedger: "xero" })) === "Xero",
+  "a connected ledger chips when the file has no source",
+);
 assert(mapped.periodLabel === "1 Sep 2026 – 21 Sep 2026", "month label stored");
 assert(mapped.periodStart === "2026-09-01" && mapped.periodEnd === "2026-09-21", "month dates stored");
 assert(mapped.periodMonths === "1", "waterfall month is not the 9-month total");

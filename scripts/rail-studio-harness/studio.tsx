@@ -148,11 +148,18 @@ export function RailStudio() {
               <ClientRailButton
                 key={item.id}
                 id={item.id}
-                landing={item.landing}
                 label={item.label}
                 active={group === item.id}
-                clientId={clientId}
                 primary={item.id === "ask"}
+                onSelect={() => {
+                  const tab = item.id === "deliverables" ? "reports" : item.id;
+                  void navigate({
+                    to: "/clients/$clientId",
+                    params: { clientId },
+                    search: (prev) => accountantClientTabSearch(prev, tab),
+                    replace: true,
+                  });
+                }}
               />
             ))}
           </nav>
