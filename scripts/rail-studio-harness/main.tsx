@@ -14,6 +14,7 @@ import { ShareButton } from "@/components/share";
 import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
+import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
@@ -120,6 +121,15 @@ const ownerRoute = createRoute({
   },
 });
 
+const teamDeskRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/milon-team-desk",
+  validateSearch: (search: Record<string, unknown>) => ({
+    fixture: search.fixture === "empty" ? "empty" : "populated",
+  }),
+  component: MilonTeamDeskPage,
+});
+
 const inviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/invite",
@@ -147,7 +157,7 @@ const importLowsRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, inviteRoute, importLowsRoute]);
+const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, teamDeskRoute, inviteRoute, importLowsRoute]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),

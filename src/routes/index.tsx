@@ -127,6 +127,13 @@ async function setLandingPortal(intent: "accountant" | "owner") {
   setPortalIntent(intent);
 }
 
+/** Firm id for insight-seen, loaded only after a session exists. */
+async function landingFirmId(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const { activeFirmIdForUser } = await import("@/lib/firm-brand");
+  return activeFirmIdForUser(userId);
+}
+
 const LandingSignInModal = lazy(() =>
   import("@/components/landing/sign-in-modal").then((mod) => ({
     default: mod.LandingSignInModal,
@@ -250,6 +257,7 @@ function LandingPage() {
   const { showSaPricing } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
+  const [firmId, setFirmId] = useState<string | null>(null);
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
   const doSendWelcome = useServerFn(sendSignupWelcome);
@@ -269,6 +277,21 @@ function LandingPage() {
 
   /* ── Lighthouse trial link (?lh=<token>) — attribute the signup back to the lead ── */
   const [lhToken, setLhToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) {
+      setFirmId(null);
+      return;
+    }
+    let cancelled = false;
+    void landingFirmId(uid).then((id) => {
+      if (!cancelled) setFirmId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -892,7 +915,8 @@ function LandingPage() {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
         await setLandingPortal("accountant");
-        if (readInsightSeen()) {
+        const insightFirmId = await landingFirmId(granted.data.user?.id);
+        if (readInsightSeen(insightFirmId)) {
           void navigate({
             to: "/billing/start",
             search: billingStartSearch(pendingCheckout),
@@ -939,14 +963,19 @@ function LandingPage() {
         try {
           const resumeFirmBilling = consumeResumeFirmBilling();
           if (resumeFirmBilling) {
-            const { listUserFirms } = await import("@/lib/firm-brand");
+            const { listUserFirms, readActiveFirmId } = await import("@/lib/firm-brand");
             const firms = await listUserFirms(uid);
             const ownsFirm = firms.some((f) => f.owner_user_id === uid);
+            const preferred = readActiveFirmId(uid);
+            const insightFirmId =
+              firms.find((f) => f.id === preferred)?.id ??
+              firms.find((f) => f.owner_user_id === uid)?.id ??
+              null;
             const resume = decidePostLoginBillingResume({
               hasPendingFirmCheckout: false,
               ownsFirm,
               resumeFirmBilling: true,
-              insightSeen: readInsightSeen(),
+              insightSeen: readInsightSeen(insightFirmId),
             });
             if (resume === "workspace") {
               await setLandingPortal("accountant");
@@ -1209,14 +1238,9 @@ function LandingPage() {
           await welcomeWithoutBlockingSignup(() => doSendWelcome());
           const { forcePortal } = await import("@/lib/user-roles");
           forcePortal("accountant");
-          if (readInsightSeen()) {
-            navigate({
-              to: "/billing/start",
-              search: billingStartSearch(pending),
-            });
-          } else {
-            navigate({ to: "/dashboard" });
-          }
+          // This firm was just created. It has not shown figures, so Checkout
+          // waits. A flag stored for another firm must not send them to Stripe.
+          navigate({ to: "/dashboard" });
           return;
         }
         setRegDone(true);
@@ -1317,7 +1341,8 @@ function LandingPage() {
     setRegRole("Accountant / Advisory firm");
     await setLandingPortal("accountant");
     if (user) {
-      if (readInsightSeen()) {
+      const id = firmId ?? (await landingFirmId(user.id));
+      if (readInsightSeen(id)) {
         void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
       } else {
         void navigate({ to: "/dashboard" });
@@ -1341,7 +1366,8 @@ function LandingPage() {
     setRegisterReady(true);
     setMobileNavOpen(false);
     if (user) {
-      if (readInsightSeen()) {
+      const id = firmId ?? (await landingFirmId(user.id));
+      if (readInsightSeen(id)) {
         void navigate({
           to: "/billing/start",
           search: billingStartSearch({ plan, interval: firmInterval, market }),
@@ -1370,7 +1396,7 @@ function LandingPage() {
     return () => {
       delete (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup;
     };
-  }, [draftMarket, firmInterval, user]);
+  }, [draftMarket, firmInterval, user, firmId]);
 
   const activeInviteToken =
     inviteClientId ?? pendingInviteTokenFromUrl() ?? peekPendingOwnerInvite()?.token ?? null;
@@ -1756,6 +1782,7 @@ function LandingPage() {
             inviteClientId={inviteClientId}
             regClientCode={regClientCode}
             copyMarket={copyMarket}
+            firmId={firmId}
             onClose={() => {
               setSigninOpen(false);
               setFpMode(false);

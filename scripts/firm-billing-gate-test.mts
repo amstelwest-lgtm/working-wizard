@@ -80,6 +80,50 @@ assert(
 );
 assert(
   decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 0,
+  }) === "allow",
+  "a firm with 0 clients stays on the dashboard before a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard?addClient=1",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 0,
+  }) === "allow",
+  "0-client add-client step stays open pre-card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/open",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 0,
+  }) === "allow",
+  "0-client /open is not the billing wall",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: null,
+  }) === "require_billing",
+  "unknown client count is not treated as zero",
+);
+assert(
+  decideFirmBillingPathGate({
     pathname: "/clients/abc",
     isAccountantFirmUser: true,
     isMilonItMember: false,
@@ -574,6 +618,10 @@ assert(layout.includes("/billing/required"), "unpaid firms redirect to billing r
 assert(layout.includes("loadFirmClientGateContext"), "shell loads the first-client count");
 assert(layout.includes("firmClientCount"), "shell passes the first-client count into the gate");
 assert(
+  layout.includes("clients.firmClientCount === 0 ? false : readInsightSeen(firmId)"),
+  "shell treats a 0-client firm as not yet seen",
+);
+assert(
   !layout.includes('to: "/app"') || layout.includes("shouldStayOnAccountantPortal"),
   "SME bounce to /app remains",
 );
@@ -667,6 +715,18 @@ const freshSignup = decideAccountantAuthLanding({
 assert(
   freshSignup.kind === "workspace",
   "Create firm signup opens the workspace; Checkout waits for an insight",
+);
+const staleSignup = decideAccountantAuthLanding({
+  flow: "signup",
+  hadFirmBefore: false,
+  hasLiveEntitlement: false,
+  pending: solo,
+  next: "/billing/start?plan=solo&interval=month&market=us",
+  insightSeen: true,
+});
+assert(
+  staleSignup.kind === "workspace",
+  "a new firm signup ignores a stored insight flag",
 );
 const earlyResume = decideAccountantAuthLanding({
   flow: "signin",

@@ -117,6 +117,12 @@ export async function fetchUserFirm(
   return firms[0] ?? null;
 }
 
+/** Id of the firm this user is in, or null when they have none yet. */
+export async function activeFirmIdForUser(userId: string): Promise<string | null> {
+  const firm = await fetchUserFirm(userId, readActiveFirmId(userId));
+  return firm?.id ?? null;
+}
+
 export function profileFromFirm(firm: FirmBrandRow): FirmBrandProfile {
   return {
     firmName: firm.name ?? "",

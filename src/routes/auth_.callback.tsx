@@ -53,7 +53,7 @@ import { readInsightSeen } from "@/lib/funnel-timing";
 import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { callbackNextParam } from "@/lib/staff-invite-landing";
-import { listUserFirms } from "@/lib/firm-brand";
+import { activeFirmIdForUser, listUserFirms } from "@/lib/firm-brand";
 import {
   clearForcePortal,
   forcePortal,
@@ -322,7 +322,7 @@ function AuthCallbackPage() {
         return;
       }
       // Checkout after insight. A fresh Solo stash still lands in the workspace.
-      if (pendingCheckout && readInsightSeen()) {
+      if (pendingCheckout && readInsightSeen(await activeFirmIdForUser(user.id))) {
         if (!cancelled) {
           void navigate({
             to: "/billing/start",

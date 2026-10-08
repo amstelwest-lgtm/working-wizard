@@ -3,6 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { useRouterState } from "@tanstack/react-router";
 import { setMonitoringUser } from "@/lib/monitoring";
 import { isPublicMarketingPath } from "@/lib/public-marketing";
+import { clearLegacyInsightSeen } from "@/lib/funnel-timing";
 
 type AuthCtx = {
   user: User | null;
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut: async () => {
           const { clearPortalRouting } = await import("@/lib/user-roles");
           clearPortalRouting();
+          clearLegacyInsightSeen();
           // Local only: a global revoke would kill this email's other tabs.
           const { supabase } = await import("@/integrations/supabase/client");
           await supabase.auth.signOut({ scope: "local" });
