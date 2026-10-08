@@ -139,8 +139,16 @@ assert(appSrc.includes("OwnerTabSignoffRow"), "other owner tabs pin the signatur
 assert(appSrc.includes('scope="profitability"'), "client profit tab uses profitability scope");
 assert(appSrc.includes('scope="action_plan"'), "client action plan tab has its own sign-off");
 assert(appSrc.includes('scope="financials"'), "client health tab keeps financials sign-off");
-assert(appSrc.includes('scope="cash_forecast"'), "client cash tab has its own sign-off");
-assert(appSrc.includes('scope="budget"'), "client budget tab has its own sign-off");
+assert(appSrc.includes("CashForecastPanel"), "owner cash mounts the forecast panel");
+assert(appSrc.includes("BudgetPanel"), "owner budget mounts the budget panel");
+assert(
+  readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8").includes('scope="cash_forecast"'),
+  "cash forecast has its own sign-off",
+);
+assert(
+  readFileSync(resolve("src/components/budget/budget-verdict.tsx"), "utf8").includes('scope="budget"'),
+  "budget has its own sign-off",
+);
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('scope="profitability"'), "accountant profit tab has its own sign-off");

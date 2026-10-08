@@ -250,8 +250,8 @@ export type BudgetActuals = {
   revenue: number;
   cogs: number;
   fixedCosts: number;
-  /** Uploaded month, statement pace, or none. */
-  chip?: "Uploaded month" | "Statement pace, prorated" | "None";
+  /** This month's actuals, statement pace, or none. */
+  chip?: "From this month's actuals" | "Estimated from statement pace" | "None";
   /** Plan slice for the same window as the statement. Falls back to the focus month. */
   budgetRevenue?: number;
   budgetCogs?: number;

@@ -2,10 +2,18 @@
  * The first thing on the Budget tab: this period, on or off the plan.
  */
 
+import type { ReactNode } from "react";
+import { ReviewSignoffButton } from "@/components/review-signoff";
+import { SignoffStatusChip } from "@/components/signoff-status-chip";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
-import { budgetSeededFromStatement, type BudgetActualsChip } from "@/lib/budget.bridges";
+import {
+  budgetSeededFromStatement,
+  showBudgetSourceChip,
+  type BudgetActualsChip,
+} from "@/lib/budget.bridges";
 import { formatVariancePct, varianceLine } from "@/lib/budget.variance";
 import type { ResolvedMarket } from "@/lib/market";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 
 function signedMoney(n: number, market: ResolvedMarket): string {
   if (Math.abs(n) < 1) return fmtBudgetMoney(0, market);
@@ -47,8 +55,14 @@ export function BudgetVerdictStrip({
   profitBudget,
   profitActual,
   chip,
-  status,
   market,
+  clientId,
+  clientName,
+  signoff = null,
+  isStale = false,
+  canSign = false,
+  onSignoffChange,
+  extraActions = null,
 }: {
   periodLabel: string;
   revenueBudget: number;
@@ -56,8 +70,14 @@ export function BudgetVerdictStrip({
   profitBudget: number;
   profitActual: number | null;
   chip: BudgetActualsChip;
-  status: string;
   market: ResolvedMarket;
+  clientId?: string;
+  clientName?: string;
+  signoff?: ClientReviewSignoff | null;
+  isStale?: boolean;
+  canSign?: boolean;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  extraActions?: ReactNode;
 }) {
   const money = (n: number) => fmtBudgetMoney(n, market);
   const hasActuals = revenueActual != null && chip !== "None";
@@ -70,13 +90,15 @@ export function BudgetVerdictStrip({
   });
   return (
     <section
-      className="rounded-2xl border border-[#d4a550]/40 bg-[#fffdf8] px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
+      className="answer-strip rounded-2xl border border-[#d4a550]/40 bg-[#fffdf8] px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
+      data-answer-strip
       data-budget-verdict
     >
+      <div className="answer-strip__lead">
       <p className="text-[11px] font-semibold leading-snug tracking-wide text-[#b8860b] text-pretty">
         {periodLabel}
       </p>
-      <p className="mt-1 text-[15px] leading-relaxed text-[#1b1608] dark:text-slate-100">
+      <p className="answer-strip__sentence mt-1 text-[#1b1608] dark:text-slate-100">
         {seeded ? (
           "Budget seeded from these figures — variance starts with the first uploaded month"
         ) : (
@@ -119,15 +141,33 @@ export function BudgetVerdictStrip({
           </span>
         )}
       </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        <span className="rounded-full border border-slate-200 px-2 py-0.5 dark:border-slate-700">
-          {chip}
-        </span>
-        {status ? (
-          <span className="rounded-full border border-slate-200 px-2 py-0.5 dark:border-slate-700">
-            {status}
+      </div>
+      <div className="answer-strip__actions">
+        {canSign && clientId && onSignoffChange ? (
+          <ReviewSignoffButton
+            hideStatus
+            clientId={clientId}
+            clientName={clientName}
+            scope="budget"
+            signoff={signoff}
+            isStale={isStale}
+            onChange={onSignoffChange}
+          />
+        ) : null}
+        {extraActions}
+      </div>
+      <div className="answer-strip__meta">
+        {showBudgetSourceChip(chip) ? (
+          <span data-source-chip className="answer-strip__chip">
+            {chip}
           </span>
         ) : null}
+        <SignoffStatusChip
+          clientId={clientId}
+          scope="budget"
+          signoff={signoff}
+          isStale={isStale}
+        />
       </div>
     </section>
   );

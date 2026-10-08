@@ -400,6 +400,7 @@ export function ReviewSignoffButton({
   isStale,
   onChange,
   compact = false,
+  hideStatus = false,
 }: {
   clientId: string;
   clientName?: string;
@@ -409,6 +410,8 @@ export function ReviewSignoffButton({
   onChange: (next: ClientReviewSignoff | null) => void;
   /** Tight control for tab headers and report cards. */
   compact?: boolean;
+  /** The answer strip already shows the status line. */
+  hideStatus?: boolean;
 }) {
   const { profile, updateProfile } = useAccountantProfile();
   const doSignoff = useServerFn(signoffReview);
@@ -500,15 +503,23 @@ export function ReviewSignoffButton({
     }
   };
 
+  const frame = hideStatus
+    ? "answer-strip__signoff"
+    : compact
+      ? "flex flex-col items-end gap-2"
+      : "mt-2 flex w-full max-w-md flex-col items-end gap-2";
+
   if (shownSignoff && !isStale) {
     return (
-      <div className={compact ? "flex flex-col items-end" : "mt-2 w-full max-w-md"}>
-        <SignoffCertificate
-          signoff={shownSignoff}
-          scope={scope}
-          isStale={false}
-          placement={compact ? "compact" : "block"}
-        />
+      <div className={frame}>
+        {hideStatus ? null : (
+          <SignoffCertificate
+            signoff={shownSignoff}
+            scope={scope}
+            isStale={false}
+            placement={compact ? "compact" : "block"}
+          />
+        )}
         <button
           type="button"
           onClick={() => setConfirmRemove(true)}
@@ -541,14 +552,8 @@ export function ReviewSignoffButton({
   }
 
   return (
-    <div
-      className={
-        compact
-          ? "flex flex-col items-end gap-2"
-          : "mt-2 flex w-full max-w-md flex-col items-end gap-2"
-      }
-    >
-      {shownSignoff && isStale && (
+    <div className={frame}>
+      {shownSignoff && isStale && !hideStatus && (
         <SignoffCertificate
           signoff={shownSignoff}
           scope={scope}
@@ -564,7 +569,7 @@ export function ReviewSignoffButton({
         />
       ) : (
         <>
-          {!shownSignoff ? (
+          {!shownSignoff && !hideStatus ? (
             <p className="text-[11px] font-semibold text-slate-500">
               {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
               {workflow?.changeComment ? ` · ${workflow.changeComment}` : ""}
@@ -581,9 +586,13 @@ export function ReviewSignoffButton({
             {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (
               <Button
                 type="button"
-                variant="outline"
+                variant={hideStatus ? "default" : "outline"}
                 size="sm"
-                className="h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
+                className={
+                  hideStatus
+                    ? SIGNOFF_GOLD_BTN
+                    : "h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
+                }
                 disabled={saving}
                 onClick={() => {
                   const previous = workflow;

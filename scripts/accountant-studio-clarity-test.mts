@@ -112,8 +112,11 @@ const builder = readFileSync(resolve("supabase/functions/ask-ai/context-builder.
 assert(builder.includes("resolveRatioRecord"), "Ask AI derives ratios when the snapshot is empty");
 
 assert(
-  /activeTab === "budget" \? "flex" : "none"/.test(studio),
-  "simplified/complex toggle is budget-only; health, cash, reports, and action plan do not show it",
+  !studio.includes("data-view-mode-toggle") &&
+    readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
+      "data-view-mode-toggle",
+    ),
+  "simplified/complex toggle is in the budget drawer; health, cash, reports, and action plan do not show it",
 );
 assert(
   !/id="wizard-profit-walk"[\s\S]{0,80}className="dark"/.test(studio),

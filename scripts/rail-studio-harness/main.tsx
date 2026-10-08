@@ -1,18 +1,27 @@
 import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Toaster } from "sonner";
+import { toast, Toaster } from "sonner";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
 import { MarketProvider } from "@/contexts/market";
 import { AuthProvider } from "@/hooks/use-auth";
 import { applyPortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
-import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
-import { RailStudio } from "./studio";
+import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
+import { OwnerCashBoard, RailStudio } from "./studio";
 
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
 // palette, which is what a dark signed-in session does.
 applyPortalTheme("dark");
+
+// The local stub rejects server calls with "harness-local". Keep those out of
+// the screenshots. App toast code is unchanged.
+const hideHarnessToast = (message: unknown) => String(message ?? "").includes("harness-local");
+const toastError = toast.error.bind(toast);
+toast.error = ((message, data) => {
+  if (hideHarnessToast(message)) return "";
+  return toastError(message, data);
+}) as typeof toast.error;
 
 // Same sheets as `__root` (styles.css) plus `/_authenticated` head links.
 // The client route itself adds none; #370 moved those onto the layout.
@@ -20,6 +29,7 @@ const sheetHrefs = [
   "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
   appCss,
   ...authenticatedLayoutLinks.flatMap((link) => (link.rel === "stylesheet" ? [link.href] : [])),
+  ...founderPortalLinks.map((link) => link.href),
 ];
 for (const href of sheetHrefs) {
   const el = document.createElement("link");
@@ -48,7 +58,19 @@ const clientRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute]);
+const ownerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/app",
+  component: function OwnerHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <OwnerCashBoard clientId="harness-client" />
+      </MarketProvider>
+    );
+  },
+});
+
+const routeTree = rootRoute.addChildren([clientRoute, ownerRoute]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),

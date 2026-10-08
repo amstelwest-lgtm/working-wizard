@@ -57,7 +57,7 @@ export const BUDGET_BROKEN_SCALE_MULTIPLE = 10;
 
 /** File note written when an order-of-magnitude plan is replaced. */
 export const BUDGET_REBUILT_NOTE =
-  "Rebuilt from the saved statement. The stored plan was more than 10× annualised revenue or cost of sales, so it was not kept.";
+  "Rebuilt from the saved statement. The stored plan was more than 10× a full year of revenue or cost of sales, so it was not kept.";
 
 const BUDGET_REBUILT_PREFIXES = [
   "Rebuilt from the saved statement.",
@@ -245,13 +245,21 @@ export function mergeMonthActuals(
   };
 }
 
-export type BudgetActualsChip = "Uploaded month" | "Statement pace, prorated" | "None";
+export type BudgetActualsChip =
+  | "From this month's actuals"
+  | "Estimated from statement pace"
+  | "None";
 
 /** One actuals chip. Statement pace is not "None". */
 export function budgetActualsBadge(importedMonths: number, statementPace: boolean): BudgetActualsChip {
-  if (importedMonths > 0) return "Uploaded month";
-  if (statementPace) return "Statement pace, prorated";
+  if (importedMonths > 0) return "From this month's actuals";
+  if (statementPace) return "Estimated from statement pace";
   return "None";
+}
+
+/** "None" is the absence of a source, not a chip. */
+export function showBudgetSourceChip(chip: BudgetActualsChip | null | undefined): boolean {
+  return chip != null && chip !== "None";
 }
 
 function budgetYearTotals(doc: BudgetDocument): { revenue: number; cogs: number } {
@@ -746,7 +754,7 @@ export function budgetSeededFromStatement(
     budgetEbit?: number;
   } | null | undefined,
 ): boolean {
-  if (!actuals || actuals.chip !== "Statement pace, prorated") return false;
+  if (!actuals || actuals.chip !== "Estimated from statement pace") return false;
   if (actuals.budgetRevenue == null || actuals.ebit == null || actuals.budgetEbit == null) return false;
   const flat = (actual: number, budget: number) => Math.abs(actual - budget) < 1;
   return flat(actuals.revenue, actuals.budgetRevenue) && flat(actuals.ebit, actuals.budgetEbit);
@@ -823,7 +831,7 @@ export function budgetVersusStatement(
     cogs: bridge.cogs,
     fixedCosts: bridge.operatingExpenses,
     ebit: bridge.ebit,
-    chip: "Statement pace, prorated",
+    chip: "Estimated from statement pace",
     budgetRevenue,
     budgetCogs,
     budgetOverheads,

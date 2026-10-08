@@ -55,8 +55,11 @@ assert(clientSrc.includes('variant: "studio"'), "accountant widget uses the larg
 assert(clientSrc.includes('audience: "accountant"'), "accountant questions send accountant audience");
 assert(clientSrc.includes("functions/v1/milon-bot"), "studio widget can call brain tools");
 assert(
-  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc),
-  "simple/complex toggle is budget-only, so Overview, Milōn Bot, Health, Cash, and Reports do not show it",
+  !clientSrc.includes("data-view-mode-toggle") &&
+    readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
+      "data-view-mode-toggle",
+    ),
+  "simple/complex toggle is in the budget drawer, so Overview, Milōn Bot, Health, Cash, and Reports do not show it",
 );
 assert(
   !/id="pane-ratios"[\s\S]{0,400}id="ask-ai-accountant"/.test(clientSrc),

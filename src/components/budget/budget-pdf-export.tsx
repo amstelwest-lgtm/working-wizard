@@ -37,12 +37,15 @@ export function BudgetPdfExportButton({
   clientName,
   signoff,
   budgetUpdatedAt,
+  quiet = false,
 }: {
   doc: BudgetDocument;
   clientId?: string;
   clientName?: string;
   signoff?: ClientReviewSignoff | null;
   budgetUpdatedAt?: string | null;
+  /** Icon on the answer strip. The download still says Export PDF to assistive tech. */
+  quiet?: boolean;
 }) {
   const { market } = useMarket();
   const { profile, firmId } = useAccountantProfile();
@@ -147,6 +150,22 @@ export function BudgetPdfExportButton({
       setExporting(false);
     }
   };
+
+  if (quiet) {
+    return (
+      <button
+        id="budget-export-pdf"
+        type="button"
+        className="answer-strip__icon"
+        aria-label="Export PDF"
+        title="Export PDF"
+        disabled={exporting}
+        onClick={() => void exportPDF()}
+      >
+        <Download className="h-3.5 w-3.5" />
+      </button>
+    );
+  }
 
   return (
     <Button

@@ -138,6 +138,28 @@ export function alignBudgetToFirmFy(doc: BudgetDocument): BudgetDocument {
 }
 
 /** "FY Jan–Dec · from Sep 2026" style caption for a budget document. */
+/** Plain window for the budget page, e.g. "Billable-hours budget · Mar 2026 – Feb 2027". */
+export function plainBudgetWindowHeading(
+  templateLabel: string,
+  doc: { fyStart: string },
+  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+): string {
+  const kind = templateLabel.split("/")[0].trim().replace(/(\S)\s+(?=\S)/g, "$1-");
+  const months = fyMonths(doc.fyStart);
+  const fmt = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    if (!y || !m) return ym;
+    return new Date(Date.UTC(y, m - 1, 1)).toLocaleString(market.locale, {
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  };
+  const start = months[0] ? fmt(months[0]) : "";
+  const end = months.length ? fmt(months[months.length - 1]) : "";
+  return `${kind} budget · ${start} – ${end}`;
+}
+
 export function budgetWindowLabel(
   doc: { fyStartMonth: number; fyStart: string },
   market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,

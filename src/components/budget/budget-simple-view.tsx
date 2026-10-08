@@ -5,19 +5,20 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
-import type { BudgetActuals, BudgetDocument, BudgetScenarioId } from "@/lib/budget.types";
+import type { BudgetActuals, BudgetDocument } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
-  budgetWindowLabel,
+  plainBudgetWindowHeading,
   currentBudgetMonth,
   fyMonths,
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
+import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
   budgetDaysNeedReview,
@@ -26,8 +27,6 @@ import {
 } from "@/lib/budget.bridges";
 import { currencySymbol, formatMoney, localizeCopy, type ResolvedMarket } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
-
-const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
 function monthOverheadTotal(doc: BudgetDocument, month: string): number {
   const sum = doc.overheads.reduce((s, oh) => s + (oh.months[month] || 0), 0);
@@ -93,16 +92,26 @@ export function BudgetSimpleView({
   doc,
   onChange,
   actuals,
-  onChangeModel,
   role = "owner",
-  reviewStatus = "",
+  clientId,
+  clientName,
+  signoff = null,
+  isStale = false,
+  canSign = false,
+  onSignoffChange,
+  drawer = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
   actuals?: BudgetActuals | null;
-  onChangeModel?: () => void;
   role?: "owner" | "accountant";
-  reviewStatus?: string;
+  clientId?: string;
+  clientName?: string;
+  signoff?: ClientReviewSignoff | null;
+  isStale?: boolean;
+  canSign?: boolean;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  drawer?: ReactNode;
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -197,32 +206,28 @@ export function BudgetSimpleView({
         profitBudget={compared?.budgetEbit ?? focus?.ebit ?? 0}
         profitActual={compared ? (compared.ebit ?? null) : null}
         chip={compared?.chip ?? "None"}
-        status={reviewStatus}
         market={market}
+        clientId={clientId}
+        clientName={clientName}
+        signoff={signoff}
+        isStale={isStale}
+        canSign={canSign}
+        onSignoffChange={onSignoffChange}
+        extraActions={
+          <BudgetPdfExportButton
+            quiet
+            doc={doc}
+            clientId={clientId}
+            clientName={clientName}
+            signoff={signoff}
+            budgetUpdatedAt={doc.updatedAt}
+          />
+        }
       />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-          {tpl.label} · {budgetWindowLabel(doc, market)}
-        </p>
-        <div className="flex rounded-full border border-slate-200 p-0.5 dark:border-slate-700">
-          {SCENARIOS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() =>
-                onChange({ ...doc, activeScenario: id, updatedAt: new Date().toISOString() })
-              }
-              className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-                doc.activeScenario === id
-                  ? "bg-[#d4a550] text-[#0a0e1a]"
-                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-            >
-              {doc.scenarios[id].label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {drawer}
+      <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
+        {plainBudgetWindowHeading(tpl.label, doc, market)}
+      </p>
 
       {/* Month engine — volume × price, then margin and overheads */}
       <section
@@ -468,8 +473,8 @@ export function BudgetSimpleView({
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Opening cash
               {budgetOpeningSourceLabel(doc.openingCashSource) ? (
-                <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
-                  {budgetOpeningSourceLabel(doc.openingCashSource)}
+                <span className="ml-1 font-medium normal-case tracking-normal text-slate-400">
+                  · {budgetOpeningSourceLabel(doc.openingCashSource)}
                 </span>
               ) : null}
             </Label>
@@ -495,8 +500,8 @@ export function BudgetSimpleView({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Debtor days
-              <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
-                {budgetDaysSourceLabel(doc.wcDaysSource)}
+              <span className="ml-1 font-medium normal-case tracking-normal text-slate-400">
+                · {budgetDaysSourceLabel(doc.wcDaysSource)}
               </span>
               {budgetDaysNeedReview(doc.wc.debtorDays) ? (
                 <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
@@ -526,8 +531,8 @@ export function BudgetSimpleView({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Creditor days
-              <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
-                {budgetDaysSourceLabel(doc.wcDaysSource)}
+              <span className="ml-1 font-medium normal-case tracking-normal text-slate-400">
+                · {budgetDaysSourceLabel(doc.wcDaysSource)}
               </span>
               {budgetDaysNeedReview(doc.wc.creditorDays) ? (
                 <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
@@ -555,24 +560,6 @@ export function BudgetSimpleView({
             </p>
           </div>
         </div>
-        {onChangeModel && (
-          <div className="mt-5 border-t border-amber-900/10 pt-4 dark:border-slate-800">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={onChangeModel}
-            >
-              Change business model
-            </Button>
-            <p className="mt-1.5 max-w-xl text-[11px] leading-snug text-slate-500">
-              {role === "accountant"
-                ? "Only if volume × price is the wrong shape for this client — multiple products, capex, or a full grid. Leave it if the month engine already fits."
-                : "Switch to Complex for full grids, capex, and more than one product line."}
-            </p>
-          </div>
-        )}
       </section>
     </div>
   );

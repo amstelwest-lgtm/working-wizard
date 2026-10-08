@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   CollapsibleGoldCard,
   COLLAPSIBLE_GOLD_SHELL,
@@ -26,8 +26,6 @@ import {
   Upload,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
-  CheckCircle2,
   Table2,
   Settings2,
   Wallet,
@@ -50,13 +48,11 @@ import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import {
-  ReviewSignoffBadge,
-  ReviewSignoffButton,
-  computeIsStale,
-} from "@/components/review-signoff";
+import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { SignoffStatusChip } from "@/components/signoff-status-chip";
 import {
   bankAccountsFromDraft,
   parseOperatingProfileUnknown,
@@ -297,13 +293,11 @@ function LineEditor({
   onChange,
   onRemove,
   tone,
-  sourceChip,
 }: {
   line: LineItem;
   onChange: (l: LineItem) => void;
   onRemove?: () => void;
   tone: "revenue" | "expense";
-  sourceChip?: string | null;
 }) {
   const { market } = useMarketFormat();
   const cur = currencySymbol(market);
@@ -315,14 +309,7 @@ function LineEditor({
       className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
     >
       <div className="md:col-span-3">
-        <Label className={LABEL_CLS}>
-          Line item
-          {sourceChip ? (
-            <span className="ml-2 rounded-full border border-[#d4a550]/40 bg-[#d4a550]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]">
-              {sourceChip}
-            </span>
-          ) : null}
-        </Label>
+        <Label className={LABEL_CLS}>Line item</Label>
         <Input
           value={line.name}
           onChange={(e) => onChange({ ...line, name: e.target.value })}
@@ -1395,29 +1382,6 @@ export function CashForecastPanel({
     linesBlank,
   });
 
-  const heroBadge = forecastEmpty ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-400/50 bg-slate-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-      No forecast yet
-    </span>
-  ) : (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
-        lowestUnderFloor
-          ? "border-[#e05c5c] bg-[#e05c5c]/10 text-[#c0392b] dark:text-[#ef6b6b]"
-          : publishedStory.note === "above the floor"
-            ? "border-[#4caf82] bg-[#4caf82]/10 text-[#3f9c72] dark:text-[#5cc492]"
-            : "border-[#d4a550] bg-[#d4a550]/15 text-[#8a6a12] dark:text-[#e2b964]"
-      }`}
-    >
-      {lowestUnderFloor ? (
-        <AlertTriangle className="h-3 w-3" />
-      ) : (
-        <CheckCircle2 className="h-3 w-3" />
-      )}
-      {lowestUnderFloor ? "Under the floor" : "Above the floor"}
-    </span>
-  );
-
   const forecastNotes =
     !forecastEmpty && (shortfallExplain || forecastCycleNote) ? (
       <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
@@ -1443,13 +1407,6 @@ export function CashForecastPanel({
         below stay at {cur}0 until then. Upload bank statements, or set the line items in
         Forecast Setup.
       </span>
-      <Button
-        size="sm"
-        className="h-8 gap-1.5 bg-[#d4a550] text-[#07090f] hover:bg-[#e2b964]"
-        onClick={() => setShowBankUpload(true)}
-      >
-        <Upload className="h-3 w-3" /> Upload bank statements
-      </Button>
     </div>
   ) : null;
 
@@ -1488,256 +1445,87 @@ export function CashForecastPanel({
     />
   );
 
-  // ── Simplified mode: glanceable hero ─────────────────────────────────────
-  if (simplified) {
-    return (
-      <div className="space-y-0">
-        {configureInputs}
-        <Card id="wizard-cash-outlook" className={CARD_SHELL}>
-          <div className={GOLD_RULE} />
-          <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-                  Cash Outlook
-                </CardTitle>
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  13-week closing balance
-                  {horizonLabel ? ` · ${horizonLabel}` : ""} · opening {fmtR(calc.opening)}
-                </p>
-                {scenarioLabel ? (
-                  <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
-                ) : null}
-                {xeroBankNote ? (
-                  <p
-                    id="xero-bank-forecast-note"
-                    className="mt-2 max-w-xl text-xs text-slate-600 dark:text-slate-400"
-                  >
-                    {xeroBankNote}
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                {heroBadge}
-                {!hideReadOnlyStamp && (
-                  <ReviewSignoffBadge
-                    signoff={forecastSignoff}
-                    scope="cash_forecast"
-                    isStale={forecastStale}
-                    placement="corner"
-                  />
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            {canSign && clientId && !hideInlineSignOff && (
-              <div className="mb-4 flex justify-end">
-                <ReviewSignoffButton
-                  clientId={clientId}
-                  clientName={clientName}
-                  scope="cash_forecast"
-                  signoff={forecastSignoff}
-                  isStale={forecastStale}
-                  onChange={patchForecastSignoff}
-                />
-              </div>
-            )}
-            {disagreeNotice}
-            {emptyNotice}
-            {forecastNotes}
-            <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Stat
-                label="Closing · Week 13"
-                value={fmtCompact(closingW13)}
-                tone={closingW13 < 0 ? "bad" : "neutral"}
-                sub={
-                  <span className="inline-flex items-center gap-1">
-                    {trajectory >= 0 ? (
-                      <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3 text-[#c0392b]" />
-                    )}
-                    {trajectory >= 0 ? "+" : ""}
-                    {fmtCompact(trajectory)} over 13 weeks
-                  </span>
-                }
-              />
-              <Stat
-                label="Lowest balance"
-                value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
-                tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-                sub={
-                  emptyPresentation.lowestBlank
-                    ? "Add an opening balance"
-                    : publishedLowest.isOpening
-                      ? "Opening balance"
-                      : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
-                }
-              />
-              <Stat
-                label="Cash runway"
-                value={forecastEmpty ? "—" : publishedStory.headline}
-                tone={
-                  forecastEmpty
-                    ? "neutral"
-                    : publishedStory.note === "above the floor"
-                      ? "good"
-                      : "bad"
-                }
-                sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
-              />
-              <Stat
-                label="Net cash · next 4 weeks"
-                value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
-                tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
-                sub="Inflows minus outflows"
-              />
-            </div>
-            {emptyPresentation.showChart ? (
-              heroChart(180)
-            ) : (
-              <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                The 13-week chart appears once a forecast line is entered.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+  const answerSentence = forecastEmpty
+    ? null
+    : forecastStatusSentence({
+        opening: baseCalc.opening,
+        closings: baseCalc.closing,
+        floor: minimumCash,
+        floorText: fmtCompact(minimumCash),
+        runwayLabel: runwayDisplayLabel(publishedDirection),
+        cashGenerative: publishedGenerative,
+      });
+
+  const answerStrip = (
+    <section className="answer-strip" data-answer-strip>
+      <div className="answer-strip__lead">
+        <h2 className="answer-strip__heading">13-week cash forecast</h2>
+        {answerSentence ? (
+          <p className="answer-strip__sentence" data-answer-sentence>
+            {answerSentence}
+          </p>
+        ) : null}
       </div>
-    );
-  }
+      <div className="answer-strip__actions">
+        {canSign && clientId ? (
+          <ReviewSignoffButton
+            hideStatus
+            clientId={clientId}
+            clientName={clientName}
+            scope="cash_forecast"
+            signoff={forecastSignoff}
+            isStale={forecastStale}
+            onChange={patchForecastSignoff}
+          />
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="answer-strip__secondary"
+          onClick={() => setShowBankUpload(true)}
+        >
+          Upload bank statements
+        </Button>
+        <button
+          type="button"
+          className="answer-strip__icon"
+          aria-label="Export PDF"
+          title="Export PDF"
+          disabled={exporting}
+          onClick={exportPDF}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="answer-strip__meta">
+        {shownLineSource ? (
+          <span className="answer-strip__chip" data-source-chip>
+            {shownLineSource}
+          </span>
+        ) : null}
+        <SignoffStatusChip
+          clientId={clientId}
+          scope="cash_forecast"
+          signoff={forecastSignoff}
+          isStale={forecastStale}
+        />
+      </div>
+    </section>
+  );
 
-  // ── Complex mode ──────────────────────────────────────────────────────────
-  return (
-    <div id="wizard-cash-outlook" className="space-y-5">
-      {/* Hero: summary + chart */}
-      <Card className={CARD_SHELL}>
-        <div className={GOLD_RULE} />
-        <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-                13-Week Cash Forecast
-              </CardTitle>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                Forecast every cent in and out of the bank
-                {horizonLabel ? ` · ${horizonLabel}` : ""} · catch a shortfall before it hits
-              </p>
-              {scenarioLabel ? (
-                <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
-              ) : null}
-            </div>
-            <div className="flex max-w-full flex-wrap items-center gap-2">
-              {heroBadge}
-              {!hideReadOnlyStamp && !canSign && (
-                <ReviewSignoffBadge
-                  signoff={forecastSignoff}
-                  scope="cash_forecast"
-                  isStale={forecastStale}
-                  placement="corner"
-                />
-              )}
-              <button
-                type="button"
-                className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-100"
-                disabled={exporting}
-                onClick={exportPDF}
-              >
-                <Download className="mr-1 inline h-3 w-3" />
-                {exporting ? "Preparing…" : "Export PDF"}
-              </button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-5">
-          {canSign && clientId && !hideInlineSignOff && (
-            <div className="mb-4 flex justify-end">
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={clientName}
-                scope="cash_forecast"
-                signoff={forecastSignoff}
-                isStale={forecastStale}
-                onChange={patchForecastSignoff}
-              />
-            </div>
-          )}
-          {disagreeNotice}
-          {emptyNotice}
-          {forecastNotes}
-          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Stat
-              label="Opening bank"
-              value={fmtCompact(baseCalc.opening)}
-              sub={`${startLabel}${openingSourceChip ? ` · ${openingSourceChip}` : ""}`}
-            />
-            <Stat
-              label="Lowest point"
-              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
-              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={
-                emptyPresentation.lowestBlank
-                  ? "Add an opening balance"
-                  : publishedLowest.isOpening
-                    ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-                    : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-              }
-            />
-            <Stat
-              label="Runway"
-              value={forecastEmpty ? "—" : publishedStory.headline}
-              tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
-              sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
-            />
-          </div>
-          {!forecastEmpty ? (
-            <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
-              {forecastStatusSentence({
-                opening: baseCalc.opening,
-                closings: baseCalc.closing,
-                floor: minimumCash,
-                floorText: fmtCompact(minimumCash),
-                runwayLabel: runwayDisplayLabel(publishedDirection),
-                cashGenerative: publishedGenerative,
-              })}
-            </p>
-          ) : null}
-          {exportError ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
-              <span>{exportError}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                onClick={() => window.location.reload()}
-              >
-                Reload
-              </Button>
-            </div>
-          ) : null}
-          {emptyPresentation.showChart ? (
-            <>
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <div className={LABEL_CLS}>Closing balance</div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Gold line is the {fmtCompact(minimumCash)} floor
-                </div>
-              </div>
-              {heroChart(240)}
-            </>
-          ) : (
-            <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              The 13-week chart appears once a forecast line is entered.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
+  const reviewInputs = (
+    <ReviewInputsDrawer hint="Inputs, what-ifs">
       <CollapsibleGoldCard
         icon={Settings2}
         title="Inputs"
-        subtitle="Only collection delay and weekly growth change the 13-week maths. Other rows are noted, not applied."
+        subtitle="Only collection delay and weekly growth change this forecast; other rows are kept as notes."
       >
+        {openingSourceChip ? (
+          <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">
+            Opening balance source: {openingSourceChip}
+          </p>
+        ) : null}
         {configureInputs}
       </CollapsibleGoldCard>
 
@@ -1745,8 +1533,8 @@ export function CashForecastPanel({
       <CollapsibleGoldCard
         id="wizard-cash-scenario"
         icon={SlidersHorizontal}
-        title="Scenario Studio"
-        subtitle="Stress-test the forecast — what if revenue drops 20% or customers pay 2 weeks late? Nothing here is saved as the base."
+        title="Try a what-if"
+        subtitle="See what happens if revenue drops or customers pay later. Nothing here is saved as the base."
         defaultOpen={false}
         headerRight={
           scenarioActive ? (
@@ -1936,6 +1724,164 @@ export function CashForecastPanel({
         </div>
       </CollapsibleGoldCard>
 
+    </ReviewInputsDrawer>
+  );
+
+  // ── Simplified mode: glanceable hero ─────────────────────────────────────
+  if (simplified) {
+    return (
+      <div className="space-y-0">
+        {answerStrip}
+        {reviewInputs}
+        <Card id="wizard-cash-outlook" className={CARD_SHELL}>
+          <div className={GOLD_RULE} />
+          <CardContent className="pt-5">
+            {scenarioLabel ? (
+              <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+            ) : null}
+            {xeroBankNote ? (
+              <p
+                id="xero-bank-forecast-note"
+                className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400"
+              >
+                {xeroBankNote}
+              </p>
+            ) : null}
+            {disagreeNotice}
+            {emptyNotice}
+            {forecastNotes}
+            <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Stat
+                label="Closing · Week 13"
+                value={fmtCompact(closingW13)}
+                tone={closingW13 < 0 ? "bad" : "neutral"}
+                sub={
+                  <span className="inline-flex items-center gap-1">
+                    {trajectory >= 0 ? (
+                      <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3 text-[#c0392b]" />
+                    )}
+                    {trajectory >= 0 ? "+" : ""}
+                    {fmtCompact(trajectory)} over 13 weeks
+                  </span>
+                }
+              />
+              <Stat
+                label="Lowest balance"
+                value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+                tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+                sub={
+                  emptyPresentation.lowestBlank
+                    ? "Add an opening balance"
+                    : publishedLowest.isOpening
+                      ? "Opening balance"
+                      : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
+                }
+              />
+              <Stat
+                label="Cash runway"
+                value={forecastEmpty ? "—" : publishedStory.headline}
+                tone={
+                  forecastEmpty
+                    ? "neutral"
+                    : publishedStory.note === "above the floor"
+                      ? "good"
+                      : "bad"
+                }
+                sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
+              />
+              <Stat
+                label="Net cash · next 4 weeks"
+                value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
+                tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
+                sub="Inflows minus outflows"
+              />
+            </div>
+            {emptyPresentation.showChart ? (
+              heroChart(180)
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                The 13-week chart appears once a forecast line is entered.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Complex mode ──────────────────────────────────────────────────────────
+  return (
+    <div id="wizard-cash-outlook" className="space-y-5">
+      {answerStrip}
+      {reviewInputs}
+      {/* Hero: summary + chart */}
+      <Card className={CARD_SHELL}>
+        <div className={GOLD_RULE} />
+        <CardContent className="pt-5">
+          {scenarioLabel ? (
+            <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+          ) : null}
+          {disagreeNotice}
+          {emptyNotice}
+          {forecastNotes}
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Stat
+              label="Opening bank"
+              value={fmtCompact(baseCalc.opening)}
+              sub={startLabel}
+            />
+            <Stat
+              label="Lowest point"
+              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+              sub={
+                emptyPresentation.lowestBlank
+                  ? "Add an opening balance"
+                  : publishedLowest.isOpening
+                    ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+                    : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+              }
+            />
+            <Stat
+              label="Runway"
+              value={forecastEmpty ? "—" : publishedStory.headline}
+              tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
+              sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
+            />
+          </div>
+          {exportError ? (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
+              <span>{exportError}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            </div>
+          ) : null}
+          {emptyPresentation.showChart ? (
+            <>
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className={LABEL_CLS}>Closing balance</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Gold line is the {fmtCompact(minimumCash)} floor
+                </div>
+              </div>
+              {heroChart(240)}
+            </>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              The 13-week chart appears once a forecast line is entered.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Weekly forecast table */}
       <CollapsibleGoldCard
         id="wizard-cash-table"
@@ -2076,14 +2022,7 @@ export function CashForecastPanel({
             />
           </div>
           <div>
-            <Label className={LABEL_CLS}>
-              Opening bank balance ({cur})
-              {openingSourceChip ? (
-                <span className="ml-2 rounded-full border border-[#d4a550]/40 bg-[#d4a550]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]">
-                  {openingSourceChip}
-                </span>
-              ) : null}
-            </Label>
+            <Label className={LABEL_CLS}>Opening bank balance ({cur})</Label>
             <Input
               type="number"
               value={openingBalance}
@@ -2117,7 +2056,6 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="revenue"
-                sourceChip={shownLineSource}
                 onChange={(n) => updateAt(revenue, setRevenue, i, n)}
                 onRemove={
                   revenue.length > 1
@@ -2144,7 +2082,6 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
-                sourceChip={shownLineSource}
                 onChange={(n) => updateAt(expenses, setExpenses, i, n)}
               />
             ))}
@@ -2156,7 +2093,6 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
-                sourceChip={shownLineSource}
                 onChange={(n) => updateAt(other, setOther, i, n)}
                 onRemove={
                   other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined

@@ -29,8 +29,7 @@ assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the cl
   assert(!openFn.includes('to: "/reports"'), "client-header does not leave for the picker");
 }
 assert(
-  /activeTab === "budget" \? "flex" : "none"/.test(clientSrc) ||
-    /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc),
+  !clientSrc.includes("data-view-mode-toggle"),
   "simple/complex toggle is hidden on Reports — the studio does not change",
 );
 
@@ -46,8 +45,8 @@ assert(studioSrc.includes("report-card__rule"), "studio cards keep the gold hair
 assert(studioSrc.includes('key: "budget"'), "studio lists a Budget & variance PDF");
 assert(studioSrc.includes('budget: "budget"'), "budget PDF uses the budget sign-off scope");
 
-const budgetPanel = readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8");
-assert(budgetPanel.includes("BudgetPdfExportButton"), "client Budget tab exports the PDF");
+const budgetWorkspace = readFileSync(resolve("src/components/budget/budget-workspace.tsx"), "utf8");
+assert(budgetWorkspace.includes("BudgetPdfExportButton"), "client Budget tab exports the PDF from the answer strip");
 const budgetExport = readFileSync(resolve("src/components/budget/budget-pdf-export.tsx"), "utf8");
 assert(budgetExport.includes("budget-export-pdf"), "Budget tab download control is the budget PDF button");
 assert(budgetExport.includes("BudgetVariancePDF"), "Budget tab uses the shared budget PDF");
