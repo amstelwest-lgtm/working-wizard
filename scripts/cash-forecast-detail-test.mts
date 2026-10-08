@@ -13,6 +13,7 @@ import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import {
   cashForecastSearchWithView,
   cashForecastViewFromSearch,
+  cashGraphWeekTickInterval,
   forecastChipSource,
   hashIsCashDetailAnchor,
 } from "../src/lib/cash-forecast-view";
@@ -37,6 +38,11 @@ assert(parseEditableAmount("—") === null, "dash clears the override");
 assert(cashForecastViewFromSearch(undefined) === "graph", "graph is the default with no param");
 assert(cashForecastViewFromSearch("graph") === "graph", "an unknown view stays on the graph");
 assert(cashForecastViewFromSearch("13week") === "13week", "view=13week opens the weekly model");
+assert(cashGraphWeekTickInterval(360) === 2, "a 360-wide chart keeps W1 W4 W7 W10 W13");
+assert(cashGraphWeekTickInterval(439) === 2, "a narrow chart thins the week ticks");
+assert(cashGraphWeekTickInterval(440) === 0, "a chart that fits shows every week");
+assert(cashGraphWeekTickInterval(1280) === 0, "a wide chart shows every week");
+assert(cashGraphWeekTickInterval(0) === 0, "an unmeasured chart shows every week");
 assert(hashIsCashDetailAnchor("#detailed-forecast"), "detailed-forecast is a legacy anchor");
 assert(hashIsCashDetailAnchor("wizard-cash-table"), "the old table id is a legacy anchor");
 assert(!hashIsCashDetailAnchor("#wizard-cash-outlook"), "the outlook anchor is not the table");
@@ -63,6 +69,7 @@ assert(cashSrc.includes("Double-click a figure to edit"), "edit affordance stays
 assert(gridSrc.includes("milon-forecast-amount"), "hover underline hint without restyle");
 assert(cashSrc.includes("applyWeekOverrides"), "grid uses persisted week overrides");
 assert(gridSrc.includes("{symbol}"), "currency symbol stays while editing");
+assert(cashSrc.includes("cashGraphWeekTickInterval"), "the graph thins week ticks from the frame width");
 assert(cashSrc.includes("<ViewToggle"), "graph and 13-week share one toggle");
 assert(cashSrc.includes('value: "13week"'), "13-week is a view value");
 assert(cashSrc.includes("detailed-forecast"), "old detailed-forecast anchor still resolves");

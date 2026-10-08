@@ -31,6 +31,16 @@ export function cashForecastSearchWithView(
   return next;
 }
 
+/**
+ * Recharts `interval` for the cash graph. `0` shows every week. `2` keeps
+ * W1, W4, W7, W10 and W13 (every third tick, both ends included).
+ * An unmeasured width stays on every week until the frame is laid out.
+ */
+export function cashGraphWeekTickInterval(chartWidth: number): 0 | 2 {
+  if (!Number.isFinite(chartWidth) || chartWidth <= 0 || chartWidth >= 440) return 0;
+  return 2;
+}
+
 export function hashIsCashDetailAnchor(hash: string | null | undefined): boolean {
   const id = (hash ?? "").replace(/^#/, "").split("?")[0].trim().toLowerCase();
   return (CASH_DETAIL_ANCHORS as readonly string[]).includes(id);

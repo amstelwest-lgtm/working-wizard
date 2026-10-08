@@ -64,6 +64,7 @@ import {
   CASH_FORECAST_CARD_ID,
   cashForecastSearchWithView,
   cashForecastViewFromSearch,
+  cashGraphWeekTickInterval,
   forecastChipSource,
   hashIsCashDetailAnchor,
   type CashForecastView,
@@ -1263,7 +1264,12 @@ export function CashForecastPanel({
 
   // ── Shared hero chart ──────────────────────────────────────────────────────
   const heroChart = (height: number) => (
-    <div style={{ height }} className="w-full min-w-0 max-w-full">
+    <div
+      ref={onChartFrame}
+      style={{ height }}
+      data-week-ticks={weekTickInterval === 2 ? "thin" : "all"}
+      className="w-full min-w-0 max-w-full"
+    >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
           <defs>
@@ -1279,7 +1285,7 @@ export function CashForecastPanel({
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            interval={0}
+            interval={weekTickInterval}
             height={28}
           />
           <YAxis
@@ -1744,6 +1750,22 @@ export function CashForecastPanel({
 
   const navigate = useNavigate();
   const routeSearch = useSearch({ strict: false }) as { view?: string };
+  const tickObserver = useRef<ResizeObserver | null>(null);
+  const [weekTickInterval, setWeekTickInterval] = useState<0 | 2>(0);
+  const onChartFrame = useCallback((node: HTMLDivElement | null) => {
+    tickObserver.current?.disconnect();
+    tickObserver.current = null;
+    if (!node) return;
+    const apply = () => {
+      const next = cashGraphWeekTickInterval(node.clientWidth);
+      setWeekTickInterval((current) => (current === next ? current : next));
+    };
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    tickObserver.current = observer;
+  }, []);
   const [viewOverride, setViewOverride] = useState<CashForecastView | null>(null);
   const view: CashForecastView =
     viewOverride ??
@@ -1784,6 +1806,8 @@ export function CashForecastPanel({
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  useEffect(() => () => tickObserver.current?.disconnect(), []);
 
   useEffect(() => {
     const redirectDetailAnchor = () => {
