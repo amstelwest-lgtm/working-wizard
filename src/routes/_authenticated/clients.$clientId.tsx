@@ -3444,6 +3444,7 @@ function ClientView() {
                       clientId={client.id}
                       clientName={client.name}
                       canSign
+                      hideReadOnlyStamp
                       hideInlineSignOff
                       signoff={cashForecastSignoff}
                       onSignoffChange={patchSignoff("cash_forecast")}

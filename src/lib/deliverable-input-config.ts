@@ -345,7 +345,8 @@ function cashQuestions(ctx: DeliverableInputContext): DeliverableQuestion[] {
   if (!profile) {
     out.push({
       id: "cash.profile",
-      prompt: "Confirm how quickly customers typically pay, so collection lag is not guessed.",
+      prompt:
+        "Review item: confirm how quickly customers typically pay. The forecast uses collection delay in weeks, not this note.",
     });
   } else if (profileNeedsCompletion(profile)) {
     const confirmed = new Set(profile.confirmedExtraKeys ?? []);

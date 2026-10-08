@@ -25,6 +25,8 @@ import {
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
+import { formatReviewDateTime } from "@/lib/market/format";
+import { useMarketFormat } from "@/contexts/market";
 
 export const SCOPE_LABEL: Record<ReviewScope, string> = {
   financials: "this period's financials / health",
@@ -51,21 +53,6 @@ export const SIGNOFF_GOLD_BTN =
 const GOLD = "#d4a550";
 const GOLD_DEEP = "#b8860b";
 
-function formatDateTime(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 function signerLine(signoff: ClientReviewSignoff): string {
   const initials = signoff.signed_off_by_initials?.trim();
   const name = signoff.signed_off_by_name;
@@ -87,10 +74,12 @@ function SignoffCertificate({
   isStale: boolean;
   placement?: SignoffPlacement;
 }) {
+  const { market } = useMarketFormat();
+  const when = formatReviewDateTime(signoff.signed_off_at, market);
   const initials = (signoff.signed_off_by_initials || signoff.signed_off_by_name.slice(0, 2)).toUpperCase();
   const title = isStale
-    ? `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)} — data has changed since`
-    : `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)}`;
+    ? `Reviewed by ${signerLine(signoff)} on ${when} — data has changed since`
+    : `Reviewed by ${signerLine(signoff)} on ${when}`;
 
   if (placement === "corner") {
     return (
@@ -118,7 +107,7 @@ function SignoffCertificate({
           </span>
         )}
         <span className="mt-0.5 text-right text-[9px] tabular-nums text-[#6b6354] dark:text-slate-400">
-          {formatDateTime(signoff.signed_off_at)}
+          {when}
         </span>
       </div>
     );
@@ -172,7 +161,7 @@ function SignoffCertificate({
               {isStale ? "Needs re-review" : "Reviewed & signed off"}
             </span>
             <span className="text-[10px] tabular-nums text-[#6b6354] dark:text-slate-400">
-              {formatDateTime(signoff.signed_off_at)}
+              {when}
             </span>
           </div>
           <div className="mt-1 text-sm font-semibold text-[#1b1608] dark:text-[#f2ecdc]">

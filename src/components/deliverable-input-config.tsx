@@ -234,7 +234,9 @@ export function DeliverableInputConfig({
                 return (
                   <li
                     key={a.id}
-                    className="rounded-lg border border-amber-900/10 bg-white/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/40"
+                    className={`rounded-lg border border-amber-900/10 bg-white/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/40 ${
+                      a.engineBound ? "" : "opacity-60"
+                    }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Label
@@ -242,6 +244,11 @@ export function DeliverableInputConfig({
                         className="text-sm font-medium text-slate-900 dark:text-slate-100"
                       >
                         {a.label}
+                        {a.engineBound ? null : (
+                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            Noted only
+                          </span>
+                        )}
                         {a.unit ? (
                           <span className="ml-1 font-normal text-slate-500">({a.unit})</span>
                         ) : null}
