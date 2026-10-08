@@ -220,6 +220,7 @@ export function ProfitabilityWaterfall({
   }, []);
 
   const figures = resolveWaterfallFigures(weeklyInputs, fallback, { preferPeriod });
+  const periodBit = periodLabel?.trim() || null;
   const answerSentence = profitAnswerSentence({
     currency: currencySymbol(market),
     periodLabel,
