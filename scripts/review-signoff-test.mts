@@ -12,7 +12,12 @@ import {
   type ReviewScope,
 } from "../src/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff, stampFromSignoff } from "../src/lib/review-signoff-stamp";
-import { computeIsStale, SIGNOFF_GOLD_BTN, SCOPE_SHORT_LABEL } from "../src/components/review-signoff";
+import {
+  computeIsStale,
+  SIGNOFF_GOLD_BTN,
+  SCOPE_SHORT_LABEL,
+  signatureReady,
+} from "../src/components/review-signoff";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -57,12 +62,18 @@ const indexed = indexReviewSignoffs(rows);
 assert(indexed.financials?.id === "1", "index financials");
 assert(indexed.profitability?.id === "2", "index profitability");
 assert(indexed.cash_forecast == null, "unsigned scope stays empty");
-assert(indexed.financials?.signature_data !== indexed.profitability?.signature_data, "signature is per deliverable");
+assert(
+  indexed.financials?.signature_data !== indexed.profitability?.signature_data,
+  "signature is per deliverable",
+);
 
 const healthStamp = stampFromSignoff(indexed.financials, false);
 assert(healthStamp?.signatureData === "data:image/png;base64,AAA", "stamp copies signature");
 assert(stampFromSignoff(indexed.financials, true) === null, "stale sign-off is not stamped");
-assert(stampFromSignoff(indexed.profitability, false)?.signatureData == null, "profit stamp has no health signature");
+assert(
+  stampFromSignoff(indexed.profitability, false)?.signatureData == null,
+  "profit stamp has no health signature",
+);
 
 const sampleSignoff: ClientReviewSignoff = {
   ...rows[0],
@@ -71,7 +82,10 @@ const sampleSignoff: ClientReviewSignoff = {
   signed_off_by_title: "CA(SA)",
   firm_name: "Sample Practice",
 };
-assert(isSamplePracticeSignoff({ name: "A. Sample", firmName: "Sample Practice" }), "sample identity");
+assert(
+  isSamplePracticeSignoff({ name: "A. Sample", firmName: "Sample Practice" }),
+  "sample identity",
+);
 assert(stampFromSignoff(sampleSignoff, false) === null, "sample practice is not stamped");
 assert(
   stampFromSignoff(sampleSignoff, false, { clientFirmName: "Ben Accountants" }) === null,
@@ -90,16 +104,34 @@ assert(
 );
 assert(stampFromSignoff(null, false) === null, "no sign-off renders no line");
 
-assert(computeIsStale(indexed.financials!, "2026-07-01T00:00:00.000Z") === false, "older data is not stale");
-assert(computeIsStale(indexed.financials!, "2026-08-03T00:00:00.000Z") === true, "newer data is stale");
+assert(
+  computeIsStale(indexed.financials!, "2026-07-01T00:00:00.000Z") === false,
+  "older data is not stale",
+);
+assert(
+  computeIsStale(indexed.financials!, "2026-08-03T00:00:00.000Z") === true,
+  "newer data is stale",
+);
 assert(initialsFromName("Ada Lovelace") === "AL", "initials");
 
-assert(SIGNOFF_GOLD_BTN.includes("#d4af37") || SIGNOFF_GOLD_BTN.includes("#ac8400"), "sign-off CTA is gold");
+assert(
+  SIGNOFF_GOLD_BTN.includes("#d4af37") || SIGNOFF_GOLD_BTN.includes("#ac8400"),
+  "sign-off CTA is gold",
+);
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
-assert(!/<header[\s\S]{0,1200}ReviewSignoffBadge/.test(appSrc), "client header does not show a global sign-off");
-assert(!/<header[\s\S]{0,1200}OwnerTabSignoffRow/.test(appSrc), "client header does not host the per-tab stamp");
-assert(!/mt-6[\s\S]{0,180}ReviewSignoffBadge/.test(appSrc), "owner stamps are not parked at the bottom of tabs");
+assert(
+  !/<header[\s\S]{0,1200}ReviewSignoffBadge/.test(appSrc),
+  "client header does not show a global sign-off",
+);
+assert(
+  !/<header[\s\S]{0,1200}OwnerTabSignoffRow/.test(appSrc),
+  "client header does not host the per-tab stamp",
+);
+assert(
+  !/mt-6[\s\S]{0,180}ReviewSignoffBadge/.test(appSrc),
+  "owner stamps are not parked at the bottom of tabs",
+);
 assert(appSrc.includes('placement="corner"'), "health orb card hosts the corner signature");
 assert(appSrc.includes("OwnerTabSignoffRow"), "other owner tabs pin the signature top-right");
 assert(appSrc.includes('scope="profitability"'), "client profit tab uses profitability scope");
@@ -110,8 +142,15 @@ assert(appSrc.includes('scope="budget"'), "client budget tab has its own sign-of
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('scope="profitability"'), "accountant profit tab has its own sign-off");
-assert(clientSrc.includes('scope="action_plan"'), "accountant action plan tab has its own sign-off");
-assert(clientSrc.includes('scope="advisory"'), "accountant advisory tab has its own sign-off");
+assert(
+  clientSrc.includes('scope="action_plan"'),
+  "accountant action plan tab has its own sign-off",
+);
+assert(clientSrc.includes("AdvisoryTabSignoff"), "advisory tab reads the pack sign-off");
+assert(
+  !/id="pane-advisory"[\s\S]{0,700}ReviewSignoffButton/.test(clientSrc),
+  "advisory tab does not keep a second page-level sign-off",
+);
 assert(!clientSrc.includes("Report sign-offs"), "reports tab no longer hosts every sign-off");
 
 const fnSrc = readFileSync(resolve("src/lib/review-signoffs.functions.ts"), "utf8");
@@ -121,7 +160,10 @@ assert(fnSrc.includes("can_sign_off_deliverable"), "sign-off is partner-only at 
 assert(fnSrc.includes("submitDeliverable"), "draft can be submitted for review");
 assert(fnSrc.includes("requestDeliverableChanges"), "reviewers can return a deliverable to draft");
 
-const mig = readFileSync(resolve("supabase/migrations/20260831120000_review_signoff_signature_scopes.sql"), "utf8");
+const mig = readFileSync(
+  resolve("supabase/migrations/20260831120000_review_signoff_signature_scopes.sql"),
+  "utf8",
+);
 assert(mig.includes("signature_data"), "migration adds signature column");
 assert(mig.includes("action_plan"), "migration allows action_plan scope");
 
@@ -132,9 +174,15 @@ const identityLock = readFileSync(
 assert(identityLock.includes("BEFORE INSERT OR UPDATE"), "identity trigger runs before the write");
 assert(identityLock.includes("profiles"), "signer name is forced from the actor profile");
 assert(identityLock.includes("firms"), "firm name is forced from the client's firm");
-assert(identityLock.includes("signed_off_by_id cannot be changed"), "signer id is locked on update");
+assert(
+  identityLock.includes("signed_off_by_id cannot be changed"),
+  "signer id is locked on update",
+);
 assert(identityLock.includes("signed_off_at cannot be changed"), "signed time is locked on update");
-assert(identityLock.includes("signed_off_by_name cannot be changed"), "signer name is locked on update");
+assert(
+  identityLock.includes("signed_off_by_name cannot be changed"),
+  "signer name is locked on update",
+);
 assert(identityLock.includes("firm_name cannot be changed"), "firm name is locked on update");
 assert(
   identityLock.includes("NEW.signed_off_by_initials := public.review_signoff_initials(actor_name)"),
@@ -151,6 +199,15 @@ assert(uiSrc.includes('placement="corner"'), "tab headers request the corner pla
 assert(uiSrc.includes("this deliverable only"), "copy says stamp is per deliverable");
 assert(uiSrc.includes("Submit for review"), "accountant can submit a draft");
 assert(uiSrc.includes("Request changes"), "reviewers can request changes");
+assert(signatureReady(null) === false, "a blank pad cannot sign");
+assert(signatureReady("") === false, "an empty signature cannot sign");
+assert(signatureReady("data:image/png;base64,abc") === true, "a drawn stroke can sign");
+assert(
+  !uiSrc.includes("profile.signatureDataUrl ?? null"),
+  "the dialog does not preload a saved squiggle",
+);
+assert(uiSrc.includes("signatureReady(signature)"), "Sign stays off until there is a stroke");
+assert(uiSrc.includes("setSignature(null)"), "opening the dialog clears the pad");
 
 void (null as unknown as ReviewScope);
 console.log("review-signoff-test: ok");
