@@ -62,6 +62,11 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
+import {
+  reviewFiguresChanged,
+  signedHealthFromHistory,
+  type SignoffPeriodSnapshot,
+} from "@/lib/signoff-status";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
@@ -1171,6 +1176,10 @@ type ClientReportData = {
   clientFirmName: string | null;
   /** `clients.is_demo`. Live figures and the sign-off stay; the PDF stamps SAMPLE. */
   isSample: boolean;
+  /** Snapshots used to tell a later period from the one that was signed. */
+  signoffSnapshots: SignoffPeriodSnapshot[];
+  /** Scores on file. The row on or before the sign-off day is the signed health. */
+  scoreHistory: { period_date: string; score: number }[];
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -1215,6 +1224,8 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   overallHealth: null,
   clientFirmName: null,
   isSample: false,
+  signoffSnapshots: [],
+  scoreHistory: [],
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -2077,7 +2088,7 @@ async function loadBudgetWorkflowStatus(clientId: string): Promise<BudgetReviewW
 }
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
-  const [clientRes, snapshotRes, signoffRes] = await Promise.all([
+  const [clientRes, snapshotRes, signoffRes, historyRes] = await Promise.all([
     supabase
       .from("clients")
       .select(
@@ -2087,7 +2098,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       .maybeSingle(),
     supabase
       .from("client_financial_snapshots")
-      .select("id, period_label, period_date, ratios, financials")
+      .select("id, period_label, period_date, ratios, financials, created_at")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(20), // fetch enough history to cover 12-month windows
@@ -2106,6 +2117,12 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       .from("client_review_signoffs")
       .select("*")
       .eq("client_id", clientId),
+    supabase
+      .from("client_score_history")
+      .select("period_date, score")
+      .eq("client_id", clientId)
+      .order("period_date", { ascending: false })
+      .limit(24),
   ]);
 
   if (signoffRes.error) {
@@ -2192,6 +2209,16 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
         : [];
   const periodParts = reportPeriodMonthYear(rawFinancials);
   const dataPeriodLabel = reportDataPeriodLabel(rawFinancials);
+  const signoffSnapshots: SignoffPeriodSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
+    created_at: s.created_at,
+    period_label: s.period_label,
+    period_date: s.period_date,
+    financials: s.financials,
+  }));
+  const scoreHistory = (historyRes.error ? [] : (historyRes.data ?? [])).map((row) => ({
+    period_date: row.period_date,
+    score: row.score,
+  }));
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
@@ -2213,6 +2240,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     periodYear: periodParts?.year ?? null,
     clientFirmName,
     isSample: Boolean(clientRow?.is_demo),
+    signoffSnapshots,
+    scoreHistory,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -2357,14 +2386,34 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     overallHealth,
     clientFirmName,
     isSample: Boolean(clientRow.is_demo),
+    signoffSnapshots,
+    scoreHistory,
   };
 }
 
-/** Freshness timestamp is null when there is nothing to be stale against yet. */
-function isSignoffStale(signoff: ClientReviewSignoff | null, freshAt: string | null): boolean {
+/**
+ * A missing sign-off is not stamped. Budget staleness is the plan's own
+ * timestamp. Health, profitability, and cash also go stale when a later
+ * statement period or a different health score is on file.
+ */
+function isSignoffStale(
+  signoff: ClientReviewSignoff | null,
+  freshAt: string | null,
+  cd?: ClientReportData | null,
+  scope?: ReviewScope,
+): boolean {
   if (!signoff) return true;
-  if (!freshAt) return false;
-  return new Date(freshAt).getTime() > new Date(signoff.signed_off_at).getTime();
+  if (scope === "budget") {
+    if (!freshAt) return false;
+    return new Date(freshAt).getTime() > new Date(signoff.signed_off_at).getTime();
+  }
+  return reviewFiguresChanged({
+    signedOffAt: signoff.signed_off_at,
+    dataUpdatedAt: freshAt,
+    snapshots: cd?.signoffSnapshots,
+    liveHealth: cd?.overallHealth?.overall ?? null,
+    signedHealth: signedHealthFromHistory(cd?.scoreHistory, signoff.signed_off_at),
+  });
 }
 
 function signoffFreshAt(scope: ReviewScope, cd: ClientReportData | null): string | null {
@@ -2374,7 +2423,7 @@ function signoffFreshAt(scope: ReviewScope, cd: ClientReportData | null): string
   return cd.financialsUpdatedAt;
 }
 
-/** Only current (non-stale) sign-offs from this client's firm are stamped. */
+/** This client's firm stamp. A stale approval stays, with figuresChanged set. */
 function signoffStampFor(
   scope: "financials" | "cash_forecast" | "profitability" | "budget",
   cd: ClientReportData | null,
@@ -2382,7 +2431,7 @@ function signoffStampFor(
   if (!cd) return null;
   const signoff = cd.reviewSignoffs[scope];
   const freshAt = signoffFreshAt(scope, cd);
-  return stampFromSignoff(signoff, isSignoffStale(signoff, freshAt), {
+  return stampFromSignoff(signoff, isSignoffStale(signoff, freshAt, cd, scope), {
     clientFirmName: cd.clientFirmName,
   });
 }
@@ -2590,7 +2639,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         sample,
-        reviewSignoff: financialsStamp,
+        reviewSignoff: null,
         operatingProfile,
         market,
       });
@@ -2970,7 +3019,6 @@ const REPORT_SIGNOFF_SCOPE: Record<string, ReviewScope> = {
   scorecard: "financials",
   intervention: "financials",
   forecast: "cash_forecast",
-  cycle: "cash_forecast",
   waterfall: "profitability",
   leverage: "financials",
   assets: "financials",
@@ -3809,7 +3857,7 @@ export function ReportsStudio({
       clientId,
       clientName: clientData?.clientName ?? clientParam,
       signoff,
-      signoffStale: isSignoffStale(signoff, freshAt),
+      signoffStale: isSignoffStale(signoff, freshAt, clientData, scope),
       onSignoffChange: patchStudioSignoff(scope),
     };
   }

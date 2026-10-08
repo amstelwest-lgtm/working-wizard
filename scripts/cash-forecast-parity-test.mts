@@ -163,7 +163,8 @@ assert(
 const reportsSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
 assert(reportsSrc.includes('scenario: "base"'), "the reports studio exports the base forecast");
 const signoffSrc = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
-assert(signoffSrc.includes("Not signed off"), "the reports list shows an unsigned forecast");
+assert(signoffSrc.includes('"Draft"'), "an unsigned deliverable says Draft");
+assert(!signoffSrc.includes("Not signed off"), "unsigned copy does not add a second phrase");
 
 const us = resolveMarket({ country: "US", regionCode: "NY" });
 const yankeesCopy = cashForecastNarrative(

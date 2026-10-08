@@ -12,12 +12,13 @@ import {
   openPracticeSettings,
 } from "@/lib/user-roles";
 import {
-  healthFromFlatFinancials,
+  scorecardHealthFromFinancials,
   buildTrend,
   scoreTier,
   type TrendPoint,
   type OverallHealth,
 } from "@/lib/health-score";
+import { periodMonthsOf } from "@/lib/ratios";
 import {
   avgHealthDelta,
   buildAttentionItems,
@@ -1349,7 +1350,16 @@ function Dashboard() {
           ? assessed.runway.weeks
           : null;
       const runwayLabel = runwayDisplayLabel(assessed.runway);
-      const health = healthFromFlatFinancials(c.financials, runwayWeeks, clientMarket);
+      const fyStartMonth =
+        parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
+      const health = scorecardHealthFromFinancials({
+        financials: c.financials,
+        fyStartMonth,
+        periodMonths: periodMonthsOf(c.financials),
+        cashRunwayWeeks: runwayWeeks,
+        market: clientMarket,
+        shortfallWeek: assessed.outlook.shortfallWeek,
+      });
       const score = health.overall;
       const realHistory = historyMap[c.id] ?? [];
       const trendHistory =

@@ -45,7 +45,7 @@ export function DemoWatermark() {
  * Unsigned budget. A flat line in the page body. The old rotated header
  * word wrapped, and the last two letters sat in the top margin.
  */
-export function DraftWatermark({ text = "DRAFT — NOT SIGNED OFF" }: { text?: string }) {
+export function DraftWatermark({ text = "DRAFT" }: { text?: string }) {
   return (
     <View style={styles.layer} fixed>
       <Text
@@ -131,7 +131,7 @@ export function DemoNotice() {
 }
 
 /** Unsigned deliverable — download is allowed; the page says it is still a draft. */
-export function DraftNotice({ text = "Draft — not signed off" }: { text?: string }) {
+export function DraftNotice({ text = "Draft" }: { text?: string }) {
   return (
     <View style={chip.wrap}>
       <View style={chip.dot} />

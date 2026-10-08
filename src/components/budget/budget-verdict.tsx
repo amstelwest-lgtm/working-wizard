@@ -123,9 +123,11 @@ export function BudgetVerdictStrip({
         <span className="rounded-full border border-slate-200 px-2 py-0.5 dark:border-slate-700">
           {chip}
         </span>
-        <span className="rounded-full border border-slate-200 px-2 py-0.5 dark:border-slate-700">
-          {status}
-        </span>
+        {status ? (
+          <span className="rounded-full border border-slate-200 px-2 py-0.5 dark:border-slate-700">
+            {status}
+          </span>
+        ) : null}
       </div>
     </section>
   );

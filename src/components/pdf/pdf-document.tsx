@@ -23,6 +23,8 @@ export type ReportSignoffStamp = {
   firmName: string | null;
   signedOffAt: string;
   signatureData?: string | null;
+  /** Stored approval whose figures no longer match the screen. */
+  figuresChanged?: boolean;
 };
 
 type Props = {
@@ -82,7 +84,7 @@ export function PDFDocument({
       <PdfSignoffContext.Provider value={stamp}>
         <PdfSampleContext.Provider value={sampleOn}>
           <PdfDraftContext.Provider value={draftOn}>
-            <PdfDraftLabelContext.Provider value={draftLabel || "Draft — not signed off"}>
+            <PdfDraftLabelContext.Provider value={draftLabel || "Draft"}>
               <Document
                 title={title}
                 subject={subject}

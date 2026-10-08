@@ -36,6 +36,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
+import { signoffStatusLine } from "@/lib/signoff-status";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
@@ -57,7 +58,6 @@ import {
   computeEditStats,
   diffPackSections,
   packSectionsForPdf,
-  packStatusLabel,
   type AdvisoryPack,
   type PackReview,
   type PackSection,
@@ -601,16 +601,20 @@ export function AdvisoryPackPanel({
                   v{pack.version}
                   {pack.period_label ? ` · ${pack.period_label}` : ""}
                 </span>
-                <span
-                  className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${STATUS_CLASS[pack.status]}`}
-                >
-                  {packStatusLabel(pack.status, pack.requires_review)}
-                </span>
-                {signOffGate.figuresChanged && pack.status !== "approved" ? (
+                {advisoryState.status === "signed" ||
+                advisoryState.status === "signed_stale" ? null : signOffGate.figuresChanged ? (
                   <span className="text-[12px] font-semibold normal-case tracking-normal text-amber-700 dark:text-amber-300">
                     {ADVISORY_PACK_STALE_NOTE}
                   </span>
-                ) : null}
+                ) : (
+                  <span
+                    className={`rounded-full border px-2 py-[1px] text-[11px] font-semibold normal-case tracking-normal ${STATUS_CLASS[pack.status]}`}
+                  >
+                    {signoffStatusLine({
+                      kind: advisoryState.status === "in_review" ? "ready" : "draft",
+                    })}
+                  </span>
+                )}
               </>
             ) : (
               "No pack yet"

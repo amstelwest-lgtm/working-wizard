@@ -152,6 +152,7 @@ export function InterventionPriorityPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
+      draft={!isDemo && !sample && !reviewSignoff}
       reviewSignoff={reviewSignoff}
       market={mkt}
     >

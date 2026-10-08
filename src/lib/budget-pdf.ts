@@ -33,6 +33,8 @@ import { presentBudgetRebuildNote } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { periodMonthsOf } from "@/lib/ratios";
 import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
+import { signoffStatusLine } from "@/lib/signoff-status";
+import { formatReviewDateTime } from "@/lib/market";
 import { readStatementMeta } from "@/lib/statement-period";
 
 export type BudgetPdfActual = {
@@ -344,9 +346,24 @@ export function budgetReviewLine(input: {
     signedOffAt: input.signedOffAt,
     market: input.market,
   });
-  if (signed && !input.isStale) return { text: signed, unsigned: false };
+  if (signed && !input.isStale) {
+    const when = input.signedOffAt
+      ? formatReviewDateTime(input.signedOffAt, input.market)
+      : "";
+    return {
+      text: signoffStatusLine({
+        kind: "signed",
+        name: input.name,
+        date: when && when !== "—" ? when : null,
+      }),
+      unsigned: false,
+    };
+  }
   if (signed && input.isStale) {
-    return { text: `${signed} · then changed`, unsigned: true };
+    return {
+      text: signoffStatusLine({ kind: "stale", name: input.name }),
+      unsigned: false,
+    };
   }
   if (input.workflowStatus === "ready_for_review") {
     return { text: "Ready for review", unsigned: true };

@@ -4,7 +4,7 @@
  */
 import { Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type ReportSignoffStamp, type SmeData } from "@/components/pdf/pdf-document";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { C } from "@/components/pdf/theme";
 
@@ -23,6 +23,7 @@ export type ActionPlanPDFProps = {
   outcomeGoal?: string | null;
   items: ActionPlanPdfItem[];
   sample?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 const S = StyleSheet.create({
@@ -61,6 +62,7 @@ export function ActionPlanPDF({
   outcomeGoal,
   items,
   sample,
+  reviewSignoff,
 }: ActionPlanPDFProps) {
   return (
     <PDFDocument
@@ -68,8 +70,9 @@ export function ActionPlanPDF({
       subject="Action Plan"
       smeData={smeData}
       accountantProfile={accountantProfile}
-      draft
+      draft={!reviewSignoff}
       sample={sample}
+      reviewSignoff={reviewSignoff}
     >
       <ReportTitle kicker="Advisory" title="Action Plan" subtitle={smeData.period} />
       {outcomeGoal ? <Text style={S.goal}>{outcomeGoal}</Text> : null}

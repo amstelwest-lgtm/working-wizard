@@ -115,7 +115,7 @@ import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/pro
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
-import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
+import { ReviewSignoffButton } from "@/components/review-signoff";
 import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
 import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import {
@@ -215,6 +215,7 @@ import { needsPastPeriodPrompt } from "@/lib/history-coverage";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
+import { reviewFiguresChanged, signedHealthFromHistory } from "@/lib/signoff-status";
 import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
@@ -1011,6 +1012,7 @@ function ClientView() {
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [firstDataOpen, setFirstDataOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
+  const [scoreHistory, setScoreHistory] = useState<{ period_date: string; score: number }[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
@@ -1147,6 +1149,20 @@ function ClientView() {
     [financials, client?.cashflow],
   );
   const healthScoreRounded = overallHealth.overall ?? 0;
+  const pageSignoffStale = (
+    signoff: ClientReviewSignoff | null,
+    updatedAt: string | null | undefined,
+  ) =>
+    Boolean(
+      signoff &&
+        reviewFiguresChanged({
+          signedOffAt: signoff.signed_off_at,
+          dataUpdatedAt: updatedAt,
+          snapshots,
+          liveHealth: overallHealth.overall,
+          signedHealth: signedHealthFromHistory(scoreHistory, signoff.signed_off_at),
+        }),
+    );
 
   // ── Health orb & pillar computation (same source as header / score history) ──
   const healthMap = healthMapFromRatios(ratios as Record<string, number>, clientMarket);
@@ -1578,6 +1594,21 @@ function ClientView() {
             ratios: (s.ratios as Record<string, number>) ?? null,
             source: (s.source as string | null) ?? null,
             created_at: (s.created_at as string | null) ?? null,
+          })),
+        );
+      });
+    supabase
+      .from("client_score_history")
+      .select("period_date, score")
+      .eq("client_id", clientId)
+      .order("period_date", { ascending: false })
+      .limit(24)
+      .then(({ data, error }) => {
+        if (error) return;
+        setScoreHistory(
+          (data ?? []).map((row) => ({
+            period_date: row.period_date,
+            score: row.score,
           })),
         );
       });
@@ -2188,7 +2219,7 @@ function ClientView() {
       firmId && client.firm_id && firmId === client.firm_id ? profile.firmName : null;
     const financialsStamp = stampFromSignoff(
       financialsSignoff,
-      computeIsStale(financialsSignoff, client.financials_updated_at ?? null),
+      pageSignoffStale(financialsSignoff, client.financials_updated_at ?? null),
       { clientFirmName },
     );
     return pdf(
@@ -2212,6 +2243,8 @@ function ClientView() {
     periodMonths,
     partMonth,
     financialsSignoff,
+    snapshots,
+    scoreHistory,
     profile,
     firmId,
     effectiveRunway,
@@ -2976,18 +3009,27 @@ function ClientView() {
                         : "One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
                     }
                     signoff={
-                      <ReviewSignoffButton
-                        compact
-                        clientId={clientId}
-                        clientName={client?.name}
-                        scope="financials"
-                        signoff={financialsSignoff}
-                        isStale={computeIsStale(
-                          financialsSignoff,
-                          client?.financials_updated_at ?? null,
-                        )}
-                        onChange={patchSignoff("financials")}
-                      />
+                      <div className="flex flex-col items-end gap-2">
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline dark:text-slate-400 dark:hover:text-slate-100"
+                          onClick={() => void handleExportPDF()}
+                        >
+                          Export PDF
+                        </button>
+                        <ReviewSignoffButton
+                          compact
+                          clientId={clientId}
+                          clientName={client?.name}
+                          scope="financials"
+                          signoff={financialsSignoff}
+                          isStale={pageSignoffStale(
+                            financialsSignoff,
+                            client?.financials_updated_at ?? null,
+                          )}
+                          onChange={patchSignoff("financials")}
+                        />
+                      </div>
                     }
                   />
                   {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
@@ -3258,7 +3300,7 @@ function ClientView() {
                         clientName={client?.name}
                         scope="profitability"
                         signoff={profitabilitySignoff}
-                        isStale={computeIsStale(
+                        isStale={pageSignoffStale(
                           profitabilitySignoff,
                           client?.financials_updated_at ?? null,
                         )}
@@ -3315,7 +3357,7 @@ function ClientView() {
                       }
                       reviewSignoff={stampFromSignoff(
                         profitabilitySignoff,
-                        computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
+                        pageSignoffStale(profitabilitySignoff, client?.financials_updated_at ?? null),
                       )}
                     />
                   </div>
@@ -3447,7 +3489,7 @@ function ClientView() {
                           clientName={client?.name}
                           scope="cash_forecast"
                           signoff={cashForecastSignoff}
-                          isStale={computeIsStale(
+                          isStale={pageSignoffStale(
                             cashForecastSignoff,
                             client?.last_forecast_at ?? null,
                           )}
@@ -3468,6 +3510,10 @@ function ClientView() {
                       canSign
                       hideReadOnlyStamp
                       hideInlineSignOff
+                      signoffStale={pageSignoffStale(
+                        cashForecastSignoff,
+                        client?.last_forecast_at ?? null,
+                      )}
                       signoff={cashForecastSignoff}
                       onSignoffChange={patchSignoff("cash_forecast")}
                       reloadToken={cashForecastReloadToken}
@@ -3675,6 +3721,7 @@ function ClientView() {
                           key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
                           clientId={client.id}
                           clientName={client.name}
+                          reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified={viewMode === "simplified"}
                           isOwner
                           initialFilter={search.filter === "overdue" ? "overdue" : undefined}

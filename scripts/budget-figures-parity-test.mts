@@ -260,10 +260,7 @@ const signed = budgetReviewLine({
   market: US_MARKET,
 });
 assert(signed.unsigned === false, "a fresh sign-off is not a draft");
-assert(
-  signed.text.startsWith("Signed off by James Fleming · Ben Accountants ·"),
-  signed.text,
-);
+assert(signed.text.startsWith("Signed off by James Fleming ·"), signed.text);
 assert(/ET|EDT|EST/.test(signed.text), `sign-off keeps a zone, got ${signed.text}`);
 const stale = budgetReviewLine({
   name: "James Fleming",
@@ -272,8 +269,7 @@ const stale = budgetReviewLine({
   isStale: true,
   market: US_MARKET,
 });
-assert(stale.unsigned && stale.text.includes("then changed"), stale.text);
-assert(budgetDraftMark(stale.text) === "SIGNED OFF, THEN CHANGED", budgetDraftMark(stale.text));
+assert(!stale.unsigned && stale.text.includes("figures have changed since; re-review"), stale.text);
 const ready = budgetReviewLine({ isStale: false, workflowStatus: "ready_for_review" });
 assert(ready.text === "Ready for review" && ready.unsigned, ready.text);
 assert(budgetDraftMark(ready.text) === "READY FOR REVIEW", budgetDraftMark(ready.text));
@@ -282,7 +278,8 @@ assert(draft.text === "Draft", draft.text);
 assert(budgetDraftMark(draft.text) === "DRAFT", budgetDraftMark(draft.text));
 
 const watermark = read("src/components/pdf/watermark.tsx");
-assert(watermark.includes("DRAFT — NOT SIGNED OFF"), "the draft mark is a full phrase");
+assert(watermark.includes('text = "DRAFT"'), "the draft mark uses the shared word");
+assert(!watermark.includes("DRAFT — NOT SIGNED OFF"), "the draft mark is not a second phrase");
 assert(!watermark.includes("top: 400"), "the draft mark is not painted over the table header");
 const signoffUi = read("src/components/review-signoff.tsx");
 assert(signoffUi.includes("Submit for review"), "a preparer can still submit");

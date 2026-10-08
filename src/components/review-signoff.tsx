@@ -25,6 +25,7 @@ import {
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
+import { signoffStatusLine } from "@/lib/signoff-status";
 import { formatReviewDateTime } from "@/lib/market/format";
 import { useMarketFormat } from "@/contexts/market";
 
@@ -79,9 +80,12 @@ function SignoffCertificate({
   const initials = (
     signoff.signed_off_by_initials || signoff.signed_off_by_name.slice(0, 2)
   ).toUpperCase();
-  const title = isStale
-    ? `Reviewed by ${signerLine(signoff)} on ${when} — data has changed since`
-    : `Reviewed by ${signerLine(signoff)} on ${when}`;
+  const line = signoffStatusLine({
+    kind: isStale ? "stale" : "signed",
+    name: signoff.signed_off_by_name,
+    date: when && when !== "—" ? when : null,
+  });
+  const title = line;
 
   if (placement === "corner") {
     return (
@@ -91,8 +95,8 @@ function SignoffCertificate({
         className="flex max-w-[210px] shrink-0 flex-col items-end rounded-lg border border-[#d4a550]/40 bg-white/90 px-2.5 py-1.5 shadow-[0_6px_18px_rgba(109,79,22,0.10)] dark:bg-[#0f172a]/90"
         title={title}
       >
-        <span className="text-[8px] font-bold uppercase tracking-[0.22em] text-[#8a6508] dark:text-[#e1b85e]">
-          {isStale ? "Needs re-review" : "Signed off"}
+        <span className="text-right text-[10px] font-semibold leading-snug text-[#8a6508] dark:text-[#e1b85e]">
+          {line}
         </span>
         {signoff.signature_data ? (
           <img
@@ -130,8 +134,8 @@ function SignoffCertificate({
         >
           {isStale ? "!" : initials.slice(0, 2)}
         </span>
-        <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] dark:text-[#e1b85e]">
-          {isStale ? "Needs re-review" : "Signed off"}
+        <span className="truncate text-[11px] font-semibold text-[#8a6508] dark:text-[#e1b85e]">
+          {line}
         </span>
       </div>
     );
@@ -159,8 +163,8 @@ function SignoffCertificate({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#8a6508] dark:text-[#e1b85e]">
-              {isStale ? "Needs re-review" : "Reviewed & signed off"}
+            <span className="text-[12px] font-semibold leading-snug text-[#8a6508] dark:text-[#e1b85e]">
+              {line}
             </span>
             <span className="text-[10px] tabular-nums text-[#6b6354] dark:text-slate-400">
               {when}
@@ -187,13 +191,6 @@ function SignoffCertificate({
             >
               {signoff.signed_off_by_name}
             </div>
-          )}
-          {isStale && (
-            <p className="mt-2 text-[11px] text-[#b8860b]">
-              {SCOPE_LABEL[scope]}{" "}
-              {scope === "cash_forecast" || scope === "budget" ? "has" : "have"} changed since this
-              review.
-            </p>
           )}
           {signoff.note && !isStale && (
             <p className="mt-2 text-[11px] italic text-[#6b6354] dark:text-slate-400">
@@ -567,13 +564,11 @@ export function ReviewSignoffButton({
         />
       ) : (
         <>
-          {workflow ? (
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+          {!shownSignoff ? (
+            <p className="text-[11px] font-semibold text-slate-500">
               {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
-              {workflow.changeComment ? ` · ${workflow.changeComment}` : ""}
+              {workflow?.changeComment ? ` · ${workflow.changeComment}` : ""}
             </p>
-          ) : !shownSignoff ? (
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Not signed off</p>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2">
             {workflow == null ||

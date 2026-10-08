@@ -45,7 +45,7 @@ export function BudgetWorkspace({
   onChangeModel,
   role = "owner",
   clientId,
-  reviewStatus = "Not signed off",
+  reviewStatus = "",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -174,7 +174,7 @@ function BudgetComplexWorkspace({
   onChangeModel,
   role = "owner",
   clientId,
-  reviewStatus = "Not signed off",
+  reviewStatus = "",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
