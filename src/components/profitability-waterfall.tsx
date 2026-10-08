@@ -162,6 +162,18 @@ async function exportPDF(opts: {
   }
 }
 
+/** The waterfall's existing subtitle, without a second source phrase. */
+export function profitAnswerSentence(input: {
+  currency: string;
+  periodLabel?: string | null;
+  preferPeriod?: boolean;
+}): string {
+  const how = `How ${input.currency}1 of revenue becomes profit`;
+  const periodBit = input.periodLabel?.trim() || "";
+  if (!periodBit) return how;
+  return input.preferPeriod ? `${how} · Month to date · ${periodBit}` : `${how} · ${periodBit}`;
+}
+
 export function ProfitabilityWaterfall({
   fallback,
   clientName,
@@ -171,7 +183,7 @@ export function ProfitabilityWaterfall({
   preferPeriod = false,
   yearToDate = null,
   periodNote = null,
-  statementSource = null,
+  hideLead = false,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
@@ -189,8 +201,10 @@ export function ProfitabilityWaterfall({
   } | null;
   /** Shown when a Xero link exists but the stored total has no dates yet. */
   periodNote?: string | null;
-  /** Dated ledger that owns these period figures. */
+  /** Dated ledger that owns these period figures. The chip lives on the answer strip. */
   statementSource?: string | null;
+  /** The answer strip already shows the heading and the sentence. */
+  hideLead?: boolean;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const { profile, firmId } = useAccountantProfile();
@@ -206,18 +220,11 @@ export function ProfitabilityWaterfall({
   }, []);
 
   const figures = resolveWaterfallFigures(weeklyInputs, fallback, { preferPeriod });
-  const hasWeekly = figures.source === "weekly";
-  const periodBit = periodLabel?.trim() || null;
-  const sourceBit = preferPeriod
-    ? statementSource === "qbo"
-      ? "QuickBooks"
-      : statementSource === "xero"
-        ? "Xero"
-        : "the ledger"
-    : hasWeekly
-      ? "aggregated weekly data"
-      : "period inputs";
-
+  const answerSentence = profitAnswerSentence({
+    currency: currencySymbol(market),
+    periodLabel,
+    preferPeriod,
+  });
   const revenue = figures.revenue;
   const costOfSales = figures.costOfSales;
   const fixedCosts = figures.fixedCosts;
@@ -330,18 +337,14 @@ export function ProfitabilityWaterfall({
       <CardHeader className="border-b border-amber-900/10 pb-5 dark:border-slate-800">
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1 cursor-pointer" onClick={() => setOpen((o) => !o)}>
-            <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
-              Profitability Waterfall
-            </CardTitle>
-            <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">
-              How {currencySymbol(market)}1 of revenue becomes profit
-              {periodBit
-                ? preferPeriod
-                  ? ` · Month to date · ${periodBit}`
-                  : ` · ${periodBit}`
-                : ""}
-              {` · ${sourceBit}`}
-            </p>
+            {hideLead ? null : (
+              <>
+                <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
+                  Profitability Waterfall
+                </CardTitle>
+                <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">{answerSentence}</p>
+              </>
+            )}
             {yearToDate?.periodLabel ? (
               <p className="mt-0.5 text-xs text-[#475569] dark:text-[#94a3b8]">
                 {yearToDateTitle(yearToDate.basis)}

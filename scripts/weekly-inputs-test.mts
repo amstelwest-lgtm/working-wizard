@@ -92,12 +92,12 @@ assert(accountantSrc.includes("Profitability inputs"), "accountant Profit tab ke
   const profitPane = accountantSrc.slice(profitStart, profitEnd);
   assert(profitStart !== -1 && profitEnd > profitStart, "profit pane exists");
   assert(
-    profitPane.indexOf("Product lines") < profitPane.indexOf("Profitability Waterfall"),
+    profitPane.indexOf("Product lines") < profitPane.indexOf("<ProfitabilityWaterfall"),
     "product-line questions sit above the waterfall",
   );
   assert(
-    profitPane.indexOf('id="wizard-profit-walk"') < profitPane.indexOf('id="profitFinCollapse"'),
-    "profitability inputs sit below the waterfall",
+    profitPane.indexOf('id="profitFinCollapse"') < profitPane.indexOf('id="wizard-profit-walk"'),
+    "profitability inputs sit in the review drawer above the waterfall",
   );
   assert(
     /build revenue and net profit per product line/i.test(profitPane),

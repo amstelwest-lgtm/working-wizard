@@ -90,6 +90,11 @@ export function figureSourcePhrase(source: string | null | undefined): string {
   }
 }
 
+/** A blank source is not a chip. The phrase stays for callers that still want the words. */
+export function showFigureSourceChip(source: string | null | undefined): boolean {
+  return Boolean(source?.trim());
+}
+
 function hasSyncTimestamp(iso: string | null | undefined): iso is string {
   return Boolean(iso) && Number.isFinite(Date.parse(iso as string));
 }

@@ -477,11 +477,15 @@ assert(studioSrc.includes("<XeroConnectCard"), "accountant studio mounts Xero co
 assert(studioSrc.includes("search.xero"), "accountant studio handles ?xero= return");
 assert(studioSrc.includes('id="accounting-connect"'), "accountant Xero is outside the Financials collapse");
 assert(studioSrc.includes("onConnectXero={() => setShowXeroDialog(true)}"), "accountant briefing opens Xero");
-const accountingConnect = studioSrc.indexOf('id="accounting-connect"');
-const finCollapse = studioSrc.indexOf('id="finCollapse"');
+const ratiosStart = studioSrc.indexOf('id="pane-ratios"');
+const ratiosEnd = studioSrc.indexOf('id="pane-profit"');
+const ratiosPane = studioSrc.slice(ratiosStart, ratiosEnd);
+const finCollapse = ratiosPane.indexOf('id="finCollapse"');
+const accountingConnect = ratiosPane.indexOf('id="accounting-connect"');
+const drawerClose = ratiosPane.indexOf("</ReviewInputsDrawer>");
 assert(
-  accountingConnect !== -1 && finCollapse !== -1 && accountingConnect < finCollapse,
-  "Xero renders before the collapsed Financials body",
+  finCollapse !== -1 && accountingConnect !== -1 && drawerClose !== -1 && finCollapse < drawerClose && drawerClose < accountingConnect,
+  "connect cards stay on the Health page, outside the Financials collapse",
 );
 const briefingSrc = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
 assert(briefingSrc.includes('id="client-connect-xero"'), "briefing labels Connect Xero");

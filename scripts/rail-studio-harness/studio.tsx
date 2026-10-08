@@ -11,6 +11,24 @@ import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { ClientBriefing } from "@/components/client-briefing";
+import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
+import { DeliverableInputConfig } from "@/components/deliverable-input-config";
+import { ProductMixPanel } from "@/components/product-mix-panel";
+import { ProfitabilityWaterfall, profitAnswerSentence } from "@/components/profitability-waterfall";
+import { QboConnectCard } from "@/components/qbo-connect";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { SageConnectCard } from "@/components/sage-connect";
+import { SimplifiedRatios } from "@/components/simplified-ratios";
+import { SphereHero } from "@/components/sphere-hero";
+import { buildSpherePillars } from "@/components/sphere-hero-adapter";
+import { XeroConnectCard } from "@/components/xero-connect";
+import { healthHeadline } from "@/lib/client-briefing";
+import { PILLAR_LABELS, scorecardHealthFromFinancials, type HealthPillarId } from "@/lib/health-score";
+import { figureSourcePhrase, showFigureSourceChip } from "@/lib/ledger-link-copy";
+import { currencySymbol } from "@/lib/market";
+import { computeOverviewCaption } from "@/lib/overview-insights";
+import { preferStatementPeriod, readStatementMeta } from "@/lib/statement-period";
+import { derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
 import { FeatureFinder } from "@/components/feature-finder";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { SectionCard } from "@/components/primitives";
@@ -117,6 +135,13 @@ export function RailStudio() {
             ) : null}
             {pane === "ask" ? <BotPane /> : null}
             {pane === "overview" ? <BriefingPane /> : null}
+            {pane === "ratios" ? (
+              <HealthPane
+                clientId={clientId}
+                pillars={search.section === "pillars" || search.focus === "pillars"}
+              />
+            ) : null}
+            {pane === "profit" ? <ProfitPane clientId={clientId} /> : null}
             {pane === "cash" ? <CashPane clientId={clientId} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} /> : null}
@@ -165,6 +190,184 @@ function BriefingPane() {
         hasFigures
         figuresPeriodLabel="September 2026"
       />
+    </div>
+  );
+}
+
+const HARNESS_FINANCIALS = {
+  cash: "186000",
+  revenue: "420000",
+  cogs: "80000",
+  fixedCosts: "140000",
+  statementSource: "upload",
+  periodLabel: "September 2026",
+};
+
+function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean }) {
+  const overall = scorecardHealthFromFinancials({
+    financials: HARNESS_FINANCIALS,
+    cashBalance: 186000,
+  });
+  const pillarById = Object.fromEntries(
+    overall.pillars.map((pillar) => [pillar.id, pillar.score ?? Number.NaN]),
+  ) as Record<HealthPillarId, number>;
+  const pillarStatus = Object.fromEntries(overall.pillars.map((pillar) => [pillar.id, pillar.status]));
+  const avg = overall.overall ?? Number.NaN;
+  const caption = computeOverviewCaption({
+    hasRealFinancials: true,
+    avgHealth: avg,
+    cashHealth: pillarById.cash ?? Number.NaN,
+    displayStatus: overall.displayStatus,
+  });
+  const sentence =
+    caption?.trim() || healthHeadline(Number.isFinite(avg) ? avg : null, overall.displayLabel);
+  const chip = showFigureSourceChip(HARNESS_FINANCIALS.statementSource)
+    ? figureSourcePhrase(HARNESS_FINANCIALS.statementSource)
+    : null;
+  const spherePillars = buildSpherePillars({
+    overallHealth: avg,
+    pillarHealths: pillarById,
+    pillarStatus,
+    healthMap: {},
+    ratioMeta: {},
+  });
+  const sections = (["profit", "assets", "financing", "cash"] as const).map((id) => ({
+    id,
+    label: PILLAR_LABELS[id],
+    health: pillarById[id],
+    status: pillarStatus[id],
+    series: [] as number[],
+  }));
+
+  return (
+    <div className="tabpane on" id="pane-ratios">
+      <DeliverableAnswerStrip
+        heading={pillars ? "Where it hurts" : "Health score"}
+        sentence={sentence}
+        chip={chip}
+        scope="financials"
+        clientId={clientId}
+        clientName="Harbour Glass"
+        signoff={null}
+        isStale={false}
+        onSignoffChange={() => {}}
+        canSign
+        extraActions={
+          <button type="button" className="answer-strip__icon" aria-label="Export PDF" title="Export PDF">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+            </svg>
+          </button>
+        }
+      />
+      <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}>
+        <DeliverableInputConfig
+          clientId={clientId}
+          deliverableId="ratios"
+          context={{ financials: HARNESS_FINANCIALS }}
+        />
+        <div className="card collapse" id="finCollapse">
+          <div className="c-head">
+            <h3>
+              Financials <span className="autosave">Auto-saved</span>
+            </h3>
+            <span className="hint">
+              Edit the figures or upload a statement. The score follows what is saved here.
+            </span>
+          </div>
+        </div>
+      </ReviewInputsDrawer>
+      <PaneBoundary label="Health score">
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ background: "#0a0e1a", borderRadius: 20, padding: "16px 8px", marginBottom: 20 }}>
+            <SphereHero
+              onDark
+              hideCaption
+              overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
+              displayStatus={overall.displayStatus}
+              pillars={spherePillars}
+            />
+          </div>
+          <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
+            <SimplifiedRatios sections={sections} />
+          </div>
+        </div>
+      </PaneBoundary>
+      <div id="accounting-connect" style={{ marginBottom: 16, display: "grid", gap: 10 }}>
+        <QboConnectCard clientId={clientId} returnPath={`/clients/${clientId}`} financials={HARNESS_FINANCIALS} />
+        <XeroConnectCard clientId={clientId} returnPath={`/clients/${clientId}`} financials={HARNESS_FINANCIALS} />
+        <SageConnectCard clientId={clientId} />
+      </div>
+    </div>
+  );
+}
+
+function ProfitPane({ clientId }: { clientId: string }) {
+  const meta = readStatementMeta(HARNESS_FINANCIALS);
+  const preferPeriod = preferStatementPeriod(HARNESS_FINANCIALS);
+  return (
+    <div className="tabpane on" id="pane-profit">
+      <DeliverableAnswerStrip
+        heading="Profitability"
+        sentence={profitAnswerSentence({
+          currency: currencySymbol(),
+          periodLabel: meta.periodLabel,
+          preferPeriod,
+        })}
+        chip={showFigureSourceChip(meta.statementSource) ? figureSourcePhrase(meta.statementSource) : null}
+        scope="profitability"
+        clientId={clientId}
+        clientName="Harbour Glass"
+        signoff={null}
+        isStale={false}
+        onSignoffChange={() => {}}
+        canSign
+      />
+      <ReviewInputsDrawer hint={deliverableDrawerHint("profit", { financials: HARNESS_FINANCIALS })}>
+        <DeliverableInputConfig
+          clientId={clientId}
+          deliverableId="profit"
+          context={{ financials: HARNESS_FINANCIALS }}
+        />
+        <p className="eyebrow">Product lines</p>
+        <p className="sub" style={{ marginBottom: 16 }}>
+          Answer these questions to build revenue and net profit per product line — so you can see which
+          lines actually make the money.
+        </p>
+        <ProductMixPanel
+          totalRevenue={420000}
+          incentive="Answer these to build revenue and net profit per product line."
+        />
+        <div className="card collapse open" id="profitFinCollapse" style={{ marginTop: 20 }}>
+          <div className="c-head">
+            <h3>
+              Profitability inputs <span className="autosave">Auto-saved</span>
+            </h3>
+            <span className="hint">Period P&amp;L that feeds the waterfall — same figures as Health &amp; Ratios</span>
+          </div>
+          <div className="c-body">
+            <div className="c-inner">
+              <p className="sub" style={{ marginTop: 0 }}>
+                Edit the period figures here. The waterfall updates from this P&amp;L — weekly figures the
+                owner enters stay on their board.
+              </p>
+            </div>
+          </div>
+        </div>
+      </ReviewInputsDrawer>
+      <div id="wizard-profit-walk">
+        <PaneBoundary label="Profitability waterfall">
+          <ProfitabilityWaterfall
+            fallback={derivePeriodWaterfallFallback(HARNESS_FINANCIALS)}
+            clientName="Harbour Glass"
+            clientId={clientId}
+            periodLabel={meta.periodLabel}
+            preferPeriod={preferPeriod}
+            statementSource={meta.statementSource}
+            hideLead
+          />
+        </PaneBoundary>
+      </div>
     </div>
   );
 }
