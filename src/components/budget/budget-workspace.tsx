@@ -14,20 +14,19 @@ import type {
   UnmappedDriver,
 } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
-import { budgetWindowLabel, fyMonths, formatMonthLabel } from "@/lib/budget.months";
+import { budgetWindowLabel, currentBudgetMonth, fyMonths, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
 } from "@/lib/budget.bridges";
-import { varianceLine } from "@/lib/budget.variance";
 import { useMarket } from "@/contexts/market";
 import { SALES_TAX_HONESTY, formatPercentRate, resolveMarket, t } from "@/lib/market";
 import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.model-change";
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
-import { BudgetYearOverviewChart } from "@/components/budget/budget-year-overview-chart";
+import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import {
   COLLAPSIBLE_GOLD_RULE,
@@ -46,6 +45,7 @@ export function BudgetWorkspace({
   onChangeModel,
   role = "owner",
   clientId,
+  reviewStatus = "Not signed off",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -56,6 +56,7 @@ export function BudgetWorkspace({
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
   clientId?: string;
+  reviewStatus?: string;
 }) {
   if (simplified) {
     return (
@@ -68,14 +69,13 @@ export function BudgetWorkspace({
             onClear={onClearUnmapped}
           />
         )}
-        <BudgetYearOverviewChart doc={doc} />
-        {/* Plan first — variance is a monthly check, not the hero */}
         <BudgetSimpleView
           doc={doc}
           onChange={onChange}
           actuals={actuals}
           onChangeModel={onChangeModel}
           role={role}
+          reviewStatus={reviewStatus}
         />
         <BudgetVariancePanel
           clientId={clientId}
@@ -97,6 +97,7 @@ export function BudgetWorkspace({
       onChangeModel={onChangeModel}
       role={role}
       clientId={clientId}
+      reviewStatus={reviewStatus}
     />
   );
 }
@@ -173,6 +174,7 @@ function BudgetComplexWorkspace({
   onChangeModel,
   role = "owner",
   clientId,
+  reviewStatus = "Not signed off",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -182,6 +184,7 @@ function BudgetComplexWorkspace({
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
   clientId?: string;
+  reviewStatus?: string;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -191,7 +194,7 @@ function BudgetComplexWorkspace({
   const usTax = tax?.regime === "sales_tax" || tax?.regime === "none";
   const taxCol = t("indirectTaxNet", market);
   const focusMonths = months;
-  const [focusMonth, setFocusMonth] = useState(months[0] ?? doc.fyStart);
+  const [focusMonth, setFocusMonth] = useState(() => currentBudgetMonth(months));
   const results = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
   const baseResults = useMemo(() => computeBudgetMonths(doc, "base"), [doc]);
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
@@ -241,19 +244,23 @@ function BudgetComplexWorkspace({
     });
   };
 
+  const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
   return (
     <div id="wizard-budget-plan" className="space-y-6">
-      {/* Header strip */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-            {tpl.label} · {budgetWindowLabel(doc, market)}
-          </p>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Budget</h2>
-          <p className="text-xs text-slate-500">
-            Drivers first — volume and price stay separate. Cash uses debtor/creditor timing.
-          </p>
-        </div>
+      <BudgetVerdictStrip
+        periodLabel={compared ? compared.label : monthLabel(focusMonth)}
+        revenueBudget={compared?.budgetRevenue ?? focus?.revenue ?? 0}
+        revenueActual={compared ? compared.revenue : null}
+        profitBudget={compared?.budgetEbit ?? focus?.ebit ?? 0}
+        profitActual={compared ? (compared.ebit ?? null) : null}
+        chip={compared?.chip ?? "None"}
+        status={reviewStatus}
+        market={market}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+          {tpl.label} · {budgetWindowLabel(doc, market)}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-full border border-slate-200 p-0.5 dark:border-slate-700">
             {SCENARIOS.map((id) => (
@@ -295,8 +302,6 @@ function BudgetComplexWorkspace({
           onClear={onClearUnmapped}
         />
       )}
-
-      <BudgetYearOverviewChart doc={doc} />
 
       <BudgetVariancePanel
         clientId={clientId}
@@ -1093,30 +1098,6 @@ function BudgetComplexWorkspace({
           </select>
         </div>
 
-        {focus && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              { l: "Revenue", v: focus.revenue },
-              { l: "Gross profit", v: focus.grossProfit },
-              { l: "EBITDA", v: focus.ebitda },
-              { l: "EBIT", v: focus.ebit },
-              { l: "Closing cash", v: focus.closingCash },
-            ].map((s) => (
-              <div
-                key={s.l}
-                className="rounded-xl border border-[#d4a550]/35 bg-[#fffdf8] px-3 py-3 dark:bg-slate-900"
-              >
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
-                  {s.l}
-                </div>
-                <div className="mt-1 text-lg font-semibold tabular-nums text-[#0f172a] dark:text-slate-100">
-                  {money(s.v)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         {trough && (
           <div
             className={`rounded-lg border px-3 py-2 text-xs ${
@@ -1129,43 +1110,11 @@ function BudgetComplexWorkspace({
             <strong className="tabular-nums">{money(trough.closingCash)}</strong>
             {doc.activeScenario !== "base" && baseFocus && focus && (
               <span className="ml-2 text-slate-500">
-                · vs base focus month cash {money(baseFocus.closingCash)} (Δ{" "}
+                · vs base focus month cash {money(baseFocus.closingCash)} (
+                {focus.closingCash - baseFocus.closingCash > 0 ? "+" : ""}
                 {money(focus.closingCash - baseFocus.closingCash)})
               </span>
             )}
-          </div>
-        )}
-
-        {actuals && actuals.chip !== "None" && (actuals.revenue || actuals.cogs || actuals.fixedCosts) && focus && (
-          <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
-            <div className="mb-2 flex flex-wrap items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
-              vs {actuals.label}
-              {actuals.chip ? (
-                <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                  {actuals.chip}
-                </span>
-              ) : null}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <CompareRow
-                label="Revenue"
-                budget={actuals.budgetRevenue ?? focus.revenue}
-                actual={actuals.revenue ?? 0}
-                higherIsBetter
-              />
-              <CompareRow
-                label="COGS"
-                budget={actuals.budgetCogs ?? focus.cogs}
-                actual={actuals.cogs ?? 0}
-                higherIsBetter={false}
-              />
-              <CompareRow
-                label="Overheads"
-                budget={actuals.budgetOverheads ?? focus.overheads}
-                actual={actuals.fixedCosts ?? 0}
-                higherIsBetter={false}
-              />
-            </div>
           </div>
         )}
 
@@ -1267,37 +1216,6 @@ function BudgetComplexWorkspace({
           </p>
         )}
       </section>
-    </div>
-  );
-}
-
-function CompareRow({
-  label,
-  budget,
-  actual,
-  higherIsBetter,
-}: {
-  label: string;
-  budget: number;
-  actual: number;
-  higherIsBetter: boolean;
-}) {
-  const { market } = useMarket();
-  const money = (n: number) => fmtBudgetMoney(n, market);
-  const line = varianceLine("revenue", label, budget, actual, higherIsBetter);
-  const tone =
-    line.signal === "adverse"
-      ? "text-red-600 dark:text-red-400"
-      : line.signal === "favourable"
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-slate-500";
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
-      <div className="tabular-nums text-slate-800 dark:text-slate-100">
-        Budget {money(budget)} · Actual {money(actual)}
-      </div>
-      <div className={`tabular-nums ${tone}`}>Δ {money(line.delta)}</div>
     </div>
   );
 }

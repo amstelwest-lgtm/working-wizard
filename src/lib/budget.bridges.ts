@@ -727,6 +727,8 @@ export function budgetVersusStatement(
   budgetRevenue: number;
   budgetCogs: number;
   budgetOverheads: number;
+  ebit: number;
+  budgetEbit: number;
 }) | null {
   if (!periodFinancials) return null;
   const aliased = withCostAliases(
@@ -744,12 +746,14 @@ export function budgetVersusStatement(
   let budgetRevenue = 0;
   let budgetCogs = 0;
   let budgetOverheads = 0;
+  let budgetEbit = 0;
   if (days != null && days < 28 && months <= 1 && rows.length) {
     const row = (endInFy ? rows.find((r) => r.month === endMonth) : null) ?? rows[0];
     const frac = days / 30;
     budgetRevenue = row.revenue * frac;
     budgetCogs = row.cogs * frac;
     budgetOverheads = row.overheads * frac;
+    budgetEbit = row.ebit * frac;
   } else {
     const keys = coverMonths(fy, endInFy ? endMonth : "", months);
     for (const row of rows) {
@@ -757,6 +761,7 @@ export function budgetVersusStatement(
       budgetRevenue += row.revenue;
       budgetCogs += row.cogs;
       budgetOverheads += row.overheads;
+      budgetEbit += row.ebit;
     }
   }
   return {
@@ -764,9 +769,11 @@ export function budgetVersusStatement(
     revenue: bridge.revenue,
     cogs: bridge.cogs,
     fixedCosts: bridge.operatingExpenses,
+    ebit: bridge.ebit,
     chip: "Statement pace, prorated",
     budgetRevenue,
     budgetCogs,
     budgetOverheads,
+    budgetEbit,
   };
 }

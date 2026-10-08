@@ -3535,8 +3535,8 @@ function ClientView() {
                   <div id="wizard-budget-panel">
                     <DeliverableTabHead
                       eyebrow="12-month Budget"
-                      title="The year plan"
-                      lede="Set the year with client management, then compare what actually happened against it. Complex opens the driver grids — revenue, overheads, and capex."
+                      title="On or off the plan"
+                      lede="The strip is this period against the budget. Simplified and Complex open on the same month. The year grid stays closed until you need it."
                       signoff={
                         <ReviewSignoffButton
                           compact

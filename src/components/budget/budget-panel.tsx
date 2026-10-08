@@ -543,25 +543,16 @@ export function BudgetPanel({
         onChangeModel={beginModelChange}
         role={role}
         clientId={clientId}
+        reviewStatus={
+          !budgetSignoff
+            ? "Not signed off"
+            : computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)
+              ? "Sign-off stale"
+              : "Signed off"
+        }
       />
 
       <div className="mt-6 space-y-4">
-        {/* Owner Simple: keep Advanced collapsed away — Complex / accountant still get the full panel */}
-        {!(simplified && role === "owner") && (
-          <BudgetAdvancedPanel
-            doc={doc}
-            onChange={(next) => {
-              budgetDirty.current = true;
-              setDoc(next);
-            }}
-            financials={financials}
-            businessTypeId={businessTypeId}
-            role={role}
-            clientId={clientId}
-            onPushedToCash={onPushedToCash}
-          />
-        )}
-
         {clientId && (canSign || role === "accountant") && !hideInlineSignOff && (
           <div className="flex justify-end">
             <ReviewSignoffButton
@@ -583,6 +574,21 @@ export function BudgetPanel({
               placement="corner"
             />
           </div>
+        )}
+        {/* Seed and push sit under sign-off so they are not the gold action. */}
+        {!(simplified && role === "owner") && (
+          <BudgetAdvancedPanel
+            doc={doc}
+            onChange={(next) => {
+              budgetDirty.current = true;
+              setDoc(next);
+            }}
+            financials={financials}
+            businessTypeId={businessTypeId}
+            role={role}
+            clientId={clientId}
+            onPushedToCash={onPushedToCash}
+          />
         )}
       </div>
 

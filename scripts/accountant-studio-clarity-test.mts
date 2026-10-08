@@ -148,8 +148,9 @@ assert(budgetSimple.includes("Volume × price"), "month engine explains volume �
 assert(budgetSimple.includes("symbol=\"×\""), "volume and price are shown as a times equation");
 assert(!budgetSimple.includes("What you’re selling"), "old bland selling label is gone");
 assert(!budgetSimple.includes("More detail"), "plain More detail link is gone");
-assert(budgetSimple.includes('id="wizard-budget-cash-timing"'), "cash timing is a hideable gold card");
-assert(budgetSimple.includes("defaultOpen={false}"), "cash timing starts collapsed");
+assert(budgetSimple.includes('id="wizard-budget-cash-timing"'), "opening cash and days stay on the page");
+assert(!budgetSimple.includes('title="Cash timing"'), "cash timing is not a collapsed card");
+assert(budgetSimple.includes("defaultOpen={false}"), "year detail starts collapsed");
 assert(
   budgetSimple.includes("Cash in the bank on day one of this financial year"),
   "opening cash explains why the accountant fills it",

@@ -164,6 +164,13 @@ export function emptyAmountMap(months: string[], amount = 0) {
   return Object.fromEntries(months.map((mo) => [mo, amount]));
 }
 
+/** The month both Budget views open on: this calendar month when it sits in the plan. */
+export function currentBudgetMonth(months: string[], now = new Date()): string {
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  if (months.includes(cur)) return cur;
+  return months[0] ?? cur;
+}
+
 export function formatMonthLabel(
   ym: string,
   market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,

@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Wallet } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,16 +13,17 @@ import type { BudgetActuals, BudgetDocument, BudgetScenarioId } from "@/lib/budg
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
   budgetWindowLabel,
+  currentBudgetMonth,
   fyMonths,
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
+import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
 } from "@/lib/budget.bridges";
-import { varianceLine } from "@/lib/budget.variance";
 import { currencySymbol, formatMoney, type ResolvedMarket } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 
@@ -94,23 +95,21 @@ export function BudgetSimpleView({
   actuals,
   onChangeModel,
   role = "owner",
+  reviewStatus = "Not signed off",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
   actuals?: BudgetActuals | null;
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
+  reviewStatus?: string;
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
   const symbol = currencySymbol(market);
   const monthLabel = (ym: string) => formatMonthLabelMarket(ym, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
-  const [focusMonth, setFocusMonth] = useState(() => {
-    const now = new Date();
-    const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return months.includes(cur) ? cur : months[0];
-  });
+  const [focusMonth, setFocusMonth] = useState(() => currentBudgetMonth(months));
   const [sameEveryMonth, setSameEveryMonth] = useState(false);
 
   const results = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
@@ -188,19 +187,23 @@ export function BudgetSimpleView({
 
   const maxRev = Math.max(1, ...results.map((r) => r.revenue));
 
+  const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
   return (
     <div id="wizard-budget-plan" className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-            {tpl.label} · {budgetWindowLabel(doc, market)}
-          </p>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Your budget</h2>
-          <p className="text-xs text-slate-500">
-            What you sell → what’s left after costs → whether cash holds.
-          </p>
-        </div>
+      <BudgetVerdictStrip
+        periodLabel={compared ? compared.label : monthLabel(focusMonth)}
+        revenueBudget={compared?.budgetRevenue ?? focus?.revenue ?? 0}
+        revenueActual={compared ? compared.revenue : null}
+        profitBudget={compared?.budgetEbit ?? focus?.ebit ?? 0}
+        profitActual={compared ? (compared.ebit ?? null) : null}
+        chip={compared?.chip ?? "None"}
+        status={reviewStatus}
+        market={market}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+          {tpl.label} · {budgetWindowLabel(doc, market)}
+        </p>
         <div className="flex rounded-full border border-slate-200 p-0.5 dark:border-slate-700">
           {SCENARIOS.map((id) => (
             <button
@@ -221,42 +224,6 @@ export function BudgetSimpleView({
         </div>
       </div>
 
-      {/* Hero */}
-      {focus && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { l: "Revenue", v: focus.revenue, sub: monthLabel(focusMonth) },
-            {
-              l: "Gross profit",
-              v: focus.grossProfit,
-              sub: `${focus.gpPct.toFixed(0)}% margin`,
-            },
-            { l: "Cash at month-end", v: focus.closingCash, sub: monthLabel(focusMonth) },
-            {
-              l: "Cash trough",
-              v: trough?.closingCash ?? 0,
-              sub: trough ? monthLabel(trough.month) : "—",
-              warn: (trough?.closingCash ?? 0) < 0,
-            },
-          ].map((s) => (
-            <div
-              key={s.l}
-              className={`rounded-xl border px-3 py-3 ${
-                s.warn ? "border-red-500/40 bg-red-500/10" : "border-[#d4a550]/35 bg-[#fffdf8] dark:bg-slate-900"
-              }`}
-            >
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
-                {s.l}
-              </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums text-[#0f172a] dark:text-slate-100">
-                {money(s.v)}
-              </div>
-              <div className="text-[11px] text-slate-500">{s.sub}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Month engine — volume × price, then margin and overheads */}
       <section
         id="wizard-budget-month-engine"
@@ -273,7 +240,7 @@ export function BudgetSimpleView({
             </h3>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[#6b6354] dark:text-slate-400">
               {role === "accountant"
-                ? "How many they sell × the price they charge becomes revenue. Gross profit % takes cost of sales. Overheads are the rest. The graph and tiles above follow these four numbers."
+                ? "How many they sell × the price they charge becomes revenue. Gross profit % takes cost of sales. Overheads are the rest. The strip above scores those four numbers."
                 : "How many you sell × the price you charge becomes this month’s revenue. Set the margin, then overheads — leftover is what the month keeps."}
             </p>
           </div>
@@ -422,26 +389,16 @@ export function BudgetSimpleView({
         </div>
       </section>
 
-      {/* Year strip */}
-      <section>
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Year at a glance
-          </h3>
-          <div className="text-[11px] text-slate-500">
-            FY revenue{" "}
-            <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-200">
-              {money(fyTotals.revenue)}
-            </span>
-            {" · "}
-            FY-end cash{" "}
-            <span
-              className={`font-semibold tabular-nums ${fyTotals.closingEnd < 0 ? "text-red-600" : "text-slate-800 dark:text-slate-200"}`}
-            >
-              {money(fyTotals.closingEnd)}
-            </span>
-          </div>
-        </div>
+      <CollapsibleGoldCard
+        icon={BarChart3}
+        title="Year detail"
+        subtitle={
+          trough
+            ? `Cash trough ${monthLabel(trough.month)} ${money(trough.closingCash)}`
+            : "Twelve months, closed until you need the grid"
+        }
+        defaultOpen={false}
+      >
         <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-12">
           {results.map((r) => {
             const h = Math.max(8, Math.round((r.revenue / maxRev) * 56));
@@ -473,10 +430,8 @@ export function BudgetSimpleView({
             );
           })}
         </div>
-      </section>
 
-      {/* FY totals */}
-      <section className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800">
+      <section className="mt-4 overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800">
         <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-900/50">
           Full-year totals
         </div>
@@ -502,50 +457,11 @@ export function BudgetSimpleView({
           ))}
         </div>
       </section>
+      </CollapsibleGoldCard>
 
-      {actuals && actuals.chip !== "None" && (actuals.revenue || actuals.cogs || actuals.fixedCosts) && focus && (
-        <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
-          <div className="mb-2 flex flex-wrap items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
-            vs {actuals.label}
-            {actuals.chip ? (
-              <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                {actuals.chip}
-              </span>
-            ) : null}
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <CompareMini
-              label="Revenue"
-              budget={actuals.budgetRevenue ?? focus.revenue}
-              actual={actuals.revenue}
-              higherIsBetter
-            />
-            <CompareMini
-              label="COGS"
-              budget={actuals.budgetCogs ?? focus.cogs}
-              actual={actuals.cogs}
-              higherIsBetter={false}
-            />
-            <CompareMini
-              label="Overheads"
-              budget={actuals.budgetOverheads ?? focus.overheads}
-              actual={actuals.fixedCosts}
-              higherIsBetter={false}
-            />
-          </div>
-        </div>
-      )}
-
-      <CollapsibleGoldCard
+      <section
         id="wizard-budget-cash-timing"
-        icon={Wallet}
-        title="Cash timing"
-        subtitle={
-          role === "accountant"
-            ? "How this profit turns into cash in the bank. Closed until you need it — the month engine above already builds the P&L."
-            : "Opening bank balance and how quickly money is collected and paid. Open if month-end cash looks off."
-        }
-        defaultOpen={false}
+        className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50"
       >
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
@@ -657,7 +573,7 @@ export function BudgetSimpleView({
             </p>
           </div>
         )}
-      </CollapsibleGoldCard>
+      </section>
     </div>
   );
 }
@@ -735,37 +651,6 @@ function CascadeRow({
         <p className="max-w-md text-[11px] leading-snug text-[#98917f] dark:text-slate-500">{hint}</p>
       </div>
       <div className="ml-auto">{children}</div>
-    </div>
-  );
-}
-
-function CompareMini({
-  label,
-  budget,
-  actual,
-  higherIsBetter,
-}: {
-  label: string;
-  budget: number;
-  actual: number;
-  higherIsBetter: boolean;
-}) {
-  const { market } = useMarket();
-  const money = (n: number) => fmtBudgetMoney(n, market);
-  const line = varianceLine("revenue", label, budget, actual, higherIsBetter);
-  const tone =
-    line.signal === "adverse"
-      ? "text-red-600 dark:text-red-400"
-      : line.signal === "favourable"
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-slate-500";
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
-      <div className="tabular-nums text-slate-800 dark:text-slate-100">
-        Budget {money(budget)} · Actual {money(actual)}
-      </div>
-      <div className={`tabular-nums ${tone}`}>Δ {money(line.delta)}</div>
     </div>
   );
 }
