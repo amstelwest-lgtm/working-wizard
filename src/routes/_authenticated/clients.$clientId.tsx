@@ -337,11 +337,13 @@ function ratioHealthScore(
 
 /** Health ring SVG */
 function HealthRing({
+  id,
   score,
   status,
   size = 46,
   strokeWidth = 4,
 }: {
+  id?: string;
   score: number | null;
   /** When set, drives ring colour (critical-pillar tell). */
   status?: HealthTier;
@@ -356,7 +358,7 @@ function HealthRing({
   const color = bandColor(band);
   const off = c * (1 - shown / 100);
   return (
-    <div className="ring" style={{ width: size, height: size }}>
+    <div className="ring" id={id} style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle
           className="tr"
@@ -1073,8 +1075,10 @@ function ClientView() {
     [financials],
   );
   useEffect(() => {
-    if (hasFigures) markInsightSeen();
-  }, [hasFigures]);
+    // Mark only once Overview is showing the score. A bot tab or an import
+    // in flight must not count as "figures seen" and pull the card wall.
+    if (hasFigures && activeTab === "overview") markInsightSeen();
+  }, [hasFigures, activeTab]);
   const startStudioTourAfterFigures = useCallback(() => {
     markOnboardingDone(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
     setFirstDataOpen(false);
@@ -1985,6 +1989,13 @@ function ClientView() {
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
+      setActiveTab("overview");
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => accountantClientTabSearch(prev, "overview"),
+        replace: true,
+      });
       startStudioTourAfterFigures();
       track("financials_uploaded", {
         surface: "accountant_portal",
@@ -2025,6 +2036,7 @@ function ClientView() {
       client?.market,
       applyAutoPopulateResult,
       startStudioTourAfterFigures,
+      navigate,
     ],
   );
 
@@ -2670,6 +2682,7 @@ function ClientView() {
                   industryLabel={clientIndustryLabel(briefingProfile, client.business_type)}
                   ring={
                     <HealthRing
+                      id="overview-health"
                       score={hasFigures ? overallHealth.overall : null}
                       status={hasFigures ? overallHealth.displayStatus : undefined}
                       size={74}

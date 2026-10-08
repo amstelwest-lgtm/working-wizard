@@ -1,7 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
+import { adaptivePricingNote } from "@/lib/stripe-checkout.core";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
 import {
   billingStartPath,
@@ -72,6 +74,7 @@ function BillingStartPage() {
       },
     })
       .then(({ url }) => {
+        if (startedRef.current === false) return;
         consumePendingCheckout();
         window.location.href = url;
       })
@@ -82,6 +85,7 @@ function BillingStartPage() {
   }, [loading, user, pending, navigate, startCheckout]);
 
   const planName = registerLabelForPlan(pending.plan);
+  const zarNote = adaptivePricingNote(pending.market);
 
   if (error) {
     return (
@@ -104,12 +108,17 @@ function BillingStartPage() {
             >
               Try again
             </button>
-            <Link
-              to="/"
+            <a
+              href="/#pricing"
               className="inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
             >
               Back to pricing
-            </Link>
+            </a>
+            <BillingSignOutButton
+              onBeforeSignOut={() => {
+                startedRef.current = false;
+              }}
+            />
           </div>
         </div>
       </div>
@@ -125,9 +134,18 @@ function BillingStartPage() {
         </h1>
         <p className="mt-2 text-sm text-slate-400">
           {user
-            ? `Redirecting to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band. South African firms may be charged in ZAR via Adaptive Pricing.`
+            ? `Redirecting to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.${zarNote ? ` ${zarNote}` : ""}`
             : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
         </p>
+        {user ? (
+          <div className="mt-5">
+            <BillingSignOutButton
+              onBeforeSignOut={() => {
+                startedRef.current = false;
+              }}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

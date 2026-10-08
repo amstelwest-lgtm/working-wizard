@@ -6,7 +6,7 @@
 import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
-import { SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
+import { isSaMarketFirm, SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
 import {
   FIRM_SETUP_PROMOTION_CODE,
   FIRM_SETUP_PROMOTION_CODE_ID,
@@ -127,9 +127,34 @@ export type FirmCheckoutSessionInput = {
   includeTrial: boolean;
 };
 
+/** ZAR presentment is for South African firms only. US Checkout stays USD. */
+export function adaptivePricingForMarket(market: StripePlanMarket): boolean {
+  return market === "za";
+}
+
+export const SA_ADAPTIVE_PRICING_NOTE =
+  "South African firms may be charged in ZAR via Adaptive Pricing.";
+
+export function adaptivePricingNote(market: StripePlanMarket): string | null {
+  return adaptivePricingForMarket(market) ? SA_ADAPTIVE_PRICING_NOTE : null;
+}
+
+/**
+ * A stored US firm stays USD even if the request says za.
+ * No firm row yet: trust an explicit za request, otherwise us.
+ */
+export function resolveFirmCheckoutMarket(
+  firmMarket: unknown,
+  requested: StripePlanMarket,
+): StripePlanMarket {
+  if (firmMarket == null) return requested === "za" ? "za" : "us";
+  return isSaMarketFirm({ market: firmMarket }) ? "za" : "us";
+}
+
 /**
  * Checkout Session create payload for a firm band.
- * Adaptive Pricing is on so SA firms can pay ZAR against the USD catalog.
+ * Adaptive Pricing is on for SA firms so they can pay ZAR against the USD catalog.
+ * US sessions turn it off so Checkout does not offer a ZAR toggle.
  * Managed Payments is left at the account default (do not force-disable).
  * automatic_tax is omitted unless registrations exist.
  *
@@ -150,10 +175,11 @@ export function firmCheckoutSessionParams(
     milon_lookup_key: input.lookupKey,
   };
   if (input.includeTrial) meta.milon_trial_days = String(FIRM_TRIAL_DAYS);
+  const zaCoupon = adaptivePricingForMarket(input.market) ? input.zaCouponId : null;
 
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
-    adaptive_pricing: { enabled: true },
+    adaptive_pricing: { enabled: adaptivePricingForMarket(input.market) },
     billing_address_collection: "required",
     tax_id_collection: { enabled: true },
     payment_method_collection: "always",
@@ -186,12 +212,12 @@ export function firmCheckoutSessionParams(
     params.allow_promotion_codes = true;
   }
 
-  if (input.promotionCodeId && !input.zaCouponId?.trim()) {
+  if (input.promotionCodeId && !zaCoupon?.trim()) {
     params.discounts = [{ promotion_code: input.promotionCodeId }];
     delete params.allow_promotion_codes;
   }
 
-  return withFirmZaCoupon(params, input.zaCouponId);
+  return withFirmZaCoupon(params, zaCoupon);
 }
 
 /**

@@ -836,7 +836,11 @@ assert(
   !JSON.stringify(usCheckout.discounts ?? []).includes("MILON_ZA_50"),
   "a US checkout does not include the SA coupon",
 );
-const saCheckout = firmCheckoutSessionParams({ ...checkoutBase, zaCouponId: "MILON_ZA_50" });
+const saCheckout = firmCheckoutSessionParams({
+  ...checkoutBase,
+  market: "za",
+  zaCouponId: "MILON_ZA_50",
+});
 assert(saCheckout.discounts?.length === 1, "SA checkout has one discount");
 assert(
   saCheckout.discounts?.[0] &&
@@ -853,6 +857,7 @@ const saAgain = withFirmZaCoupon(saCheckout, "MILON_ZA_50");
 assert(saAgain.discounts?.length === 1, "applying the SA coupon twice does not stack it");
 const saUpgrade = firmUpgradeCheckoutSessionParams({
   ...checkoutBase,
+  market: "za",
   zaCouponId: "MILON_ZA_50",
   replacesSubscriptionId: "sub_starter",
 });

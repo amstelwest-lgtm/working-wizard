@@ -97,6 +97,34 @@ export function isFirmProductPath(pathname: string): boolean {
   );
 }
 
+/** `/clients/:id` — Overview and the scored figures live on this file. */
+export function clientIdFromFirmPath(pathname: string): string | null {
+  const match = pathname.match(/^\/clients\/([^/]+)\/?$/);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+/**
+ * The first client's file stays readable without a card.
+ * `firmClientCount` null means the count failed to load — do not wall the file.
+ * Two or more clients: only the earliest file stays open. A later file does not.
+ */
+export function isFirstClientFiguresPath(input: {
+  pathname: string;
+  firmClientCount: number | null;
+  firstClientId?: string | null;
+}): boolean {
+  const id = clientIdFromFirmPath(input.pathname);
+  if (!id) return false;
+  if (input.firmClientCount === null || input.firmClientCount <= 1) return true;
+  const first = input.firstClientId?.trim() ?? "";
+  return first.length > 0 && id === first;
+}
+
 export async function customerHasEntitlingSubscription(
   stripe: StripeCustomerSubscriptionReader,
   customerId: string,
@@ -188,9 +216,19 @@ export function decideFirmBillingPathGate(input: {
   entitled: boolean;
   /**
    * When false, dashboard and client workspace stay open so the accountant
-   * can reach an insight before Checkout. Omitted still requires billing.
+   * can reach an insight before Checkout. Omitted still requires billing
+   * on paths that are not the first client's file.
    */
   insightSeen?: boolean;
+  /**
+   * Firm clients this owner can see. Pass from the shell.
+   * Omitted: no first-client exception (older callers still redirect).
+   * Null: the count failed — keep `/clients/:id` open.
+   * 2 means two or more.
+   */
+  firmClientCount?: number | null;
+  /** Oldest firm client. Required to keep that file open once a second exists. */
+  firstClientId?: string | null;
 }): FirmBillingPathDecision {
   if (isBillingExemptPath(input.pathname)) return "allow";
   if (isOwnerSparkPath(input.pathname)) return "allow";
@@ -199,6 +237,18 @@ export function decideFirmBillingPathGate(input: {
   if (input.isMilonItMember) return "allow";
   if (!input.isAccountantFirmUser) return "allow";
   if (input.entitled) return "allow";
+  // First client's Overview and figures stay on screen without a card.
+  // Reports, the practice board (a second client), and settings still redirect.
+  if (
+    input.firmClientCount !== undefined &&
+    isFirstClientFiguresPath({
+      pathname: input.pathname,
+      firmClientCount: input.firmClientCount,
+      firstClientId: input.firstClientId,
+    })
+  ) {
+    return "allow";
+  }
   if (input.insightSeen === false && isPreInsightWorkspacePath(input.pathname)) return "allow";
   return "require_billing";
 }

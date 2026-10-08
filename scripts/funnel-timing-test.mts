@@ -66,8 +66,33 @@ assert(
     isMilonItMember: false,
     entitled: false,
     insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "allow",
+  "first-client figures stay viewable without a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/second",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 2,
+    firstClientId: "abc",
   }) === "require_billing",
-  "client workspace bills once an insight exists",
+  "a second client still bills once an insight exists",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/reports",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+  }) === "require_billing",
+  "export still bills once an insight exists",
 );
 assert(
   decidePostLoginBillingResume({
@@ -95,9 +120,34 @@ assert(picker.includes("FUNNEL_SOLO_FIRST"), "plan picker marks Solo when it lea
 assert(picker.includes("Start here"), "plan picker says Solo is where to start");
 assert(!pricing.includes("SA_FIRM_DISCOUNT") || pricing.includes("showSaPricing"), "SA discount stays behind the geo flag");
 assert(prompt.includes(`data-funnel={FUNNEL_CHECKOUT_AFTER_INSIGHT}`), "checkout prompt is the after-insight marker");
-assert(prompt.includes("Continue with"), "one Checkout action after the figures");
+assert(
+  prompt.includes("Add a card to start your 14-day free trial"),
+  "one card action after the figures",
+);
 assert(client.includes("<CheckoutAfterInsight />"), "client studio offers Checkout after figures");
-assert(client.includes("markInsightSeen"), "figures mark the insight");
+assert(
+  client.includes('if (hasFigures && activeTab === "overview") markInsightSeen()'),
+  "Overview showing the figures marks the insight",
+);
+const imported = client.slice(
+  client.indexOf("const handleConfirmFinancials"),
+  client.indexOf("Deliverables bar actions"),
+);
+assert(
+  imported.includes('accountantClientTabSearch(prev, "overview")'),
+  "a successful import lands on Overview",
+);
+assert(!imported.includes('"ask"'), "a successful import does not open the bot tab");
+const wizard = read("src/components/walkthrough-wizard.tsx");
+const tour = wizard.slice(
+  wizard.indexOf("const ACCOUNTANT_CLIENT_STEPS: Step[] = ["),
+  wizard.indexOf("function stepsFor"),
+);
+assert(
+  tour.indexOf('tab: "overview"') !== -1 &&
+    tour.indexOf('tab: "overview"') < tour.indexOf('tab: "ask"'),
+  "the studio tour opens Overview before the bot",
+);
 assert(client.includes("Other ways"), "upload/sync alternatives are folded");
 assert(dash.includes("<CheckoutAfterInsight />"), "a scored book offers Checkout");
 assert(dash.includes("clientRows.length === 0 ? \"tb-btn\""), "empty book does not gold-button Reports");

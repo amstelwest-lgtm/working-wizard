@@ -52,6 +52,7 @@ import {
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
   resolveFirmCatalogPrice,
+  resolveFirmCheckoutMarket,
 } from "@/lib/stripe-checkout.core";
 import {
   assertUpgradeTarget,
@@ -326,14 +327,15 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
     const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
+    const market = resolveFirmCheckoutMarket(firmMarket, data.market as StripePlanMarket);
     return createPaidCheckoutSession({
       userId,
       email,
       plan: data.plan as FirmCheckoutBand,
       interval: data.interval as FirmInterval,
-      market: data.market as StripePlanMarket,
+      market,
       promo: data.promo,
-      zaCouponId: zaCouponIdForMarket(firmMarket),
+      zaCouponId: market === "za" ? zaCouponIdForMarket(firmMarket) : null,
     });
   });
 

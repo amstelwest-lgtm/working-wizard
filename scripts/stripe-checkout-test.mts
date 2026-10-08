@@ -18,9 +18,13 @@ import {
 import { STRIPE_SAAS_BUSINESS_TAX_CODE, firmLookupKey } from "../src/lib/stripe-plans";
 import {
   assertFoundingMonthlyOnly,
+  adaptivePricingForMarket,
+  adaptivePricingNote,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
+  firmUpgradeCheckoutSessionParams,
   foundingRejectedOnYearly,
+  resolveFirmCheckoutMarket,
   resolvePriceByLookupKey,
 } from "../src/lib/stripe-checkout.core";
 
@@ -102,7 +106,8 @@ const yearly = firmCheckoutSessionParams({
   integrationIdentifier: firmIntegrationIdentifier("solo", "year", "abcdefgh"),
   includeTrial: true,
 });
-assert(yearly.adaptive_pricing?.enabled === true, "adaptive_pricing on yearly too");
+assert(yearly.adaptive_pricing?.enabled === false, "US yearly Checkout does not offer ZAR");
+assert(!yearly.discounts, "US yearly Checkout has no SA coupon");
 assert(yearly.allow_promotion_codes !== true, "yearly Checkout hides promotion codes");
 assert(yearly.payment_method_collection === "always", "yearly trial still collects a card");
 assert(yearly.subscription_data?.trial_period_days === 14, "chosen yearly band also trials 14 days");
@@ -189,6 +194,10 @@ assert(
   "firm sessions do not force-disable Managed Payments",
 );
 assert(checkoutFn.includes("resolveFirmCatalogPrice"), "checkout resolves catalog lookup_keys");
+assert(
+  checkoutFn.includes("resolveFirmCheckoutMarket"),
+  "checkout market follows the firm, not a tampered US request",
+);
 assert(!checkoutFn.includes("price_data"), "checkout does not build inline price_data");
 assert(checkoutFn.includes("assertFoundingMonthlyOnly"), "FOUNDING guard on create");
 assert(
@@ -197,7 +206,74 @@ assert(
 );
 
 const core = readFileSync(resolve("src/lib/stripe-checkout.core.ts"), "utf8");
-assert(core.includes("adaptive_pricing: { enabled: true }"), "core sets adaptive_pricing");
+assert(core.includes("adaptivePricingForMarket"), "core sets adaptive_pricing from the market");
+assert(adaptivePricingForMarket("za") === true, "SA sessions keep Adaptive Pricing");
+assert(adaptivePricingForMarket("us") === false, "US sessions turn Adaptive Pricing off");
+assert(adaptivePricingNote("us") === null, "US interstitial hides the ZAR line");
+assert(
+  adaptivePricingNote("za")?.includes("ZAR") === true,
+  "SA interstitial can mention ZAR",
+);
+assert(
+  resolveFirmCheckoutMarket({ country: "US", regionCode: "CA" }, "za") === "us",
+  "a US firm stays USD even if the request says za",
+);
+assert(
+  resolveFirmCheckoutMarket({ country: "ZA" }, "us") === "za",
+  "a SA firm keeps ZAR presentment",
+);
+assert(resolveFirmCheckoutMarket(null, "us") === "us", "no firm row and a US request stays USD");
+const usWithCoupon = firmCheckoutSessionParams({
+  priceId: "price_test_solo_month",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: "user_1",
+  email: "firm@example.com",
+  market: "us",
+  zaCouponId: "MILON_ZA_50",
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: true,
+});
+assert(usWithCoupon.adaptive_pricing?.enabled === false, "US session disables Adaptive Pricing");
+assert(
+  !usWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50"),
+  "the SA 50% coupon never attaches for a US firm",
+);
+const zaWithCoupon = firmCheckoutSessionParams({
+  priceId: "price_test_solo_month",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: "user_1",
+  email: "firm@example.com",
+  market: "za",
+  zaCouponId: "MILON_ZA_50",
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: false,
+});
+assert(zaWithCoupon.adaptive_pricing?.enabled === true, "SA session keeps Adaptive Pricing");
+assert(
+  zaWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50") ===
+    true,
+  "SA session still attaches the 50% coupon",
+);
+const usUpgrade = firmUpgradeCheckoutSessionParams({
+  priceId: "price_test_solo_month",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: "user_1",
+  email: "firm@example.com",
+  market: "us",
+  zaCouponId: "MILON_ZA_50",
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: false,
+});
+assert(usUpgrade.adaptive_pricing?.enabled === false, "US upgrade Checkout does not offer ZAR");
 assert(core.includes('billing_address_collection: "required"'), "core collects billing address");
 assert(core.includes("subscription_data"), "plan metadata lands on the subscription");
 assert(core.includes("trial_period_days: FIRM_TRIAL_DAYS"), "core sets a 14-day trial");

@@ -11,6 +11,7 @@ import {
   decideFirmBillingEntitlement,
   decideFirmBillingPathGate,
   decidePostLoginBillingResume,
+  isFirstClientFiguresPath,
   emailHasEntitlingSubscription,
   isBillingExemptPath,
   isFirmProductPath,
@@ -104,6 +105,114 @@ assert(
     insightSeen: true,
   }) === "require_billing",
   "after an insight an unpaid firm is sent to Checkout",
+);
+assert(
+  isFirstClientFiguresPath({ pathname: "/clients/abc", firmClientCount: 1, firstClientId: "abc" }),
+  "the only client file is the figures view",
+);
+assert(
+  !isFirstClientFiguresPath({ pathname: "/reports", firmClientCount: 1 }),
+  "reports is not the figures view",
+);
+assert(
+  !isFirstClientFiguresPath({
+    pathname: "/clients/second",
+    firmClientCount: 2,
+    firstClientId: "first",
+  }),
+  "a later client is not the first figures view",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/abc",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "allow",
+  "first-client figures stay viewable without a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/first",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 2,
+    firstClientId: "first",
+  }) === "allow",
+  "the earliest file stays open after a second client exists",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/abc",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: null,
+  }) === "allow",
+  "a failed client count does not wall the file",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/second",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 2,
+    firstClientId: "first",
+  }) === "require_billing",
+  "a second client still redirects after an insight",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "require_billing",
+  "the practice board still redirects after an insight (second client stays gated)",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/reports",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "require_billing",
+  "reports and export still redirect",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/settings/team",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: false,
+    firmClientCount: 1,
+  }) === "require_billing",
+  "team settings still bill before an insight",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients/abc",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+  }) === "require_billing",
+  "without a first-client count the client path still redirects",
 );
 assert(
   decideFirmBillingPathGate({
@@ -334,6 +443,15 @@ assert(
   landing.includes("decidePostLoginBillingResume"),
   "post-login can send unpaid firm owners to billing",
 );
+const signedInLanding = landing.slice(
+  landing.indexOf("redirect if already signed in"),
+  landing.indexOf("Landing theme"),
+);
+assert(
+  !signedInLanding.includes('to: "/billing/start"'),
+  "a signed-in visit to / does not auto-start Checkout",
+);
+assert(signedInLanding.includes('hash === "pricing"'), "pricing hash stays on the landing");
 const goToFirm = landing.slice(
   landing.indexOf("const goToFirmSignup"),
   landing.indexOf("const goToOwnerSpark"),
@@ -427,6 +545,8 @@ const layout = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
 assert(layout.includes("getFirmBillingEntitlement"), "authenticated shell calls the Stripe gate");
 assert(layout.includes("isFirmProductPath"), "authenticated shell gates firm product paths");
 assert(layout.includes("/billing/required"), "unpaid firms redirect to billing required");
+assert(layout.includes("loadFirmClientGateContext"), "shell loads the first-client count");
+assert(layout.includes("firmClientCount"), "shell passes the first-client count into the gate");
 assert(
   !layout.includes('to: "/app"') || layout.includes("shouldStayOnAccountantPortal"),
   "SME bounce to /app remains",
@@ -440,10 +560,22 @@ const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8"
 assert(required.includes("Continue on"), "required page is Checkout after the figures");
 assert(required.includes("The figures stay."), "required page does not pretend the workspace never opened");
 assert(required.includes("Resume Checkout"), "required page resumes Checkout");
+assert(required.includes('href="/#pricing"'), "back to pricing shows pricing, not Checkout");
+assert(!required.includes('to="/"'), "back to pricing does not link at /");
+assert(required.includes("BillingSignOutButton"), "billing wall can sign out");
 assert(required.includes('createFileRoute("/billing/required")'), "required route");
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
+assert(start.includes("BillingSignOutButton"), "billing start can sign out");
+const signOut = readFileSync(resolve("src/components/billing-sign-out.tsx"), "utf8");
+assert(signOut.includes("Sign out"), "sign out label is visible");
+assert(start.includes("adaptivePricingNote(pending.market)"), "ZAR line follows the market");
+assert(
+  !start.includes("South African firms may be charged in ZAR via Adaptive Pricing."),
+  "US interstitial does not hard-code the SA line",
+);
+assert(start.includes('href="/#pricing"'), "billing start error returns to pricing");
 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
 assert(

@@ -42,7 +42,7 @@ App constants: `src/lib/stripe-plans.ts`. Session builder: `src/lib/stripe-check
 
 - `mode: "subscription"`
 - `line_items[].price` = catalog price id from lookup_key (**not** inline `price_data`)
-- `adaptive_pricing: { enabled: true }`
+- `adaptive_pricing: { enabled: true }` for a South African firm only. US sessions set `enabled: false` so Checkout does not offer a ZAR toggle. The SA 50% coupon is not attached on a US firm.
 - **Do not** pass `managed_payments: { enabled: false }` — leave Managed Payments at the account default (Stripe handles tax for a fee).
 - **Do not** enable `automatic_tax` unless active Tax registrations exist. Prefer Managed Payments default.
 - `billing_address_collection: "required"` and `tax_id_collection: { enabled: true }`
@@ -65,7 +65,7 @@ If the signed-in email already has an **active** Stripe subscription, Checkout c
 
 ## New firm signup — 14-day trial
 
-New firms open the practice workspace after `/auth` signup (email confirm and Google included). Checkout on a **paid** band waits until the accountant has seen an insight (figures on a client). The default band is Solo monthly (`milon_solo_monthly`). Starter $0 is not a new-signup path. Dashboard and `/clients` stay open before that insight; after it, an unpaid owner resumes at `/billing/required`.
+New firms open the practice workspace after `/auth` signup (email confirm and Google included). Checkout on a **paid** band waits until the accountant has seen an insight (figures on a client). The default band is Solo monthly (`milon_solo_monthly`). Starter $0 is not a new-signup path. Dashboard and `/clients` stay open before that insight. After it, the first client's file stays open so the figures remain on screen, with an in-context card step. Reports, team and brand settings, the practice dashboard (adding another client), and a later client's file still resume at `/billing/required`.
 
 - Copy: **14-day free trial · up to 3 clients**. Do not write “3 free clients” or “free forever.”
 - Card is required at Checkout, not before the first figures. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
@@ -154,8 +154,9 @@ Failed or skipped Checkout must not leave a firm with an open accountant
 workspace. Auth account creation can still happen before Checkout; after login,
 **firm product UI requires an entitling Stripe subscription**.
 
-- **Gated:** `/dashboard`, `/clients/*`, `/reports*`, `/settings/team`,
-  `/settings/brand` for accountant / firm **owners**.
+- **Gated:** `/dashboard` after an insight, `/reports*`, `/settings/team`,
+  `/settings/brand`, and a second client's file, for accountant / firm **owners**.
+  The first client's file (Overview and figures) stays readable without a card.
 - **Entitled when:** Stripe customer for the signed-in email has a subscription
   with status `active` or `trialing`. A 14-day trial counts (`trialing`).
   Checkout success includes `complete` / `paid` / `no_payment_required`
