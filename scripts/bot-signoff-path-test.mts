@@ -115,7 +115,9 @@ assert(
 assert(clipped.tab === "plan" && clipped.coach === "actions", "destination keeps the plan route");
 
 const widget = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
-const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const studio =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const portfolio = readFileSync(resolve("src/lib/portfolio.ts"), "utf8");
 assert(widget.includes("botSignoffCtas"), "the bot panel asks for sign-off CTAs");
 assert(widget.includes("dataset.signoff"), "the CTA is a button the thread can find");

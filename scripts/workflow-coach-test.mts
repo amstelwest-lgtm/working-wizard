@@ -226,7 +226,9 @@ assert(
   "reading path strip component is not in the client shell",
 );
 
-const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const studio =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 assert(
   !studio.includes("WorkflowCoachStrip"),
   "client shell does not mount the reading path strip",

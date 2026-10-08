@@ -9,10 +9,9 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const clientSrc = readFileSync(
-  resolve("src/routes/_authenticated/clients.$clientId.tsx"),
-  "utf8",
-);
+const clientSrc =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const widgetSrc = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
 const copySrc = readFileSync(resolve("src/lib/milon-bot-copy.ts"), "utf8");
 const cssSrc = readFileSync(resolve("public/ask-ai.css"), "utf8");

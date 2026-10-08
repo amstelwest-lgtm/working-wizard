@@ -47,10 +47,9 @@ const typesSrc = readFileSync(resolve("src/integrations/supabase/types.ts"), "ut
 const clientSrc = readFileSync(resolve("src/lib/milon-bot-client.ts"), "utf8");
 const summarySrc = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
-const studioSrc = readFileSync(
-  resolve("src/routes/_authenticated/clients.$clientId.tsx"),
-  "utf8",
-);
+const studioSrc =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const widgetSrc = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
 const copySrc = readFileSync(resolve("src/lib/milon-bot-copy.ts"), "utf8");
 const askAiSrc = readFileSync(resolve("supabase/functions/ask-ai/anthropic.ts"), "utf8");

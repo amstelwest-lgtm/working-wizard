@@ -383,7 +383,9 @@ const card = readFileSync(resolve("src/components/xero-connect.tsx"), "utf8");
 assert(card.includes('id="xero-aged-ap-status"'), "xero card shows aged payables proof");
 const qboCard = readFileSync(resolve("src/components/qbo-connect.tsx"), "utf8");
 assert(qboCard.includes('id="qbo-aged-ap-status"'), "qbo card shows aged payables proof");
-const rail = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const rail =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 assert(rail.includes('label: "Payables"'), "payables is a deliverable rail item");
 const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
 assert(propose.includes("buildPayablesDraft"), "propose files a payables draft from the cache");

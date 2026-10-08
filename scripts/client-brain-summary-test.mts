@@ -72,10 +72,9 @@ const brainSummaryRls = readFileSync(
   "utf8",
 );
 const typesSrc = readFileSync(resolve("src/integrations/supabase/types.ts"), "utf8");
-const clientSrc = readFileSync(
-  resolve("src/routes/_authenticated/clients.$clientId.tsx"),
-  "utf8",
-);
+const clientSrc =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const panelSrc = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
 
 assert(migration.includes("brain_summary jsonb"), "clients.brain_summary column");

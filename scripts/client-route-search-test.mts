@@ -146,7 +146,9 @@ assert(
 );
 assert(plan.filter === "overdue", "opening Action Plan keeps an overdue filter");
 
-const route = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const route =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const parser = route.slice(
   route.indexOf("validateSearch:"),
   route.indexOf("component: ClientView"),

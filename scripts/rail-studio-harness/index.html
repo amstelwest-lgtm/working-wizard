@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rail harness</title>
+    <script>
+      (function () {
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = function (input, init) {
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.href
+                : input && input.url
+                  ? input.url
+                  : "";
+          if (/supabase\.(co|in|com)/i.test(url)) {
+            return Promise.reject(new Error("rail harness blocked a Supabase request"));
+          }
+          return nativeFetch(input, init);
+        };
+      })();
+    </script>
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        min-height: 100%;
+        background: #050507;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

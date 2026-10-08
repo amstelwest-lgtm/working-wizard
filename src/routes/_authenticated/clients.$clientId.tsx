@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { openPracticeSettings } from "@/lib/user-roles";
 import { useEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
@@ -129,10 +129,17 @@ import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
-  DELIVERABLE_SECTIONS,
   legacyPaneForSearch,
-  OVERVIEW_SECTIONS,
 } from "@/lib/client-route-search";
+import {
+  CLIENT_RAIL,
+  ClientRailButton,
+  DELIVERABLE_SECTION_TABS,
+  OVERVIEW_SECTION_TABS,
+  railGroup,
+  SectionTabList,
+  selectedSectionId,
+} from "@/components/client-studio-chrome";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -523,133 +530,6 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "plan",
   "advisory",
 ];
-
-const CLIENT_RAIL: { id: "ask" | "overview" | "deliverables"; label: string; landing: string }[] = [
-  { id: "ask", label: "Bot", landing: "ask" },
-  { id: "overview", label: "Overview", landing: "overview" },
-  { id: "deliverables", label: "Deliverables", landing: "reports" },
-];
-
-const OVERVIEW_SECTION_TABS: { id: (typeof OVERVIEW_SECTIONS)[number]; label: string }[] = [
-  { id: "health", label: "Health" },
-  { id: "pillars", label: "Pillars" },
-  { id: "cash", label: "Cash" },
-  { id: "profit", label: "Profit" },
-  { id: "collections", label: "Collections" },
-  { id: "payables", label: "Payables" },
-  { id: "budget", label: "Budget" },
-  { id: "moves", label: "Moves" },
-  { id: "books", label: "Books" },
-];
-
-const DELIVERABLE_SECTION_TABS: { id: (typeof DELIVERABLE_SECTIONS)[number]; label: string }[] = [
-  { id: "reports", label: "Reports" },
-  { id: "pack", label: "Advisory pack" },
-  { id: "plan", label: "Action plan" },
-];
-
-function railGroup(tab: ActiveTab): "ask" | "overview" | "deliverables" {
-  if (tab === "ask") return "ask";
-  if (tab === "reports" || tab === "plan" || tab === "advisory") return "deliverables";
-  return "overview";
-}
-
-function selectedSectionId(tab: ActiveTab, section: string | undefined): string | null {
-  if (railGroup(tab) === "deliverables") {
-    return DELIVERABLE_SECTION_TABS.some((row) => row.id === section) ? (section ?? "reports") : "reports";
-  }
-  return OVERVIEW_SECTION_TABS.some((row) => row.id === section) ? (section ?? null) : null;
-}
-
-function ClientRailButton({
-  id,
-  landing,
-  label,
-  active,
-  clientId,
-  primary,
-}: {
-  id: "ask" | "overview" | "deliverables";
-  landing: string;
-  label: string;
-  active: boolean;
-  clientId: string;
-  primary?: boolean;
-}) {
-  return (
-    <Link
-      to="/clients/$clientId"
-      params={{ clientId }}
-      search={(prev) => accountantClientTabSearch(prev, landing)}
-      className={`tab${active ? " on" : ""}${primary ? " bot-primary" : ""}`}
-      data-tab={id}
-      data-bot-rail={primary ? "true" : undefined}
-      aria-current={active ? "page" : undefined}
-      replace
-    >
-      {label}
-    </Link>
-  );
-}
-
-function SectionTabList({
-  label,
-  sections,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  sections: readonly { id: string; label: string }[];
-  selected: string | null;
-  onSelect: (id: string) => void;
-}) {
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (
-      event.key !== "ArrowLeft" &&
-      event.key !== "ArrowRight" &&
-      event.key !== "Home" &&
-      event.key !== "End"
-    ) {
-      return;
-    }
-    event.preventDefault();
-    const ids = sections.map((section) => section.id);
-    const current = selected && ids.includes(selected) ? selected : ids[0];
-    let index = Math.max(0, ids.indexOf(current ?? ""));
-    if (event.key === "ArrowRight") index = (index + 1) % ids.length;
-    if (event.key === "ArrowLeft") index = (index - 1 + ids.length) % ids.length;
-    if (event.key === "Home") index = 0;
-    if (event.key === "End") index = ids.length - 1;
-    const next = ids[index];
-    if (!next) return;
-    onSelect(next);
-    window.requestAnimationFrame(() => {
-      document.getElementById(`section-tab-${next}`)?.focus();
-    });
-  };
-  return (
-    <div className="section-tablist" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
-      {sections.map((section, index) => {
-        const on = selected === section.id;
-        const roving = on || (selected == null && index === 0);
-        return (
-          <button
-            key={section.id}
-            type="button"
-            role="tab"
-            id={`section-tab-${section.id}`}
-            className="section-tab"
-            aria-selected={on}
-            tabIndex={roving ? 0 : -1}
-            onClick={() => onSelect(section.id)}
-          >
-            {section.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function DeliverableTabHead({
   id,
