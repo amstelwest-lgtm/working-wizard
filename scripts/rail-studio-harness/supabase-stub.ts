@@ -60,7 +60,13 @@ const CLIENT_ROW = {
     businessTypeId: "professional_services",
     confirmedAt: "2026-09-01T00:00:00.000Z",
   },
-  financials: { cash: "186000", revenue: "420000", cogs: "80000", fixedCosts: "140000" },
+  financials: {
+    cash: "186000",
+    revenue: "420000",
+    cogs: "80000",
+    fixedCosts: "140000",
+    periodEnd: "2026-09-30",
+  },
   financials_updated_at: "2026-10-01T00:00:00.000Z",
   budget: null,
 };
@@ -167,6 +173,54 @@ function deliveryRows(): unknown[] {
   return [];
 }
 
+/** Opening under a ~R 49.2k floor, recovering at the week-1 close. */
+function belowFloorClient() {
+  return {
+    ...CLIENT_ROW,
+    cashflow: {
+      startDate: "2026-10-05",
+      openingBalance: "46300",
+      openingBalanceSource: "upload",
+      forecastLinesSource: "xero-bank-summary",
+      revenue: [
+        {
+          id: "r1",
+          name: "Collections",
+          amount: "18080",
+          frequency: "recurring-weekly",
+          startWeek: 1,
+          splitCount: 1,
+        },
+      ],
+      expenses: [
+        {
+          id: "e1",
+          name: "Payroll",
+          amount: "12300",
+          frequency: "recurring-weekly",
+          startWeek: 1,
+          splitCount: 1,
+        },
+      ],
+      other: [],
+    },
+    financials: {
+      cash: "46300",
+      revenue: "216960",
+      cogs: "0",
+      fixedCosts: "159900",
+      periodEnd: "2026-09-30",
+    },
+  };
+}
+
+function clientRow() {
+  if (typeof location !== "undefined" && /(?:^|[?&])open=below(?:&|$)/.test(location.search)) {
+    return belowFloorClient();
+  }
+  return CLIENT_ROW;
+}
+
 function materialize(table: string, mode: Mode): { data: unknown; error: null } {
   if (table === "advisory_deliveries") {
     const rows = deliveryRows();
@@ -178,7 +232,7 @@ function materialize(table: string, mode: Mode): { data: unknown; error: null } 
     if (mode === "list") return { data: rows, error: null };
     return { data: rows[0] ?? null, error: null };
   }
-  const row = TABLES[table];
+  const row = table === "clients" ? clientRow() : TABLES[table];
   if (mode === "list") {
     if (Array.isArray(row)) return { data: row, error: null };
     if (row == null) return { data: [], error: null };

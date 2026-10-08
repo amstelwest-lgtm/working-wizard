@@ -13,9 +13,12 @@ import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import {
   cashForecastSearchWithView,
   cashForecastViewFromSearch,
+  cashBalanceSeries,
+  cashGraphAxisTicks,
   cashGraphWeekTickInterval,
   forecastChipSource,
   hashIsCashDetailAnchor,
+  lowestCashPoint,
   weeksBelowFloorCopy,
 } from "../src/lib/cash-forecast-view";
 
@@ -65,6 +68,61 @@ assert(
   }).sub === "stays above the floor",
   "a clear forecast does not invent a dip",
 );
+const opensUnder = cashBalanceSeries({
+  opening: 46300,
+  closings: [52080, 57860, 63640],
+  floor: 49200,
+});
+assert(opensUnder[0]?.key === "Now" && opensUnder[0].belowFloor, "opening is the first point on the series");
+assert(opensUnder[1]?.key === "W1" && opensUnder[1].belowFloor === false, "week 1 close can sit above the floor");
+const opensUnderLow = lowestCashPoint(opensUnder);
+assert(
+  opensUnderLow.key === "Now" && opensUnderLow.belowFloor && opensUnderLow.balance === 46300,
+  "the low point is the opening when it is under the floor",
+);
+const opensUnderCopy = weeksBelowFloorCopy({
+  empty: false,
+  weeksBelow: 0,
+  horizon: 13,
+  firstDipWeek: null,
+  firstDipDate: null,
+  opensBelow: true,
+});
+assert(opensUnderCopy.value === "Below floor now", opensUnderCopy.value);
+assert(opensUnderCopy.sub === "recovers W1", opensUnderCopy.sub);
+assert(!opensUnderCopy.value.startsWith("0 of"), "an under-floor opening is not 0 of 13");
+const openingIsLow = cashBalanceSeries({
+  opening: 128000,
+  closings: [140000, 151000, 162000],
+  floor: 49200,
+});
+const openingIsLowPoint = lowestCashPoint(openingIsLow);
+assert(
+  openingIsLowPoint.key === "Now" &&
+    openingIsLowPoint.balance === 128000 &&
+    openingIsLowPoint.belowFloor === false,
+  "the opening can be the lowest point while staying above the floor",
+);
+assert(
+  openingIsLow.every((point) => point.belowFloor === false),
+  "an above-floor series has no breach to shade",
+);
+const dippedWhileOpen = weeksBelowFloorCopy({
+  empty: false,
+  weeksBelow: 2,
+  horizon: 13,
+  firstDipWeek: 8,
+  firstDipDate: "23 Nov",
+  opensBelow: true,
+});
+assert(dippedWhileOpen.value === "Below floor now", dippedWhileOpen.value);
+assert(dippedWhileOpen.sub === "first dip W8 · 23 Nov", dippedWhileOpen.sub);
+const axisKeys = ["Now", ...Array.from({ length: 13 }, (_, index) => `W${index + 1}`)];
+assert(
+  JSON.stringify(cashGraphAxisTicks(360, axisKeys)) === JSON.stringify(["Now", "W4", "W7", "W10", "W13"]),
+  "a narrow chart keeps Now and the later week labels",
+);
+assert(cashGraphAxisTicks(1280, axisKeys) === undefined, "a wide chart shows every point including Now");
 assert(hashIsCashDetailAnchor("#detailed-forecast"), "detailed-forecast is a legacy anchor");
 assert(hashIsCashDetailAnchor("wizard-cash-table"), "the old table id is a legacy anchor");
 assert(!hashIsCashDetailAnchor("#wizard-cash-outlook"), "the outlook anchor is not the table");
@@ -91,7 +149,13 @@ assert(cashSrc.includes("Double-click a figure to edit"), "edit affordance stays
 assert(gridSrc.includes("milon-forecast-amount"), "hover underline hint without restyle");
 assert(cashSrc.includes("applyWeekOverrides"), "grid uses persisted week overrides");
 assert(gridSrc.includes("{symbol}"), "currency symbol stays while editing");
-assert(cashSrc.includes("cashGraphWeekTickInterval"), "the graph thins week ticks from the frame width");
+assert(cashSrc.includes("cashBalanceSeries"), "the graph plots the shared opening series");
+assert(cashSrc.includes("cashGraphAxisTicks"), "the graph thins week ticks from the frame width");
+assert(gridSrc.includes("data-cash-opening-tight"), "an opening under the floor tints that cell");
+const paymentsRow = gridSrc.slice(gridSrc.indexOf('key: "total-payments"'), gridSrc.indexOf('key: "total-payments"') + 280);
+assert(paymentsRow.includes("blankZero: true"), "a zero payment week shows a dash");
+assert(paymentsRow.includes('tone: "plain"') && paymentsRow.includes("rule: true"), "total payments stays neutral");
+assert(!paymentsRow.includes('tone: "out"'), "total payments is not a red band");
 assert(cashSrc.includes("<ViewToggle"), "graph and 13-week share one toggle");
 assert(cashSrc.includes('value: "13week"'), "13-week is a view value");
 assert(cashSrc.includes("detailed-forecast"), "old detailed-forecast anchor still resolves");

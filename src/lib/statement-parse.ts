@@ -670,18 +670,24 @@ export function mergeStatementFinancials(
   return out;
 }
 
+function statementIsoDate(value: unknown): string | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(value)) return null;
+  return value.slice(0, 10);
+}
+
 /**
  * Balance-sheet date for the opening-cash label.
  * Returned only when the figure on screen is the statement cash balance.
+ * `cashAsOf` is written on a new balance-sheet upload. Older snapshots only
+ * have `periodEnd`, and that date is the fallback. A stored `cashAsOf` still
+ * wins, so a later P&L period end does not move the label.
  * The 13-week axis can still start on the Monday of the current week.
  */
 export function balanceSheetCashAsOf(
-  financials: { cash?: unknown; cashAsOf?: unknown } | null | undefined,
+  financials: { cash?: unknown; cashAsOf?: unknown; periodEnd?: unknown } | null | undefined,
   openingBalance: number,
 ): string | null {
-  const raw = financials?.cashAsOf;
-  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
   const sheet = parseFloat(String(financials?.cash ?? "").replace(/[^0-9.-]/g, ""));
   if (!Number.isFinite(sheet) || Math.abs(sheet - openingBalance) >= 0.5) return null;
-  return raw.slice(0, 10);
+  return statementIsoDate(financials?.cashAsOf) ?? statementIsoDate(financials?.periodEnd);
 }

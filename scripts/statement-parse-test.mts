@@ -290,6 +290,19 @@ assert(
   balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30" }, 12000) === null,
   "a different opening keeps the week label",
 );
+assert(
+  balanceSheetCashAsOf({ cash: "46300", periodEnd: "2026-09-30" }, 46300) === "2026-09-30",
+  "older snapshots fall back to the period end when cashAsOf was never stored",
+);
+assert(
+  balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30", periodEnd: "2026-10-31" }, 46300) ===
+    "2026-09-30",
+  "a stored cash date wins over a later period end",
+);
+assert(
+  balanceSheetCashAsOf({ cash: "46300", periodEnd: "2026-09-30" }, 12000) === null,
+  "a period end does not label a different opening",
+);
 
 const uploadCard = readFileSync(new URL("../src/components/upload-financials.tsx", import.meta.url), "utf8");
 assert(uploadCard.includes('result.statement_basis !== "unknown"'), "unknown basis chip is hidden");
