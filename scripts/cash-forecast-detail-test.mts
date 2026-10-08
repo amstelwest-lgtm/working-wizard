@@ -9,6 +9,13 @@ import {
   parseEditableAmount,
   setWeekOverride,
 } from "../src/lib/cash-week-overrides";
+import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
+import {
+  cashForecastSearchWithView,
+  cashForecastViewFromSearch,
+  forecastChipSource,
+  hashIsCashDetailAnchor,
+} from "../src/lib/cash-forecast-view";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -27,12 +34,39 @@ assert(parseEditableAmount("1,250.5") === 1250.5, "typed amount strips commas");
 assert(parseEditableAmount("") === null, "blank clears the override");
 assert(parseEditableAmount("—") === null, "dash clears the override");
 
+assert(cashForecastViewFromSearch(undefined) === "graph", "graph is the default with no param");
+assert(cashForecastViewFromSearch("graph") === "graph", "an unknown view stays on the graph");
+assert(cashForecastViewFromSearch("13week") === "13week", "view=13week opens the weekly model");
+assert(hashIsCashDetailAnchor("#detailed-forecast"), "detailed-forecast is a legacy anchor");
+assert(hashIsCashDetailAnchor("wizard-cash-table"), "the old table id is a legacy anchor");
+assert(!hashIsCashDetailAnchor("#wizard-cash-outlook"), "the outlook anchor is not the table");
+const cleared = cashForecastSearchWithView({ tab: "overview", section: "cash", view: "13week" }, "graph");
+assert(!("view" in cleared), "graph drops the view param");
+assert(cleared.section === "cash", "other search params stay");
+assert(
+  cashForecastSearchWithView({ section: "cash" }, "13week").view === "13week",
+  "13-week writes view=13week",
+);
+assert(forecastChipSource("xero-bank-summary") === "xero", "xero lines use the Xero chip");
+assert(forecastChipSource("qbo-bank-activity") === "qbo", "qbo lines use the QuickBooks chip");
+assert(forecastChipSource("upload") === "upload", "an upload stays an upload chip");
+assert(forecastChipSource(null) === "assumption", "an untagged line is an assumption");
+assert(figureSourceChipLabel("assumption") === "Assumption", "assumption is a chip");
+assert(figureSourceChipLabel("xero") === "Xero", "xero chip is unchanged");
+assert(figureSourceChipLabel("qbo") === "QuickBooks", "quickbooks chip is unchanged");
+assert(figureSourceChipLabel("upload") === "Uploaded statement", "upload chip is unchanged");
+
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
-assert(cashSrc.includes("Detailed cashflow forecast"), "section title");
-assert(cashSrc.includes("Double-click a figure to edit"), "edit affordance in the subtitle");
-assert(cashSrc.includes("milon-forecast-amount"), "hover underline hint without restyle");
+const gridSrc = readFileSync(resolve("src/components/cash-thirteen-week.tsx"), "utf8");
+assert(!cashSrc.includes('title="Detailed cashflow forecast"'), "the separate detailed section is gone");
+assert(cashSrc.includes("Double-click a figure to edit"), "edit affordance stays on the 13-week view");
+assert(gridSrc.includes("milon-forecast-amount"), "hover underline hint without restyle");
 assert(cashSrc.includes("applyWeekOverrides"), "grid uses persisted week overrides");
-assert(cashSrc.includes("{symbol}"), "currency symbol stays while editing");
+assert(gridSrc.includes("{symbol}"), "currency symbol stays while editing");
+assert(cashSrc.includes("<ViewToggle"), "graph and 13-week share one toggle");
+assert(cashSrc.includes('value: "13week"'), "13-week is a view value");
+assert(cashSrc.includes("detailed-forecast"), "old detailed-forecast anchor still resolves");
+assert(cashSrc.includes("hashIsCashDetailAnchor"), "anchor hashes redirect onto the card");
 assert(cashSrc.includes("const startLabel = weeks[0]"), "forecast start uses the week-axis label");
 assert(!cashSrc.includes("`Start ${startDate}`"), "opening stat does not print the raw ISO start");
 assert(!cashSrc.includes("`Forecast starts ${startDate}"), "PDF assumption does not print the raw ISO start");

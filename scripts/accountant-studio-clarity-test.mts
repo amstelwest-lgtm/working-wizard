@@ -219,11 +219,11 @@ assert(
 );
 
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
-assert(cashSrc.includes('title="Detailed cashflow forecast"'), "weekly grid is renamed");
+assert(!cashSrc.includes('title="Detailed cashflow forecast"'), "the separate detailed section is gone");
 assert(!cashSrc.includes('title="Weekly Detail"'), "old Weekly Detail title is gone");
-assert(cashSrc.includes("onDoubleClick"), "figures are double-click editable");
-assert(cashSrc.includes("ForecastAmountCell"), "symbol stays; only the number edits");
-assert(cashSrc.includes("CollapsibleGoldCard"), "13-week forecast uses the same hideable card");
+assert(cashSrc.includes("<ViewToggle"), "graph and 13-week share one card");
+assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly model is one toggle away from the graph");
+assert(cashSrc.includes("CollapsibleGoldCard"), "setup still uses the hideable card");
 
 const ownerApp = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(ownerApp.includes("ratioActualLine"), "owner complex Health rows show mini actuals");

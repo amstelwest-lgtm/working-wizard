@@ -121,6 +121,8 @@ export function figureSourceChipLabel(source: string | null | undefined): string
       return "Saved figures";
     case "lighthouse_import":
       return "Import";
+    case "assumption":
+      return "Assumption";
     default: {
       const raw = source?.trim() ?? "";
       if (/trial|tb/i.test(raw)) return "Trial balance";
