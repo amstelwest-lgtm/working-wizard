@@ -24,7 +24,7 @@ import {
   STAFF_INVITE_TTL_MS,
   revokeFirmStaffInviteRecord,
   rotateFirmStaffInviteLink,
-} from "../src/lib/practice-access.functions";
+} from "../src/lib/firm-staff-invite.server";
 import type { LooseAdmin } from "../src/lib/owner-ops.guard";
 
 function assert(cond: boolean, msg: string) {
