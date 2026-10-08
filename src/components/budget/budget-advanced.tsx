@@ -289,7 +289,8 @@ export function BudgetAdvancedPanel({
             <Button
               type="button"
               size="sm"
-              className="gap-1.5 bg-[#d4a550] text-xs text-[#0a0e1a] hover:bg-[#c49a45]"
+              variant="outline"
+              className="gap-1.5 text-xs"
               disabled={pushing || !clientId}
               onClick={pushCash}
             >

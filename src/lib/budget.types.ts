@@ -256,6 +256,9 @@ export type BudgetActuals = {
   budgetRevenue?: number;
   budgetCogs?: number;
   budgetOverheads?: number;
+  /** Operating profit for the same window. */
+  ebit?: number;
+  budgetEbit?: number;
 };
 
 export type UnmappedDriver = {

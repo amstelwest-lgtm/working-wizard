@@ -23,8 +23,7 @@ import { preflightUploadFile } from "@/lib/upload-quality";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
-import { budgetActualsBadge } from "@/lib/budget.bridges";
-import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
+import { fyMonths, currentBudgetMonth, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
 import { useMarket } from "@/contexts/market";
 import {
@@ -44,13 +43,6 @@ import {
 import { extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { selectionPayload } from "@/lib/market";
-
-function priorCalendarMonth(): string {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 export function BudgetVariancePanel({
   clientId,
@@ -74,11 +66,7 @@ export function BudgetVariancePanel({
     return m;
   }, [budgetResults]);
 
-  const defaultMonth = useMemo(() => {
-    const prior = priorCalendarMonth();
-    if (months.includes(prior)) return prior;
-    return months[Math.min(months.length - 1, 0)] ?? prior;
-  }, [months]);
+  const defaultMonth = useMemo(() => currentBudgetMonth(months), [months]);
 
   const [focusMonth, setFocusMonth] = useState(defaultMonth);
   const [rows, setRows] = useState<BudgetMonthActualRow[]>([]);
@@ -266,8 +254,8 @@ export function BudgetVariancePanel({
 
   const imported = rows.length;
   const accountantEmpty = statementPace
-    ? "The month tiles above already use this statement’s monthly pace. This card is the month-true scorecard — upload a month’s management accounts when you have them."
-    : "The monthly scorecard against the plan above. Closed until you have a month’s management accounts to upload — until then there is nothing to compare, and that is expected.";
+    ? "The strip above is the statement, prorated. Upload a month’s management accounts when that file exists."
+    : "Closed until a month’s management accounts are on file.";
   const accountantLoaded = `${imported} month${imported === 1 ? "" : "s"} of management accounts on file. Open to see where the plan is off.`;
 
   return (
@@ -285,11 +273,6 @@ export function BudgetVariancePanel({
             : "Upload a month’s P&L when you have it — this is how the plan is checked, not how it is built."
       }
       defaultOpen={false}
-      headerRight={
-        <span className="hidden rounded-full border border-amber-900/15 bg-white/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:inline dark:border-slate-700 dark:bg-slate-900/60">
-          {budgetActualsBadge(imported, statementPace)}
-        </span>
-      }
     >
       <div className="space-y-4">
         {role === "accountant" && (
@@ -343,7 +326,8 @@ export function BudgetVariancePanel({
             size="sm"
             disabled={uploading || migrationRequired}
             onClick={() => fileRef.current?.click()}
-            className="gap-1.5 border-[#d4a550]/40 bg-[#d4a550] text-xs text-[#0a0e1a] hover:bg-[#c49a45]"
+            variant="outline"
+            className="gap-1.5 text-xs"
           >
             {uploading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
