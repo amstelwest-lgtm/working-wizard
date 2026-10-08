@@ -1024,9 +1024,17 @@ function ClientView() {
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
-  const [planSentence, setPlanSentence] = useState("No actions in the plan yet.");
+  const [planSentence, setPlanSentence] = useState(
+    "No actions in the plan yet. Add the first one to get started.",
+  );
+  const [planCount, setPlanCount] = useState(0);
+  const focusPlanAdd = useRef<(() => void) | null>(null);
   const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
+    setPlanCount(actions.length);
     setPlanSentence(planAnswerSentence(actions));
+  }, []);
+  const registerPlanAdd = useCallback((focus: () => void) => {
+    focusPlanAdd.current = focus;
   }, []);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
 
@@ -3743,6 +3751,7 @@ function ClientView() {
 
                 {/* ===== ACTION PLAN TAB ===== */}
                 <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
+                  <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
                   <DeliverableAnswerStrip
                     heading="Action plan"
                     sentence={planSentence}
@@ -3752,7 +3761,19 @@ function ClientView() {
                     signoff={actionPlanSignoff}
                     isStale={false}
                     onSignoffChange={patchSignoff("action_plan")}
-                    canSign
+                    canSign={planCount > 0}
+                    signoffVerbOnly
+                    extraActions={
+                      planCount === 0 ? (
+                        <button
+                          type="button"
+                          className={ARAP_GOLD_BTN}
+                          onClick={() => focusPlanAdd.current?.()}
+                        >
+                          Add action
+                        </button>
+                      ) : null
+                    }
                   />
                   <ReviewInputsDrawer hint={deliverableDrawerHint("plan", deliverableInputContext)}>
                     <DeliverableInputConfig
@@ -3762,6 +3783,7 @@ function ClientView() {
                       context={deliverableInputContext}
                     />
                   </ReviewInputsDrawer>
+                  </section>
                   {/* Follow the portal theme. A nested `.dark` island made Tailwind
               light-on-dark copy fire while accountant `--card` stayed a
               near-transparent cream — titles vanished in light mode. */}
@@ -3791,6 +3813,7 @@ function ClientView() {
                           focusMoveKey={planFocusMove}
                           onFocusHandled={() => setPlanFocusMove(null)}
                           onAnswer={onPlanAnswer}
+                          onRegisterAdd={registerPlanAdd}
                         />
                       )}
                     </Suspense>

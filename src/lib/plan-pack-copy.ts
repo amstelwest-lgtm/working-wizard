@@ -84,7 +84,7 @@ export function packStatusText(input: {
   });
 }
 
-const PLAN_EMPTY_SENTENCE = "No actions in the plan yet.";
+const PLAN_EMPTY_SENTENCE = "No actions in the plan yet. Add the first one to get started.";
 
 /** Same lead-in as Moves. The first title is the first action already in the list. */
 export function planAnswerSentence(actions: readonly { title: string }[]): string {

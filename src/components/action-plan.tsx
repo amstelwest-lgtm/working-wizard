@@ -25,6 +25,7 @@ import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
+import { planConfidenceDisplay } from "@/lib/plan-confidence-display";
 import {
   createActionFromRecommendation,
   listRecommendations,
@@ -171,6 +172,8 @@ interface Props {
   reviewSignoff?: ReportSignoffStamp | null;
   /** Titles already on the list, in stored order. The strip sentence uses them. */
   onAnswer?: (actions: readonly { title: string }[]) => void;
+  /** The strip's Add action uses this same focus. */
+  onRegisterAdd?: (focus: () => void) => void;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -452,6 +455,7 @@ export default function ActionPlanPanel({
   initialFilter,
   reviewSignoff = null,
   onAnswer,
+  onRegisterAdd,
 }: Props) {
   const { date } = useMarketFormat();
   const { profile } = useAccountantProfile();
@@ -481,6 +485,13 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const quickAddRef = useRef<HTMLInputElement>(null);
+  const focusQuickAdd = useCallback(() => {
+    quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    quickAddRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    onRegisterAdd?.(focusQuickAdd);
+  }, [onRegisterAdd, focusQuickAdd]);
 
   useEffect(() => {
     if (initialFilter) setFilter(initialFilter);
@@ -1151,16 +1162,9 @@ export default function ActionPlanPanel({
                 )}
                 <Button
                   size="sm"
-                  variant={pendingRecs.length > 0 ? "outline" : "default"}
-                  className={
-                    pendingRecs.length > 0
-                      ? INPUT_CLS
-                      : "bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
-                  }
-                  onClick={() => {
-                    quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                    quickAddRef.current?.focus();
-                  }}
+                  variant="outline"
+                  className={INPUT_CLS}
+                  onClick={focusQuickAdd}
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   Add action
@@ -1179,9 +1183,10 @@ export default function ActionPlanPanel({
                 {unsent.length > 0 && (
                   <Button
                     size="sm"
+                    variant="outline"
                     disabled={!ready.length || sending}
                     onClick={sendBatch}
-                    className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                    className={INPUT_CLS}
                   >
                     {sending ? (
                       <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -1293,10 +1298,9 @@ export default function ActionPlanPanel({
               {isOwner && items.length === 0 && (
                 <Button
                   size="sm"
-                  className="mt-3 bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
-                  onClick={() =>
-                    pendingRecs.length > 0 ? setRecOpen(true) : quickAddRef.current?.focus()
-                  }
+                  variant="outline"
+                  className={`mt-3 ${INPUT_CLS}`}
+                  onClick={() => (pendingRecs.length > 0 ? setRecOpen(true) : focusQuickAdd())}
                 >
                   {pendingRecs.length > 0 ? (
                     <>
@@ -1644,14 +1648,31 @@ function GoalHeader({
           {confidence != null && (
             <div className="shrink-0 rounded-xl border border-amber-900/10 bg-white/60 px-5 py-3 text-center dark:border-slate-800 dark:bg-slate-900/50">
               <div className={LABEL_CLS}>Plan confidence</div>
-              <div
-                className="mt-0.5 text-3xl font-black tabular-nums tracking-tight"
-                style={{
-                  color: confidence >= 75 ? "#22c55e" : confidence >= 50 ? "#f5a524" : "#ef4444",
-                }}
-              >
-                {confidence}%
-              </div>
+              {(() => {
+                const shown = planConfidenceDisplay(confidence);
+                return (
+                  <>
+                    <div
+                      className={`mt-0.5 text-3xl font-black tabular-nums tracking-tight ${shown.hint ? "text-slate-400 dark:text-slate-500" : ""}`}
+                      style={
+                        shown.hint
+                          ? undefined
+                          : {
+                              color:
+                                confidence >= 75 ? "#22c55e" : confidence >= 50 ? "#f5a524" : "#ef4444",
+                            }
+                      }
+                    >
+                      {shown.value}
+                    </div>
+                    {shown.hint ? (
+                      <p className="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                        {shown.hint}
+                      </p>
+                    ) : null}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -3241,7 +3262,8 @@ function BurnUp({
         ) : (
           <>
             <span className="font-bold text-[#ef4444]">{Math.abs(gap)}pt behind</span> the planned
-            line — that gap is the confidence number{confidence != null ? ` (${confidence}%)` : ""}.
+            line — that gap is the confidence number
+            {planConfidenceDisplay(confidence).hint ? "" : ` (${planConfidenceDisplay(confidence).value})`}.
           </>
         )}
       </p>

@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { PrecardCapCard } from "../src/components/precard-cap-card";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
 import { packAnswerSentence, packDrawerHint, packStatusText, planAnswerSentence } from "../src/lib/plan-pack-copy";
+import { planConfidenceDisplay } from "../src/lib/plan-confidence-display";
 import { PAGE_FIGURES_CHANGED_CLAUSE, signoffStatusLine } from "../src/lib/signoff-status";
 
 const september = { periodLabel: "September 2026", sectionCount: 6 };
@@ -77,7 +78,19 @@ assert.equal(
   false,
 );
 
-assert.equal(planAnswerSentence([]), "No actions in the plan yet.");
+assert.equal(
+  planAnswerSentence([]),
+  "No actions in the plan yet. Add the first one to get started.",
+);
+assert.deepEqual(planConfidenceDisplay(Number.NaN), {
+  value: "—",
+  hint: "Not enough progress yet",
+});
+assert.deepEqual(planConfidenceDisplay(undefined), {
+  value: "—",
+  hint: "Not enough progress yet",
+});
+assert.deepEqual(planConfidenceDisplay(72), { value: "72%", hint: null });
 assert.equal(
   planAnswerSentence([{ title: "Call the two largest overdue accounts" }]),
   "1 action in the plan. Start with: call the two largest overdue accounts.",
@@ -103,6 +116,9 @@ const footerAt = clientSrc.indexOf('className="footer-note"', advisoryAt);
 assert.ok(footerAt > advisoryAt, "the pack pane ends before the footer");
 const advisoryPane = clientSrc.slice(advisoryAt, footerAt);
 
+assert.ok(planPane.includes("signoffVerbOnly"), "the plan strip says Sign off");
+assert.ok(planPane.includes("planCount > 0"), "an empty plan hides Sign off");
+assert.ok(planPane.includes("Add action"), "an empty plan uses Add action");
 assert.ok(planPane.includes("DeliverableAnswerStrip"), "the plan pane uses the answer strip");
 assert.ok(planPane.includes('scope="action_plan"'), "the plan keeps its sign-off scope");
 assert.ok(planPane.includes("ActionPlanPanel"), "the plan pane still mounts the work list");

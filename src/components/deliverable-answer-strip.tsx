@@ -31,6 +31,7 @@ export function DeliverableAnswerStrip({
   onSignoffChange,
   canSign = false,
   extraActions = null,
+  signoffVerbOnly = false,
 }: {
   heading: string;
   sentence: string;
@@ -43,6 +44,8 @@ export function DeliverableAnswerStrip({
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   canSign?: boolean;
   extraActions?: ReactNode;
+  /** "Sign off" without the scope name. */
+  signoffVerbOnly?: boolean;
 }) {
   return (
     <section className="answer-strip" data-answer-strip>
@@ -60,6 +63,7 @@ export function DeliverableAnswerStrip({
             signoff={signoff}
             isStale={isStale}
             onChange={onSignoffChange}
+            verbOnly={signoffVerbOnly}
           />
         ) : null}
         {extraActions}

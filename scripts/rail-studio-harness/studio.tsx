@@ -2,7 +2,7 @@
  * Mounts the accountant studio shell from the client route, with fixture panes.
  * Supabase is the local stub. Nothing here has a project URL.
  */
-import { Component, useState, type ReactNode } from "react";
+import { Component, useRef, useState, type ReactNode } from "react";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
@@ -834,7 +834,11 @@ function PackPane({ clientId, packView }: { clientId: string; packView?: string 
 }
 
 function PlanPane({ clientId, planView }: { clientId: string; planView?: string }) {
-  const [sentence, setSentence] = useState("No actions in the plan yet.");
+  const [sentence, setSentence] = useState(
+    "No actions in the plan yet. Add the first one to get started.",
+  );
+  const [planCount, setPlanCount] = useState(0);
+  const focusAdd = useRef<(() => void) | null>(null);
   const signoff =
     planView === "signed"
       ? {
@@ -853,6 +857,7 @@ function PlanPane({ clientId, planView }: { clientId: string; planView?: string 
       : null;
   return (
     <div className="tabpane on" id="pane-plan">
+      <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
       <DeliverableAnswerStrip
         heading="Action plan"
         sentence={sentence}
@@ -862,7 +867,15 @@ function PlanPane({ clientId, planView }: { clientId: string; planView?: string 
         signoff={signoff}
         isStale={false}
         onSignoffChange={() => {}}
-        canSign
+        canSign={planCount > 0}
+        signoffVerbOnly
+        extraActions={
+          planCount === 0 ? (
+            <button type="button" className={ARAP_GOLD_BTN} onClick={() => focusAdd.current?.()}>
+              Add action
+            </button>
+          ) : null
+        }
       />
       <ReviewInputsDrawer hint={deliverableDrawerHint("plan", { financials: HARNESS_FINANCIALS })}>
         <DeliverableInputConfig
@@ -871,13 +884,20 @@ function PlanPane({ clientId, planView }: { clientId: string; planView?: string 
           context={{ financials: HARNESS_FINANCIALS }}
         />
       </ReviewInputsDrawer>
+      </section>
       <PaneBoundary label="Action plan">
         <ActionPlanPanel
           clientId={clientId}
           clientName="Harbour Glass"
           simplified
           isOwner
-          onAnswer={(actions) => setSentence(planAnswerSentence(actions))}
+          onAnswer={(actions) => {
+            setPlanCount(actions.length);
+            setSentence(planAnswerSentence(actions));
+          }}
+          onRegisterAdd={(focus) => {
+            focusAdd.current = focus;
+          }}
         />
       </PaneBoundary>
     </div>
