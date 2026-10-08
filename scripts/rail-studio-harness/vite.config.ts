@@ -1,6 +1,7 @@
 /**
  * Standalone Vite app for the rail screenshots. Not part of the production build.
  */
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +11,7 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   root,
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: [
       {

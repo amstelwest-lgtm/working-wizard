@@ -122,6 +122,7 @@ export function SectionTabList({
             id={`section-tab-${section.id}`}
             className="section-tab"
             aria-selected={on}
+            aria-current={on ? "page" : undefined}
             tabIndex={roving ? 0 : -1}
             onClick={() => onSelect(section.id)}
           >

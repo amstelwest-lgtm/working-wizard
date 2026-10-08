@@ -5,10 +5,28 @@ import { Toaster } from "sonner";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
 import { MarketProvider } from "@/contexts/market";
 import { AuthProvider } from "@/hooks/use-auth";
-import "@/styles.css";
-import "@/styles/accountant-portal.css";
-import "@/styles/feature-finder.css";
+import { applyPortalTheme } from "@/lib/portal-theme";
+import appCss from "@/styles.css?url";
+import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
 import { RailStudio } from "./studio";
+
+// Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
+// palette, which is what a dark signed-in session does.
+applyPortalTheme("dark");
+
+// Same sheets as `__root` (styles.css) plus `/_authenticated` head links.
+// The client route itself adds none; #370 moved those onto the layout.
+const sheetHrefs = [
+  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
+  appCss,
+  ...authenticatedLayoutLinks.flatMap((link) => (link.rel === "stylesheet" ? [link.href] : [])),
+];
+for (const href of sheetHrefs) {
+  const el = document.createElement("link");
+  el.rel = "stylesheet";
+  el.href = href;
+  document.head.appendChild(el);
+}
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
