@@ -110,7 +110,6 @@ import { periodProfitBridge } from "@/lib/period-profit";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton } from "@/components/review-signoff";
-import "@/styles/accountant-portal.css";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { parseOperatingProfile, type ClientOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
@@ -149,7 +148,9 @@ export const Route = createFileRoute("/_authenticated/reports/")({
         : undefined,
   }),
   component: ReportsPage,
-  head: () => ({ meta: [{ title: "Reports — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Reports — Milōn" }],
+  }),
 });
 
 const REPORT_KEYS = [

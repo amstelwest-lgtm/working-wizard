@@ -6,7 +6,7 @@
  * from code that also runs during SSR — every entry point checks for `window`.
  */
 
-type SentryReact = typeof import("@sentry/react");
+type SentryReact = typeof import("./sentry-lite");
 
 let sdk: Promise<SentryReact | null> | undefined;
 let currentUserId: string | null = null;
@@ -22,11 +22,13 @@ export function monitoringEnabled(): boolean {
 /** Idempotent. Call once, early, in the browser. */
 export function initMonitoring(): Promise<SentryReact | null> {
   if (sdk) return sdk;
-  if (!monitoringEnabled()) {
+  // `import.meta.env.SSR` is folded at build time so the server bundle does not
+  // include the browser SDK (a server chunk of the re-exports fails to load).
+  if (import.meta.env.SSR || !monitoringEnabled()) {
     sdk = Promise.resolve(null);
     return sdk;
   }
-  sdk = import("@sentry/react")
+  sdk = import("./sentry-lite")
     .then((Sentry) => {
       Sentry.init({
         dsn: dsn(),

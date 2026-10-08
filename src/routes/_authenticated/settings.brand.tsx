@@ -17,7 +17,9 @@ import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-pe
 
 export const Route = createFileRoute("/_authenticated/settings/brand")({
   component: BrandSettingsPage,
-  head: () => ({ meta: [{ title: "Brand Settings — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Brand Settings — Milōn" }],
+  }),
 });
 
 function ColorSwatch({
