@@ -5670,7 +5670,7 @@ function Index() {
                           [PERIOD_MONTHS_CHOSEN_KEY]: "1",
                         }));
                       }}
-                      title="P&L figures are scaled to a 12-month equivalent for ratios and the health score. Balance-sheet figures are never scaled."
+                      title="Profit and loss figures are stretched across a full year so the ratios can be compared. Balance-sheet figures stay as they are."
                     >
                       {PERIOD_MONTH_OPTIONS.map((o) => (
                         <option key={o.months} value={String(o.months)}>

@@ -40,6 +40,7 @@ import { autosaveKeepsLedgerSync } from "@/lib/ledger-sync-financials";
 import { MarketProvider } from "@/contexts/market";
 import {
   coerceMarketSelection,
+  currencySymbol,
   formatDate,
   formatMoneyCompact,
   isUsCopy,
@@ -49,7 +50,7 @@ import {
   resolveMarket,
 } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
-import { computeOverviewCaption } from "@/lib/overview-insights";
+import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -81,6 +82,7 @@ import {
   overviewRatioInputs,
   overviewRatios,
   PILLAR_LABELS,
+  PILLAR_SHORT_LABELS,
   scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -96,7 +98,14 @@ import { FeatureFinder } from "@/components/feature-finder";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
-import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
+import {
+  ProfitabilityWaterfall,
+  profitAnswerSentence,
+  type WaterfallExportApi,
+} from "@/components/profitability-waterfall";
+import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
@@ -839,6 +848,7 @@ function ClientView() {
   }, [activeTab, clientId, firmId, track]);
   const [finOpen, setFinOpen] = useState(false);
   const [profitFinOpen, setProfitFinOpen] = useState(true);
+  const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
   const [planFocusMove, setPlanFocusMove] = useState<string | null>(null);
@@ -1172,6 +1182,25 @@ function ClientView() {
   };
 
   const avgHealth = overallHealth.overall ?? NaN;
+  const healthCaption = computeOverviewCaption({
+    hasRealFinancials: hasFigures,
+    avgHealth,
+    cashHealth: pillarHealths.cash ?? NaN,
+    displayStatus: overallHealth.displayStatus,
+  });
+  const healthPillarLines = (["profit", "assets", "financing", "cash"] as const).map((id) => ({
+    label: PILLAR_SHORT_LABELS[id],
+    score: pillarHealths[id],
+    status: pillarStatus[id],
+  }));
+  const healthSentence = healthAnswerSentence({
+    caption: healthCaption,
+    score: Number.isFinite(avgHealth) ? avgHealth : null,
+    bandLabel: overallHealth.displayLabel,
+    pillars: healthPillarLines,
+    includeScore: search.focus === "pillars",
+  });
+  const healthChip = figureSourceChipLabel(statementMeta.statementSource);
 
   const sphereRatioMeta = useMemo(
     () =>
@@ -2947,41 +2976,38 @@ function ClientView() {
 
                 {/* ===== RATIOS TAB ===== */}
                 <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
-                  <DeliverableTabHead
-                    eyebrow={search.focus === "pillars" ? "Pillars" : "Business Health & Ratios"}
-                    title={search.focus === "pillars" ? "Where it hurts" : "Health score"}
-                    lede={
-                      search.focus === "pillars"
-                        ? "Each pillar is a place the score can break. A weak one opens the evidence that explains it."
-                        : "One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
-                    }
-                    signoff={
-                      <div className="flex flex-col items-end gap-2">
-                        <button
-                          type="button"
-                          className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline dark:text-slate-400 dark:hover:text-slate-100"
-                          onClick={() => void handleExportPDF()}
-                        >
-                          Export PDF
-                        </button>
-                        <ReviewSignoffButton
-                          compact
-                          clientId={clientId}
-                          clientName={client?.name}
-                          scope="financials"
-                          signoff={financialsSignoff}
-                          isStale={pageSignoffStale(
-                            financialsSignoff,
-                            client?.financials_updated_at ?? null,
-                          )}
-                          onChange={patchSignoff("financials")}
-                        />
-                      </div>
+                  <DeliverableAnswerStrip
+                    heading={search.focus === "pillars" ? "Where it hurts" : "Health score"}
+                    sentence={healthSentence}
+                    chip={healthChip}
+                    scope="financials"
+                    clientId={clientId}
+                    clientName={client?.name}
+                    signoff={financialsSignoff}
+                    isStale={pageSignoffStale(
+                      financialsSignoff,
+                      client?.financials_updated_at ?? null,
+                    )}
+                    onSignoffChange={patchSignoff("financials")}
+                    canSign
+                    extraActions={
+                      <button
+                        type="button"
+                        className="answer-strip__icon"
+                        aria-label="Export PDF"
+                        title="Export PDF"
+                        onClick={() => void handleExportPDF()}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                        </svg>
+                      </button>
                     }
                   />
                   {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
                     <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
                   ) : null}
+                  <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", deliverableInputContext)}>
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -2993,9 +3019,138 @@ function ClientView() {
                       }
                     }}
                   />
+                  {/* Collapsible Financials */}
+                  <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">
+                    <div
+                      className="c-head"
+                      onClick={() => setFinOpen((v) => !v)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && setFinOpen((v) => !v)}
+                    >
+                      <h3>
+                        Financials{" "}
+                        {autosaveStatus === "saving" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Saving…
+                          </span>
+                        )}
+                        {autosaveStatus === "saved" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Auto-saved
+                          </span>
+                        )}
+                        {autosaveStatus === "idle" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Auto-saved
+                          </span>
+                        )}
+                      </h3>
+                      <span className="hint">
+                        Edit the figures or upload a statement. The score follows what is saved here.
+                      </span>
+                      <span className="chev">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        >
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </span>
+                    </div>
+                    <div className="c-body">
+                      <div className="c-inner">
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            flexWrap: "wrap",
+                            marginBottom: 16,
+                          }}
+                        >
+                          <label
+                            className="fin-period"
+                            title="Profit and loss figures are stretched across a full year so the ratios can be compared. Balance-sheet figures stay as they are."
+                          >
+                            <span>Figures cover</span>
+                            {equityCheck.warning ? (
+                              <span className="hint" style={{ marginLeft: 8 }}>
+                                {equityCheck.warning}
+                              </span>
+                            ) : null}
+                            <select
+                              value={String(periodMonths)}
+                              onChange={(e) => {
+                                handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value);
+                                handleFinancialChange(PERIOD_MONTHS_CHOSEN_KEY, "1");
+                              }}
+                            >
+                              {PERIOD_MONTH_OPTIONS.map((o) => (
+                                <option key={o.months} value={String(o.months)}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <span style={{ flex: 1 }} />
+                          <button className="btn ghost mini" onClick={handleSaveSnapshot}>
+                            Save snapshot
+                          </button>
+                          <button
+                            className="btn ghost mini"
+                            onClick={() => setShowBankDrafter(true)}
+                          >
+                            <svg viewBox="0 0 24 24">
+                              <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                            </svg>
+                            Draft from banks
+                          </button>
+                          <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
+                            <svg viewBox="0 0 24 24">
+                              <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                            </svg>
+                            Upload statement
+                          </button>
+                        </div>
+                        <div className="fin-grid">
+                          {FIELD_LABELS.map(({ key, label }) => (
+                            <div key={key}>
+                              <label>
+                                {key === "equity" && financials[EQUITY_DERIVED_KEY] === "1"
+                                  ? DERIVED_EQUITY_LABEL
+                                  : key === "laborCost"
+                                    ? laborCostLabel(clientMarket)
+                                    : label}
+                              </label>
+                              <input
+                                value={financials[key] ?? ""}
+                                onChange={(e) => handleFinancialChange(key, e.target.value)}
+                                onBlur={(e) => handleFinancialChange(key, e.target.value)}
+                                placeholder="—"
+                                type="number"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <DebtScheduleEditor
+                          value={debtSchedule}
+                          onChange={handleDebtScheduleChange}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  </ReviewInputsDrawer>
                   {/* One Health view — orb and pillar cards. No Simplified/Complex switch. */}
                   <div style={{ marginBottom: 32 }}>
-                      {/* Orb — always-dark container so sphere colours read correctly */}
+                      {/* Orb stays on Health. Pillars leads with the cards. */}
+                      {search.focus === "pillars" ? null : (
                       <div
                         style={{
                           background: "#0a0e1a",
@@ -3006,17 +3161,12 @@ function ClientView() {
                       >
                         <SphereHero
                           onDark
+                          hideCaption
                           overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
                           displayStatus={overallHealth.displayStatus}
                           pillars={spherePillars}
                           queryCounts={ratioQueryCounts}
                           onDriverClick={(key) => openDrawerFromUiKey(key)}
-                          caption={computeOverviewCaption({
-                            hasRealFinancials: hasFigures,
-                            avgHealth,
-                            cashHealth: pillarHealths.cash ?? NaN,
-                            displayStatus: overallHealth.displayStatus,
-                          })}
                           topPriority={(() => {
                             const worst = Object.entries(pillarHealths)
                               .filter(([, h]) => isFinite(h))
@@ -3035,6 +3185,7 @@ function ClientView() {
                           })()}
                         />
                       </div>
+                      )}
                       {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
                       <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
                         <SimplifiedRatios
@@ -3103,158 +3254,44 @@ function ClientView() {
                       onSyncComplete={onSageSyncComplete}
                     />
                   </div>
-
-                  {/* Collapsible Financials */}
-                  <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">
-                    <div
-                      className="c-head"
-                      onClick={() => setFinOpen((v) => !v)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && setFinOpen((v) => !v)}
-                    >
-                      <h3>
-                        Financials{" "}
-                        {autosaveStatus === "saving" && (
-                          <span className="autosave" style={{ marginLeft: 10 }}>
-                            Saving…
-                          </span>
-                        )}
-                        {autosaveStatus === "saved" && (
-                          <span className="autosave" style={{ marginLeft: 10 }}>
-                            Auto-saved
-                          </span>
-                        )}
-                        {autosaveStatus === "idle" && (
-                          <span className="autosave" style={{ marginLeft: 10 }}>
-                            Auto-saved
-                          </span>
-                        )}
-                      </h3>
-                      <span className="hint">
-                        Edit figures or upload a statement — every ratio recalculates live
-                      </span>
-                      <span className="chev">
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </span>
-                    </div>
-                    <div className="c-body">
-                      <div className="c-inner">
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 10,
-                            alignItems: "center",
-                            justifyContent: "flex-end",
-                            flexWrap: "wrap",
-                            marginBottom: 16,
-                          }}
-                        >
-                          <label
-                            className="fin-period"
-                            title="P&L and cash-flow figures are scaled to a 12-month equivalent for ratios, the health score and the budget seed. Balance-sheet figures are never scaled."
-                          >
-                            <span>Figures cover</span>
-                            {equityCheck.warning ? (
-                              <span className="hint" style={{ marginLeft: 8 }}>
-                                {equityCheck.warning}
-                              </span>
-                            ) : null}
-                            <select
-                              value={String(periodMonths)}
-                              onChange={(e) => {
-                                handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value);
-                                handleFinancialChange(PERIOD_MONTHS_CHOSEN_KEY, "1");
-                              }}
-                            >
-                              {PERIOD_MONTH_OPTIONS.map((o) => (
-                                <option key={o.months} value={String(o.months)}>
-                                  {o.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <span style={{ flex: 1 }} />
-                          <button className="btn ghost mini" onClick={handleSaveSnapshot}>
-                            Save snapshot
-                          </button>
-                          <button
-                            className="btn gold mini"
-                            onClick={() => setShowBankDrafter(true)}
-                          >
-                            <svg viewBox="0 0 24 24">
-                              <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
-                            </svg>
-                            Draft from banks
-                          </button>
-                          <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
-                            <svg viewBox="0 0 24 24">
-                              <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
-                            </svg>
-                            Upload statement
-                          </button>
-                        </div>
-                        <div className="fin-grid">
-                          {FIELD_LABELS.map(({ key, label }) => (
-                            <div key={key}>
-                              <label>
-                                {key === "equity" && financials[EQUITY_DERIVED_KEY] === "1"
-                                  ? DERIVED_EQUITY_LABEL
-                                  : key === "laborCost"
-                                    ? laborCostLabel(clientMarket)
-                                    : label}
-                              </label>
-                              <input
-                                value={financials[key] ?? ""}
-                                onChange={(e) => handleFinancialChange(key, e.target.value)}
-                                onBlur={(e) => handleFinancialChange(key, e.target.value)}
-                                placeholder="—"
-                                type="number"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <DebtScheduleEditor
-                          value={debtSchedule}
-                          onChange={handleDebtScheduleChange}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
                 </div>
 
                 {/* ===== PROFIT TAB ===== */}
                 <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
-                  <DeliverableTabHead
-                    eyebrow="Profitability"
-                    title="How revenue becomes profit"
-                    lede="Review the waterfall, then sign it off so client management can trust the picture."
-                    signoff={
-                      <ReviewSignoffButton
-                        compact
-                        clientId={clientId}
-                        clientName={client?.name}
-                        scope="profitability"
-                        signoff={profitabilitySignoff}
-                        isStale={pageSignoffStale(
-                          profitabilitySignoff,
-                          client?.financials_updated_at ?? null,
-                        )}
-                        onChange={patchSignoff("profitability")}
-                      />
+                  <DeliverableAnswerStrip
+                    heading="Profitability"
+                    sentence={profitAnswerSentence({
+                      currency: currencySymbol(clientMarket),
+                      periodLabel: statementMeta.periodLabel,
+                      preferPeriod: preferStatementPeriod(financials),
+                    })}
+                    chip={figureSourceChipLabel(statementMeta.statementSource)}
+                    scope="profitability"
+                    clientId={clientId}
+                    clientName={client?.name}
+                    signoff={profitabilitySignoff}
+                    isStale={pageSignoffStale(
+                      profitabilitySignoff,
+                      client?.financials_updated_at ?? null,
+                    )}
+                    onSignoffChange={patchSignoff("profitability")}
+                    canSign
+                    extraActions={
+                      <button
+                        type="button"
+                        className="answer-strip__icon"
+                        aria-label="Export PDF"
+                        title="Export PDF"
+                        disabled={profitExport?.exporting}
+                        onClick={() => profitExport?.exportPdf()}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                        </svg>
+                      </button>
                     }
                   />
+                  <ReviewInputsDrawer hint={deliverableDrawerHint("profit", deliverableInputContext)}>
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -3276,39 +3313,6 @@ function ClientView() {
                       incentive="Answer these to build revenue and net profit per product line."
                     />
                   </div>
-
-                  <span className="eyebrow">Profitability Waterfall</span>
-                  <p className="sub" style={{ marginBottom: 24 }}>
-                    How revenue converts to profit — step by step. Period figures below (or an
-                    upload) feed this view.
-                  </p>
-
-                  {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
-                  <div id="wizard-profit-walk">
-                    <ProfitabilityWaterfall
-                      fallback={waterfallFallback}
-                      clientName={client?.name}
-                      clientId={client?.id}
-                      periodLabel={readStatementMeta(financials).periodLabel}
-                      preferPeriod={preferStatementPeriod(financials)}
-                      yearToDate={statementYearLine(financials)}
-                      statementSource={readStatementMeta(financials).statementSource}
-                      periodNote={
-                        preferStatementPeriod(financials) || (!qboLink && !xeroLink)
-                          ? null
-                          : qboLink && !xeroLink
-                            ? "This total has no period dates. Sync QuickBooks again — it is a multi-month figure, not this month."
-                            : !qboLink && xeroLink
-                              ? "This total has no period dates. Sync Xero again — it is a multi-month figure, not this month."
-                              : "This total has no period dates. Sync again — it is a multi-month figure, not this month."
-                      }
-                      reviewSignoff={stampFromSignoff(
-                        profitabilitySignoff,
-                        pageSignoffStale(profitabilitySignoff, client?.financials_updated_at ?? null),
-                      )}
-                    />
-                  </div>
-
                   <div
                     className={`card collapse${profitFinOpen ? " open" : ""}`}
                     id="profitFinCollapse"
@@ -3373,7 +3377,7 @@ function ClientView() {
                             }}
                           >
                             Edit the period figures here. The waterfall updates from this P&amp;L —
-                            weekly figures that client management enters stay on their board.
+                            weekly figures the owner enters stay on their board.
                           </p>
                           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                             <button
@@ -3385,11 +3389,11 @@ function ClientView() {
                                 setFinOpen(true);
                               }}
                             >
-                              Full financials
+                              All figures
                             </button>
                             <button
                               type="button"
-                              className="btn gold mini"
+                              className="btn ghost mini"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setUploadOpen(true);
@@ -3419,6 +3423,36 @@ function ClientView() {
                       </div>
                     </div>
                   </div>
+
+                  </ReviewInputsDrawer>
+                  <div id="wizard-profit-walk">
+                    <ProfitabilityWaterfall
+                      fallback={waterfallFallback}
+                      clientName={client?.name}
+                      clientId={client?.id}
+                      periodLabel={readStatementMeta(financials).periodLabel}
+                      preferPeriod={preferStatementPeriod(financials)}
+                      yearToDate={statementYearLine(financials)}
+                      statementSource={readStatementMeta(financials).statementSource}
+                      periodNote={
+                        preferStatementPeriod(financials) || (!qboLink && !xeroLink)
+                          ? null
+                          : qboLink && !xeroLink
+                            ? "This total has no period dates. Sync QuickBooks again — it is a multi-month figure, not this month."
+                            : !qboLink && xeroLink
+                              ? "This total has no period dates. Sync Xero again — it is a multi-month figure, not this month."
+                              : "This total has no period dates. Sync again — it is a multi-month figure, not this month."
+                      }
+                      reviewSignoff={stampFromSignoff(
+                        profitabilitySignoff,
+                        pageSignoffStale(profitabilitySignoff, client?.financials_updated_at ?? null),
+                      )}
+                      hideLead
+                      hideCardExport
+                      onExportReady={setProfitExport}
+                    />
+                  </div>
+
                 </div>
 
                 {/* ===== CASH TAB ===== */}

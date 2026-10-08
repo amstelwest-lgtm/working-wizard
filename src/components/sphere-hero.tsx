@@ -71,6 +71,8 @@ export type SphereHeroProps = {
   onTopPriority?: () => void;
   /** Optional one-line caption under the score sphere */
   caption?: string;
+  /** The answer strip owns the sentence, so the orb does not repeat it. */
+  hideCaption?: boolean;
   /** Denser overview layout — smaller orb, tighter spacing */
   compact?: boolean;
   /**
@@ -317,6 +319,7 @@ export function SphereHero({
   topPriority,
   onTopPriority,
   caption,
+  hideCaption = false,
   compact = false,
   onDark = false,
   onDriverClick,
@@ -398,6 +401,7 @@ export function SphereHero({
             />
           </div>
 
+          {hideCaption ? null : (
           <p
             className={`${compact ? "mt-2.5" : "mt-4"} max-w-md text-center ${reduceMotion ? "" : "transition-opacity duration-300"} ${
               level === 1 ? "opacity-100" : "opacity-0"
@@ -420,6 +424,7 @@ export function SphereHero({
                       : "Add your first numbers to see your health score."}
             </span>
           </p>
+          )}
         </>
       )}
 

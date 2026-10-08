@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
@@ -162,6 +162,23 @@ async function exportPDF(opts: {
   }
 }
 
+/** The waterfall's existing subtitle, without a second source phrase. */
+export function profitAnswerSentence(input: {
+  currency: string;
+  periodLabel?: string | null;
+  preferPeriod?: boolean;
+}): string {
+  const how = `How ${input.currency}1 of revenue becomes profit`;
+  const periodBit = input.periodLabel?.trim() || "";
+  if (!periodBit) return how;
+  return input.preferPeriod ? `${how} · Month to date · ${periodBit}` : `${how} · ${periodBit}`;
+}
+
+export type WaterfallExportApi = {
+  exporting: boolean;
+  exportPdf: () => void;
+};
+
 export function ProfitabilityWaterfall({
   fallback,
   clientName,
@@ -171,7 +188,9 @@ export function ProfitabilityWaterfall({
   preferPeriod = false,
   yearToDate = null,
   periodNote = null,
-  statementSource = null,
+  hideLead = false,
+  hideCardExport = false,
+  onExportReady,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
@@ -189,16 +208,21 @@ export function ProfitabilityWaterfall({
   } | null;
   /** Shown when a Xero link exists but the stored total has no dates yet. */
   periodNote?: string | null;
-  /** Dated ledger that owns these period figures. */
+  /** Dated ledger that owns these period figures. The chip lives on the answer strip. */
   statementSource?: string | null;
+  /** The answer strip already shows the heading and the sentence. */
+  hideLead?: boolean;
+  /** Export PDF sits on the answer strip. The card does not repeat it. */
+  hideCardExport?: boolean;
+  onExportReady?: (api: WaterfallExportApi) => void;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const { money: fmt, moneyCompact: fmtCompact, market } = useMarketFormat();
-  const [open, setOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const exportPdfRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setMounted(true));
@@ -206,18 +230,12 @@ export function ProfitabilityWaterfall({
   }, []);
 
   const figures = resolveWaterfallFigures(weeklyInputs, fallback, { preferPeriod });
-  const hasWeekly = figures.source === "weekly";
   const periodBit = periodLabel?.trim() || null;
-  const sourceBit = preferPeriod
-    ? statementSource === "qbo"
-      ? "QuickBooks"
-      : statementSource === "xero"
-        ? "Xero"
-        : "the ledger"
-    : hasWeekly
-      ? "aggregated weekly data"
-      : "period inputs";
-
+  const answerSentence = profitAnswerSentence({
+    currency: currencySymbol(market),
+    periodLabel,
+    preferPeriod,
+  });
   const revenue = figures.revenue;
   const costOfSales = figures.costOfSales;
   const fixedCosts = figures.fixedCosts;
@@ -324,24 +342,47 @@ export function ProfitabilityWaterfall({
   const CHART_H = 280; // px
   const LABEL_PAD = 36; // headroom above the tallest bar for its value label
 
+  exportPdfRef.current = () => {
+    setExporting(true);
+    void exportPDF({
+      clientId,
+      clientName,
+      revenue,
+      costOfSales,
+      fixedCosts,
+      depreciation,
+      interest,
+      tax,
+      accountantProfile: profile,
+      reviewSignoff,
+      createdBy: user?.id ?? null,
+      firmId,
+      market,
+      periodLabel: periodBit,
+    }).finally(() => setExporting(false));
+  };
+
+  useEffect(() => {
+    onExportReady?.({ exporting, exportPdf: () => exportPdfRef.current() });
+  }, [onExportReady, exporting]);
+
+  const showHeader = !hideLead || Boolean(yearToDate?.periodLabel) || Boolean(periodNote) || !hideCardExport;
+
   return (
     <Card className="relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] text-[#0f172a] shadow-[0_20px_60px_rgba(109,79,22,0.10)] print:hidden dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:text-[#f1f5f9] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
       <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent" />
+      {showHeader ? (
       <CardHeader className="border-b border-amber-900/10 pb-5 dark:border-slate-800">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex-1 cursor-pointer" onClick={() => setOpen((o) => !o)}>
-            <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
-              Profitability Waterfall
-            </CardTitle>
-            <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">
-              How {currencySymbol(market)}1 of revenue becomes profit
-              {periodBit
-                ? preferPeriod
-                  ? ` · Month to date · ${periodBit}`
-                  : ` · ${periodBit}`
-                : ""}
-              {` · ${sourceBit}`}
-            </p>
+          <div className="flex-1">
+            {hideLead ? null : (
+              <>
+                <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
+                  Profitability Waterfall
+                </CardTitle>
+                <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">{answerSentence}</p>
+              </>
+            )}
             {yearToDate?.periodLabel ? (
               <p className="mt-0.5 text-xs text-[#475569] dark:text-[#94a3b8]">
                 {yearToDateTitle(yearToDate.basis)}
@@ -354,48 +395,27 @@ export function ProfitabilityWaterfall({
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">{periodNote}</p>
             ) : null}
           </div>
+          {hideCardExport ? null : (
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
               className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#d4a550] hover:bg-[#d4a550]/20"
               disabled={exporting}
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
-                setExporting(true);
-                try {
-                  await exportPDF({
-                    clientId,
-                    clientName,
-                    revenue,
-                    costOfSales,
-                    fixedCosts,
-                    depreciation,
-                    interest,
-                    tax,
-                    accountantProfile: profile,
-                    reviewSignoff,
-                    createdBy: user?.id ?? null,
-                    firmId,
-                    market,
-                    periodLabel: periodBit,
-                  });
-                } finally {
-                  setExporting(false);
-                }
+                exportPdfRef.current();
               }}
             >
               <Download className="h-3 w-3" />
               {exporting ? "Preparing…" : "Export PDF"}
             </Button>
-            <button type="button" className="p-1 text-[#d4a550]" onClick={() => setOpen((o) => !o)}>
-              {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
           </div>
+          )}
         </div>
       </CardHeader>
+      ) : null}
 
-      {open && (
         <CardContent className="pb-7 pt-6">
           {revenue === 0 && (
             <p className="mb-4 rounded-lg border border-amber-900/10 bg-amber-50/70 px-3 py-2 text-xs italic text-[#475569] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[#94a3b8]">
@@ -604,7 +624,6 @@ export function ProfitabilityWaterfall({
               })}
           </div>
         </CardContent>
-      )}
     </Card>
   );
 }
