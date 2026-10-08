@@ -81,7 +81,7 @@ assert(!clientSrc.includes('label: "Staff tasks"'), "accountant portal no longer
 assert(!clientSrc.includes("TasksPanel"), "accountant portal no longer mounts the staff tasks panel");
 assert(clientSrc.includes("accountantWorkspaceTab"), "owner and staff-tasks tab IDs open the matching studio tab");
 assert(
-  clientSrc.includes("normalizeAccountantClientTab"),
+  clientSrc.includes("canonicalizeAccountantSearch"),
   "actions and health aliases are applied in the client route search parser",
 );
 assert(readFileSync(resolve("src/components/action-plan.tsx"), "utf8").includes('id="action-plan-export-pdf"'), "Action Plan exports a PDF");

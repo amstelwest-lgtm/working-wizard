@@ -4,13 +4,15 @@
  * visibility, and “show on page” must treat those pairs as one page.
  *
  * Pairs:
- *   Health        today | today-complex | ratios | health (?tab=health)
+ *   Health        today | today-complex | ratios | health | pillars
  *   Profit        waterfall | profit
- *   Action plan   tasks | plan | actions (?tab=actions aliases the studio plan)
+ *   Action plan   tasks | plan | actions | action-plan
  *   Cash          cash
  *   Collections   collections (accountant only)
  *   Payables      payables (accountant only)
  *   Budget        budget
+ *   Books         summary | data | brain | books | client-brain
+ *   Advisory      advisory | pack (drafter stays on the pack pane)
  *
  * No parallel page (stay in Open queries; do not dump the user on the wrong tab):
  *   next → owner Next moves only
@@ -20,14 +22,7 @@
 
 export type NotesWorkspace = "owner" | "accountant";
 
-export const OWNER_NOTE_TABS = [
-  "today",
-  "waterfall",
-  "cash",
-  "budget",
-  "next",
-  "tasks",
-] as const;
+export const OWNER_NOTE_TABS = ["today", "waterfall", "cash", "budget", "next", "tasks"] as const;
 
 export const ACCOUNTANT_NOTE_TABS = [
   "overview",
@@ -48,19 +43,19 @@ export const ACCOUNTANT_NOTE_TABS = [
 /** Same-deliverable aliases. First owner-native id, then accountant-native id. */
 const TAB_GROUPS: readonly (readonly string[])[] = [
   ["today", "today-complex", "ratios", "health", "pillars"],
-  ["waterfall", "profit"],
-  ["tasks", "plan", "actions"],
-  ["cash"],
+  ["waterfall", "profit", "profitability"],
+  ["tasks", "plan", "actions", "action", "action-plan"],
+  ["cash", "forecast", "cash-forecast"],
   ["collections"],
   ["payables"],
   ["budget"],
   ["next"],
-  ["moves"],
+  ["moves", "strategic-moves"],
   ["overview"],
-  ["summary", "data", "brain"],
-  ["ask"],
-  ["reports"],
-  ["advisory"],
+  ["summary", "data", "brain", "books", "client-brain"],
+  ["ask", "bot", "milon-bot"],
+  ["reports", "report"],
+  ["advisory", "pack"],
 ];
 
 const GROUP_BY_TAB = new Map<string, readonly string[]>();
@@ -86,12 +81,18 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   plan: "Action plan",
   actions: "Action plan",
   reports: "Reports",
+  report: "Reports",
   advisory: "Advisory",
+  pack: "Advisory",
   overview: "Overview",
-  summary: "Client Brain",
-  data: "Client Brain",
-  brain: "Client Brain",
-  ask: "Milōn Bot",
+  summary: "Books",
+  data: "Books",
+  brain: "Books",
+  books: "Books",
+  "client-brain": "Books",
+  ask: "Bot",
+  bot: "Bot",
+  "milon-bot": "Bot",
 };
 
 export function noteTabLabel(tab: string): string {

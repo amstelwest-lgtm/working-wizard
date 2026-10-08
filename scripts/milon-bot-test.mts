@@ -47,10 +47,9 @@ const typesSrc = readFileSync(resolve("src/integrations/supabase/types.ts"), "ut
 const clientSrc = readFileSync(resolve("src/lib/milon-bot-client.ts"), "utf8");
 const summarySrc = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
-const studioSrc = readFileSync(
-  resolve("src/routes/_authenticated/clients.$clientId.tsx"),
-  "utf8",
-);
+const studioSrc =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const widgetSrc = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
 const copySrc = readFileSync(resolve("src/lib/milon-bot-copy.ts"), "utf8");
 const askAiSrc = readFileSync(resolve("supabase/functions/ask-ai/anthropic.ts"), "utf8");
@@ -188,7 +187,7 @@ assert(!appSrc.includes("MilonBotPanel"), "owner board no longer mounts a second
 assert(appSrc.includes('id="ask-ai-overview"'), "owner board keeps the unified widget mount");
 assert(appSrc.includes("OwnerBrainDrip"), "owner drip unchanged");
 assert(studioSrc.includes('id="ask-ai-accountant"'), "studio still mounts the widget");
-assert(studioSrc.includes('{ id: "ask", label: "Milōn Bot"'), "studio tab is labeled Milōn Bot");
+assert(studioSrc.includes('{ id: "ask", label: "Bot"'), "studio rail is labeled Bot");
 assert(studioSrc.includes("functions/v1/milon-bot"), "studio widget can call milon-bot");
 assert(clientSrc.includes("/functions/v1/milon-bot"), "client posts to milon-bot");
 assert(!appSrc.toLowerCase().includes("agent api"), "no public Agent API");

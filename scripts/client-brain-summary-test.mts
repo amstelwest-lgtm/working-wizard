@@ -72,10 +72,9 @@ const brainSummaryRls = readFileSync(
   "utf8",
 );
 const typesSrc = readFileSync(resolve("src/integrations/supabase/types.ts"), "utf8");
-const clientSrc = readFileSync(
-  resolve("src/routes/_authenticated/clients.$clientId.tsx"),
-  "utf8",
-);
+const clientSrc =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const panelSrc = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
 
 assert(migration.includes("brain_summary jsonb"), "clients.brain_summary column");
@@ -128,7 +127,7 @@ assert(typesSrc.includes("client_brain_questions:"), "types include client_brain
 assert(typesSrc.includes("brain_summary: Json | null"), "types include brain_summary");
 
 assert(clientSrc.includes('"summary"'), "summary is an ActiveTab");
-assert(clientSrc.includes('{ id: "summary", label: "Client Brain" }'), "Client Brain tab in the rail");
+assert(clientSrc.includes('{ id: "books", label: "Books" }'), "Books section opens Client Brain");
 assert(clientSrc.includes('id="pane-summary"'), "Summary pane exists");
 assert(clientSrc.includes("ClientBrainSummary"), "panel is mounted");
 assert(clientSrc.includes('from "@/components/client-brain-summary"'), "panel imported");

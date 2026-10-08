@@ -10,7 +10,7 @@ import {
   botSignoffHref,
   botSignoffStateLine,
 } from "../src/lib/bot-signoff-path.ts";
-import { normalizeAccountantClientTab } from "../src/lib/client-route-search.ts";
+import { canonicalizeAccountantSearch } from "../src/lib/client-route-search.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -27,9 +27,17 @@ assert(plan[0].state.includes("approval"), "recommendations say they are waiting
 const href = botSignoffHref("client 1", plan[0], "Propose next steps from what's on file.");
 const url = new URL(href, "https://milon.test");
 assert(url.pathname === "/clients/client%201", "href keeps the client id");
-assert(normalizeAccountantClientTab(url.searchParams.get("tab") ?? "") === "plan", "tab=plan survives the route alias");
+const planSearch = canonicalizeAccountantSearch({ tab: url.searchParams.get("tab") ?? "" });
+assert(
+  planSearch.tab === "deliverables" && planSearch.section === "plan",
+  "tab=plan opens the plan section",
+);
 assert(url.searchParams.get("coach") === "actions", "coach intent is actions");
-assert(normalizeAccountantClientTab("actions") === "plan", "legacy ?tab=actions still opens the plan");
+const actionsSearch = canonicalizeAccountantSearch({ tab: "actions" });
+assert(
+  actionsSearch.tab === "deliverables" && actionsSearch.section === "plan",
+  "legacy ?tab=actions still opens the plan",
+);
 
 const tasks = botSignoffCtas({
   created: { items: [{ title: "Chase debtors" }], actionItemIds: ["a1"] },
@@ -53,17 +61,25 @@ const both = botSignoffCtas({
   ],
 });
 assert(
-  both.map((c) => `${c.label}@${c.tab}`).join("|") === "Review Action Plan@plan|Open for sign-off@advisory",
+  both.map((c) => `${c.label}@${c.tab}`).join("|") ===
+    "Review Action Plan@plan|Open for sign-off@advisory",
   `two surfaces, got ${both.map((c) => c.label).join("|")}`,
 );
-assert(botSignoffStateLine(both).includes("Action Plan") && botSignoffStateLine(both).includes("Advisory pack"), "state names both");
+assert(
+  botSignoffStateLine(both).includes("Action Plan") &&
+    botSignoffStateLine(both).includes("Advisory pack"),
+  "state names both",
+);
 
 const human = botSignoffCtas({
   run: {
     trace: [{ tool: "create_task_from_recommendation", status: "needs_human", happened: false }],
   },
 });
-assert(human[0]?.label === "Review Action Plan" && human[0].state.includes("approval"), "needs-human stays on review");
+assert(
+  human[0]?.label === "Review Action Plan" && human[0].state.includes("approval"),
+  "needs-human stays on review",
+);
 
 const drafted = botSignoffCtas({
   run: { trace: [{ tool: "draft_deliverable", status: "ok", happened: true }] },
@@ -73,18 +89,35 @@ assert(drafted[0]?.tab === "advisory", "an objective that saved a draft opens th
 const openDraft = botSignoffCtas({ created: { draftAlreadyOpen: true, draftId: "d1" } });
 assert(openDraft[0]?.tab === "advisory", "an already-open draft still offers sign-off");
 
-assert(botSignoffCtas({ tools: [{ name: "answer_from_brain", status: "ok" }] }).length === 0, "a read is not sign-off work");
-assert(botSignoffCtas({ tools: [{ name: "propose_next_steps", status: "empty" }] }).length === 0, "empty propose is not a CTA");
-assert(botSignoffCtas({ tools: [{ name: "draft_deliverable", status: "error" }] }).length === 0, "a failed draft is not a CTA");
-assert(botSignoffCtas({ created: { draftInserted: false, items: [], actionItemIds: [] } }).length === 0, "a create that wrote nothing is not a CTA");
+assert(
+  botSignoffCtas({ tools: [{ name: "answer_from_brain", status: "ok" }] }).length === 0,
+  "a read is not sign-off work",
+);
+assert(
+  botSignoffCtas({ tools: [{ name: "propose_next_steps", status: "empty" }] }).length === 0,
+  "empty propose is not a CTA",
+);
+assert(
+  botSignoffCtas({ tools: [{ name: "draft_deliverable", status: "error" }] }).length === 0,
+  "a failed draft is not a CTA",
+);
+assert(
+  botSignoffCtas({ created: { draftInserted: false, items: [], actionItemIds: [] } }).length === 0,
+  "a create that wrote nothing is not a CTA",
+);
 assert(botSignoffCtas(null).length === 0, "missing evidence is not a CTA");
 
 const clipped = botSignoffDestination(plan[0], "x".repeat(200));
-assert(clipped.why && clipped.why.length <= 140 && clipped.why.endsWith("…"), "why is clipped for the route");
+assert(
+  clipped.why && clipped.why.length <= 140 && clipped.why.endsWith("…"),
+  "why is clipped for the route",
+);
 assert(clipped.tab === "plan" && clipped.coach === "actions", "destination keeps the plan route");
 
 const widget = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
-const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const studio =
+  readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
+  readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 const portfolio = readFileSync(resolve("src/lib/portfolio.ts"), "utf8");
 assert(widget.includes("botSignoffCtas"), "the bot panel asks for sign-off CTAs");
 assert(widget.includes("dataset.signoff"), "the CTA is a button the thread can find");
@@ -95,26 +128,28 @@ assert(studio.includes("data-ask-bot"), "Overview has a Bot entry");
 assert(studio.includes("Ask Milōn Bot"), "the entry is labelled Ask Milōn Bot");
 assert(studio.includes('writeAccountantTab("ask")'), "the entry opens the Bot tab for this client");
 assert(studio.includes("data-bot-entry"), "the entry is marked");
-assert(studio.includes("data-bot-rail"), "with figures, Bot leads the rail");
-assert(studio.includes("bot-primary"), "the lead Bot control is the primary rail action");
-const rail = studio.slice(studio.indexOf('className="deliverable-rail"'));
-const nextAt = rail.indexOf('rail-kicker">Next');
-const clientKickerAt = rail.indexOf('rail-kicker">Client');
+assert(studio.includes("data-bot-rail"), "Bot stays on the rail");
+assert(studio.includes("bot-primary"), "Bot stays the primary rail action");
+assert(studio.includes('{ id: "ask", label: "Bot"'), "the rail names Bot");
+assert(studio.includes('{ id: "overview", label: "Overview"'), "the rail names Overview");
 assert(
-  nextAt >= 0 && clientKickerAt > nextAt && rail.slice(0, nextAt).includes("hasFigures"),
-  "when figures are on file, Next / Milōn Bot sits above the rest of the rail",
+  studio.includes('{ id: "deliverables", label: "Deliverables"'),
+  "the rail names Deliverables",
 );
 assert(
-  studio.includes('t.id !== "ask"'),
-  "Bot is not listed twice once it leads the rail",
+  studio.indexOf('{ id: "ask", label: "Bot"') <
+    studio.indexOf('{ id: "overview", label: "Overview"') &&
+    studio.indexOf('{ id: "overview", label: "Overview"') <
+      studio.indexOf('{ id: "deliverables", label: "Deliverables"'),
+  "the rail is Bot, then Overview, then Deliverables",
 );
 const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
 assert(portalCss.includes(".tab.bot-primary"), "the lead Bot control is gold on first paint");
 assert(studio.includes("onOpenDeliverable"), "Bot still deep-links through the existing coach");
+assert(portfolio.includes("waiting for your sign-off"), "dashboard pack sign-off rows stay");
 assert(
-  portfolio.includes("waiting for your sign-off"),
-  "dashboard pack sign-off rows stay",
+  !studio.includes("trial-ended") || studio.includes("TrialEndedPlanBlock"),
+  "paywall block is untouched",
 );
-assert(!studio.includes("trial-ended") || studio.includes("TrialEndedPlanBlock"), "paywall block is untouched");
 
 console.log("bot-signoff-path-test: ok");

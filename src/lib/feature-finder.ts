@@ -2,8 +2,8 @@
  * Feature finder — jump list for the product shells.
  *
  * Accountant destinations reuse the reading-path tabs in `workflow-coach`
- * (`COACH_STEPS`) and the studio tab ids in `next-step`
- * (`ACCOUNTANT_STUDIO_TABS`). Owner destinations reuse `OWNER_BOARD_TABS`,
+ * (`COACH_STEPS`): rail `tab` plus `section`. Owner destinations reuse
+ * `OWNER_BOARD_TABS`,
  * the same pairs as `notes-tabs.ts` (today/ratios, waterfall/profit, tasks/plan).
  *
  * Upload uses the studio's existing `?onboard=1` deep link, which opens the
@@ -12,7 +12,7 @@
  * are rendered there. Billing has no standalone page — Manage billing is on
  * Settings, and only for the practice view.
  */
-import { ACCOUNTANT_STUDIO_TABS, OWNER_BOARD_TABS } from "@/lib/next-step";
+import { OWNER_BOARD_TABS } from "@/lib/next-step";
 import { COACH_STEPS, type CoachStepId } from "@/lib/workflow-coach";
 
 export type FeatureAudience = "accountant" | "owner";
@@ -23,14 +23,18 @@ export type FeatureFinderContext = {
   clientId?: string | null;
 };
 
-type StudioTab = (typeof ACCOUNTANT_STUDIO_TABS)[number];
 type OwnerTab = (typeof OWNER_BOARD_TABS)[number];
 
 export type FeatureDestination =
   | {
       kind: "client";
       clientId: string;
-      search: { tab: StudioTab; focus?: "health" | "pillars"; onboard?: "1" };
+      search: {
+        tab: "ask" | "overview" | "deliverables";
+        section?: string;
+        focus?: "health" | "pillars";
+        onboard?: "1";
+      };
     }
   | { kind: "owner"; tab: OwnerTab }
   | { kind: "dashboard" }
@@ -54,7 +58,12 @@ export type FeatureSearch = {
   needsClient: boolean;
 };
 
-type StudioTarget = { tab: StudioTab; focus?: "health" | "pillars"; onboard?: "1" };
+type StudioTarget = {
+  tab: "ask" | "overview" | "deliverables";
+  section?: string;
+  focus?: "health" | "pillars";
+  onboard?: "1";
+};
 
 type FeatureDef = {
   id: string;
@@ -71,19 +80,19 @@ type FeatureDef = {
   practice?: "dashboard" | "settings";
 };
 
-const STUDIO_TABS: readonly string[] = ACCOUNTANT_STUDIO_TABS;
-
 function coachTarget(id: CoachStepId): StudioTarget {
   const step = COACH_STEPS.find((s) => s.id === id);
   if (!step) throw new Error(`missing coach step ${id}`);
-  if (!STUDIO_TABS.includes(step.tab)) {
-    throw new Error(`coach step ${id} tab ${step.tab} is not a studio tab`);
-  }
-  const tab = step.tab as StudioTab;
-  if ("focus" in step && (step.focus === "health" || step.focus === "pillars")) {
-    return { tab, focus: step.focus };
-  }
-  return { tab };
+  const focus =
+    "focus" in step && (step.focus === "health" || step.focus === "pillars")
+      ? step.focus
+      : undefined;
+  const section = "section" in step ? step.section : undefined;
+  return {
+    tab: step.tab,
+    ...(section ? { section } : {}),
+    ...(focus ? { focus } : {}),
+  };
 }
 
 const DATA = coachTarget("data");
@@ -95,6 +104,17 @@ const BUDGET = coachTarget("budget");
 const ACTIONS = coachTarget("actions");
 
 const FEATURES: readonly FeatureDef[] = [
+  {
+    id: "overview",
+    label: "Overview",
+    hint: "Briefing",
+    order: 5,
+    scope: "client",
+    synonyms: ["overview", "briefing", "client home"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "overview" },
+  },
   {
     id: "health",
     label: "Health",
@@ -164,7 +184,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["ar", "aged receivables", "aged debtors", "debtors", "receivables", "chase list"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "collections" },
+    studio: { tab: "overview", section: "collections" },
   },
   {
     id: "payables",
@@ -175,11 +195,22 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["ap", "aged payables", "aged creditors", "creditors", "bills", "suppliers"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "payables" },
+    studio: { tab: "overview", section: "payables" },
+  },
+  {
+    id: "moves",
+    label: "Moves",
+    hint: "Strategic moves",
+    order: 75,
+    scope: "client",
+    synonyms: ["moves", "strategic moves", "ranked moves"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "overview", section: "moves" },
   },
   {
     id: "bot",
-    label: "Milōn Bot",
+    label: "Bot",
     hint: "Drafts",
     order: 80,
     scope: "client",
@@ -199,6 +230,39 @@ const FEATURES: readonly FeatureDef[] = [
     requiresClient: true,
     studio: ACTIONS,
     ownerTab: "tasks",
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    hint: "Reports studio",
+    order: 92,
+    scope: "client",
+    synonyms: ["reports", "report", "board pack", "scorecard"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "deliverables", section: "reports" },
+  },
+  {
+    id: "advisory-pack",
+    label: "Advisory pack",
+    hint: "Pack and recommendations",
+    order: 94,
+    scope: "client",
+    synonyms: ["advisory pack", "pack", "recommendations", "advisory"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "deliverables", section: "pack" },
+  },
+  {
+    id: "advisory-drafter",
+    label: "Advisory drafter",
+    hint: "Draft the note",
+    order: 96,
+    scope: "client",
+    synonyms: ["advisory drafter", "drafter", "draft note", "sent history"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "deliverables", section: "pack" },
   },
   {
     id: "data-sync",
@@ -330,6 +394,7 @@ export function featureHref(dest: FeatureDestination): string {
   if (dest.kind === "owner") return `/app?tab=${encodeURIComponent(dest.tab)}`;
   const params = new URLSearchParams();
   params.set("tab", dest.search.tab);
+  if (dest.search.section) params.set("section", dest.search.section);
   if (dest.search.focus) params.set("focus", dest.search.focus);
   if (dest.search.onboard) params.set("onboard", dest.search.onboard);
   return `/clients/${encodeURIComponent(dest.clientId)}?${params.toString()}`;
