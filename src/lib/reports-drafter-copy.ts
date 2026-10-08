@@ -41,6 +41,9 @@ export const DRAFTER_EMPTY_SENTENCE =
 export const DRAFTER_HISTORY_SENTENCE =
   "Everything you copy, email or share is saved to Sent history.";
 
+export const SENT_HISTORY_INTRO =
+  "Every email, WhatsApp share and PDF you've sent from here, with the figures it used. A share means you opened it to send; we can't confirm the client received it.";
+
 /** en-ZA prints a leading zero (`02 Oct 2026`). The strip reads `2 Oct 2026`. */
 export function plainSentDate(label: string): string {
   return label.replace(/^0(?=\d)/, "");

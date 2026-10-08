@@ -84,6 +84,19 @@ export function packStatusText(input: {
   });
 }
 
+/** No pack on file is not a draft. The pill appears only once a pack exists. */
+export function packStripStatus(
+  hasPack: boolean,
+  input: {
+    status: PackAnswerStatus;
+    signedBy?: string | null;
+    signedDate?: string | null;
+  },
+): string | null {
+  if (!hasPack) return null;
+  return packStatusText(input);
+}
+
 const PLAN_EMPTY_SENTENCE = "No actions in the plan yet. Add the first one to get started.";
 
 /** Same lead-in as Moves. The first title is the first action already in the list. */

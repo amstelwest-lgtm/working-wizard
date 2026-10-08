@@ -1,5 +1,5 @@
 /**
- * Delivery history — advisory / PDF / share events for a client.
+ * Sent history — emails, shares, and PDF downloads for a client.
  */
 
 import { useEffect, useState } from "react";
@@ -12,6 +12,7 @@ import {
   signedDeliveryPdfUrl,
   type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
+import { SENT_HISTORY_INTRO } from "@/lib/reports-drafter-copy";
 import { scorecardDownloadShouldRenderLive } from "@/lib/scorecard-rows";
 
 function kindLabel(kind: AdvisoryDelivery["kind"]): string {
@@ -36,7 +37,7 @@ export function AdvisorySentHistory({
   /** Overview scorecard. A stored PDF is not re-opened. */
   liveScorecard?: (() => Promise<Blob | null>) | null;
 }) {
-  const { dateTime, market } = useMarketFormat();
+  const { dateTime } = useMarketFormat();
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -114,22 +115,8 @@ export function AdvisorySentHistory({
 
   return (
     <div id="sent-history" className="card" style={{ marginTop: 16, padding: "14px 18px" }}>
-      <div
-        style={{
-          fontSize: 11,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          color: "var(--ink-dim)",
-        }}
-      >
-        Delivery history
-      </div>
-      <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>
-        Logged shares and PDF downloads with stamped figures.{" "}
-        {market.copyPack === "us" ? "Email / WhatsApp" : "Mailto / WhatsApp"} rows mean the share
-        sheet was opened — not postal proof — until the client acknowledges. Archived PDFs can be
-        re-downloaded when a file was stored with the row.
-      </p>
+      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Sent history</div>
+      <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>{SENT_HISTORY_INTRO}</p>
       {loading ? (
         <p style={{ fontSize: 13, color: "var(--ink-dim)" }}>Loading…</p>
       ) : rows.length === 0 ? (
@@ -197,8 +184,8 @@ export function AdvisorySentHistory({
                   </button>
                 ) : null}
                 <span
-                  className={`chip ${r.acknowledged_at ? "ok" : "warn"}`}
-                  style={{ fontSize: 11, alignSelf: "center" }}
+                  className={`chip chip-sentence ${r.acknowledged_at ? "ok" : "warn"}`}
+                  style={{ alignSelf: "center" }}
                 >
                   {channelHonestyLabel(r.channel, !!r.acknowledged_at)}
                 </span>

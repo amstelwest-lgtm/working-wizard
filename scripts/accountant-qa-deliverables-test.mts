@@ -400,12 +400,19 @@ assert(read("src/components/cash-classification-workspace.tsx").includes("recurr
 
 assert(channelHonestyLabel("pdf_download", false) === "Downloaded", "a download says Downloaded");
 assert(channelHonestyLabel("email", false) === "Sent", "a real email send says Sent");
+assert(channelHonestyLabel("mailto", false) === "Shared · not confirmed received", "an opened share is not a confirmed send");
+assert(channelHonestyLabel("whatsapp", false) === "Shared · not confirmed received", "WhatsApp uses the same share label");
+assert(channelHonestyLabel("copy", false) === "Copied · not confirmed received", "a copy is not a send");
+assert(channelHonestyLabel("mailto", true) === "Acknowledged", "an acknowledgement is sentence case");
 assert(!channelHonestyLabel("copy", false).includes("Sent"), "a copy is not a send");
 assert(!channelHonestyLabel("mailto", false).includes("Sent"), "opening a share sheet is not a send");
 assert(!channelHonestyLabel("pdf_download", false).includes("Sent"), "a download is not Sent");
 const history = read("src/components/advisory-sent-history.tsx");
-assert(history.includes("Delivery history"), "the drafter list is not titled Sent");
-assert(!history.includes(">Sent history<") && !history.includes("Sent history\n"), "downloads are not listed under Sent");
+assert(history.includes("Sent history"), "the list is titled Sent history");
+assert(history.includes("SENT_HISTORY_INTRO"), "the helper is the plain sent-history sentence");
+assert(history.includes("chip-sentence"), "row status stays sentence case");
+assert(!history.includes("Delivery history"), "the old delivery-history title is gone");
+assert(!history.includes("not postal proof"), "the postal-proof aside is gone");
 
 const ask = read("src/lib/ask-ai.js");
 assert(ask.includes("compositionstart"), "composer tracks IME composition");

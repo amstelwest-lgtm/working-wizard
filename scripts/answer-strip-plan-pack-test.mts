@@ -10,7 +10,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import assert from "node:assert/strict";
 import { PrecardCapCard } from "../src/components/precard-cap-card";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
-import { packAnswerSentence, packDrawerHint, packStatusText, planAnswerSentence } from "../src/lib/plan-pack-copy";
+import {
+  packAnswerSentence,
+  packDrawerHint,
+  packStatusText,
+  packStripStatus,
+  planAnswerSentence,
+} from "../src/lib/plan-pack-copy";
 import { planConfidenceDisplay } from "../src/lib/plan-confidence-display";
 import { PAGE_FIGURES_CHANGED_CLAUSE, signoffStatusLine } from "../src/lib/signoff-status";
 
@@ -50,6 +56,8 @@ assert.equal(
   packAnswerSentence({ periodLabel: "Q3 close", sectionCount: 1, status: "draft" }),
   "Q3 close pack: 1 section drafted. Read it through, then sign off.",
 );
+assert.equal(packStripStatus(false, { status: "draft" }), null);
+assert.equal(packStripStatus(true, { status: "draft" }), "Draft");
 assert.equal(packDrawerHint(3, true), "Version 3 · sections, regenerate");
 assert.equal(packDrawerHint(3, false), "Version 3 · sections");
 
@@ -155,6 +163,7 @@ assert.equal(
   "the pack fixture and the live pack both keep PrecardCapCard",
 );
 assert.ok(panelSrc.includes("headerOwnsSignOff"), "the panel hides its own sign-off when the strip owns it");
+assert.ok(panelSrc.includes("packStripStatus(Boolean(pack)"), "an empty pack has no status pill");
 assert.ok(panelSrc.includes("packDisplayedSignoffLine"), "the lifted line still uses the pack sign-off helper");
 assert.ok(panelSrc.includes('id="advisory-pack-export-pdf"'), "export stays on the pack");
 assert.ok(panelSrc.includes("data-signoff-line"), "the sentence is the sign-off line");

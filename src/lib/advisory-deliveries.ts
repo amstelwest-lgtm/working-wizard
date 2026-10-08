@@ -336,13 +336,19 @@ export async function acknowledgeDelivery(
   return { ok: true, delivery: data as AdvisoryDelivery, error: null };
 }
 
+/** Row status on Sent history. Display only; the logged channel is unchanged. */
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  acknowledged: "Acknowledged",
+  email: "Sent",
+  pdf_download: "Downloaded",
+  copy: "Copied · not confirmed received",
+  mailto: "Shared · not confirmed received",
+  whatsapp: "Shared · not confirmed received",
+};
+
 export function channelHonestyLabel(channel: DeliveryChannel, acknowledged: boolean): string {
-  if (acknowledged) return "Acknowledged by client";
-  if (channel === "email") return "Sent";
-  if (channel === "pdf_download") return "Downloaded";
-  if (channel === "copy") return "Copied · not confirmed delivered";
-  if (channel === "mailto" || channel === "whatsapp") return "Opened share · not confirmed delivered";
-  return "Logged";
+  if (acknowledged) return DELIVERY_STATUS_LABEL.acknowledged;
+  return DELIVERY_STATUS_LABEL[channel] ?? "Logged";
 }
 
 /** Soft warning when the ledger insert failed — never blocks the user action. */

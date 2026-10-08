@@ -39,7 +39,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
-import { packAnswerSentence, packDrawerHint, packStatusText, type PackAnswerStatus } from "@/lib/plan-pack-copy";
+import { packAnswerSentence, packDrawerHint, packStripStatus, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
@@ -603,7 +603,7 @@ export function AdvisoryPackPanel({
 
   if (fixture) {
     const sentence = packAnswerSentence(fixture);
-    const statusText = packStatusText(fixture);
+    const statusText = packStripStatus(true, fixture);
     const fixtureStale = fixture.status === "signed_stale";
     return (
       <section className={shell} id="advisory-pack" data-audience={audience} data-advisory-signoff={fixture.status}>
@@ -664,7 +664,7 @@ export function AdvisoryPackPanel({
         signedDate: advisoryState.signedAt ? fmtWhen(advisoryState.signedAt, market) : null,
       })
     : packAnswerSentence({ periodLabel: null, sectionCount: 0, status: "draft" });
-  const statusText = packStatusText({
+  const statusText = packStripStatus(Boolean(pack), {
     status: advisoryState.status,
     signedBy: advisoryState.signedBy,
     signedDate: advisoryState.signedAt ? fmtWhen(advisoryState.signedAt, market) : null,

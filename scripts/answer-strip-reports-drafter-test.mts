@@ -10,6 +10,7 @@ import { botSignoffCtas, botSignoffDestination } from "../src/lib/bot-signoff-pa
 import {
   DRAFTER_EMPTY_SENTENCE,
   DRAFTER_HISTORY_SENTENCE,
+  SENT_HISTORY_INTRO,
   drafterAnswerSentence,
   plainSentDate,
   reportsAnswerSentence,
@@ -33,6 +34,10 @@ assert.equal(drafterAnswerSentence({}), DRAFTER_EMPTY_SENTENCE);
 assert.equal(
   DRAFTER_HISTORY_SENTENCE,
   "Everything you copy, email or share is saved to Sent history.",
+);
+assert.equal(
+  SENT_HISTORY_INTRO,
+  "Every email, WhatsApp share and PDF you've sent from here, with the figures it used. A share means you opened it to send; we can't confirm the client received it.",
 );
 assert.equal(
   drafterAnswerSentence({
