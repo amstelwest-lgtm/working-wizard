@@ -4,6 +4,7 @@
  * Invited staff and client-owner invite accepts are not welcomed here.
  */
 
+import { SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 
 export const WELCOME_EMAIL_SUBJECT = "Welcome to Milōn";
@@ -49,8 +50,8 @@ export function welcomeIdempotencyKey(userId: string): string {
   return `welcome-email/${userId}`.slice(0, 256);
 }
 
-export function welcomeAppPath(audience: WelcomeAudience): "/dashboard" | "/app" {
-  return audience === "firm_owner" ? "/dashboard" : "/app";
+export function welcomeAppPath(audience: WelcomeAudience): typeof SMART_LANDING_PATH | "/app" {
+  return audience === "firm_owner" ? SMART_LANDING_PATH : "/app";
 }
 
 /** First given name, or null when we should not invent one. */
