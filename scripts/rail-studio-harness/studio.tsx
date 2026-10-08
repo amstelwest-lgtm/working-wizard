@@ -807,7 +807,13 @@ function CashPane({ clientId }: { clientId: string }) {
     <div className="tabpane on" id="pane-cash">
       <div className="card cf-wrap" id="wizard-cash-panel">
         <PaneBoundary label="Cash forecast">
-          <CashForecastPanel clientId={clientId} clientName="Harbour Glass" canSign hideReadOnlyStamp />
+          <CashForecastPanel
+            clientId={clientId}
+            clientName="Harbour Glass"
+            canSign
+            hideReadOnlyStamp
+            statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
+          />
         </PaneBoundary>
       </div>
     </div>
@@ -833,7 +839,13 @@ export function OwnerCashBoard({ clientId }: { clientId: string }) {
         ))}
       </div>
       <PaneBoundary label="Owner cash">
-        <CashForecastPanel clientId={clientId} clientName="Harbour Glass" canSign={false} hideReadOnlyStamp />
+        <CashForecastPanel
+          clientId={clientId}
+          clientName="Harbour Glass"
+          canSign={false}
+          hideReadOnlyStamp
+          statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
+        />
       </PaneBoundary>
     </div>
   );
