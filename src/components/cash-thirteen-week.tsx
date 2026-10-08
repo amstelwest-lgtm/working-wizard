@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cashBalanceSeries } from "@/lib/cash-forecast-view";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { cn } from "@/lib/utils";
 import { parseEditableAmount } from "@/lib/cash-week-overrides";
@@ -25,6 +26,7 @@ type GridRow = {
   blankZero: boolean;
   tone: RowTone;
   strong?: boolean;
+  rule?: boolean;
   editable?: { bucket: "revenue" | "expenses" | "other"; id: string };
 };
 
@@ -140,12 +142,6 @@ const HEAD_BG = "bg-[#f3ecdc] dark:bg-[#1b170f]";
 const HEAD_TIGHT =
   "bg-[#f8e8e4] shadow-[inset_0_3px_0_#c0392b] dark:bg-[#2a1a1c] dark:shadow-[inset_0_3px_0_#ef6b6b]";
 
-function tightOf(closing: number, floor: number): "negative" | "floor" | null {
-  if (closing < 0) return "negative";
-  if (closing < floor) return "floor";
-  return null;
-}
-
 export function CashThirteenWeekGrid({
   weeks,
   opening,
@@ -187,7 +183,11 @@ export function CashThirteenWeekGrid({
   ) => void;
 }) {
   const openings = closing.map((_, index) => (index === 0 ? opening : closing[index - 1]!));
-  const tight = closing.map((value) => tightOf(value, floor));
+  const series = cashBalanceSeries({ opening, closings: closing, floor });
+  const openingBelow = series[0]?.belowFloor === true;
+  const tight = series.slice(1).map((point) =>
+    point.negative ? ("negative" as const) : point.belowFloor ? ("floor" as const) : null,
+  );
   const visibleReceipts = receipts.filter((line) => line.vals.some((value) => value));
   const visiblePayments = payments.filter((line) => line.vals.some((value) => value));
 
@@ -251,9 +251,10 @@ export function CashThirteenWeekGrid({
           values: outflow,
           total: sum(outflow),
           kind: "out",
-          blankZero: false,
-          tone: "out",
+          blankZero: true,
+          tone: "plain",
           strong: true,
+          rule: true,
         },
       ],
     },
@@ -305,11 +306,11 @@ export function CashThirteenWeekGrid({
         {floorNote ? ` Floor ${floorNote}.` : ""}
       </p>
       <div
-        className="cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-amber-900/10 dark:border-slate-800"
+        className="cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-amber-900/10 pe-4 max-md:pe-16 dark:border-slate-800"
         tabIndex={0}
         aria-label="13-week cash model"
       >
-        <table className="w-full min-w-[1280px] border-separate border-spacing-0 text-xs tabular-nums">
+        <table className="w-max min-w-[1480px] border-separate border-spacing-0 text-xs tabular-nums">
           <caption className="sr-only">
             Thirteen week cash forecast with a total column. Weeks that close below the runway floor
             are marked.
@@ -340,7 +341,7 @@ export function CashThirteenWeekGrid({
                           : `${label}, week ${index + 1}`
                     }
                     className={cn(
-                      "sticky top-0 z-20 min-w-[92px] whitespace-nowrap border-b border-amber-900/15 px-2 py-2 text-right dark:border-slate-700",
+                      "sticky top-0 z-20 min-w-[112px] whitespace-nowrap border-b border-amber-900/15 px-2 py-2 text-right dark:border-slate-700",
                       flag ? HEAD_TIGHT : HEAD_BG,
                     )}
                   >
@@ -376,6 +377,7 @@ export function CashThirteenWeekGrid({
                 onCommit={onCommit}
                 floorNote={section.rows.some((row) => row.key === "floor") ? floorNote : null}
                 openingNote={section.rows.some((row) => row.key === "opening") ? openingNote : null}
+                openingBelow={openingBelow}
               />
             ))}
           </tbody>
@@ -399,6 +401,7 @@ function SectionRows({
   onCommit,
   floorNote,
   openingNote,
+  openingBelow,
 }: {
   label: string;
   rows: GridRow[];
@@ -408,6 +411,7 @@ function SectionRows({
   onCommit: CashThirteenWeekGridProps["onCommit"];
   floorNote?: string | null;
   openingNote?: string | null;
+  openingBelow?: boolean;
 }) {
   return (
     <>
@@ -436,6 +440,7 @@ function SectionRows({
               "sticky left-0 z-30 min-w-[148px] border-b border-amber-900/10 px-3 py-1.5 text-left align-top shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-800",
               TONE_BG[row.tone],
               row.strong ? "font-bold" : "font-normal",
+              row.rule && "border-t border-slate-300/80 dark:border-slate-600",
             )}
           >
             <span className="flex max-w-[11.5rem] flex-col items-start gap-1 py-0.5">
@@ -462,25 +467,31 @@ function SectionRows({
             </span>
           </th>
           {row.values.map((value, index) => {
-            const flag = tight[index];
+            const openingCell = row.key === "opening" && index === 0 && openingBelow;
+            const flag = openingCell ? "floor" : tight[index];
             const display = money(value, row);
             const flaggedClose = row.key === "closing" && flag;
             return (
               <td
                 key={index}
                 data-cash-tight={flag ?? undefined}
+                data-cash-opening-tight={openingCell ? "floor" : undefined}
                 title={
-                  flag === "negative"
-                    ? "Closing cash is negative"
-                    : flag === "floor"
-                      ? "Closing cash is under the runway floor"
-                      : undefined
+                  openingCell
+                    ? "Opening cash is under the runway floor"
+                    : flag === "negative"
+                      ? "Closing cash is negative"
+                      : flag === "floor"
+                        ? "Closing cash is under the runway floor"
+                        : undefined
                 }
                 className={cn(
                   "border-b border-amber-900/10 px-2 py-1.5 text-right align-middle tabular-nums text-slate-800 dark:border-slate-800 dark:text-slate-100",
                   flag ? TIGHT_BG : TONE_BG[row.tone],
+                  row.rule && "border-t border-slate-300/80 dark:border-slate-600",
                   row.strong && "font-bold",
-                  flaggedClose && "font-bold text-[#9b2c2c] dark:text-[#ffb4b4]",
+                  (flaggedClose || openingCell) && "font-bold text-[#9b2c2c] dark:text-[#ffb4b4]",
+                  display === "—" && "text-slate-400 dark:text-slate-500",
                   row.tone === "floor" && "text-slate-500 dark:text-slate-400",
                   row.key === "net" &&
                     value < 0 &&
@@ -507,6 +518,7 @@ function SectionRows({
             className={cn(
               "border-b border-l border-amber-900/15 px-2 py-1.5 text-right align-middle font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:text-slate-50",
               TONE_BG[row.tone],
+              row.rule && "border-t border-slate-300/80 dark:border-slate-600",
               row.strong && "font-bold",
               row.key === "closing" &&
                 (closingIsTight(row, tight)

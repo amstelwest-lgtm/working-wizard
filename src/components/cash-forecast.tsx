@@ -66,9 +66,12 @@ import {
   CASH_FORECAST_CARD_ID,
   cashForecastSearchWithView,
   cashForecastViewFromSearch,
+  cashBalanceSeries,
+  cashGraphAxisTicks,
   cashGraphWeekTickInterval,
   forecastChipSource,
   hashIsCashDetailAnchor,
+  lowestCashPoint,
   weeksBelowFloorCopy,
   type CashForecastView,
 } from "@/lib/cash-forecast-view";
@@ -106,7 +109,6 @@ import {
   cashEmptyPresentation,
   forecastFloorPosition,
   forecastLinesSourceLabel,
-  forecastLowestPoint,
   forecastRunwayHeadlineShared,
   forecastStatusSentence,
   openingSourceLabel,
@@ -198,18 +200,15 @@ function CashNegativeDot({
   cx,
   cy,
   payload,
-  index,
-  lowestWeek,
+  lowestKey,
 }: {
   cx?: number;
   cy?: number;
-  payload?: { closing?: number };
-  index?: number;
-  lowestWeek?: number;
+  payload?: { closing?: number; week?: string };
+  lowestKey?: string;
 }) {
   if (cx == null || cy == null || payload?.closing == null) return <g />;
-  const week = (index ?? -1) + 1;
-  if (!(payload.closing < 0) || week === lowestWeek) return <g />;
+  if (!(payload.closing < 0) || payload.week === lowestKey) return <g />;
   return <circle cx={cx} cy={cy} r={3.5} fill={RED} stroke="#fff" strokeWidth={1.5} />;
 }
 
@@ -1160,9 +1159,6 @@ export function CashForecastPanel({
     setList(c);
   };
 
-  const publishedLowest = forecastLowestPoint(baseCalc.opening, baseCalc.closing);
-  const lowestBal = publishedLowest.amount;
-  const lowestWeek = publishedLowest.week;
   const closingW13 = calc.closing[WEEKS - 1];
   const trajectory = closingW13 - calc.opening;
   const screenRunway = useMemo(
@@ -1176,6 +1172,14 @@ export function CashForecastPanel({
     () => forecastMinimumCash({ weeklyOutflows: baseCalc.outflow }),
     [baseCalc.outflow],
   );
+  const balanceSeries = cashBalanceSeries({
+    opening: baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: minimumCash,
+  });
+  const lowPoint = lowestCashPoint(balanceSeries);
+  const lowestBal = lowPoint.balance;
+  const lowestWeek = lowPoint.week;
   const hasWeeklyOutflows = baseCalc.outflow.some((n) => n > 0);
   const liveFloorLabel = hasWeeklyOutflows
     ? `${fmtCompact(minimumCash)} · about 4 weeks of outflows`
@@ -1193,14 +1197,15 @@ export function CashForecastPanel({
     revGrowthPct !== 0 ||
     (parseFloat(capexAmount) || 0) !== 0;
 
-  const chartData = weeks.map((w, i) => {
-    const closing = Math.round(baseCalc.closing[i] ?? 0);
+  const chartData = balanceSeries.map((point) => {
     const floor = Math.round(minimumCash);
+    const closing = Math.round(point.balance);
     return {
-      week: `W${i + 1}`,
-      label: w,
+      week: point.key,
+      label: point.week === 0 ? (openingAsOf ? openingLabel : "") : (weeks[point.week - 1] ?? point.key),
       closing,
-      underFloor: closing < floor ? closing : floor,
+      underFloor: point.belowFloor ? closing : floor,
+      weekIndex: point.week,
     };
   });
 
@@ -1322,15 +1327,21 @@ export function CashForecastPanel({
   };
 
   // ── Shared hero chart ──────────────────────────────────────────────────────
-  const heroChart = (height: number) => (
+  const heroChart = (height: number) => {
+    const narrow = cashGraphWeekTickInterval(chartWidth) === 2;
+    const axisTicks = cashGraphAxisTicks(
+      chartWidth,
+      chartData.map((row) => row.week),
+    );
+    return (
     <div
       ref={onChartFrame}
       style={{ height }}
-      data-week-ticks={weekTickInterval === 2 ? "thin" : "all"}
-      className="w-full min-w-0 max-w-full"
+      data-week-ticks={narrow ? "thin" : "all"}
+      className="w-full min-w-0 max-w-full max-md:pb-3"
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 22, right: 12, left: 0, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 22, right: narrow ? 80 : 16, left: 0, bottom: 8 }}>
           <defs>
             <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
@@ -1344,7 +1355,8 @@ export function CashForecastPanel({
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            interval={weekTickInterval}
+            interval={0}
+            ticks={axisTicks}
             height={28}
           />
           <YAxis
@@ -1365,7 +1377,10 @@ export function CashForecastPanel({
               color: "#f1f5f9",
             }}
             labelStyle={{ color: "#d4a550", fontWeight: 700 }}
-            formatter={(v: number) => [fmtR(v), "Closing"]}
+            formatter={(v: number, _name, item) => {
+              const weekIndex = (item?.payload as { weekIndex?: number } | undefined)?.weekIndex;
+              return [fmtR(v), weekIndex === 0 ? "Opening" : "Closing"];
+            }}
             labelFormatter={(l, payload) => {
               const p = payload?.[0]?.payload as { label?: string } | undefined;
               return p?.label ? `${l} · ${p.label}` : String(l);
@@ -1408,13 +1423,13 @@ export function CashForecastPanel({
             name="Closing"
             stroke={GOLD}
             strokeWidth={2.5}
-            dot={<CashNegativeDot lowestWeek={lowestWeek} />}
+            dot={<CashNegativeDot lowestKey={lowPoint.key} />}
             activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
             isAnimationActive={false}
           />
-          {lowestWeek > 0 && (lowestBal < minimumCash || lowestBal < 0) ? (
+          {(lowPoint.belowFloor || lowPoint.negative) ? (
             <ReferenceDot
-              x={`W${lowestWeek}`}
+              x={lowPoint.key}
               y={Math.round(lowestBal)}
               r={5}
               fill={RED}
@@ -1433,7 +1448,8 @@ export function CashForecastPanel({
         </ComposedChart>
       </ResponsiveContainer>
     </div>
-  );
+    );
+  };
 
   const totalInflow = calc.inflow.reduce((sum, n) => sum + n, 0);
   const totalOutflow = calc.outflow.reduce((sum, n) => sum + n, 0);
@@ -1857,14 +1873,14 @@ export function CashForecastPanel({
   const navigate = useNavigate();
   const routeSearch = useSearch({ strict: false }) as { view?: string };
   const tickObserver = useRef<ResizeObserver | null>(null);
-  const [weekTickInterval, setWeekTickInterval] = useState<0 | 2>(0);
+  const [chartWidth, setChartWidth] = useState(0);
   const onChartFrame = useCallback((node: HTMLDivElement | null) => {
     tickObserver.current?.disconnect();
     tickObserver.current = null;
     if (!node) return;
     const apply = () => {
-      const next = cashGraphWeekTickInterval(node.clientWidth);
-      setWeekTickInterval((current) => (current === next ? current : next));
+      const next = node.clientWidth;
+      setChartWidth((current) => (current === next ? current : next));
     };
     apply();
     if (typeof ResizeObserver === "undefined") return;
@@ -2008,7 +2024,7 @@ export function CashForecastPanel({
               sub={
                 emptyPresentation.lowestBlank
                   ? "Add an opening balance"
-                  : publishedLowest.isOpening
+                  : lowPoint.week === 0
                     ? "Opening balance"
                     : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
               }
@@ -2036,7 +2052,7 @@ export function CashForecastPanel({
               sub={
                 emptyPresentation.lowestBlank
                   ? "Add an opening balance"
-                  : publishedLowest.isOpening
+                  : lowPoint.week === 0
                     ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
                     : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
               }
@@ -2064,7 +2080,7 @@ export function CashForecastPanel({
   const forecastCard = (
     <Card
       id={CASH_FORECAST_CARD_ID}
-      className={`${CARD_SHELL} w-full min-w-0`}
+      className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
       data-cash-view={view}
     >
       <span id="detailed-forecast" className="sr-only">
@@ -2079,7 +2095,7 @@ export function CashForecastPanel({
             </p>
             <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
               {view === "13week"
-                ? "Double-click a figure to edit. Red weeks close under the runway floor."
+                ? "Double-click a figure to edit. Red marks cash under the runway floor."
                 : `Gold line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
             </p>
           </div>
