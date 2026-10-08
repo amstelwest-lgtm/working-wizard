@@ -27,6 +27,14 @@ import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
 import { peerMedian } from "../../../src/lib/ratios.ts";
+import {
+  advisorySignoffGrounding,
+  getAdvisorySignoffState,
+} from "../../../src/lib/advisory-signoff.ts";
+import {
+  groundBrainSummaryRecord,
+  ratiosForBrainProse,
+} from "../../../src/lib/advisory-narrative.ts";
 
 /** Infer display format from the canonical camelCase key. */
 function inferFormat(camelKey: string): string {
@@ -321,6 +329,13 @@ export async function buildContext(
       if (row?.scope) signedScopes.add(String(row.scope));
     }
   }
+  if (brainSummary) {
+    brainSummary = groundBrainSummaryRecord(
+      brainSummary,
+      ratiosForBrainProse(financials, profile?.operating?.fyStartMonth),
+    );
+  }
+
   const overview =
     tier === "none"
       ? null
@@ -338,6 +353,15 @@ export async function buildContext(
           figuresAsOf: snapDate,
           brainSummary,
         });
+  let advisorySignoff = null;
+  if (tier !== "none") {
+    try {
+      advisorySignoff = advisorySignoffGrounding(await getAdvisorySignoffState(clientId, supabase));
+    } catch (err) {
+      console.warn("advisory sign-off:", (err as Error).message);
+    }
+  }
+
   if (overview && (overview.health != null || overview.pillars.some((p) => p.score != null))) {
     scores = {
       overall_score: overview.health,
@@ -374,5 +398,6 @@ export async function buildContext(
     actionPlan,
     deliverables,
     overview,
+    advisorySignoff,
   };
 }

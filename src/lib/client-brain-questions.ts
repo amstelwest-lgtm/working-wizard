@@ -3,7 +3,7 @@
  * Slow drip stamps last_asked_at on one owner|both item per call.
  */
 
-import type { ClientOperatingProfile } from "@/lib/client-profile";
+import type { ClientOperatingProfile } from "./client-profile.ts";
 import {
   canAdvanceFromCosts,
   canAdvanceFromNames,
@@ -12,9 +12,9 @@ import {
   hasProductMixAnswer,
   namedProductLines,
   type ProductMix,
-} from "@/lib/product-mix";
-import { hasWeeklyProfitFigures, type WeeklyInputs } from "@/lib/weekly-inputs";
-import type { ClientBrainQuestion } from "@/lib/client-brain";
+} from "./product-mix.ts";
+import { hasWeeklyProfitFigures, type WeeklyInputs } from "./weekly-inputs.ts";
+import type { ClientBrainQuestion } from "./client-brain.ts";
 
 export type QuestionState = {
   key: string;

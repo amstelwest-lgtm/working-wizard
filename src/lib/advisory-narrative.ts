@@ -4,8 +4,8 @@
  * already say 25 days, 37 days, and 8.6%.
  * Qualitative claims follow the same score bands as the Scorecard.
  */
-import { scoreRatio } from "./health-score.ts";
-import { healthBandLabel, scoreTier } from "./ratios.ts";
+import { overviewRatios, scoreRatio } from "./health-score.ts";
+import { healthBandLabel, periodMonthsOf, scoreTier } from "./ratios.ts";
 
 const DAYS_RATIOS = new Set([
   "Debtor Days",
@@ -111,8 +111,7 @@ function groundDayPair(text: string, ratios: Record<string, number>): string {
 }
 
 /** Words that may sit between a label and the figure it quotes. */
-const LABEL_CONNECTOR =
-  String.raw`(?:\s+(?:ratio|figure|reading|are|is|of|at|currently|about|around|now))*`;
+const LABEL_CONNECTOR = String.raw`(?:\s+(?:ratio|figure|reading|are|is|of|at|currently|about|around|now))*`;
 
 function groundLabeled(text: string, ratios: Record<string, number>): string {
   let out = text;
@@ -214,4 +213,45 @@ export function groundAdvisoryNarrative(
 ): string {
   if (!text || !ratios) return text;
   return alignPayablesJudgment(groundLabeled(groundDayPair(text, ratios), ratios), ratios);
+}
+
+/**
+ * Live Overview ratios for stored Brain prose. Null when there is no
+ * financials file, so a missing snapshot does not rewrite the text.
+ */
+export function ratiosForBrainProse(
+  financials: Record<string, unknown> | null | undefined,
+  fyStartMonth?: number | null,
+): Record<string, number> | null {
+  if (!financials || typeof financials !== "object" || Array.isArray(financials)) return null;
+  return overviewRatios(financials, {
+    fyStartMonth,
+    periodMonths: periodMonthsOf(financials),
+  });
+}
+
+const BRAIN_PROSE_KEYS = ["headline", "body", "summary"] as const;
+
+/**
+ * Rewrite ratio citations in a stored brain_summary so the Books summary
+ * and the Bot quote the live Overview figures. Other fields stay as stored.
+ */
+export function groundBrainSummaryRecord(
+  raw: unknown,
+  ratios: Record<string, number> | null | undefined,
+): unknown {
+  if (!ratios) return raw;
+  if (typeof raw === "string") return groundAdvisoryNarrative(raw, ratios);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const src = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...src };
+  for (const key of BRAIN_PROSE_KEYS) {
+    if (typeof out[key] === "string") out[key] = groundAdvisoryNarrative(out[key], ratios);
+  }
+  if (Array.isArray(out.bullets)) {
+    out.bullets = out.bullets.map((item) =>
+      typeof item === "string" ? groundAdvisoryNarrative(item, ratios) : item,
+    );
+  }
+  return out;
 }

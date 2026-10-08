@@ -4,7 +4,7 @@
  * waterfalls read the same week aggregates.
  */
 
-import { periodProfitBridge } from "@/lib/period-profit";
+import { periodProfitBridge } from "./period-profit.ts";
 
 export type WeeklyRow = {
   revenue: number;

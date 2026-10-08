@@ -12,10 +12,10 @@
  * Kinds / statuses mirror the CHECK constraints in
  * supabase/migrations/20260918140000_data_requests.sql (test-guarded).
  */
-import type { Json } from "@/integrations/supabase/types";
-import type { AdvisoryState } from "@/lib/advisory-state";
-import { ratiosStatementFigures } from "@/lib/deliverable-input-config";
-import { creditorDaysHealthyBand, peerMedian } from "@/lib/ratios";
+import type { Json } from "../integrations/supabase/types.ts";
+import type { AdvisoryState } from "./advisory-state.ts";
+import { ratiosStatementFigures } from "./deliverable-input-config.ts";
+import { creditorDaysHealthyBand, peerMedian } from "./ratios.ts";
 
 export const DATA_REQUEST_KINDS = [
   "bank_statement",

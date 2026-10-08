@@ -11,6 +11,10 @@ import {
   overviewFyStartMonth,
   type OverviewBrief,
 } from "../ask-ai/overview-brief.ts";
+import {
+  groundBrainSummaryRecord,
+  ratiosForBrainProse,
+} from "../../../src/lib/advisory-narrative.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 
 export async function loadOverviewBrief(
@@ -67,6 +71,9 @@ export async function loadOverviewBrief(
     clientName: typeof row?.name === "string" ? row.name : null,
     periodLabel: (snapRes.data?.period_label as string | null) ?? null,
     figuresAsOf: (snapRes.data?.period_date as string | null) ?? null,
-    brainSummary: row?.brain_summary ?? null,
+    brainSummary: groundBrainSummaryRecord(
+      row?.brain_summary ?? null,
+      ratiosForBrainProse(financials, fyStartMonth),
+    ),
   });
 }

@@ -2,6 +2,7 @@ import type { AskAiContext, DisclosureTier } from "./types.ts";
 import { fmtPct } from "./deliverable-summaries.ts";
 import { DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 import { formatOverviewForPrompt } from "./overview-brief.ts";
+import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signoff.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   appendClientIdentity,
@@ -33,6 +34,7 @@ Rules:
 - Operating margin is EBIT divided by revenue. Net margin is net income divided by revenue. Use those names from OVERVIEW FIGURES. Do not relabel operating margin as EBIT, and do not quote a waterfall percentage in place of either.
 - When cash on file is listed, that balance is present. Never say there is no bank balance or that cash is missing. If runway cannot be estimated, say no cash-flow statement is on file.
 - When asked which deliverable to prepare first, recommend one deliverable and why, using OVERVIEW FIGURES. Do not say a draft or a pack version was saved.
+- Advisory pack sign-off and version come only from the ADVISORY PACK SIGN-OFF block. Quote its Status line. Do not say no sign-off or version is on file when that block is present. Do not create or save a pack version while answering.
 - Offer 1–2 concrete next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.
@@ -117,6 +119,7 @@ export function buildPrompt(
   if (named) lines.push(`Client name: ${named}`);
   const overviewBlock = ctx.overview ? formatOverviewForPrompt(ctx.overview, audience) : "";
   if (overviewBlock) lines.push(overviewBlock);
+  if (ctx.advisorySignoff) lines.push(formatAdvisorySignoffGrounding(ctx.advisorySignoff));
 
   if (deliverables.length > 0) {
     const filled = deliverables.filter((d) => d.filled);
