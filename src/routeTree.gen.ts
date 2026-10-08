@@ -19,6 +19,7 @@ import { Route as FaqRouteImport } from './routes/faq'
 import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
 import { Route as ForOwnersRouteImport } from './routes/for-owners'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as OpenRouteImport } from './routes/open'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
@@ -107,6 +108,11 @@ const ForOwnersRoute = ForOwnersRouteImport.update({
 const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
   id: '/llms.txt',
   path: '/llms.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpenRoute = OpenRouteImport.update({
+  id: '/open',
+  path: '/open',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -331,6 +337,7 @@ export interface FileRoutesByFullPath {
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
   '/llms.txt': typeof LlmsDottxtRoute
+  '/open': typeof OpenRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
   '/llms.txt': typeof LlmsDottxtRoute
+  '/open': typeof OpenRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -435,6 +443,7 @@ export interface FileRoutesById {
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
   '/llms.txt': typeof LlmsDottxtRoute
+  '/open': typeof OpenRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -488,6 +497,7 @@ export interface FileRouteTypes {
     | '/for-accountants'
     | '/for-owners'
     | '/llms.txt'
+    | '/open'
     | '/privacy'
     | '/reset-password'
     | '/robots.txt'
@@ -539,6 +549,7 @@ export interface FileRouteTypes {
     | '/for-accountants'
     | '/for-owners'
     | '/llms.txt'
+    | '/open'
     | '/privacy'
     | '/reset-password'
     | '/robots.txt'
@@ -591,6 +602,7 @@ export interface FileRouteTypes {
     | '/for-accountants'
     | '/for-owners'
     | '/llms.txt'
+    | '/open'
     | '/privacy'
     | '/reset-password'
     | '/robots.txt'
@@ -644,6 +656,7 @@ export interface RootRouteChildren {
   ForAccountantsRoute: typeof ForAccountantsRoute
   ForOwnersRoute: typeof ForOwnersRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
+  OpenRoute: typeof OpenRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
@@ -746,6 +759,13 @@ declare module '@tanstack/react-router' {
       path: '/llms.txt'
       fullPath: '/llms.txt'
       preLoaderRoute: typeof LlmsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/open': {
+      id: '/open'
+      path: '/open'
+      fullPath: '/open'
+      preLoaderRoute: typeof OpenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -1072,6 +1092,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForAccountantsRoute: ForAccountantsRoute,
   ForOwnersRoute: ForOwnersRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
+  OpenRoute: OpenRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,

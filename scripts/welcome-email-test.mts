@@ -13,6 +13,7 @@ import {
   WELCOME_EMAIL_SUBJECT,
   WELCOME_NEXT_STEP,
   WELCOME_SIGN_OFF,
+  welcomeAppPath,
   welcomeAttemptGate,
   welcomeFailureLog,
   welcomeIdempotencyKey,
@@ -46,10 +47,13 @@ function candidate(over: Partial<WelcomeCandidate> = {}): WelcomeCandidate {
   };
 }
 
+assert(welcomeAppPath("firm_owner") === "/open", "firm welcome opens the smart landing");
+assert(welcomeAppPath("business_owner") === "/app", "Spark welcome stays on the business board");
+
 const firm = renderWelcomeEmail({
   fullName: "Ada Lovelace",
   audience: "firm_owner",
-  appUrl: `${APP}/dashboard`,
+  appUrl: `${APP}${welcomeAppPath("firm_owner")}`,
 });
 const owner = renderWelcomeEmail({
   fullName: "Ada Lovelace",
@@ -67,9 +71,10 @@ assert(firm.subject === "Welcome to Milōn", "subject spelling");
 assert(firm.text.startsWith("Welcome, Ada."), "firm welcome uses the first name");
 assert(firm.text.includes(WELCOME_NEXT_STEP), "firm next step");
 assert(firm.text.includes(FIRM_TRIAL_SENTENCE), "firm trial line");
-assert(firm.text.includes(`${APP}/dashboard`), "firm link");
+assert(firm.text.includes(`${APP}/open`), "firm link");
+assert(!firm.text.includes("/dashboard"), "firm link is not the paywalled dashboard");
 assert(firm.text.trimEnd().endsWith(WELCOME_SIGN_OFF), "firm sign-off");
-assert(firm.html.includes(`href="${APP}/dashboard"`), "firm button");
+assert(firm.html.includes(`href="${APP}/open"`), "firm button");
 assert(firm.html.includes("Open Milōn"), "firm button label");
 
 assert(owner.text.startsWith("Welcome, Ada."), "owner welcome");
@@ -181,7 +186,7 @@ async function deliver(
   return runWelcomeDelivery({
     candidate: { ...base, ...stamp },
     now,
-    appUrlFor: (audience) => `${APP}${audience === "firm_owner" ? "/dashboard" : "/app"}`,
+    appUrlFor: (audience) => `${APP}${welcomeAppPath(audience)}`,
     claimAttempt: async () => {
       if (stamp.sentAt || stamp.attempts !== base.attempts) return false;
       stamp.attempts += 1;

@@ -14,6 +14,7 @@ import {
   budgetMonthViews,
   budgetTableRows,
   budgetYtdSentence,
+  budgetYtdSignal,
   revenueYtd,
   type BudgetActualMonth,
   type BudgetLens,
@@ -98,12 +99,7 @@ export function BudgetChartTable({
   const through = currentBudgetMonth(months);
   const ytd = revenueYtd(views, through);
   const sentence = budgetYtdSentence({ ...ytd, money });
-  const ytdTone =
-    ytd.actual == null
-      ? "text-slate-500"
-      : tone(
-          ytd.actual - ytd.budget > 1 ? "favourable" : ytd.actual - ytd.budget < -1 ? "adverse" : "inline",
-        );
+  const ytdTone = tone(budgetYtdSignal(ytd));
 
   const choose = (next: BudgetLens) => {
     setLocalLens(next);
@@ -119,7 +115,9 @@ export function BudgetChartTable({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">Budget vs actual</h3>
-          <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`}>{sentence}</p>
+          <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
+            {sentence}
+          </p>
         </div>
         <ViewToggle
           value={shown}
@@ -240,8 +238,8 @@ function BudgetMonthChart({
           <div key={row.month} className="min-w-0 flex-1 px-0.5 text-center">
             <div className="truncate text-[10px] text-slate-500">{row.label}</div>
             {row.delta == null ? (
-              <div className="truncate text-[10px] text-slate-400" title="Budget only">
-                Only
+              <div className="truncate text-[10px] text-slate-500/40" title="Budget only" aria-label="Budget only">
+                –
               </div>
             ) : (
               <div className={`truncate text-[10px] font-semibold tabular-nums ${tone(row.signal)}`}>
@@ -327,9 +325,9 @@ function BudgetMonthTable({
 function MonthHeads() {
   return (
     <>
-      <th className="px-2 py-1 text-right font-medium">Budget</th>
-      <th className="px-2 py-1 text-right font-medium">Actual</th>
-      <th className="px-2 py-1 text-right font-medium">Variance</th>
+      <th className="budget-grid__money px-2 py-1 text-right font-medium">Budget</th>
+      <th className="budget-grid__money px-2 py-1 text-right font-medium">Actual</th>
+      <th className="budget-grid__money px-2 py-1 text-right font-medium">Variance</th>
     </>
   );
 }
@@ -343,9 +341,11 @@ function MonthCells({
 }) {
   return (
     <>
-      <td className="px-2 py-1.5 text-right tabular-nums">{money(item.budget)}</td>
-      <td className="px-2 py-1.5 text-right tabular-nums">{item.actual == null ? "—" : money(item.actual)}</td>
-      <td className={`px-2 py-1.5 text-right tabular-nums ${tone(item.variance?.signal ?? null)}`}>
+      <td className="budget-grid__money px-2 py-1.5 text-right tabular-nums">{money(item.budget)}</td>
+      <td className="budget-grid__money px-2 py-1.5 text-right tabular-nums">
+        {item.actual == null ? "—" : money(item.actual)}
+      </td>
+      <td className={`budget-grid__money px-2 py-1.5 text-right tabular-nums ${tone(item.variance?.signal ?? null)}`}>
         {item.variance == null ? "—" : money(item.variance.delta)}
       </td>
     </>

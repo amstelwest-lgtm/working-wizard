@@ -11,6 +11,7 @@ import {
   budgetMonthViews,
   budgetTableRows,
   budgetYtdSentence,
+  budgetYtdSignal,
   revenueYtd,
 } from "../src/lib/budget-chart-table";
 import { formatMoney } from "../src/lib/market/format";
@@ -46,6 +47,10 @@ assert(
     `YTD: actual ${money(1000)} vs budget ${money(1000)} · in line.`,
   "a matched year is in line",
 );
+assert(budgetYtdSignal({ budget: 1000, actual: null }) === null, "no actuals have no colour");
+assert(budgetYtdSignal({ budget: 1000, actual: 700 }) === "adverse", "revenue under budget is red");
+assert(budgetYtdSignal({ budget: 1000, actual: 1300 }) === "favourable", "revenue over budget is green");
+assert(budgetYtdSignal({ budget: 1000, actual: 1000 }) === "inline", "a matched year is not red");
 
 const doc = createBudgetDocument({
   templateId: "services_hours",
@@ -114,6 +119,10 @@ for (const src of [simple, workspace]) {
 }
 assert(simple.includes("formatMoney(value, market)"), "the money field formats the resting value");
 
+assert(chart.includes("budgetYtdSignal"), "the year-to-date colour uses the revenue signal");
+assert(!chart.includes(">Only<"), "budget-only months do not say Only");
+assert(chart.includes("Budget only"), "the legend still names budget-only months");
+assert(read("src/styles/accountant-portal.css").includes(".budget-grid__money{white-space:nowrap"), "money cells do not wrap");
 assert(chart.includes("<ViewToggle"), "budget uses the shared toggle");
 assert(!chart.includes("data-view-mode-toggle"), "the chart toggle is not the drawer toggle");
 assert(toggle.includes('role="tablist"'), "the toggle is a tablist");

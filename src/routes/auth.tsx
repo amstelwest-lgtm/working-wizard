@@ -31,6 +31,7 @@ import {
   type PendingCheckout,
 } from "@/lib/pending-checkout";
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "@/lib/auth-landing";
+import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { listUserFirms } from "@/lib/firm-brand";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
@@ -214,9 +215,16 @@ function AuthPage() {
     ? "/ops"
     : next?.startsWith("/access/")
       ? next
-      : "/dashboard";
+      : isSmartLandingNext(next)
+        ? SMART_LANDING_PATH
+        : "/dashboard";
   const googleNext =
-    isOpsNext(next) || next?.startsWith("/access/") || isBillingStartPath(next) ? next : undefined;
+    isOpsNext(next) ||
+    next?.startsWith("/access/") ||
+    isBillingStartPath(next) ||
+    isSmartLandingNext(next)
+      ? next
+      : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
   /** While Create firm is provisioning, don't let the session effect steal the landing. */
@@ -248,6 +256,12 @@ function AuthPage() {
         const tab = lighthouseTabFromOpsNext(next);
         navigate({ to: "/ops", search: tab ? { tab } : {} });
         return "/ops";
+      }
+      if (isSmartLandingNext(next)) {
+        await ensurePractice().catch(() => undefined);
+        landedPathRef.current = SMART_LANDING_PATH;
+        navigate({ to: SMART_LANDING_PATH, replace: true });
+        return SMART_LANDING_PATH;
       }
       const firmsKnown =
         hadFirmBefore !== undefined ? hadFirmBefore : (await listUserFirms(userId)).length > 0;

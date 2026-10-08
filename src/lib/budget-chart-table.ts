@@ -11,6 +11,7 @@ import {
   varianceLine,
   type TaxonomyTotals,
   type VarianceLine,
+  type VarianceSignal,
 } from "@/lib/budget.variance";
 
 export type BudgetLens = "chart" | "table";
@@ -50,6 +51,15 @@ export function budgetMonthViews(
         : null,
     };
   });
+}
+
+/**
+ * Revenue year-to-date colour. Higher revenue is favourable, so "under" is
+ * adverse (red) and "over" is favourable (green). Null when there are no actuals.
+ */
+export function budgetYtdSignal(input: { budget: number; actual: number | null }): VarianceSignal | null {
+  if (input.actual == null) return null;
+  return varianceLine("revenue", "Revenue", input.budget, input.actual, true).signal;
 }
 
 /** Revenue year-to-date. Months without actuals stay out of the comparison. */
