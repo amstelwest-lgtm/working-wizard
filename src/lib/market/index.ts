@@ -13,7 +13,7 @@ export {
 export type { BenchmarkMarket } from "./benchmarks";
 export { isMissingMarketSupport, withMarketRpcFallback } from "./compat";
 export type { CopyKey } from "./copy";
-export { laborCostLabel, laborProductivityFileStem, laborProductivityTitle, localizeCopy, spellLabor, SALES_TAX_HONESTY, t } from "./copy";
+export { laborCostLabel, laborProductivityFileStem, laborProductivityTitle, localizeCopy, spellForMarket, spellLabor, SALES_TAX_HONESTY, t } from "./copy";
 export {
   applyVisitorMarketToDocument,
   LIST_PRICES,

@@ -52,6 +52,8 @@ export type BenchmarkReportPDFProps = {
   benchmarkRows: BenchmarkRow[];
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
 };
@@ -157,6 +159,7 @@ export function BenchmarkReportPDF({
   benchmarkRows,
   accountantProfile,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   market,
@@ -205,6 +208,7 @@ export function BenchmarkReportPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
       market={market ?? ZA_MARKET}
     >

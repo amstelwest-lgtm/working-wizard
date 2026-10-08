@@ -1,12 +1,13 @@
 /**
- * DemoWatermark — elegant diagonal watermark + notice chip for demo/mock data
- * so a firm never accidentally sends placeholder numbers as real figures.
+ * Watermarks and title badges for demo, draft, signed, and sample PDFs.
  *
  * SSR safety: react-pdf primitives — only import via dynamic import().
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { SAMPLE_STAMP_LINE, SAMPLE_STAMP_WORD } from "@/lib/pdf-sample";
 import { C } from "./theme";
+import { CheckMark } from "./glyphs";
 
 const styles = StyleSheet.create({
   layer: {
@@ -67,6 +68,34 @@ export function DraftWatermark() {
   );
 }
 
+/**
+ * Fictional client (`clients.is_demo`). Figures and the sign-off stay.
+ * The word and the caption are on every page.
+ */
+export function SampleWatermark() {
+  return (
+    <View style={styles.layer} fixed>
+      <Text
+        style={{
+          position: "absolute",
+          top: 340,
+          left: -40,
+          width: 680,
+          textAlign: "center",
+          fontSize: 64,
+          fontFamily: "Helvetica-Bold",
+          color: C.amberDeep,
+          opacity: 0.13,
+          letterSpacing: 10,
+          transform: "rotate(-28deg)",
+        }}
+      >
+        {SAMPLE_STAMP_WORD}
+      </Text>
+    </View>
+  );
+}
+
 const chip = StyleSheet.create({
   wrap: {
     alignSelf: "flex-start",
@@ -107,6 +136,65 @@ export function DraftNotice() {
     <View style={chip.wrap}>
       <View style={chip.dot} />
       <Text style={chip.text}>Draft — not signed off</Text>
+    </View>
+  );
+}
+
+/**
+ * Current sign-off, under the title. 8.5pt. The check is an SVG because
+ * Helvetica cannot draw U+2713. Sits in the same slot as the draft chip.
+ */
+export function SignedNotice({ line }: { line: string }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        marginTop: 6,
+        marginBottom: 4,
+        maxWidth: 515,
+      }}
+    >
+      <CheckMark size={9} color={C.greenDeep} />
+      <Text
+        style={{
+          fontSize: 8.5,
+          fontFamily: "Helvetica",
+          color: C.greenDeep,
+          lineHeight: 1.35,
+        }}
+      >
+        {line}
+      </Text>
+    </View>
+  );
+}
+
+/** Exact sample caption. Shown under the title and repeated in the footer. */
+export function SampleNotice() {
+  return (
+    <View style={{ marginTop: 6, marginBottom: 2 }}>
+      <Text
+        style={{
+          fontSize: 8.5,
+          fontFamily: "Helvetica-Bold",
+          color: C.amberDeep,
+          letterSpacing: 1.2,
+        }}
+      >
+        {SAMPLE_STAMP_WORD}
+      </Text>
+      <Text
+        style={{
+          fontSize: 8,
+          fontFamily: "Helvetica",
+          color: C.amberDeep,
+          marginTop: 1,
+        }}
+      >
+        {SAMPLE_STAMP_LINE}
+      </Text>
     </View>
   );
 }

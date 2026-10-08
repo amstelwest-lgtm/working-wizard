@@ -52,6 +52,8 @@ export type RatioMovementPDFProps = {
   };
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
 };
@@ -137,6 +139,7 @@ export function RatioMovementPDF({
   periodLabels,
   accountantProfile,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   market,
@@ -194,6 +197,7 @@ export function RatioMovementPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
       market={market ?? ZA_MARKET}
     >

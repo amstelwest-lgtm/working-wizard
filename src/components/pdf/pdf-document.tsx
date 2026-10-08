@@ -6,8 +6,9 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
-import { DemoWatermark, DraftWatermark } from "./watermark";
+import { DemoWatermark, DraftWatermark, SampleWatermark } from "./watermark";
 import { PdfMarketContext } from "./pdf-market";
+import { PdfDraftContext, PdfSampleContext, PdfSignoffContext } from "./pdf-frame";
 
 export type SmeData = {
   name: string;
@@ -31,7 +32,12 @@ type Props = {
   accountantProfile: AccountantProfile;
   /** When true, every page carries an elegant "illustrative data" watermark. */
   isDemo?: boolean;
-  /** Unsigned live deliverable. Ignored when isDemo is set (illustrative watermark wins). */
+  /**
+   * Fictional client (`clients.is_demo`). Stamps SAMPLE on every page and
+   * keeps live figures plus the sign-off. Wins over the demo and draft marks.
+   */
+  sample?: boolean;
+  /** Unsigned live deliverable. Ignored when isDemo or sample is set. */
   draft?: boolean;
   /** Only pass a non-stale sign-off — the footer renders it unconditionally when present. */
   reviewSignoff?: ReportSignoffStamp | null;
@@ -55,14 +61,21 @@ export function PDFDocument({
   smeData,
   accountantProfile,
   isDemo,
+  sample,
   draft,
   reviewSignoff,
   market,
   children,
 }: Props) {
   const resolved = market ?? ZA_MARKET;
+  const stamp = reviewSignoff ?? null;
+  const sampleOn = Boolean(sample);
+  const draftOn = Boolean(draft) && !sampleOn && !stamp && !isDemo;
   return (
     <PdfMarketContext.Provider value={resolved}>
+      <PdfSignoffContext.Provider value={stamp}>
+        <PdfSampleContext.Provider value={sampleOn}>
+          <PdfDraftContext.Provider value={draftOn}>
       <Document
         title={title}
         subject={subject}
@@ -73,11 +86,11 @@ export function PDFDocument({
         <Page
           size="A4"
           style={{
-            paddingBottom: 56,
+            paddingBottom: sampleOn ? 68 : 56,
             backgroundColor: "#ffffff",
           }}
         >
-          {isDemo ? <DemoWatermark /> : draft ? <DraftWatermark /> : null}
+          {sampleOn ? <SampleWatermark /> : isDemo ? <DemoWatermark /> : draft ? <DraftWatermark /> : null}
 
           {/* Fixed header — renders at the top of every page */}
           <ReportHeader
@@ -91,9 +104,12 @@ export function PDFDocument({
           <View style={{ paddingHorizontal: 40, paddingTop: 16 }}>{children}</View>
 
           {/* Fixed footer — absolutely positioned at bottom of every page */}
-          <ReportFooter fixed profile={accountantProfile} reviewSignoff={reviewSignoff} />
+          <ReportFooter fixed profile={accountantProfile} reviewSignoff={stamp} />
         </Page>
       </Document>
+          </PdfDraftContext.Provider>
+        </PdfSampleContext.Provider>
+      </PdfSignoffContext.Provider>
     </PdfMarketContext.Provider>
   );
 }

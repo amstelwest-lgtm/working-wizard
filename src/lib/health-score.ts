@@ -63,11 +63,15 @@ export type OverallHealth = {
   hasCriticalPillar: boolean;
 };
 
+/**
+ * Names on the scorecard PDF, the Overview pillar chips, and the pack.
+ * One map so those three cannot print different words for the same pillar.
+ */
 export const PILLAR_LABELS: Record<HealthPillarId, string> = {
-  profit: "Profitability",
-  assets: "Asset Efficiency",
-  financing: "Financing",
-  cash: "Cash & Working Capital",
+  profit: "Profit Drivers",
+  assets: "Asset Productivity",
+  financing: "Leverage & Finance",
+  cash: "Cash Flow",
 };
 
 /** Maps `computeRatios()` human-readable names → camelCase keys used in UI health maps. */
