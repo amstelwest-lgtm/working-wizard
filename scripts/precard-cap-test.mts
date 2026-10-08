@@ -19,9 +19,11 @@ import {
   decidePrecardAllowance,
   finishPrecardAttempt,
   isPrecardCapFailure,
+  normalizePrecardTurnId,
   precardBotRemainingLabel,
   precardCapApplies,
   precardCapError,
+  precardCapReason,
   type PrecardLimitKind,
   type PrecardUsage,
 } from "../src/lib/precard-cap";
@@ -321,6 +323,85 @@ assert(!html.includes("ZAR") && !html.includes("50%"), "the card does not show r
 const widget = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
 assert(widget.includes("precard-cap-card"), "the Bot paints the cap as a reply bubble");
 assert(widget.includes("precardCap"), "the Bot keeps the cap off the error path");
+assert(widget.includes("precardCapReason"), "the cap reason uses the shared helper");
+assert(!widget.includes("You've used your 10"), "the Bot widget does not hardcode the allowance");
+const reasonSrc = readFileSync(resolve("src/lib/precard-cap.ts"), "utf8");
+const reasonFn = reasonSrc.slice(
+  reasonSrc.indexOf("export function precardCapReason"),
+  reasonSrc.indexOf("export function normalizePrecardTurnId"),
+);
+assert(reasonFn.includes("precardLimitFor"), "the reason count comes from the configured cap");
+assert(!reasonFn.includes("You've used your 10"), "the reason helper does not hardcode 10");
+assert(
+  precardCapReason("bot") === `You've used your ${PRECARD_BOT_LIMIT} free Bot questions.`,
+  "bot reason follows the Bot limit",
+);
+assert(normalizePrecardTurnId("turn-1234-abcd") === "turn-1234-abcd", "a retry token is kept");
+assert(normalizePrecardTurnId("no") === null, "a short token is not an idempotency key");
+assert(
+  normalizePrecardTurnId("11111111-2222-4333-8444-555555555555") ===
+    "11111111-2222-4333-8444-555555555555",
+  "a uuid turn id is kept",
+);
+
+let charges = 0;
+const seen = new Set<string>();
+const idempotent = {
+  async rpc(fn: string, args: { p_turn_id?: string }) {
+    if (fn === "increment_precard_usage_once") {
+      const token = String(args.p_turn_id ?? "");
+      if (seen.has(token)) return { data: charges, error: null };
+      seen.add(token);
+      charges += 1;
+      return { data: charges, error: null };
+    }
+    charges += 1;
+    return { data: charges, error: null };
+  },
+};
+assert(
+  (await recordPrecardUse(idempotent, "firm_new", "bot", "11111111-2222-4333-8444-555555555555")) === 1,
+  "the first successful answer charges once",
+);
+assert(
+  (await recordPrecardUse(idempotent, "firm_new", "bot", "11111111-2222-4333-8444-555555555555")) === 1,
+  "a retry of the same turn does not charge again",
+);
+assert(charges === 1, "the counter moved once");
+
+let plainCharges = 0;
+const missingOnce = {
+  async rpc(fn: string) {
+    if (fn === "increment_precard_usage_once") {
+      return {
+        data: null,
+        error: { message: "Could not find the function public.increment_precard_usage_once in the schema cache" },
+      };
+    }
+    plainCharges += 1;
+    return { data: plainCharges, error: null };
+  },
+};
+assert(
+  (await recordPrecardUse(missingOnce, "firm_new", "bot", "22222222-2222-4333-8444-555555555555")) === 1,
+  "a missing idempotent rpc still records the successful answer",
+);
+
+const ask = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "utf8");
+assert(ask.includes("normalizePrecardTurnId"), "ask-ai keys the charge to the client turn");
+assert(
+  ask.includes("precard.firmId && answer.trim()"),
+  "ask-ai charges only after a non-empty answer",
+);
+const bot = readFileSync(resolve("supabase/functions/milon-bot/index.ts"), "utf8");
+assert(bot.includes("modelAnswer"), "milon-bot does not charge the failure fallback");
+assert(bot.includes("normalizePrecardTurnId"), "milon-bot keys the charge to the client turn");
+const idempotentSql = readFileSync(
+  resolve("supabase/migrations/20261008223000_precard_turn_idempotency.sql"),
+  "utf8",
+);
+assert(idempotentSql.includes("ON CONFLICT (firm_id, turn_id) DO NOTHING"), "a repeated turn id does not insert twice");
+assert(idempotentSql.includes("service_role"), "only the service role records a turn");
 const migration = readFileSync(
   resolve("supabase/migrations/20261008170000_firm_precard_ai_usage.sql"),
   "utf8",

@@ -9,6 +9,7 @@ import {
   decidePrecardAllowance,
   finishPrecardAttempt,
   missingPrecardColumn,
+  normalizePrecardTurnId,
   precardUsageFromRow,
   type PrecardDecision,
   type PrecardLimitKind,
@@ -74,24 +75,49 @@ export async function readPrecardGate(input: {
   };
 }
 
+function countFromRpc(data: unknown): number | null {
+  return typeof data === "number" && Number.isFinite(data) ? data : null;
+}
+
+/** True when the idempotent RPC is not deployed yet. Charging still works; a retry can double-count until the migration is applied. */
+function missingOnceRpc(message: string): boolean {
+  return /increment_precard_usage_once/i.test(message) && /does not exist|schema cache|could not find/i.test(message);
+}
+
+/**
+ * Record one successful use. Pass the client turn id so a retry of a dropped
+ * reply does not consume a second allowance. Call this only after a non-empty
+ * answer exists — a failed or empty attempt must not reach here.
+ */
 export async function recordPrecardUse(
   db: unknown,
   firmId: string,
   kind: PrecardLimitKind,
+  turnId?: string | null,
 ): Promise<number | null> {
   const id = firmId.trim();
   if (!id) return null;
+  const token = normalizePrecardTurnId(turnId);
   try {
     const gate = db as GateDb;
     if (!gate.rpc) return null;
     // Method call keeps `this` on the SupabaseClient. A detached
     // `const rpc = db.rpc; rpc(...)` throws reading `this.rest`.
+    if (token) {
+      const once = await gate.rpc("increment_precard_usage_once", {
+        p_firm_id: id,
+        p_kind: kind,
+        p_turn_id: token,
+      });
+      if (!once.error) return countFromRpc(once.data);
+      if (!missingOnceRpc(once.error.message)) return null;
+    }
     const { data, error } = await gate.rpc("increment_precard_usage", {
       p_firm_id: id,
       p_kind: kind,
     });
     if (error) return null;
-    return typeof data === "number" && Number.isFinite(data) ? data : null;
+    return countFromRpc(data);
   } catch (err) {
     console.error("recordPrecardUse failed", err instanceof Error ? err.message : err);
     return null;

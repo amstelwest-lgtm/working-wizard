@@ -520,7 +520,7 @@ await test("Scenario 5b: Enter-to-send clears the composer", async () => {
   assert(after?.value === "", "Enter-to-send clears the composer");
 });
 
-await test("Scenario 5c: a failed send keeps the draft", async () => {
+await test("Scenario 5c: a failed send echoes the question and offers Retry", async () => {
   (globalThis as Record<string, unknown>).fetch = async () => ({
     ok: false,
     status: 500,
@@ -538,10 +538,13 @@ await test("Scenario 5c: a failed send keeps the draft", async () => {
   await new Promise((r) => setTimeout(r, 0));
 
   const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
-  assert(ta?.value === "Keep this if it fails", "a failed send leaves the draft in the box");
+  const echo = container.find((el) => el.className.includes("ask-ai-turn-user"));
+  assert(echo?.textContent === "Keep this if it fails", "a failed send still echoes the question");
+  assert(ta?.value === "", "the composer clears once the question is in the thread");
   const err = container.find((el) => el.className.includes("ask-ai-error"));
   assert(err?.textContent === "nope", "a failed send shows the error in the thread");
   assert(err?.role === "alert", "the error is an alert");
+  assert(err?.find((el) => el.className.includes("ask-ai-retry"))?.textContent === "Retry", "the error has Retry");
 });
 
 await test("Scenario 6: a suggested chip then Ask shows a reply", async () => {
@@ -598,8 +601,10 @@ await test("Scenario 6b: Thinking keeps the chip draft until the reply arrives",
   await new Promise((r) => setTimeout(r, 0));
 
   const during = container.find((el) => el.className.includes("ask-ai-textarea"));
+  const echo = container.find((el) => el.className.includes("ask-ai-turn-user"));
   const send = container.find((el) => el.className.includes("ask-ai-send"));
-  assert(during?.value === chipText, "Thinking does not wipe the draft");
+  assert(echo?.textContent === chipText, "Thinking echoes the question instead of clearing it");
+  assert(during?.value === "", "the composer clears once the question is echoed");
   assert((send?.innerHTML ?? "").includes("Thinking"), "the send control shows Thinking");
   assert(container.children[0]?.dataset.askState === "thinking", "state is thinking");
 
@@ -645,8 +650,12 @@ await test("Scenario 7: empty, non-JSON, and network failures stay visible", asy
     text: async () => JSON.stringify({ answer: "  ", chips: [] }),
   }));
   assert(
-    empty.find((el) => el.className.includes("ask-ai-textarea"))?.value === chipText,
-    "an empty reply keeps the draft",
+    empty.find((el) => el.className.includes("ask-ai-turn-user"))?.textContent === chipText,
+    "an empty reply still echoes the question",
+  );
+  assert(
+    empty.find((el) => el.className.includes("ask-ai-retry")) != null,
+    "an empty reply offers Retry",
   );
   assert(
     (empty.find((el) => el.className.includes("ask-ai-error"))?.textContent ?? "").includes(
@@ -665,8 +674,8 @@ await test("Scenario 7: empty, non-JSON, and network failures stay visible", asy
     text: async () => "<!doctype html><html>bad gateway</html>",
   }));
   assert(
-    html.find((el) => el.className.includes("ask-ai-textarea"))?.value === chipText,
-    "a non-JSON edge error keeps the draft",
+    html.find((el) => el.className.includes("ask-ai-turn-user"))?.textContent === chipText,
+    "a non-JSON edge error still echoes the question",
   );
   assert(
     (html.find((el) => el.className.includes("ask-ai-error"))?.textContent ?? "").includes(
@@ -679,8 +688,8 @@ await test("Scenario 7: empty, non-JSON, and network failures stay visible", asy
     throw new TypeError("Failed to fetch");
   });
   assert(
-    offline.find((el) => el.className.includes("ask-ai-textarea"))?.value === chipText,
-    "a network failure keeps the draft",
+    offline.find((el) => el.className.includes("ask-ai-turn-user"))?.textContent === chipText,
+    "a network failure still echoes the question",
   );
   assert(
     (offline.find((el) => el.className.includes("ask-ai-error"))?.textContent ?? "").includes(
@@ -862,6 +871,135 @@ await test("Scenario 11: a remount in this tab restores the thread", async () =>
     const users = second.findAll((el) => el.className.includes("ask-ai-turn-user"));
     assert(users.length === 1 && (users[0].textContent ?? "").includes("How is cash?"), "the question survives remount");
     assert(answers.length === 1 && (answers[0].innerHTML ?? "").includes("Cash is on file."), "the reply survives remount");
+  } finally {
+    if (previous) (globalThis as { sessionStorage?: Storage }).sessionStorage = previous;
+    else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  }
+});
+
+await test("Scenario 12: a retry reuses the turn and does not echo twice", async () => {
+  const ids: string[] = [];
+  let n = 0;
+  (globalThis as Record<string, unknown>).fetch = async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as { turnId?: string };
+    ids.push(String(body.turnId ?? ""));
+    n += 1;
+    if (n === 1) {
+      return { ok: false, status: 500, json: async () => ({ error: "dropped" }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ answer: "Recovered.", chips: [] }) };
+  };
+
+  const container = makeContainer("retry-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  ta?.input("What is net profit?");
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const retry = container.find((el) => el.className.includes("ask-ai-retry"));
+  assert(retry != null, "the dropped send shows Retry");
+  retry?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(ids.length === 2 && ids[0] !== "" && ids[0] === ids[1], `retry kept turn ${ids.join(" / ")}`);
+  const users = container.findAll((el) => el.className.includes("ask-ai-turn-user"));
+  const answers = container.findAll((el) => el.className.includes("ask-ai-answer"));
+  assert(users.length === 1, `retry does not echo a second question, got ${users.length}`);
+  assert((answers[0]?.innerHTML ?? "").includes("Recovered."), "the retry shows the answer");
+  assert(container.find((el) => el.className.includes("ask-ai-retry")) == null, "a recovered turn hides Retry");
+});
+
+await test("Scenario 13: a timeout echoes the question and offers Retry", async () => {
+  (globalThis as Record<string, unknown>).fetch = () => new Promise(() => {});
+  const container = makeContainer("timeout-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    timeoutMs: 30,
+    getToken: async () => "test-token",
+  });
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  ta?.input("Still there?");
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 80));
+
+  const echo = container.find((el) => el.className.includes("ask-ai-turn-user"));
+  const err = container.find((el) => el.className.includes("ask-ai-error"));
+  assert(echo?.textContent === "Still there?", "a timeout keeps the question on screen");
+  assert((err?.textContent ?? "").includes("too long"), "a timeout explains itself");
+  assert(err?.find((el) => el.className.includes("ask-ai-retry")) != null, "a timeout offers Retry");
+  assert(container.children[0]?.dataset.askState === "error", "a timeout is an error, not a silent clear");
+});
+
+await test("Scenario 14: the first capped reply is the full card, and a remount keeps it", async () => {
+  const store = new Map<string, string>();
+  const previous = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  (globalThis as { sessionStorage?: unknown }).sessionStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  };
+  try {
+    (globalThis as Record<string, unknown>).fetch = async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: "Add a card to start your 14-day free trial",
+        code: "precard_cap",
+        limit: "bot",
+      }),
+    });
+    const first = makeContainer("cap-client");
+    mountAskAi(first, {
+      endpoint: "https://example.com/functions/v1/ask-ai",
+      variant: "studio",
+      getToken: async () => "test-token",
+    });
+    const ta = first.find((el) => el.className.includes("ask-ai-textarea"));
+    ta?.input("One more question");
+    first.find((el) => el.className.includes("ask-ai-send"))?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const card = first.find((el) => el.className.includes("precard-cap-card"));
+    assert(card != null, "the first capped reply is the card, not a plain bubble");
+    assert(
+      (card?.find((el) => el.className.includes("precard-cap-reason"))?.textContent ?? "").includes(
+        "free Bot questions",
+      ),
+      "the card says why the allowance is used",
+    );
+    assert(
+      (card?.find((el) => el.className.includes("precard-cap-reason"))?.textContent ?? "").includes("10"),
+      "the reason uses the configured Bot allowance",
+    );
+    assert(card?.find((el) => el.className.includes("precard-cap-button"))?.textContent === "Add a card", "the card has Add a card");
+    const href = String((card?.find((el) => el.className.includes("precard-cap-button")) as { href?: string } | null)?.href ?? "");
+    assert(
+      href.includes("/billing/start?plan=solo&interval=month&market=us"),
+      `Add a card opens Checkout, got ${href}`,
+    );
+
+    const second = makeContainer("cap-client");
+    mountAskAi(second, {
+      endpoint: "https://example.com/functions/v1/ask-ai",
+      variant: "studio",
+      getToken: async () => "test-token",
+    });
+    const restored = second.find((el) => el.className.includes("precard-cap-card"));
+    assert(restored != null, "a remount still shows the cap card without another send");
+    assert(
+      restored?.find((el) => el.className.includes("precard-cap-button"))?.textContent === "Add a card",
+      "the restored card still has the button",
+    );
   } finally {
     if (previous) (globalThis as { sessionStorage?: Storage }).sessionStorage = previous;
     else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;

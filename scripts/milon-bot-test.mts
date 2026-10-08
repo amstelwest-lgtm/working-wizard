@@ -110,6 +110,10 @@ assert(!BOT_SYSTEM.includes("point them to Ask AI"), "does not send users to a s
 assert(BOT_SYSTEM.includes("Do not send the user to a separate product"), "stays on one surface");
 assert(BOT_SYSTEM.includes("30–60 days"), "bot quotes the shared creditor band");
 assert(BOT_SYSTEM.includes("40-day band"), "bot is told not to invent a 40-day band");
+assert(
+  BOT_SYSTEM.includes("Do not multiply a margin by revenue"),
+  "bot quotes stored net profit instead of margin times revenue",
+);
 
 assert(summarizeToolArgs("answer_from_brain", { topic: "cash" }) === "answer_from_brain:cash", "args summary");
 assert(summarizeToolArgs("list_blockers", {}) === "list_blockers", "empty args summary");

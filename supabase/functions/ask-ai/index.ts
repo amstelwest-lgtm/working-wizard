@@ -15,7 +15,7 @@ import {
   readPrecardGate,
   recordPrecardUse,
 } from "../_shared/precard-cap-gate.ts";
-import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -105,7 +105,7 @@ async function handleAskAi(req: Request): Promise<Response> {
   if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
 
   // ── Parse body ────────────────────────────────────────────────────────────
-  let body: { clientId?: string; question?: string; audience?: string };
+  let body: { clientId?: string; question?: string; audience?: string; turnId?: string };
   try {
     body = await req.json();
   } catch {
@@ -263,6 +263,9 @@ async function handleAskAi(req: Request): Promise<Response> {
 
   const answer = rehydrateForUi(claudeResult.text, sealed.session, question);
   let precardRemaining: number | null = null;
+  // Charge only after a non-empty answer. An empty or failed call leaves the
+  // allowance where it was. The turn id makes a client retry of this same
+  // send free if the reply was dropped after the charge.
   if (precard.firmId && answer.trim()) {
     let nextCount: number | null = null;
     try {
@@ -270,7 +273,12 @@ async function handleAskAi(req: Request): Promise<Response> {
         decision: precard,
         succeeded: true,
         record: async () => {
-          nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+          nextCount = await recordPrecardUse(
+            adminClient,
+            precard.firmId!,
+            "bot",
+            normalizePrecardTurnId(body.turnId),
+          );
         },
       });
     } catch (err) {

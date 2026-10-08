@@ -12,7 +12,7 @@ import { rehydrateForUi } from "../_shared/redact-identifiers.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
-import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
 import {
   finishPrecardAttempt,
   precardMessagesLeft,
@@ -342,6 +342,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     mode?: string;
     history?: Array<{ role?: string; content?: string }>;
     audience?: string;
+    turnId?: string;
   };
   try {
     body = await req.json();
@@ -397,6 +398,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     );
   }
 
+  const turnId = normalizePrecardTurnId(body.turnId);
   const noteBotAnswer = async (produced: boolean) => {
     if (!precard.firmId || !produced) return null;
     let nextCount: number | null = null;
@@ -405,7 +407,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
         decision: precard,
         succeeded: true,
         record: async () => {
-          nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+          nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot", turnId);
         },
       });
     } catch (err) {
@@ -673,14 +675,21 @@ async function handleMilonBot(req: Request): Promise<Response> {
       if (e) console.warn("Token count update failed:", e.message);
     });
 
-  if (!answer.trim()) {
-    answer = toolsUsed.some((t) => t.status === "empty")
+  const modelAnswer = answer.trim();
+  const groundedEmpty = !modelAnswer && toolsUsed.some((t) => t.status === "empty");
+  if (!modelAnswer) {
+    answer = groundedEmpty
       ? "Nothing on file for that yet — I will not invent it."
       : "I could not complete that. Try again, or use Propose / Draft on the Summary tab.";
   }
 
   const shown = rehydrateForUi(answer, sealedChat.session, message);
-  const precardRemaining = await noteBotAnswer(Boolean(shown.trim()));
+  // Charge a real model answer, or the grounded "nothing on file" reply.
+  // The failure fallback is not an answer. A retry of the same turn id
+  // does not consume a second allowance.
+  const precardRemaining = await noteBotAnswer(
+    Boolean(shown.trim()) && (Boolean(modelAnswer) || groundedEmpty),
+  );
   return respond({
     answer: shown,
     tools: toolsUsed,
