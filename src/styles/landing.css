@@ -1105,7 +1105,7 @@ html[data-landing="1"] body{font-family:"Noto Sans","Noto Sans Fallback",sans-se
     color:var(--gold-ink);
     -webkit-text-fill-color:var(--gold-ink);
   }
-  html[data-landing="1"] nav#topnav .nav-trial{
+  html[data-landing="1"] nav#topnav .links a.nav-trial{
     min-height:44px;
     padding:0 18px;
     font-size:14px;
@@ -1118,11 +1118,11 @@ html[data-landing="1"] body{font-family:"Noto Sans","Noto Sans Fallback",sans-se
     -webkit-text-fill-color:var(--gold-ink);
     box-shadow:none;
   }
-  html[data-landing="1"] nav#topnav .nav-trial::after{
+  html[data-landing="1"] nav#topnav .links a.nav-trial::after{
     content:none;
     display:none;
   }
-  html[data-landing="1"] nav#topnav .nav-trial:hover{
+  html[data-landing="1"] nav#topnav .links a.nav-trial:hover{
     background:color-mix(in srgb,var(--gold) 12%,transparent);
     background-image:none;
     background-position:0 center;
@@ -1132,7 +1132,7 @@ html[data-landing="1"] body{font-family:"Noto Sans","Noto Sans Fallback",sans-se
     box-shadow:none;
     transform:none;
   }
-  html[data-landing="1"] nav#topnav .nav-trial:hover::after{
+  html[data-landing="1"] nav#topnav .links a.nav-trial:hover::after{
     content:none;
     display:none;
     left:-80%;

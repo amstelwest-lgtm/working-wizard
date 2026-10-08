@@ -1204,15 +1204,15 @@ html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-vouch
   outline-offset: 2px;
 }
 html[data-theme="light"] .firm-band-upgrade .firm-voucher-input {
-  background: #fffdf8;
-  color: #1b1608;
-  -webkit-text-fill-color: #1b1608;
-  border: 1px solid #8a6508;
+  background: #fffdf8 !important;
+  color: #1b1608 !important;
+  -webkit-text-fill-color: #1b1608 !important;
+  border: 1px solid #8a6508 !important;
 }
 html[data-theme="light"] .firm-band-upgrade .firm-voucher-input::placeholder {
-  color: #6b5f48;
-  -webkit-text-fill-color: #6b5f48;
-  opacity: 1;
+  color: #6b5f48 !important;
+  -webkit-text-fill-color: #6b5f48 !important;
+  opacity: 1 !important;
 }
 html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
   outline: 2px solid #8a6508;
