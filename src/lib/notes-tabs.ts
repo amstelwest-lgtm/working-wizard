@@ -12,7 +12,7 @@
  *   Payables      payables (accountant only)
  *   Budget        budget
  *   Books         summary | data | brain | books | client-brain
- *   Advisory      advisory | pack (drafter stays on the pack pane)
+ *   Advisory      advisory | pack | drafter (one note group across the split)
  *
  * No parallel page (stay in Open queries; do not dump the user on the wrong tab):
  *   next → owner Next moves only
@@ -55,7 +55,7 @@ const TAB_GROUPS: readonly (readonly string[])[] = [
   ["summary", "data", "brain", "books", "client-brain"],
   ["ask", "bot", "milon-bot"],
   ["reports", "report"],
-  ["advisory", "pack"],
+  ["advisory", "pack", "drafter"],
 ];
 
 const GROUP_BY_TAB = new Map<string, readonly string[]>();

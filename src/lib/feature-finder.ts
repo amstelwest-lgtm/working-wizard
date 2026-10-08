@@ -262,7 +262,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["advisory drafter", "drafter", "draft note", "sent history"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "deliverables", section: "pack" },
+    studio: { tab: "deliverables", section: "drafter" },
   },
   {
     id: "data-sync",

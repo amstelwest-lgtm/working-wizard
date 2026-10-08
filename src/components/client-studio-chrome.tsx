@@ -28,11 +28,12 @@ export const DELIVERABLE_SECTION_TABS: { id: (typeof DELIVERABLE_SECTIONS)[numbe
   { id: "reports", label: "Reports" },
   { id: "pack", label: "Advisory pack" },
   { id: "plan", label: "Action plan" },
+  { id: "drafter", label: "Advisory" },
 ];
 
 export function railGroup(tab: string): "ask" | "overview" | "deliverables" {
   if (tab === "ask") return "ask";
-  if (tab === "reports" || tab === "plan" || tab === "advisory") return "deliverables";
+  if (tab === "reports" || tab === "plan" || tab === "advisory" || tab === "drafter") return "deliverables";
   return "overview";
 }
 

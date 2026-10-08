@@ -141,6 +141,7 @@ import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
+  drafterSectionForHash,
   legacyPaneForSearch,
 } from "@/lib/client-route-search";
 import {
@@ -532,6 +533,7 @@ type ActiveTab =
   | "reports"
   | "plan"
   | "advisory"
+  | "drafter"
   | "summary"
   | "moves";
 
@@ -549,6 +551,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "reports",
   "plan",
   "advisory",
+  "drafter",
 ];
 
 function DeliverableTabHead({
@@ -827,6 +830,18 @@ function ClientView() {
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
   }, [search, requestOpenNote, openArchive]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const next = drafterSectionForHash(search.section, window.location.hash);
+    if (!next) return;
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => accountantClientTabSearch(prev, "deliverables", { section: next }),
+      hash: window.location.hash,
+      replace: true,
+    });
+  }, [search.section, clientId, navigate]);
   // Landing tab: Overview — the client explanation, profile, and upload.
   // Deliverables stay clean. Decided once per client, after load, and never
   // over a ?tab= deep link.
@@ -3715,17 +3730,6 @@ function ClientView() {
 
                 {/* ===== REPORTS TAB — same Reports Studio as /reports ===== */}
                 <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
-                  <DeliverableTabHead
-                    eyebrow="Reports Studio"
-                    title="Board-ready PDFs"
-                    lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. Packs use your firm's logo and colours."
-                  />
-                  <DeliverableInputConfig
-                    className="mb-5"
-                    clientId={clientId}
-                    deliverableId="reports"
-                    context={deliverableInputContext}
-                  />
                   {activeTab === "reports" && (
                     <TabErrorBoundary label="Reports">
                       <Suspense
@@ -3742,6 +3746,15 @@ function ClientView() {
                           report={studioDeepLink.report}
                           action={studioDeepLink.action}
                           embedded
+                          sourceChip={figureSourceChipLabel(statementMeta.statementSource)}
+                          inputs={
+                            <DeliverableInputConfig
+                              className="mb-5"
+                              clientId={clientId}
+                              deliverableId="reports"
+                              context={deliverableInputContext}
+                            />
+                          }
                           onSearchCleared={() => setStudioDeepLink({})}
                         />
                       </Suspense>
@@ -3826,7 +3839,7 @@ function ClientView() {
                   className={`tabpane${activeTab === "advisory" ? " on" : ""}`}
                   id="pane-advisory"
                 >
-                  {/* Pack, recommendations, outcomes, drafter, and sent history stay stacked on section=pack. */}
+                  {/* Pack, recommendations, and outcomes. The drafter is section=drafter. */}
                   <AdvisoryPackPanel
                     className="mb-5"
                     clientId={client.id}
@@ -3880,17 +3893,27 @@ function ClientView() {
                     refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                   />
-                  <AdvisoryDrafter
-                    clientId={client.id}
-                    clientName={client.name}
-                    onLogged={() => setDeliveryRefresh((n) => n + 1)}
-                  />
-                  <AdvisorySentHistory
-                    clientId={client.id}
-                    refreshToken={deliveryRefresh}
-                    statementPeriodLabel={reportDataPeriodLabel(financials)}
-                    liveScorecard={renderOverviewScorecard}
-                  />
+                </div>
+
+                {/* ===== ADVISORY DRAFTER ===== */}
+                <div className={`tabpane${activeTab === "drafter" ? " on" : ""}`} id="pane-drafter">
+                  {activeTab === "drafter" ? (
+                    <>
+                      <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+                        <AdvisoryDrafter
+                          clientId={client.id}
+                          clientName={client.name}
+                          onLogged={() => setDeliveryRefresh((n) => n + 1)}
+                        />
+                      </section>
+                      <AdvisorySentHistory
+                        clientId={client.id}
+                        refreshToken={deliveryRefresh}
+                        statementPeriodLabel={reportDataPeriodLabel(financials)}
+                        liveScorecard={renderOverviewScorecard}
+                      />
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>

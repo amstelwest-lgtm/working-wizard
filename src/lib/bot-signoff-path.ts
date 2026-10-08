@@ -121,8 +121,10 @@ export function botSignoffStateLine(ctas: readonly BotSignoffCta[]): string {
 export function botSignoffDestination(
   cta: BotSignoffCta,
   why?: string | null,
-): { tab: "plan" | "advisory"; coach?: "actions"; why?: string } {
-  const dest: { tab: "plan" | "advisory"; coach?: "actions"; why?: string } = { tab: cta.tab };
+): { tab: string; section?: "pack"; coach?: "actions"; why?: string } {
+  // Pack sign-off stays on the pack section. ?tab=advisory now opens the drafter.
+  const dest: { tab: string; section?: "pack"; coach?: "actions"; why?: string } =
+    cta.tab === "advisory" ? { tab: "deliverables", section: "pack" } : { tab: cta.tab };
   if (cta.coach) dest.coach = cta.coach;
   const clean = (why ?? "").replace(/[<>"]/g, "").replace(/\s+/g, " ").trim();
   if (!clean) return dest;
@@ -134,6 +136,7 @@ export function botSignoffHref(clientId: string, cta: BotSignoffCta, why?: strin
   const dest = botSignoffDestination(cta, why);
   const params = new URLSearchParams();
   params.set("tab", dest.tab);
+  if (dest.section) params.set("section", dest.section);
   if (dest.coach) params.set("coach", dest.coach);
   if (dest.why) params.set("why", dest.why);
   return `/clients/${encodeURIComponent(clientId)}?${params.toString()}`;

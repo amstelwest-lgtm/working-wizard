@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { toast, Toaster } from "sonner";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
+import { NotesProvider } from "@/contexts/notes";
 import { MarketProvider } from "@/contexts/market";
 import { AuthProvider } from "@/hooks/use-auth";
 import { applyPortalTheme } from "@/lib/portal-theme";
@@ -55,6 +56,7 @@ const clientRoute = createRoute({
         : undefined,
     planView:
       search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
+    drafterView: search.drafterView === "sent" ? "sent" : undefined,
   }),
   component: function ClientHarness() {
     return (
@@ -93,8 +95,10 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AuthProvider>
       <AccountantProfileProvider>
-        <RouterProvider router={router} />
-        <Toaster />
+        <NotesProvider>
+          <RouterProvider router={router} />
+          <Toaster />
+        </NotesProvider>
       </AccountantProfileProvider>
     </AuthProvider>
   </StrictMode>,

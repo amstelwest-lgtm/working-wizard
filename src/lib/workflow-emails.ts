@@ -305,8 +305,10 @@ export function workflowEmailHref(
   const base = siteUrl.replace(/\/$/, "");
   if (audience === "requested_firm") return `${base}/dashboard#accountant-inbox`;
   if (audience === "accountant") {
-    const tab = kind === "forecast_break" ? "cash" : "advisory";
-    return `${base}/clients/${clientId}?tab=${tab}`;
+    if (kind === "forecast_break") return `${base}/clients/${clientId}?tab=cash`;
+    // Pack mail used ?tab=advisory while that alias was the stacked pack page.
+    // The alias now opens the drafter, so the pack link names the pack section.
+    return `${base}/clients/${clientId}?tab=deliverables&section=pack`;
   }
   const tab = kind === "forecast_break" ? "cash" : kind === "cycle_restarted" ? "today" : "next";
   return `${base}/app?tab=${tab}`;

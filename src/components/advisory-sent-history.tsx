@@ -113,7 +113,7 @@ export function AdvisorySentHistory({
   };
 
   return (
-    <div className="card" style={{ marginTop: 16, padding: "14px 18px" }}>
+    <div id="sent-history" className="card" style={{ marginTop: 16, padding: "14px 18px" }}>
       <div
         style={{
           fontSize: 11,

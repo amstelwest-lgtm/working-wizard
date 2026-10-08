@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
+  drafterSectionForHash,
   type CanonicalClientSearch,
 } from "../src/lib/client-route-search";
 import { STRATEGIC_MOVE_CATALOG, rankStrategicMoves } from "../src/lib/strategic-moves";
@@ -93,7 +94,7 @@ lands("strategic-moves", { tab: "overview", section: "moves" }, "?tab=strategic-
 
 lands("reports", { tab: "deliverables", section: "reports" }, "?tab=reports opens Reports");
 lands("report", { tab: "deliverables", section: "reports" }, "?tab=report opens Reports");
-lands("advisory", { tab: "deliverables", section: "pack" }, "?tab=advisory opens the pack");
+lands("advisory", { tab: "deliverables", section: "drafter" }, "?tab=advisory opens the drafter");
 lands("plan", { tab: "deliverables", section: "plan" }, "?tab=plan opens Action Plan");
 lands("actions", { tab: "deliverables", section: "plan" }, "?tab=actions opens Action Plan");
 lands("action", { tab: "deliverables", section: "plan" }, "?tab=action opens Action Plan");
@@ -191,14 +192,19 @@ const deliverableStrip = route.slice(
   route.indexOf("const DELIVERABLE_SECTION_TABS"),
   route.indexOf("function railGroup"),
 );
-const deliverableOrder = ["reports", "pack", "plan"];
+const deliverableOrder = ["reports", "pack", "plan", "drafter"];
 let deliverableAt = -1;
 for (const id of deliverableOrder) {
   const at = deliverableStrip.indexOf(`id: "${id}"`);
   assert(at > deliverableAt, `Deliverables section ${id} is in order`);
   deliverableAt = at;
 }
-assert(route.includes('id: "pack", label: "Advisory pack"'), "Deliverables keeps the stacked pack");
+assert(route.includes('id: "pack", label: "Advisory pack"'), "Deliverables keeps the pack");
+assert(route.includes('id: "drafter", label: "Advisory"'), "Deliverables has an Advisory section");
+assert(drafterSectionForHash("pack", "#drafter") === "drafter", "pack#drafter opens the drafter");
+assert(drafterSectionForHash("pack", "#sent-history") === "drafter", "sent history hash opens the drafter");
+assert(drafterSectionForHash("drafter", "#drafter") === null, "a drafter hash stays on the drafter");
+assert(drafterSectionForHash("reports", "#nope") === null, "other hashes stay put");
 assert(route.includes('id="pane-moves"'), "Moves has its own pane");
 assert(route.includes("StrategicMovesPanel"), "Moves pane shows Strategic Moves");
 assert(route.includes("rankStrategicMoves"), "Moves and Action Plan share the ranked list");

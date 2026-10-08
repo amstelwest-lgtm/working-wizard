@@ -309,7 +309,7 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
                     <Link
                       to="/clients/$clientId"
                       params={{ clientId: r.client_id }}
-                      search={{ tab: "advisory" } as never}
+                      search={{ tab: "deliverables", section: "pack" } as never}
                       className="underline-offset-2 hover:underline"
                     >
                       {r.client_name ?? "A business"}

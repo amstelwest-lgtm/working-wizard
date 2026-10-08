@@ -112,9 +112,10 @@ const planAt = clientSrc.indexOf('id="pane-plan"');
 const advisoryAt = clientSrc.indexOf('id="pane-advisory"');
 assert.ok(planAt > 0 && advisoryAt > planAt, "plan and pack panes are in the route");
 const planPane = clientSrc.slice(planAt, advisoryAt);
+const drafterAt = clientSrc.indexOf('id="pane-drafter"');
 const footerAt = clientSrc.indexOf('className="footer-note"', advisoryAt);
-assert.ok(footerAt > advisoryAt, "the pack pane ends before the footer");
-const advisoryPane = clientSrc.slice(advisoryAt, footerAt);
+assert.ok(drafterAt > advisoryAt && footerAt > drafterAt, "the drafter pane sits after the pack");
+const advisoryPane = clientSrc.slice(advisoryAt, drafterAt);
 
 assert.ok(planPane.includes("signoffVerbOnly"), "the plan strip says Sign off");
 assert.ok(planPane.includes("planCount > 0"), "an empty plan hides Sign off");
@@ -129,7 +130,8 @@ assert.equal(planPane.includes("PrecardCapCard"), false, "the plan pane does not
 
 assert.ok(advisoryPane.includes("AdvisoryPackPanel"), "the pack path still mounts the pack");
 assert.ok(advisoryPane.includes("RecommendationsPanel"), "recommendations stay stacked on the pack");
-assert.ok(advisoryPane.includes("AdvisoryDrafter"), "the drafter stays stacked on the pack");
+assert.equal(advisoryPane.includes("AdvisoryDrafter"), false, "the pack page does not stack the drafter");
+assert.equal(advisoryPane.includes("AdvisorySentHistory"), false, "sent history leaves the pack page");
 assert.ok(advisoryPane.includes("AdvisoryTabSignoff"), "the pack path keeps the one sign-off control");
 assert.ok(advisoryPane.includes("onSignoffAction={setPackSignoff}"), "that control signs the pack");
 assert.equal(/ReviewSignoffButton/.test(advisoryPane), false, "the pack path has no second sign-off");

@@ -276,7 +276,7 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}â†
   );
   eq(
     workflowEmailHref("pack_ready_for_review", "accountant", CLIENT, site),
-    `https://milon.co.za/clients/${CLIENT}?tab=advisory`,
+    `https://milon.co.za/clients/${CLIENT}?tab=deliverables&section=pack`,
     "accountant pack link",
   );
   eq(
