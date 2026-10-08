@@ -65,7 +65,7 @@ function PaneFallback({ label }: { label: string }) {
   );
 }
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
-import "@/styles/ops-console.css";
+import { opsConsoleLinks } from "@/styles/app-route-styles";
 
 function LighthousePage() {
   return (
@@ -81,7 +81,10 @@ export const Route = createFileRoute("/_authenticated/ops")({
     const tab = parseOpsSearchTab(search.tab);
     return tab ? { tab } : {};
   },
-  head: () => ({ meta: [{ title: "Lighthouse — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Lighthouse — Milōn" }],
+    links: opsConsoleLinks,
+  }),
 });
 
 const OPS_CONSOLE_TABS = ["it", "access", "pilot", "usage"] as const;

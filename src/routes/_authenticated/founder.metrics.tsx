@@ -30,13 +30,13 @@ import {
 import { HYPOTHESIS_PLAIN, formatValue, stallTitle, stallWho, stallWhy } from "@/lib/metrics/instrument-view";
 import { getLighthouseUsage } from "@/lib/product-usage.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
-import "@/styles/ops-console.css";
-import "@/styles/founder-metrics.css";
+import { founderMetricsLinks } from "@/styles/app-route-styles";
 
 export const Route = createFileRoute("/_authenticated/founder/metrics")({
   component: FounderMetricsPage,
   head: () => ({
     meta: [{ title: "Founder instrument — Milōn" }],
+    links: founderMetricsLinks,
   }),
 });
 

@@ -30,7 +30,6 @@ import {
 import { subscribeFeatureFinderHotkey, toggleFinderOpen } from "@/lib/feature-finder-hotkey";
 import { openOwnerSettings, openPracticeSettings } from "@/lib/user-roles";
 import { cn } from "@/lib/utils";
-import "@/styles/feature-finder.css";
 
 type Props = {
   audience: FeatureAudience;

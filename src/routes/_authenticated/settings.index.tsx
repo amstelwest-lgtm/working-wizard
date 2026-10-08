@@ -67,7 +67,9 @@ import { SettingsShell } from "@/components/settings-shell";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
-  head: () => ({ meta: [{ title: "Settings — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Settings — Milōn" }],
+  }),
 });
 
 function SettingsPage() {

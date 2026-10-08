@@ -41,7 +41,9 @@ import {
 
 export const Route = createFileRoute("/_authenticated/settings/team")({
   component: TeamAccessPage,
-  head: () => ({ meta: [{ title: "Team & access — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Team & access — Milōn" }],
+  }),
 });
 
 function ClassificationSelect({

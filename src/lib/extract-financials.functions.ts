@@ -24,6 +24,7 @@ import type {
   CashFlowStatement,
 } from "@/lib/extraction-types";
 import { assessFlatExtraction, assessMergedExtraction, assertUsable } from "@/lib/upload-quality";
+import { blankDisallowedSections, mergeStatementFields, parseStatementText } from "@/lib/statement-parse";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import {
   financialExtractionPrompt,
@@ -285,7 +286,7 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
     // Call Claude for each PDF in parallel
     const extractions = await Promise.all(
       files.map(async (f) => ({
-        raw: await callClaudePDF(f.base64, f.fileName, prompt),
+        raw: blankDisallowedSections(await callClaudePDF(f.base64, f.fileName, prompt)),
         fileName: f.fileName,
       })),
     );
@@ -312,16 +313,27 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
 const FIELDS = [
   "revenue",
   "cogs",
+  "grossProfit",
   "ebit",
   "ebt",
   "netIncome",
   "ebitda",
+  "interestExpense",
+  "tax",
+  "depreciation",
   "operatingCashflow",
   "totalAssets",
   "equity",
   "receivables",
   "inventory",
   "payables",
+  "cash",
+  "currentAssets",
+  "currentLiabilities",
+  "totalLiabilities",
+  "fixedAssets",
+  "shortTermDebt",
+  "longTermDebt",
   "fixedCosts",
   "variableCosts",
   "top5Revenue",
@@ -329,88 +341,6 @@ const FIELDS = [
   "employees",
   "founderHours",
 ];
-
-const KEYWORDS: Record<string, string[]> = {
-  revenue: ["total revenue", "total turnover", "revenue", "turnover", "net sales", "total sales"],
-  cogs: ["cost of goods sold", "cost of sales", "cost of revenue", "direct costs"],
-  ebit: ["operating profit", "profit from operations", "ebit"],
-  ebt: ["profit before tax", "income before tax", "profit before income tax", "ebt"],
-  netIncome: [
-    "profit after tax",
-    "net income",
-    "net profit",
-    "profit for the year",
-    "profit for the period",
-  ],
-  ebitda: ["ebitda"],
-  operatingCashflow: [
-    "net cash from operating",
-    "cash from operating activities",
-    "cash generated from operations",
-  ],
-  totalAssets: ["total assets"],
-  equity: [
-    "total equity",
-    "shareholders equity",
-    "stockholders equity",
-    "total shareholders",
-    "net assets",
-  ],
-  receivables: [
-    "accounts receivable",
-    "trade receivables",
-    "trade and other receivables",
-    "debtors",
-  ],
-  inventory: ["inventories", "inventory", "stock"],
-  payables: ["accounts payable", "trade payables", "trade and other payables", "creditors"],
-  fixedCosts: ["fixed costs", "fixed overhead", "fixed expenses"],
-  variableCosts: ["variable costs", "variable expenses"],
-  laborCost: [
-    "employee costs",
-    "staff costs",
-    "salaries and wages",
-    "payroll",
-    "personnel costs",
-    "remuneration",
-  ],
-  employees: ["number of employees", "total employees", "headcount", "full-time equivalent"],
-  top5Revenue: [],
-  founderHours: [],
-};
-
-function extractNumber(segment: string): number | null {
-  const matches = segment.match(/[-−(]?\d[\d ,]*(?:\.\d+)?[)]?/g);
-  if (!matches) return null;
-  const raw = matches[matches.length - 1]
-    .replace(/[, ]/g, "")
-    .replace(/\(([^)]+)\)/, "-$1")
-    .replace("−", "-");
-  const n = parseFloat(raw);
-  return isFinite(n) ? n : null;
-}
-
-function patternExtract(text: string): Record<string, string> {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const out: Record<string, string> = {};
-  for (const [field, kws] of Object.entries(KEYWORDS)) {
-    if (kws.length === 0 || out[field]) continue;
-    for (const line of lines) {
-      const lc = line.toLowerCase();
-      if (kws.some((kw) => lc.includes(kw))) {
-        const n = extractNumber(line);
-        if (n !== null) {
-          out[field] = String(n);
-          break;
-        }
-      }
-    }
-  }
-  return out;
-}
 
 async function aiExtractText(
   text: string,
@@ -463,9 +393,22 @@ export const extractFinancials = createServerFn({ method: "POST" })
     if (!data.text?.trim()) throw new Error("No usable content provided");
     if (looksLikeBankLedger(data.text)) throw new Error(BANK_LEDGER_MESSAGE);
     const docText = data.text.slice(0, 120_000);
+    const parsed = parseStatementText(docText);
     const aiResult = await aiExtractText(docText, data.fileName, resolvePromptMarket(data.market));
-    const patternResult = patternExtract(docText);
-    const merged: Record<string, string> = { ...patternResult, ...aiResult };
+    const merged = mergeStatementFields(parsed, aiResult, docText);
     assertUsable(assessFlatExtraction(Object.keys(merged).length));
-    return { financials: merged, fieldCount: Object.keys(merged).length };
+    return {
+      financials: merged,
+      fieldCount: Object.keys(merged).length,
+      statement: {
+        kind: parsed.kind,
+        companyName: parsed.companyName,
+        periodLabel: parsed.periodLabel,
+        periodStart: parsed.periodStart,
+        periodEnd: parsed.periodEnd,
+        periodMonths: parsed.periodMonths,
+        currency: parsed.currency,
+        derived: parsed.derived.filter((key) => key in merged),
+      },
+    };
   });

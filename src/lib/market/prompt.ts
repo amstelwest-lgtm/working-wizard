@@ -83,8 +83,12 @@ EXTRACTION RULES:
   "Trade and other receivables" = debtors
   "Trade and other payables" = creditors
   "Property plant and equipment" = fixed_assets
-  "Profit before tax" = ebt
+  "Profit before tax" = ebt. A debt line is never ebt — "Current portion of long-term debt" is short_term_debt
   "Profit after tax" = net_income
+  "Cash", "Cash and cash equivalents", "Cash at bank", or "Bank" = cash
+  fixed_costs only when a line is labelled fixed costs or fixed overheads. Do not add rent, salaries and insurance together
+  A balance sheet leaves every income-statement field null. An income statement leaves every balance-sheet field null
+  company_name and the period dates come from the statement heading
   "Staff costs" or "Payroll" = labor_cost
 - For top_expenses: use the ACTUAL line item labels from the document — do not rename them
 - For top_income_sources: extract revenue breakdown lines if shown
@@ -116,8 +120,12 @@ EXTRACTION RULES:
   "Accounts receivable" / "Trade receivables" = debtors (keep JSON key debtors)
   "Accounts payable" / "Trade payables" = creditors (keep JSON key creditors)
   "Property plant and equipment" = fixed_assets
-  "Profit before tax" / "Income before tax" = ebt
+  "Profit before tax" / "Income before tax" = ebt. A debt line is never ebt — "Current portion of long-term debt" is short_term_debt
   "Net income" / "Profit after tax" = net_income
+  "Cash", "Cash and cash equivalents", "Cash at bank", or "Bank" = cash
+  fixed_costs only when a line is labelled fixed costs or fixed overheads. Do not add rent, salaries and insurance together
+  A balance sheet leaves every income-statement field null. An income statement leaves every balance-sheet field null
+  company_name and the period dates come from the statement heading
   "Payroll" or "Compensation" or "Staff costs" = labor_cost
 - Sales tax collected is not revenue — do not fold it into income
 - For top_expenses: use the ACTUAL line item labels from the document — do not rename them
@@ -267,8 +275,13 @@ Keys:
 - ${rev}
 - cogs (cost of sales / cost of goods sold)
 - ebit (operating profit)
-- ebt (profit before tax)
+- ebt (profit before tax — never a debt or loan line)
 - netIncome (profit after tax / net profit)
+- cash (cash, cash and cash equivalents, cash at bank, bank — balance sheet only)
+- interestExpense (interest expense)
+- tax (income tax)
+- depreciation (depreciation expense, not accumulated depreciation)
+- grossProfit (gross profit)
 - ebitda
 - operatingCashflow (cash generated from operations)
 - totalAssets
@@ -276,7 +289,7 @@ Keys:
 - ${ar}
 - inventory (stock)
 - ${ap}
-- fixedCosts (rent + salaries + insurance + recurring overheads)
+- fixedCosts (only a line labelled fixed costs or fixed overheads — do not sum rent, salaries and insurance)
 - variableCosts
 - top5Revenue (revenue from top-5 customers if disclosed)
 - laborCost (employee costs / wages / payroll)

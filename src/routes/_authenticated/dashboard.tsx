@@ -70,7 +70,6 @@ import { assessClientMetrics, runwayDisplayLabel, runwayTileValue } from "@/lib/
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryLabel } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
-import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsNavButton } from "@/components/settings-nav-button";
 import { FeatureFinder } from "@/components/feature-finder";
@@ -115,7 +114,9 @@ import { AccountantInbox } from "@/components/accountant-inbox";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Firm Dashboard — Milōn" }] }),
+  head: () => ({
+    meta: [{ title: "Firm Dashboard — Milōn" }],
+  }),
 });
 
 // ── Types ────────────────────────────────────────────────────────────────────

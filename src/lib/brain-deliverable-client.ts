@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { PRECARD_CAP_CODE, isPrecardLimitKind, precardCapError } from "@/lib/precard-cap";
 
 export type BrainDeliverableResult = {
   draftInserted: boolean;
@@ -7,6 +8,8 @@ export type BrainDeliverableResult = {
 
 type RawDeliverableBody = BrainDeliverableResult & {
   error?: string;
+  code?: string;
+  limit?: string;
   smoke?: string;
   status?: string;
 };
@@ -15,7 +18,7 @@ function parseDeliverableBody(raw: unknown): RawDeliverableBody {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     return raw as RawDeliverableBody;
   }
-  return {};
+  return { draftInserted: false };
 }
 
 /** Reject smoke stubs and other non-contract 200 responses before the UI treats them as "no draft". */
@@ -61,6 +64,9 @@ export async function invokeBrainDeliverableDraft(clientId: string): Promise<Bra
 
   const body = parseDeliverableBody(await res.json().catch(() => null));
   if (!res.ok) {
+    if (body.code === PRECARD_CAP_CODE) {
+      throw precardCapError(isPrecardLimitKind(body.limit) ? body.limit : "pack");
+    }
     throw new Error(body.error || `Draft failed (${res.status})`);
   }
 

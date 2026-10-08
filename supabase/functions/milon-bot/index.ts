@@ -12,6 +12,13 @@ import { rehydrateForUi } from "../_shared/redact-identifiers.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
+import {
+  finishPrecardAttempt,
+  precardMessagesLeft,
+  readPrecardGate,
+  recordPrecardUse,
+} from "../_shared/precard-cap-gate.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
 import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
 import {
@@ -332,6 +339,33 @@ Deno.serve(async (req: Request) => {
   }
   if (!hasAccess) return respond({ error: "Client not accessible" }, 403);
 
+  let precard;
+  try {
+    precard = await readPrecardGate({ db: adminClient, clientId, kind: "bot" });
+  } catch (err) {
+    console.error("precard check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+  if (!precard.allowed) {
+    return respond(
+      { error: precard.message || PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: precard.limit },
+      403,
+    );
+  }
+
+  const noteBotAnswer = async (produced: boolean) => {
+    if (!precard.firmId || !produced) return null;
+    let nextCount: number | null = null;
+    await finishPrecardAttempt({
+      decision: precard,
+      succeeded: true,
+      record: async () => {
+        nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+      },
+    });
+    return precard.applies ? precardMessagesLeft(nextCount, precard.remaining) : null;
+  };
+
   const { data: allowed, error: rlErr } = await adminClient.rpc("ask_ai_record_request", {
     p_user_id: user.id,
     p_client_id: clientId,
@@ -376,10 +410,25 @@ Deno.serve(async (req: Request) => {
         userClient,
         adminClient,
       });
+      if (created.precard) {
+        return respond(
+          {
+            error: created.precard.message,
+            code: created.precard.code,
+            limit: created.precard.limit,
+          },
+          403,
+        );
+      }
+      const produced = Boolean(
+        created.created.draftInserted || created.created.packId || created.created.actionItemIds.length,
+      );
+      const precardRemaining = await noteBotAnswer(produced);
       return respond({
         answer: created.answer,
         tools: created.tools,
         created: created.created,
+        ...(precardRemaining != null ? { precardRemaining } : {}),
       });
     } catch (e) {
       return respond({ error: (e as Error).message || "Could not save the deliverable" }, 500);
@@ -429,7 +478,13 @@ Deno.serve(async (req: Request) => {
           if (e) console.warn("Token count update failed:", e.message);
         });
       const view = publicRun(run);
-      return respond({ answer: view.summary, tools: run.tools, run: view });
+      const precardRemaining = await noteBotAnswer(Boolean(view.summary?.trim()));
+      return respond({
+        answer: view.summary,
+        tools: run.tools,
+        run: view,
+        ...(precardRemaining != null ? { precardRemaining } : {}),
+      });
     } catch (e) {
       const msg = (e as Error).message;
       if (msg.startsWith("Rate limit")) return respond({ error: msg }, 429);
@@ -566,8 +621,11 @@ Deno.serve(async (req: Request) => {
       : "I could not complete that. Try again, or use Propose / Draft on the Summary tab.";
   }
 
+  const shown = rehydrateForUi(answer, sealedChat.session, message);
+  const precardRemaining = await noteBotAnswer(Boolean(shown.trim()));
   return respond({
-    answer: rehydrateForUi(answer, sealedChat.session, message),
+    answer: shown,
     tools: toolsUsed,
+    ...(precardRemaining != null ? { precardRemaining } : {}),
   });
 });

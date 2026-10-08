@@ -22,7 +22,12 @@ import {
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
-import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
+import {
+  defaultAutoPopulatePrefs,
+  statementAutoPopulatePrefs,
+  type AutoPopulatePrefs,
+} from "@/lib/auto-populate";
+import { statementKindFromMetadata } from "@/lib/statement-parse";
 import { useMarketFormat } from "@/contexts/market";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -40,13 +45,15 @@ export interface MappedInputs {
   receivables?: string;
   inventory?: string;
   payables?: string;
-  fixedCosts?: string;
-  laborCost?: string;
-  employees?: string;
-  cash?: string;
-  capex?: string;
-  depreciation?: string;
-}
+    fixedCosts?: string;
+    laborCost?: string;
+    employees?: string;
+    cash?: string;
+    currentAssets?: string;
+    currentLiabilities?: string;
+    capex?: string;
+    depreciation?: string;
+  }
 
 interface Props {
   result: MergedExtractionResult;
@@ -87,6 +94,8 @@ export function extractionToInputs(r: MergedExtractionResult): MappedInputs {
     laborCost: n(is?.labor_cost),
     employees: n(meta?.headcount),
     cash: n(bs?.cash),
+    currentAssets: n(bs?.current_assets),
+    currentLiabilities: n(bs?.current_liabilities),
     capex: n(cfs?.capex),
     depreciation: n(is?.depreciation),
   };
@@ -128,6 +137,7 @@ interface FieldRowProps {
   onEdit: () => void;
   onChange: (v: string) => void;
   editVal: string;
+  derived?: boolean;
 }
 
 function FieldRow({
@@ -140,6 +150,7 @@ function FieldRow({
   onEdit,
   onChange,
   editVal,
+  derived = false,
 }: FieldRowProps) {
   const { money } = useMarketFormat();
   const hasValue = value != null && isFinite(value);
@@ -147,6 +158,11 @@ function FieldRow({
     <div className="flex items-center gap-2 py-1.5 border-b border-slate-800/60 last:border-0">
       <div className="flex-1 min-w-0">
         <span className="text-xs text-slate-400">{label}</span>
+        {derived && hasValue && (
+          <span className="ml-1.5 rounded border border-amber-800/80 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-400">
+            Derived
+          </span>
+        )}
         {originalValue != null && originalValue !== value && (
           <span className="ml-2 text-[10px] text-slate-600">
             ({isCurrency ? fmtMoney(originalValue, money) : originalValue})
@@ -227,8 +243,10 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   const [acceptedQuality, setAcceptedQuality] = useState(false);
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(defaultAutoPopulatePrefs());
   useEffect(() => {
-    if (open) setAutoPrefs(autoPopulate?.prefs ?? defaultAutoPopulatePrefs());
-  }, [open, autoPopulate?.prefs]);
+    if (!open) return;
+    const stored = autoPopulate?.prefs ?? defaultAutoPopulatePrefs();
+    setAutoPrefs(statementAutoPopulatePrefs(stored, statementKindFromMetadata(result.document_metadata)));
+  }, [open, autoPopulate?.prefs, result]);
 
   useEffect(() => {
     if (open) setAcceptedQuality(false);
@@ -273,6 +291,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
         value={value}
         source={source}
         isCurrency={isCurrency}
+        derived={result.derived_fields?.includes(path) ?? false}
         isEditing={editingPath === path}
         onEdit={() => (editingPath === path ? stopEdit() : startEdit(path, raw))}
         onChange={(v) => setEditValues((prev) => ({ ...prev, [path]: v }))}
@@ -281,23 +300,31 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
     );
   };
 
-  // Count null fields in core sections
+  const showIncome = Boolean(meta?.contains_income_statement) || !meta?.contains_balance_sheet;
+  const showBalance = Boolean(meta?.contains_balance_sheet) || !meta?.contains_income_statement;
+  const showCashFlow = Boolean(meta?.contains_cash_flow_statement) || (showIncome && showBalance);
+  // Count gaps only on the statement that was uploaded.
   const coreFields = [
-    is?.revenue,
-    is?.cogs,
-    is?.gross_profit,
-    is?.ebit,
-    is?.ebt,
-    is?.net_income,
-    is?.ebitda,
-    is?.labor_cost,
-    is?.fixed_costs,
-    bs?.total_assets,
-    bs?.equity,
-    bs?.debtors,
-    bs?.inventory,
-    bs?.creditors,
-    cfs?.operating_cash_flow,
+    ...(showIncome
+      ? [
+          is?.revenue,
+          is?.cogs,
+          is?.gross_profit,
+          is?.ebit,
+          is?.ebt,
+          is?.net_income,
+          is?.ebitda,
+          is?.interest_expense,
+          is?.tax,
+          is?.depreciation,
+          is?.labor_cost,
+          is?.fixed_costs,
+        ]
+      : []),
+    ...(showBalance
+      ? [bs?.cash, bs?.total_assets, bs?.equity, bs?.debtors, bs?.inventory, bs?.creditors]
+      : []),
+    ...(meta?.contains_cash_flow_statement ? [cfs?.operating_cash_flow] : []),
   ];
   const nullCount = coreFields.filter((v) => v == null).length;
   const hasNulls = nullCount > 0;
@@ -332,13 +359,14 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
   };
 
   const periodLabel =
-    meta?.period_start_date && meta?.period_end_date
+    meta?.period_label?.trim() ||
+    (meta?.period_start_date && meta?.period_end_date
       ? `${meta.period_start_date} to ${meta.period_end_date}`
       : meta?.period_end_date
-        ? `Year ended ${meta.period_end_date}`
+        ? `As of ${meta.period_end_date}`
         : meta?.period_months
           ? `${meta.period_months}-month period`
-          : "Period unknown";
+          : "Period unknown");
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -496,6 +524,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
           )}
 
           {/* ── Income Statement ── */}
+          {showIncome && (
           <Section title="Income Statement" defaultOpen>
             {fieldRow("Revenue", "income_statement.revenue", is?.revenue)}
             {fieldRow("COGS", "income_statement.cogs", is?.cogs)}
@@ -523,8 +552,10 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
               is?.director_remuneration,
             )}
           </Section>
+          )}
 
           {/* ── Balance Sheet ── */}
+          {showBalance && (
           <Section title="Balance Sheet">
             {fieldRow("Total Assets", "balance_sheet.total_assets", bs?.total_assets)}
             {fieldRow("Fixed Assets", "balance_sheet.fixed_assets", bs?.fixed_assets)}
@@ -558,8 +589,10 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
               bs?.shareholder_loans_liability,
             )}
           </Section>
+          )}
 
           {/* ── Cash Flow ── */}
+          {showCashFlow && (
           <Section title="Cash Flow Statement">
             {fieldRow(
               "Operating Cash Flow",
@@ -584,6 +617,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
               cfs?.net_cash_movement,
             )}
           </Section>
+          )}
 
           {/* ── Top Expenses ── */}
           {result.top_expenses?.length > 0 && (
