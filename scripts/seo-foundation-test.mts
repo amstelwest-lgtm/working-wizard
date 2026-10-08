@@ -29,6 +29,7 @@ import {
   WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
 import {
+  FIRM_TEAM_BULLETS,
   HERO_BADGE,
   HERO_H1_GOLD,
   HERO_LEDE,
@@ -334,7 +335,18 @@ assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");
 assert(!firms.includes("South African accounting"), "firm page meta is not SA-first");
 assert(!/white-label/i.test(firms), "firm page does not claim white-label");
 assert(firms.includes("Portfolio triage."), "firm page keeps portfolio triage");
-assert(firms.includes("Drafted advisory reports."), "firm page keeps drafted advisory reports");
+assert(firms.includes("FIRM_TEAM_BULLETS"), "firm page renders the three finance-team bullets");
+assert(!firms.includes("ACCOUNTANTS_DRAFT_BULLET"), "firm page drops the single drafted-reports bullet");
+assert(!firms.includes("Drafted advisory reports."), "firm page drops the drafted advisory reports label");
+assert(
+  FIRM_TEAM_BULLETS.map((bullet) => bullet.title).join("|") ===
+    [
+      "Milōn Accountant, your team's newest accountant.",
+      "Milōn Analyst, your AI financial analyst.",
+      "Milōn Advisor.",
+    ].join("|"),
+  "firm page names three distinct agents",
+);
 assert(firms.includes("A risk radar."), "firm page keeps the risk radar");
 assert(firms.includes("A recurring reason to talk."), "firm page keeps the recurring reason to talk");
 assert(
@@ -344,8 +356,8 @@ assert(
 assert(firms.includes("SA_FOUNDING_LINE"), "firm page keeps the SA founding line");
 assert(
   SEO_PAGES.forAccountants.title ===
-    "Advisory drafts from QBO & Xero for accounting firms | MILŌN",
-  "firm page title names advisory drafts from QBO and Xero",
+    "AI Finance Team for Accountants, from QBO & Xero | MILŌN",
+  "firm page title names the AI finance team from QBO and Xero",
 );
 assert(firms.includes("Works with QuickBooks Online and Xero"), "firm page names both ledgers");
 assert(firms.includes("Connect QuickBooks Online or Xero"), "firm page says connect either ledger");
@@ -360,7 +372,8 @@ assert(owners.includes("Xero"), "owners page names Xero");
 assert(!owners.includes("certified"), "owners page does not claim certification");
 
 for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwners, SEO_PAGES.faq]) {
-  assert(page.description.includes("QuickBooks Online"), `${page.path} meta names QuickBooks Online`);
+  const ledgerName = page.path === "/for-accountants" ? "QBO" : "QuickBooks Online";
+  assert(page.description.includes(ledgerName), `${page.path} meta names ${ledgerName}`);
   assert(page.description.includes("Xero"), `${page.path} meta names Xero`);
   assert(page.description.length <= 170, `${page.path} meta description stays snippet-length`);
   assert(!page.description.includes("certified"), `${page.path} meta does not claim certification`);

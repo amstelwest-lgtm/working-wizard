@@ -15,7 +15,7 @@ export const HERO_BADGE = "For accounting firms and the businesses they advise";
 export const HERO_H1_LEAD = "QuickBooks Online and Xero,";
 export const HERO_H1_GOLD = "plug-and-play.";
 export const HERO_LEDE =
-  "Milōn Bot reads the numbers, diagnoses the business, and drafts the advisory deliverables. The accountant reviews and signs off.";
+  "Your AI finance team reads the numbers, diagnoses the business, and drafts the advisory deliverables. The accountant reviews and signs off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 export const HERO_CTA_NOTE = `${FIRM_CARD_TIMING} Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
@@ -33,7 +33,7 @@ export const HERO_SIGNOFF_POINT = "You review and sign off every advisory pack."
 
 export const HERO_POINTS = [
   "Connect a client's QuickBooks Online or Xero file, or upload a P&L and balance sheet.",
-  "Milōn Bot builds the health score, 13-week cash forecast and action plan.",
+  "Milōn Accountant, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
   HERO_SIGNOFF_POINT,
 ] as const;
 
@@ -60,14 +60,46 @@ export const TRUST_ITEMS = [
 export const TRUST_AI_LINK = "How we handle data and AI →";
 
 export const HOW_STEP_03 =
-  "Milōn Bot turns the analysis and business context into clear recommendations, a 13-week cash forecast, and an action plan.";
+  "Your Milōn finance team turns the analysis and business context into clear recommendations, a 13-week cash forecast, and an action plan.";
 
-export const BRIDGE_DRAFT_LABEL = "Milōn Bot drafts";
+export const BRIDGE_DRAFT_LABEL = "Your AI finance team drafts";
 export const BRIDGE_DRAFT_BODY =
   "It prepares the first version of the analysis and the advisory deliverables.";
 
-export const ACCOUNTANTS_DRAFT_BULLET =
-  "Milōn Bot writes the first draft from the client's actual numbers. You correct, sign off, and send — the judgement stays yours.";
+/** Three distinct agents on /for-accountants. Same <strong> + body pattern as the old single bullet. */
+export const FIRM_TEAM_BULLETS = [
+  {
+    title: "Milōn Accountant, your team's newest accountant.",
+    body: "Checks each client's books are up to date every month and flags what's missing, so your firm can stamp them clean.",
+  },
+  {
+    title: "Milōn Analyst, your AI financial analyst.",
+    body: "Budget vs actual, a 13-week cash flow forecast and plain-word variance explanations, plus a first-draft board report.",
+  },
+  {
+    title: "Milōn Advisor.",
+    body: "Watches the cash floor and debtors between reports and drafts next moves and the advisory. You correct, sign off and send — the judgement stays yours.",
+  },
+] as const;
+
+/** Role strip in #problem. Reuses .bridge-facts / .bridge-fact; no new CSS. */
+export const FINANCE_TEAM = [
+  {
+    name: "Milōn Accountant",
+    body: "Your team's newest accountant. Checks each client's books are up to date every month and flags what's missing.",
+    bold: "Your firm stamps them clean.",
+  },
+  {
+    name: "Milōn Analyst",
+    body: "Budget vs actual and a 13-week cash forecast, with variances explained in plain words.",
+    bold: "Drafts the board report.",
+  },
+  {
+    name: "Milōn Advisor",
+    body: "Watches the cash floor and debtors between reports.",
+    bold: "Drafts next moves and advisory for your sign-off.",
+  },
+] as const;
 
 export const WATCH_EYEBROW = "See it in 30 seconds";
 export const WATCH_TITLE = "Two seats. One workspace.";
@@ -146,7 +178,7 @@ export const PROOF_SIGNOFF_BODY =
  * stops the loop for a decision. No email claim (forecast_break can mail early).
  */
 export const PROOF_BOT_BODY =
-  "Milōn Bot works only from what's on file. It won't invent figures, and it stops when a decision needs you.";
+  "Each Milōn agent works only from what's on file. None invents figures, and each stops when a decision needs you.";
 
 export const PROOF_CARDS = [
   {
@@ -169,7 +201,7 @@ export const PROOF_CARDS = [
   },
   {
     id: "plan",
-    title: "An agent that knows its limits",
+    title: "Agents that know their limits",
     body: PROOF_BOT_BODY,
     alt: "Action plan ready for review with Request changes and Sign off action plan for Sample Co.",
     base: "action-plan-review",
