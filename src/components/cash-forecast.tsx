@@ -277,7 +277,7 @@ function Stat({
     <div className="rounded-xl border border-amber-900/10 bg-white/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50">
       <div className={LABEL_CLS}>{label}</div>
       <div
-        className={`mt-1 truncate text-xl font-extrabold tracking-tight ${
+        className={`mt-1 text-xl font-extrabold leading-tight tracking-tight whitespace-normal ${
           tone === "good"
             ? "text-[#3f9c72] dark:text-[#5cc492]"
             : tone === "bad"
@@ -1258,7 +1258,7 @@ export function CashForecastPanel({
 
   // ── Shared hero chart ──────────────────────────────────────────────────────
   const heroChart = (height: number) => (
-    <div style={{ height }} className="w-full">
+    <div style={{ height }} className="w-full min-w-0 max-w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
           <defs>
@@ -1618,7 +1618,7 @@ export function CashForecastPanel({
                 <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center gap-2">
               {heroBadge}
               {!hideReadOnlyStamp && !canSign && (
                 <ReviewSignoffBadge
@@ -1722,7 +1722,7 @@ export function CashForecastPanel({
           ) : null}
           {emptyPresentation.showChart ? (
             <>
-              <div className="mb-1 flex items-center justify-between">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <div className={LABEL_CLS}>Closing balance</div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400">
                   Gold line is the {fmtCompact(minimumCash)} floor

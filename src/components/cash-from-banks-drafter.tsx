@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -244,13 +245,16 @@ export function CashFromBanksDrafter({
         }
       }}
     >
-      <DialogContent className="max-h-[min(92vh,100dvh-1rem)] w-[calc(100vw-1rem)] max-w-5xl overflow-y-auto border border-amber-900/20 bg-[#fffdf8] p-4 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
-            <Wallet className="h-4 w-4 text-[#b8860b]" />
-            Cash forecast from bank statements
+      <DialogContent className="box-border max-h-[min(92vh,100dvh-1rem)] w-full min-w-0 max-w-[min(64rem,calc(100vw-24px))] overflow-x-hidden overflow-y-auto border border-amber-900/20 bg-[#fffdf8] p-4 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
+        <DialogClose className="absolute right-12 top-3 z-10 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50">
+          Cancel
+        </DialogClose>
+        <DialogHeader className="pr-28 text-left">
+          <DialogTitle className="flex min-w-0 items-start gap-2 text-left text-base font-semibold leading-snug tracking-tight">
+            <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-[#b8860b]" />
+            <span className="min-w-0">Cash forecast from bank statements</span>
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
+          <DialogDescription className="text-left text-xs leading-relaxed text-slate-500">
             Classify cash movements, set cadence, then publish into the 13-week Cash Forecast.
           </DialogDescription>
         </DialogHeader>
@@ -318,7 +322,7 @@ export function CashFromBanksDrafter({
             <Button
               disabled={files.length === 0 || working}
               onClick={runDraft}
-              className="w-full bg-[#b8860b] text-white hover:bg-[#9a7209]"
+              className="w-full max-w-full whitespace-normal bg-[#b8860b] text-white hover:bg-[#9a7209] sm:whitespace-nowrap"
             >
               {working ? (
                 <>

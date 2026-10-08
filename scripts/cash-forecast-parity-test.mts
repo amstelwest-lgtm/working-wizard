@@ -11,6 +11,7 @@ import {
   forecastMinimumCash,
   ledgerOpeningIsCashEvidence,
   RUNWAY_PROFITABLE_LABEL,
+  runwayTileValue,
 } from "../src/lib/client-metrics";
 import {
   canonicalForecastFloor,
@@ -205,6 +206,16 @@ const aboveFloor = forecastRunwayHeadlineShared({
 assert(aboveFloor.headline === "No shortfall", aboveFloor.headline);
 assert(aboveFloor.note === "above the floor", aboveFloor.note);
 assert(!aboveFloor.headline.includes("Profitable"), aboveFloor.headline);
+
+const profitableTile = forecastRunwayHeadlineShared({
+  opening: 0,
+  closings: [0, 0],
+  floor: 0,
+  runwayLabel: RUNWAY_PROFITABLE_LABEL,
+});
+assert(profitableTile.headline === "Profitable", profitableTile.headline);
+assert(runwayTileValue(RUNWAY_PROFITABLE_LABEL) === "Profitable", "clients list tile");
+assert(!profitableTile.headline.includes("P&L"), profitableTile.headline);
 
 const generativeTile = forecastRunwayHeadlineShared({
   opening: 128450,

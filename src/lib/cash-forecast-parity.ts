@@ -130,6 +130,9 @@ export function forecastRunwayHeadlineShared(input: {
     label === RUNWAY_PROFITABLE_LABEL ||
     label === RUNWAY_INSUFFICIENT_LABEL;
   if (openingSet && asksForData) return { headline: "No shortfall", note: "above the floor" };
+  if (label === RUNWAY_PROFITABLE_LABEL) {
+    return { headline: "Profitable", note: "Add a cash-flow statement or bank balance" };
+  }
   if (label && label !== "—") return { headline: label, note: "above the floor" };
   const horizon = input.closings.length > 0 ? input.closings.length : 13;
   return { headline: `${horizon}+ wks`, note: "above the floor" };

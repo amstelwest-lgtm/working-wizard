@@ -3424,15 +3424,7 @@ function ClientView() {
                         <span className="eyebrow">Signature view</span>
                         <div className="h-sec">13-week cash forecast</div>
                       </div>
-                      <div
-                        className="deliverable-tab-head__sign"
-                        style={{
-                          display: "flex",
-                          gap: 10,
-                          flexWrap: "wrap",
-                          justifyContent: "flex-end",
-                        }}
-                      >
+                      <div className="deliverable-tab-head__sign">
                         <ReviewSignoffButton
                           compact
                           clientId={clientId}

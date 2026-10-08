@@ -232,6 +232,17 @@ export function clientRunway(input: {
   return weeksFromBurn(cash, burn / span);
 }
 
+/**
+ * Tile value. The long profitable sentence stays in the note and the tooltip;
+ * the tile itself is one or two lines ("Profitable"), on the phone and on desktop.
+ */
+export function runwayTileValue(label: string | null | undefined): string {
+  const text = label?.trim() ?? "";
+  if (!text || text === "—") return "—";
+  if (text === RUNWAY_PROFITABLE_LABEL) return "Profitable";
+  return text;
+}
+
 /** Label for Overview, the forecast, and the Bot. A blank cash line stays hidden. */
 export function runwayDisplayLabel(runway: ClientRunway): string | null {
   if (runway.kind === "unknown" && runway.label === "—") return null;
