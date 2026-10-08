@@ -122,6 +122,27 @@ export function forecastRunwayHeadlineShared(input: {
   return { headline: `${horizon}+ wks`, note: "above the floor" };
 }
 
+/**
+ * The sentence under the cash-tab tiles. The pack uses the same words so a
+ * regenerated forecast cannot disagree with the screen.
+ */
+export function forecastStatusSentence(input: {
+  opening: number;
+  closings: readonly number[];
+  floor: number;
+  floorText: string;
+  runwayLabel?: string | null;
+  cashGenerative?: boolean;
+}): string {
+  const story = forecastRunwayHeadlineShared(input);
+  const weeks = input.closings.length > 0 ? input.closings.length : 13;
+  if (story.note === "above the floor") {
+    return `Cash stays above the ${input.floorText} floor across these ${weeks} weeks.`;
+  }
+  const phrase = forecastPositionPhrase(input);
+  return `Cash ${phrase} (floor ${input.floorText}). ${story.headline} — action needed.`;
+}
+
 export type OpeningSourceChip = "Statement" | "Bank" | "Sync" | "Manual" | "Estimate";
 
 /** Chip for the opening field. Unknown sources stay blank rather than guessed. */

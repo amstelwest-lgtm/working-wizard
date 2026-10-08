@@ -1,4 +1,5 @@
 import type { SpherePillar } from "@/components/sphere-hero";
+import { PILLAR_SHORT_LABELS } from "@/lib/health-score";
 import { HEALTH_BAND_TABLE, type HealthTier } from "@/lib/ratios";
 
 /**
@@ -27,13 +28,6 @@ export const PILLAR_DRIVER_KEYS: Record<SpherePillar["id"], string[]> = {
   assets: ["assetTurnover", "roa", "inventoryDays", "salesPerEmployee"],
   financing: ["equityMultiplier", "interestBurden", "taxBurden", "roe"],
   cash: ["debtorDays", "creditorDays", "workingCapitalDays", "ocfToEbitda"],
-};
-
-const PILLAR_LABEL: Record<SpherePillar["id"], string> = {
-  profit: "Profit",
-  assets: "Assets",
-  financing: "Financing",
-  cash: "Cash",
 };
 
 function blurbFor(id: SpherePillar["id"], health: number): string {
@@ -81,7 +75,7 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
     const health = pillarHealths[id];
     return {
       id,
-      label: PILLAR_LABEL[id],
+      label: PILLAR_SHORT_LABELS[id],
       health,
       status: pillarStatus?.[id],
       delta: pillarDeltas?.[id],

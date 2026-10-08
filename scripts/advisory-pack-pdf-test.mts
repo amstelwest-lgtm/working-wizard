@@ -199,4 +199,49 @@ assert(
 );
 assert(signedText.includes("healthy at 80/100"), "signed pdf includes the pack body");
 
+const approvedPeriod = advisoryPackPdfPeriodLine({
+  status: "approved",
+  requires_review: true,
+  period_label: "September 2026",
+  version: 10,
+  content: { periodLabel: null } as AdvisoryPack["content"],
+});
+assert(approvedPeriod === "v10 · Signed off · September 2026", approvedPeriod);
+assert(!approvedPeriod.includes("With your accountant") && !approvedPeriod.includes("Draft"), approvedPeriod);
+
+const staleLine =
+  "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT — figures have changed since; regenerate and re-review";
+const staleBuf = await renderToBuffer(
+  createElement(AdvisoryPackPDF, {
+    smeData: { name: "QA US", period: approvedPeriod },
+    accountantProfile: profile,
+    reviewSignoff: {
+      signedOffByName: "James Fleming",
+      signedOffByInitials: null,
+      signedOffByTitle: null,
+      firmName: "Ben Accountants",
+      signedOffAt: "2026-10-07T23:01:31.000Z",
+      signatureData: null,
+    },
+    staleNotice: staleLine,
+    sections: [
+      {
+        title: "Where the business stands",
+        body: "Lowest R134 200 in week 1. Opening balance R128 450. Comfort line R50 000. Inventory days 61. Profitability is the weak pillar.",
+      },
+    ],
+  }),
+);
+const staleText = await textOf(staleBuf);
+assert(staleText.includes("figures have changed since"), staleText);
+assert(staleText.includes("James Fleming"), staleText);
+assert(staleText.includes("Ben Accountants"), staleText);
+assert(staleText.includes("regenerate and re-review"), staleText);
+assert(staleText.includes("R134 200"), "stored rand narrative stays in the bytes");
+assert(staleText.includes("v10"), staleText);
+assert(staleText.includes("Signed off"), staleText);
+assert(!staleText.includes("NOT SIGNED OFF"), staleText);
+assert(!staleText.includes("Draft for accountant review"), staleText);
+assert(!staleText.includes("With your accountant"), staleText);
+
 console.log("advisory-pack-pdf: all checks passed");

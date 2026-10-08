@@ -325,26 +325,18 @@ export function movementNarrative(
 
 export function benchmarkNarrative(
   d: {
-    topQ: number;
     above: number;
     below: number;
+    at: number;
     total: number;
     industryName: string;
   },
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
-  const aboveOrTop = d.topQ + d.above;
-  const standing =
-    aboveOrTop >= d.total * 0.7
-      ? "an upper-tier performer in its sector"
-      : aboveOrTop >= d.total * 0.4
-        ? "a mid-pack performer with clear areas to close on the leaders"
-        : "trailing its sector on most measures — the gaps below map the catch-up agenda";
   const medianLabel = market.copyPack === "us" ? "global SME bands" : "the sector median";
-  const base =
-    `Against ${d.industryName} peers, ${aboveOrTop} of ${d.total} ratios sit at or above ${medianLabel}` +
-    `${d.topQ > 0 ? ` and ${d.topQ} reach${d.topQ === 1 ? "es" : ""} the top quartile` : ""}, making the business ${standing}.`;
+  const atBit = d.at > 0 ? `, and ${d.at} sit on it` : "";
+  const base = `Against ${d.industryName} peers, ${d.above} of ${d.total} ratios sit above ${medianLabel} and ${d.below} sit below${atBit}.`;
   return withCoda(base, profile, "benchmark", market);
 }
 

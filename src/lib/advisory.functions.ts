@@ -28,6 +28,7 @@ import { rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileAiContext } from "@/lib/profile-signals";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import { PILLAR_LABELS, pillarForRatioName } from "@/lib/health-score";
 
 type RatioMap = Record<string, number | string | null>;
 
@@ -50,28 +51,9 @@ const InputSchema = z.object({
   steer: z.string().max(600).optional(),
 });
 
-// The 4 pillars, so the brief groups movement the way the product does.
-const PILLAR: Record<string, "Profit" | "Cash" | "Assets" | "Financing"> = {
-  "Net Margin": "Profit",
-  "Operating Margin": "Profit",
-  "Gross Margin": "Profit",
-  "Return on Equity": "Profit",
-  "Return on Assets": "Profit",
-  "Degree of Operating Leverage": "Profit",
-  "Fixed Cost Ratio": "Profit",
-  "Debtor Days": "Cash",
-  "Inventory Days": "Cash",
-  "Creditor Days": "Cash",
-  "Working Capital Days": "Cash",
-  "OCF / EBITDA": "Cash",
-  "Asset Turnover": "Assets",
-  "Sales-per-Employee Ratio": "Assets",
-  "Gross Profit / Labor": "Assets",
-  "Top-5 Customer Share": "Financing",
-  "Equity Multiplier": "Financing",
-  "Interest Burden": "Financing",
-  "Tax Burden": "Financing",
-};
+function pillarName(ratio: string): string {
+  return PILLAR_LABELS[pillarForRatioName(ratio)];
+}
 
 function toNum(v: number | string | null | undefined): number {
   if (v == null) return NaN;
@@ -93,7 +75,7 @@ function buildMovementBrief(
   if (!prior) {
     const lines = Object.entries(current)
       .filter(([, v]) => Number.isFinite(toNum(v)))
-      .map(([k, v]) => `${PILLAR[k] ?? "Other"} · ${k}: ${fmt(k, toNum(v))}`);
+      .map(([k, v]) => `${pillarName(k)} · ${k}: ${fmt(k, toNum(v))}`);
     return { lines, hasPrior: false };
   }
 
@@ -109,8 +91,8 @@ function buildMovementBrief(
     if (pctMove < 0.05 && !signFlipped) continue;
     const dir = delta > 0 ? "up" : "down";
     rows.push({
-      pillar: PILLAR[k] ?? "Other",
-      text: `${PILLAR[k] ?? "Other"} · ${k}: ${fmt(k, p)} → ${fmt(k, c)} (${dir} ${fmtDelta(k, delta)})`,
+      pillar: pillarName(k),
+      text: `${pillarName(k)} · ${k}: ${fmt(k, p)} → ${fmt(k, c)} (${dir} ${fmtDelta(k, delta)})`,
       absPctMove: pctMove,
     });
   }

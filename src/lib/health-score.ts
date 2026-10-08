@@ -74,6 +74,17 @@ export const PILLAR_LABELS: Record<HealthPillarId, string> = {
   cash: "Cash Flow",
 };
 
+/**
+ * Tight labels for the Overview orb. Each one abbreviates `PILLAR_LABELS`.
+ * Pack prose, the scorecard, and the pillar cards use the canonical names.
+ */
+export const PILLAR_SHORT_LABELS: Record<HealthPillarId, string> = {
+  profit: "Profit",
+  assets: "Assets",
+  financing: "Financing",
+  cash: "Cash",
+};
+
 /** Maps `computeRatios()` human-readable names → camelCase keys used in UI health maps. */
 export const RATIO_NAME_TO_KEY: Record<string, string> = {
   "Gross Margin": "grossMargin",
