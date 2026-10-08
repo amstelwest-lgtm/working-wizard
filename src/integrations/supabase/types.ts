@@ -2134,6 +2134,10 @@ export type Database = {
           brand_contact_email: string | null
           brand_updated_at: string | null
           market: Json | null
+          precard_pack_generations: number
+          precard_email_drafts: number
+          precard_bot_messages: number
+          precard_cap_applies: boolean | null
         }
         Insert: {
           created_at?: string
@@ -2152,6 +2156,10 @@ export type Database = {
           brand_contact_email?: string | null
           brand_updated_at?: string | null
           market?: Json | null
+          precard_pack_generations?: number
+          precard_email_drafts?: number
+          precard_bot_messages?: number
+          precard_cap_applies?: boolean | null
         }
         Update: {
           created_at?: string
@@ -2170,6 +2178,10 @@ export type Database = {
           brand_contact_email?: string | null
           brand_updated_at?: string | null
           market?: Json | null
+          precard_pack_generations?: number
+          precard_email_drafts?: number
+          precard_bot_messages?: number
+          precard_cap_applies?: boolean | null
         }
         Relationships: []
       }
@@ -2927,6 +2939,13 @@ export type Database = {
           p_kinds: string[]
           p_with: Json
           p_actor?: string | null
+        }
+        Returns: number
+      }
+      increment_precard_usage: {
+        Args: {
+          p_firm_id: string
+          p_kind: string
         }
         Returns: number
       }

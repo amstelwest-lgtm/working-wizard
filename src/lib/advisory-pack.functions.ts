@@ -21,6 +21,8 @@ import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-iden
 import type { LooseSb } from "@/lib/advisory-state.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
+import { gatePrecardGeneration, recordPrecardGeneration } from "@/lib/precard-cap.server";
+import { PRECARD_CAP_CODE, finishPrecardAttempt } from "@/lib/precard-cap";
 import {
   ADVISORY_PACK_STALE_NOTE,
   PACK_APP_ACTIONS,
@@ -309,7 +311,7 @@ export const getLatestAdvisoryPack = createServerFn({ method: "GET" })
 
 export type GeneratePackResult =
   | { ok: true; pack: AdvisoryPack }
-  | { ok: false; reason: "not_migrated" | "no_figures" };
+  | { ok: false; reason: "not_migrated" | "no_figures" | typeof PRECARD_CAP_CODE };
 
 type ClientFigureRow = {
   name?: string;
@@ -524,6 +526,14 @@ export const generateAdvisoryPack = createServerFn({ method: "POST" })
 
     const inputs = await gatherPackInputs(sb, data.clientId, now);
     if (!inputs) return { ok: false, reason: "no_figures" };
+    const precard = await gatePrecardGeneration({
+      supabase: context.supabase,
+      userId: context.userId,
+      email: actorEmail(context),
+      firmId,
+      kind: "pack",
+    });
+    if (!precard.allowed) return { ok: false, reason: PRECARD_CAP_CODE };
     const content = buildAdvisoryPack(inputs);
 
     const { data: snap } = await sb
@@ -554,6 +564,15 @@ export const generateAdvisoryPack = createServerFn({ method: "POST" })
     if (readErr) throw new Error(readErr.message);
     const pack = parsePackRow(row as Record<string, unknown>);
     await supersedeBrainDraftsBeforePack(sb, data.clientId, pack.generated_at);
+    if (precard.firmId) {
+      await finishPrecardAttempt({
+        decision: precard,
+        succeeded: true,
+        record: async () => {
+          await recordPrecardGeneration(precard.firmId!, "pack");
+        },
+      });
+    }
     return { ok: true, pack };
   });
 

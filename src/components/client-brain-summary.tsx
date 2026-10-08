@@ -19,7 +19,9 @@ import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { portalButtonClass } from "@/lib/client-chrome";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
+import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
+import { isPrecardCapFailure } from "@/lib/precard-cap";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
 import { SharedDocumentsList } from "@/components/shared-documents-list";
 import { PanelSkeleton } from "@/components/primitives";
@@ -189,6 +191,7 @@ export function ClientBrainSummary({
   const { user } = useAuth();
   const assertDeliverable = useServerFn(assertFirmCanGenerateDeliverable);
   const trialBlock = useTrialEndedAction();
+  const [precardOpen, setPrecardOpen] = useState(false);
   const { dateTime } = useMarketFormat();
   const { productMix, weeklyInputs } = useFinancialInputs();
 
@@ -342,6 +345,7 @@ export function ClientBrainSummary({
 
   const proposeFromBrain = async () => {
     setProposing(true);
+    setPrecardOpen(false);
     trialBlock.reset();
     try {
       const result = await invokeBrainPropose(
@@ -366,6 +370,10 @@ export function ClientBrainSummary({
       }
       await load();
     } catch (e) {
+      if (isPrecardCapFailure(e)) {
+        setPrecardOpen(true);
+        return;
+      }
       trialBlock.report(e, "Could not propose from brain");
     } finally {
       setProposing(false);
@@ -510,6 +518,7 @@ export function ClientBrainSummary({
 
   const draftAdvisoryFromBrain = async () => {
     setDrafting(true);
+    setPrecardOpen(false);
     trialBlock.reset();
     try {
       await assertDeliverable({ data: { clientId } });
@@ -527,6 +536,10 @@ export function ClientBrainSummary({
       }
       await load();
     } catch (e) {
+      if (isPrecardCapFailure(e)) {
+        setPrecardOpen(true);
+        return;
+      }
       trialBlock.report(e, "Could not draft advisory from brain");
     } finally {
       setDrafting(false);
@@ -579,6 +592,7 @@ export function ClientBrainSummary({
           sent until you sign it off.
         </p>
         <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+        {precardOpen ? <PrecardCapCard /> : null}
       </div>
 
       {loading ? (

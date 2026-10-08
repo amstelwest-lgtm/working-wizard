@@ -9,6 +9,13 @@ import {
   cacheHitIsDisplaySafe,
   rehydrateForUi,
 } from "../_shared/redact-identifiers.ts";
+import {
+  finishPrecardAttempt,
+  precardMessagesLeft,
+  readPrecardGate,
+  recordPrecardUse,
+} from "../_shared/precard-cap-gate.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -115,6 +122,20 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Client not accessible" }, 403);
   }
 
+  let precard;
+  try {
+    precard = await readPrecardGate({ db: adminClient, clientId, kind: "bot" });
+  } catch (err) {
+    console.error("precard check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+  if (!precard.allowed) {
+    return respond(
+      { error: precard.message || PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: precard.limit },
+      403,
+    );
+  }
+
   // ── Sanitise & classify ───────────────────────────────────────────────────
   const question = sanitize(rawQuestion);
   const tier     = classify(question);
@@ -154,7 +175,14 @@ Deno.serve(async (req: Request) => {
         .eq("question_hash", hash)
         .then(() => {});
 
-      return respond({ answer: cached.answer, cached: true, chips: deriveChips(question, tier) });
+      const cachedRemaining =
+        precard.applies && precard.remaining != null && precard.remaining > 0 ? precard.remaining : null;
+      return respond({
+        answer: cached.answer,
+        cached: true,
+        chips: deriveChips(question, tier),
+        ...(cachedRemaining != null ? { precardRemaining: cachedRemaining } : {}),
+      });
     }
   }
 
@@ -222,7 +250,25 @@ Deno.serve(async (req: Request) => {
   }
 
   const answer = rehydrateForUi(claudeResult.text, sealed.session, question);
-  return respond({ answer, chips: deriveChips(question, tier) });
+  let precardRemaining: number | null = null;
+  if (precard.firmId && answer.trim()) {
+    let nextCount: number | null = null;
+    await finishPrecardAttempt({
+      decision: precard,
+      succeeded: true,
+      record: async () => {
+        nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+      },
+    });
+    precardRemaining = precard.applies
+      ? precardMessagesLeft(nextCount, precard.remaining)
+      : null;
+  }
+  return respond({
+    answer,
+    chips: deriveChips(question, tier),
+    ...(precardRemaining != null ? { precardRemaining } : {}),
+  });
 });
 
 function deriveChips(question: string, tier: string): string[] {

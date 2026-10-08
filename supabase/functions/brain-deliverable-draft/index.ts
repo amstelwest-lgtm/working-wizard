@@ -9,6 +9,12 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
+import {
+  finishPrecardAttempt,
+  readPrecardGate,
+  recordPrecardUse,
+} from "../_shared/precard-cap-gate.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
 import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { partyNamesInBrain } from "../brain-propose/prompt.ts";
 import { buildDeliverableDraftPayload } from "./prompt.ts";
@@ -306,6 +312,20 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
   }
 
+  let precard;
+  try {
+    precard = await readPrecardGate({ db: adminClient, clientId, kind: "pack" });
+  } catch (err) {
+    console.error("precard check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+  if (!precard.allowed) {
+    return respond(
+      { error: precard.message || PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: precard.limit },
+      403,
+    );
+  }
+
   const { data: allowed, error: rlErr } = await adminClient.rpc("ask_ai_record_request", {
     p_user_id: user.id,
     p_client_id: clientId,
@@ -475,6 +495,16 @@ Deno.serve(async (req: Request) => {
   if (insErr) {
     console.error("deliverable_drafts insert:", insErr.message);
     return respond({ error: insErr.message }, 500);
+  }
+
+  if (precard.firmId) {
+    await finishPrecardAttempt({
+      decision: precard,
+      succeeded: true,
+      record: async () => {
+        await recordPrecardUse(adminClient, precard.firmId!, "pack");
+      },
+    });
   }
 
   return respond({ draftInserted: true });

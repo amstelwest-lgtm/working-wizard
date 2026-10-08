@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
+import { precardCapError, finishPrecardAttempt } from "@/lib/precard-cap";
+import { gatePrecardGeneration, recordPrecardGeneration } from "@/lib/precard-cap.server";
 
 /**
  * Advisory Drafter
@@ -140,13 +142,13 @@ export const draftAdvisory = createServerFn({ method: "POST" })
     if (!client) throw new Error("Client not accessible");
 
     const claims = context.claims as { email?: string | null };
+    const firmId = (client as { firm_id?: string | null }).firm_id ?? null;
     await assertStarterTrialAllowsNewWork({
       supabase: context.supabase,
       userId: context.userId,
       email: claims.email ?? "",
-      firmId: (client as { firm_id?: string | null }).firm_id ?? null,
+      firmId,
     });
-
     const operatingProfile = parseOperatingProfile(
       (client as { operating_profile?: unknown }).operating_profile,
     );
@@ -211,6 +213,18 @@ export const draftAdvisory = createServerFn({ method: "POST" })
       signoffNames = [];
     }
 
+    const precard =
+      data.kind === "client_email"
+        ? await gatePrecardGeneration({
+            supabase: context.supabase,
+            userId: context.userId,
+            email: claims.email ?? "",
+            firmId,
+            kind: "email",
+          })
+        : null;
+    if (precard && !precard.allowed) throw precardCapError("email");
+
     const sealed = buildAdvisoryModelPayload({
       kind: data.kind,
       steer: data.steer,
@@ -271,6 +285,16 @@ export const draftAdvisory = createServerFn({ method: "POST" })
         subject = m[1].trim();
         body = m[2].trim();
       }
+    }
+
+    if (precard?.firmId && body.trim()) {
+      await finishPrecardAttempt({
+        decision: precard,
+        succeeded: true,
+        record: async () => {
+          await recordPrecardGeneration(precard.firmId!, "email");
+        },
+      });
     }
 
     return {

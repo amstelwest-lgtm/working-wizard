@@ -45,6 +45,12 @@ import {
   quotedStatementFigures,
 } from "../../../src/lib/statement-margin.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
+import {
+  finishPrecardAttempt,
+  readPrecardGate,
+  recordPrecardUse,
+} from "../_shared/precard-cap-gate.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const allowed = Deno.env.get("ALLOWED_ORIGINS");
@@ -156,6 +162,20 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error("plan check failed", err instanceof Error ? err.message : err);
     return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+
+  let precard;
+  try {
+    precard = await readPrecardGate({ db: adminClient, clientId, kind: "pack" });
+  } catch (err) {
+    console.error("precard check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
+  if (!precard.allowed) {
+    return respond(
+      { error: precard.message || PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: precard.limit },
+      403,
+    );
   }
 
   const { data: allowed, error: rlErr } = await adminClient.rpc("ask_ai_record_request", {
@@ -570,6 +590,17 @@ Deno.serve(async (req: Request) => {
       console.error("brain_summary update: 0 rows (RLS or missing client)");
       return respond({ error: "Could not save brain summary" }, 403);
     }
+  }
+
+  if (precard.firmId) {
+    await finishPrecardAttempt({
+      decision: precard,
+      succeeded:
+        !skippedReason && (stepsInserted > 0 || patched.gapAdded > 0 || patched.competitorAdded > 0),
+      record: async () => {
+        await recordPrecardUse(adminClient, precard.firmId!, "pack");
+      },
+    });
   }
 
   return respond({

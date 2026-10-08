@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { PRECARD_CAP_CODE, isPrecardLimitKind, precardCapError } from "@/lib/precard-cap";
 
 export type BrainProposeResult = {
   stepsInserted: number;
@@ -29,8 +30,13 @@ export async function invokeBrainPropose(
     },
     body: JSON.stringify({ clientId, outstanding }),
   });
-  const body = (await res.json().catch(() => ({}))) as BrainProposeResult & { error?: string };
+  const body = (await res.json().catch(() => ({}))) as BrainProposeResult & {
+    error?: string;
+    code?: string;
+    limit?: string;
+  };
   if (!res.ok) {
+    if (body.code === PRECARD_CAP_CODE) throw precardCapError(isPrecardLimitKind(body.limit) ? body.limit : "pack");
     throw new Error(body.error || `Propose failed (${res.status})`);
   }
   return {

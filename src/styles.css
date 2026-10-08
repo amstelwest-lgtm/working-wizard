@@ -1218,6 +1218,34 @@ html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
   outline: 2px solid #8a6508;
   outline-offset: 2px;
 }
+.precard-cap-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(140, 110, 10, 0.28);
+  background: #fffdf8;
+  color: #1b1608;
+}
+.precard-cap-title { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
+.precard-cap-button {
+  display: inline-flex;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #e0b85c;
+  color: #1b1300;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.precard-cap-remaining { margin: 8px 0 0; font-size: 12px; font-weight: 500; opacity: 0.72; }
+html.dark .precard-cap-card,
+html:not([data-theme="light"]) .accountant-portal .precard-cap-card,
+.dark .ask-ai-answer.precard-cap-card {
+  background: #101018;
+  color: #f7f1e4;
+  border-color: rgba(212, 175, 55, 0.35);
+}
 .trial-ended-action {
   margin-top: 12px;
 }

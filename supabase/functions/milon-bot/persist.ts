@@ -16,6 +16,12 @@ import {
 } from "../ask-ai/overview-brief.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
+import {
+  finishPrecardAttempt,
+  readPrecardGate,
+  recordPrecardUse,
+} from "../_shared/precard-cap-gate.ts";
+import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE } from "../../../src/lib/precard-cap.ts";
 import { isStarterTrialEndedMessage } from "../../../src/lib/starter-trial-generation.ts";
 
 export type CreateIntent = {
@@ -61,7 +67,10 @@ function quarterEnd(now = new Date()): string {
   return new Date(Date.UTC(now.getUTCFullYear(), q * 3 + 3, 0)).toISOString().slice(0, 10);
 }
 
-async function invokeDraft(token: string, clientId: string): Promise<{ draftInserted?: boolean; skippedReason?: string; error?: string }> {
+async function invokeDraft(
+  token: string,
+  clientId: string,
+): Promise<{ draftInserted?: boolean; skippedReason?: string; error?: string; code?: string }> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   if (!supabaseUrl) return { error: "Draft service URL is not configured" };
@@ -77,7 +86,8 @@ async function invokeDraft(token: string, clientId: string): Promise<{ draftInse
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = typeof body?.error === "string" ? body.error : `brain-deliverable-draft failed (${res.status})`;
-    return { error: err };
+    const code = typeof body?.code === "string" ? body.code : undefined;
+    return { error: err, code };
   }
   return body as { draftInserted?: boolean; skippedReason?: string };
 }
@@ -217,7 +227,12 @@ export async function persistAdvisoryCreate(input: {
   intent: CreateIntent;
   userClient: SupabaseClient;
   adminClient: SupabaseClient;
-}): Promise<{ answer: string; created: CreatedPayload; tools: Array<{ name: string; status: "ok" | "empty" | "error" }> }> {
+}): Promise<{
+  answer: string;
+  created: CreatedPayload;
+  tools: Array<{ name: string; status: "ok" | "empty" | "error" }>;
+  precard?: { code: typeof PRECARD_CAP_CODE; limit: "pack"; message: string } | null;
+}> {
   const brief = await loadOverviewBrief(input.userClient, input.clientId);
   const emptyBrief = !brief || overviewFactLines(brief).length === 0;
   const created: CreatedPayload = {
@@ -267,8 +282,44 @@ export async function persistAdvisoryCreate(input: {
     };
   }
 
+  let packGate: Awaited<ReturnType<typeof readPrecardGate>> | null = null;
   if (input.intent.draft) {
+    try {
+      packGate = await readPrecardGate({
+        db: input.adminClient,
+        clientId: input.clientId,
+        kind: "pack",
+      });
+    } catch (err) {
+      const message = "Could not check the plan. Nothing was generated.";
+      created.errors.push(err instanceof Error ? err.message : message);
+      return { answer: message, created, tools };
+    }
+    if (!packGate.allowed) {
+      return {
+        answer: packGate.message || PRECARD_CAP_MESSAGE,
+        created,
+        tools: [{ name: "draft_deliverable", status: "error" }],
+        precard: {
+          code: PRECARD_CAP_CODE,
+          limit: "pack",
+          message: packGate.message || PRECARD_CAP_MESSAGE,
+        },
+      };
+    }
+  }
+
+  if (input.intent.draft && packGate?.allowed) {
     const remote = await invokeDraft(input.token, input.clientId);
+    if (remote.code === PRECARD_CAP_CODE) {
+      const message = remote.error || PRECARD_CAP_MESSAGE;
+      return {
+        answer: message,
+        created,
+        tools: [{ name: "draft_deliverable", status: "error" }],
+        precard: { code: PRECARD_CAP_CODE, limit: "pack", message },
+      };
+    }
     if (isStarterTrialEndedMessage(remote.error ?? "")) {
       const message = remote.error ?? "Your trial has ended, choose a plan";
       created.errors.push(message);
@@ -306,7 +357,30 @@ export async function persistAdvisoryCreate(input: {
         created.draftInserted = true;
         created.draftId = String(data.id);
         tools.push({ name: "draft_deliverable", status: "ok" });
+        if (packGate.firmId) {
+          await finishPrecardAttempt({
+            decision: packGate,
+            succeeded: true,
+            record: async () => {
+              await recordPrecardUse(input.adminClient, packGate!.firmId!, "pack");
+            },
+          });
+        }
       }
+    }
+
+    const again = await readPrecardGate({
+      db: input.adminClient,
+      clientId: input.clientId,
+      kind: "pack",
+    });
+    if (!again.allowed && !created.draftInserted && !created.draftAlreadyOpen) {
+      return {
+        answer: again.message || PRECARD_CAP_MESSAGE,
+        created,
+        tools,
+        precard: { code: PRECARD_CAP_CODE, limit: "pack", message: again.message || PRECARD_CAP_MESSAGE },
+      };
     }
 
     const actionsForPack = planActionsFromOverview(brief);
@@ -317,20 +391,34 @@ export async function persistAdvisoryCreate(input: {
       .order("period_date", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const { data: packId, error: packErr } = await input.userClient.rpc("advisory_pack_create", {
-      p_client_id: input.clientId,
-      p_content: packContentFromOverview(brief, actionsForPack, new Date().toISOString()),
-      p_period_label: brief.periodLabel,
-      p_figures_as_of: brief.figuresAsOf ? String(brief.figuresAsOf).slice(0, 10) : null,
-      p_snapshot_id: snap?.id ?? null,
-      p_generator: "rules",
-    });
-    if (packErr || !packId) {
+    const packStillOpen = again.allowed;
+    const createdPack = packStillOpen
+      ? await input.userClient.rpc("advisory_pack_create", {
+          p_client_id: input.clientId,
+          p_content: packContentFromOverview(brief, actionsForPack, new Date().toISOString()),
+          p_period_label: brief.periodLabel,
+          p_figures_as_of: brief.figuresAsOf ? String(brief.figuresAsOf).slice(0, 10) : null,
+          p_snapshot_id: snap?.id ?? null,
+          p_generator: "rules",
+        })
+      : { data: null, error: null };
+    const packId = createdPack.data;
+    const packErr = createdPack.error;
+    if (packStillOpen && (packErr || !packId)) {
       created.errors.push(packErr?.message || "Advisory pack was not saved.");
       tools.push({ name: "advisory_pack", status: "error" });
-    } else {
+    } else if (packId) {
       created.packId = String(packId);
       tools.push({ name: "advisory_pack", status: "ok" });
+      if (again.firmId) {
+        await finishPrecardAttempt({
+          decision: again,
+          succeeded: true,
+          record: async () => {
+            await recordPrecardUse(input.adminClient, again.firmId!, "pack");
+          },
+        });
+      }
     }
   }
 
