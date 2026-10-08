@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { computeOverallHealth } from "../src/lib/health-score";
 import { periodProfitBridge } from "../src/lib/period-profit";
 import {
+  balanceSheetCashAsOf,
   mergeStatementFields,
   mergeStatementFinancials,
   parseStatementText,
@@ -15,8 +16,10 @@ import {
   defaultAutoPopulatePrefs,
   prefsToRemember,
   statementAutoPopulatePrefs,
+  summariseAutoPopulate,
 } from "../src/lib/auto-populate";
 import { ZA_MARKET } from "../src/lib/market";
+import { formatCalendarDay } from "../src/lib/market/format";
 import { rankStrategicMoves } from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
@@ -217,6 +220,76 @@ const datedCash = datedOpening.update.cashflow as { openingBalance?: string; sta
 assert(datedCash?.openingBalance === "46300", "balance-sheet cash still sets the opening");
 assert(datedCash?.startDate === "2026-09-30", `opening is dated on the balance sheet (${datedCash?.startDate})`);
 assert(!("budget" in datedOpening.update), "balance-sheet cash does not rewrite the budget");
+assert(
+  summariseAutoPopulate(datedOpening, false).includes("cash forecast"),
+  `ticked cash forecast is named in the toast (${summariseAutoPopulate(datedOpening, false)})`,
+);
+
+// A non-zero opening used to be treated as typed, so a ticked Cash forecast
+// box saved the balance sheet and then said nothing else was updated.
+const typedSheet = buildAutoPopulateWrites(
+  { profitability: false, cash_forecast: true, budget: false },
+  {
+    fields: { cash: "46300" },
+    existingCashflow: { openingBalance: "12000", startDate: "2026-10-05", revenue: [], expenses: [] },
+    market: ZA_MARKET,
+    now,
+    statementKind: "balance_sheet",
+    cashOpeningDate: "2026-09-30",
+  },
+);
+const typedCash = typedSheet.update.cashflow as { openingBalance?: string; startDate?: string } | undefined;
+assert(typedSheet.applied.includes("cash_forecast"), "a ticked balance-sheet cash forecast is applied");
+assert(typedCash?.openingBalance === "46300" && typedCash?.startDate === "2026-09-30", "typed opening takes the statement cash and date");
+assert(
+  summariseAutoPopulate(typedSheet, false).startsWith("Updated cash forecast"),
+  summariseAutoPopulate(typedSheet, false),
+);
+
+const already = buildAutoPopulateWrites(
+  { profitability: false, cash_forecast: true, budget: false },
+  {
+    fields: { cash: "46300" },
+    existingCashflow: { openingBalance: "46300", startDate: "2026-09-30", revenue: [], expenses: [] },
+    market: ZA_MARKET,
+    now,
+    statementKind: "balance_sheet",
+    cashOpeningDate: "2026-09-30",
+  },
+);
+assert(!already.applied.includes("cash_forecast"), "an opening that already matches is not rewritten");
+assert(
+  summariseAutoPopulate(already, false) ===
+    "Figures saved. Cash forecast already matched this balance sheet.",
+  summariseAutoPopulate(already, false),
+);
+
+const bsDated = mergeStatementFinancials(
+  { revenue: "412000", periodEnd: "2026-08-31" },
+  { cash: "46300", periodEnd: "2026-09-30", receivables: "38900" },
+  "balance_sheet",
+);
+assert(bsDated.cashAsOf === "2026-09-30", `cash keeps the balance-sheet date (${String(bsDated.cashAsOf)})`);
+assert(bsDated.revenue === "412000", "dating cash does not drop revenue");
+const plAfterDated = mergeStatementFinancials(
+  bsDated,
+  { revenue: "500000", periodEnd: "2026-10-31" },
+  "income_statement",
+);
+assert(plAfterDated.cashAsOf === "2026-09-30", "a later P&L does not move the cash date");
+assert(plAfterDated.periodEnd === "2026-10-31", "a later P&L still updates its own period end");
+const weekLabel = formatCalendarDay("2026-10-05", { locale: "en-US" }, { day: "2-digit", month: "short" });
+const sheetLabel = formatCalendarDay(
+  balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30" }, 46300) ?? "",
+  { locale: "en-US" },
+  { day: "2-digit", month: "short" },
+);
+assert(weekLabel.includes("Oct") && weekLabel.includes("05"), `week label ${weekLabel}`);
+assert(sheetLabel.includes("Sep") && sheetLabel.includes("30"), `opening label ${sheetLabel}`);
+assert(
+  balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30" }, 12000) === null,
+  "a different opening keeps the week label",
+);
 
 const uploadCard = readFileSync(new URL("../src/components/upload-financials.tsx", import.meta.url), "utf8");
 assert(uploadCard.includes('result.statement_basis !== "unknown"'), "unknown basis chip is hidden");

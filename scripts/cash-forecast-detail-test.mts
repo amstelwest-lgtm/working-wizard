@@ -34,6 +34,8 @@ assert(cashSrc.includes("milon-forecast-amount"), "hover underline hint without 
 assert(cashSrc.includes("applyWeekOverrides"), "grid uses persisted week overrides");
 assert(cashSrc.includes("{symbol}"), "currency symbol stays while editing");
 assert(cashSrc.includes("const startLabel = weeks[0]"), "forecast start uses the week-axis label");
+assert(cashSrc.includes("sub={openingLabel}"), "opening tile can use the balance-sheet date");
+assert(cashSrc.includes("balanceSheetCashAsOf"), "opening label reads the statement cash date");
 assert(!cashSrc.includes("`Start ${startDate}`"), "opening stat does not print the raw ISO start");
 assert(!cashSrc.includes("`Forecast starts ${startDate}"), "PDF assumption does not print the raw ISO start");
 

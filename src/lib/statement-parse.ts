@@ -661,5 +661,27 @@ export function mergeStatementFinancials(
     }
     out[key] = merged;
   }
+  // The cash figure's own date. A later P&L updates periodEnd and must not
+  // move this: the Cash tab reads it when the opening is this balance.
+  if (resolved === "balance_sheet" && written.has("cash")) {
+    const end = typeof next.periodEnd === "string" ? next.periodEnd.trim().slice(0, 10) : "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(end)) out.cashAsOf = end;
+  }
   return out;
+}
+
+/**
+ * Balance-sheet date for the opening-cash label.
+ * Returned only when the figure on screen is the statement cash balance.
+ * The 13-week axis can still start on the Monday of the current week.
+ */
+export function balanceSheetCashAsOf(
+  financials: { cash?: unknown; cashAsOf?: unknown } | null | undefined,
+  openingBalance: number,
+): string | null {
+  const raw = financials?.cashAsOf;
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(raw)) return null;
+  const sheet = parseFloat(String(financials?.cash ?? "").replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(sheet) || Math.abs(sheet - openingBalance) >= 0.5) return null;
+  return raw.slice(0, 10);
 }
