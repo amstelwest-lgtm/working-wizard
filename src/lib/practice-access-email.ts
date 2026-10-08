@@ -2,7 +2,7 @@
  * Dual-approval emails for practice access + firm staff invites.
  */
 
-import { inviteSiteUrl } from "@/lib/client-invite-email";
+import { inviteSiteUrl, RESEND_SEND_TIMEOUT_MS } from "@/lib/client-invite-email";
 import { CLASSIFICATION_LABELS, type PracticeClassification } from "@/lib/practice-access";
 
 function escapeHtml(s: string): string {
@@ -15,6 +15,31 @@ function escapeHtml(s: string): string {
 
 export function accessApproveUrl(token: string): string {
   return `${inviteSiteUrl()}/access/${token}`;
+}
+
+/** Safe to show and log. Strips tokens and API keys from a Resend body. */
+export function publicEmailError(status: number | null, raw: string): string {
+  let detail = raw.replace(/\s+/g, " ").trim();
+  if (detail.startsWith("{") || detail.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(detail) as { message?: unknown; error?: unknown };
+      if (typeof parsed.message === "string" && parsed.message.trim()) detail = parsed.message.trim();
+      else if (typeof parsed.error === "string" && parsed.error.trim()) detail = parsed.error.trim();
+    } catch {
+      /* keep the text */
+    }
+  }
+  detail = detail
+    .replace(/re_[A-Za-z0-9_-]+/g, "[redacted]")
+    .replace(/\b(sk|pk)_(live|test)_[A-Za-z0-9]+/g, "[redacted]")
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+    .slice(0, 180);
+  if (status) {
+    const prefix = `Resend ${status}`;
+    if (!detail || detail === prefix || detail.startsWith(`${prefix}:`)) return detail || prefix;
+    return `${prefix}: ${detail}`;
+  }
+  return detail || "Email send failed";
 }
 
 export async function sendAccessEmail(opts: {
@@ -31,26 +56,39 @@ export async function sendAccessEmail(opts: {
     : fromRaw.trim();
   if (!apiKey) return { ok: false, error: "RESEND_API_KEY not configured" };
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": opts.idempotencyKey.slice(0, 256),
-    },
-    body: JSON.stringify({
-      from: `Milōn <${fromAddr}>`,
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    return { ok: false, error: `Resend ${res.status}: ${body.slice(0, 200)}` };
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": opts.idempotencyKey.slice(0, 256),
+      },
+      body: JSON.stringify({
+        from: `Milōn <${fromAddr}>`,
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+      }),
+      signal: AbortSignal.timeout(RESEND_SEND_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const error = publicEmailError(res.status, body);
+      console.error("sendAccessEmail failed", { status: res.status, message: error });
+      return { ok: false, error };
+    }
+    return { ok: true };
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "";
+    const error =
+      name === "TimeoutError" || name === "AbortError"
+        ? "Email send timed out"
+        : publicEmailError(null, err instanceof Error ? err.message : String(err));
+    console.error("sendAccessEmail failed", { status: null, message: error });
+    return { ok: false, error };
   }
-  return { ok: true };
 }
 
 export function accessRequestEmail(opts: {

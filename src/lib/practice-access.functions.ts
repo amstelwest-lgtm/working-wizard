@@ -672,20 +672,22 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
         { onConflict: "user_id,role" },
       );
       const inviter = await profileById(admin, ctx.userId);
+      const inviteUrl = `${inviteSiteUrl()}/auth`;
       const mail = firmInviteEmail({
         recipientName: existing.name || name,
         firmName: firm.name,
         inviterName: inviter.name,
         roleLabel: MEMBERSHIP_LABELS[data.membershipRole],
-        url: `${inviteSiteUrl()}/auth`,
+        url: inviteUrl,
       });
-      await sendAccessEmail({
+      const sent = await sendAccessEmail({
         to: email,
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
         idempotencyKey: `firm-add-${firm.id}-${email}`,
       });
+      if (!sent.ok) console.error("inviteFirmStaff email failed", { error: sent.error });
       await writeAudit(admin, {
         actorId: ctx.userId,
         action: "member_invited",
@@ -693,7 +695,13 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
         subjectUserId: existing.id,
         details: { email, membershipRole: data.membershipRole, classification: data.classification, existing: true },
       });
-      return { addedExisting: true as const, invited: false as const };
+      return {
+        addedExisting: true as const,
+        invited: false as const,
+        emailed: sent.ok,
+        error: sent.ok ? null : sent.error,
+        inviteUrl,
+      };
     }
 
     const token = newToken();
@@ -711,19 +719,24 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    await admin.from("access_approval_tokens").insert({
+    const { error: tokenError } = await admin.from("access_approval_tokens").insert({
       purpose: "firm_invite",
       email,
       invite_id: invite.id,
       token_hash: hashToken(token),
     });
+    if (tokenError) {
+      await admin.from("firm_staff_invites").delete().eq("id", invite.id);
+      throw new Error(tokenError.message);
+    }
     const inviter = await profileById(admin, ctx.userId);
+    const inviteUrl = accessApproveUrl(token);
     const mail = firmInviteEmail({
       recipientName: name,
       firmName: firm.name,
       inviterName: inviter.name,
       roleLabel: MEMBERSHIP_LABELS[data.membershipRole],
-      url: accessApproveUrl(token),
+      url: inviteUrl,
     });
     const sent = await sendAccessEmail({
       to: email,
@@ -732,13 +745,51 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
       text: mail.text,
       idempotencyKey: `firm-invite-${invite.id}`,
     });
+    if (!sent.ok) console.error("inviteFirmStaff email failed", { error: sent.error });
     await writeAudit(admin, {
       actorId: ctx.userId,
       action: "member_invited",
       firmId: firm.id,
       details: { email, membershipRole: data.membershipRole, classification: data.classification, existing: false },
     });
-    return { addedExisting: false as const, invited: true as const, emailed: sent.ok };
+    return {
+      addedExisting: false as const,
+      invited: true as const,
+      emailed: sent.ok,
+      error: sent.ok ? null : sent.error,
+      inviteUrl,
+    };
+  });
+
+export const rotateFirmStaffInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        inviteId: z.string().uuid(),
+        sendEmail: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    const { rotateFirmStaffInviteLink } = await import("@/lib/firm-staff-invite.server");
+    return rotateFirmStaffInviteLink(admin, {
+      actorId: ctx.userId,
+      inviteId: data.inviteId,
+      sendEmail: data.sendEmail === true,
+    });
+  });
+
+export const revokeFirmStaffInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ inviteId: z.string().uuid() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    const { revokeFirmStaffInviteRecord } = await import("@/lib/firm-staff-invite.server");
+    return revokeFirmStaffInviteRecord(admin, { actorId: ctx.userId, inviteId: data.inviteId });
   });
 
 export const updateFirmMember = createServerFn({ method: "POST" })

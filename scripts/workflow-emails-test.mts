@@ -9,6 +9,7 @@ import {
   RESTART_NEWS_WINDOW_DAYS,
   WORKFLOW_EMAIL_KINDS,
   dropAlreadySent,
+  dropFailedAttempts,
   planWorkflowEmails,
   renderWorkflowEmail,
   workflowEmailHref,
@@ -188,6 +189,63 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}â†
     "sent dropped (case-insensitive), failed retried, other recipient kept",
   );
   eq(dropAlreadySent(planned, []).length, 3, "empty log â†’ all due");
+
+{
+  const hour = 60 * 60 * 1000;
+  const planned = [
+    { kind: "forecast_break" as const, refKey: "t1", email: "owner@x.test" },
+    { kind: "forecast_break" as const, refKey: "t1", email: "acct@x.test" },
+    { kind: "forecast_break" as const, refKey: "t2", email: "owner@x.test" },
+  ];
+  const fail = (email: string, ref: string, created_at: string) => ({
+    kind: "forecast_break",
+    ref_key: ref,
+    recipient_email: email,
+    status: "failed",
+    created_at,
+  });
+  const recent = new Date(Date.parse(NOW) - hour).toISOString();
+  const stale = new Date(Date.parse(NOW) - 25 * hour).toISOString();
+  eq(
+    dropFailedAttempts(planned, [fail("Owner@X.test", "t1", recent)], NOW)
+      .map((row) => `${row.refKey}:${row.email}`)
+      .join(","),
+    "t1:acct@x.test,t2:owner@x.test",
+    "a failure in the last 24h is not retried for that template, recipient, and entity",
+  );
+  eq(
+    dropFailedAttempts(planned, [fail("owner@x.test", "t1", stale)], NOW).length,
+    3,
+    "a single failure older than 24h can be retried",
+  );
+  eq(
+    dropFailedAttempts(
+      planned,
+      [fail("owner@x.test", "t1", stale), fail("owner@x.test", "t1", stale), fail("owner@x.test", "t1", stale)],
+      NOW,
+    )
+      .map((row) => row.email)
+      .join(","),
+    "acct@x.test,owner@x.test",
+    "three failures stop further attempts",
+  );
+  eq(
+    dropFailedAttempts(planned, [{ ...fail("owner@x.test", "t1", recent), created_at: null }], NOW).length,
+    2,
+    "an undated failure is not retried immediately",
+  );
+  const logged = [
+    { kind: "forecast_break", ref_key: "t1", recipient_email: "acct@x.test", status: "sent", created_at: recent },
+    fail("owner@x.test", "t1", recent),
+  ];
+  eq(
+    dropFailedAttempts(dropAlreadySent(planned, logged), logged, NOW)
+      .map((row) => `${row.refKey}:${row.email}`)
+      .join(","),
+    "t2:owner@x.test",
+    "sent rows and recent failures are both dropped",
+  );
+}
   eq(
     dropAlreadySent(planned, [
       { kind: "forecast_break", ref_key: "t2", recipient_email: "owner@x.test", status: "sent" },
@@ -353,6 +411,11 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}â†
   const fns = readFileSync(resolve("src/lib/workflow-emails.functions.ts"), "utf8");
   assert(fns.includes('rpc("workflow_recipients"'), "engine resolves recipients via RPC");
   assert(fns.includes("dropAlreadySent(fanned"), "engine dedupes against the log");
+  assert(fns.includes("dropFailedAttempts("), "engine treats a recent failure as done");
+  assert(
+    fns.includes('.in("status", ["sent", "failed"])'),
+    "failed attempts are loaded alongside sent rows",
+  );
   assert(
     fns.includes("idempotencyKey: `workflow:${data.clientId}:${d.kind}:${d.refKey}:${d.email}`"),
     "Resend idempotency key per (client, kind, ref, recipient)",
