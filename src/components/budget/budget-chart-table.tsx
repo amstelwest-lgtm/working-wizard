@@ -169,7 +169,15 @@ function BudgetMonthChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
-            <XAxis dataKey="label" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+            <XAxis
+              dataKey="label"
+              stroke="#94a3b8"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              interval={0}
+              minTickGap={0}
+            />
             <YAxis
               stroke="#94a3b8"
               fontSize={10}
