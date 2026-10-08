@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ReportsStudio } from "../src/routes/_authenticated/reports.index";
+import { ReportsStudio } from "../src/routes/_authenticated/reports-studio";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -33,12 +33,13 @@ assert(
   "simple/complex toggle is hidden on Reports — the studio does not change",
 );
 
-const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+const routeSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");
-assert(studioSrc.includes('to: "/clients/$clientId"'), "/reports with a client redirects into that file");
-assert(studioSrc.includes('section: "reports"'), "/reports redirect keeps the reports section");
-assert(studioSrc.includes("search.report"), "/reports redirect carries the report deep link");
-assert(!studioSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
+assert(routeSrc.includes('to: "/clients/$clientId"'), "/reports with a client redirects into that file");
+assert(routeSrc.includes('section: "reports"'), "/reports redirect keeps the reports section");
+assert(routeSrc.includes("search.report"), "/reports redirect carries the report deep link");
+assert(!studioSrc.includes("/reports/demo") && !routeSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
 assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");
 assert(studioSrc.includes("report-card__rule"), "studio cards keep the gold hairline");

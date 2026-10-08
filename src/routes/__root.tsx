@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -9,21 +9,21 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { Toaster } from "sonner";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { AccountantProfileProvider } from "@/contexts/accountant-profile";
-import { ViewModeProvider } from "@/contexts/view-mode";
-import { ShareButton } from "@/components/share";
-import { AnalyticsProvider } from "@/contexts/analytics";
-import { NotesProvider } from "@/contexts/notes";
-import { FloatingNoteButton } from "@/components/floating-note-button";
-import { NoteArchiveSheet } from "@/components/note-archive";
+import { AuthProvider } from "@/hooks/use-auth";
 import { reportClientError } from "@/lib/monitoring";
 import { StaleBundleBar } from "@/components/stale-bundle-bar";
+import { isPublicMarketingPath, PUBLIC_MARKETING_PATHS } from "@/lib/public-marketing";
 
 import appCss from "../styles.css?url";
 import { notFoundHead, organizationGraphJson } from "@/lib/seo";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
+
+const AppChrome = lazy(() =>
+  import("@/components/app-chrome").then((mod) => ({ default: mod.AppChrome })),
+);
+const PublicChrome = lazy(() =>
+  import("@/components/app-chrome").then((mod) => ({ default: mod.PublicChrome })),
+);
 
 function NotFoundComponent() {
   useEffect(() => {
@@ -96,19 +96,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     // marketing pages use the system stack in marketing.css. Skip the shared
     // Google Fonts sheet (Inter, Instrument Serif, Cormorant, Noto) and
     // Ask-AI's Inter stylesheet on those routes.
-    const PUBLIC_MARKETING = [
-      "/",
-      "/for-accountants",
-      "/for-owners",
-      "/about",
-      "/faq",
-      "/privacy",
-      "/terms",
-      "/ai",
-    ];
     const onLanding = matches.some(
       (entry) =>
-        PUBLIC_MARKETING.includes(String(entry.routeId)) || String(entry.routeId) === "/",
+        isPublicMarketingPath(String(entry.routeId)) || String(entry.routeId) === "/",
     );
     const jsonLd = {
       type: "application/ld+json",
@@ -141,7 +131,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
               },
               { rel: "stylesheet" as const, href: "/ask-ai.css" },
             ]),
-        { rel: "stylesheet", href: appCss },
+        // Public pages inline their own CSS. The app sheet is render-blocking
+        // (~300ms on mobile); RootShell starts it with media=print instead.
+        ...(onLanding ? [] : [{ rel: "stylesheet" as const, href: appCss }]),
         { rel: "manifest", href: "/manifest.json" },
         { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
         { rel: "icon", href: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
@@ -222,6 +214,19 @@ function RootShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isLanding = pathname === "/" || pathname === "";
 
+  useEffect(() => {
+    if (!isPublicMarketingPath(pathname)) return;
+    if (document.querySelector(`link[rel="stylesheet"][href="${appCss}"]`)) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = appCss;
+    link.media = "print";
+    link.onload = () => {
+      link.media = "all";
+    };
+    document.head.appendChild(link);
+  }, [pathname]);
+
   return (
     <html lang="en-US" data-landing={isLanding ? "1" : undefined} suppressHydrationWarning>
       <head>
@@ -237,9 +242,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
             __html: `(function(){try{var p=location.pathname;if(p!="/"&&p!="")return;var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=location.pathname||"/";if(p.length>1&&p.charAt(p.length-1)==="/")p=p.slice(0,-1);var ok=${JSON.stringify(PUBLIC_MARKETING_PATHS)};if(ok.indexOf(p)<0)return;var h=${JSON.stringify(appCss)};if(document.querySelector('link[rel="stylesheet"][href="'+h+'"]'))return;var l=document.createElement("link");l.rel="stylesheet";l.href=h;l.media="print";l.onload=function(){this.media="all";this.onload=null;};document.head.appendChild(l);}catch(e){}})();`,
+          }}
+        />
         <style
           dangerouslySetInnerHTML={{
             __html: [
+              "html,body{margin:0}",
               'html[data-landing="1"]:not([data-theme="light"]),html[data-landing="1"]:not([data-theme="light"]) body{',
               "background:#050507!important;background-color:#050507!important;",
               "color:#f2ecdc!important;color-scheme:dark;color-scheme:only dark;",
@@ -264,54 +275,55 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function LandingFloatGate() {
-  const { user } = useAuth();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onLanding = pathname === "/" || pathname === "";
-  const [narrow, setNarrow] = useState(true);
-  const [measured, setMeasured] = useState(false);
-
+function DeferredPublicChrome() {
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1023px)");
-    const apply = () => setNarrow(mq.matches);
-    apply();
-    setMeasured(true);
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId = 0;
+    let timeoutId = 0;
+    const go = () => setReady(true);
+    if (typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(go, { timeout: 1500 });
+    } else {
+      timeoutId = window.setTimeout(go, 1);
+    }
+    return () => {
+      if (idleId && win.cancelIdleCallback) win.cancelIdleCallback(idleId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
   }, []);
-
-  // Logged-out `/` below 1024px: no pencil or share button in the DOM.
-  // Until the viewport is measured, render neither so a phone never hydrates them.
-  if (onLanding && !user && (!measured || narrow)) return null;
-  if (onLanding && !user) return <FloatingNoteButton safeCorner />;
-
+  if (!ready) return null;
   return (
-    <>
-      <ShareButton />
-      <FloatingNoteButton />
-    </>
+    <Suspense fallback={null}>
+      <PublicChrome />
+    </Suspense>
   );
 }
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onPublic = isPublicMarketingPath(pathname);
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AccountantProfileProvider>
-          <AnalyticsProvider>
-            <NotesProvider>
-              <ViewModeProvider>
-                <Outlet />
-                <LandingFloatGate />
-                <NoteArchiveSheet />
-                <Toaster position="top-right" richColors offset={16} style={{ zIndex: 70 }} />
-                <StaleBundleBar />
-              </ViewModeProvider>
-            </NotesProvider>
-          </AnalyticsProvider>
-        </AccountantProfileProvider>
+        {onPublic ? (
+          <>
+            <Outlet />
+            <DeferredPublicChrome />
+          </>
+        ) : (
+          <Suspense fallback={null}>
+            <AppChrome>
+              <Outlet />
+            </AppChrome>
+          </Suspense>
+        )}
+        <StaleBundleBar />
       </AuthProvider>
     </QueryClientProvider>
   );

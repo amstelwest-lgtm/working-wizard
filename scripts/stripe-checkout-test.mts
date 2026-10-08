@@ -351,7 +351,7 @@ assert(landingCss.includes(".acc-pricing{display:block"), "firm band table is vi
 assert(!landingCss.includes("body.persona-accountant .acc-pricing"), "persona CSS does not gate firm prices");
 assert(landingCss.includes(".owner-spark-path"), "owner Spark is styled as a secondary path");
 
-const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
+const root = readFileSync(resolve("src/components/app-chrome.tsx"), "utf8");
 assert(root.includes("zIndex: 70"), "root toaster sits above sticky marketing chrome");
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");

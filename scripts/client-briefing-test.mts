@@ -414,7 +414,7 @@ for (const must of ["Financial Health", "Financial snapshot", "About this busine
   assert(comp.includes(must), `component has "${must}"`);
 }
 assert(!/CONCENTRATION|Concentration<|>Debt</.test(comp), "no concentration/debt tags");
-const reports = read("src/routes/_authenticated/reports.index.tsx");
+const reports = read("src/routes/_authenticated/reports-studio.tsx");
 assert(!reports.includes("No period history yet — save at least one snapshot"), "movement report no longer throws without history");
 const pdf = read("src/reports/ratio-movement.tsx");
 assert(pdf.includes("hasHistory ? counts : { ...counts, total: 0 }"), "movement PDF has a first-period empty state");

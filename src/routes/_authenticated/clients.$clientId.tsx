@@ -264,7 +264,7 @@ import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel(
-  () => import("@/routes/_authenticated/reports.index").then((m) => ({ default: m.ReportsStudio })),
+  () => import("@/routes/_authenticated/reports-studio").then((m) => ({ default: m.ReportsStudio })),
   "Reports",
 );
 

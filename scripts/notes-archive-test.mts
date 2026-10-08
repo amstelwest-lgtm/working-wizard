@@ -63,7 +63,9 @@ assert(archive.includes("closeArchive"), "jumping closes the sheet so the pin is
 assert(archive.includes("requestOpenNote"), "jumping focuses the pin");
 
 const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
-assert(root.includes("NoteArchiveSheet"), "archive sheet is mounted app-wide");
+const chrome = readFileSync(resolve("src/components/app-chrome.tsx"), "utf8");
+assert(root.includes("PublicChrome") && root.includes("AppChrome"), "root mounts chrome on public and app routes");
+assert(chrome.includes("NoteArchiveSheet"), "archive sheet is mounted app-wide");
 
 const client = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(client.includes("openArchive"), "Open queries opens the notes archive");
