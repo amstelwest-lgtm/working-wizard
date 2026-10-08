@@ -1181,3 +1181,10 @@ html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreg
 .auth-entry .milon-auth-divider::after {
   background: color-mix(in srgb, var(--brand-ink) 10%, transparent);
 }
+
+/* Phone: keep the last screen of content above the share + notes buttons. */
+@media (max-width: 767px) {
+  html[data-milon-fab="1"] body {
+    padding-bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
+  }
+}

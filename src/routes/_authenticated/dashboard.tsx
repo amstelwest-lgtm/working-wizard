@@ -65,7 +65,7 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import { assessClientMetrics, runwayDisplayLabel, runwayTileValue } from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryLabel } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
@@ -2085,8 +2085,10 @@ function Dashboard() {
                           {c.priorityLabel}
                         </span>
                       </td>
-                      <td className="num" data-label="Runway">
-                        {runwayStr(c)}
+                      <td className="num" data-label="Runway" title={runwayStr(c)}>
+                        <span className="inline-block max-w-[14rem] whitespace-normal text-right leading-snug">
+                          {runwayTileValue(runwayStr(c))}
+                        </span>
                       </td>
                       <td className="num hide-sm" data-label="Queries">
                         {c.openQueries > 0 ? (

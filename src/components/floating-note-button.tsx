@@ -1,25 +1,31 @@
 import { Archive, PenLine, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNotes } from "@/contexts/notes";
+import { useFabScrollHidden, useMobileFabInset } from "@/hooks/use-fab-scroll";
 
 export function FloatingNoteButton({ safeCorner = false }: { safeCorner?: boolean }) {
   const { pinMode, setPinMode, surface, getNotesForTab, notes, openArchive } = useNotes();
   const count = surface?.clientId ? getNotesForTab(surface.tab).length : 0;
   const resolvedCount = notes.filter((n) => n.resolved).length;
+  const scrolledAway = useFabScrollHidden();
+  useMobileFabInset(true);
 
   return (
     <div
       id="wizard-notes-pin"
-      className={
+      className={`${
         safeCorner
           ? "landing-safe fixed z-50 flex flex-col items-end gap-2"
           : "fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2"
-      }
-      style={
-        safeCorner
+      } transition-[transform,opacity] duration-200 ${
+        scrolledAway ? "pointer-events-none opacity-0" : ""
+      }`}
+      style={{
+        ...(safeCorner
           ? { right: "max(24px, env(safe-area-inset-right))", bottom: "24px" }
-          : undefined
-      }
+          : {}),
+        transform: scrolledAway ? "translateY(160%)" : undefined,
+      }}
     >
       {surface?.clientId && notes.length > 0 && (
         <button

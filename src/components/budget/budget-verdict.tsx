@@ -73,44 +73,50 @@ export function BudgetVerdictStrip({
       className="rounded-2xl border border-[#d4a550]/40 bg-[#fffdf8] px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
       data-budget-verdict
     >
-      <p className="text-[11px] font-semibold tracking-wide text-[#b8860b]">{periodLabel}</p>
+      <p className="text-[11px] font-semibold leading-snug tracking-wide text-[#b8860b] text-pretty">
+        {periodLabel}
+      </p>
       <p className="mt-1 text-[15px] leading-relaxed text-[#1b1608] dark:text-slate-100">
         {seeded ? (
           "Budget seeded from these figures — variance starts with the first uploaded month"
         ) : (
-          <>
-            <span className="font-semibold">Revenue</span>{" "}
-            {hasActuals ? (
-              <>
-                {money(revenueActual!)} vs budget {money(revenueBudget)} (
-                <Delta
-                  budget={revenueBudget}
-                  actual={revenueActual!}
-                  higherIsBetter
-                  market={market}
-                />
-                )
-              </>
-            ) : (
-              <span className="tabular-nums">{money(revenueBudget)}</span>
-            )}
-            <span className="text-slate-400"> · </span>
-            <span className="font-semibold">Profit</span>{" "}
-            {hasActuals && profitActual != null ? (
-              <>
-                {money(profitActual)} vs budget {money(profitBudget)} (
-                <Delta
-                  budget={profitBudget}
-                  actual={profitActual}
-                  higherIsBetter
-                  market={market}
-                />
-                )
-              </>
-            ) : (
-              <span className="tabular-nums">{money(profitBudget)}</span>
-            )}
-          </>
+          <span className="flex flex-col gap-1 sm:block">
+            <span>
+              <span className="font-semibold">Revenue</span>{" "}
+              {hasActuals ? (
+                <>
+                  {money(revenueActual!)} vs budget {money(revenueBudget)} (
+                  <Delta
+                    budget={revenueBudget}
+                    actual={revenueActual!}
+                    higherIsBetter
+                    market={market}
+                  />
+                  )
+                </>
+              ) : (
+                <span className="tabular-nums">{money(revenueBudget)}</span>
+              )}
+            </span>
+            <span className="hidden text-slate-400 sm:inline"> · </span>
+            <span>
+              <span className="font-semibold">Profit</span>{" "}
+              {hasActuals && profitActual != null ? (
+                <>
+                  {money(profitActual)} vs budget {money(profitBudget)} (
+                  <Delta
+                    budget={profitBudget}
+                    actual={profitActual}
+                    higherIsBetter
+                    market={market}
+                  />
+                  )
+                </>
+              ) : (
+                <span className="tabular-nums">{money(profitBudget)}</span>
+              )}
+            </span>
+          </span>
         )}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
