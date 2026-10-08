@@ -169,6 +169,12 @@ import {
 } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
+import { periodProfitBridge } from "@/lib/period-profit";
+import {
+  statementKindFromMetadata,
+  type StatementMeta,
+} from "@/lib/statement-parse";
+import { prefsToRemember } from "@/lib/auto-populate";
 import {
   hasOwnerFirstUploadHandled,
   isInvitedOwnerWithFigures,
@@ -365,6 +371,8 @@ type Inputs = {
   accumulatedDepreciation: string;
   priorPpeGross: string;
   priorAccumDep: string;
+  /** Balance-sheet cash. Empty until a statement or the forecast supplies it. */
+  cash: string;
   /** Months the P&L figures cover (1–12); absent = 12. Not a figure, so not in defaults. */
   periodMonths?: string;
   /** "1" when Figures cover was chosen. An unlocked 12 still follows the statement dates. */
@@ -404,6 +412,7 @@ const defaults: Inputs = {
   accumulatedDepreciation: "",
   priorPpeGross: "",
   priorAccumDep: "",
+  cash: "",
 };
 
 type RatioKey =
@@ -1780,6 +1789,7 @@ const BUSINESS_TYPES: BusinessType[] = [
 function flatExtractionToMergedResult(
   financials: Record<string, string>,
   fileName: string,
+  meta?: StatementMeta | null,
 ): import("@/lib/extraction-types").MergedExtractionResult {
   const n = (key: string): number | null => {
     const v = financials[key];
@@ -1787,77 +1797,90 @@ function flatExtractionToMergedResult(
     const num = parseFloat(v);
     return isFinite(num) ? num : null;
   };
+  const kind =
+    meta?.kind && meta.kind !== "unknown"
+      ? meta.kind
+      : n("revenue") != null && n("totalAssets") == null && n("cash") == null
+        ? "income_statement"
+        : (n("totalAssets") != null || n("cash") != null) && n("revenue") == null
+          ? "balance_sheet"
+          : "unknown";
+  const income = kind !== "balance_sheet";
+  const balance = kind !== "income_statement";
+  const currency = meta?.currency ?? "ZAR";
   return {
     document_metadata: {
-      company_name: null,
+      company_name: meta?.companyName ?? null,
       registration_number: null,
-      period_start_date: null,
-      period_end_date: null,
-      period_months: null,
+      period_start_date: meta?.periodStart ?? null,
+      period_end_date: meta?.periodEnd ?? null,
+      period_months: meta?.periodMonths ?? null,
+      period_label: meta?.periodLabel ?? null,
       prior_period_start_date: null,
       prior_period_end_date: null,
-      document_type: "unknown",
+      document_type:
+        kind === "income_statement" || kind === "balance_sheet" ? kind : "unknown",
       financial_statement_type: "unknown",
       prepared_by: null,
       auditor_firm: null,
       approval_date: null,
       industry_description: null,
-      functional_currency: "ZAR",
+      functional_currency: currency === "other" || currency == null ? "ZAR" : currency,
       foreign_currency_exposure: null,
       headcount: n("employees"),
       accounting_basis: "unknown",
       values_appear_in_thousands: false,
-      contains_income_statement: true,
-      contains_balance_sheet: true,
-      contains_cash_flow_statement: false,
+      contains_income_statement: income && kind !== "unknown" ? true : kind === "unknown",
+      contains_balance_sheet: balance && kind !== "unknown" ? true : kind === "unknown",
+      contains_cash_flow_statement: n("operatingCashflow") != null,
       contains_notes: false,
     },
     current_period: {
       income_statement: {
-        revenue: n("revenue"),
-        cogs: n("cogs"),
-        gross_profit: null,
+        revenue: income ? n("revenue") : null,
+        cogs: income ? n("cogs") : null,
+        gross_profit: income ? n("grossProfit") : null,
         other_income: null,
-        fixed_costs: n("fixedCosts"),
-        labor_cost: n("laborCost"),
-        depreciation: null,
+        fixed_costs: income ? n("fixedCosts") : null,
+        labor_cost: income ? n("laborCost") : null,
+        depreciation: income ? n("depreciation") : null,
         amortisation: null,
         depreciation_amortisation_total: null,
-        ebitda: n("ebitda"),
-        ebit: n("ebit"),
-        interest_expense: null,
+        ebitda: income ? n("ebitda") : null,
+        ebit: income ? n("ebit") : null,
+        interest_expense: income ? n("interestExpense") : null,
         interest_income: null,
-        ebt: n("ebt"),
-        tax: null,
-        net_income: n("netIncome"),
+        ebt: income ? n("ebt") : null,
+        tax: income ? n("tax") : null,
+        net_income: income ? n("netIncome") : null,
         director_remuneration: null,
         dividends_declared: null,
       },
       balance_sheet: {
-        total_assets: n("totalAssets"),
-        fixed_assets: null,
+        total_assets: balance ? n("totalAssets") : null,
+        fixed_assets: balance ? n("fixedAssets") : null,
         goodwill: null,
         intangible_assets: null,
         right_of_use_assets: null,
-        current_assets: null,
-        inventory: n("inventory"),
+        current_assets: balance ? n("currentAssets") : null,
+        inventory: balance ? n("inventory") : null,
         wip: null,
-        debtors: n("receivables"),
+        debtors: balance ? n("receivables") : null,
         provision_bad_debts: null,
-        cash: null,
+        cash: balance ? n("cash") : null,
         other_current_assets: null,
-        total_liabilities: null,
-        current_liabilities: null,
-        creditors: n("payables"),
-        short_term_debt: null,
+        total_liabilities: balance ? n("totalLiabilities") : null,
+        current_liabilities: balance ? n("currentLiabilities") : null,
+        creditors: balance ? n("payables") : null,
+        short_term_debt: balance ? n("shortTermDebt") : null,
         lease_liabilities_current: null,
         other_current_liabilities: null,
         non_current_liabilities: null,
-        long_term_debt: null,
+        long_term_debt: balance ? n("longTermDebt") : null,
         lease_liabilities_non_current: null,
         deferred_tax_liability: null,
         deferred_tax_asset: null,
-        equity: n("equity"),
+        equity: balance ? n("equity") : null,
         share_capital: null,
         retained_earnings_opening: null,
         retained_earnings_closing: null,
@@ -1920,6 +1943,9 @@ function flatExtractionToMergedResult(
     normalisation_applied: false,
     document_count: 1,
     file_names: [fileName],
+    derived_fields: (meta?.derived ?? [])
+      .map((key) => (key === "ebitda" ? "income_statement.ebitda" : ""))
+      .filter((path) => path.length > 0),
   };
 }
 
@@ -2085,7 +2111,11 @@ function Index() {
             market: selectionPayload(coerceMarketSelection(workspaceMarket)),
           },
         });
-        const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
+        const extracted =
+          (result as { financials?: Record<string, string>; statement?: StatementMeta })
+            ?.financials ?? {};
+        const statementMeta =
+          (result as { statement?: StatementMeta }).statement ?? null;
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {
           toast.warning(
@@ -2100,7 +2130,7 @@ function Index() {
           if (Object.keys(csvExtras).length) setPendingCsvExtras(csvExtras);
           await archiveStatementUpload(file);
           // Open review modal so owner can verify values before they are applied
-          const reviewResult = flatExtractionToMergedResult(extracted, file.name);
+          const reviewResult = flatExtractionToMergedResult(extracted, file.name, statementMeta);
           setExtractionForReview(reviewResult);
           setShowFinData(false);
           setReviewOpen(true);
@@ -3490,9 +3520,12 @@ function Index() {
       ? ownerMetrics.runway.weeks
       : null;
   const ownerOutlook = ownerMetrics.outlook;
+  const cashText = String(v.cash ?? "").trim();
+  const cashBalance = cashText === "" ? null : Number(cashText);
   const overallHealth = computeOverallHealth({
     ratios: computedRatios as Record<string, number>,
-    cashRunwayWeeks: effectiveRunway,
+    cashRunwayWeeks: cashBalance != null && Number.isFinite(cashBalance) ? effectiveRunway : null,
+    cashBalance: cashBalance != null && Number.isFinite(cashBalance) ? cashBalance : null,
     market: boardMarket,
     shortfallWeek: ownerOutlook.shortfallWeek,
   });
@@ -3556,9 +3589,11 @@ function Index() {
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
+  const profitBridge = periodProfitBridge(v as unknown as Record<string, unknown>);
   const nextSteps = rankStrategicMoves({
     healthByKey: healthMap,
     profile: operatingProfile,
+    suppressKeys: profitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -5915,12 +5950,21 @@ function Index() {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
+                const reviewMeta = extractionForReview?.document_metadata;
+                const periodEntries: [string, string][] = [];
+                if (reviewMeta?.period_months)
+                  periodEntries.push(["periodMonths", String(reviewMeta.period_months)]);
+                if (reviewMeta?.period_start_date)
+                  periodEntries.push(["periodStart", reviewMeta.period_start_date]);
+                if (reviewMeta?.period_end_date)
+                  periodEntries.push(["periodEnd", reviewMeta.period_end_date]);
                 // Merge CSV/Excel-only extras (variableCosts, top5Revenue, founderHours)
                 // that aren't surfaced in the review modal but were extracted from the file
                 const extras = pendingCsvExtras ?? {};
                 const allEntries = [
                   ...entries,
                   ...Object.entries(extras).filter(([k]) => k in defaults),
+                  ...periodEntries,
                 ];
                 if (
                   historyUpload &&
@@ -5978,10 +6022,16 @@ function Index() {
                     const fields = Object.fromEntries(allEntries) as Record<string, string>;
                     const periodEnd =
                       extractionForReview?.document_metadata?.period_end_date ?? null;
+                    const uploadKind = statementKindFromMetadata(reviewMeta);
                     void runAutoPopulate({
                       clientId: effectiveClientId,
                       fields,
                       chosen: autoPopulate,
+                      prefsToRemember: prefsToRemember(
+                        autoPopulate,
+                        uploadKind,
+                        autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+                      ),
                       firstUpload: autoPopulateState?.firstUpload,
                       firstActualsMonth: periodEnd ? periodEnd.slice(0, 7) : null,
                       fallbackMarket: workspaceMarket,

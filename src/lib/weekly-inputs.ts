@@ -103,6 +103,12 @@ export type WaterfallFallback = {
   depreciation?: number;
   interest: number;
   tax: number;
+  /** When false, a derived interest step must not be drawn as a real charge. */
+  interestIsFact?: boolean;
+  /** When false, a derived tax step must not be drawn as a real charge. */
+  taxIsFact?: boolean;
+  /** Printed net income, used when the interest/tax bridge is not a fact. */
+  statedNetIncome?: number | null;
 };
 
 /** Period P&L → waterfall fallback. Same bridge on owner and accountant. */
@@ -115,7 +121,17 @@ export function derivePeriodWaterfallFallback(fields: Record<string, unknown>): 
     depreciation: bridge.depreciation,
     interest: bridge.interest,
     tax: bridge.tax,
+    interestIsFact: bridge.interestIsFact,
+    taxIsFact: bridge.taxIsFact,
+    statedNetIncome: fieldPresentNet(fields),
   };
+}
+
+function fieldPresentNet(fields: Record<string, unknown>): number | null {
+  const raw = fields.netIncome;
+  if (raw == null || String(raw).trim() === "") return null;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
 }
 
 export type ResolvedWaterfallFigures = {
@@ -125,6 +141,9 @@ export type ResolvedWaterfallFigures = {
   depreciation: number;
   interest: number;
   tax: number;
+  interestIsFact: boolean;
+  taxIsFact: boolean;
+  statedNetIncome: number | null;
   source: "weekly" | "period";
 };
 
@@ -148,6 +167,9 @@ export function resolveWaterfallFigures(
     depreciation: hasWeekly ? 0 : (fallback?.depreciation ?? 0),
     interest: hasWeekly ? agg.interest : (fallback?.interest ?? 0),
     tax: hasWeekly ? agg.tax : (fallback?.tax ?? 0),
+    interestIsFact: hasWeekly ? true : fallback?.interestIsFact !== false,
+    taxIsFact: hasWeekly ? true : fallback?.taxIsFact !== false,
+    statedNetIncome: hasWeekly ? null : (fallback?.statedNetIncome ?? null),
     source: hasWeekly ? "weekly" : "period",
   };
 }

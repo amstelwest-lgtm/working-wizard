@@ -9,6 +9,28 @@
 
 const CLOSE = 1;
 
+/** Dollars. A derived interest or tax step inside this band still ties out. */
+export const PROFIT_RECONCILE_TOLERANCE = 1;
+
+/**
+ * A derived interest or tax step is not a fact when it is negative, or when
+ * operating profit − interest − tax does not land on net income.
+ */
+export function derivedProfitStepsAreFacts(input: {
+  operatingProfit: number;
+  interest: number;
+  tax: number;
+  netIncome: number;
+}): boolean {
+  if (!Number.isFinite(input.interest) || input.interest < -PROFIT_RECONCILE_TOLERANCE) return false;
+  if (!Number.isFinite(input.tax) || input.tax < -PROFIT_RECONCILE_TOLERANCE) return false;
+  if (!Number.isFinite(input.operatingProfit) || !Number.isFinite(input.netIncome)) return false;
+  return (
+    Math.abs(input.operatingProfit - input.interest - input.tax - input.netIncome) <=
+    PROFIT_RECONCILE_TOLERANCE
+  );
+}
+
 function fieldPresent(fields: Record<string, unknown>, key: string): boolean {
   const v = fields[key];
   return v != null && String(v).trim() !== "";
@@ -32,6 +54,12 @@ export type PeriodProfitBridge = {
   ebit: number;
   interest: number;
   tax: number;
+  /** False when interest was derived and the bridge does not tie out. */
+  interestIsFact: boolean;
+  /** False when tax was derived and the bridge does not tie out. */
+  taxIsFact: boolean;
+  /** Next Moves may rank debt drag only when the interest step is a fact. */
+  interestBurdenUsable: boolean;
 };
 
 /**
@@ -78,8 +106,29 @@ export function periodProfitBridge(fields: Record<string, unknown>): PeriodProfi
   const ebit = hasEbit ? statedEbit : gross - operatingExpenses - depreciation;
   const hasEbt = fieldPresent(fields, "ebt");
   const hasNet = fieldPresent(fields, "netIncome");
-  const interest = hasEbit && hasEbt ? statedEbit - fieldNum(fields, "ebt") : 0;
-  const tax = hasEbt && hasNet ? fieldNum(fields, "ebt") - fieldNum(fields, "netIncome") : 0;
+  const statedInterest = fieldPresent(fields, "interestExpense")
+    ? fieldNum(fields, "interestExpense")
+    : fieldPresent(fields, "interest")
+      ? fieldNum(fields, "interest")
+      : null;
+  const statedTax = fieldPresent(fields, "tax") ? fieldNum(fields, "tax") : null;
+  const derivedInterest = hasEbit && hasEbt ? statedEbit - fieldNum(fields, "ebt") : null;
+  const derivedTax = hasEbt && hasNet ? fieldNum(fields, "ebt") - fieldNum(fields, "netIncome") : null;
+  const interestValue = statedInterest ?? derivedInterest ?? 0;
+  const taxValue = statedTax ?? derivedTax ?? 0;
+  const interestDerived = statedInterest == null && derivedInterest != null;
+  const taxDerived = statedTax == null && derivedTax != null;
+  const netIncome = hasNet ? fieldNum(fields, "netIncome") : null;
+  const derivedBroken =
+    (interestDerived || taxDerived) &&
+    !derivedProfitStepsAreFacts({
+      operatingProfit: ebit,
+      interest: interestValue,
+      tax: taxValue,
+      netIncome: netIncome ?? ebit - interestValue - taxValue,
+    });
+  const interestIsFact = !interestDerived || !derivedBroken;
+  const taxIsFact = !taxDerived || !derivedBroken;
 
   return {
     revenue,
@@ -88,7 +137,10 @@ export function periodProfitBridge(fields: Record<string, unknown>): PeriodProfi
     operatingExpenses,
     depreciation,
     ebit,
-    interest,
-    tax,
+    interest: interestIsFact ? interestValue : 0,
+    tax: taxIsFact ? taxValue : 0,
+    interestIsFact,
+    taxIsFact,
+    interestBurdenUsable: interestIsFact && taxIsFact,
   };
 }

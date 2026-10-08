@@ -21,6 +21,8 @@ export interface DocumentMetadata {
   contains_balance_sheet: boolean;
   contains_cash_flow_statement: boolean;
   contains_notes: boolean;
+  /** Short cover such as "Jan–Sep 2026", when the heading names a range. */
+  period_label?: string | null;
 }
 
 export interface IncomeStatement {
@@ -172,4 +174,6 @@ export interface MergedExtractionResult extends RawExtraction {
   annualisation_factor?: number;
   document_count: number;
   file_names: string[];
+  /** Paths such as income_statement.ebitda that were calculated, not printed. */
+  derived_fields?: string[];
 }

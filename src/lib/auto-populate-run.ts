@@ -70,6 +70,11 @@ export type RunAutoPopulateInput = {
   cashDraft?: CashFromBanksDraftResult | null;
   /** Checkbox state from the dialog (ignored on first upload — everything runs). */
   chosen: AutoPopulatePrefs;
+  /**
+   * What to store when Remember is on. Defaults to `chosen`. Pass this when
+   * the dialog forced a cross-statement toggle off for this file only.
+   */
+  prefsToRemember?: AutoPopulatePrefs;
   /** Undefined (dialog state not loaded yet) → decided from the row's freshness stamps. */
   firstUpload?: boolean;
   firstActualsMonth?: string | null;
@@ -152,7 +157,7 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
   if (prefsColumn) {
     update.auto_update_prefs = nextStoredPrefs(
       parseAutoPopulatePrefs(row?.auto_update_prefs),
-      input.chosen,
+      input.prefsToRemember ?? input.chosen,
     );
   }
 
