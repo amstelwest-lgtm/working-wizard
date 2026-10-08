@@ -24,7 +24,7 @@ export const OVERVIEW_SECTIONS = [
   "books",
 ] as const;
 
-export const DELIVERABLE_SECTIONS = ["reports", "pack", "plan"] as const;
+export const DELIVERABLE_SECTIONS = ["reports", "pack", "plan", "drafter"] as const;
 
 export type OverviewSection = (typeof OVERVIEW_SECTIONS)[number];
 export type DeliverableSection = (typeof DELIVERABLE_SECTIONS)[number];
@@ -48,6 +48,7 @@ export type LegacyPaneId =
   | "reports"
   | "plan"
   | "advisory"
+  | "drafter"
   | "summary"
   | "moves";
 
@@ -81,7 +82,7 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   "strategic-moves": { tab: "overview", section: "moves" },
   reports: { tab: "deliverables", section: "reports" },
   report: { tab: "deliverables", section: "reports" },
-  advisory: { tab: "deliverables", section: "pack" },
+  advisory: { tab: "deliverables", section: "drafter" },
   plan: { tab: "deliverables", section: "plan" },
   actions: { tab: "deliverables", section: "plan" },
   action: { tab: "deliverables", section: "plan" },
@@ -160,6 +161,7 @@ export function legacyPaneForSearch(search: {
   if (canonical.tab === "deliverables") {
     if (canonical.section === "pack") return "advisory";
     if (canonical.section === "plan") return "plan";
+    if (canonical.section === "drafter") return "drafter";
     return "reports";
   }
   switch (canonical.section) {
@@ -213,4 +215,21 @@ export function accountantClientTabSearch<T extends object>(
     delete next.action;
   }
   return next as T;
+}
+
+/** Hashes that used to point at the drafter while it lived under the pack. */
+const DRAFTER_HASHES = new Set(["drafter", "sent", "sent-history", "advisory-drafter"]);
+
+/**
+ * `section=pack#drafter` and a sent-history hash land on the drafter section.
+ * A hash that is already on that section stays put.
+ */
+export function drafterSectionForHash(
+  section: string | null | undefined,
+  hash: string | null | undefined,
+): "drafter" | null {
+  const id = (hash ?? "").replace(/^#/, "").split("?")[0].trim().toLowerCase();
+  if (!DRAFTER_HASHES.has(id)) return null;
+  if ((section ?? "").trim() === "drafter") return null;
+  return "drafter";
 }

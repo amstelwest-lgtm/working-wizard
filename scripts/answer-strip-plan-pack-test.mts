@@ -10,7 +10,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import assert from "node:assert/strict";
 import { PrecardCapCard } from "../src/components/precard-cap-card";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
-import { packAnswerSentence, packDrawerHint, packStatusText, planAnswerSentence } from "../src/lib/plan-pack-copy";
+import {
+  packAnswerSentence,
+  packDrawerHint,
+  packStatusText,
+  packStripStatus,
+  planAnswerSentence,
+} from "../src/lib/plan-pack-copy";
 import { planConfidenceDisplay } from "../src/lib/plan-confidence-display";
 import { PAGE_FIGURES_CHANGED_CLAUSE, signoffStatusLine } from "../src/lib/signoff-status";
 
@@ -50,6 +56,8 @@ assert.equal(
   packAnswerSentence({ periodLabel: "Q3 close", sectionCount: 1, status: "draft" }),
   "Q3 close pack: 1 section drafted. Read it through, then sign off.",
 );
+assert.equal(packStripStatus(false, { status: "draft" }), null);
+assert.equal(packStripStatus(true, { status: "draft" }), "Draft");
 assert.equal(packDrawerHint(3, true), "Version 3 · sections, regenerate");
 assert.equal(packDrawerHint(3, false), "Version 3 · sections");
 
@@ -112,9 +120,10 @@ const planAt = clientSrc.indexOf('id="pane-plan"');
 const advisoryAt = clientSrc.indexOf('id="pane-advisory"');
 assert.ok(planAt > 0 && advisoryAt > planAt, "plan and pack panes are in the route");
 const planPane = clientSrc.slice(planAt, advisoryAt);
+const drafterAt = clientSrc.indexOf('id="pane-drafter"');
 const footerAt = clientSrc.indexOf('className="footer-note"', advisoryAt);
-assert.ok(footerAt > advisoryAt, "the pack pane ends before the footer");
-const advisoryPane = clientSrc.slice(advisoryAt, footerAt);
+assert.ok(drafterAt > advisoryAt && footerAt > drafterAt, "the drafter pane sits after the pack");
+const advisoryPane = clientSrc.slice(advisoryAt, drafterAt);
 
 assert.ok(planPane.includes("signoffVerbOnly"), "the plan strip says Sign off");
 assert.ok(planPane.includes("planCount > 0"), "an empty plan hides Sign off");
@@ -129,7 +138,8 @@ assert.equal(planPane.includes("PrecardCapCard"), false, "the plan pane does not
 
 assert.ok(advisoryPane.includes("AdvisoryPackPanel"), "the pack path still mounts the pack");
 assert.ok(advisoryPane.includes("RecommendationsPanel"), "recommendations stay stacked on the pack");
-assert.ok(advisoryPane.includes("AdvisoryDrafter"), "the drafter stays stacked on the pack");
+assert.equal(advisoryPane.includes("AdvisoryDrafter"), false, "the pack page does not stack the drafter");
+assert.equal(advisoryPane.includes("AdvisorySentHistory"), false, "sent history leaves the pack page");
 assert.ok(advisoryPane.includes("AdvisoryTabSignoff"), "the pack path keeps the one sign-off control");
 assert.ok(advisoryPane.includes("onSignoffAction={setPackSignoff}"), "that control signs the pack");
 assert.equal(/ReviewSignoffButton/.test(advisoryPane), false, "the pack path has no second sign-off");
@@ -153,6 +163,7 @@ assert.equal(
   "the pack fixture and the live pack both keep PrecardCapCard",
 );
 assert.ok(panelSrc.includes("headerOwnsSignOff"), "the panel hides its own sign-off when the strip owns it");
+assert.ok(panelSrc.includes("packStripStatus(Boolean(pack)"), "an empty pack has no status pill");
 assert.ok(panelSrc.includes("packDisplayedSignoffLine"), "the lifted line still uses the pack sign-off helper");
 assert.ok(panelSrc.includes('id="advisory-pack-export-pdf"'), "export stays on the pack");
 assert.ok(panelSrc.includes("data-signoff-line"), "the sentence is the sign-off line");

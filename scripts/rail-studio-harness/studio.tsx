@@ -9,6 +9,7 @@ import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
+import { ReportsStudio } from "@/routes/_authenticated/reports.index";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
@@ -103,6 +104,7 @@ export function RailStudio() {
     aged?: string | number;
     packView?: string;
     planView?: string;
+    drafterView?: string;
   };
   const navigate = useNavigate();
   const pane = legacyPaneForSearch(search) ?? "overview";
@@ -180,6 +182,8 @@ export function RailStudio() {
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} packView={search.packView} /> : null}
             {pane === "plan" ? <PlanPane clientId={clientId} planView={search.planView} /> : null}
+            {pane === "reports" ? <ReportsPane clientId={clientId} /> : null}
+            {pane === "drafter" ? <DrafterPane clientId={clientId} /> : null}
           </div>
         </div>
       </div>
@@ -823,9 +827,33 @@ function PackPane({ clientId, packView }: { clientId: string; packView?: string 
       <PaneBoundary label="Outcomes">
         <OutcomesPanel className="mb-5" clientId={clientId} audience="accountant" onChanged={() => {}} />
       </PaneBoundary>
-      <PaneBoundary label="Advisory drafter">
-        <AdvisoryDrafter clientId={clientId} clientName="Harbour Glass" />
+    </div>
+  );
+}
+
+function ReportsPane({ clientId }: { clientId: string }) {
+  return (
+    <div className="tabpane on" id="pane-reports">
+      <PaneBoundary label="Reports">
+        <ReportsStudio
+          embedded
+          client="Harbour Glass"
+          clientId={clientId}
+          sourceChip={figureSourceChipLabel("upload")}
+        />
       </PaneBoundary>
+    </div>
+  );
+}
+
+function DrafterPane({ clientId }: { clientId: string }) {
+  return (
+    <div className="tabpane on" id="pane-drafter">
+      <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+        <PaneBoundary label="Advisory drafter">
+          <AdvisoryDrafter clientId={clientId} clientName="Harbour Glass" />
+        </PaneBoundary>
+      </section>
       <PaneBoundary label="Sent history">
         <AdvisorySentHistory clientId={clientId} />
       </PaneBoundary>

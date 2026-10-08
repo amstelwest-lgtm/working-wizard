@@ -151,7 +151,7 @@ export function coachPageForTab(
   if (tab === "deliverables") {
     if (section === "plan") return "actions";
     if (section === "reports") return "reports";
-    if (section === "pack") return "advisory";
+    if (section === "pack" || section === "drafter") return "advisory";
     return null;
   }
   switch (tab) {

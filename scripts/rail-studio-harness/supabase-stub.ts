@@ -102,7 +102,42 @@ function actionItemRows(): unknown[] {
   return [ACTION_ITEM];
 }
 
+const SENT_DELIVERY = {
+  id: "harness-sent",
+  client_id: "harness-client",
+  firm_id: null,
+  channel: "mailto",
+  kind: "advisory_draft",
+  subject: "September note",
+  body: "A short note.",
+  recipient_email: null,
+  recipient_name: null,
+  report_key: null,
+  snapshot_id: null,
+  figures_hash: null,
+  period_label: "September 2026",
+  created_by: "harness-local-user",
+  created_at: "2026-10-02T08:00:00.000Z",
+  acknowledged_at: null,
+  acknowledged_by: null,
+  ack_token: null,
+  pdf_storage_path: null,
+  pdf_byte_size: null,
+};
+
+function deliveryRows(): unknown[] {
+  if (typeof location !== "undefined" && /(?:^|[?&])drafterView=sent(?:&|$)/.test(location.search)) {
+    return [SENT_DELIVERY];
+  }
+  return [];
+}
+
 function materialize(table: string, mode: Mode): { data: unknown; error: null } {
+  if (table === "advisory_deliveries") {
+    const rows = deliveryRows();
+    if (mode === "list") return { data: rows, error: null };
+    return { data: rows[0] ?? null, error: null };
+  }
   if (table === "action_items" || table === "action_items_v") {
     const rows = actionItemRows();
     if (mode === "list") return { data: rows, error: null };

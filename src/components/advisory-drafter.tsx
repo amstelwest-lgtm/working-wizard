@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { useMarket } from "@/contexts/market";
-import { isUsCopy } from "@/lib/market";
+import { formatDate, isUsCopy } from "@/lib/market";
+import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import {
   Loader2,
   Sparkles,
@@ -22,10 +23,17 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   hashFigures,
   latestSnapshotId,
+  listDeliveries,
   recordDelivery,
   warnIfDeliveryFailed,
+  type AdvisoryDelivery,
   type DeliveryKind,
 } from "@/lib/advisory-deliveries";
+import {
+  DRAFTER_HISTORY_SENTENCE,
+  drafterAnswerSentence,
+  plainSentDate,
+} from "@/lib/reports-drafter-copy";
 
 type Kind = "client_email" | "meeting_agenda" | "exec_summary";
 
@@ -83,6 +91,23 @@ export function AdvisoryDrafter({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DraftResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [lastSent, setLastSent] = useState<AdvisoryDelivery | null>(null);
+  const [sentTick, setSentTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    listDeliveries(clientId)
+      .then((rows) => {
+        if (cancelled) return;
+        setLastSent(rows.find((row) => row.channel !== "pdf_download") ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setLastSent(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, sentTick]);
 
   const generate = async () => {
     setLoading(true);
@@ -133,6 +158,7 @@ export function AdvisoryDrafter({
     });
     warnIfDeliveryFailed(logged.error);
     onLogged?.();
+    setSentTick((n) => n + 1);
     return { body: logged.body ?? draft.body, ackToken: logged.ackToken };
   };
 
@@ -165,18 +191,56 @@ export function AdvisoryDrafter({
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
+  const dateLabel = lastSent
+    ? formatDate(lastSent.created_at, market, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+        .replace(/\u202f/g, " ")
+        .replace(/\u00a0/g, " ")
+    : "";
+  const sentOn = plainSentDate(dateLabel);
+  const sentence = drafterAnswerSentence({
+    last:
+      lastSent && sentOn && sentOn !== "—"
+        ? {
+            kind: lastSent.kind,
+            recipient: clientName?.trim() || "the client",
+            dateLabel: sentOn,
+          }
+        : null,
+  });
+
   return (
-    <div className="rounded-xl border border-amber-500/20 bg-slate-900/60 p-5">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-amber-400" />
-        <h3 className="text-sm font-semibold text-amber-100">
-          Advisory drafter{clientName ? ` — ${clientName}` : ""}
-        </h3>
-      </div>
-      <p className="mt-1 text-xs text-slate-400">
-        Drafts a deliverable from this client&apos;s real movement and your signed-off moves, in
-        your voice. Copy / email / WhatsApp are logged to Sent history (share opened — not postal
-        proof). {usCopy ? "Email is the primary share path for US clients." : ""}
+    <div id="drafter">
+      <ArapAnswerStrip
+        heading="Advisory"
+        sentence={sentence}
+        primary={
+          <button
+            type="button"
+            onClick={generate}
+            disabled={loading}
+            className={ARAP_GOLD_BTN}
+            data-draft
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Drafting…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" /> {result ? "Regenerate" : "Draft"}
+              </>
+            )}
+          </button>
+        }
+      />
+      <div className="mt-4 rounded-xl border border-amber-500/20 bg-slate-900/60 p-5">
+      <p className="text-xs text-slate-400">
+        {DRAFTER_HISTORY_SENTENCE}
+        {usCopy ? " Email is the primary share path for US clients." : ""}
       </p>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
@@ -209,23 +273,6 @@ export function AdvisoryDrafter({
         placeholder="Optional steer — e.g. 'keep it warm, first-time owner' or 'push on debtor days this month'"
         className="mt-3 w-full resize-none rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 placeholder:text-slate-600 focus:border-amber-500/50 focus:outline-none"
       />
-
-      <button
-        type="button"
-        onClick={generate}
-        disabled={loading}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:opacity-90 disabled:opacity-60"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Drafting…
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" /> {result ? "Regenerate" : "Draft"}
-          </>
-        )}
-      </button>
 
       <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
       {precardOpen ? <PrecardCapCard /> : null}
@@ -286,6 +333,7 @@ export function AdvisoryDrafter({
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

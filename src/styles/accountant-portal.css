@@ -383,6 +383,24 @@ body:has(.settings-plan-card) #wizard-notes-pin{visibility:hidden;pointer-events
   border-color:transparent;
   box-shadow:0 4px 16px rgba(212,175,55,.28);
 }
+@media(max-width:520px){
+  .accountant-portal .section-tablist{
+    flex-wrap:wrap;
+    overflow:visible;
+    gap:4px;
+    padding:0 0 4px;
+  }
+  .accountant-portal .section-tab{
+    padding:4px 8px;
+    font-size:12px;
+  }
+}
+.accountant-portal .chip.chip-sentence{
+  text-transform:none;
+  letter-spacing:0;
+  font-size:12px;
+  font-weight:600;
+}
 .accountant-portal .deliverable-rail{
   position:sticky;
   top:82px;

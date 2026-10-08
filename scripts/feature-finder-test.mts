@@ -93,7 +93,7 @@ assert(href("overview", studio).endsWith("tab=overview"), "Overview briefing");
 assert(href("moves", studio).includes("section=moves"), "Moves section");
 assert(href("reports", studio).includes("section=reports"), "Reports section");
 assert(href("advisory pack", studio).includes("section=pack"), "Advisory pack section");
-assert(href("drafter", studio).includes("section=pack"), "Advisory drafter stays on the pack");
+assert(href("drafter", studio).includes("section=drafter"), "Advisory drafter has its own section");
 assert(
   href("actions", studio) ===
     `/clients/${CLIENT}?tab=${coach("actions").tab}&section=${coach("actions").section}`,

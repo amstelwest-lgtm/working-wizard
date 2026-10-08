@@ -1,5 +1,5 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Download,
@@ -21,6 +21,10 @@ import {
   Scale,
 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { AdvisorySentHistory } from "@/components/advisory-sent-history";
+import { reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -3088,6 +3092,7 @@ function ReportCard({
   highlight,
   onGenerate,
   onPreview,
+  downloadOutline = false,
   market = ZA_MARKET,
   signoff = null,
   signoffStale = false,
@@ -3106,6 +3111,8 @@ function ReportCard({
   highlight?: boolean;
   onGenerate: () => void;
   onPreview: () => void;
+  /** Embedded tab: the strip owns the one gold control, so card downloads stay outline. */
+  downloadOutline?: boolean;
   market?: ResolvedMarket;
   signoff?: ClientReviewSignoff | null;
   signoffStale?: boolean;
@@ -3198,7 +3205,12 @@ function ReportCard({
         </Button>
         <Button
           size="sm"
-          className="flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
+          variant={downloadOutline ? "outline" : "default"}
+          className={
+            downloadOutline
+              ? "flex-1 border-border bg-transparent text-xs gap-1.5 text-foreground hover:bg-muted"
+              : "flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
+          }
           onClick={() => {
             if (gate.disabled || isGenerating) return;
             onGenerate();
@@ -3723,6 +3735,10 @@ export type ReportsStudioProps = {
   embedded?: boolean;
   /** Embedded deep-links call this instead of rewriting `/reports` search. */
   onSearchCleared?: () => void;
+  /** `figureSourceChipLabel` for the statement already on the file. */
+  sourceChip?: string | null;
+  /** Configure-inputs block. The embedded tab keeps it in the closed drawer. */
+  inputs?: ReactNode;
 };
 
 export function ReportsStudio({
@@ -3732,6 +3748,8 @@ export function ReportsStudio({
   action: actionParam,
   embedded = false,
   onSearchCleared,
+  sourceChip = null,
+  inputs = null,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId, brandLoading } = useAccountantProfile();
@@ -4206,6 +4224,80 @@ export function ReportsStudio({
   const zipPct = zipProgress ? Math.round((zipProgress.done / zipProgress.total) * 100) : 0;
   const essential = REPORTS.filter((r) => r.category === "essential");
   const optional = REPORTS.filter((r) => r.category === "optional");
+  const reportMarket = clientData?.market ?? ZA_MARKET;
+  const readyReports = clientData?.hasData
+    ? REPORTS.filter((report) => !unavailableFor(report.key))
+    : [];
+  const reportsSentence = reportsAnswerSentence({
+    readyNames: readyReports.map((report) => reportCopy(report, reportMarket).name),
+    periodLabel: clientData?.dataPeriodLabel || null,
+  });
+  const openPrimaryReport = () => {
+    const target = readyReports[0] ?? REPORTS[0];
+    if (!target) return;
+    void handlePreview(target);
+  };
+
+  const reportCatalogue = (
+    <>
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <span className="rounded-full bg-[#c9962b]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a8791a] dark:text-[#e5c66b]">
+            Essential — {essential.length} Reports
+          </span>
+          <div className="flex-1 border-t border-border" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {essential.map((r) => (
+            <ReportCard
+              key={r.key}
+              report={r}
+              isGenerating={loadingKey === r.key}
+              isPreviewing={previewKey === r.key}
+              isClient={isClient}
+              dataLoading={studioBusy}
+              blocked={blockedForClient}
+              unavailableReason={unavailableFor(r.key)}
+              highlight={reportParam === r.key}
+              onGenerate={() => handleGenerate(r)}
+              onPreview={() => handlePreview(r)}
+              downloadOutline={embedded}
+              market={clientData?.market ?? ZA_MARKET}
+              {...reportCardSignoff(r)}
+            />
+          ))}
+        </div>
+      </section>
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Optional — {optional.length} Reports
+          </span>
+          <div className="flex-1 border-t border-border" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {optional.map((r) => (
+            <ReportCard
+              key={r.key}
+              report={r}
+              isGenerating={loadingKey === r.key}
+              isPreviewing={previewKey === r.key}
+              isClient={isClient}
+              dataLoading={studioBusy}
+              blocked={blockedForClient}
+              unavailableReason={unavailableFor(r.key)}
+              highlight={reportParam === r.key}
+              onGenerate={() => handleGenerate(r)}
+              onPreview={() => handlePreview(r)}
+              downloadOutline={embedded}
+              market={clientData?.market ?? ZA_MARKET}
+              {...reportCardSignoff(r)}
+            />
+          ))}
+        </div>
+      </section>
+    </>
+  );
 
   // Deep-link focus: skip painting the full catalogue until preview/download finishes.
   if (deepLinkBusy && deepLinkReport) {
@@ -4269,7 +4361,71 @@ export function ReportsStudio({
           </div>
         )}
 
-        {/* Header */}
+        {embedded ? (
+          <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+            <ArapAnswerStrip
+              heading="Reports"
+              sentence={reportsSentence}
+              chip={sourceChip}
+              primary={
+                <>
+                  <button
+                    type="button"
+                    className={ARAP_GOLD_BTN}
+                    data-reports-primary
+                    disabled={studioBusy}
+                    onClick={openPrimaryReport}
+                  >
+                    {studioBusy ? "Loading…" : reportsPrimaryLabel(readyReports.length)}
+                  </button>
+                  <button
+                    type="button"
+                    className="answer-strip__icon"
+                    aria-label="Export all reports"
+                    title="Export all reports"
+                    disabled={zipGate.disabled || zipProgress !== null}
+                    onClick={() => {
+                      if (zipGate.disabled) return;
+                      void handleGenerateAll();
+                    }}
+                  >
+                    {zipProgress ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" aria-hidden />
+                    )}
+                  </button>
+                </>
+              }
+            />
+            {zipProgress ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Generating {zipProgress.done}/{zipProgress.total} reports…
+              </p>
+            ) : null}
+            <ReviewInputsDrawer hint="Templates, settings, exports">
+              {inputs}
+              {reportCatalogue}
+              <SettingsPanel
+                settings={settings}
+                onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
+                profile={profile}
+                clientSector={clientData?.hasData ? clientData.benchmarkSector : null}
+                statementPeriod={clientData?.dataPeriodLabel ?? null}
+                nameExample={t("entityExample", clientData?.market ?? firmMarket)}
+              />
+              {clientId ? (
+                <AdvisorySentHistory
+                  clientId={clientId}
+                  statementPeriodLabel={clientData?.dataPeriodLabel ?? null}
+                />
+              ) : null}
+            </ReviewInputsDrawer>
+          </section>
+        ) : null}
+
+        {/* Header — standalone studio. The client tab uses the answer strip. */}
+        {!embedded ? (
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -4396,68 +4552,13 @@ export function ReportsStudio({
             )}
           </div>
         </div>
+        ) : null}
 
         {/* Main layout */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
           {/* Card grid */}
           <div className="space-y-6">
-            {/* Essential */}
-            <section>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-[#c9962b]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a8791a] dark:text-[#e5c66b]">
-                  Essential — {essential.length} Reports
-                </span>
-                <div className="flex-1 border-t border-border" />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {essential.map((r) => (
-                  <ReportCard
-                    key={r.key}
-                    report={r}
-                    isGenerating={loadingKey === r.key}
-                    isPreviewing={previewKey === r.key}
-                    isClient={isClient}
-                    dataLoading={studioBusy}
-                    blocked={blockedForClient}
-                    unavailableReason={unavailableFor(r.key)}
-                    highlight={reportParam === r.key}
-                    onGenerate={() => handleGenerate(r)}
-                    onPreview={() => handlePreview(r)}
-                    market={clientData?.market ?? ZA_MARKET}
-                    {...reportCardSignoff(r)}
-                  />
-                ))}
-              </div>
-            </section>
-
-            {/* Optional */}
-            <section>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Optional — {optional.length} Reports
-                </span>
-                <div className="flex-1 border-t border-border" />
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {optional.map((r) => (
-                  <ReportCard
-                    key={r.key}
-                    report={r}
-                    isGenerating={loadingKey === r.key}
-                    isPreviewing={previewKey === r.key}
-                    isClient={isClient}
-                    dataLoading={studioBusy}
-                    blocked={blockedForClient}
-                    unavailableReason={unavailableFor(r.key)}
-                    highlight={reportParam === r.key}
-                    onGenerate={() => handleGenerate(r)}
-                    onPreview={() => handlePreview(r)}
-                    market={clientData?.market ?? ZA_MARKET}
-                    {...reportCardSignoff(r)}
-                  />
-                ))}
-              </div>
-            </section>
+            {embedded ? null : reportCatalogue}
 
             {/* Playbooks */}
             <section>
@@ -4501,7 +4602,7 @@ export function ReportsStudio({
             </section>
           </div>
 
-          {/* Settings sidebar */}
+          {!embedded ? (
           <SettingsPanel
             settings={settings}
             onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
@@ -4510,6 +4611,7 @@ export function ReportsStudio({
             statementPeriod={clientData?.dataPeriodLabel ?? null}
             nameExample={t("entityExample", clientData?.market ?? firmMarket)}
           />
+          ) : null}
         </div>
       </div>
 
