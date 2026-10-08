@@ -17,6 +17,8 @@ export const SIGNOFF_STATUS_DRAFT = "Draft";
 export const SIGNOFF_STATUS_READY = "Ready for review";
 /** Page and report sign-offs. Pack approvals still say regenerate. */
 export const PAGE_FIGURES_CHANGED_CLAUSE = "figures have changed since; re-review";
+/** Pill when the sentence already carries the long stale line. */
+export const SIGNOFF_STATUS_STALE_SHORT = "Signed off · figures changed";
 
 export type SignoffStatusKind = "draft" | "ready" | "signed" | "stale";
 
@@ -37,6 +39,11 @@ export function signoffStatusLine(input: {
   name?: string | null;
   /** Already formatted clock. Used for a clean sign-off. */
   date?: string | null;
+  /**
+   * `short` is the pill when the sentence already says who signed and that
+   * the figures changed. Other kinds ignore it.
+   */
+  variant?: "full" | "short";
 }): string {
   if (input.kind === "ready") return SIGNOFF_STATUS_READY;
   const name = input.name?.trim() || "";
@@ -46,6 +53,7 @@ export function signoffStatusLine(input: {
     if (name) return `Signed off by ${name}`;
   }
   if (input.kind === "stale") {
+    if (input.variant === "short") return SIGNOFF_STATUS_STALE_SHORT;
     if (name) return `Signed off by ${name} · ${PAGE_FIGURES_CHANGED_CLAUSE}`;
     return PAGE_FIGURES_CHANGED_CLAUSE;
   }

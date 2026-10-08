@@ -1331,6 +1331,7 @@ html[data-theme="dark"] .reports-studio .reports-settings{
   gap:8px;
 }
 .answer-strip__signoff{margin:0;width:auto;max-width:none}
+.answer-strip__primary{text-transform:none;letter-spacing:0}
 .answer-strip__secondary{
   border:0;
   background:transparent;

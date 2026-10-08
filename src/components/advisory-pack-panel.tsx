@@ -39,7 +39,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
-import { packAnswerSentence, packStatusText, type PackAnswerStatus } from "@/lib/plan-pack-copy";
+import { packAnswerSentence, packDrawerHint, packStatusText, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
@@ -116,6 +116,7 @@ type Props = {
     status: PackAnswerStatus;
     signedBy?: string | null;
     signedDate?: string | null;
+    version?: number | null;
   } | null;
 };
 
@@ -603,21 +604,40 @@ export function AdvisoryPackPanel({
   if (fixture) {
     const sentence = packAnswerSentence(fixture);
     const statusText = packStatusText(fixture);
+    const fixtureStale = fixture.status === "signed_stale";
     return (
       <section className={shell} id="advisory-pack" data-audience={audience} data-advisory-signoff={fixture.status}>
         <PackStrip
           sentence={sentence}
           chip={chip}
           statusText={statusText}
-          primary={primary}
+          primary={
+            <>
+              {primary}
+              {fixtureStale ? (
+                <button
+                  type="button"
+                  onClick={() => void doGenerate()}
+                  disabled={busy !== null}
+                  className={ARAP_GOLD_BTN}
+                  style={{ textTransform: "none", letterSpacing: 0 }}
+                  data-generate
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate pack
+                </button>
+              ) : null}
+            </>
+          }
           onExport={() => {}}
           exporting={false}
         />
-        <ReviewInputsDrawer hint="Sections, regenerate">
+        <ReviewInputsDrawer hint={packDrawerHint(fixture.version, !fixtureStale)}>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={GHOST_BTN}>
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate
-            </button>
+            {fixtureStale ? null : (
+              <button type="button" onClick={() => void doGenerate()} className={GHOST_BTN} data-generate>
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate
+              </button>
+            )}
             <button type="button" className={GHOST_BTN}>
               Read
             </button>
@@ -633,6 +653,8 @@ export function AdvisoryPackPanel({
   if (!pack && audience === "owner" && !canGenerate) return null;
 
   const headerOwnsSignOff = audience === "accountant" && Boolean(onSignoffAction);
+  const packIsStale = advisoryState.status === "signed_stale";
+  const canRegenerate = Boolean(pack && isWriter && canGenerate);
   const sentence = pack
     ? packAnswerSentence({
         periodLabel: pack.period_label,
@@ -664,6 +686,23 @@ export function AdvisoryPackPanel({
         primary={
           <>
             {primary}
+            {canRegenerate && packIsStale ? (
+              <button
+                type="button"
+                onClick={() => void doGenerate()}
+                disabled={busy !== null}
+                className={ARAP_GOLD_BTN}
+                style={{ textTransform: "none", letterSpacing: 0 }}
+                data-generate
+              >
+                {busy === "generate" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                )}
+                Regenerate pack
+              </button>
+            ) : null}
             {!pack && isWriter && canGenerate ? (
               <button
                 type="button"
@@ -685,7 +724,7 @@ export function AdvisoryPackPanel({
         onExport={pack ? () => void exportPdf() : undefined}
         exporting={exportingPdf || busy !== null}
       />
-      <ReviewInputsDrawer hint="Sections, regenerate">
+      <ReviewInputsDrawer hint={packDrawerHint(pack?.version, canRegenerate && !packIsStale)}>
         <div className="flex flex-wrap items-center gap-2">
           {versions.length > 1 ? (
             <select
@@ -702,7 +741,7 @@ export function AdvisoryPackPanel({
               ))}
             </select>
           ) : null}
-          {pack && isWriter && canGenerate ? (
+          {canRegenerate && !packIsStale ? (
             <button
               type="button"
               onClick={() => void doGenerate()}

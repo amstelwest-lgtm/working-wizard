@@ -10,18 +10,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import assert from "node:assert/strict";
 import { PrecardCapCard } from "../src/components/precard-cap-card";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
-import { packAnswerSentence, packStatusText, planAnswerSentence } from "../src/lib/plan-pack-copy";
+import { packAnswerSentence, packDrawerHint, packStatusText, planAnswerSentence } from "../src/lib/plan-pack-copy";
 import { PAGE_FIGURES_CHANGED_CLAUSE, signoffStatusLine } from "../src/lib/signoff-status";
 
 const september = { periodLabel: "September 2026", sectionCount: 6 };
 
 assert.equal(
   packAnswerSentence({ ...september, status: "draft" }),
-  "September pack: 6 sections drafted. Draft.",
+  "September pack: 6 sections drafted. Read it through, then sign off.",
 );
 assert.equal(
   packAnswerSentence({ ...september, status: "in_review" }),
-  "September pack: 6 sections drafted. Ready for review.",
+  "September pack: 6 sections drafted and ready for your review.",
 );
 assert.equal(
   packAnswerSentence({
@@ -47,23 +47,28 @@ assert.equal(
 );
 assert.equal(
   packAnswerSentence({ periodLabel: "Q3 close", sectionCount: 1, status: "draft" }),
-  "Q3 close pack: 1 section drafted. Draft.",
+  "Q3 close pack: 1 section drafted. Read it through, then sign off.",
 );
+assert.equal(packDrawerHint(3, true), "Version 3 · sections, regenerate");
+assert.equal(packDrawerHint(3, false), "Version 3 · sections");
 
 assert.equal(packStatusText({ status: "in_review" }), signoffStatusLine({ kind: "ready" }));
 assert.equal(
   packStatusText({ status: "signed_stale", signedBy: "Ada Mbeki", signedDate: "2 Oct 2026" }),
-  signoffStatusLine({ kind: "stale", name: "Ada Mbeki" }),
+  signoffStatusLine({ kind: "stale", name: "Ada Mbeki", variant: "short" }),
+);
+assert.equal(
+  packStatusText({ status: "signed_stale", signedBy: "Ada Mbeki", signedDate: "2 Oct 2026" }),
+  "Signed off · figures changed",
 );
 assert.equal(
   packStatusText({ status: "signed", signedBy: "Ada Mbeki", signedDate: "2 Oct 2026" }),
   "Signed off by Ada Mbeki · 2 Oct 2026",
 );
-assert.ok(
-  packStatusText({ status: "signed_stale", signedBy: "Ada Mbeki", signedDate: "2 Oct 2026" }).includes(
-    PAGE_FIGURES_CHANGED_CLAUSE,
-  ),
-  "the stale pill uses the shared figures-changed clause",
+assert.equal(
+  packStatusText({ status: "signed_stale", signedBy: "Ada Mbeki" }).includes(PAGE_FIGURES_CHANGED_CLAUSE),
+  false,
+  "the stale pill does not repeat the long clause",
 );
 assert.equal(
   packStatusText({ status: "signed_stale", signedBy: "Ada Mbeki", signedDate: "2 Oct 2026" }).includes(
@@ -142,6 +147,11 @@ assert.equal(panelSrc.includes("Ready for your review"), false, "the sentence us
 const tabSrc = readFileSync(resolve("src/components/advisory-tab-signoff.tsx"), "utf8");
 assert.equal(tabSrc.split("data-approve").length - 1, 1, "the tab component has one Sign off control");
 assert.ok(tabSrc.includes("hideLine"), "the strip does not repeat the tab line");
+assert.ok(/\n\s*Sign off\n/.test(tabSrc), "the button says Sign off");
+assert.equal(tabSrc.includes("Sign off v"), false, "the version is not on the button");
+assert.ok(panelSrc.includes("Regenerate pack"), "a stale pack promotes regenerate");
+assert.ok(panelSrc.includes("doGenerate()"), "regenerate keeps the existing handler");
+assert.equal(panelSrc.includes('"Signed off · figures changed"'), false, "the panel does not hard-code the short pill");
 
 const card = renderToStaticMarkup(createElement(PrecardCapCard));
 assert.ok(card.includes("precard-cap-card"), "PrecardCapCard still renders");

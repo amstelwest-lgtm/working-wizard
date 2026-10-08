@@ -33,6 +33,15 @@ assert(
     `Signed off by James Fleming · ${PAGE_FIGURES_CHANGED_CLAUSE}`,
   "stale word",
 );
+assert(
+  signoffStatusLine({ kind: "stale", name: "James Fleming", variant: "short" }) ===
+    "Signed off · figures changed",
+  "stale pill is the short shared line",
+);
+assert(
+  signoffStatusLine({ kind: "draft", variant: "short" }) === "Draft",
+  "short does not invent a draft word",
+);
 
 const signedAt = "2026-10-07T23:01:00.000Z";
 assert(

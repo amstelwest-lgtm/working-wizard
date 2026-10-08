@@ -102,6 +102,7 @@ export function RailStudio() {
     focus?: string;
     aged?: string | number;
     packView?: string;
+    planView?: string;
   };
   const navigate = useNavigate();
   const pane = legacyPaneForSearch(search) ?? "overview";
@@ -178,7 +179,7 @@ export function RailStudio() {
             {pane === "payables" ? <PayablesPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} packView={search.packView} /> : null}
-            {pane === "plan" ? <PlanPane clientId={clientId} /> : null}
+            {pane === "plan" ? <PlanPane clientId={clientId} planView={search.planView} /> : null}
           </div>
         </div>
       </div>
@@ -761,9 +762,9 @@ function harnessPackAction(status: PackAnswerStatus, signedBy: string | null): A
 function PackPane({ clientId, packView }: { clientId: string; packView?: string }) {
   const fixture =
     packView === "draft"
-      ? { periodLabel: "September 2026", sectionCount: 6, status: "draft" as const, signedBy: null }
+      ? { periodLabel: "September 2026", sectionCount: 6, status: "draft" as const, signedBy: null, version: 3 }
       : packView === "ready"
-        ? { periodLabel: "September 2026", sectionCount: 6, status: "in_review" as const, signedBy: null }
+        ? { periodLabel: "September 2026", sectionCount: 6, status: "in_review" as const, signedBy: null, version: 3 }
         : packView === "stale"
           ? {
               periodLabel: "September 2026",
@@ -771,6 +772,7 @@ function PackPane({ clientId, packView }: { clientId: string; packView?: string 
               status: "signed_stale" as const,
               signedBy: "Ada Mbeki",
               signedDate: "2 Oct 2026",
+              version: 3,
             }
           : null;
   return (
@@ -831,8 +833,24 @@ function PackPane({ clientId, packView }: { clientId: string; packView?: string 
   );
 }
 
-function PlanPane({ clientId }: { clientId: string }) {
+function PlanPane({ clientId, planView }: { clientId: string; planView?: string }) {
   const [sentence, setSentence] = useState("No actions in the plan yet.");
+  const signoff =
+    planView === "signed"
+      ? {
+          id: "harness-plan-signoff",
+          client_id: clientId,
+          scope: "action_plan" as const,
+          signed_off_by_id: "harness-local-user",
+          signed_off_by_name: "Ada Mbeki",
+          signed_off_by_initials: "AM",
+          signed_off_by_title: null,
+          firm_name: "Harbour & Co",
+          note: null,
+          signature_data: null,
+          signed_off_at: "2026-10-02T08:00:00.000Z",
+        }
+      : null;
   return (
     <div className="tabpane on" id="pane-plan">
       <DeliverableAnswerStrip
@@ -841,13 +859,17 @@ function PlanPane({ clientId }: { clientId: string }) {
         scope="action_plan"
         clientId={clientId}
         clientName="Harbour Glass"
-        signoff={null}
+        signoff={signoff}
         isStale={false}
         onSignoffChange={() => {}}
         canSign
       />
-      <ReviewInputsDrawer hint="Inputs">
-        <p className="sub">The work list stays below.</p>
+      <ReviewInputsDrawer hint={deliverableDrawerHint("plan", { financials: HARNESS_FINANCIALS })}>
+        <DeliverableInputConfig
+          clientId={clientId}
+          deliverableId="plan"
+          context={{ financials: HARNESS_FINANCIALS }}
+        />
       </ReviewInputsDrawer>
       <PaneBoundary label="Action plan">
         <ActionPlanPanel

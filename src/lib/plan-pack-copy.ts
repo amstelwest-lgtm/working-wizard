@@ -56,10 +56,20 @@ export function packAnswerSentence(input: {
   }
   const count = Math.max(0, input.sectionCount);
   const drafted = count === 1 ? "1 section drafted" : `${count} sections drafted`;
-  return `${packTitle(input.periodLabel)}: ${drafted}. ${finish(signoffStatusLine({ kind }))}`;
+  const title = packTitle(input.periodLabel);
+  // Same kind as the pill. Ready and draft are the only open states.
+  if (kind === "ready") return `${title}: ${drafted} and ready for your review.`;
+  return `${title}: ${drafted}. Read it through, then sign off.`;
 }
 
-/** Status pill. Stale keeps `signoffStatusLine` and does not add a date. */
+/** Drawer hint. The version left the Sign off button. */
+export function packDrawerHint(version: number | null | undefined, includeRegenerate: boolean): string {
+  const tail = includeRegenerate ? "sections, regenerate" : "sections";
+  if (version != null && version > 0) return `Version ${version} · ${tail}`;
+  return includeRegenerate ? "Sections, regenerate" : "Sections";
+}
+
+/** Status pill. The stale pill is the short shared line; the sentence keeps the long one. */
 export function packStatusText(input: {
   status: PackAnswerStatus;
   signedBy?: string | null;
@@ -70,6 +80,7 @@ export function packStatusText(input: {
     kind,
     name: input.signedBy,
     date: kind === "signed" ? input.signedDate : null,
+    variant: kind === "stale" ? "short" : "full",
   });
 }
 

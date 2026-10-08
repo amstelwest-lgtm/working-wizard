@@ -53,6 +53,8 @@ const clientRoute = createRoute({
       search.packView === "draft" || search.packView === "ready" || search.packView === "stale"
         ? search.packView
         : undefined,
+    planView:
+      search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
   }),
   component: function ClientHarness() {
     return (
