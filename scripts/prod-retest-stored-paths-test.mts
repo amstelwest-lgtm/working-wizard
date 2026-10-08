@@ -81,22 +81,28 @@ const qaStory = story(qa);
 const yankeesStory = story(yankees);
 
 const qaNet = qaStory.assessed.forecastNet ?? 0;
-assert(qaStory.assessed.runway.label === "21 weeks", `QA runway ${qaStory.assessed.runway.label}`);
-assert(qaStory.assessed.runway.weeks === 21, "QA weeks are 21, not the stored column 0");
-assert(Math.abs(qaNet - -15160) < 1, `QA forecast net ${qaNet}`);
+// The stored +8 week collection delay is a scenario overlay. The published
+// series lands receipts on time, nets cash in, and does not dip under the floor.
+assert(
+  qaStory.assessed.runway.label ===
+    "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway",
+  `QA runway ${qaStory.assessed.runway.label}`,
+);
+assert(qaStory.assessed.runway.weeks === null, "a cash-in base series does not store burn weeks");
+assert(Math.abs(qaNet - 4840) < 1, `QA forecast net ${qaNet}`);
 assert(Math.abs(qaStory.assessed.outlook.opening - 25000) < 1, `QA opening ${qaStory.assessed.outlook.opening}`);
 assert(
-  Math.abs((qaStory.assessed.outlook.closing.at(-1) ?? 0) - 9840) < 1,
+  Math.abs((qaStory.assessed.outlook.closing.at(-1) ?? 0) - 29840) < 1,
   `QA ending cash ${qaStory.assessed.outlook.closing.at(-1)}`,
 );
-assert(qaStory.assessed.outlook.dipsBelowFloorWeek === 5, `QA dip week ${qaStory.assessed.outlook.dipsBelowFloorWeek}`);
+assert(qaStory.assessed.outlook.dipsBelowFloorWeek == null, `QA dip week ${qaStory.assessed.outlook.dipsBelowFloorWeek}`);
 assert(
   forecastInTheBlack(
     qaStory.assessed.outlook.totalInflow,
     qaStory.assessed.outlook.totalOutflow,
     qaStory.assessed.outlook.closing.at(-1) ?? 0,
-  ) === false,
-  "QA is not in the black",
+  ) === true,
+  "QA base forecast is in the black",
 );
 assert(
   qaStory.again.opening === qaStory.assessed.outlook.opening &&
@@ -117,8 +123,12 @@ const qaSnap = buildFinancialSnapshot({
 });
 const qaRunway = qaSnap.find((row) => row.key === "runway");
 const qaCash = qaSnap.find((row) => row.key === "cash");
-assert(qaRunway?.value === "21 weeks", `snapshot runway ${qaRunway?.value}`);
-assert(qaCash?.value.includes("week 5") === true, `snapshot cash ${qaCash?.value}`);
+assert(
+  qaRunway?.value ===
+    "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway",
+  `snapshot runway ${qaRunway?.value}`,
+);
+assert(qaCash?.value.includes("stays above floor") === true, `snapshot cash ${qaCash?.value}`);
 assert(qaCash?.value.includes("25.0k") === true, `snapshot opening ${qaCash?.value}`);
 
 const yankeesNet = yankeesStory.assessed.forecastNet ?? 0;

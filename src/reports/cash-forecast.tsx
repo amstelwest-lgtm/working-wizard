@@ -23,7 +23,11 @@ import { profileCashAssumptions } from "@/lib/profile-signals";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
-import { forecastIsCashGenerative, forecastRunwayHeadline } from "@/lib/client-metrics";
+import { forecastIsCashGenerative } from "@/lib/client-metrics";
+import {
+  forecastLowestPoint,
+  forecastRunwayHeadlineShared,
+} from "@/lib/cash-forecast-parity";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -351,46 +355,41 @@ export function CashForecastPDF({
   const resolvedAssumptions = [...assumptions, ...profileCashAssumptions(operatingProfile)];
 
   const closings = weeks.map((w) => w.closing_balance);
-  const minBalance = Math.min(...closings);
+  const startBalance = weeks[0]?.opening_balance ?? 0;
+  const lowestPoint = forecastLowestPoint(startBalance, closings);
+  const minBalance = lowestPoint.amount;
   const weeksBelow = weeks.filter((w) => w.closing_balance < minimumThreshold).length;
   const firstBreach = weeks.findIndex((w) => w.closing_balance < minimumThreshold);
-  const runwayWeeks = firstBreach === -1 ? weeks.length : firstBreach;
   const totalReceipts = weeks.reduce((s, w) => s + w.total_receipts, 0);
   const totalPayments = weeks.reduce((s, w) => s + Math.abs(w.total_payments), 0);
   const endBalance = weeks[weeks.length - 1]?.closing_balance ?? 0;
-  const startBalance = weeks[0]?.opening_balance ?? 0;
 
   const firstBreachWeek = firstBreach === -1 ? null : firstBreach + 1;
   const netFlow = totalReceipts - totalPayments;
   const generative =
     Boolean(cashGenerative) && forecastIsCashGenerative(totalReceipts, totalPayments);
-  const fromSeries = forecastRunwayHeadline({
-    totalInflow: totalReceipts,
-    totalOutflow: totalPayments,
-    cashGenerative: generative,
-    weeksUntilBreach: firstBreach === -1 ? null : runwayWeeks,
-    horizonWeeks: weeks.length,
+  const sharedRunway = forecastRunwayHeadlineShared({
+    opening: startBalance,
+    closings,
+    floor: minimumThreshold,
+    runwayLabel,
+    cashGenerative: generative && startBalance >= minimumThreshold && firstBreach === -1,
   });
-  const runwayValue =
-    generative || !runwayLabel || runwayLabel === "Cash generative" || firstBreach !== -1
-      ? fromSeries
-      : runwayLabel;
+  const runwayValue = sharedRunway.headline;
+  const runwayWeeks = firstBreach === -1 ? weeks.length : firstBreach;
   const figures: HeadlineFigure[] = [
     {
       label: "Runway",
       value: runwayValue,
-      good: generative || weeksBelow === 0,
-      direction: generative || weeksBelow === 0 ? "up" : "down",
-      note:
-        weeksBelow === 0
-          ? `above ${fmtRandCompact(minimumThreshold, m)} minimum`
-          : `first dip in week ${firstBreachWeek}`,
+      good: sharedRunway.note === "above the floor",
+      direction: sharedRunway.note === "above the floor" ? "up" : "down",
+      note: sharedRunway.note,
     },
     {
       label: "Lowest Balance",
       value: fmtRandCompact(minBalance, m),
       good: minBalance >= minimumThreshold,
-      note: "projected trough",
+      note: lowestPoint.isOpening ? "opening balance" : "projected trough",
     },
     {
       label: "Closing Position",

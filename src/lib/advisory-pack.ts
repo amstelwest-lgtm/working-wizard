@@ -33,6 +33,7 @@ import {
   scoreRatio,
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
+import { forecastLowestPoint } from "@/lib/cash-forecast-parity";
 import { cashComfortThreshold } from "@/lib/cash-runway";
 import { humanizeInternalFieldNames } from "@/lib/client-brain-questions";
 import { formatMoney } from "@/lib/market";
@@ -635,6 +636,11 @@ export type PackInputs = {
   openingBalance: number | null;
   /** Weekly closing balances from the saved 13-week forecast; null = no forecast. */
   closings: number[] | null;
+  /**
+   * Canonical minimum-cash floor (`forecastMinimumCash`). Omitted callers
+   * keep the currency comfort line (R50,000 / $50,000).
+   */
+  floor?: number | null;
   cashRunwayWeeks: number | null;
   /** Same label Overview prints. Weeks are null when the business is cash generative. */
   runwayLabel?: string | null;
@@ -667,18 +673,10 @@ export function forecastLowPoint(
   opening: number | null | undefined,
   closings: readonly number[],
 ): ForecastLowPoint | null {
-  const open = opening != null && Number.isFinite(opening) ? opening : null;
-  let amount = open ?? Number.POSITIVE_INFINITY;
-  let week: number | null = null;
-  closings.forEach((closing, index) => {
-    if (!Number.isFinite(closing)) return;
-    if (closing < amount) {
-      amount = closing;
-      week = index + 1;
-    }
-  });
-  if (!Number.isFinite(amount)) return null;
-  return { amount, week };
+  const open = opening != null && Number.isFinite(opening) ? opening : Number.POSITIVE_INFINITY;
+  const low = forecastLowestPoint(open, closings);
+  if (!Number.isFinite(opening ?? NaN) && low.isOpening) return null;
+  return { amount: low.amount, week: low.isOpening ? null : low.week };
 }
 
 /** Pack sentence for a runway label. Insufficient data is a sentence, not the raw chip. */
@@ -746,7 +744,10 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const usd = packIsUsd(input.currency);
   const cur = usd ? "$" : "R";
   const money = (n: number) => packMoney(n, usd ? "USD" : "ZAR");
-  const comfort = cashComfortThreshold(usd ? "USD" : "ZAR");
+  const comfort =
+    typeof input.floor === "number" && input.floor > 0
+      ? input.floor
+      : cashComfortThreshold(usd ? "USD" : "ZAR");
   const name = input.clientName.trim() || "This business";
 
   // ── data blocks ──

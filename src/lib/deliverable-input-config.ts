@@ -455,7 +455,7 @@ function cashAssumptions(): DeliverableAssumption[] {
       engineBound: false,
       min: 0,
       step: 1000,
-      defaultLabel: `Workspace default (${CASH_RUNWAY_THRESHOLD_RAND.toLocaleString("en-ZA")}) used for runway.`,
+      defaultLabel: `Fallback only (${CASH_RUNWAY_THRESHOLD_RAND.toLocaleString("en-ZA")}) when the forecast has no outflows. The live floor is about four weeks of those outflows, not this number.`,
     },
   ];
 }

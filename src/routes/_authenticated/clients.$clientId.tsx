@@ -148,6 +148,7 @@ import {
   plBankDisagreement,
   runwayDisplayLabel,
 } from "@/lib/client-metrics";
+import { forecastRunwayHeadlineShared } from "@/lib/cash-forecast-parity";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
@@ -1276,7 +1277,13 @@ function ClientView() {
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
-    runwayLabel: runwayDisplayLabel(metricRunway),
+    runwayLabel: forecastRunwayHeadlineShared({
+      opening: cashOutlook.opening,
+      closings: cashOutlook.closing,
+      floor: cashOutlook.floor,
+      runwayLabel: runwayDisplayLabel(metricRunway),
+      cashGenerative: metricRunway.kind === "cash_generative",
+    }).headline,
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,

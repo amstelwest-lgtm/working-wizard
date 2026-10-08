@@ -489,6 +489,7 @@ export async function gatherPackInputs(
     priorRatios,
     openingBalance: overview.metrics.openingBalance,
     closings: overview.metrics.closings,
+    floor: overview.metrics.floor,
     cashRunwayWeeks: overview.metrics.cashRunwayWeeks,
     runwayLabel: overview.metrics.runwayLabel,
     recommendations,

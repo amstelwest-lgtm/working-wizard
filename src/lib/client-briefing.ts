@@ -169,10 +169,15 @@ export function buildFinancialSnapshot(input: {
     });
   }
   if (input.cash && Number.isFinite(input.cash.amount) && Number.isFinite(input.cash.floor)) {
+    const opensBelow = input.cash.amount < input.cash.floor;
     const position =
       input.cash.dipsBelowFloorWeek == null
-        ? "stays above floor"
-        : `dips below floor in week ${input.cash.dipsBelowFloorWeek}`;
+        ? opensBelow
+          ? "opens below floor"
+          : "stays above floor"
+        : opensBelow
+          ? `opens below floor; dips below floor in week ${input.cash.dipsBelowFloorWeek}`
+          : `dips below floor in week ${input.cash.dipsBelowFloorWeek}`;
     out.push({
       key: "cash",
       label: "Cash",
