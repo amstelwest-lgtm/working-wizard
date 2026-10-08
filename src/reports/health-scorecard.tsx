@@ -21,6 +21,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { DuPontStrip } from "@/components/pdf/dupont";
 import {
   computeOverallHealth,
+  PILLAR_LABELS,
   type HealthPillarId,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -72,12 +73,14 @@ export type HealthScorecardPDFProps = {
 
 const PILLARS = ["profit", "assets", "financing", "cash"] as const;
 
-const PILLAR_LABEL: Record<string, string> = {
-  profit: "Profit Drivers",
-  assets: "Asset Productivity",
-  financing: "Leverage & Finance",
-  cash: "Cash Flow",
-};
+function pillarLabel(pillar: string): string {
+  return PILLAR_LABELS[pillar as HealthPillarId] ?? pillar;
+}
+
+function unscoredPillarNote(pillar: string): string {
+  if (pillar === "financing") return "Not scored — needs balance sheet";
+  return "Not scored";
+}
 
 function tierDescription(tier: "healthy" | "at_risk" | "critical"): string {
   const band = healthBandLabel(tier);
@@ -145,6 +148,13 @@ const styles = StyleSheet.create({
   pillarScoreRow: { flexDirection: "row", alignItems: "baseline", gap: 3, marginBottom: 7 },
   pillarScore: { fontSize: 22, fontFamily: "Helvetica-Bold" },
   pillarOutOf: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint },
+  pillarUnscored: {
+    fontSize: 8,
+    fontFamily: "Helvetica",
+    color: C.muted,
+    lineHeight: 1.35,
+    marginTop: 2,
+  },
   pillarGaugeRow: { marginBottom: 8 },
   pillarCountRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   countChip: { flexDirection: "row", alignItems: "center", gap: 3 },
@@ -167,17 +177,26 @@ function PillarBox({
   const hasScore = score != null && Number.isFinite(score);
   const rounded = hasScore ? Math.round(score) : null;
 
+  if (!hasScore) {
+    return (
+      <View style={styles.pillarBox}>
+        <Text style={styles.pillarName}>{pillarLabel(pillar)}</Text>
+        <Text style={styles.pillarUnscored}>{unscoredPillarNote(pillar)}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.pillarBox}>
-      <Text style={styles.pillarName}>{PILLAR_LABEL[pillar]}</Text>
+      <Text style={styles.pillarName}>{pillarLabel(pillar)}</Text>
       <View style={styles.pillarScoreRow}>
-        <Text style={[styles.pillarScore, { color: hasScore ? scoreColor(rounded!) : C.faint }]}>
-          {rounded ?? "—"}
+        <Text style={[styles.pillarScore, { color: scoreColor(rounded!) }]}>
+          {rounded}
         </Text>
         <Text style={styles.pillarOutOf}>/ 100</Text>
       </View>
       <View style={styles.pillarGaugeRow}>
-        <HealthScoreGauge score={hasScore ? score : 0} height={5} />
+        <HealthScoreGauge score={rounded!} height={5} />
       </View>
       <View style={styles.pillarCountRow}>
         {counts.critical > 0 && (
@@ -286,7 +305,7 @@ export function HealthScorecardPDF({
   );
   const pillarChoices = scoredPillarData.map((p) => ({
     id: p.pillar,
-    label: PILLAR_LABEL[p.pillar],
+    label: pillarLabel(p.pillar),
     score: p.score,
   }));
   const bestPillar = pickPillarExtreme(pillarChoices, "strongest");
@@ -425,7 +444,7 @@ export function HealthScorecardPDF({
       <View break>
         {pillarData.map(({ pillar, score, ratios }) => (
           <View key={pillar} style={styles.pillarSection}>
-            <SectionHeader title={PILLAR_LABEL[pillar]} score={score ?? undefined} />
+            <SectionHeader title={pillarLabel(pillar)} score={score ?? undefined} />
             {ratios.map((r, i) => {
               const spelled = spellLabor(r.ratio_name, market ?? ZA_MARKET);
               const percent = r.formatted_value.split(" · ")[0] ?? r.formatted_value;

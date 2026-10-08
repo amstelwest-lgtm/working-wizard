@@ -9,9 +9,13 @@
 -- Or:
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/seed-outreach-sample.sql
 --
--- Sign-in after it succeeds:
---   email:    alex.rivera@northwind-advisory.example
---   password: HarborSample-2026
+-- The script does not set a login password and does not store one.
+-- After it succeeds, set the password in the Supabase dashboard:
+--   Authentication → Users → alex.rivera@northwind-advisory.example
+--   → set a password, or send a recovery link.
+-- Re-running the script does not overwrite a password you already set.
+--
+-- Sign-in email: alex.rivera@northwind-advisory.example
 --
 -- Export the samples (logged in as Alex):
 --   1. Open client "Harbor & Pine Supply Co." (is_demo = true, US / USD).
@@ -66,7 +70,7 @@ BEGIN
     'authenticated',
     'authenticated',
     'alex.rivera@northwind-advisory.example',
-    crypt('HarborSample-2026', gen_salt('bf')),
+    crypt(gen_random_uuid()::text, gen_salt('bf')),
     now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"full_name":"Alex Rivera, CPA (fictional)"}'::jsonb,
@@ -76,7 +80,6 @@ BEGIN
   )
   ON CONFLICT (id) DO UPDATE
     SET email = EXCLUDED.email,
-        encrypted_password = EXCLUDED.encrypted_password,
         email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
         raw_user_meta_data = EXCLUDED.raw_user_meta_data,
         updated_at = now();

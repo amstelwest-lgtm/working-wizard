@@ -79,13 +79,10 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
                   style={{ height: 16, width: 64, objectFit: "contain", marginBottom: 2 }}
                 />
               ) : null}
-              <View style={styles.signoffRow}>
-                {signoffFooterSegments(reviewSignoff, signoffDate ?? "").map((segment, index) => (
-                  <Text
-                    key={`${index}-${segment}`}
-                    style={index === 0 ? styles.signoff : [styles.signoff, { marginLeft: 3 }]}
-                  >
-                    {segment}
+              <View>
+                {signoffFooterSegments(reviewSignoff, signoffDate ?? "").map((line, index) => (
+                  <Text key={`${index}-${line}`} style={styles.signoff}>
+                    {line}
                   </Text>
                 ))}
               </View>

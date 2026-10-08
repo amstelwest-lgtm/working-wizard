@@ -97,7 +97,7 @@ export function AdvisoryPackPDF({
         <Text style={S.empty}>This pack has no sections yet.</Text>
       ) : (
         sections.map((section, i) => (
-          <View key={`${section.title}-${i}`}>
+          <View key={`${section.title}-${i}`} minPresenceAhead={88}>
             <SectionHeader title={pdfSafeText(section.title)} />
             {lines(section.body).map((line, li) => (
               <Text key={li} style={S.body}>

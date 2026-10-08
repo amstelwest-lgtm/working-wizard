@@ -18,16 +18,21 @@
 import { formatSnapshotRatio, groundAdvisoryNarrative } from "@/lib/advisory-narrative";
 import { ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import type { Json } from "@/integrations/supabase/types";
-import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  RUNWAY_INSUFFICIENT_LABEL,
+  runwayDisplayLabel,
+} from "@/lib/client-metrics";
 import {
   type HealthPillarId,
   type OverallHealth,
   type ScoreMarket,
-  computeOverallHealth,
   overviewRatios,
   pillarForRatioName,
+  scorecardHealthFromFinancials,
   scoreRatio,
 } from "@/lib/health-score";
+import { periodMonthsOf } from "@/lib/ratios";
 import { cashComfortThreshold } from "@/lib/cash-runway";
 import { humanizeInternalFieldNames } from "@/lib/client-brain-questions";
 import { formatMoney } from "@/lib/market";
@@ -433,7 +438,7 @@ export function advisoryPackFiguresChanged(
 ): boolean {
   if (!content) return false;
   const body = content.sections?.find((section) => section.key === "forecast")?.body ?? "";
-  if (current.runwayLabel && !body.includes(current.runwayLabel)) return true;
+  if (current.runwayLabel && !forecastBodyMentionsRunway(body, current.runwayLabel)) return true;
   const packed = content.health?.overall;
   if (
     current.healthScore != null &&
@@ -549,9 +554,20 @@ export function livePackMetrics(input: {
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
       ? assessed.runway.weeks
       : null;
-  const ratios = overviewRatios(input.financials, { fyStartMonth: input.fyStartMonth });
-  const health = computeOverallHealth({
-    ratios,
+  // Same cover and helper as the scorecard PDF and Overview. A year-span
+  // annualisation (unlocked 12 read as January–September) scores different
+  // inventory and working-capital days than `periodMonthsOf`.
+  const periodMonths = periodMonthsOf(
+    (input.financials ?? null) as Record<string, unknown> | null,
+  );
+  const ratios = overviewRatios(input.financials, {
+    fyStartMonth: input.fyStartMonth,
+    periodMonths,
+  });
+  const health = scorecardHealthFromFinancials({
+    financials: input.financials,
+    fyStartMonth: input.fyStartMonth,
+    periodMonths,
     cashRunwayWeeks: runwayWeeks,
     market: input.market ?? undefined,
     shortfallWeek: assessed.outlook.shortfallWeek,
@@ -634,6 +650,55 @@ export type PackInputs = {
 
 const MOVE_THRESHOLD = 0.05;
 const WEAK_SCORE = 40;
+
+export type ForecastLowPoint = {
+  /** Lowest of the opening balance and the weekly closings. */
+  amount: number;
+  /** 1-based closing week when that week is strictly the low. Null when the opening is the low. */
+  week: number | null;
+};
+
+/**
+ * Trough of a 13-week forecast. The opening balance is in the minimum —
+ * a later closing cannot be reported as the low when it is higher than
+ * the cash the forecast started from.
+ */
+export function forecastLowPoint(
+  opening: number | null | undefined,
+  closings: readonly number[],
+): ForecastLowPoint | null {
+  const open = opening != null && Number.isFinite(opening) ? opening : null;
+  let amount = open ?? Number.POSITIVE_INFINITY;
+  let week: number | null = null;
+  closings.forEach((closing, index) => {
+    if (!Number.isFinite(closing)) return;
+    if (closing < amount) {
+      amount = closing;
+      week = index + 1;
+    }
+  });
+  if (!Number.isFinite(amount)) return null;
+  return { amount, week };
+}
+
+/** Pack sentence for a runway label. Insufficient data is a sentence, not the raw chip. */
+export function packRunwayPhrase(label: string | null | undefined): string | null {
+  const text = label?.trim();
+  if (!text) return null;
+  if (text === RUNWAY_INSUFFICIENT_LABEL) return "Runway can't be estimated yet";
+  return `Runway ${text}`;
+}
+
+function forecastBodyMentionsRunway(body: string, label: string): boolean {
+  if (body.includes(label)) return true;
+  const phrase = packRunwayPhrase(label);
+  return phrase != null && body.includes(phrase);
+}
+
+function forecastLowPhrase(amount: number, week: number | null, money: (n: number) => string): string {
+  if (week == null) return `${money(amount)}, the opening balance`;
+  return `${money(amount)} in week ${week}`;
+}
 
 function packIsUsd(currency: string | null | undefined): boolean {
   const code = (currency ?? "").trim().toUpperCase();
@@ -718,23 +783,18 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
 
   let forecast: PackForecastBlock | null = null;
   if (input.closings && input.closings.length > 0) {
-    let lowest = Number.POSITIVE_INFINITY;
-    let lowestWeek = 0;
-    input.closings.forEach((c, i) => {
-      if (c < lowest) {
-        lowest = c;
-        lowestWeek = i + 1;
-      }
-    });
-    forecast = {
-      openingBalance: input.openingBalance,
-      lowestClosing: lowest,
-      lowestWeek,
-      breachesZero: lowest < 0,
-      breachesThreshold: lowest < comfort,
-      runwayWeeks: input.cashRunwayWeeks,
-      horizonWeeks: input.closings.length,
-    };
+    const low = forecastLowPoint(input.openingBalance, input.closings);
+    if (low) {
+      forecast = {
+        openingBalance: input.openingBalance,
+        lowestClosing: low.amount,
+        lowestWeek: low.week,
+        breachesZero: low.amount < 0,
+        breachesThreshold: low.amount < comfort,
+        runwayWeeks: input.cashRunwayWeeks,
+        horizonWeeks: input.closings.length,
+      };
+    }
   }
 
   const quotedRatios = input.narrativeRatios ?? input.ratios;
@@ -797,20 +857,21 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     stateLines.push(`${name} has no scorable figures yet, so the health score is not available.`);
   }
   if (forecast) {
+    const lowText = forecastLowPhrase(forecast.lowestClosing ?? 0, forecast.lowestWeek, money);
     stateLines.push(
       forecast.breachesZero
-        ? `The 13-week cash forecast goes below zero in week ${forecast.lowestWeek} (lowest point ${money(
-            forecast.lowestClosing ?? 0,
-          )}).`
-        : forecast.breachesThreshold
-          ? `The 13-week cash forecast stays positive but dips to ${money(
+        ? forecast.lowestWeek == null
+          ? `The opening balance is already below zero (lowest point ${lowText}).`
+          : `The 13-week cash forecast goes below zero in week ${forecast.lowestWeek} (lowest point ${money(
               forecast.lowestClosing ?? 0,
-            )} in week ${forecast.lowestWeek}, under the ${money(comfort)} comfort line.`
-          : `The 13-week cash forecast stays above the ${money(
-              comfort,
-            )} comfort line throughout (lowest ${money(forecast.lowestClosing ?? 0)} in week ${
-              forecast.lowestWeek
-            }).`,
+            )}).`
+        : forecast.breachesThreshold
+          ? forecast.lowestWeek == null
+            ? `The opening balance of ${money(forecast.lowestClosing ?? 0)} is under the ${money(comfort)} comfort line.`
+            : `The 13-week cash forecast stays positive but dips to ${money(
+                forecast.lowestClosing ?? 0,
+              )} in week ${forecast.lowestWeek}, under the ${money(comfort)} comfort line.`
+          : `The 13-week cash forecast stays above the ${money(comfort)} comfort line throughout (lowest ${lowText}).`,
     );
   }
   if (input.openActions > 0) {
@@ -849,11 +910,15 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   }
   if (forecast?.breachesZero) {
     mattersBullets.push(
-      `Cash runs out in week ${forecast.lowestWeek} on current assumptions. Every recommendation below is judged first on whether it moves that week.`,
+      forecast.lowestWeek == null
+        ? "The opening balance is already below zero. Every recommendation below is judged first on whether it repairs that."
+        : `Cash runs out in week ${forecast.lowestWeek} on current assumptions. Every recommendation below is judged first on whether it moves that week.`,
     );
   } else if (forecast?.breachesThreshold) {
     mattersBullets.push(
-      `Cash is thin in week ${forecast.lowestWeek}; a late debtor or an early supplier bill turns thin into negative.`,
+      forecast.lowestWeek == null
+        ? "The opening balance is already under the comfort line; a late debtor or an early supplier bill turns thin into negative."
+        : `Cash is thin in week ${forecast.lowestWeek}; a late debtor or an early supplier bill turns thin into negative.`,
     );
   }
   if (gaps.some((g) => g.severity === "critical")) {
@@ -862,19 +927,26 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     );
   }
 
+  const runwaySentence = packRunwayPhrase(input.runwayLabel);
   const forecastBody = !forecast
     ? "No 13-week cash forecast has been published yet, so this pack cannot say when cash gets tight. Publishing one is the fastest way to sharpen every recommendation."
     : forecast.openingBalance === null || forecast.openingBalance === 0
-      ? `The forecast has no opening bank balance, so its runway starts from zero and the week-${forecast.lowestWeek} low of ${money(
-          forecast.lowestClosing ?? 0,
-        )} is understated by whatever is actually in the bank.${
-          input.runwayLabel ? ` Runway ${input.runwayLabel}.` : ""
+      ? `The forecast has no opening bank balance, so its runway starts from zero and the ${
+          forecast.lowestWeek == null ? "opening" : `week-${forecast.lowestWeek}`
+        } low of ${money(forecast.lowestClosing ?? 0)} is understated by whatever is actually in the bank.${
+          runwaySentence ? ` ${runwaySentence}.` : ""
         }`
-      : `Opening balance ${money(forecast.openingBalance)}; lowest point ${money(
+      : `Opening balance ${money(forecast.openingBalance)}; lowest point ${forecastLowPhrase(
           forecast.lowestClosing ?? 0,
-        )} in week ${forecast.lowestWeek} of ${forecast.horizonWeeks}${
-          input.runwayLabel
-            ? `. Runway ${input.runwayLabel}`
+          forecast.lowestWeek,
+          money,
+        )}${
+          forecast.lowestWeek == null
+            ? `, across ${forecast.horizonWeeks} weeks`
+            : ` of ${forecast.horizonWeeks}`
+        }${
+          runwaySentence
+            ? `. ${runwaySentence}`
             : forecast.runwayWeeks !== null && forecast.runwayWeeks < forecast.horizonWeeks
               ? `; runway ${forecast.runwayWeeks} week${forecast.runwayWeeks === 1 ? "" : "s"} before the comfort line`
               : ""
@@ -1022,7 +1094,11 @@ function buildHeadline(
     parts.push(`${name} has no health score yet`);
   }
   if (forecast?.breachesZero) {
-    parts.push(`cash goes negative in week ${forecast.lowestWeek}`);
+    parts.push(
+      forecast.lowestWeek == null
+        ? "the opening balance is already negative"
+        : `cash goes negative in week ${forecast.lowestWeek}`,
+    );
   } else if (weak[0]) {
     parts.push(`${weak[0].name} at ${weak[0].formatted} is the number to move`);
   }

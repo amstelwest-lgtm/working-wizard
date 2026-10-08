@@ -8,7 +8,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createElement } from "react";
-import { assessClientMetrics } from "../src/lib/client-metrics";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "../src/lib/scorecard-rows";
 import { resolveMarket } from "../src/lib/market/resolve";
@@ -121,27 +120,41 @@ async function main() {
   const { AdvisoryPackPDF } = await import("../src/reports/advisory-pack");
 
   const rawRatios = scorecardRatiosFromFinancials(financials, { fyStartMonth: 1 });
-  const assessed = assessClientMetrics({
+  const live = livePackMetrics({
     financials,
-    cashflow: null,
-    financialsUpdatedAt: "2026-09-30T12:00:00.000Z",
-    timeZone: market.timezone,
     fyStartMonth: 1,
-  });
-  const runwayWeeks =
-    assessed.runway.kind === "weeks" || assessed.runway.kind === "zero" ? assessed.runway.weeks : null;
-  const ratioResults = buildScorecardRatioResults(rawRatios, market, {
-    cashFlowKnown: cashFlowKnown(financials),
-    periodMonths: 12,
+    market,
+    timeZone: market.timezone,
+    financialsUpdatedAt: "2026-09-30T12:00:00.000Z",
   });
   const overallHealth = scorecardHealthFromFinancials({
     financials,
     fyStartMonth: 1,
     periodMonths: 12,
-    cashRunwayWeeks: runwayWeeks,
+    cashRunwayWeeks: live.cashRunwayWeeks,
     market,
-    shortfallWeek: assessed.outlook.shortfallWeek,
+    shortfallWeek: null,
   });
+  if (live.health.overall !== overallHealth.overall) {
+    throw new Error(`score split: pack ${live.health.overall} vs scorecard ${overallHealth.overall}`);
+  }
+  for (const pillar of overallHealth.pillars) {
+    const packed = live.health.pillars.find((row) => row.id === pillar.id);
+    if (packed?.score !== pillar.score || packed?.label !== pillar.label) {
+      throw new Error(
+        `pillar split ${pillar.id}: pack ${packed?.label} ${packed?.score} vs scorecard ${pillar.label} ${pillar.score}`,
+      );
+    }
+  }
+  const ratioResults = buildScorecardRatioResults(rawRatios, market, {
+    cashFlowKnown: cashFlowKnown(financials),
+    periodMonths: 12,
+  });
+  console.log(
+    "shared score",
+    overallHealth.overall,
+    overallHealth.pillars.map((pillar) => `${pillar.label} ${pillar.score ?? "unscored"}`).join(", "),
+  );
 
   const scorecard = createElement(HealthScorecardPDF, {
     smeData: SME,
@@ -150,7 +163,7 @@ async function main() {
     isDemo: false,
     sample: true,
     reviewSignoff: SIGNOFF,
-    cashRunwayWeeks: runwayWeeks,
+    cashRunwayWeeks: live.cashRunwayWeeks,
     overallHealth,
     market,
   });
@@ -174,7 +187,6 @@ async function main() {
   writeFileSync(roadPath, roadPdf);
   pagePng(roadPath, `${OUT}/sample-roadmap-page1.png`);
 
-  const live = livePackMetrics({ financials, fyStartMonth: 1, market, timeZone: market.timezone });
   const pack = buildAdvisoryPack({
     clientName: SME.name,
     firmName: PROFILE.firmName,
@@ -182,7 +194,7 @@ async function main() {
     periodLabel: "September 2026",
     priorPeriodLabel: null,
     figuresAsOf: "2026-09-30",
-    health: live.health,
+    health: overallHealth,
     ratios: live.ratios,
     narrativeRatios: packNarrativeRatios(financials, live.ratios),
     priorRatios: null,

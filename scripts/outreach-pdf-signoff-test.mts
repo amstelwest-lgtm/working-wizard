@@ -2,7 +2,13 @@
  * Outreach PDF sign-off, sample stamp, and the advisory-pack currency fixes.
  * Run: pnpm test:outreach-pdf-signoff
  */
-import { buildAdvisoryPack, packSectionsForPdf, signedPackNextStep } from "../src/lib/advisory-pack";
+import {
+  buildAdvisoryPack,
+  livePackMetrics,
+  packSectionsForPdf,
+  signedPackNextStep,
+} from "../src/lib/advisory-pack";
+import { scorecardHealthFromFinancials } from "../src/lib/health-score";
 import { groundAdvisoryNarrative } from "../src/lib/advisory-narrative";
 import { humanizeInternalFieldNames, humanQuestionLabel } from "../src/lib/client-brain-questions";
 import { spellForMarket } from "../src/lib/market";
@@ -39,16 +45,21 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
 {
   const segments = signoffFooterSegments(
     {
-      signedOffByName: "James Fleming",
-      signedOffByInitials: "JF",
+      signedOffByName: "Alex Rivera, CPA (fictional)",
+      signedOffByInitials: "AR",
       signedOffByTitle: null,
-      firmName: "Ben Accountants",
+      firmName: "Northwind Advisory (Sample)",
     },
     "Oct 7, 2026, 7:01 PM EDT",
   );
-  assert(segments[0] === "Reviewed & signed off by", segments.join(" | "));
-  assert(segments.slice(1).every((part) => part.startsWith("·\u00A0")), segments.join(" | "));
-  assert(!segments[0].endsWith("·"), "the first segment does not end on a separator");
+  assert(
+    segments[0] ===
+      "Reviewed & signed off · Alex Rivera, CPA (fictional) · Oct 7, 2026, 7:01 PM EDT",
+    segments.join(" | "),
+  );
+  assert(segments[1] === "Northwind Advisory (Sample)", segments.join(" | "));
+  assert(!segments.join(" ").includes("AR"), segments.join(" | "));
+  assert(!segments.some((line) => line.trim().startsWith("·")), segments.join(" | "));
 }
 
 {
@@ -105,7 +116,7 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
     openingBalance: 128450,
     closings: Array.from({ length: 13 }, () => 134200),
     cashRunwayWeeks: null,
-    runwayLabel: "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway",
+    runwayLabel: "Not enough data",
     recommendations: [],
     dataRequests: [],
     openActions: 0,
@@ -116,8 +127,15 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
   const forecast = pack.sections.find((s) => s.key === "forecast")!.body;
   const state = pack.sections.find((s) => s.key === "state_of_business")!.body;
   assert(forecast.includes("$128,450"), forecast);
-  assert(forecast.includes("$134,200"), forecast);
+  assert(forecast.includes("the opening balance"), forecast);
+  assert(!forecast.includes("$134,200"), forecast);
+  assert(!forecast.includes("in week 1"), forecast);
+  assert(forecast.includes("Runway can't be estimated yet"), forecast);
+  assert(!forecast.includes("Not enough data"), forecast);
   assert(state.includes("$50,000"), state);
+  assert(state.includes("the opening balance"), state);
+  assert(!state.includes("$134,200"), state);
+  assert(!state.includes("in week 1"), state);
   assert(!forecast.includes("R128") && !state.includes("R50") && !state.includes("R 50"), state);
   assert(
     pack.sections.some((s) => s.key === "recommendations"),
@@ -168,6 +186,42 @@ const us = resolveMarket({ country: "US", regionCode: "NY" });
     SAMPLE_STAMP_LINE === "Fictional business and reviewer; figures illustrative",
     SAMPLE_STAMP_LINE,
   );
+}
+
+{
+  const financials = {
+    revenue: "700000",
+    cogs: "280000",
+    ebit: "60000",
+    receivables: "48500",
+    payables: "28500",
+    inventory: "62000",
+    cash: "128450",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  };
+  const scorecard = scorecardHealthFromFinancials({
+    financials,
+    fyStartMonth: 1,
+    periodMonths: 12,
+    market: us,
+  });
+  const pack = livePackMetrics({ financials, fyStartMonth: 1, market: us });
+  assert(scorecard.overall === 49, `scorecard ${scorecard.overall}`);
+  assert(pack.health.overall === scorecard.overall, `pack ${pack.health.overall} vs scorecard ${scorecard.overall}`);
+  for (const pillar of scorecard.pillars) {
+    const packed = pack.health.pillars.find((row) => row.id === pillar.id);
+    assert(packed?.score === pillar.score, `${pillar.id} ${packed?.score} vs ${pillar.score}`);
+    assert(packed?.label === pillar.label, `${pillar.id} label ${packed?.label} vs ${pillar.label}`);
+  }
+  const byId = Object.fromEntries(scorecard.pillars.map((pillar) => [pillar.id, pillar]));
+  assert(byId.profit?.label === "Profit Drivers" && byId.profit.score === 71, JSON.stringify(byId.profit));
+  assert(
+    byId.assets?.label === "Asset Productivity" && byId.assets.score === 10,
+    JSON.stringify(byId.assets),
+  );
+  assert(byId.financing?.label === "Leverage & Finance" && byId.financing.score === null, JSON.stringify(byId.financing));
+  assert(byId.cash?.label === "Cash Flow" && byId.cash.score === 65, JSON.stringify(byId.cash));
 }
 
 console.log("outreach-pdf-signoff: ok");

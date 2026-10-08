@@ -133,8 +133,8 @@ export function pdfSignoffBadgeLine(
 }
 
 /**
- * Footer segments. Each segment after the first carries its separator so a
- * wrap starts with "· " instead of leaving a hanging dot at the end of the line.
+ * Footer lines. Initials stay off this line. The firm is its own line, with
+ * no leading dot, so a wrap cannot start with "·".
  */
 export function signoffFooterSegments(
   stamp: {
@@ -148,14 +148,12 @@ export function signoffFooterSegments(
   const titled = stamp.signedOffByTitle?.trim()
     ? `${stamp.signedOffByName.trim()}, ${stamp.signedOffByTitle.trim()}`
     : stamp.signedOffByName.trim();
-  const parts = ["Reviewed & signed off by"];
-  const initials = stamp.signedOffByInitials?.trim();
-  if (initials) parts.push(initials);
-  parts.push(titled);
-  const firm = stamp.firmName?.trim();
-  if (firm) parts.push(firm);
+  const parts = ["Reviewed & signed off", titled];
   if (when.trim()) parts.push(when.trim());
-  return parts.map((part, index) => (index === 0 ? part : `·\u00A0${part}`));
+  const lines = [parts.join(" · ")];
+  const firm = stamp.firmName?.trim();
+  if (firm) lines.push(firm);
+  return lines;
 }
 
 export function stampFromSignoff(
