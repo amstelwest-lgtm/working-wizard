@@ -135,12 +135,22 @@ export function isFirstUpload(meta: ClientFreshness | null | undefined): boolean
   return !meta.financials_updated_at && !meta.last_forecast_at && !meta.budget_updated_at;
 }
 
-/** First upload fills everything; afterwards the checkboxes decide. */
+/** A P&L or a balance sheet on its own. Mixed packs still fill every deliverable. */
+export function isSingleStatementKind(kind: StatementUploadKind | null | undefined): boolean {
+  return kind === "balance_sheet" || kind === "income_statement";
+}
+
+/**
+ * First upload of a mixed pack fills everything. A single statement honours
+ * the checkboxes, which start with the other statement's deliverables off.
+ * Later uploads always honour the checkboxes.
+ */
 export function resolveAutoPopulatePlan(opts: {
   firstUpload: boolean;
   prefs: AutoPopulatePlan;
+  statementKind?: StatementUploadKind | null;
 }): AutoPopulatePlan {
-  if (opts.firstUpload) return allOnPlan();
+  if (opts.firstUpload && !isSingleStatementKind(opts.statementKind)) return allOnPlan();
   return {
     profitability: Boolean(opts.prefs.profitability),
     cash_forecast: Boolean(opts.prefs.cash_forecast),
@@ -182,6 +192,13 @@ export type AutoPopulateContext = {
   fyStartMonth?: number | null;
   /** Earliest month covered by the upload (YYYY-MM). */
   firstActualsMonth?: string | null;
+  /**
+   * Statement that produced `fields`. A single statement does not refresh the
+   * other statement's deliverables, including on the first upload.
+   */
+  statementKind?: StatementUploadKind | null;
+  /** Balance-sheet date (YYYY-MM-DD). The cash opening is dated on this day. */
+  cashOpeningDate?: string | null;
   market: ResolvedMarket;
   now?: string;
 };
@@ -292,8 +309,13 @@ export function buildAutoPopulateWrites(
     changes.push("Profitability figures refreshed from the upload");
   }
 
+  // A balance sheet refreshes the cash opening. It must not rebuild the
+  // forecast from P&L figures that belong to the other statement.
+  const balanceOpeningOnly =
+    ctx.statementKind === "balance_sheet" && !plan.budget && !ctx.cashDraft;
+  const openingDate = ctx.cashOpeningDate?.trim() ?? "";
   let seededDoc: BudgetDocument | null = null;
-  if (plan.budget || (plan.cash_forecast && !ctx.cashDraft)) {
+  if (!balanceOpeningOnly && (plan.budget || (plan.cash_forecast && !ctx.cashDraft))) {
     if (hasFigures(ctx.fields)) {
       const doc = resolveBudgetDocForAutoPopulate(ctx);
       const seeded = seedBudgetFromFinancials(doc, ctx.fields);
@@ -324,21 +346,46 @@ export function buildAutoPopulateWrites(
       payload = budgetToCashForecastPayload(seededDoc);
       const openingCash = parseFloat(String(ctx.fields.cash ?? "")) || 0;
       const typedOpening = isTypedForecastOpening(ctx.existingCashflow);
+      let adoptedStatementCash = false;
       if (typedOpening && ctx.existingCashflow?.openingBalance) {
         payload = { ...payload, openingBalance: String(ctx.existingCashflow.openingBalance) };
       } else if (openingCash > 0) {
         payload = { ...payload, openingBalance: String(openingCash) };
+        adoptedStatementCash = true;
       }
+      if (adoptedStatementCash && openingDate) payload = { ...payload, startDate: openingDate };
       changes.push("Cash forecast drafted from the budget's first three months");
     } else if (ctx.existingCashflow && !isTypedForecastOpening(ctx.existingCashflow)) {
       // A later balance sheet has cash but no P&L to reseed. The forecast
       // already exists (often opening 0). Write the cash line onto it so the
       // board and the bank-balance prompt stop treating cash as missing.
+      // The opening is dated on the balance sheet, not the week of the upload.
       const openingCash =
         parseFloat(String(ctx.fields.cash ?? "").replace(/[^0-9.-]/g, "")) || 0;
       const current = parseFloat(String(ctx.existingCashflow.openingBalance ?? ""));
-      if (openingCash > 0 && (!Number.isFinite(current) || Math.abs(current - openingCash) >= 0.5)) {
-        payload = { ...ctx.existingCashflow, openingBalance: String(openingCash) };
+      const dateMoves = Boolean(openingDate) && ctx.existingCashflow.startDate !== openingDate;
+      if (
+        openingCash > 0 &&
+        (dateMoves || !Number.isFinite(current) || Math.abs(current - openingCash) >= 0.5)
+      ) {
+        payload = {
+          ...ctx.existingCashflow,
+          openingBalance: String(openingCash),
+          ...(openingDate ? { startDate: openingDate } : {}),
+        };
+        changes.push("Cash forecast opening set from the statement cash balance");
+      }
+    } else if (ctx.statementKind === "balance_sheet" && !isTypedForecastOpening(ctx.existingCashflow)) {
+      const openingCash =
+        parseFloat(String(ctx.fields.cash ?? "").replace(/[^0-9.-]/g, "")) || 0;
+      if (openingCash > 0) {
+        payload = {
+          revenue: [],
+          expenses: [],
+          other: [],
+          openingBalance: String(openingCash),
+          ...(openingDate ? { startDate: openingDate } : {}),
+        };
         changes.push("Cash forecast opening set from the statement cash balance");
       }
     }

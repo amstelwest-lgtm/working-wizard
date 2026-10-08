@@ -11,6 +11,7 @@ import type { BalanceSheet, ExtractionResult, IncomeStatement, Money } from "./f
 import { coherentEquity } from "./equity-coherence.ts";
 import type { RatioInputs } from "./ratios.ts";
 import { currentPeriodProfit } from "./statement-balance.ts";
+import type { StatementKind } from "./statement-parse.ts";
 
 export type PeriodFinancials = RatioInputs & {
   cash: string;
@@ -281,6 +282,23 @@ export function applyBalanceSheetTotals(result: ExtractionResult): ExtractionRes
  * EBIT, EBT, and net profit are derived when the statement has the ingredients
  * but not the subtotal. Cash comes from the bank / cash line, then cash at end.
  */
+function sectionHasAmount(value: unknown): boolean {
+  if (typeof value === "number") return Number.isFinite(value);
+  if (!value || typeof value !== "object") return false;
+  return Object.values(value as Record<string, unknown>).some(sectionHasAmount);
+}
+
+/** Which statement the extraction actually contains. Nulls do not count. */
+export function statementKindFromExtraction(result: ExtractionResult): StatementKind {
+  const figures = result.current_period?.figures;
+  const income = sectionHasAmount(figures?.income_statement);
+  const balance = sectionHasAmount(figures?.balance_sheet);
+  if (income && balance) return "mixed";
+  if (balance) return "balance_sheet";
+  if (income) return "income_statement";
+  return "unknown";
+}
+
 export function periodFinancialsFromExtraction(result: ExtractionResult): PeriodFinancials {
   const prepared = applyBalanceSheetTotals(result);
   const income = prepared.current_period.figures.income_statement as LooseIncome;

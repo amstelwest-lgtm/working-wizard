@@ -5968,6 +5968,7 @@ function Index() {
                     financials: fields,
                     periodDate: periodEnd,
                     source: "upload",
+                    statementKind: statementKindFromMetadata(reviewMeta),
                   }).then((saved) => {
                     if (saved.error) {
                       toast.error(`Could not save the past period: ${saved.error}`);
@@ -6022,6 +6023,8 @@ function Index() {
                         autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
                       ),
                       firstUpload: autoPopulateState?.firstUpload,
+                      statementKind: uploadKind,
+                      cashOpeningDate: uploadKind === "balance_sheet" ? periodEnd : null,
                       firstActualsMonth: periodEnd ? periodEnd.slice(0, 7) : null,
                       fallbackMarket: workspaceMarket,
                       surface: "owner_app",

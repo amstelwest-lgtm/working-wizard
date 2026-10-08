@@ -7,6 +7,7 @@ import { computeOverallHealth } from "../src/lib/health-score";
 import { periodProfitBridge } from "../src/lib/period-profit";
 import {
   mergeStatementFields,
+  mergeStatementFinancials,
   parseStatementText,
 } from "../src/lib/statement-parse";
 import {
@@ -136,5 +137,93 @@ const typedOpening = buildAutoPopulateWrites(
 );
 assert(!("cashflow" in typedOpening.update), "a typed opening is left alone");
 assert(scored.pillars.find((pillar) => pillar.id === "cash")?.score === 85, "known cash still scores runway");
+
+function blankedImport(
+  parsed: Record<string, string | undefined>,
+  kind: "income_statement" | "balance_sheet",
+): Record<string, string> {
+  const incomeKeys = ["revenue", "cogs", "netIncome", "ebit", "ebitda", "ebt", "grossProfit", "fixedCosts", "laborCost"];
+  const balanceKeys = ["cash", "receivables", "inventory", "payables", "totalAssets", "equity", "currentAssets", "currentLiabilities", "totalLiabilities"];
+  const incoming: Record<string, string> = {};
+  for (const key of [...incomeKeys, ...balanceKeys]) incoming[key] = "";
+  const own = kind === "income_statement" ? incomeKeys : balanceKeys;
+  for (const key of own) {
+    const value = parsed[key];
+    if (value) incoming[key] = value;
+  }
+  return incoming;
+}
+
+const plImport = blankedImport(income.fields, "income_statement");
+const bsImport = blankedImport(balance.fields, "balance_sheet");
+const afterPl = mergeStatementFinancials(null, plImport, "income_statement");
+const plThenBs = mergeStatementFinancials(afterPl, bsImport, "balance_sheet");
+for (const key of ["revenue", "cogs", "netIncome", "ebit", "ebitda", "ebt"] as const) {
+  assert(plThenBs[key] === income.fields[key], `P&L then BS keeps ${key} (${String(plThenBs[key])})`);
+}
+assert(plThenBs.cash === "46300", `P&L then BS adds cash (${String(plThenBs.cash)})`);
+assert(plThenBs.totalAssets === "179200", `P&L then BS adds assets (${String(plThenBs.totalAssets)})`);
+assert(plThenBs.receivables === "38900", "P&L then BS adds receivables");
+assert(String(plThenBs.revenue) !== "", "P&L then BS does not blank revenue");
+
+const afterBs = mergeStatementFinancials(null, bsImport, "balance_sheet");
+const bsThenPl = mergeStatementFinancials(afterBs, plImport, "income_statement");
+assert(bsThenPl.cash === "46300", "BS then P&L keeps cash");
+assert(bsThenPl.totalAssets === "179200", "BS then P&L keeps total assets");
+assert(bsThenPl.equity === balance.fields.equity, "BS then P&L keeps equity");
+assert(bsThenPl.revenue === "412000", "BS then P&L adds revenue");
+assert(bsThenPl.netIncome === "38200", "BS then P&L adds net income");
+
+const replUpload = mergeStatementFinancials(
+  plThenBs,
+  { ...plImport, revenue: "500000", netIncome: "40000" },
+  "income_statement",
+);
+assert(replUpload.revenue === "500000", "re-uploading a P&L updates revenue");
+assert(replUpload.netIncome === "40000", "re-uploading a P&L updates net income");
+assert(replUpload.cash === "46300", "re-uploading a P&L keeps cash");
+const rebsUpload = mergeStatementFinancials(plThenBs, { ...bsImport, cash: "50000" }, "balance_sheet");
+assert(rebsUpload.cash === "50000", "re-uploading a balance sheet updates cash");
+assert(rebsUpload.revenue === "412000", "re-uploading a balance sheet keeps revenue");
+assert(rebsUpload.cogs === "171000", "re-uploading a balance sheet keeps cogs");
+
+const poisonedSnapshot = mergeStatementFinancials(
+  { revenue: "412000", cash: "1", fieldSources: { revenue: "income_statement" } },
+  { revenue: "999", cash: "46300", cogs: "", fieldSources: { revenue: "balance_sheet", cash: "balance_sheet" } },
+  "balance_sheet",
+);
+assert(poisonedSnapshot.revenue === "412000", "a balance sheet cannot overwrite revenue");
+const sources = poisonedSnapshot.fieldSources as Record<string, string>;
+assert(sources.revenue === "income_statement", "untouched revenue keeps its source");
+assert(sources.cash === "balance_sheet", "rewritten cash takes the new source");
+
+const datedOpening = buildAutoPopulateWrites(
+  { profitability: false, cash_forecast: true, budget: false },
+  {
+    fields: { cash: "46300", revenue: "412000", netIncome: "38200" },
+    existingCashflow: {
+      openingBalance: "0",
+      startDate: "2026-10-05",
+      revenue: [],
+      expenses: [],
+    },
+    market: ZA_MARKET,
+    now,
+    statementKind: "balance_sheet",
+    cashOpeningDate: "2026-09-30",
+  },
+);
+const datedCash = datedOpening.update.cashflow as { openingBalance?: string; startDate?: string } | undefined;
+assert(datedCash?.openingBalance === "46300", "balance-sheet cash still sets the opening");
+assert(datedCash?.startDate === "2026-09-30", `opening is dated on the balance sheet (${datedCash?.startDate})`);
+assert(!("budget" in datedOpening.update), "balance-sheet cash does not rewrite the budget");
+
+const uploadCard = readFileSync(new URL("../src/components/upload-financials.tsx", import.meta.url), "utf8");
+assert(uploadCard.includes('result.statement_basis !== "unknown"'), "unknown basis chip is hidden");
+assert(uploadCard.includes("clientName"), "import card shows the client name");
+assert(uploadCard.includes("File header:"), "parsed header name stays secondary");
+assert(uploadCard.includes("statementAutoPopulatePrefs"), "toggles are set once the statement type is known");
+const signupCopy = readFileSync(new URL("../src/lib/firm-signup-copy.ts", import.meta.url), "utf8");
+assert(signupCopy.includes("Required. Your practice's state."), "state hint says the field is required");
 
 console.log("statement-parse: ok");

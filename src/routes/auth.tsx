@@ -652,9 +652,7 @@ function AuthPage() {
                 </p>
               ) : null}
               {mode === "signup" && practiceHint ? (
-                <p className="firm-signup-hint">
-                  Create firm account stays off until the practice location is filled in.
-                </p>
+                <p className="firm-signup-hint">{practiceHint}</p>
               ) : null}
               <AuthEntryPrimaryButton
                 type="submit"

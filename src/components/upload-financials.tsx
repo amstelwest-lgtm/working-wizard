@@ -5,7 +5,7 @@
  * Styled with MILŌN's dark/gold design system (Tailwind).
  */
 
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Upload, Loader2, AlertTriangle, CheckCircle2, FileText, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -21,7 +21,13 @@ import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-qua
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
-import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
+import {
+  defaultAutoPopulatePrefs,
+  isSingleStatementKind,
+  statementAutoPopulatePrefs,
+  type AutoPopulatePrefs,
+} from "@/lib/auto-populate";
+import { statementKindFromExtraction } from "@/lib/statement-financials";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import {
@@ -137,12 +143,15 @@ export type UploadFinancialsProps = {
   autoPopulate?: AutoPopulateDialogState | null;
   /** A bank-transaction file was dropped here. Open the bank upload instead. */
   onOpenBankUpload?: (file: File) => void;
+  /** Client on the page. The file header is secondary, never the title. */
+  clientName?: string | null;
 };
 
 export function UploadFinancials({
   onConfirm,
   autoPopulate,
   onOpenBankUpload,
+  clientName,
 }: UploadFinancialsProps) {
   const { number, selection } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -159,6 +168,7 @@ export function UploadFinancials({
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(
     autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
   );
+  const [prefsTouched, setPrefsTouched] = useState(false);
 
   const extract = useServerFn(extractFinancialsFromPDF);
   const monthNames = importMonthNames();
@@ -210,6 +220,13 @@ export function UploadFinancials({
       setIssues(res.issues);
       setAutoSafe(res.autoImportSafe);
       seedPeriod(res.data.current_period.period_end);
+      setPrefsTouched(false);
+      setAutoPrefs(
+        statementAutoPopulatePrefs(
+          autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
+          statementKindFromExtraction(res.data),
+        ),
+      );
       setStatus("review");
     } catch (e) {
       toast.error((e as Error).message ?? "Extraction failed.");
@@ -230,8 +247,20 @@ export function UploadFinancials({
     setPeriodMonth("");
     setPeriodYear("");
     setBankFile(null);
+    setPrefsTouched(false);
     if (inputRef.current) inputRef.current.value = "";
   }
+
+  const statementKind = result ? statementKindFromExtraction(result) : "unknown";
+  useEffect(() => {
+    if (!result || prefsTouched) return;
+    setAutoPrefs(
+      statementAutoPopulatePrefs(
+        autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
+        statementKindFromExtraction(result),
+      ),
+    );
+  }, [result, autoPopulate?.prefs, prefsTouched]);
 
   // Live balance check. Unclosed trial-balance profit is added to equity.
   const balanceCheck = useMemo(
@@ -344,8 +373,15 @@ export function UploadFinancials({
         <div>
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-amber-500" />
-            <span className="font-semibold">{result.entity_name ?? "Extracted statement"}</span>
+            <span className="font-semibold">
+              {clientName?.trim() || result.entity_name?.trim() || "Extracted statement"}
+            </span>
           </div>
+          {clientName?.trim() &&
+          result.entity_name?.trim() &&
+          result.entity_name.trim() !== clientName.trim() ? (
+            <p className="mt-1 text-xs text-muted-foreground">File header: {result.entity_name.trim()}</p>
+          ) : null}
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             {result.currency && (
               <Badge variant="outline" className="text-xs">
@@ -357,11 +393,11 @@ export function UploadFinancials({
                 in {result.units}
               </Badge>
             )}
-            {result.statement_basis && (
+            {result.statement_basis && result.statement_basis !== "unknown" ? (
               <Badge variant="outline" className="text-xs capitalize">
                 {result.statement_basis.replace(/_/g, " ")}
               </Badge>
-            )}
+            ) : null}
             <Badge variant="outline" className="text-xs">
               {periodDetected && result.current_period.period_end
                 ? `Extracted period end: ${result.current_period.period_end}`
@@ -703,9 +739,12 @@ export function UploadFinancials({
       </div>
 
       <AutoPopulateOptions
-        firstUpload={autoPopulate?.firstUpload ?? true}
+        firstUpload={(autoPopulate?.firstUpload ?? true) && !isSingleStatementKind(statementKind)}
         value={autoPrefs}
-        onChange={setAutoPrefs}
+        onChange={(next) => {
+          setPrefsTouched(true);
+          setAutoPrefs(next);
+        }}
         role={autoPopulate?.role ?? "accountant"}
       />
       <UploadQualityDisclaimer

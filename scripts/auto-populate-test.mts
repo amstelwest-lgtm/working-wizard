@@ -46,6 +46,24 @@ assert(!isFirstUpload({ budget_updated_at: "2026-01-01" }), "budget stamped → 
 const off = { profitability: false, cash_forecast: false, budget: false };
 const first = resolveAutoPopulatePlan({ firstUpload: true, prefs: off });
 assert(first.profitability && first.cash_forecast && first.budget, "first upload ignores unchecked");
+const bsFirst = resolveAutoPopulatePlan({
+  firstUpload: true,
+  prefs: { profitability: false, cash_forecast: true, budget: false },
+  statementKind: "balance_sheet",
+});
+assert(
+  bsFirst.cash_forecast && !bsFirst.profitability && !bsFirst.budget,
+  "first balance sheet leaves profitability and budget off",
+);
+const plFirst = resolveAutoPopulatePlan({
+  firstUpload: true,
+  prefs: { profitability: true, cash_forecast: false, budget: true },
+  statementKind: "income_statement",
+});
+assert(
+  plFirst.profitability && plFirst.budget && !plFirst.cash_forecast,
+  "first P&L leaves the cash forecast off",
+);
 const later = resolveAutoPopulatePlan({
   firstUpload: false,
   prefs: { profitability: true, cash_forecast: false, budget: true },

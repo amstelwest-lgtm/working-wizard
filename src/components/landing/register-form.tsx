@@ -342,9 +342,7 @@ export function LandingRegisterForm({
                   At least 6 characters.
                 </p>
                 {practiceLocationHint(draftMarket) ? (
-                  <p className="firm-signup-hint">
-                    Create firm account stays off until the practice location is filled in.
-                  </p>
+                  <p className="firm-signup-hint">{practiceLocationHint(draftMarket)}</p>
                 ) : null}
                 <button
                   type="submit"

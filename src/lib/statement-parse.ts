@@ -581,3 +581,85 @@ export function blankDisallowedSections<T extends {
   }
   return copy;
 }
+
+/** Empty extracted values. Zero is a real figure and is kept. */
+export function isBlankExtracted(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "number") return !Number.isFinite(value);
+  if (typeof value === "string") return value.trim() === "";
+  return false;
+}
+
+/** Kind implied by which flat keys actually have figures. Blanks do not count. */
+export function statementKindFromFlatFields(
+  fields: Record<string, unknown> | null | undefined,
+): StatementKind {
+  const income = INCOME_KEYS.some((key) => !isBlankExtracted(fields?.[key]));
+  const balance = BALANCE_KEYS.some((key) => !isBlankExtracted(fields?.[key]));
+  if (income && balance) return "mixed";
+  if (balance) return "balance_sheet";
+  if (income) return "income_statement";
+  return "unknown";
+}
+
+/** P&L companions that are not parser aliases but travel with the income statement. */
+const INCOME_MERGE_KEYS = new Set<string>([...INCOME_KEYS, "top5Revenue"]);
+/** Balance-sheet companions. A P&L import must not write these. */
+const BALANCE_MERGE_KEYS = new Set<string>([
+  ...BALANCE_KEYS,
+  "equityDerived",
+  "nonCurrentLiabilities",
+  "periodProfitInEquity",
+]);
+
+const PROVENANCE_KEYS = ["fieldSources", "sources", "source_map", "provenance"] as const;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function fieldAllowed(kind: StatementKind, key: string): boolean {
+  if (kind === "balance_sheet" && INCOME_MERGE_KEYS.has(key)) return false;
+  if (kind === "income_statement" && BALANCE_MERGE_KEYS.has(key)) return false;
+  return true;
+}
+
+/**
+ * Merge one statement import into the snapshot (or live blob) already stored
+ * for that period. The import may write only its own statement's fields.
+ * A blank or missing extract never replaces a figure that is already there.
+ * Field-level provenance, when the blob has it, stays with the field that
+ * was not rewritten.
+ */
+export function mergeStatementFinancials(
+  existing: unknown,
+  incoming: unknown,
+  kind?: StatementKind | null,
+): Record<string, unknown> {
+  const prior = asRecord(existing) ?? {};
+  const next = asRecord(incoming) ?? {};
+  const resolved = kind && kind !== "unknown" ? kind : statementKindFromFlatFields(next);
+  const out: Record<string, unknown> = { ...prior };
+  const written = new Set<string>();
+  for (const [key, value] of Object.entries(next)) {
+    if ((PROVENANCE_KEYS as readonly string[]).includes(key)) continue;
+    if (!fieldAllowed(resolved, key)) continue;
+    if (isBlankExtracted(value)) continue;
+    out[key] = value;
+    written.add(key);
+  }
+  for (const key of PROVENANCE_KEYS) {
+    const left = asRecord(prior[key]);
+    const right = asRecord(next[key]);
+    if (!left && !right) continue;
+    const merged: Record<string, unknown> = { ...(left ?? {}) };
+    if (right) {
+      for (const [field, source] of Object.entries(right)) {
+        if (written.has(field)) merged[field] = source;
+      }
+    }
+    out[key] = merged;
+  }
+  return out;
+}
