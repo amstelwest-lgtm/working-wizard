@@ -63,7 +63,19 @@ async function sha256(text: string): Promise<string> {
     .join("");
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve((req: Request) =>
+  handleAskAi(req).catch((err) => {
+    const cors = buildCorsHeaders(req.headers.get("Origin"));
+    console.error("ask-ai failed", err instanceof Error ? err.message : err);
+    return json(
+      { error: err instanceof Error && err.message ? err.message : "Something went wrong" },
+      500,
+      cors,
+    );
+  }),
+);
+
+async function handleAskAi(req: Request): Promise<Response> {
   // Build per-request CORS headers respecting the ALLOWED_ORIGINS env var.
   const cors = buildCorsHeaders(req.headers.get("Origin"));
   const respond = (body: unknown, status = 200) => json(body, status, cors);
@@ -253,13 +265,17 @@ Deno.serve(async (req: Request) => {
   let precardRemaining: number | null = null;
   if (precard.firmId && answer.trim()) {
     let nextCount: number | null = null;
-    await finishPrecardAttempt({
-      decision: precard,
-      succeeded: true,
-      record: async () => {
-        nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
-      },
-    });
+    try {
+      await finishPrecardAttempt({
+        decision: precard,
+        succeeded: true,
+        record: async () => {
+          nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+        },
+      });
+    } catch (err) {
+      console.error("precard record failed", err instanceof Error ? err.message : err);
+    }
     precardRemaining = precard.applies
       ? precardMessagesLeft(nextCount, precard.remaining)
       : null;
@@ -269,7 +285,7 @@ Deno.serve(async (req: Request) => {
     chips: deriveChips(question, tier),
     ...(precardRemaining != null ? { precardRemaining } : {}),
   });
-});
+}
 
 function deriveChips(question: string, tier: string): string[] {
   const lower = question.toLowerCase();

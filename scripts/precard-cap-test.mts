@@ -279,6 +279,28 @@ assert(
   "edge increments a successful Bot answer",
 );
 
+const boundClient = {
+  rest: { ok: true },
+  async rpc(this: { rest?: { ok: boolean } }, _fn: string, _args: Record<string, unknown>) {
+    if (!this?.rest) throw new TypeError("Cannot read properties of undefined (reading 'rest')");
+    return { data: 4, error: null };
+  },
+};
+assert(
+  (await recordPrecardUse(boundClient, "firm_new", "bot")) === 4,
+  "recordPrecardUse keeps rpc bound and returns the counter",
+);
+
+const throwingClient = {
+  async rpc(_fn: string, _args: Record<string, unknown>): Promise<{ data: unknown; error: { message: string } | null }> {
+    throw new TypeError("Cannot read properties of undefined (reading 'rest')");
+  },
+};
+assert(
+  (await recordPrecardUse(throwingClient, "firm_new", "bot")) === null,
+  "a throwing rpc returns null",
+);
+
 const bubble = parseAskAiBody(
   403,
   { error: PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: "bot" },

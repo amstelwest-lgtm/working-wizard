@@ -269,7 +269,19 @@ async function auditToolCall(
   if (error) console.warn("bot_tool_calls insert:", error.message);
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve((req: Request) =>
+  handleMilonBot(req).catch((err) => {
+    const cors = buildCorsHeaders(req.headers.get("Origin"));
+    console.error("milon-bot failed", err instanceof Error ? err.message : err);
+    return json(
+      { error: err instanceof Error && err.message ? err.message : "Something went wrong" },
+      500,
+      cors,
+    );
+  }),
+);
+
+async function handleMilonBot(req: Request): Promise<Response> {
   const cors = buildCorsHeaders(req.headers.get("Origin"));
   const respond = (body: unknown, status = 200) => json(body, status, cors);
 
@@ -356,13 +368,17 @@ Deno.serve(async (req: Request) => {
   const noteBotAnswer = async (produced: boolean) => {
     if (!precard.firmId || !produced) return null;
     let nextCount: number | null = null;
-    await finishPrecardAttempt({
-      decision: precard,
-      succeeded: true,
-      record: async () => {
-        nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
-      },
-    });
+    try {
+      await finishPrecardAttempt({
+        decision: precard,
+        succeeded: true,
+        record: async () => {
+          nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+        },
+      });
+    } catch (err) {
+      console.error("precard record failed", err instanceof Error ? err.message : err);
+    }
     return precard.applies ? precardMessagesLeft(nextCount, precard.remaining) : null;
   };
 
@@ -628,4 +644,4 @@ Deno.serve(async (req: Request) => {
     tools: toolsUsed,
     ...(precardRemaining != null ? { precardRemaining } : {}),
   });
-});
+}
