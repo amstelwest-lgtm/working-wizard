@@ -14,6 +14,7 @@ import {
   annualiseBudgetFinancials,
   budgetDaysNeedReview,
   budgetScaleBreak,
+  budgetSeededFromStatement,
   budgetVersusStatement,
   publishBudgetDocument,
   seedBudgetFromFinancials,
@@ -21,6 +22,7 @@ import {
 import { createBudgetDocument, fyMonths } from "../src/lib/budget.months";
 import {
   budgetActualFromFinancials,
+  budgetDraftMark,
   budgetReviewLine,
   buildBudgetPdfModel,
 } from "../src/lib/budget-pdf";
@@ -159,6 +161,11 @@ assert(
   `9 months of the plan match the cover, got ${versus!.budgetRevenue}`,
 );
 assert(versus!.chip === "Statement pace, prorated", versus!.chip);
+assert(versus!.label === "Jan–Sep 2026, prorated", versus!.label);
+assert(
+  budgetSeededFromStatement(versus),
+  "a budget seeded from this statement is not a 0% verdict",
+);
 const pdfActual = budgetActualFromFinancials(us);
 const pdf = buildBudgetPdfModel(published, pdfActual ? [pdfActual] : [], US_MARKET);
 const pdfRevenue = pdf.summary.find((row) => row.label === "Revenue");
@@ -265,11 +272,14 @@ const stale = budgetReviewLine({
   isStale: true,
   market: US_MARKET,
 });
-assert(stale.unsigned && stale.text.includes("inputs changed after sign-off"), stale.text);
+assert(stale.unsigned && stale.text.includes("then changed"), stale.text);
+assert(budgetDraftMark(stale.text) === "SIGNED OFF, THEN CHANGED", budgetDraftMark(stale.text));
 const ready = budgetReviewLine({ isStale: false, workflowStatus: "ready_for_review" });
-assert(ready.text === "Ready for review — not signed off" && ready.unsigned, ready.text);
+assert(ready.text === "Ready for review" && ready.unsigned, ready.text);
+assert(budgetDraftMark(ready.text) === "READY FOR REVIEW", budgetDraftMark(ready.text));
 const draft = budgetReviewLine({ isStale: false, workflowStatus: "draft" });
-assert(draft.text === "Draft — not signed off", draft.text);
+assert(draft.text === "Draft", draft.text);
+assert(budgetDraftMark(draft.text) === "DRAFT", budgetDraftMark(draft.text));
 
 const watermark = read("src/components/pdf/watermark.tsx");
 assert(watermark.includes("DRAFT — NOT SIGNED OFF"), "the draft mark is a full phrase");

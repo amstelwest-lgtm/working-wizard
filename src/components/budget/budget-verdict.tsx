@@ -3,7 +3,7 @@
  */
 
 import { fmtBudgetMoney } from "@/lib/budget.compute";
-import type { BudgetActualsChip } from "@/lib/budget.bridges";
+import { budgetSeededFromStatement, type BudgetActualsChip } from "@/lib/budget.bridges";
 import { formatVariancePct, varianceLine } from "@/lib/budget.variance";
 import type { ResolvedMarket } from "@/lib/market";
 
@@ -61,45 +61,56 @@ export function BudgetVerdictStrip({
 }) {
   const money = (n: number) => fmtBudgetMoney(n, market);
   const hasActuals = revenueActual != null && chip !== "None";
+  const seeded = budgetSeededFromStatement({
+    chip,
+    revenue: revenueActual ?? 0,
+    budgetRevenue: revenueBudget,
+    ebit: profitActual ?? undefined,
+    budgetEbit: profitBudget,
+  });
   return (
     <section
       className="rounded-2xl border border-[#d4a550]/40 bg-[#fffdf8] px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
       data-budget-verdict
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
-        {periodLabel}
-      </p>
+      <p className="text-[11px] font-semibold tracking-wide text-[#b8860b]">{periodLabel}</p>
       <p className="mt-1 text-[15px] leading-relaxed text-[#1b1608] dark:text-slate-100">
-        <span className="font-semibold">Revenue</span>{" "}
-        {hasActuals ? (
-          <>
-            {money(revenueActual!)} vs budget {money(revenueBudget)} (
-            <Delta
-              budget={revenueBudget}
-              actual={revenueActual!}
-              higherIsBetter
-              market={market}
-            />
-            )
-          </>
+        {seeded ? (
+          "Budget seeded from these figures — variance starts with the first uploaded month"
         ) : (
-          <span className="tabular-nums">{money(revenueBudget)}</span>
-        )}
-        <span className="text-slate-400"> · </span>
-        <span className="font-semibold">Profit</span>{" "}
-        {hasActuals && profitActual != null ? (
           <>
-            {money(profitActual)} vs budget {money(profitBudget)} (
-            <Delta
-              budget={profitBudget}
-              actual={profitActual}
-              higherIsBetter
-              market={market}
-            />
-            )
+            <span className="font-semibold">Revenue</span>{" "}
+            {hasActuals ? (
+              <>
+                {money(revenueActual!)} vs budget {money(revenueBudget)} (
+                <Delta
+                  budget={revenueBudget}
+                  actual={revenueActual!}
+                  higherIsBetter
+                  market={market}
+                />
+                )
+              </>
+            ) : (
+              <span className="tabular-nums">{money(revenueBudget)}</span>
+            )}
+            <span className="text-slate-400"> · </span>
+            <span className="font-semibold">Profit</span>{" "}
+            {hasActuals && profitActual != null ? (
+              <>
+                {money(profitActual)} vs budget {money(profitBudget)} (
+                <Delta
+                  budget={profitBudget}
+                  actual={profitActual}
+                  higherIsBetter
+                  market={market}
+                />
+                )
+              </>
+            ) : (
+              <span className="tabular-nums">{money(profitBudget)}</span>
+            )}
           </>
-        ) : (
-          <span className="tabular-nums">{money(profitBudget)}</span>
         )}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">

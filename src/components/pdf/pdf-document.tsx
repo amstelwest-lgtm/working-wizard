@@ -8,7 +8,7 @@ import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
 import { DemoWatermark, DraftWatermark, SampleWatermark } from "./watermark";
 import { PdfMarketContext } from "./pdf-market";
-import { PdfDraftContext, PdfSampleContext, PdfSignoffContext } from "./pdf-frame";
+import { PdfDraftContext, PdfDraftLabelContext, PdfSampleContext, PdfSignoffContext } from "./pdf-frame";
 
 export type SmeData = {
   name: string;
@@ -39,6 +39,10 @@ type Props = {
   sample?: boolean;
   /** Unsigned live deliverable. Ignored when isDemo or sample is set. */
   draft?: boolean;
+  /** Title chip when unsigned. Defaults to the shared draft notice. */
+  draftLabel?: string;
+  /** Footer mark when unsigned. Defaults to the shared draft mark. */
+  draftMark?: string;
   /** Only pass a non-stale sign-off — the footer renders it unconditionally when present. */
   reviewSignoff?: ReportSignoffStamp | null;
   /** Client (or firm) market — currency, locale, copy. Defaults to ZA. */
@@ -63,6 +67,8 @@ export function PDFDocument({
   isDemo,
   sample,
   draft,
+  draftLabel,
+  draftMark,
   reviewSignoff,
   market,
   children,
@@ -76,37 +82,45 @@ export function PDFDocument({
       <PdfSignoffContext.Provider value={stamp}>
         <PdfSampleContext.Provider value={sampleOn}>
           <PdfDraftContext.Provider value={draftOn}>
-      <Document
-        title={title}
-        subject={subject}
-        author={accountantProfile.firmName || "Milōn"}
-        creator="Milōn"
-        producer="Milōn PDF Engine"
-      >
-        <Page
-          size="A4"
-          style={{
-            paddingBottom: sampleOn ? 68 : 56,
-            backgroundColor: "#ffffff",
-          }}
-        >
-          {sampleOn ? <SampleWatermark /> : isDemo ? <DemoWatermark /> : draft ? <DraftWatermark /> : null}
+            <PdfDraftLabelContext.Provider value={draftLabel || "Draft — not signed off"}>
+              <Document
+                title={title}
+                subject={subject}
+                author={accountantProfile.firmName || "Milōn"}
+                creator="Milōn"
+                producer="Milōn PDF Engine"
+              >
+                <Page
+                  size="A4"
+                  style={{
+                    paddingBottom: sampleOn ? 68 : 56,
+                    backgroundColor: "#ffffff",
+                  }}
+                >
+                  {sampleOn ? (
+                    <SampleWatermark />
+                  ) : isDemo ? (
+                    <DemoWatermark />
+                  ) : draft ? (
+                    <DraftWatermark text={draftMark} />
+                  ) : null}
 
-          {/* Fixed header — renders at the top of every page */}
-          <ReportHeader
-            fixed
-            profile={accountantProfile}
-            smeName={smeData.name}
-            period={smeData.period}
-          />
+                  {/* Fixed header — renders at the top of every page */}
+                  <ReportHeader
+                    fixed
+                    profile={accountantProfile}
+                    smeName={smeData.name}
+                    period={smeData.period}
+                  />
 
-          {/* Content area */}
-          <View style={{ paddingHorizontal: 40, paddingTop: 16 }}>{children}</View>
+                  {/* Content area */}
+                  <View style={{ paddingHorizontal: 40, paddingTop: 16 }}>{children}</View>
 
-          {/* Fixed footer — absolutely positioned at bottom of every page */}
-          <ReportFooter fixed profile={accountantProfile} reviewSignoff={stamp} />
-        </Page>
-      </Document>
+                  {/* Fixed footer — absolutely positioned at bottom of every page */}
+                  <ReportFooter fixed profile={accountantProfile} reviewSignoff={stamp} />
+                </Page>
+              </Document>
+            </PdfDraftLabelContext.Provider>
           </PdfDraftContext.Provider>
         </PdfSampleContext.Provider>
       </PdfSignoffContext.Provider>

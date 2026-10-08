@@ -346,7 +346,7 @@ export function BudgetPanel({
     setDoc(publishBudgetDocument(seeded.doc, seedFrom, {
       cashflow: loadedCashflowRef.current,
     }));
-    toast.success("Budget rebuilt from the latest actuals", {
+    toast.success("Budget rebuilt from the saved statement", {
       description: seeded.changes[0],
     });
   };
@@ -484,20 +484,20 @@ export function BudgetPanel({
           <p className="font-semibold">Rebuild is a suggestion — nothing has been replaced</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
             The stored plan is more than ten times the annualised revenue or cost of sales. It is
-            still the plan on file. Rebuild only if you want it to follow the latest actuals.
+            still the plan on file. Rebuild only if you want it to follow the saved statement.
           </p>
           <Button
             type="button"
             className="mt-3 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
             onClick={rebuildFromActuals}
           >
-            Rebuild budget from latest actuals
+            Rebuild from the saved statement
           </Button>
         </div>
       )}
       {rebuilt && (
         <div className="mb-4 rounded-xl border border-sky-300/80 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-50">
-          <p className="font-semibold">This budget was rebuilt from the latest actuals</p>
+          <p className="font-semibold">This budget was rebuilt from the saved statement</p>
           <p className="mt-1 text-[13px] leading-relaxed text-sky-900/90 dark:text-sky-100/80">
             The stored plan was more than ten times the annualised revenue or cost of sales. The
             file note records the rebuild.
@@ -506,7 +506,7 @@ export function BudgetPanel({
       )}
       {implausible && (
         <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
-          <p className="font-semibold">This budget does not line up with the latest actuals</p>
+          <p className="font-semibold">This budget does not line up with the saved statement</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
             Cost of sales is zero while the period has a cost of sales, or a full year of revenue or
             cost of sales is more than three times the annualised actual. Nothing is overwritten
@@ -517,7 +517,7 @@ export function BudgetPanel({
             className="mt-3 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
             onClick={rebuildFromActuals}
           >
-            Rebuild budget from latest actuals
+            Rebuild from the saved statement
           </Button>
         </div>
       )}

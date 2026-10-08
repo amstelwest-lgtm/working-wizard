@@ -197,7 +197,14 @@ assert(
 
 const { doc } = illustrativeBudgetPack("2026-01");
 const bare = buildBudgetPdfModel(doc, []);
-assert(/No month actuals/.test(bare.comparedLabel), "empty uploads say no month actuals");
+assert(
+  bare.comparedLabel === "No monthly management accounts uploaded yet",
+  bare.comparedLabel,
+);
+assert(
+  bare.headline.startsWith("No monthly management accounts uploaded yet"),
+  bare.headline,
+);
 const actual = budgetActualFromFinancials({
   periodStart: "2026-09-01",
   periodEnd: "2026-09-21",
@@ -210,6 +217,6 @@ assert(actual?.month === "2026-09", `statement month ${actual?.month}`);
 const withActuals = buildBudgetPdfModel(doc, actual ? [actual] : []);
 assert(withActuals.hasActuals, "statement figures count as month actuals");
 assert(!/No month actuals/i.test(withActuals.comparedLabel), withActuals.comparedLabel);
-assert(!/No month actuals/i.test(withActuals.headline), withActuals.headline);
+assert(!/monthly management accounts uploaded yet/i.test(withActuals.headline), withActuals.headline);
 
 console.log("report-direction-test ok");
