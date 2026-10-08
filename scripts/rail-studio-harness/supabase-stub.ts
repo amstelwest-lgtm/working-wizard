@@ -125,9 +125,37 @@ const SENT_DELIVERY = {
   pdf_byte_size: null,
 };
 
+function reportHistoryRows(): unknown[] {
+  const keys = [
+    "scorecard/budget/forecast",
+    "scorecard/budget/forecast/cash",
+    "scorecard/budget/forecast/labour",
+    "scorecard/budget/forecast/benchmark",
+    "scorecard/budget/forecast/interventions",
+    "scorecard/budget/forecast/balance-sheet",
+  ];
+  return keys.map((report_key, index) => ({
+    ...SENT_DELIVERY,
+    id: `harness-report-${index + 1}`,
+    channel: "copy",
+    kind: "report_pdf",
+    subject: null,
+    report_key,
+    figures_hash: `h${index + 1}ab`,
+    period_label: "September 2026",
+    created_at: new Date(Date.UTC(2026, 9, 2, 8, index)).toISOString(),
+    ack_token: `harness-ack-token-${index + 1}-0123456789`,
+    pdf_storage_path: `advisory-pdfs/harness/${report_key}.pdf`,
+    pdf_byte_size: 120000,
+  }));
+}
+
 function deliveryRows(): unknown[] {
   if (typeof location !== "undefined" && /(?:^|[?&])drafterView=sent(?:&|$)/.test(location.search)) {
     return [SENT_DELIVERY];
+  }
+  if (typeof location !== "undefined" && /(?:^|[?&])section=reports(?:&|$)/.test(location.search)) {
+    return reportHistoryRows();
   }
   return [];
 }

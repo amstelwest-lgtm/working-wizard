@@ -5,7 +5,8 @@
  * are derived. Hidden on the Profit tab until opted in via a 5-question funnel.
  */
 
-import { formatMoney, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+import { formatMoney, type MoneyMarket } from "./market/format.ts";
+import { ZA_MARKET } from "./market/resolve.ts";
 
 export const PRODUCT_MIX_VERSION = 3 as const;
 export const PRODUCT_MIX_MAX_LINES = 5;

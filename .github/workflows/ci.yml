@@ -30,12 +30,13 @@ jobs:
             echo "::error::Server-only monitoring code leaked into the client bundle"; exit 1
           fi
 
-  # Blocking: ask-ai prod is a one-liner that imports this entry from
-  # raw.githubusercontent.com at a pinned commit. That runtime resolves the
-  # graph with Deno defaults — explicit extensions, no import map, no
-  # sloppy imports, and no repo deno.lock — so this job uses the same rules.
-  # A bare `@/` or an extensionless relative import fails here, the same way
-  # the redeploy would. --no-lock keeps the root deno.lock from pinning esm.sh.
+  # Blocking: ask-ai, milon-bot, brain-propose, and brain-deliverable-draft
+  # prod are one-liners that import these entries from raw.githubusercontent.com
+  # at a pinned commit. That runtime resolves the graph with Deno defaults —
+  # explicit extensions, no import map, no sloppy imports, and no repo
+  # deno.lock — so this job uses the same rules. A bare `@/` or an
+  # extensionless relative import fails here, the same way the redeploy would.
+  # --no-lock keeps the root deno.lock from pinning esm.sh.
   ask-ai-deno:
     name: ask-ai Deno check
     runs-on: ubuntu-latest
@@ -46,6 +47,8 @@ jobs:
           deno-version: 2.9.7
       - name: deno check ask-ai
         run: deno check --no-lock supabase/functions/ask-ai/index.ts
+      - name: deno check milon-bot
+        run: deno check --no-lock supabase/functions/milon-bot/index.ts
       - name: deno check brain-propose
         run: deno check --no-lock supabase/functions/brain-propose/index.ts
       - name: deno check brain-deliverable-draft

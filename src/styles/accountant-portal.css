@@ -395,6 +395,21 @@ body:has(.settings-plan-card) #wizard-notes-pin{visibility:hidden;pointer-events
     font-size:12px;
   }
 }
+.budget-lens{min-width:0;max-width:100%}
+.budget-lens .milon-scroll-table{min-width:0}
+.budget-lens .milon-scroll-table__viewport{max-height:420px;overflow:auto}
+.budget-lens .milon-scroll-table__hint{text-transform:none;letter-spacing:0;font-size:12px;font-weight:500}
+.budget-lens .budget-grid thead th{position:sticky;top:0;z-index:2;height:32px;background:#fffdf8}
+.budget-lens .budget-grid thead tr:nth-child(2) th{top:32px;height:28px}
+.budget-lens .budget-grid__line{position:sticky;left:0;z-index:3;min-width:8.5rem;background:#fffdf8}
+.budget-lens .budget-grid thead .budget-grid__line{z-index:4}
+.budget-lens .budget-grid__sub td{font-weight:600;background:rgba(212,165,80,.08)}
+.budget-lens .budget-grid__sub .budget-grid__line{background:#fbf6ea}
+.budget-lens .budget-grid__total td{font-weight:700;border-top:2px solid rgba(15,23,42,.18)}
+html.dark .budget-lens .budget-grid thead th,
+html.dark .budget-lens .budget-grid__line{background:#0b1220}
+html.dark .budget-lens .budget-grid__sub td{background:rgba(212,165,80,.12)}
+html.dark .budget-lens .budget-grid__sub .budget-grid__line{background:#16130c}
 .accountant-portal .chip.chip-sentence{
   text-transform:none;
   letter-spacing:0;
@@ -1254,6 +1269,91 @@ html[data-theme="dark"] .reports-studio .reports-settings{
   background:
     radial-gradient(circle at 100% 0%,rgba(212,165,80,0.1),transparent 42%),
     linear-gradient(180deg,#141a28,#0b1220);
+}
+
+/*
+ * Reports history is not a glass card. `.accountant-portal .card` is
+ * `background: var(--card)` (rgba(255,255,255,.024) / rgba(52,40,0,.035))
+ * plus `backdrop-filter: blur(8px)`, and each row had no fill. The settings
+ * panel used to be `position: sticky` (Report Branding at the bottom), so
+ * scrolling the list painted those rows over the firm brand and the blur
+ * showed it through. These surfaces are solid and sit above that panel.
+ */
+.accountant-portal .reports-studio .sent-history--reports{
+  margin:0 0 18px;
+  padding:14px 18px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#101018;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  position:relative;
+  z-index:2;
+  isolation:isolate;
+  max-width:100%;
+  min-width:0;
+}
+html[data-theme="light"] .accountant-portal .reports-studio .sent-history--reports{
+  background:#fffdf8;
+}
+.accountant-portal .reports-studio .sent-history__list{
+  display:grid;
+  gap:8px;
+  max-height:280px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  background:#101018;
+  position:relative;
+  z-index:1;
+  border-radius:12px;
+  min-width:0;
+  max-width:100%;
+}
+html[data-theme="light"] .accountant-portal .reports-studio .sent-history__list{
+  background:#fffdf8;
+}
+.accountant-portal .reports-studio .sent-history__row{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:8px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#1a1a22;
+  max-width:100%;
+  min-width:0;
+  position:relative;
+  z-index:1;
+}
+html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
+  background:#ffffff;
+}
+.accountant-portal .reports-studio .sent-history__copy{
+  flex:1 1 14rem;
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.accountant-portal .reports-studio .sent-history__actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  max-width:100%;
+  min-width:0;
+}
+.accountant-portal .reports-studio .sent-history__actions > *{
+  flex:0 0 auto;
+}
+.accountant-portal .reports-studio .sent-history__actions .chip{
+  white-space:normal;
+  max-width:100%;
+}
+@media (max-width:1100px){
+  .accountant-portal .reports-studio .sent-history__actions{
+    flex-basis:100%;
+  }
 }
 
 /* ===== practice home: clients first ===== */

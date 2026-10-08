@@ -46,7 +46,7 @@ export function practiceLocationHint(draft: {
     return "Choose where this practice is — South Africa or the United States.";
   }
   if (draft.country === "US" && !draft.regionCode) {
-    return "Choose a US state. It is required for sales tax.";
+    return "Required. Your practice's state.";
   }
   return null;
 }

@@ -33,9 +33,11 @@ import {
 } from "@/lib/auto-populate-run";
 import {
   defaultAutoPopulatePrefs,
+  prefsToRemember,
   summariseAutoPopulate,
   type AutoPopulatePrefs,
 } from "@/lib/auto-populate";
+import { mergeStatementFinancials } from "@/lib/statement-parse";
 import { autosaveKeepsLedgerSync } from "@/lib/ledger-sync-financials";
 import { MarketProvider } from "@/contexts/market";
 import {
@@ -62,6 +64,7 @@ import {
   scalarsWithReadTimeEquity,
   periodFinancialsFromExtraction,
   preserveHandEnteredEquity,
+  statementKindFromExtraction,
   type PeriodFinancials,
 } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
@@ -455,6 +458,8 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     action?: "preview" | "download";
     /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
     profile?: number;
+    /** Budget chart or table under the answer strip. Absent means chart. */
+    view?: "chart" | "table";
   } => {
     const out: {
       qbo?: string;
@@ -472,6 +477,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       report?: string;
       action?: "preview" | "download";
       profile?: number;
+      view?: "chart" | "table";
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.xero === "string") out.xero = search.xero;
@@ -494,6 +500,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
     if (search.action === "preview" || search.action === "download") out.action = search.action;
     if (search.profile === 1 || search.profile === "1") out.profile = 1;
+    if (search.view === "table" || search.view === "chart") out.view = search.view;
     if (
       search.filter === "overdue" ||
       search.filter === "at_risk" ||
@@ -2071,7 +2078,6 @@ function ClientView() {
         periodEnd: period?.periodEnd ?? "",
         ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
       };
-      const ratiosOut = overviewRatios(inputs, { fyStartMonth });
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate) || !periodLabel) {
@@ -2079,18 +2085,32 @@ function ClientView() {
         return;
       }
 
-      const { data: existing } = await supabase
+      const statementKind = statementKindFromExtraction(result);
+      const { data: byDate } = await supabase
         .from("client_financial_snapshots")
-        .select("id")
+        .select("id, financials")
         .eq("client_id", clientId)
-        .eq("period_label", periodLabel)
+        .eq("period_date", periodDate)
         .maybeSingle();
+      let existing = byDate as { id?: string; financials?: unknown } | null;
+      if (!existing?.id) {
+        const { data: byLabel } = await supabase
+          .from("client_financial_snapshots")
+          .select("id, financials")
+          .eq("client_id", clientId)
+          .eq("period_label", periodLabel)
+          .maybeSingle();
+        existing = byLabel as { id?: string; financials?: unknown } | null;
+      }
+
+      const snapshotMerged = mergeStatementFinancials(existing?.financials ?? null, inputs, statementKind);
+      const ratiosOut = overviewRatios(snapshotMerged, { fyStartMonth });
 
       let saveError: { message: string } | null = null;
       if (existing?.id) {
         const { error } = await supabase
           .from("client_financial_snapshots")
-          .update({ financials: inputs as never, ratios: ratiosOut as never })
+          .update({ financials: snapshotMerged as never, ratios: ratiosOut as never })
           .eq("id", existing.id);
         saveError = error;
       } else {
@@ -2098,7 +2118,7 @@ function ClientView() {
           client_id: clientId,
           period_label: periodLabel,
           period_date: periodDate,
-          financials: inputs as never,
+          financials: snapshotMerged as never,
           ratios: ratiosOut as never,
           source: "pdf_upload",
         });
@@ -2135,12 +2155,12 @@ function ClientView() {
       }
 
       const financialsUpdatedAt = new Date().toISOString();
-      const nextScalars = {
-        ...financialsRef.current,
-        ...Object.fromEntries(
-          Object.entries(inputs).map(([k, v]) => [k, v != null ? String(v) : ""]),
+      const liveMerged = mergeStatementFinancials(financialsRef.current, inputs, statementKind);
+      const nextScalars = Object.fromEntries(
+        Object.entries(liveMerged).flatMap(([key, value]) =>
+          value == null || typeof value === "object" ? [] : [[key, String(value)]],
         ),
-      };
+      ) as Record<string, string>;
       financialsRef.current = nextScalars;
       const blob = mergeCurrentBlob(nextScalars);
       await supabase
@@ -2183,7 +2203,14 @@ function ClientView() {
             clientId,
             fields: nextScalars,
             chosen: autoPopulate,
+            prefsToRemember: prefsToRemember(
+              autoPopulate,
+              statementKind,
+              autoPopulateState?.prefs ?? defaultAutoPopulatePrefs(),
+            ),
             firstUpload: autoPopulateState?.firstUpload,
+            statementKind,
+            cashOpeningDate: statementKind === "balance_sheet" ? periodDate : null,
             firstActualsMonth: periodDate.slice(0, 7),
             fallbackMarket: client?.market ?? null,
             surface: "accountant_portal",
@@ -2206,6 +2233,7 @@ function ClientView() {
       firmId,
       track,
       autoPopulateState?.firstUpload,
+      autoPopulateState?.prefs,
       client?.market,
       applyAutoPopulateResult,
       startStudioTourAfterFigures,
@@ -3771,6 +3799,18 @@ function ClientView() {
                         setCashForecastReloadToken((n) => n + 1);
                         setActiveTab("cash");
                       }}
+                      lens={search.view === "table" ? "table" : "chart"}
+                      onLensChange={(next) => {
+                        void navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId },
+                          search: (prev) => ({
+                            ...prev,
+                            view: next === "table" ? "table" : undefined,
+                          }),
+                          replace: true,
+                        });
+                      }}
                     />
                   </div>
                 </div>
@@ -4083,6 +4123,7 @@ function ClientView() {
                     : "Upload your income statement or balance sheet, one file at a time. Figures are read from the file. PDF, Excel, OpenDocument or CSV. Review every figure before confirming. The quality of the financial information we produce depends on the accuracy of the information you upload."}
                 </p>
                 <UploadFinancials
+                  clientName={client?.name}
                   onConfirm={(result, prefs, period) => {
                     void handleConfirmFinancials(result, prefs, period);
                   }}

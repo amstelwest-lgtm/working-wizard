@@ -3,7 +3,7 @@
  * A local draft never overrides them, and a sample/demo persona is not a greeting.
  */
 
-import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
+import { isSamplePracticeSignoff } from "./review-signoff-stamp.ts";
 
 export type PersistedNameChain = {
   profileFullName: string;

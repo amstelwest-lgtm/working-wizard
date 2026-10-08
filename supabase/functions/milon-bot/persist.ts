@@ -358,13 +358,17 @@ export async function persistAdvisoryCreate(input: {
         created.draftId = String(data.id);
         tools.push({ name: "draft_deliverable", status: "ok" });
         if (packGate.firmId) {
-          await finishPrecardAttempt({
-            decision: packGate,
-            succeeded: true,
-            record: async () => {
-              await recordPrecardUse(input.adminClient, packGate!.firmId!, "pack");
-            },
-          });
+          try {
+            await finishPrecardAttempt({
+              decision: packGate,
+              succeeded: true,
+              record: async () => {
+                await recordPrecardUse(input.adminClient, packGate!.firmId!, "pack");
+              },
+            });
+          } catch (err) {
+            console.error("precard record failed", err instanceof Error ? err.message : err);
+          }
         }
       }
     }
@@ -411,13 +415,17 @@ export async function persistAdvisoryCreate(input: {
       created.packId = String(packId);
       tools.push({ name: "advisory_pack", status: "ok" });
       if (again.firmId) {
-        await finishPrecardAttempt({
-          decision: again,
-          succeeded: true,
-          record: async () => {
-            await recordPrecardUse(input.adminClient, again.firmId!, "pack");
-          },
-        });
+        try {
+          await finishPrecardAttempt({
+            decision: again,
+            succeeded: true,
+            record: async () => {
+              await recordPrecardUse(input.adminClient, again.firmId!, "pack");
+            },
+          });
+        } catch (err) {
+          console.error("precard record failed", err instanceof Error ? err.message : err);
+        }
       }
     }
   }

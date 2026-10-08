@@ -24,6 +24,7 @@ import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
 import {
   defaultAutoPopulatePrefs,
+  isSingleStatementKind,
   statementAutoPopulatePrefs,
   type AutoPopulatePrefs,
 } from "@/lib/auto-populate";
@@ -701,7 +702,10 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
 
           {/* ── Footer actions ── */}
           <AutoPopulateOptions
-            firstUpload={autoPopulate?.firstUpload ?? true}
+            firstUpload={
+              (autoPopulate?.firstUpload ?? true) &&
+              !isSingleStatementKind(statementKindFromMetadata(result.document_metadata))
+            }
             value={autoPrefs}
             onChange={setAutoPrefs}
             role={autoPopulate?.role ?? "owner"}

@@ -24,7 +24,7 @@ import {
   type OutcomeVerdict,
   type Recommendation,
   type RecommendationOutcome,
-} from "@/lib/recommendations";
+} from "./recommendations.ts";
 
 export type SnapshotLike = {
   id: string;

@@ -57,6 +57,7 @@ const clientRoute = createRoute({
     planView:
       search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
     drafterView: search.drafterView === "sent" ? "sent" : undefined,
+    view: search.view === "table" ? "table" : undefined,
   }),
   component: function ClientHarness() {
     return (

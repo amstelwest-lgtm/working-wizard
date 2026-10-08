@@ -44,6 +44,7 @@ import {
 import { useMarket } from "@/contexts/market";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { budgetSaveErrorMessage } from "@/lib/reach-error";
+import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 
 export function BudgetPanel({
   clientId,
@@ -65,6 +66,9 @@ export function BudgetPanel({
   reloadToken,
   onReviewStale,
   onViewModeChange,
+  lens,
+  onLensChange,
+  actualMonths,
 }: {
   clientId?: string;
   clientName?: string;
@@ -92,6 +96,11 @@ export function BudgetPanel({
   /** Header sign-off uses the same stale clock as the PDF. */
   onReviewStale?: (stale: boolean) => void;
   onViewModeChange?: (mode: "simplified" | "complex") => void;
+  /** Chart or table under the answer strip. Chart when omitted. */
+  lens?: BudgetLens;
+  onLensChange?: (next: BudgetLens) => void;
+  /** Preview months. Production reads stored month actuals instead. */
+  actualMonths?: readonly BudgetActualMonth[];
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -604,6 +613,9 @@ export function BudgetPanel({
         canSign={Boolean(canSign && clientId)}
         onSignoffChange={patchBudgetSignoff}
         drawer={reviewDrawer}
+        lens={lens}
+        onLensChange={onLensChange}
+        actualMonths={actualMonths}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>

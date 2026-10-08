@@ -19,6 +19,15 @@ import {
   readPrecardGate,
   recordPrecardUse,
 } from "../_shared/precard-cap-gate.ts";
+import {
+  groundBrainSummaryRecord,
+  ratiosForBrainProse,
+} from "../../../src/lib/advisory-narrative.ts";
+import {
+  advisorySignoffGrounding,
+  formatAdvisorySignoffGrounding,
+  getAdvisorySignoffState,
+} from "../../../src/lib/advisory-signoff.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
 import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
 import {
@@ -185,7 +194,8 @@ async function runTool(
     // before this loop by "brain-deliverable-draft". A question never reaches here
     // as a successful create, and a free tool call must not insert a version.
     return {
-      error: "A question does not save a draft. Draft the advisory pack only when asked explicitly.",
+      error:
+        "A question does not save a draft. Draft the advisory pack only when asked explicitly.",
       empty: true,
     };
   }
@@ -231,20 +241,38 @@ async function runTool(
     financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
   });
   const cash = persistedRunwayWeeks(brainMetrics.runway);
-  return buildBrainAnswer({
-    facts,
-    brainSummary: clientRes.data?.brain_summary ?? null,
-    financials: snap
-      ? {
-          period_label:
-            (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
-          ratios: numericRatios(snap.ratios),
-          cash_runway_weeks: cash,
-        }
-      : cash != null
-        ? { period_label: null, ratios: {}, cash_runway_weeks: cash }
-        : null,
-  });
+  const fin =
+    clientRes.data?.financials && typeof clientRes.data.financials === "object"
+      ? (clientRes.data.financials as Record<string, unknown>)
+      : null;
+  let advisorySignoff = null;
+  try {
+    advisorySignoff = advisorySignoffGrounding(
+      await getAdvisorySignoffState(ctx.clientId, ctx.userClient),
+    );
+  } catch (err) {
+    console.warn("advisory sign-off:", (err as Error).message);
+  }
+  return {
+    ...buildBrainAnswer({
+      facts,
+      brainSummary: groundBrainSummaryRecord(
+        clientRes.data?.brain_summary ?? null,
+        ratiosForBrainProse(fin),
+      ),
+      financials: snap
+        ? {
+            period_label:
+              (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
+            ratios: numericRatios(snap.ratios),
+            cash_runway_weeks: cash,
+          }
+        : cash != null
+          ? { period_label: null, ratios: {}, cash_runway_weeks: cash }
+          : null,
+    }),
+    advisory_signoff: advisorySignoff,
+  };
 }
 
 async function auditToolCall(
@@ -269,7 +297,19 @@ async function auditToolCall(
   if (error) console.warn("bot_tool_calls insert:", error.message);
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve((req: Request) =>
+  handleMilonBot(req).catch((err) => {
+    const cors = buildCorsHeaders(req.headers.get("Origin"));
+    console.error("milon-bot failed", err instanceof Error ? err.message : err);
+    return json(
+      { error: err instanceof Error && err.message ? err.message : "Something went wrong" },
+      500,
+      cors,
+    );
+  }),
+);
+
+async function handleMilonBot(req: Request): Promise<Response> {
   const cors = buildCorsHeaders(req.headers.get("Origin"));
   const respond = (body: unknown, status = 200) => json(body, status, cors);
 
@@ -348,7 +388,11 @@ Deno.serve(async (req: Request) => {
   }
   if (!precard.allowed) {
     return respond(
-      { error: precard.message || PRECARD_CAP_MESSAGE, code: PRECARD_CAP_CODE, limit: precard.limit },
+      {
+        error: precard.message || PRECARD_CAP_MESSAGE,
+        code: PRECARD_CAP_CODE,
+        limit: precard.limit,
+      },
       403,
     );
   }
@@ -356,13 +400,17 @@ Deno.serve(async (req: Request) => {
   const noteBotAnswer = async (produced: boolean) => {
     if (!precard.firmId || !produced) return null;
     let nextCount: number | null = null;
-    await finishPrecardAttempt({
-      decision: precard,
-      succeeded: true,
-      record: async () => {
-        nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
-      },
-    });
+    try {
+      await finishPrecardAttempt({
+        decision: precard,
+        succeeded: true,
+        record: async () => {
+          nextCount = await recordPrecardUse(adminClient, precard.firmId!, "bot");
+        },
+      });
+    } catch (err) {
+      console.error("precard record failed", err instanceof Error ? err.message : err);
+    }
     return precard.applies ? precardMessagesLeft(nextCount, precard.remaining) : null;
   };
 
@@ -396,6 +444,14 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       console.warn("overview brief:", (e as Error).message);
     }
+    try {
+      const signoff = formatAdvisorySignoffGrounding(
+        advisorySignoffGrounding(await getAdvisorySignoffState(clientId, userClient)),
+      );
+      overviewBlock = overviewBlock ? `${overviewBlock}\n\n${signoff}` : signoff;
+    } catch (e) {
+      console.warn("advisory sign-off:", (e as Error).message);
+    }
   }
 
   if (createIntent) {
@@ -421,7 +477,9 @@ Deno.serve(async (req: Request) => {
         );
       }
       const produced = Boolean(
-        created.created.draftInserted || created.created.packId || created.created.actionItemIds.length,
+        created.created.draftInserted ||
+        created.created.packId ||
+        created.created.actionItemIds.length,
       );
       const precardRemaining = await noteBotAnswer(produced);
       return respond({
@@ -628,4 +686,4 @@ Deno.serve(async (req: Request) => {
     tools: toolsUsed,
     ...(precardRemaining != null ? { precardRemaining } : {}),
   });
-});
+}

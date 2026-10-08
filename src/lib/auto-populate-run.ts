@@ -13,7 +13,9 @@ import {
   type AutoPopulateContext,
   type AutoPopulatePrefs,
   type AutoPopulateWrites,
+  type StatementUploadKind,
 } from "@/lib/auto-populate";
+import { mergeStatementFinancials } from "@/lib/statement-parse";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import type { CashFromBanksDraftResult } from "@/lib/cash-from-banks.types";
 import { parseOperatingProfile } from "@/lib/client-profile";
@@ -77,6 +79,10 @@ export type RunAutoPopulateInput = {
   prefsToRemember?: AutoPopulatePrefs;
   /** Undefined (dialog state not loaded yet) → decided from the row's freshness stamps. */
   firstUpload?: boolean;
+  /** P&L or balance sheet. A single statement does not fill the other deliverables. */
+  statementKind?: StatementUploadKind | null;
+  /** Balance-sheet date. Cash opening is stored on this day. */
+  cashOpeningDate?: string | null;
   firstActualsMonth?: string | null;
   /** Workspace market when the client row has none (owner board). */
   fallbackMarket?: unknown;
@@ -105,7 +111,7 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
   const { data, error } = await supabase
     .from("clients")
     .select(
-      "budget, cashflow, operating_profile, financial_year_start_month, market, auto_update_prefs, financials_updated_at, last_forecast_at, budget_updated_at",
+      "budget, cashflow, operating_profile, financial_year_start_month, market, auto_update_prefs, financials, financials_updated_at, last_forecast_at, budget_updated_at",
     )
     .eq("id", input.clientId)
     .maybeSingle();
@@ -116,6 +122,7 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
     financial_year_start_month?: number | null;
     market?: unknown;
     auto_update_prefs?: unknown;
+    financials?: unknown;
     financials_updated_at?: string | null;
     last_forecast_at?: string | null;
     budget_updated_at?: string | null;
@@ -127,7 +134,7 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
     const retry = await supabase
       .from("clients")
       .select(
-        "budget, cashflow, operating_profile, financial_year_start_month, market, financials_updated_at, last_forecast_at, budget_updated_at",
+        "budget, cashflow, operating_profile, financial_year_start_month, market, financials, financials_updated_at, last_forecast_at, budget_updated_at",
       )
       .eq("id", input.clientId)
       .maybeSingle();
@@ -136,10 +143,20 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
   }
 
   const firstUpload = input.firstUpload ?? isFirstUpload(row);
-  const plan = resolveAutoPopulatePlan({ firstUpload, prefs: input.chosen });
+  const plan = resolveAutoPopulatePlan({
+    firstUpload,
+    prefs: input.chosen,
+    statementKind: input.statementKind,
+  });
   const marketRaw = row?.market ?? input.fallbackMarket ?? null;
+  const fields =
+    input.source === "financial_statement"
+      ? mergeStatementFinancials(row?.financials, input.fields, input.statementKind)
+      : input.fields;
   const ctx: AutoPopulateContext = {
-    fields: input.fields,
+    fields: fields as AutoPopulateContext["fields"],
+    statementKind: input.statementKind,
+    cashOpeningDate: input.cashOpeningDate,
     cashDraft: input.cashDraft ?? null,
     existingBudget: row?.budget ?? null,
     existingCashflow: row?.cashflow ?? null,

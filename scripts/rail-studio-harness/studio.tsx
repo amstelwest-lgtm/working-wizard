@@ -17,6 +17,7 @@ import { PayablesPanel } from "@/components/payables-panel";
 import { finalizeCollections } from "@/lib/collections";
 import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
+import type { BudgetActualMonth } from "@/lib/budget-chart-table";
 import { ClientBriefing } from "@/components/client-briefing";
 import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
@@ -105,6 +106,7 @@ export function RailStudio() {
     packView?: string;
     planView?: string;
     drafterView?: string;
+    view?: string;
   };
   const navigate = useNavigate();
   const pane = legacyPaneForSearch(search) ?? "overview";
@@ -732,7 +734,30 @@ export function OwnerCashBoard({ clientId }: { clientId: string }) {
   );
 }
 
+/** Harness-only month actuals so the chart can show variance. Not stored. */
+const HARNESS_BUDGET_ACTUALS: readonly BudgetActualMonth[] = [
+  ["2026-03", 38000, 6000, 10000],
+  ["2026-04", 30000, 9000, 14000],
+  ["2026-05", 36000, 6500, 11000],
+  ["2026-06", 28000, 8000, 13000],
+  ["2026-07", 40000, 6200, 10500],
+  ["2026-08", 34000, 7000, 12000],
+].map(([month, revenue, cogs, overheads]) => ({
+  month: String(month),
+  totals: {
+    revenue: Number(revenue),
+    cogs: Number(cogs),
+    grossProfit: Number(revenue) - Number(cogs),
+    overheadsTotal: Number(overheads),
+    overheadsOps: Number(overheads),
+    depreciation: 0,
+    ebit: Number(revenue) - Number(cogs) - Number(overheads),
+  },
+}));
+
 function BudgetPane({ clientId }: { clientId: string }) {
+  const search = useSearch({ strict: false }) as { view?: string };
+  const navigate = useNavigate();
   return (
     <div className="tabpane on" id="pane-budget">
       <PaneBoundary label="Budget">
@@ -745,6 +770,19 @@ function BudgetPane({ clientId }: { clientId: string }) {
           simplified={false}
           financials={{ revenue: "420000", cogs: "80000", fixedCosts: "140000", cash: "186000" }}
           fyStartMonthDefault={3}
+          lens={search.view === "table" ? "table" : "chart"}
+          onLensChange={(next) => {
+            void navigate({
+              to: "/clients/$clientId",
+              params: { clientId },
+              search: (prev) => ({
+                ...prev,
+                view: next === "table" ? "table" : undefined,
+              }),
+              replace: true,
+            });
+          }}
+          actualMonths={HARNESS_BUDGET_ACTUALS}
         />
       </PaneBoundary>
     </div>

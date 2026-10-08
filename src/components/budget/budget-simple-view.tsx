@@ -17,7 +17,9 @@ import {
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
+import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
+import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
@@ -33,7 +35,7 @@ function monthOverheadTotal(doc: BudgetDocument, month: string): number {
   return Math.round(sum * 100) / 100;
 }
 
-function MoneyField({
+export function MoneyField({
   value,
   onChange,
   label,
@@ -100,6 +102,9 @@ export function BudgetSimpleView({
   canSign = false,
   onSignoffChange,
   drawer = null,
+  lens,
+  onLensChange,
+  actualMonths,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -112,6 +117,9 @@ export function BudgetSimpleView({
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   drawer?: ReactNode;
+  lens?: BudgetLens;
+  onLensChange?: (next: BudgetLens) => void;
+  actualMonths?: readonly BudgetActualMonth[];
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -223,6 +231,13 @@ export function BudgetSimpleView({
             budgetUpdatedAt={doc.updatedAt}
           />
         }
+      />
+      <BudgetChartTable
+        doc={doc}
+        clientId={clientId}
+        lens={lens}
+        onLensChange={onLensChange}
+        actualMonths={actualMonths}
       />
       {drawer}
       <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
@@ -478,14 +493,15 @@ export function BudgetSimpleView({
                 </span>
               ) : null}
             </Label>
-            <Input
-              type="number"
-              className="mt-1 h-9"
+            <MoneyField
               value={doc.openingCash ?? 0}
-              onChange={(e) =>
+              label="Opening cash"
+              market={market}
+              className="mt-1 h-9"
+              onChange={(openingCash) =>
                 onChange({
                   ...doc,
-                  openingCash: parseFloat(e.target.value) || 0,
+                  openingCash,
                   openingCashSource: "manual",
                   updatedAt: new Date().toISOString(),
                 })

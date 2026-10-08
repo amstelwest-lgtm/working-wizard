@@ -9,6 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
+import { mergeStatementFinancials, type StatementKind } from "@/lib/statement-parse";
 import { readStatementMeta, resolveSnapshotPeriodLabel } from "@/lib/statement-period";
 
 export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "sage" | "pdf_upload";
@@ -78,30 +79,43 @@ export async function upsertPeriodSnapshot(opts: {
   periodLabel?: string | null;
   ratios?: Record<string, number> | null;
   source?: SnapshotSource;
+  /** When set, an existing row is merged. The import writes only this statement. */
+  statementKind?: StatementKind | null;
 }): Promise<{ id: string | null; error: string | null; periodLabel: string; periodDate: string }> {
   const periodDate = periodDateFromUnknown(opts.periodDate);
   const requestedLabel = opts.periodLabel?.trim() || periodLabelFromDate(periodDate);
-  const ratiosOut = opts.ratios ?? computeRatios(opts.financials as unknown as RatioInputs);
 
   const byDate = await supabase
     .from("client_financial_snapshots")
-    .select("id, period_label")
+    .select("id, period_label, financials")
     .eq("client_id", opts.clientId)
     .eq("period_date", periodDate)
     .maybeSingle();
 
-  let existing = byDate.data as { id?: string; period_label?: string | null } | null;
+  let existing = byDate.data as {
+    id?: string;
+    period_label?: string | null;
+    financials?: unknown;
+  } | null;
   let existingId = existing?.id ?? null;
   if (!existingId) {
     const byLabel = await supabase
       .from("client_financial_snapshots")
-      .select("id, period_label")
+      .select("id, period_label, financials")
       .eq("client_id", opts.clientId)
       .eq("period_label", requestedLabel)
       .maybeSingle();
-    existing = byLabel.data as { id?: string; period_label?: string | null } | null;
+    existing = byLabel.data as typeof existing;
     existingId = existing?.id ?? null;
   }
+
+  const mergeOnWrite = Boolean(existingId) && (Boolean(opts.statementKind) || isUploadSnapshot(opts.source));
+  const financialsToWrite = mergeOnWrite
+    ? mergeStatementFinancials(existing?.financials, opts.financials, opts.statementKind)
+    : opts.financials;
+  const ratiosOut = mergeOnWrite
+    ? computeRatios(financialsToWrite as unknown as RatioInputs)
+    : (opts.ratios ?? computeRatios(opts.financials as unknown as RatioInputs));
 
   const periodLabel = resolveSnapshotPeriodLabel(existing?.period_label, requestedLabel);
   const statementSource = readStatementMeta(opts.financials).statementSource;
@@ -114,7 +128,7 @@ export async function upsertPeriodSnapshot(opts: {
     const { error } = await supabase
       .from("client_financial_snapshots")
       .update({
-        financials: opts.financials as never,
+        financials: financialsToWrite as never,
         ratios: ratiosOut as never,
         period_label: periodLabel,
         period_date: periodDate,
@@ -131,7 +145,7 @@ export async function upsertPeriodSnapshot(opts: {
       client_id: opts.clientId,
       period_label: periodLabel,
       period_date: periodDate,
-      financials: opts.financials as never,
+      financials: financialsToWrite as never,
       ratios: ratiosOut as never,
       source: ledgerSource ?? opts.source ?? "autosave",
     })
