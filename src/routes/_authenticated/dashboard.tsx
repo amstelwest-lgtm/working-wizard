@@ -1535,8 +1535,8 @@ function Dashboard() {
   // Average only scored clients — never invent 50 for empty financials.
   const scoredRows = clientRows.filter((c) => c.score != null && Number.isFinite(c.score));
   useEffect(() => {
-    if (scoredRows.length > 0) markInsightSeen();
-  }, [scoredRows.length]);
+    if (scoredRows.length > 0) markInsightSeen(firmId);
+  }, [scoredRows.length, firmId]);
   const avgHealth = scoredRows.length
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;

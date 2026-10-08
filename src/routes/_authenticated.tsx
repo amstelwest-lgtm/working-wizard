@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
 import {
   billingStartSearch,
   peekPendingCheckout,
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthGate() {
   const { user, loading } = useAuth();
+  const { firmId, brandLoading } = useAccountantProfile();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
@@ -50,6 +52,10 @@ function AuthGate() {
     if (!user || loading) return;
     if (!isFirmProductPath(pathname)) {
       setFirmGate("allow");
+      return;
+    }
+    if (brandLoading) {
+      if (!entitledRef.current) setFirmGate("checking");
       return;
     }
     let cancelled = false;
@@ -97,7 +103,7 @@ function AuthGate() {
         isAccountantFirmUser: true,
         isMilonItMember: false,
         entitled,
-        insightSeen: readInsightSeen(),
+        insightSeen: clients.firmClientCount === 0 ? false : readInsightSeen(firmId),
         firmClientCount: clients.firmClientCount,
         firstClientId: clients.firstClientId,
       });
@@ -117,7 +123,7 @@ function AuthGate() {
     return () => {
       cancelled = true;
     };
-  }, [user, loading, pathname, navigate, checkEntitlement]);
+  }, [user, loading, pathname, navigate, checkEntitlement, firmId, brandLoading]);
 
   if (loading) {
     return (

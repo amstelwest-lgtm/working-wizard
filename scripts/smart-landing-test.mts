@@ -71,6 +71,39 @@ assert(
 const onboard = decideSmartLanding({ signedIn: true, entitled: false, firstClientId: null });
 assert(onboard.kind === "onboarding" && onboard.href === PRECARD_ONBOARDING_HREF, "no card + no client → add-client step");
 assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 0,
+  }) === "allow",
+  "0-client /open destination stays open pre-card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: PRECARD_ONBOARDING_HREF,
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 0,
+  }) === "allow",
+  "/dashboard?addClient=1 stays open for a 0-client firm",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: SMART_LANDING_PATH,
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 0,
+  }) === "allow",
+  "/open itself is not the billing wall for a 0-client firm",
+);
+assert(
   decideSmartLanding({ signedIn: true, entitled: false, firstClientId: " " }).kind === "onboarding",
   "blank client id is the add-client step",
 );

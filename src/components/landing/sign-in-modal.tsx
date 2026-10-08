@@ -24,6 +24,7 @@ export function LandingSignInModal({
   inviteClientId,
   regClientCode,
   copyMarket,
+  firmId = null,
   onClose,
   onSiEmailChange,
   onSiPasswordChange,
@@ -50,6 +51,8 @@ export function LandingSignInModal({
   inviteClientId: string | null;
   regClientCode: string;
   copyMarket: { copyPack: VisitorCopyPack };
+  /** Current firm, when one is already known. Unknown is not seen. */
+  firmId?: string | null;
   onClose: () => void;
   onSiEmailChange: (value: string) => void;
   onSiPasswordChange: (value: string) => void;
@@ -70,7 +73,7 @@ export function LandingSignInModal({
       ? "Check your email"
       : "Reset password"
     : peekPendingCheckout()
-      ? readInsightSeen()
+      ? readInsightSeen(firmId)
         ? "Sign in to finish firm billing"
         : "Sign in to open your practice"
       : "Sign in to MILŌN";
