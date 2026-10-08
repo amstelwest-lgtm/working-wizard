@@ -23,7 +23,11 @@ import {
   MILON_BOT_OWNER_CHIPS,
   MILON_BOT_SUBTITLE,
   MILON_BOT_TITLE,
+  DRAFT_ADVISORY_PACK_COMMAND,
+  DRAFT_ADVISORY_PACK_LABEL,
   deriveMilonBotEndpoint,
+  isDeliverableRecommendationQuestion,
+  isQuestionPrompt,
   persistedCreateIntent,
   routeMilonIntent,
 } from "../src/lib/milon-bot-copy.ts";
@@ -228,5 +232,31 @@ assert(created?.draft === true && created.actions === true && created.pdf === tr
 assert(persistedCreateIntent("What's the health score?") === null, "health questions stay on the grounded Q&A path");
 assert(persistedCreateIntent("Draft an advisory pack from the brain — don't send it.")?.draft === true, "draft chip persists a pack");
 assert(persistedCreateIntent("Draft an advisory pack from the brain — don't send it.")?.actions === false, "draft chip does not invent action items");
+assert(
+  persistedCreateIntent("which deliverable should I prepare first?") === null,
+  "which deliverable should I prepare first? does not create",
+);
+assert(
+  persistedCreateIntent("Which deliverable should I prepare for them first, and why?") === null,
+  "the QA read question does not create a pack",
+);
+assert(isQuestionPrompt("Which deliverable should I prepare for them first, and why?"), "QA prompt is a question");
+assert(
+  isDeliverableRecommendationQuestion("Which deliverable should I prepare for them first, and why?"),
+  "QA prompt asks for a recommendation",
+);
+assert(
+  routeMilonIntent("Which deliverable should I prepare for them first, and why?") === "ask-ai",
+  "the recommendation stays on the numbers path",
+);
+const drafted = persistedCreateIntent("draft the advisory pack");
+assert(drafted?.draft === true && drafted.actions === false, "draft the advisory pack creates a pack only");
+const draftedNow = persistedCreateIntent(DRAFT_ADVISORY_PACK_COMMAND);
+assert(draftedNow?.draft === true && draftedNow.actions === false, "the draft button command creates a pack");
+assert(DRAFT_ADVISORY_PACK_LABEL === "Draft the Advisory Pack", "button label");
+assert(widgetSrc.includes("DRAFT_ADVISORY_PACK_COMMAND"), "the reply button sends the explicit draft command");
+assert(widgetSrc.includes("ask-ai-thread"), "the widget keeps the session thread on screen");
+assert(widgetSrc.includes("dataset.draftPack"), "the draft control is a button in the reply");
+assert(!fnSrc.includes("parsedCreate ??"), "mode create cannot invent a write from a question");
 
 console.log("milon-bot-test: all assertions passed");

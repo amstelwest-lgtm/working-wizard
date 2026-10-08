@@ -28,9 +28,13 @@ import {
   formatOverviewForPrompt,
   planActionsFromOverview,
 } from "../supabase/functions/ask-ai/overview-brief.ts";
-import { healthFromFlatFinancials, healthFromRatioInputs, flatToRatioInputs } from "../src/lib/health-score.ts";
-import { assessClientMetrics } from "../src/lib/client-metrics.ts";
-import { computeRatios } from "../src/lib/ratios.ts";
+import {
+  healthFromFlatFinancials,
+  overviewRatios,
+  scorecardHealthFromFinancials,
+} from "../src/lib/health-score.ts";
+import { assessClientMetrics, RUNWAY_PROFITABLE_LABEL } from "../src/lib/client-metrics.ts";
+import { periodMonthsOf } from "../src/lib/ratios.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -180,9 +184,15 @@ assert(
   Object.keys(resolveRatioRecord(null, { revenue: 800_000, netIncome: 120_000 })).includes("Net Margin"),
   "empty snapshot still yields ratios from financials",
 );
+const liveOverSnapshot = resolveRatioRecord(
+  { "Net Margin": 0.2, "Creditor Days": 28 },
+  { revenue: 800_000, netIncome: 120_000, cogs: 400_000, payables: 30_000 },
+);
+assert(Math.abs(liveOverSnapshot["Net Margin"] - 0.15) < 1e-9, "live net margin wins over a stale snapshot");
+assert(liveOverSnapshot["Creditor Days"] !== 28, "live creditor days win over a stale snapshot");
 assert(
-  Object.keys(resolveRatioRecord({ "Net Margin": 0.2 }, { revenue: 1, netIncome: 1 }))[0] === "Net Margin",
-  "snapshot wins when present",
+  Object.keys(resolveRatioRecord({ "Creditor Days": 28 }, null)).includes("Creditor Days"),
+  "snapshot is the fallback only when live financials yield nothing",
 );
 const pillars = pillarBreakdownFromRatios(derived);
 assert(pillars.some((p) => p.id === "profit" && p.score != null), "profit pillar scored");
@@ -311,33 +321,47 @@ assert(
   "61 creditor days is outside the shared band",
 );
 
-// QA US: unlocked periodMonths 12 with a July month-end is 7 months from January.
-// Ratios annualise that span (debtor 25 / creditor 37). Overview copy and the
-// cash pillar must quote those figures, not the unannualised 43 / 63.
+// Live QA US file. Stored cover is 12 months (debtor 25 / creditor 37).
+// A January–September year span annualises to 19 / 28. The Bot must quote 37.
 const qaUs = {
   cash: "128450",
   revenue: "700000",
   cogs: "280000",
-  ebit: "60200",
-  receivables: "82192",
-  payables: "48658",
+  ebit: "60000",
+  netIncome: "60000",
+  receivables: "48500",
+  payables: "28500",
+  inventory: "62000",
   periodMonths: "12",
-  periodEnd: "2026-07-31",
+  periodEnd: "2026-09-30",
 };
-const qaInputs = flatToRatioInputs(qaUs, { fyStartMonth: 1 });
-const qaRatios = computeRatios(qaInputs);
+const qaRatios = overviewRatios(qaUs, { fyStartMonth: 1, periodMonths: periodMonthsOf(qaUs) });
 assert(qaRatios["Debtor Days"] === 25, `Ratios debtor days 25, got ${qaRatios["Debtor Days"]}`);
 assert(qaRatios["Creditor Days"] === 37, `Ratios creditor days 37, got ${qaRatios["Creditor Days"]}`);
 assert(Math.round(qaRatios["Gross Margin"] * 1000) === 600, "Ratios gross margin 60%");
 assert(Math.round(qaRatios["Operating Margin"] * 1000) === 86, "Ratios operating margin 8.6%");
-const storedTwelve = computeRatiosFromFinancials(qaUs);
-assert(storedTwelve["Debtor Days"] === 43, `stored 12 debtor days stay 43, got ${storedTwelve["Debtor Days"]}`);
-assert(storedTwelve["Creditor Days"] === 63, `stored 12 creditor days stay 63, got ${storedTwelve["Creditor Days"]}`);
-const qaHealth = healthFromRatioInputs(qaInputs, null, { country: "US", copyPack: "us" });
+assert(Math.round(qaRatios["Net Margin"] * 1000) === 86, "Ratios net margin 8.6%");
+const yearSpan = computeRatiosFromFinancials(
+  { ...qaUs, periodMonths: "9" },
+  { fyStartMonth: 1, periodMonths: 9 },
+);
+assert(yearSpan["Creditor Days"] === 28, `year-span creditor days 28, got ${yearSpan["Creditor Days"]}`);
+const storedCover = computeRatiosFromFinancials(qaUs, { fyStartMonth: 1 });
+assert(storedCover["Debtor Days"] === 25, `stored cover debtor days 25, got ${storedCover["Debtor Days"]}`);
+assert(storedCover["Creditor Days"] === 37, `stored cover creditor days 37, got ${storedCover["Creditor Days"]}`);
+const qaHealth = scorecardHealthFromFinancials({
+  financials: qaUs,
+  fyStartMonth: 1,
+  periodMonths: periodMonthsOf(qaUs),
+  market: { country: "US", copyPack: "us" },
+});
 const qaBrief = buildOverviewBrief({
   financials: qaUs,
+  ratios: { "Creditor Days": 28, "Operating Margin": 0.099 },
   cash: 128450,
+  runwayLabel: RUNWAY_PROFITABLE_LABEL,
   copyPack: "us",
+  fyStartMonth: 1,
   clientName: "QA US Test LLC",
 });
 const qaCash = qaHealth.pillars.find((p) => p.id === "cash")?.score;
@@ -345,14 +369,56 @@ const briefCash = qaBrief.pillars.find((p) => p.id === "cash")?.score;
 assert(qaBrief.debtorDays === 25 && qaBrief.creditorDays === 37, `overview days ${qaBrief.debtorDays}/${qaBrief.creditorDays}`);
 assert(briefCash === qaCash, `overview cash pillar ${briefCash} matches Ratios ${qaCash}`);
 assert(qaBrief.health === qaHealth.overall, `overview health ${qaBrief.health} matches Ratios ${qaHealth.overall}`);
+assert(Math.round((qaBrief.operatingMargin ?? 0) * 1000) === 86, "brief operating margin is 8.6%");
+assert(Math.round((qaBrief.netMargin ?? 0) * 1000) === 86, "brief net margin is 8.6%");
 const qaPrompt = formatOverviewForPrompt(qaBrief, "accountant");
 assert(qaPrompt.includes("Debtor days: 25 days"), qaPrompt);
 assert(qaPrompt.includes("Creditor days: 37 days"), qaPrompt);
+assert(!qaPrompt.includes("28 days"), qaPrompt);
 assert(qaPrompt.includes("Gross margin: 60.0%"), qaPrompt);
 assert(qaPrompt.includes("Operating margin: 8.6%"), qaPrompt);
+assert(qaPrompt.includes("Net margin: 8.6%"), qaPrompt);
+assert(qaPrompt.includes("Operating margin is EBIT divided by revenue"), qaPrompt);
+assert(qaPrompt.includes("no cash-flow statement is on file"), qaPrompt);
+assert(!qaPrompt.includes("add a cash-flow statement or bank balance"), qaPrompt);
+assert(qaPrompt.includes("Do not say the bank balance"), qaPrompt);
 assert(qaPrompt.includes("$700,000"), "overview keeps period revenue");
 assert(qaPrompt.includes("$128,450"), "overview keeps cash on file");
 assert(!qaPrompt.includes("44 days") && !qaPrompt.includes("73 days") && !qaPrompt.includes("43.8"), qaPrompt);
+const mixed = buildPrompt(
+  "What's wrong with this client?",
+  {
+    profile: null,
+    profileQuestions: [],
+    scores: null,
+    ratios: [{ key: "creditorDays", value: 37, format: "days", p25: null, p50: 40, p75: null, higher_is_better: null }],
+    playbook: [],
+    copyPack: "us",
+    waterfall: {
+      source: "period",
+      hasData: true,
+      steps: [
+        { label: "Fixed / operating costs", pctOfRevenue: 50.1 },
+        { label: "EBIT", pctOfRevenue: 9.9 },
+        { label: "Net income", pctOfRevenue: 9.9 },
+      ],
+    },
+    cashForecast: null,
+    productLines: [],
+    nextSteps: [],
+    actionPlan: null,
+    deliverables: [],
+    overview: qaBrief,
+  },
+  "full",
+  "accountant",
+);
+assert(mixed.user.includes("Operating margin: 8.6%"), mixed.user);
+assert(mixed.user.includes("Net margin: 8.6%"), mixed.user);
+assert(mixed.user.includes("Creditor Days: 37 days"), mixed.user);
+assert(!mixed.user.includes("EBIT: 9.9%"), mixed.user);
+assert(mixed.user.includes("do not quote a reconstructed EBIT"), mixed.user);
+assert(mixed.system.includes("Never say there is no bank balance"), mixed.system);
 const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(
   ownerSrc.includes("withCanonicalDebtorCreditorDays") &&

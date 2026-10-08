@@ -70,13 +70,49 @@ export type PersistedCreateIntent = {
   pdf: boolean;
 };
 
+/** Button label. The click sends DRAFT_ADVISORY_PACK_COMMAND through the create path. */
+export const DRAFT_ADVISORY_PACK_LABEL = "Draft the Advisory Pack";
+
+/** Unambiguous imperative. Question wording must not be substituted for this. */
+export const DRAFT_ADVISORY_PACK_COMMAND = "Draft the advisory pack now";
+
+/**
+ * A question asks. It must never be treated as an instruction to write.
+ * "Which deliverable should I prepare first?" is a question even with "prepare".
+ */
+export function isQuestionPrompt(question: string): boolean {
+  const q = question.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!q) return false;
+  if (/\?\s*$/.test(q)) return true;
+  if (/^(what|which|who|why|how|when|where|whose)\b/.test(q)) return true;
+  if (/^(should|can|could|would|do|does|did|is|are|am|will)\b/.test(q)) return true;
+  if (/\bshould i\b/.test(q)) return true;
+  return false;
+}
+
+/**
+ * Read question about which deliverable to prepare. The reply recommends;
+ * the Draft button is the write.
+ */
+export function isDeliverableRecommendationQuestion(question: string): boolean {
+  const q = question.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!isQuestionPrompt(q)) return false;
+  return /\b(deliverable|advisory pack|pack)\b/.test(q);
+}
+
 /**
  * Questions that must write a draft and/or Action Plan rows, not only chat.
  * "create an advisory deliverable / action plan PDF" is the product case.
+ * A question ("which deliverable should I prepare?") never writes, even when
+ * it contains a create verb and the word deliverable.
  */
 export function persistedCreateIntent(question: string): PersistedCreateIntent | null {
   const q = question.toLowerCase().replace(/\s+/g, " ").trim();
   if (!q) return null;
+  if (isQuestionPrompt(q)) return null;
+  if (/\b(don'?t|do not|never)\s+(create|draft|generate|build|write|make|prepare|produce)\b/.test(q)) {
+    return null;
+  }
   const verb = /\b(create|draft|generate|build|write|make|prepare|produce)\b/.test(q);
   if (!verb) return null;
   const pdf = /\bpdf\b/.test(q);

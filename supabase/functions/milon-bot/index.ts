@@ -80,12 +80,6 @@ const TOOLS: ClaudeTool[] = [
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
-    name: "draft_deliverable",
-    description:
-      "Call the existing brain-deliverable-draft function. Writes a draft pack only. Never ready or sent.",
-    input_schema: { type: "object", properties: {}, additionalProperties: false },
-  },
-  {
     name: "answer_from_brain",
     description:
       "Read context_facts, brain_summary, and financial snapshot summaries. Missing fields stay empty — never invent.",
@@ -180,7 +174,13 @@ async function runTool(
   }
 
   if (tool === "draft_deliverable") {
-    return invokeExistingFunction("brain-deliverable-draft", ctx.token, ctx.clientId);
+    // Chat must not write a pack. Explicit "draft the advisory pack" is persisted
+    // before this loop by "brain-deliverable-draft". A question never reaches here
+    // as a successful create, and a free tool call must not insert a version.
+    return {
+      error: "A question does not save a draft. Draft the advisory pack only when asked explicitly.",
+      empty: true,
+    };
   }
 
   const topic = typeof args.topic === "string" ? args.topic.trim().toLowerCase() : "";
@@ -307,15 +307,9 @@ Deno.serve(async (req: Request) => {
   const rawMessage = body.message;
   const rawObjective = typeof body.objective === "string" ? body.objective.trim() : "";
   const createText = (typeof rawMessage === "string" ? rawMessage : rawObjective).trim();
-  const parsedCreate = persistedCreateIntent(createText);
-  const explicitCreate = body.mode === "create";
-  const createIntent: CreateIntent | null = explicitCreate
-    ? parsedCreate ?? {
-        draft: true,
-        actions: true,
-        pdf: /\bpdf\b/i.test(createText),
-      }
-    : parsedCreate;
+  // Questions never write, even when the client sends mode "create".
+  // The Draft button posts an unambiguous imperative, which parses here.
+  const createIntent: CreateIntent | null = persistedCreateIntent(createText);
   if (!clientId || (!createIntent && (agentMode ? rawObjective.length < 8 : !rawMessage?.trim()))) {
     return respond(
       {

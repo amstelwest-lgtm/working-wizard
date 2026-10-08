@@ -11,11 +11,16 @@
  */
 
 import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
-import { computeOverallHealth, type ScoreMarket } from "../../../src/lib/health-score.ts";
+import {
+  computeOverallHealth,
+  scorecardHealthFromFinancials,
+  type ScoreMarket,
+} from "../../../src/lib/health-score.ts";
 import {
   creditorDaysHealthyBand,
   healthBandLabel,
   peerMedian,
+  periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
@@ -173,6 +178,20 @@ function days(n: number): string {
   return `${Math.round(n)} days`;
 }
 
+/**
+ * Runway line the Bot may quote. Cash already on file is not a missing bank
+ * balance — the only gap left is a cash-flow statement.
+ */
+export function overviewRunwayFact(brief: OverviewBrief): string | null {
+  const label = brief.runwayLabel;
+  if (brief.cash != null && label && /bank balance/i.test(label)) {
+    return "Cash runway: not estimated yet — no cash-flow statement is on file";
+  }
+  if (label) return `Cash runway: ${label}`;
+  if (brief.runwayWeeks != null) return `Cash runway: ${brief.runwayWeeks} weeks`;
+  return null;
+}
+
 export function buildOverviewBrief(input: {
   financials?: Record<string, unknown> | null;
   ratios?: Record<string, number> | null;
@@ -198,16 +217,30 @@ export function buildOverviewBrief(input: {
     input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
       ? input.financials
       : null;
-  const derived = finiteDisplayRatios(computeRatiosFromFinancials(financials, { fyStartMonth }));
+  const periodMonths = financials ? periodMonthsOf(financials) : null;
+  const derived = finiteDisplayRatios(
+    computeRatiosFromFinancials(financials, { fyStartMonth, periodMonths }),
+  );
   const ratios = Object.keys(derived).length > 0 ? derived : finiteDisplayRatios(input.ratios ?? null);
 
   const runway = asNumber(input.runwayWeeks);
-  const scored = computeOverallHealth({
-    ratios,
-    cashRunwayWeeks: runway,
-    shortfallWeek: input.shortfallWeek,
-    market,
-  });
+  // Same pillar math as Overview / the scorecard. A year-span health score
+  // (creditor days 28) must not sit next to the stored-cover days (37).
+  const scored = financials
+    ? scorecardHealthFromFinancials({
+        financials,
+        fyStartMonth,
+        periodMonths,
+        cashRunwayWeeks: runway,
+        shortfallWeek: input.shortfallWeek,
+        market,
+      })
+    : computeOverallHealth({
+        ratios,
+        cashRunwayWeeks: runway,
+        shortfallWeek: input.shortfallWeek,
+        market,
+      });
   const pillars: OverviewPillar[] = scored.pillars.map((pillar) => ({
     id: pillar.id,
     label: pillar.label,
@@ -277,8 +310,8 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.revenue != null) {
     lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}`);
   }
-  if (brief.runwayLabel) lines.push(`Cash runway: ${brief.runwayLabel}`);
-  else if (brief.runwayWeeks != null) lines.push(`Cash runway: ${brief.runwayWeeks} weeks`);
+  const runwayFact = overviewRunwayFact(brief);
+  if (runwayFact) lines.push(runwayFact);
   if (brief.grossMargin != null) lines.push(`Gross margin: ${pct(brief.grossMargin)}`);
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
@@ -321,6 +354,16 @@ export function formatOverviewForPrompt(
   if (brief.brainHeadline) {
     lines.push(
       `Client Brain headline (background only; if it disagrees with the figures above, use the figures): ${brief.brainHeadline}`,
+    );
+  }
+  if (brief.operatingMargin != null || brief.netMargin != null) {
+    lines.push(
+      "Operating margin is EBIT divided by revenue. Net margin is net income divided by revenue. Quote those labels. Do not call operating margin EBIT, and do not replace either figure with a waterfall percentage.",
+    );
+  }
+  if (brief.cash != null) {
+    lines.push(
+      "Cash on file is already recorded. Do not say the bank balance or the cash figure is missing. If runway is not estimated, the only gap you may name is that no cash-flow statement is on file.",
     );
   }
   if (audience === "accountant") {

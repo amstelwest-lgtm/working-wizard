@@ -99,6 +99,15 @@ class FakeElement {
     }
     return null;
   }
+
+  findAll(predicate: (el: FakeElement) => boolean): FakeElement[] {
+    const out: FakeElement[] = [];
+    for (const child of this.children) {
+      if (predicate(child)) out.push(child);
+      out.push(...child.findAll(predicate));
+    }
+    return out;
+  }
 }
 
 // Patch Node.js globals to satisfy ask-ai.js at import time and at runtime.
@@ -724,6 +733,139 @@ await test("Scenario 8: a drafted recommendation offers Review Action Plan", asy
   assert(opened.length === 1, "one click opens the existing deliverable");
   assert(opened[0].tab === "plan" && opened[0].coach === "actions", "deep link is this client's Action Plan");
   assert((opened[0].why ?? "").includes("Propose next steps"), "the route keeps the question");
+});
+
+await test("Scenario 9: a prepare question recommends, and the button creates", async () => {
+  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+  let n = 0;
+  (globalThis as Record<string, unknown>).fetch = async (url: string, init?: RequestInit) => {
+    const body = JSON.parse((init?.body as string) ?? "{}");
+    calls.push({ url, body });
+    n += 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        answer: n === 1 ? "Prepare the advisory pack first. Profitability is the weak pillar." : "Saved an advisory draft.",
+        chips: [],
+        ...(n === 2 ? { created: { packId: "pack-1" } } : {}),
+      }),
+    };
+  };
+
+  const container = makeContainer("qa-us");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+  });
+
+  const question = "Which deliverable should I prepare for them first, and why?";
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  if (!ta) throw new Error("textarea missing");
+  ta.input(question);
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 1, "one request for the question");
+  assert(!calls[0].url.includes("milon-bot"), "the question stays on ask-ai");
+  assert(calls[0].body.question === question, "the question is sent as a question");
+  assert(calls[0].body.mode == null, "the question does not post mode create");
+  const draft = container.find((el) => el.dataset.draftPack === "1");
+  assert(draft?.textContent === "Draft the Advisory Pack", `draft button missing, got ${draft?.textContent}`);
+  draft?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 2, "the button sends a second request");
+  assert(calls[1].url.includes("milon-bot"), "the button uses the create path");
+  assert(calls[1].body.mode === "create", "the button posts mode create");
+  assert(calls[1].body.message === "Draft the advisory pack now", "the button sends the explicit command");
+});
+
+await test("Scenario 10: earlier questions stay visible", async () => {
+  let n = 0;
+  (globalThis as Record<string, unknown>).fetch = async () => {
+    n += 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: n === 1 ? "First reply about cash." : "Second reply about margin.", chips: [] }),
+    };
+  };
+
+  const container = makeContainer("qa-history");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  if (!ta) throw new Error("textarea missing");
+  ta.input("How is cash?");
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 0));
+  const box = container.find((el) => el.className.includes("ask-ai-textarea"));
+  box?.input("How is margin?");
+  container.find((el) => el.className.includes("ask-ai-send"))?.click();
+  await new Promise((r) => setTimeout(r, 0));
+
+  const thread = container.find((el) => el.className.includes("ask-ai-thread"));
+  assert(thread != null, "the session renders a scrolling thread");
+  const answers = container.findAll((el) => el.className.includes("ask-ai-answer"));
+  const users = container.findAll((el) => el.className.includes("ask-ai-turn-user"));
+  assert(answers.length === 2, `both replies stay visible, got ${answers.length}`);
+  assert(users.length === 2, `both questions stay visible, got ${users.length}`);
+  assert((answers[0].innerHTML ?? "").includes("First reply"), "the first reply is still in the thread");
+  assert((answers[1].innerHTML ?? "").includes("Second reply"), "the latest reply is in the thread");
+});
+
+await test("Scenario 11: a remount in this tab restores the thread", async () => {
+  const store = new Map<string, string>();
+  const previous = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  (globalThis as { sessionStorage?: unknown }).sessionStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  };
+
+  try {
+    (globalThis as Record<string, unknown>).fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: "Cash is on file.", chips: [] }),
+    });
+    const first = makeContainer("qa-persist");
+    mountAskAi(first, {
+      endpoint: "https://example.com/functions/v1/ask-ai",
+      variant: "studio",
+      getToken: async () => "test-token",
+    });
+    const ta = first.find((el) => el.className.includes("ask-ai-textarea"));
+    ta?.input("How is cash?");
+    first.find((el) => el.className.includes("ask-ai-send"))?.click();
+    await new Promise((r) => setTimeout(r, 0));
+    assert(store.size === 1, "the page session stores the thread");
+
+    const second = makeContainer("qa-persist");
+    mountAskAi(second, {
+      endpoint: "https://example.com/functions/v1/ask-ai",
+      variant: "studio",
+      getToken: async () => "test-token",
+    });
+    const answers = second.findAll((el) => el.className.includes("ask-ai-answer"));
+    const users = second.findAll((el) => el.className.includes("ask-ai-turn-user"));
+    assert(users.length === 1 && (users[0].textContent ?? "").includes("How is cash?"), "the question survives remount");
+    assert(answers.length === 1 && (answers[0].innerHTML ?? "").includes("Cash is on file."), "the reply survives remount");
+  } finally {
+    if (previous) (globalThis as { sessionStorage?: Storage }).sessionStorage = previous;
+    else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  }
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

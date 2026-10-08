@@ -1,6 +1,8 @@
 /**
- * Ask AI ratio derivation. Ratios come from `computeRatios` / `flatToRatioInputs`
- * so Overview copy uses the same days, margins, and period as the Ratios page.
+ * Ask AI ratio derivation. Days, margins, and the period cover come from
+ * `overviewRatios` with `periodMonthsOf` — the same helpers Overview and
+ * Ratios use. A year-span (`effectivePeriodMonths`) or a snapshot must not
+ * replace those figures (19/28 instead of 25/37 on the live QA US file).
  */
 
 import {
@@ -8,8 +10,8 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
-import { flatToRatioInputs, type FlatFinancials } from "../../../src/lib/health-score.ts";
-import { computeRatios } from "../../../src/lib/ratios.ts";
+import { overviewRatios } from "../../../src/lib/health-score.ts";
+import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 
 export const DISPLAY_TO_CAMEL: Record<string, string> = {
   "Net Margin": "netMargin",
@@ -63,18 +65,23 @@ function num(raw: unknown): number {
 }
 
 /**
- * Same display-name keys as `computeRatios()` in src/lib/ratios.ts, including
- * `effectivePeriodMonths` when a financial-year start is passed.
+ * Display-name keys from `overviewRatios`, on the stored figures cover
+ * (`periodMonthsOf`) unless the caller passes the same cover Overview uses.
  */
 export function computeRatiosFromFinancials(
   financials: Record<string, unknown> | null | undefined,
-  opts?: { fyStartMonth?: number | null },
+  opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
 ): Record<string, number> {
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return {};
-  // Blob values are unknown here; flatToRatioInputs stringifies each field.
-  return computeRatios(
-    flatToRatioInputs(financials as FlatFinancials, { fyStartMonth: opts?.fyStartMonth }),
-  );
+  const explicit = opts?.periodMonths;
+  const periodMonths =
+    explicit != null && Number.isFinite(explicit) && explicit >= 1 && explicit <= 12
+      ? Math.round(explicit)
+      : periodMonthsOf(financials);
+  return overviewRatios(financials, {
+    fyStartMonth: opts?.fyStartMonth,
+    periodMonths,
+  });
 }
 
 function clamp(n: number): number {
@@ -129,11 +136,23 @@ export function pillarBreakdownFromRatios(
   });
 }
 
-/** Prefer snapshot ratios; fall back to live `clients.financials`. */
+/**
+ * Live Overview ratios win. A snapshot is only the fallback when
+ * `clients.financials` does not yield a ratio — a saved snapshot can still
+ * show the old year-span creditor days (28) after Overview moved to 37.
+ */
 export function resolveRatioRecord(
   snapshotRatios: Record<string, unknown> | null | undefined,
   financials: Record<string, unknown> | null | undefined,
+  opts?: { fyStartMonth?: number | null; periodMonths?: number | null },
 ): Record<string, number> {
+  const derived = computeRatiosFromFinancials(financials, opts);
+  const live: Record<string, number> = {};
+  for (const [k, v] of Object.entries(derived)) {
+    if (Number.isFinite(v)) live[k] = v;
+  }
+  if (Object.keys(live).length > 0) return live;
+
   const fromSnap: Record<string, number> = {};
   if (snapshotRatios && typeof snapshotRatios === "object" && !Array.isArray(snapshotRatios)) {
     for (const [k, v] of Object.entries(snapshotRatios)) {
@@ -141,11 +160,5 @@ export function resolveRatioRecord(
       if (Number.isFinite(n)) fromSnap[k] = n;
     }
   }
-  if (Object.keys(fromSnap).length > 0) return fromSnap;
-  const derived = computeRatiosFromFinancials(financials);
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(derived)) {
-    if (Number.isFinite(v)) out[k] = v;
-  }
-  return out;
+  return fromSnap;
 }
