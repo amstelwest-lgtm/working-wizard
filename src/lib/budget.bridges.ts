@@ -8,11 +8,20 @@ import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compu
 import { newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 import { periodProfitBridge } from "@/lib/period-profit";
+import { assessClientMetrics } from "@/lib/client-metrics";
+import {
+  DAYS_REVIEW_LIMIT,
+  computedDaysAp,
+  computedDaysAr,
+  daysNeedReview,
+} from "@/lib/deliverable-input-config";
+import { readStatementMeta } from "@/lib/statement-period";
 import {
   annualiseFinancials,
   FLOW_FIELD_KEYS,
   PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
+  periodMonthsOf,
 } from "@/lib/ratios";
 
 function num(v: string | number | null | undefined): number {
@@ -105,6 +114,13 @@ function figuresCoverChosen(fin: Record<string, unknown>): boolean {
  * ~180× a year.
  */
 export function annualiseBudgetFinancials<T extends Record<string, unknown>>(fin: T): T {
+  // Ratios' stored cover, including an unlocked 9 months. A dated span must
+  // not leave that total looking like a 12-month year.
+  const cover = periodMonthsOf(fin);
+  if (cover >= 2 && cover < 12) {
+    return scaleFlowFields(fin, 12 / cover);
+  }
+
   const months = explicitPeriodMonths(fin);
   if (figuresCoverChosen(fin) && months != null) {
     if (months === 12) return fin;
@@ -219,11 +235,13 @@ export function mergeMonthActuals(
   };
 }
 
-/** Variance-card badge. Statement pace is not "no actuals". */
-export function budgetActualsBadge(importedMonths: number, statementPace: boolean): string {
-  if (importedMonths > 0) return `${importedMonths} imported`;
-  if (statementPace) return "Statement pace";
-  return "No actuals yet";
+export type BudgetActualsChip = "Uploaded month" | "Statement pace, prorated" | "None";
+
+/** One actuals chip. Statement pace is not "None". */
+export function budgetActualsBadge(importedMonths: number, statementPace: boolean): BudgetActualsChip {
+  if (importedMonths > 0) return "Uploaded month";
+  if (statementPace) return "Statement pace, prorated";
+  return "None";
 }
 
 function budgetYearTotals(doc: BudgetDocument): { revenue: number; cogs: number } {
@@ -585,4 +603,170 @@ export function repairUntouchedSeededBudget(
   const normalized = normalizeBudgetDocument(doc);
   if (!periodFinancials || !budgetSeedIsUntouched(normalized)) return normalized;
   return normalizeBudgetDocument(seedBudgetFromFinancials(normalized, periodFinancials).doc);
+}
+
+export type BudgetOpeningSource = "bank" | "statement" | "manual";
+
+export function budgetOpeningSourceLabel(
+  source: BudgetOpeningSource | null | undefined,
+): string | null {
+  if (source === "bank") return "Bank";
+  if (source === "statement") return "Statement";
+  if (source === "manual") return "Manual";
+  return null;
+}
+
+/** Days past this need a review flag. The budget, Ratios, and Cash share the figure. */
+export const BUDGET_DAYS_REVIEW = DAYS_REVIEW_LIMIT;
+
+export function budgetDaysNeedReview(days: number | null | undefined): boolean {
+  return daysNeedReview(days);
+}
+
+export function budgetDaysSourceLabel(
+  source: "ratios" | "manual" | null | undefined,
+): "Ratios" | "Manual" {
+  return source === "manual" ? "Manual" : "Ratios";
+}
+
+/**
+ * Opening cash for this client's own bank or statement.
+ * A manual entry is kept. Anything else — including another client's
+ * balance still sitting on the document — is replaced from this client's
+ * cash figure (`assessClientMetrics` / `resolveClientCash`).
+ */
+export function alignBudgetOpeningCash(
+  doc: BudgetDocument,
+  input: {
+    financials?: Record<string, unknown> | null;
+    cashflow?: unknown;
+    financialsUpdatedAt?: string | null;
+  },
+): BudgetDocument {
+  if (doc.openingCashSource === "manual") return doc;
+  const cash = assessClientMetrics({
+    financials: input.financials ?? null,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+  }).cash;
+  if (cash.amount == null || !(cash.amount > 0)) return doc;
+  const source: BudgetOpeningSource = cash.source === "bank" ? "bank" : "statement";
+  if (doc.openingCash === cash.amount && doc.openingCashSource === source) return doc;
+  return { ...doc, openingCash: cash.amount, openingCashSource: source };
+}
+
+/** Debtor and creditor days follow Ratios unless the accountant typed them. */
+export function alignBudgetWorkingCapital(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, unknown> | null | undefined,
+): BudgetDocument {
+  if (!periodFinancials || doc.wcDaysSource === "manual") return doc;
+  const debtorDays = computedDaysAr(periodFinancials);
+  const creditorDays = computedDaysAp(periodFinancials);
+  if (debtorDays == null && creditorDays == null) return doc;
+  const nextDebtor = debtorDays ?? doc.wc.debtorDays;
+  const nextCreditor = creditorDays ?? doc.wc.creditorDays;
+  if (
+    doc.wcDaysSource === "ratios" &&
+    doc.wc.debtorDays === nextDebtor &&
+    doc.wc.creditorDays === nextCreditor
+  ) {
+    return doc;
+  }
+  return {
+    ...doc,
+    wcDaysSource: "ratios",
+    wc: { ...doc.wc, debtorDays: nextDebtor, creditorDays: nextCreditor },
+  };
+}
+
+/**
+ * The budget the tab, the PDF, and Reports all read.
+ * An order-of-magnitude plan is left as a suggestion (`budgetScaleBreak`).
+ * It is not replaced here. Untouched seeds still pick up statement
+ * depreciation. Opening cash and working-capital days are this client's.
+ */
+export function publishBudgetDocument(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, string | number | null | undefined> | null | undefined,
+  cash?: { cashflow?: unknown; financialsUpdatedAt?: string | null },
+): BudgetDocument {
+  const normalized = normalizeBudgetDocument(doc);
+  const scaleBroken = budgetScaleBreak(normalized, periodFinancials) != null;
+  const repaired =
+    scaleBroken || !periodFinancials
+      ? normalized
+      : repairUntouchedSeededBudget(normalized, periodFinancials);
+  const withDays = alignBudgetWorkingCapital(repaired, periodFinancials ?? null);
+  return alignBudgetOpeningCash(withDays, {
+    financials: periodFinancials ?? null,
+    cashflow: cash?.cashflow,
+    financialsUpdatedAt: cash?.financialsUpdatedAt ?? null,
+  });
+}
+
+function coverMonths(fy: string[], endMonth: string, periodMonths: number): string[] {
+  const n = Math.max(1, Math.min(fy.length, Math.round(periodMonths) || fy.length));
+  if (n >= fy.length) return fy.slice();
+  const endIdx = fy.indexOf(endMonth);
+  if (endIdx < 0) return fy.slice(0, n);
+  const startIdx = Math.max(0, endIdx - n + 1);
+  return fy.slice(startIdx, endIdx + 1);
+}
+
+/**
+ * Statement window versus the same slice of the plan.
+ * Actuals are the period totals Overview uses, not an annualised month.
+ * A 21-day September is not shown as that month times 365/21/12.
+ */
+export function budgetVersusStatement(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, unknown> | null | undefined,
+): (BudgetActuals & {
+  chip: BudgetActualsChip;
+  budgetRevenue: number;
+  budgetCogs: number;
+  budgetOverheads: number;
+}) | null {
+  if (!periodFinancials) return null;
+  const aliased = withCostAliases(
+    periodFinancials as Record<string, string | number | null | undefined>,
+  );
+  const bridge = periodProfitBridge(aliased);
+  if (!(bridge.revenue || bridge.cogs || bridge.operatingExpenses)) return null;
+  const meta = readStatementMeta(periodFinancials);
+  const months = periodMonthsOf(periodFinancials);
+  const days = inclusivePeriodDays(meta.periodStart, meta.periodEnd);
+  const rows = computeBudgetMonths(doc, doc.activeScenario);
+  const fy = fyMonths(doc.fyStart);
+  const endMonth = meta.periodEnd?.slice(0, 7) ?? "";
+  const endInFy = /^\d{4}-\d{2}$/.test(endMonth) && fy.includes(endMonth);
+  let budgetRevenue = 0;
+  let budgetCogs = 0;
+  let budgetOverheads = 0;
+  if (days != null && days < 28 && months <= 1 && rows.length) {
+    const row = (endInFy ? rows.find((r) => r.month === endMonth) : null) ?? rows[0];
+    const frac = days / 30;
+    budgetRevenue = row.revenue * frac;
+    budgetCogs = row.cogs * frac;
+    budgetOverheads = row.overheads * frac;
+  } else {
+    const keys = coverMonths(fy, endInFy ? endMonth : "", months);
+    for (const row of rows) {
+      if (!keys.includes(row.month)) continue;
+      budgetRevenue += row.revenue;
+      budgetCogs += row.cogs;
+      budgetOverheads += row.overheads;
+    }
+  }
+  return {
+    label: meta.periodLabel || "Statement",
+    revenue: bridge.revenue,
+    cogs: bridge.cogs,
+    fixedCosts: bridge.operatingExpenses,
+    chip: "Statement pace, prorated",
+    budgetRevenue,
+    budgetCogs,
+    budgetOverheads,
+  };
 }

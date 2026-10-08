@@ -60,7 +60,7 @@ export type BenchmarkReportPDFProps = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-type Position = "top_quartile" | "above_median" | "below_median";
+type Position = "top_quartile" | "above_median" | "below_median" | "in_band";
 
 function rowDirection(row: BenchmarkRow): MetricDirection {
   if (row.direction) return row.direction;
@@ -82,6 +82,7 @@ const POS_META: Record<Position, { label: string; fg: string; bg: string }> = {
   top_quartile: { label: "TOP QUARTILE", fg: C.greenDeep, bg: C.greenSoft },
   above_median: { label: "ABOVE MEDIAN", fg: C.blueDeep, bg: C.blueSoft },
   below_median: { label: "BELOW MEDIAN", fg: C.redDeep, bg: C.redSoft },
+  in_band: { label: "IN BAND", fg: C.muted, bg: C.soft },
 };
 
 const PILLAR_LABEL: Record<string, string> = {

@@ -19,8 +19,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import {
   buildDeliverableInputDefinition,
+  computedDaysAp,
+  computedDaysAr,
   configNeedsRefresh,
   countCheckedSources,
+  daysNeedReview,
   deliverableInputContextKey,
   markConfigApplied,
   mergeDeliverableInputState,
@@ -244,6 +247,19 @@ export function DeliverableInputConfig({
                         {a.label}
                         {a.unit ? (
                           <span className="ml-1 font-normal text-slate-500">({a.unit})</span>
+                        ) : null}
+                        {a.id === "daysAr" || a.id === "daysAp" ? (
+                          <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">
+                            {(() => {
+                              const n = typeof value === "number" ? value : Number(value);
+                              const ratios =
+                                a.id === "daysAr"
+                                  ? computedDaysAr(context.financials)
+                                  : computedDaysAp(context.financials);
+                              const source = ratios != null && n === ratios ? "Ratios" : "Manual";
+                              return daysNeedReview(n) ? `${source} · Review` : source;
+                            })()}
+                          </span>
                         ) : null}
                       </Label>
                       {a.kind === "number" ? (

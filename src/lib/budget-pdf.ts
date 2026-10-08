@@ -31,6 +31,7 @@ import {
 import { formatMoney, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { periodMonthsOf } from "@/lib/ratios";
+import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
 import { readStatementMeta } from "@/lib/statement-period";
 
 export type BudgetPdfActual = {
@@ -52,6 +53,8 @@ export type BudgetPdfActual = {
    * Operations / Sales split. Do not book that total as Other.
    */
   overheadsUnsplit?: boolean;
+  /** Statement period label, used when the month key is outside the plan. */
+  periodLabel?: string | null;
 };
 
 export type BudgetPdfRow = {
@@ -319,20 +322,53 @@ function finiteField(fin: Record<string, unknown>, key: string): number | null {
  * Used when `budget_month_actuals` is empty so #11 does not say "No month actuals"
  * while the scorecard is full of that period's revenue and costs.
  */
+export type BudgetReviewWorkflow = "draft" | "ready_for_review" | "signed_off";
+
+/**
+ * The line the Budget PDF prints under the title. It matches the tab:
+ * a named sign-off, the same line marked stale after an input change,
+ * ready for review, or draft.
+ */
+export function budgetReviewLine(input: {
+  name?: string | null;
+  firmName?: string | null;
+  signedOffAt?: string | null;
+  isStale: boolean;
+  workflowStatus?: BudgetReviewWorkflow | null;
+  market?: Pick<ResolvedMarket, "locale" | "timezone">;
+}): { text: string; unsigned: boolean } {
+  const signed = inAppAccountantSignoffLine({
+    name: input.name,
+    firmName: input.firmName,
+    signedOffAt: input.signedOffAt,
+    market: input.market,
+  });
+  if (signed && !input.isStale) return { text: signed, unsigned: false };
+  if (signed && input.isStale) {
+    return { text: `${signed} · inputs changed after sign-off`, unsigned: true };
+  }
+  if (input.workflowStatus === "ready_for_review") {
+    return { text: "Ready for review — not signed off", unsigned: true };
+  }
+  return { text: "Draft — not signed off", unsigned: true };
+}
+
 export function budgetActualFromFinancials(
   fin: Record<string, unknown> | null | undefined,
 ): BudgetPdfActual | null {
   if (!fin) return null;
   const meta = readStatementMeta(fin);
   const month = meta.periodEnd?.slice(0, 7) ?? "";
-  if (!/^\d{4}-\d{2}$/.test(month)) return null;
+  const monthOk = /^\d{4}-\d{2}$/.test(month);
   const revenue = finiteField(fin, "revenue");
   const cogs = finiteField(fin, "cogs");
   const ebit = finiteField(fin, "ebit");
   if (revenue == null && cogs == null && ebit == null) return null;
   const bridge = periodProfitBridge(fin);
+  if (!(bridge.revenue || bridge.cogs || bridge.operatingExpenses || bridge.ebit)) return null;
   return {
-    month,
+    month: monthOk ? month : "",
+    periodLabel: meta.periodLabel,
     status: "confirmed",
     totals: {
       revenue: bridge.revenue,
@@ -369,17 +405,31 @@ export function buildBudgetPdfModel(
     if (!fy.includes(row.month)) continue;
     actualByMonth.set(row.month, row);
   }
-  const comparedMonths = fy.filter((m) => actualByMonth.has(m));
+  const statementCandidate =
+    actuals.find((row) => row.statementCoverMonths != null) ??
+    (actuals.length === 1 ? actuals[0] : undefined);
+  let comparedMonths = fy.filter((m) => actualByMonth.has(m));
+  // A statement with revenue but no month inside this financial year is still
+  // an actual. Pin it on the cover window instead of saying none exist.
+  if (comparedMonths.length === 0 && statementCandidate?.statementCoverMonths != null && fy[0]) {
+    const cover = Math.max(1, Math.round(statementCandidate.statementCoverMonths));
+    const anchor = fy[Math.min(fy.length, cover) - 1];
+    actualByMonth.set(anchor, { ...statementCandidate, month: anchor });
+    comparedMonths = [anchor];
+  }
   const hasActuals = comparedMonths.length > 0;
   const includesDraftActuals = comparedMonths.some((m) => actualByMonth.get(m)?.status === "draft");
-  const statementRow = actuals.length === 1 ? actuals[0] : undefined;
+  const statementRow = statementCandidate;
   const statementCover =
     hasActuals && statementRow?.statementCoverMonths != null
       ? statementRow.statementCoverMonths
       : null;
+  const budgetAnchor = fy.includes(statementRow?.month ?? "")
+    ? (statementRow?.month ?? comparedMonths[0])
+    : comparedMonths[0];
   const budgetMonthKeys =
     statementCover != null
-      ? budgetMonthsForCover(fy, statementRow?.month ?? comparedMonths[0], statementCover)
+      ? budgetMonthsForCover(fy, budgetAnchor, statementCover)
       : comparedMonths;
 
   const budgetWindow = hasActuals
@@ -550,11 +600,15 @@ export function buildBudgetPdfModel(
   }
 
   const labelMonths = hasActuals ? budgetMonthKeys : comparedMonths;
-  const comparedLabel = hasActuals
-    ? monthsAreContiguous(fy, labelMonths)
-      ? contiguousLabel(labelMonths, market)
-      : `${labelMonths.length} months with actuals (not consecutive)`
-    : "No month actuals uploaded";
+  const pinnedStatementLabel =
+    hasActuals && statementRow && !fy.includes(statementRow.month) ? statementRow.periodLabel : null;
+  const comparedLabel = pinnedStatementLabel
+    ? pinnedStatementLabel
+    : hasActuals
+      ? monthsAreContiguous(fy, labelMonths)
+        ? contiguousLabel(labelMonths, market)
+        : `${labelMonths.length} months with actuals (not consecutive)`
+      : "No month actuals uploaded";
 
   const fySum = sumBudget(results);
   const fullYearNote = hasActuals

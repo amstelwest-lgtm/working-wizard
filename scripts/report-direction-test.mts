@@ -73,6 +73,26 @@ assert(
   }) === "below_median",
   "329 creditor days is not top quartile versus a 30-day median",
 );
+assert(
+  benchmarkPosition({
+    value: 37,
+    median: 40,
+    top: 30,
+    direction: "sweet_spot",
+    healthyMin: 30,
+    healthyMax: 60,
+  }) === "in_band",
+  "creditor days inside the same band as the median are not top quartile",
+);
+assert(
+  benchmarkPosition({
+    value: 37,
+    median: 40,
+    top: 20,
+    direction: "lower_is_better",
+  }) === "above_median",
+  "37 debtor days beat a 40-day median without reaching the top quartile",
+);
 assert(scoreCreditorDays(329) === 0, "329 creditor days still score 0");
 assert(creditorDaysPaysSlowly(329) && !creditorDaysPaysSlowly(45), "only days past the band are slow payment");
 assert(!/too quickly/i.test(SLOW_CREDITOR_DAYS_STEP.step_description), "advice must not say paying too quickly");

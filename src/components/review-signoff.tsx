@@ -557,7 +557,8 @@ export function ReviewSignoffButton({
         </p>
       ) : null}
       <div className="flex flex-wrap justify-end gap-2">
-        {workflow == null ? (
+        {workflow == null ||
+        (canSignOff && (cycleStatus === "draft" || cycleStatus === "ready_for_review")) ? (
           <button
             type="button"
             onClick={() => {
@@ -570,7 +571,7 @@ export function ReviewSignoffButton({
             {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
           </button>
         ) : null}
-        {workflow && canSubmit && cycleStatus === "draft" ? (
+        {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (
           <Button
             type="button"
             variant="outline"
@@ -609,19 +610,6 @@ export function ReviewSignoffButton({
           >
             Request changes
           </Button>
-        ) : null}
-        {(workflow == null || canSignOff) && cycleStatus === "ready_for_review" ? (
-          <button
-            type="button"
-            onClick={() => {
-              setSignature(profile.signatureDataUrl ?? null);
-              setOpen(true);
-            }}
-            className={SIGNOFF_GOLD_BTN}
-          >
-            <PenLine className="h-3.5 w-3.5" />
-            {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
-          </button>
         ) : null}
       </div>
         </>

@@ -97,12 +97,14 @@ import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
 import {
   budgetActualFromFinancials,
+  budgetReviewLine,
   buildBudgetPdfModel,
   illustrativeBudgetPack,
   parseBudgetDocument,
   type BudgetPdfActual,
+  type BudgetReviewWorkflow,
 } from "@/lib/budget-pdf";
-import { reseedBudgetIfScaleBroken } from "@/lib/budget.bridges";
+import { publishBudgetDocument } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
@@ -1147,6 +1149,8 @@ type ClientReportData = {
   budget: BudgetDocument | null;
   budgetActuals: BudgetPdfActual[];
   budgetUpdatedAt: string | null;
+  /** client_deliverable_states for the budget. Null when the row is missing. */
+  budgetWorkflowStatus: BudgetReviewWorkflow | null;
   /** Owner 10Q profile — shapes report narratives / ordering, not layout. */
   operatingProfile: ClientOperatingProfile | null;
   /**
@@ -1200,6 +1204,7 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   budget: null,
   budgetActuals: [],
   budgetUpdatedAt: null,
+  budgetWorkflowStatus: null,
   operatingProfile: null,
   benchmarkSector: null,
   market: ZA_MARKET,
@@ -2033,6 +2038,43 @@ async function loadBudgetActualsForPdf(clientId: string): Promise<BudgetPdfActua
   return out;
 }
 
+async function loadBudgetWorkflowStatus(clientId: string): Promise<BudgetReviewWorkflow | null> {
+  const loose = supabase as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          k: string,
+          v: string,
+        ) => {
+          eq: (
+            k: string,
+            v: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { status?: string } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    };
+  };
+  try {
+    const { data, error } = await loose
+      .from("client_deliverable_states")
+      .select("status")
+      .eq("client_id", clientId)
+      .eq("scope", "budget")
+      .maybeSingle();
+    if (error) return null;
+    const status = data?.status;
+    if (status === "draft" || status === "ready_for_review" || status === "signed_off") return status;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
   const [clientRes, snapshotRes, signoffRes] = await Promise.all([
     supabase
@@ -2129,10 +2171,15 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     clientRow?.financials && typeof clientRow.financials === "object"
       ? (clientRow.financials as Record<string, unknown>)
       : null;
+  const budgetWorkflowStatus = await loadBudgetWorkflowStatus(clientId);
   const budget = storedBudget
-    ? reseedBudgetIfScaleBroken(
+    ? publishBudgetDocument(
         storedBudget,
         rawFinancials as Record<string, string | number | null | undefined> | null,
+        {
+          cashflow: clientRow?.cashflow,
+          financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
+        },
       )
     : null;
   const statementActual = budgetActualFromFinancials(rawFinancials);
@@ -2159,6 +2206,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budget,
     budgetActuals,
     budgetUpdatedAt,
+    budgetWorkflowStatus,
     dataPeriodLabel,
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
@@ -2301,6 +2349,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budget,
     budgetActuals,
     budgetUpdatedAt,
+    budgetWorkflowStatus,
     dataPeriodLabel,
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
@@ -2718,7 +2767,21 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         );
       }
       const model = buildBudgetPdfModel(doc, isDemo ? pack!.actuals : cd!.budgetActuals, market);
-      const budgetStamp = signoffStampFor("budget", clientData);
+      const budgetSignoff = cd?.reviewSignoffs.budget ?? null;
+      const budgetStale = Boolean(
+        budgetSignoff &&
+          cd?.budgetUpdatedAt &&
+          new Date(cd.budgetUpdatedAt).getTime() > new Date(budgetSignoff.signed_off_at).getTime(),
+      );
+      const review = budgetReviewLine({
+        name: budgetSignoff?.signed_off_by_name,
+        firmName: budgetSignoff?.firm_name,
+        signedOffAt: budgetSignoff?.signed_off_at,
+        isStale: budgetStale,
+        workflowStatus: cd?.budgetWorkflowStatus ?? null,
+        market,
+      });
+      const budgetStamp = isDemo || review.unsigned ? null : signoffStampFor("budget", clientData);
       return renderToBlob(BudgetVariancePDF, {
         smeData: {
           name: isDemo ? s.smeName || "Demo Client" : cd!.clientName,
@@ -2730,7 +2793,8 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         sample,
-        draft: !isDemo && !budgetStamp,
+        draft: !isDemo && review.unsigned,
+        reviewLine: isDemo ? null : review.text,
         reviewSignoff: budgetStamp,
         market,
       });

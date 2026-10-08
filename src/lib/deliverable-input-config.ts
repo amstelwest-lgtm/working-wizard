@@ -285,16 +285,27 @@ export function withCanonicalDebtorCreditorDays(
   return next;
 }
 
+/** Days past this are flagged for review. Shared by Budget, Ratios, and Cash. */
+export const DAYS_REVIEW_LIMIT = 180;
+
+export function daysNeedReview(days: number | null | undefined): boolean {
+  return days != null && Number.isFinite(days) && days > DAYS_REVIEW_LIMIT;
+}
+
 export function defaultDaysAr(ctx: DeliverableInputContext): number {
+  const computed = computedDaysAr(ctx.financials);
+  if (computed != null) return computed;
   if (ctx.operatingProfile?.debtorDaysDefault != null)
     return ctx.operatingProfile.debtorDaysDefault;
   if (ctx.budgetWc?.debtorDays != null) return ctx.budgetWc.debtorDays;
-  return computedDaysAr(ctx.financials) ?? DEFAULT_DAYS_AR;
+  return DEFAULT_DAYS_AR;
 }
 
 export function defaultDaysAp(ctx: DeliverableInputContext): number {
+  const computed = computedDaysAp(ctx.financials);
+  if (computed != null) return computed;
   if (ctx.budgetWc?.creditorDays != null) return ctx.budgetWc.creditorDays;
-  return computedDaysAp(ctx.financials) ?? DEFAULT_DAYS_AP;
+  return DEFAULT_DAYS_AP;
 }
 
 function source(id: string, label: string, available: boolean, hint?: string): DeliverableSource {
@@ -320,8 +331,24 @@ function cashSources(ctx: DeliverableInputContext): DeliverableSource[] {
   return out;
 }
 
+function daysReviewQuestion(
+  id: string,
+  ctx: DeliverableInputContext,
+): DeliverableQuestion | null {
+  const daysAr = computedDaysAr(ctx.financials) ?? ctx.budgetWc?.debtorDays ?? null;
+  const daysAp = computedDaysAp(ctx.financials) ?? ctx.budgetWc?.creditorDays ?? null;
+  if (!daysNeedReview(daysAr) && !daysNeedReview(daysAp)) return null;
+  return {
+    id,
+    prompt:
+      "Days AR or Days AP is over 180. Confirm the figure before the plan treats that timing as normal.",
+  };
+}
+
 function cashQuestions(ctx: DeliverableInputContext): DeliverableQuestion[] {
   const out: DeliverableQuestion[] = [];
+  const days = daysReviewQuestion("cash.daysReview", ctx);
+  if (days) out.push(days);
   if (!ctx.hasBankDraft && !ctx.bankAccounts?.length && !ctx.hasCashLines) {
     out.push({
       id: "cash.banks",
@@ -379,7 +406,7 @@ function cashAssumptions(): DeliverableAssumption[] {
       max: 180,
       step: 1,
       defaultLabel:
-        "Saved for this forecast. The 13-week engine currently uses collection delay in weeks, not debtor days.",
+        "Ratios figure for this client. The 13-week engine uses collection delay in weeks, not these days.",
     },
     {
       id: "daysAp",
@@ -391,7 +418,7 @@ function cashAssumptions(): DeliverableAssumption[] {
       max: 180,
       step: 1,
       defaultLabel:
-        "Saved for this forecast. Supplier timing is not a first-class 13-week input yet.",
+        "Ratios figure for this client. Supplier timing is not a first-class 13-week input yet.",
     },
     {
       id: "collectDelay",
@@ -548,6 +575,8 @@ function budgetSources(ctx: DeliverableInputContext): DeliverableSource[] {
 
 function budgetQuestions(ctx: DeliverableInputContext): DeliverableQuestion[] {
   const out: DeliverableQuestion[] = [];
+  const days = daysReviewQuestion("budget.daysReview", ctx);
+  if (days) out.push(days);
   if (!ctx.operatingProfile) {
     out.push({
       id: "budget.profile",
@@ -926,13 +955,13 @@ export function liveAssumptionOverlay(
   ctx: DeliverableInputContext,
 ): Record<string, string | number | boolean> {
   const out: Record<string, string | number | boolean> = {};
-  const ratiosFigures = def.id === "ratios" ? ratiosStatementFigures(ctx.financials) : null;
+  const ratiosFigures = ratiosStatementFigures(ctx.financials);
   for (const a of def.assumptions) {
-    if (ratiosFigures && a.id === "daysAr" && ratiosFigures.debtorDays != null) {
+    if (a.id === "daysAr" && ratiosFigures.debtorDays != null) {
       out[a.id] = ratiosFigures.debtorDays;
       continue;
     }
-    if (ratiosFigures && a.id === "daysAp" && ratiosFigures.creditorDays != null) {
+    if (a.id === "daysAp" && ratiosFigures.creditorDays != null) {
       out[a.id] = ratiosFigures.creditorDays;
       continue;
     }
@@ -1017,11 +1046,10 @@ export function onlyLiveEngineValuesChanged(
     .map((k) => [k, Boolean(next.checkedSources[k])]);
   if (JSON.stringify(prevSrc) !== JSON.stringify(nextSrc)) return false;
   const engineIds = new Set(def.assumptions.filter((a) => a.engineBound).map((a) => a.id));
-  // Ratios Days AR / Days AP are live statement figures, not a saved assumption.
-  if (def.id === "ratios") {
-    engineIds.add("daysAr");
-    engineIds.add("daysAp");
-  }
+  // Days AR / Days AP follow Ratios on every tab. A live movement is not an
+  // unapplied edit, and it does not start driving the cash engine.
+  if (def.assumptions.some((a) => a.id === "daysAr")) engineIds.add("daysAr");
+  if (def.assumptions.some((a) => a.id === "daysAp")) engineIds.add("daysAp");
   const keys = new Set([
     ...Object.keys(prev.assumptionValues),
     ...Object.keys(next.assumptionValues),

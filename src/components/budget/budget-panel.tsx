@@ -7,17 +7,16 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BudgetWorkspace } from "@/components/budget/budget-workspace";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
-import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
+import type { BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import {
   budgetIsImplausible,
   budgetScaleBreak,
+  budgetVersusStatement,
   budgetWasRebuiltFromActuals,
-  mergeMonthActuals,
-  repairUntouchedSeededBudget,
+  publishBudgetDocument,
   reseedBudgetIfScaleBroken,
   seedBudgetFromFinancials,
-  statementMonthActuals,
 } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
@@ -68,6 +67,7 @@ export function BudgetPanel({
   onSignoffChange,
   firstActualsMonth,
   reloadToken,
+  onReviewStale,
 }: {
   clientId?: string;
   clientName?: string;
@@ -92,6 +92,8 @@ export function BudgetPanel({
   firstActualsMonth?: string | null;
   /** Bump to re-read clients.budget after an external write (auto-populate). */
   reloadToken?: number;
+  /** Header sign-off uses the same stale clock as the PDF. */
+  onReviewStale?: (stale: boolean) => void;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -106,7 +108,6 @@ export function BudgetPanel({
     mode: "apply" | "fresh";
   } | null>(null);
   const [lowOverlapOpen, setLowOverlapOpen] = useState(false);
-  const [snapshotActuals, setSnapshotActuals] = useState<BudgetActuals | null>(null);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
   const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
@@ -116,10 +117,27 @@ export function BudgetPanel({
   const budgetDirty = useRef(false);
   const saveGeneration = useRef(0);
   const seededFromProfile = useRef(false);
+  /** Client id whose budget is in `doc`. A switch clears this before the next fetch. */
+  const loadedFor = useRef<string | null>(null);
+  const loadedFinancialsRef = useRef<Record<string, string | number | null> | null>(null);
+  const loadedCashflowRef = useRef<unknown>(null);
 
   useEffect(() => {
     setProfile(operatingProfileProp ?? null);
   }, [operatingProfileProp]);
+
+  useEffect(() => {
+    loadedFor.current = null;
+    loadedFinancialsRef.current = null;
+    loadedCashflowRef.current = null;
+    seededFromProfile.current = false;
+    budgetDirty.current = false;
+    skipAutosave.current = true;
+    saveGeneration.current += 1;
+    setDoc(null);
+    setBudgetUpdatedAt(null);
+    setLoaded(!clientId);
+  }, [clientId]);
 
   useEffect(() => {
     if (!clientId) {
@@ -130,10 +148,11 @@ export function BudgetPanel({
     // (StrictMode double-mount, client switch) used to setDoc(null) over a
     // budget just seeded from the profile — "Budget ready" toast, empty panel.
     let cancelled = false;
+    const requestedId = clientId;
     supabase
       .from("clients")
       .select(
-        "budget, budget_updated_at, financial_year_start_month, operating_profile, financials",
+        "budget, budget_updated_at, financial_year_start_month, operating_profile, financials, cashflow, financials_updated_at",
       )
       .eq("id", clientId)
       .maybeSingle()
@@ -142,28 +161,36 @@ export function BudgetPanel({
         if (error) {
           console.warn("budget load:", error.message);
         }
+        if (cancelled) return;
         const row = data as {
           budget?: BudgetDocument | null;
           budget_updated_at?: string | null;
           operating_profile?: unknown;
           financials?: Record<string, string | number | null> | null;
+          cashflow?: unknown;
+          financials_updated_at?: string | null;
         } | null;
         const budget = row?.budget ?? null;
+        loadedFinancialsRef.current = row?.financials ?? null;
+        loadedCashflowRef.current = row?.cashflow ?? null;
         setBudgetUpdatedAt(row?.budget_updated_at ?? null);
         const fromDb = parseOperatingProfile(row?.operating_profile);
         if (fromDb) setProfile(fromDb);
+        loadedFor.current = requestedId;
         if (budget && budget.version === 1) {
           const financials = row?.financials ?? null;
           const normalized = normalizeBudgetDocument(budget);
-          // An order-of-magnitude plan is replaced from the latest actuals.
-          // A smaller mismatch stays on screen and asks before a rebuild.
-          const broken = budgetScaleBreak(normalized, financials) != null;
-          const next = broken
-            ? reseedBudgetIfScaleBroken(normalized, financials)
-            : repairUntouchedSeededBudget(normalized, financials);
-          const persisted = broken && budgetScaleBreak(next, financials) == null;
-          skipAutosave.current = !persisted;
-          budgetDirty.current = persisted;
+          // A 10× plan stays on screen as a suggestion. Opening cash and
+          // days still come from this client. Nothing is rebuilt on load.
+          const next = publishBudgetDocument(normalized, financials, {
+            cashflow: row?.cashflow,
+            financialsUpdatedAt: row?.financials_updated_at ?? null,
+          });
+          const before = JSON.stringify({ ...normalized, updatedAt: "" });
+          const after = JSON.stringify({ ...next, updatedAt: "" });
+          const changed = before !== after;
+          skipAutosave.current = !changed;
+          budgetDirty.current = changed;
           setDoc(next);
         } else {
           budgetDirty.current = false;
@@ -186,6 +213,10 @@ export function BudgetPanel({
   };
 
   useEffect(() => {
+    onReviewStale?.(computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc?.updatedAt ?? null));
+  }, [onReviewStale, budgetSignoff, budgetUpdatedAt, doc?.updatedAt]);
+
+  useEffect(() => {
     if (!clientId) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
@@ -199,35 +230,7 @@ export function BudgetPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  // Prefer latest financial snapshot for budget-vs-actuals; fall back to live financials.
-  useEffect(() => {
-    if (!clientId) {
-      setSnapshotActuals(null);
-      return;
-    }
-    supabase
-      .from("client_financial_snapshots")
-      .select("period_label, financials")
-      .eq("client_id", clientId)
-      .order("period_date", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        const fin = (
-          data as { period_label?: string; financials?: Record<string, string | number> } | null
-        )?.financials;
-        if (!fin) {
-          setSnapshotActuals(null);
-          return;
-        }
-        setSnapshotActuals(
-          statementMonthActuals(
-            fin,
-            (data as { period_label?: string }).period_label || "Latest snapshot",
-          ),
-        );
-      });
-  }, [clientId]);
+  // Snapshots are not a second actuals source. The statement on this client is.
 
   useEffect(() => {
     if (!clientId || !loaded || !doc || !budgetDirty.current) return;
@@ -237,7 +240,9 @@ export function BudgetPanel({
     }
     const gen = ++saveGeneration.current;
     const snapshot = doc;
+    const savedFor = clientId;
     const t = setTimeout(async () => {
+      if (loadedFor.current !== savedFor) return;
       const updatedAt = new Date().toISOString();
       const payload = { ...snapshot, updatedAt };
       const { error } = await supabase
@@ -275,10 +280,11 @@ export function BudgetPanel({
     return () => clearTimeout(t);
   }, [clientId, loaded, doc]);
 
-  const liveActuals: BudgetActuals | null = financials
-    ? statementMonthActuals(financials, "Current financials")
-    : null;
-  const actuals = mergeMonthActuals(snapshotActuals, liveActuals);
+  const figureSource = loadedFinancialsRef.current ?? financials ?? null;
+  const actuals =
+    doc && loadedFor.current === (clientId ?? null)
+      ? budgetVersusStatement(doc, figureSource)
+      : null;
 
   const startFresh = useCallback(
     (args: {
@@ -294,11 +300,16 @@ export function BudgetPanel({
       }
       // Figures already on the board (typed, uploaded, or entered by the
       // accountant) seed the plan; a template at $0 revenue is not a budget.
+      const seedFrom =
+        (loadedFinancialsRef.current as Record<string, string> | null) ?? financials ?? null;
       const hasFigures = Boolean(
-        financials && (parseFloat(financials.revenue ?? "") || parseFloat(financials.cogs ?? "")),
+        seedFrom && (parseFloat(seedFrom.revenue ?? "") || parseFloat(seedFrom.cogs ?? "")),
       );
-      const seeded = hasFigures ? seedBudgetFromFinancials(next, financials!) : null;
+      const seeded = hasFigures ? seedBudgetFromFinancials(next, seedFrom!) : null;
       if (seeded) next = seeded.doc;
+      if (seedFrom) {
+        next = publishBudgetDocument(next, seedFrom, { cashflow: loadedCashflowRef.current });
+      }
       skipAutosave.current = false;
       budgetDirty.current = true;
       setDoc(next);
@@ -313,19 +324,28 @@ export function BudgetPanel({
   // Seed budget from operating profile when none exists yet
   useEffect(() => {
     if (!loaded || doc || !profile || seededFromProfile.current) return;
+    if (clientId && loadedFor.current !== clientId) return;
     seededFromProfile.current = true;
     startFresh({
       templateId: profile.templateId,
       qualification: profileToBudgetQualification(profile, "none"),
       fyStartMonth: profile.fyStartMonth || fyDefault,
     });
-  }, [loaded, doc, profile, fyDefault, startFresh]);
+  }, [loaded, doc, profile, fyDefault, startFresh, clientId]);
 
   const rebuildFromActuals = () => {
-    if (!doc || !financials) return;
-    const seeded = seedBudgetFromFinancials(doc, financials);
+    const seedFrom =
+      (loadedFinancialsRef.current as Record<string, string> | null) ?? financials ?? null;
+    if (!doc || !seedFrom) return;
+    // Accepting the suggestion is the only rebuild. Load does not call this.
+    const broken = budgetScaleBreak(doc, seedFrom) != null;
+    const seeded = broken
+      ? { doc: reseedBudgetIfScaleBroken(doc, seedFrom), changes: [] as string[] }
+      : seedBudgetFromFinancials(doc, seedFrom);
     budgetDirty.current = true;
-    setDoc(seeded.doc);
+    setDoc(publishBudgetDocument(seeded.doc, seedFrom, {
+      cashflow: loadedCashflowRef.current,
+    }));
     toast.success("Budget rebuilt from the latest actuals", {
       description: seeded.changes[0],
     });
@@ -414,7 +434,13 @@ export function BudgetPanel({
           if (typeof patch.daysAr === "number") wc.debtorDays = patch.daysAr;
           if (typeof patch.daysAp === "number") wc.creditorDays = patch.daysAp;
           if (typeof patch.inventoryDays === "number") wc.inventoryDays = patch.inventoryDays;
-          return { ...d, wc, updatedAt: new Date().toISOString() };
+          const daysTouched = typeof patch.daysAr === "number" || typeof patch.daysAp === "number";
+          return {
+            ...d,
+            wc,
+            wcDaysSource: daysTouched ? "manual" : d.wcDaysSource,
+            updatedAt: new Date().toISOString(),
+          };
         });
       }}
     />
@@ -446,12 +472,29 @@ export function BudgetPanel({
     );
   }
 
-  const implausible = budgetIsImplausible(doc, financials);
+  const implausible = budgetIsImplausible(doc, figureSource);
+  const scaleBroken = budgetScaleBreak(doc, figureSource) != null;
   const rebuilt = budgetWasRebuiltFromActuals(doc);
 
   return (
     <>
       {budgetInputConfig}
+      {scaleBroken && (
+        <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
+          <p className="font-semibold">Rebuild is a suggestion — nothing has been replaced</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
+            The stored plan is more than ten times the annualised revenue or cost of sales. It is
+            still the plan on file. Rebuild only if you want it to follow the latest actuals.
+          </p>
+          <Button
+            type="button"
+            className="mt-3 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+            onClick={rebuildFromActuals}
+          >
+            Rebuild budget from latest actuals
+          </Button>
+        </div>
+      )}
       {rebuilt && (
         <div className="mb-4 rounded-xl border border-sky-300/80 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-50">
           <p className="font-semibold">This budget was rebuilt from the latest actuals</p>

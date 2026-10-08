@@ -26,6 +26,8 @@ export type BudgetVariancePDFProps = {
   sample?: boolean;
   /** Live client with no current budget sign-off. */
   draft?: boolean;
+  /** Tab status line. Shown as the draft chip, or under the title once signed. */
+  reviewLine?: string | null;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
 };
@@ -191,6 +193,7 @@ export function BudgetVariancePDF({
   isDemo,
   sample,
   draft,
+  reviewLine,
   reviewSignoff,
   market = ZA_MARKET,
 }: BudgetVariancePDFProps) {
@@ -221,6 +224,12 @@ export function BudgetVariancePDF({
         subtitle={subtitle}
         isDemo={isDemo}
       />
+      {draft && !isDemo ? (
+        <DraftNotice text={reviewLine || "Draft — not signed off"} />
+      ) : reviewLine ? (
+        <Text style={styles.yearNote}>{reviewLine}</Text>
+      ) : null}
+
       <ExecSummary figures={figures} narrative={model.headline} />
 
       <Text style={styles.yearNote}>

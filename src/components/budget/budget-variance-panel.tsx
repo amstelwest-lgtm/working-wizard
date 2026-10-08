@@ -389,7 +389,16 @@ export function BudgetVariancePanel({
 
       {!focusActual && (
         <div className="rounded-lg border border-dashed border-amber-900/20 bg-white/40 px-3 py-4 text-sm leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
-          {role === "accountant" ? (
+          {statementPace ? (
+            <>
+              No uploaded month for{" "}
+              <strong className="text-slate-900 dark:text-slate-100">
+                {formatMonthLabel(focusMonth, market)}
+              </strong>
+              . The comparison above is the statement, prorated to that window — not this month’s
+              management accounts.
+            </>
+          ) : role === "accountant" ? (
             <>
               No management accounts for{" "}
               <strong className="text-slate-900 dark:text-slate-100">
