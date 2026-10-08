@@ -1,7 +1,7 @@
 import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Toaster } from "sonner";
+import { toast, Toaster } from "sonner";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
 import { MarketProvider } from "@/contexts/market";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -13,6 +13,15 @@ import { OwnerCashBoard, RailStudio } from "./studio";
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
 // palette, which is what a dark signed-in session does.
 applyPortalTheme("dark");
+
+// The local stub rejects server calls with "harness-local". Keep those out of
+// the screenshots. App toast code is unchanged.
+const hideHarnessToast = (message: unknown) => String(message ?? "").includes("harness-local");
+const toastError = toast.error.bind(toast);
+toast.error = ((message, data) => {
+  if (hideHarnessToast(message)) return "";
+  return toastError(message, data);
+}) as typeof toast.error;
 
 // Same sheets as `__root` (styles.css) plus `/_authenticated` head links.
 // The client route itself adds none; #370 moved those onto the layout.

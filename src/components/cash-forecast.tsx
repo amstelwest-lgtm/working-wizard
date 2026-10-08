@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   CollapsibleGoldCard,
   COLLAPSIBLE_GOLD_SHELL,
@@ -1458,23 +1458,13 @@ export function CashForecastPanel({
 
   const answerStrip = (
     <section className="answer-strip" data-answer-strip>
-      {answerSentence ? (
-        <p className="answer-strip__sentence" data-answer-sentence>
-          {answerSentence}
-        </p>
-      ) : null}
-      <div className="answer-strip__meta">
-        {shownLineSource ? (
-          <span className="answer-strip__chip" data-source-chip>
-            {shownLineSource}
-          </span>
+      <div className="answer-strip__lead">
+        <h2 className="answer-strip__heading">13-week cash forecast</h2>
+        {answerSentence ? (
+          <p className="answer-strip__sentence" data-answer-sentence>
+            {answerSentence}
+          </p>
         ) : null}
-        <SignoffStatusChip
-          clientId={clientId}
-          scope="cash_forecast"
-          signoff={forecastSignoff}
-          isStale={forecastStale}
-        />
       </div>
       <div className="answer-strip__actions">
         {canSign && clientId ? (
@@ -1488,15 +1478,44 @@ export function CashForecastPanel({
             onChange={patchForecastSignoff}
           />
         ) : null}
-        <Button type="button" variant="outline" size="sm" onClick={() => setShowBankUpload(true)}>
-          <Upload className="h-3 w-3" /> Upload bank statements
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="answer-strip__secondary"
+          onClick={() => setShowBankUpload(true)}
+        >
+          Upload bank statements
         </Button>
+        <button
+          type="button"
+          className="answer-strip__icon"
+          aria-label="Export PDF"
+          title="Export PDF"
+          disabled={exporting}
+          onClick={exportPDF}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="answer-strip__meta">
+        {shownLineSource ? (
+          <span className="answer-strip__chip" data-source-chip>
+            {shownLineSource}
+          </span>
+        ) : null}
+        <SignoffStatusChip
+          clientId={clientId}
+          scope="cash_forecast"
+          signoff={forecastSignoff}
+          isStale={forecastStale}
+        />
       </div>
     </section>
   );
 
   const reviewInputs = (
-    <ReviewInputsDrawer>
+    <ReviewInputsDrawer hint="Inputs, what-ifs">
       <CollapsibleGoldCard
         icon={Settings2}
         title="Inputs"
@@ -1716,32 +1735,18 @@ export function CashForecastPanel({
         {reviewInputs}
         <Card id="wizard-cash-outlook" className={CARD_SHELL}>
           <div className={GOLD_RULE} />
-          <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-                  Cash Outlook
-                </CardTitle>
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  13-week closing balance
-                  {horizonLabel ? ` · ${horizonLabel}` : ""} · opening {fmtR(calc.opening)}
-                </p>
-                {scenarioLabel ? (
-                  <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
-                ) : null}
-                {xeroBankNote ? (
-                  <p
-                    id="xero-bank-forecast-note"
-                    className="mt-2 max-w-xl text-xs text-slate-600 dark:text-slate-400"
-                  >
-                    {xeroBankNote}
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex flex-col items-end gap-1.5" />
-            </div>
-          </CardHeader>
           <CardContent className="pt-5">
+            {scenarioLabel ? (
+              <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+            ) : null}
+            {xeroBankNote ? (
+              <p
+                id="xero-bank-forecast-note"
+                className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400"
+              >
+                {xeroBankNote}
+              </p>
+            ) : null}
             {disagreeNotice}
             {emptyNotice}
             {forecastNotes}
@@ -1814,34 +1819,10 @@ export function CashForecastPanel({
       {/* Hero: summary + chart */}
       <Card className={CARD_SHELL}>
         <div className={GOLD_RULE} />
-        <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-                13-Week Cash Forecast
-              </CardTitle>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                Forecast every cent in and out of the bank
-                {horizonLabel ? ` · ${horizonLabel}` : ""} · catch a shortfall before it hits
-              </p>
-              {scenarioLabel ? (
-                <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
-              ) : null}
-            </div>
-            <div className="flex max-w-full flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-100"
-                disabled={exporting}
-                onClick={exportPDF}
-              >
-                <Download className="mr-1 inline h-3 w-3" />
-                {exporting ? "Preparing…" : "Export PDF"}
-              </button>
-            </div>
-          </div>
-        </CardHeader>
         <CardContent className="pt-5">
+          {scenarioLabel ? (
+            <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+          ) : null}
           {disagreeNotice}
           {emptyNotice}
           {forecastNotes}

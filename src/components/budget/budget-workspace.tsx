@@ -2,7 +2,7 @@
  * Budget workspace — drivers, monthly P&L, cash, scenarios, actuals compare.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import type {
   UnmappedDriver,
 } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
-import { budgetWindowLabel, currentBudgetMonth, fyMonths, formatMonthLabel } from "@/lib/budget.months";
+import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
   budgetDaysNeedReview,
@@ -26,6 +26,8 @@ import { SALES_TAX_HONESTY, formatPercentRate, localizeCopy, resolveMarket, t } 
 import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.model-change";
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
+import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
@@ -35,6 +37,20 @@ import {
 } from "@/components/primitives/collapsible-gold-card";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
+
+function nestInDrawer(drawer: ReactNode, hint: string, extras: ReactNode): ReactNode {
+  if (!isValidElement(drawer)) return drawer;
+  const element = drawer as ReactElement<{ children?: ReactNode; hint?: string }>;
+  if (element.type !== ReviewInputsDrawer) return drawer;
+  return cloneElement(
+    element,
+    { hint },
+    <>
+      {extras}
+      {element.props.children}
+    </>,
+  );
+}
 
 export function BudgetWorkspace({
   doc,
@@ -69,6 +85,15 @@ export function BudgetWorkspace({
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   drawer?: ReactNode;
 }) {
+  const variance = (
+    <BudgetVariancePanel
+      clientId={clientId}
+      doc={doc}
+      role={role}
+      statementPace={Boolean(actuals && (actuals.revenue || actuals.cogs || actuals.fixedCosts))}
+    />
+  );
+
   if (simplified) {
     return (
       <div className="space-y-4">
@@ -83,13 +108,7 @@ export function BudgetWorkspace({
           isStale={isStale}
           canSign={canSign}
           onSignoffChange={onSignoffChange}
-          drawer={drawer}
-        />
-        <BudgetVariancePanel
-          clientId={clientId}
-          doc={doc}
-          role={role}
-          statementPace={Boolean(actuals && (actuals.revenue || actuals.cogs || actuals.fixedCosts))}
+          drawer={nestInDrawer(drawer, "Budget vs actuals", variance)}
         />
       </div>
     );
@@ -111,6 +130,7 @@ export function BudgetWorkspace({
       canSign={canSign}
       onSignoffChange={onSignoffChange}
       drawer={drawer}
+      variance={variance}
     />
   );
 }
@@ -220,6 +240,7 @@ function BudgetComplexWorkspace({
   canSign = false,
   onSignoffChange,
   drawer = null,
+  variance = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -235,6 +256,7 @@ function BudgetComplexWorkspace({
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   drawer?: ReactNode;
+  variance?: ReactNode;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -295,6 +317,13 @@ function BudgetComplexWorkspace({
   };
 
   const compared = actuals && actuals.chip && actuals.chip !== "None" ? actuals : null;
+  const assumptionCount = 4 + (doc.showInventoryDays ? 1 : 0) + (usTax ? 1 : 2);
+  const sourceCount = new Set(
+    [budgetOpeningSourceLabel(doc.openingCashSource), budgetDaysSourceLabel(doc.wcDaysSource)].filter(
+      (label): label is string => Boolean(label),
+    ),
+  ).size;
+  const drawerHint = `${sourceCount} source${sourceCount === 1 ? "" : "s"} · ${assumptionCount} assumptions`;
   return (
     <div id="wizard-budget-plan" className="space-y-6">
       <BudgetVerdictStrip
@@ -311,21 +340,25 @@ function BudgetComplexWorkspace({
         isStale={isStale}
         canSign={canSign}
         onSignoffChange={onSignoffChange}
+        extraActions={
+          <BudgetPdfExportButton
+            quiet
+            doc={doc}
+            clientId={clientId}
+            clientName={clientName}
+            signoff={signoff}
+            budgetUpdatedAt={doc.updatedAt}
+          />
+        }
       />
-      {drawer}
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-        {tpl.label} · {budgetWindowLabel(doc, market)}
-      </p>
-
-      <BudgetVariancePanel
-        clientId={clientId}
-        doc={doc}
-        role={role}
-        statementPace={Boolean(actuals && (actuals.revenue || actuals.cogs || actuals.fixedCosts))}
-      />
-
-      {/* Assumptions */}
-      <section className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-3 lg:grid-cols-6">
+      {nestInDrawer(
+        drawer,
+        drawerHint,
+        <>
+          <section
+            id="wizard-budget-assumptions"
+            className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-3 lg:grid-cols-6"
+          >
         <div>
           <Label className="text-[10px] uppercase tracking-wider text-slate-500">
             Opening cash
@@ -575,6 +608,12 @@ function BudgetComplexWorkspace({
           </>
         )}
       </section>
+          {variance}
+        </>,
+      )}
+      <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
+        {plainBudgetWindowHeading(tpl.label, doc, market)}
+      </p>
 
       {/* Revenue drivers */}
       <section className={`space-y-3 ${COLLAPSIBLE_GOLD_SHELL} p-4`}>

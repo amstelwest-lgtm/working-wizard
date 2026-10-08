@@ -173,11 +173,6 @@ function CashPane({ clientId }: { clientId: string }) {
   return (
     <div className="tabpane on" id="pane-cash">
       <div className="card cf-wrap" id="wizard-cash-panel">
-        <div className="cf-head">
-          <div>
-            <div className="h-sec">13-week cash forecast</div>
-          </div>
-        </div>
         <PaneBoundary label="Cash forecast">
           <CashForecastPanel clientId={clientId} clientName="Harbour Glass" canSign hideReadOnlyStamp />
         </PaneBoundary>

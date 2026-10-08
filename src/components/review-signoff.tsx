@@ -503,9 +503,15 @@ export function ReviewSignoffButton({
     }
   };
 
+  const frame = hideStatus
+    ? "answer-strip__signoff"
+    : compact
+      ? "flex flex-col items-end gap-2"
+      : "mt-2 flex w-full max-w-md flex-col items-end gap-2";
+
   if (shownSignoff && !isStale) {
     return (
-      <div className={compact ? "flex flex-col items-end" : "mt-2 w-full max-w-md"}>
+      <div className={frame}>
         {hideStatus ? null : (
           <SignoffCertificate
             signoff={shownSignoff}
@@ -546,13 +552,7 @@ export function ReviewSignoffButton({
   }
 
   return (
-    <div
-      className={
-        compact
-          ? "flex flex-col items-end gap-2"
-          : "mt-2 flex w-full max-w-md flex-col items-end gap-2"
-      }
-    >
+    <div className={frame}>
       {shownSignoff && isStale && !hideStatus && (
         <SignoffCertificate
           signoff={shownSignoff}

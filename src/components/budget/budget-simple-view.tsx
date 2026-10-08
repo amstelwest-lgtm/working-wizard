@@ -11,11 +11,12 @@ import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-ca
 import type { BudgetActuals, BudgetDocument } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
-  budgetWindowLabel,
+  plainBudgetWindowHeading,
   currentBudgetMonth,
   fyMonths,
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
+import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
@@ -212,10 +213,20 @@ export function BudgetSimpleView({
         isStale={isStale}
         canSign={canSign}
         onSignoffChange={onSignoffChange}
+        extraActions={
+          <BudgetPdfExportButton
+            quiet
+            doc={doc}
+            clientId={clientId}
+            clientName={clientName}
+            signoff={signoff}
+            budgetUpdatedAt={doc.updatedAt}
+          />
+        }
       />
       {drawer}
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-        {tpl.label} · {budgetWindowLabel(doc, market)}
+      <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
+        {plainBudgetWindowHeading(tpl.label, doc, market)}
       </p>
 
       {/* Month engine — volume × price, then margin and overheads */}

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import { budgetActualsBadge, showBudgetSourceChip } from "../src/lib/budget.bridges";
+import { plainBudgetWindowHeading } from "../src/lib/budget.months";
 import { signoffStatusKind, signoffStatusLine } from "../src/lib/signoff-status";
 
 assert(budgetActualsBadge(2, false) === "From this month's actuals", "uploaded month uses plain words");
@@ -14,6 +15,11 @@ assert(showBudgetSourceChip("From this month's actuals"), "an uploaded month is 
 assert(showBudgetSourceChip("Estimated from statement pace"), "statement pace is a chip");
 assert(!showBudgetSourceChip("None"), "None is not a chip");
 assert(!showBudgetSourceChip(null), "a missing chip stays blank");
+assert(
+  plainBudgetWindowHeading("Billable hours / T&M", { fyStart: "2026-03" }) ===
+    "Billable-hours budget · Mar 2026 – Feb 2027",
+  "the budget window is plain words",
+);
 
 assert(signoffStatusKind({ hasSignoff: false, isStale: false, readyForReview: false }) === "draft");
 assert(signoffStatusKind({ hasSignoff: false, isStale: false, readyForReview: true }) === "ready");
@@ -32,6 +38,9 @@ const budgetPanel = readFileSync(resolve("src/components/budget/budget-panel.tsx
 const budgetWorkspace = readFileSync(resolve("src/components/budget/budget-workspace.tsx"), "utf8");
 const clientRoute = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+const drawer = readFileSync(resolve("src/components/review-inputs-drawer.tsx"), "utf8");
+const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+const harness = readFileSync(resolve("scripts/rail-studio-harness/main.tsx"), "utf8");
 
 assert(count(cash, "<SignoffStatusChip") === 1, "cash defines one status chip");
 assert(count(budgetVerdict, "<SignoffStatusChip") === 1, "budget defines one status chip");
@@ -62,5 +71,28 @@ assert(budgetPanel.includes("data-view-mode-toggle"), "the budget toggle lives i
 for (const label of ["Business Health", "Profit", "Cash Forecast", "Budget", "Next moves", "Action Plan"]) {
   assert(owner.includes(`label: "${label}"`), `owner tab ${label} stays`);
 }
+
+assert(count(cash, "13-week cash forecast") === 1, "cash keeps one strip heading");
+assert(!cash.includes("13-Week Cash Forecast"), "the inner cash title is gone");
+assert(cash.includes('hint="Inputs, what-ifs"'), "cash drawer names its contents");
+assert(cash.includes("answer-strip__secondary"), "upload sits on the strip as a secondary");
+assert(cash.includes('aria-label="Export PDF"'), "cash export is an icon on the strip");
+assert(cash.includes("answer-strip__actions"), "the primary sits on the strip row");
+assert(budgetVerdict.includes("answer-strip__actions"), "budget primary sits on the strip row");
+assert(budgetVerdict.includes("extraActions"), "budget export joins the strip row");
+assert(drawer.includes("review-inputs__chevron"), "the drawer summary has a chevron");
+assert(drawer.includes("review-inputs__hint"), "the drawer summary can show a count");
+assert(portalCss.includes("grid-row:3"), "at phone width the primary drops under the chips");
+assert(portalCss.includes(".review-inputs__body{display:none}"), "a closed drawer does not paint its inputs");
+assert(portalCss.includes(".review-inputs[open] > .review-inputs__body"), "the drawer body shows only when open");
+assert(portalCss.includes('content:"▸"'), "the closed drawer shows a chevron");
+const assumptionsAt = budgetWorkspace.indexOf('id="wizard-budget-assumptions"');
+const driversAt = budgetWorkspace.indexOf("{/* Revenue drivers */}");
+const nestAt = budgetWorkspace.lastIndexOf("nestInDrawer(", assumptionsAt);
+assert(nestAt !== -1 && nestAt < assumptionsAt && assumptionsAt < driversAt, "assumptions sit in the drawer, above the drivers");
+assert(budgetWorkspace.includes("{variance}"), "budget vs actuals is passed into the drawer");
+assert(!budgetWorkspace.slice(driversAt).includes('id="wizard-budget-assumptions"'), "drivers are not wrapped around the assumptions");
+assert(harness.includes('includes("harness-local")'), "the harness hides its own stub toasts");
+assert(!readFileSync(resolve("src/components/ui/sonner.tsx"), "utf8").includes("harness-local"), "app toast code is unchanged");
 
 console.log("answer-strip cash + budget ok");

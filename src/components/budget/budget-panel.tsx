@@ -43,7 +43,6 @@ import {
 } from "@/lib/client-profile";
 import { useMarket } from "@/contexts/market";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
-import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { budgetSaveErrorMessage } from "@/lib/reach-error";
 
 export function BudgetPanel({
@@ -586,15 +585,6 @@ export function BudgetPanel({
           </Button>
         </div>
       )}
-      <div className="mb-3 flex justify-end">
-        <BudgetPdfExportButton
-          doc={doc}
-          clientId={clientId}
-          clientName={clientName}
-          signoff={budgetSignoff}
-          budgetUpdatedAt={budgetUpdatedAt ?? doc.updatedAt}
-        />
-      </div>
       <BudgetWorkspace
         doc={doc}
         onChange={(next) => {
