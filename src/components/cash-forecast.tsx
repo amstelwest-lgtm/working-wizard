@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
@@ -26,7 +27,6 @@ import {
   Upload,
   TrendingUp,
   TrendingDown,
-  Table2,
   Settings2,
   Wallet,
 } from "lucide-react";
@@ -39,6 +39,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Line,
+  ReferenceDot,
   ReferenceLine,
 } from "recharts";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
@@ -58,7 +60,18 @@ import {
   parseOperatingProfileUnknown,
 } from "@/lib/deliverable-input-config";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import { ViewToggle } from "@/components/ui/view-toggle";
+import { CashThirteenWeekGrid } from "@/components/cash-thirteen-week";
+import {
+  CASH_FORECAST_CARD_ID,
+  cashForecastSearchWithView,
+  cashForecastViewFromSearch,
+  cashGraphWeekTickInterval,
+  forecastChipSource,
+  hashIsCashDetailAnchor,
+  weeksBelowFloorCopy,
+  type CashForecastView,
+} from "@/lib/cash-forecast-view";
 import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
@@ -91,6 +104,7 @@ import {
 } from "@/lib/client-metrics";
 import {
   cashEmptyPresentation,
+  forecastFloorPosition,
   forecastLinesSourceLabel,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
@@ -179,6 +193,25 @@ function distribute(line: LineItem): number[] {
 const GOLD = "#d4a550";
 const GOLD_DARK = "#b8860b";
 const RED = "#e05c5c";
+
+function CashNegativeDot({
+  cx,
+  cy,
+  payload,
+  index,
+  lowestWeek,
+}: {
+  cx?: number;
+  cy?: number;
+  payload?: { closing?: number };
+  index?: number;
+  lowestWeek?: number;
+}) {
+  if (cx == null || cy == null || payload?.closing == null) return <g />;
+  const week = (index ?? -1) + 1;
+  if (!(payload.closing < 0) || week === lowestWeek) return <g />;
+  return <circle cx={cx} cy={cy} r={3.5} fill={RED} stroke="#fff" strokeWidth={1.5} />;
+}
 
 // ── Shared card shell — light + dark, gold top rule ─────────────────────────
 const CARD_SHELL = COLLAPSIBLE_GOLD_SHELL;
@@ -481,6 +514,8 @@ export function CashForecastPanel({
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [openingSourceChip, setOpeningSourceChip] = useState<string | null>(null);
+  const [openingSourceKey, setOpeningSourceKey] = useState<string | null>(null);
+  const [linesSourceKey, setLinesSourceKey] = useState<string | null>(null);
   const [publishedBankEvidence, setPublishedBankEvidence] = useState(false);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
@@ -729,6 +764,10 @@ export function CashForecastPanel({
       loadedCashflowRef.current = cf ? { ...(cf as Record<string, unknown>) } : null;
       setOpeningSourceChip(openingSourceLabel(cf as Record<string, unknown> | null));
       setLinesSourceChip(forecastLinesSourceLabel(cf as Record<string, unknown> | null));
+      setOpeningSourceKey(
+        typeof cf?.openingBalanceSource === "string" ? cf.openingBalanceSource : null,
+      );
+      setLinesSourceKey(typeof cf?.forecastLinesSource === "string" ? cf.forecastLinesSource : null);
       const lineNames = [...(cf?.revenue ?? []), ...(cf?.expenses ?? []), ...(cf?.other ?? [])].map(
         (line) => String(line?.name ?? ""),
       );
@@ -1151,11 +1190,16 @@ export function CashForecastPanel({
     revGrowthPct !== 0 ||
     (parseFloat(capexAmount) || 0) !== 0;
 
-  const chartData = weeks.map((w, i) => ({
-    week: `W${i + 1}`,
-    label: w,
-    closing: Math.round(baseCalc.closing[i]),
-  }));
+  const chartData = weeks.map((w, i) => {
+    const closing = Math.round(baseCalc.closing[i] ?? 0);
+    const floor = Math.round(minimumCash);
+    return {
+      week: `W${i + 1}`,
+      label: w,
+      closing,
+      underFloor: closing < floor ? closing : floor,
+    };
+  });
 
   /**
    * Professional PDF export — the base forecast, same series as Overview.
@@ -1276,9 +1320,14 @@ export function CashForecastPanel({
 
   // ── Shared hero chart ──────────────────────────────────────────────────────
   const heroChart = (height: number) => (
-    <div style={{ height }} className="w-full min-w-0 max-w-full">
+    <div
+      ref={onChartFrame}
+      style={{ height }}
+      data-week-ticks={weekTickInterval === 2 ? "thin" : "all"}
+      className="w-full min-w-0 max-w-full"
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 22, right: 12, left: 0, bottom: 8 }}>
           <defs>
             <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
@@ -1292,7 +1341,7 @@ export function CashForecastPanel({
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            interval={0}
+            interval={weekTickInterval}
             height={28}
           />
           <YAxis
@@ -1329,15 +1378,55 @@ export function CashForecastPanel({
           <Area
             type="monotone"
             dataKey="closing"
-            name="closing"
-            stroke={GOLD}
-            strokeWidth={2.5}
+            name="closing-fill"
+            stroke="none"
             fill="url(#cfGoldFill)"
+            tooltipType="none"
             dot={false}
-            activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
+            activeDot={false}
             isAnimationActive
             animationDuration={mounted ? 700 : 1100}
           />
+          <Area
+            type="monotone"
+            dataKey="underFloor"
+            className="cash-floor-breach"
+            stroke="none"
+            fill="rgba(224, 92, 92, 0.28)"
+            baseValue={Math.round(minimumCash)}
+            tooltipType="none"
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="closing"
+            name="Closing"
+            stroke={GOLD}
+            strokeWidth={2.5}
+            dot={<CashNegativeDot lowestWeek={lowestWeek} />}
+            activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
+            isAnimationActive={false}
+          />
+          {lowestWeek > 0 && (lowestBal < minimumCash || lowestBal < 0) ? (
+            <ReferenceDot
+              x={`W${lowestWeek}`}
+              y={Math.round(lowestBal)}
+              r={5}
+              fill={RED}
+              stroke="#fff"
+              strokeWidth={1.5}
+              ifOverflow="extendDomain"
+              label={{
+                value: fmtCompact(lowestBal),
+                position: "top",
+                fill: RED,
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            />
+          ) : null}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -1761,121 +1850,181 @@ export function CashForecastPanel({
     </ReviewInputsDrawer>
   );
 
-  // ── Simplified mode: glanceable hero ─────────────────────────────────────
-  if (simplified) {
-    return (
-      <div className="space-y-0">
-        {answerStrip}
-        {reviewInputs}
-        <Card id="wizard-cash-outlook" className={CARD_SHELL}>
-          <div className={GOLD_RULE} />
-          <CardContent className="pt-5">
-            {scenarioLabel ? (
-              <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
-            ) : null}
-            {xeroBankNote ? (
-              <p
-                id="xero-bank-forecast-note"
-                className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400"
-              >
-                {xeroBankNote}
-              </p>
-            ) : null}
-            {disagreeNotice}
-            {emptyNotice}
-            {forecastNotes}
-            <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {!loaded ? (
-                <CashTileSkeletons count={4} />
-              ) : (
-              <>
-              <Stat
-                label="Closing · Week 13"
-                value={fmtCompact(closingW13)}
-                tone={closingW13 < 0 ? "bad" : "neutral"}
-                sub={
-                  <span className="inline-flex items-center gap-1">
-                    {trajectory >= 0 ? (
-                      <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3 text-[#c0392b]" />
-                    )}
-                    {trajectory >= 0 ? "+" : ""}
-                    {fmtCompact(trajectory)} over 13 weeks
-                  </span>
-                }
-              />
-              <Stat
-                label="Lowest balance"
-                value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
-                tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-                sub={
-                  emptyPresentation.lowestBlank
-                    ? "Add an opening balance"
-                    : publishedLowest.isOpening
-                      ? "Opening balance"
-                      : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
-                }
-              />
-              <Stat
-                label="Cash runway"
-                value={forecastEmpty ? "—" : publishedStory.headline}
-                tone={
-                  forecastEmpty
-                    ? "neutral"
-                    : publishedStory.note === "above the floor"
-                      ? "good"
-                      : "bad"
-                }
-                sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
-              />
-              <Stat
-                label="Net cash · next 4 weeks"
-                value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
-                tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
-                sub="Inflows minus outflows"
-              />
-              </>
-              )}
-            </div>
-            {emptyPresentation.showChart ? (
-              heroChart(180)
-            ) : (
-              <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                The 13-week chart appears once a forecast line is entered.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const navigate = useNavigate();
+  const routeSearch = useSearch({ strict: false }) as { view?: string };
+  const tickObserver = useRef<ResizeObserver | null>(null);
+  const [weekTickInterval, setWeekTickInterval] = useState<0 | 2>(0);
+  const onChartFrame = useCallback((node: HTMLDivElement | null) => {
+    tickObserver.current?.disconnect();
+    tickObserver.current = null;
+    if (!node) return;
+    const apply = () => {
+      const next = cashGraphWeekTickInterval(node.clientWidth);
+      setWeekTickInterval((current) => (current === next ? current : next));
+    };
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    tickObserver.current = observer;
+  }, []);
+  const [viewOverride, setViewOverride] = useState<CashForecastView | null>(null);
+  const view: CashForecastView =
+    viewOverride ??
+    cashForecastViewFromSearch(typeof routeSearch.view === "string" ? routeSearch.view : null);
 
-  // ── Complex mode ──────────────────────────────────────────────────────────
-  return (
-    <div id="wizard-cash-outlook" className="space-y-5">
-      {answerStrip}
-      {reviewInputs}
-      {/* Hero: summary + chart */}
-      <Card className={CARD_SHELL}>
-        <div className={GOLD_RULE} />
-        <CardContent className="pt-5">
-          {scenarioLabel ? (
-            <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
-          ) : null}
-          {disagreeNotice}
-          {emptyNotice}
-          {forecastNotes}
-          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {!loaded ? (
-              <CashTileSkeletons count={3} />
-            ) : (
-            <>
+  const setView = useCallback(
+    (next: CashForecastView) => {
+      setViewOverride(next);
+      const writeUrl = () => {
+        const url = new URL(window.location.href);
+        if (next === "13week") url.searchParams.set("view", "13week");
+        else url.searchParams.delete("view");
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${url.pathname}${url.search}${url.hash}`,
+        );
+      };
+      void Promise.resolve(
+        navigate({
+          replace: true,
+          resetScroll: false,
+          search: (prev: Record<string, unknown>) => cashForecastSearchWithView(prev, next),
+        } as never),
+      )
+        .then(() => {
+          const current = new URL(window.location.href).searchParams.get("view");
+          const wanted = next === "13week" ? "13week" : null;
+          if (current !== wanted) writeUrl();
+        })
+        .catch(() => writeUrl());
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    const onPop = () => setViewOverride(null);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => () => tickObserver.current?.disconnect(), []);
+
+  useEffect(() => {
+    const redirectDetailAnchor = () => {
+      const hash = window.location.hash;
+      if (!hashIsCashDetailAnchor(hash)) return;
+      const id = hash.replace(/^#/, "").split("?")[0].trim().toLowerCase();
+      if (new URL(window.location.href).searchParams.get("view") !== "13week") setView("13week");
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.requestAnimationFrame(() => {
+        document.getElementById(CASH_FORECAST_CARD_ID)?.scrollIntoView({
+          block: "start",
+          behavior: reduce ? "auto" : "smooth",
+        });
+        if (id !== CASH_FORECAST_CARD_ID) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("view", "13week");
+          url.hash = CASH_FORECAST_CARD_ID;
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+          );
+        }
+      });
+    };
+    redirectDetailAnchor();
+    window.addEventListener("hashchange", redirectDetailAnchor);
+    return () => window.removeEventListener("hashchange", redirectDetailAnchor);
+  }, [setView]);
+
+  const openingUntouched =
+    xeroCashMarkers.current.openingBalance == null ||
+    openingBalance === xeroCashMarkers.current.openingBalance;
+  const openingChipKey = !openingUntouched
+    ? "assumption"
+    : openingSourceKey
+      ? forecastChipSource(openingSourceKey)
+      : bankSeeded
+        ? "bank_pack"
+        : "assumption";
+  const flowChipKey = !linesMatchLoaded
+    ? "assumption"
+    : linesSourceKey
+      ? forecastChipSource(linesSourceKey)
+      : bankSeeded
+        ? "bank_pack"
+        : "assumption";
+
+  const floorPos = forecastFloorPosition({
+    opening: baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: minimumCash,
+  });
+  const weeksBelow = weeksBelowFloorCopy({
+    empty: forecastEmpty,
+    weeksBelow: floorPos.weeksBelow,
+    horizon: baseCalc.closing.length || WEEKS,
+    firstDipWeek: floorPos.firstDipWeek,
+    firstDipDate: floorPos.firstDipWeek != null ? (weeks[floorPos.firstDipWeek - 1] ?? null) : null,
+    opensBelow: floorPos.opensBelow,
+  });
+  const runwayAside =
+    !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
+
+  const graphPane = (
+    <>
+      <div className={`mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        {!loaded ? (
+          <CashTileSkeletons count={simplified ? 4 : 3} />
+        ) : simplified ? (
+          <>
             <Stat
-              label="Opening bank"
-              value={fmtCompact(baseCalc.opening)}
-              sub={openingLabel}
+              label="Closing · Week 13"
+              value={fmtCompact(closingW13)}
+              tone={closingW13 < 0 ? "bad" : "neutral"}
+              sub={
+                <span className="inline-flex items-center gap-1">
+                  {trajectory >= 0 ? (
+                    <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-[#c0392b]" />
+                  )}
+                  {trajectory >= 0 ? "+" : ""}
+                  {fmtCompact(trajectory)} over 13 weeks
+                </span>
+              }
             />
+            <Stat
+              label="Lowest balance"
+              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+              sub={
+                emptyPresentation.lowestBlank
+                  ? "Add an opening balance"
+                  : publishedLowest.isOpening
+                    ? "Opening balance"
+                    : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
+              }
+            />
+            <Stat
+              label="Weeks below floor"
+              value={weeksBelow.value}
+              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
+              sub={weeksBelow.sub}
+            />
+            <Stat
+              label="Net cash · next 4 weeks"
+              value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
+              tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
+              sub="Inflows minus outflows"
+            />
+          </>
+        ) : (
+          <>
+            <Stat label="Opening bank" value={fmtCompact(baseCalc.opening)} sub={openingLabel} />
             <Stat
               label="Lowest point"
               value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
@@ -1889,166 +2038,139 @@ export function CashForecastPanel({
               }
             />
             <Stat
-              label="Runway"
-              value={forecastEmpty ? "—" : publishedStory.headline}
-              tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
-              sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
+              label="Weeks below floor"
+              value={weeksBelow.value}
+              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
+              sub={weeksBelow.sub}
             />
-            </>
-            )}
-          </div>
-          {exportError ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
-              <span>{exportError}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8"
-                onClick={() => window.location.reload()}
-              >
-                Reload
-              </Button>
-            </div>
-          ) : null}
-          {emptyPresentation.showChart ? (
-            <>
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <div className={LABEL_CLS}>Closing balance</div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                  Gold line is the {fmtCompact(minimumCash)} floor
-                </div>
-              </div>
-              {heroChart(240)}
-            </>
-          ) : (
-            <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              The 13-week chart appears once a forecast line is entered.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        )}
+      </div>
+      {emptyPresentation.showChart ? (
+        heroChart(simplified ? 180 : 240)
+      ) : (
+        <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          The 13-week chart appears once a forecast line is entered.
+        </p>
+      )}
+    </>
+  );
 
-      {/* Weekly forecast table */}
-      <CollapsibleGoldCard
-        id="wizard-cash-table"
-        icon={Table2}
-        title="Detailed cashflow forecast"
-        subtitle="Double-click a figure to edit · red = shortfall, act early"
-      >
-        <ScrollableTable hint="Swipe sideways to see weeks →">
-          <table className="milon-data-table w-full min-w-[1180px] text-xs">
-            <thead>
-              <tr className="border-b border-amber-900/15 text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                <th className="sticky left-0 z-10 whitespace-nowrap bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">
-                  Item
-                </th>
-                {weeks.map((w, i) => (
-                  <th key={i} className="whitespace-nowrap px-2 py-2 text-right">
-                    W{i + 1}
-                    <div className="text-[9px] font-normal text-slate-400 dark:text-slate-500">
-                      {w}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {baseCalc.revRows.filter((r) => r.vals.some((v) => v)).map((r, i) => (
-                <tr
-                  key={`r${i}`}
-                  className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300"
-                >
-                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">
-                    {r.name}
-                  </td>
-                  {r.vals.map((v, j) => (
-                    <td key={j} className="px-2 py-1 text-right">
-                      <ForecastAmountCell
-                        symbol={cur}
-                        value={v}
-                        display={v ? fmtR(v) : "—"}
-                        onCommit={(next) => commitWeekOverride("revenue", r.id, j, next)}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr className="border-b border-amber-900/15 bg-[#4caf82]/10 font-semibold text-[#3f9c72] dark:border-slate-700 dark:text-[#5cc492]">
-                <td className="sticky left-0 bg-[#f2f8f2] px-2 py-1 dark:bg-[#0e1a20]">
-                  Total inflow
-                </td>
-                {baseCalc.inflow.map((v, j) => (
-                  <td key={j} className="whitespace-nowrap px-2 py-1 text-right tabular-nums">
-                    {v ? fmtR(v) : "—"}
-                  </td>
-                ))}
-              </tr>
-              {baseCalc.expRows.filter((r) => r.vals.some((v) => v)).map((r, i) => (
-                <tr
-                  key={`e${i}`}
-                  className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300"
-                >
-                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">
-                    {r.name}
-                  </td>
-                  {r.vals.map((v, j) => (
-                    <td key={j} className="px-2 py-1 text-right">
-                      {"id" in r && r.id ? (
-                        <ForecastAmountCell
-                          symbol={cur}
-                          value={v}
-                          display={v ? `(${fmtR(v)})` : "—"}
-                          onCommit={(next) => {
-                            if (r.bucket && r.id) commitWeekOverride(r.bucket, r.id, j, next);
-                          }}
-                        />
-                      ) : v ? (
-                        `(${fmtR(v)})`
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr className="border-b border-amber-900/15 bg-[#e05c5c]/10 font-semibold text-[#c0392b] dark:border-slate-700 dark:text-[#ef6b6b]">
-                <td className="sticky left-0 bg-[#faf1f0] px-2 py-1 dark:bg-[#1a1216]">
-                  Total outflow
-                </td>
-                {baseCalc.outflow.map((v, j) => (
-                  <td key={j} className="whitespace-nowrap px-2 py-1 text-right tabular-nums">
-                    {v ? `(${fmtR(v)})` : "—"}
-                  </td>
-                ))}
-              </tr>
-              <tr className="border-b border-amber-900/15 font-semibold text-slate-900 dark:border-slate-700 dark:text-slate-100">
-                <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">Net cash</td>
-                {baseCalc.net.map((v, j) => (
-                  <td
-                    key={j}
-                    className={`px-2 py-1 text-right ${v < 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-[#3f9c72] dark:text-[#5cc492]"}`}
-                  >
-                    {fmtR(v)}
-                  </td>
-                ))}
-              </tr>
-              <tr className="bg-[#d4a550]/15 font-bold text-slate-950 dark:text-white">
-                <td className="sticky left-0 bg-[#f7efdd] px-2 py-1 dark:bg-[#1c1a12]">
-                  Closing balance
-                </td>
-                {baseCalc.closing.map((v, j) => (
-                  <td
-                    key={j}
-                    className={`px-2 py-1 text-right ${v < 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : ""}`}
-                  >
-                    {fmtR(v)}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </ScrollableTable>
-      </CollapsibleGoldCard>
+
+  const forecastCard = (
+    <Card
+      id={CASH_FORECAST_CARD_ID}
+      className={`${CARD_SHELL} w-full min-w-0`}
+      data-cash-view={view}
+    >
+      <span id="detailed-forecast" className="sr-only">
+        Weekly cash model
+      </span>
+      <div className={GOLD_RULE} />
+      <CardContent className="pt-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b]">
+              {horizonLabel || "Next 13 weeks"}
+            </p>
+            <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+              {view === "13week"
+                ? "Double-click a figure to edit. Red weeks close under the runway floor."
+                : `Gold line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
+            </p>
+          </div>
+          <ViewToggle
+            value={view}
+            onChange={(next) => setView(next === "13week" ? "13week" : "graph")}
+            ariaLabel="Cash forecast view"
+            options={[
+              { value: "graph", label: "Graph" },
+              { value: "13week", label: "13-week" },
+            ]}
+          />
+        </div>
+        {scenarioLabel ? (
+          <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+        ) : null}
+        {simplified && xeroBankNote ? (
+          <p
+            id="xero-bank-forecast-note"
+            className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400"
+          >
+            {xeroBankNote}
+          </p>
+        ) : null}
+        {disagreeNotice}
+        {emptyNotice}
+        {forecastNotes}
+        {exportError ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
+            <span>{exportError}</span>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          </div>
+        ) : null}
+        <div
+          key={view}
+          className="cash-forecast-swap"
+          role="tabpanel"
+          aria-label={view === "13week" ? "13-week" : "Graph"}
+        >
+          {view === "13week" ? (
+            <CashThirteenWeekGrid
+              weeks={weeks}
+              opening={baseCalc.opening}
+              receipts={baseCalc.revRows.map((row) => ({
+                id: row.id,
+                name: row.name,
+                vals: row.vals,
+                bucket: "revenue",
+              }))}
+              payments={baseCalc.expRows.map((row) => ({
+                id: row.id ?? row.name,
+                name: row.name,
+                vals: row.vals,
+                bucket: row.id && row.bucket ? row.bucket : undefined,
+              }))}
+              inflow={baseCalc.inflow}
+              outflow={baseCalc.outflow}
+              net={baseCalc.net}
+              closing={baseCalc.closing}
+              floor={minimumCash}
+              floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
+              openingNote={openingAsOf ? openingLabel : null}
+              symbol={cur}
+              format={fmtR}
+              openingChip={openingChipKey}
+              flowChip={flowChipKey}
+              onCommit={commitWeekOverride}
+            />
+          ) : (
+            graphPane
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  // ── Simplified mode: glanceable hero ─────────────────────────────────────
+  if (simplified) {
+    return (
+      <div id="wizard-cash-outlook" className="space-y-0">
+        {answerStrip}
+        {reviewInputs}
+        {forecastCard}
+      </div>
+    );
+  }
+
+  // ── Complex mode ──────────────────────────────────────────────────────────
+  return (
+    <div id="wizard-cash-outlook" className="space-y-5">
+      {answerStrip}
+      {reviewInputs}
+      {forecastCard}
 
       {/* Setup + inputs */}
       <CollapsibleGoldCard

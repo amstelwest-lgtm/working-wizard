@@ -461,8 +461,11 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     action?: "preview" | "download";
     /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
     profile?: number;
-    /** Budget chart or table under the answer strip. Absent means chart. */
-    view?: "chart" | "table";
+    /**
+     * Shared view param. Budget uses chart (default, omitted) or table.
+     * Cash uses 13week; Graph is the default and omits the param.
+     */
+    view?: "chart" | "table" | "13week";
   } => {
     const out: {
       qbo?: string;
@@ -480,7 +483,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       report?: string;
       action?: "preview" | "download";
       profile?: number;
-      view?: "chart" | "table";
+      view?: "chart" | "table" | "13week";
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.xero === "string") out.xero = search.xero;
@@ -503,7 +506,9 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
     if (search.action === "preview" || search.action === "download") out.action = search.action;
     if (search.profile === 1 || search.profile === "1") out.profile = 1;
-    if (search.view === "table" || search.view === "chart") out.view = search.view;
+    if (search.view === "table" || search.view === "chart" || search.view === "13week") {
+      out.view = search.view;
+    }
     if (
       search.filter === "overdue" ||
       search.filter === "at_risk" ||

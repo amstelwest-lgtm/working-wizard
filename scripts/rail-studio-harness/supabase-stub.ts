@@ -22,16 +22,23 @@ const CLIENT_ROW = {
   id: "harness-client",
   name: "Harbour Glass",
   cashflow: {
-    startDate: "2026-10-06",
+    startDate: "2026-10-05",
     openingBalance: "186000",
-    seededFromBanksAt: "2026-10-01",
+    openingBalanceSource: "upload",
+    forecastLinesSource: "xero-bank-summary",
     revenue: [
-      { id: "r1", name: "Collections", amount: "42000", frequency: "weekly", startWeek: 1, splitCount: 1 },
+      { id: "r1", name: "Collections", amount: "36000", frequency: "recurring-weekly", startWeek: 1, splitCount: 1 },
+      { id: "r2", name: "Project receipts", amount: "55000", frequency: "once-off", startWeek: 4, splitCount: 1 },
     ],
     expenses: [
-      { id: "e1", name: "Payroll", amount: "28000", frequency: "weekly", startWeek: 1, splitCount: 1 },
+      { id: "e1", name: "Payroll", amount: "18000", frequency: "recurring-weekly", startWeek: 1, splitCount: 1 },
+      { id: "e2", name: "Suppliers", amount: "6000", frequency: "recurring-weekly", startWeek: 1, splitCount: 1 },
+      { id: "e3", name: "Rent", amount: "12000", frequency: "recurring-monthly", startWeek: 1, splitCount: 1 },
+      { id: "e4", name: "VAT", amount: "160000", frequency: "once-off", startWeek: 8, splitCount: 1 },
     ],
-    other: [],
+    other: [
+      { id: "o1", name: "Owner drawings", amount: "8000", frequency: "recurring-monthly", startWeek: 3, splitCount: 1 },
+    ],
   },
   last_forecast_at: "2026-10-01T00:00:00.000Z",
   cashflow_bank_draft: null,
