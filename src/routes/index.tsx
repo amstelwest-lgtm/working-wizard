@@ -72,7 +72,6 @@ import {
   HERO_H1_GOLD,
   HERO_H1_LEAD,
   HERO_LEDE,
-  HERO_OWNER_LINK,
   HERO_OWNER_PREFIX,
   HERO_POINTS,
   HERO_WALKTHROUGH_LABEL,
@@ -1919,21 +1918,17 @@ function LandingPage() {
               ) : null}
             </div>
             <p className="hero-cta-note">{HERO_CTA_NOTE}</p>
-            <p className="hero-contact">
-              Questions first? Email{" "}
-              <a href={HERO_CONTACT_HREF}>{HERO_CONTACT_EMAIL}</a>
-            </p>
-            <p className="hero-owner">
-              {HERO_OWNER_PREFIX}{" "}
-              <button type="button" onClick={goToOwnerSpark}>
-                {HERO_OWNER_LINK}
-              </button>
-            </p>
             <ul className="hero-points">
               {HERO_POINTS.map((point) => (
                 <li key={point}>{point}</li>
               ))}
             </ul>
+            <p className="hero-owner">
+              {HERO_OWNER_PREFIX}{" "}
+              <button type="button" onClick={goToOwnerSpark}>
+                {PRICING_OWNER_CTA}
+              </button>
+            </p>
           </div>
 
           <div className="dash-stage hero-mock-fade">
@@ -2631,7 +2626,8 @@ function LandingPage() {
             </p>
           </div>
           <div className="persona-grid stagger">
-            <div
+            <button
+              type="button"
               className="persona-card"
               onClick={() => (window as any).__mq_start?.("accountant")}
             >
@@ -2649,8 +2645,12 @@ function LandingPage() {
               <div className="go">
                 See MILŌN for my clients <i>→</i>
               </div>
-            </div>
-            <div className="persona-card" onClick={() => (window as any).__mq_start?.("owner")}>
+            </button>
+            <button
+              type="button"
+              className="persona-card"
+              onClick={() => (window as any).__mq_start?.("owner")}
+            >
               <div className="icon">
                 <svg viewBox="0 0 24 24">
                   <rect x="3" y="3" width="7" height="7" />
@@ -2668,7 +2668,7 @@ function LandingPage() {
               <div className="go">
                 Take the 90-second diagnostic <i>→</i>
               </div>
-            </div>
+            </button>
           </div>
         </div>
       </section>
@@ -2708,6 +2708,8 @@ function LandingPage() {
           <p className="home-faq-more">
             {FAQ_MORE_LEAD}
             <a href="/faq">{FAQ_MORE_LINK}</a>
+            {" · or email "}
+            <a href={HERO_CONTACT_HREF}>{HERO_CONTACT_EMAIL}</a>
           </p>
         </div>
       </section>

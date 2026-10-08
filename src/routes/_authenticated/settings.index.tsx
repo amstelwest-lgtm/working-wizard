@@ -435,7 +435,7 @@ function SettingsPage() {
             </Link>
             <Link to="/settings/brand" className="settings-row">
               <Palette className="h-4 w-4" />
-              Brand & logo (white-label reports)
+              Brand & logo on reports
             </Link>
             <Link to="/dashboard" className="settings-row">
               <Building2 className="h-4 w-4" />

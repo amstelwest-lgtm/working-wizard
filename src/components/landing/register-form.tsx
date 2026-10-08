@@ -371,7 +371,7 @@ export function LandingRegisterForm({
                   <a href="/ai">AI notice</a>
                 </p>
                 <p style={{ textAlign: "center", marginTop: 16 }}>
-                  <button type="button" className="btn btn-ghost" onClick={goToOwnerSpark}>
+                  <button type="button" className="reg-owner-link" onClick={goToOwnerSpark}>
                     Business owners: start free
                   </button>
                 </p>

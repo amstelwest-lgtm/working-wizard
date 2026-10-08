@@ -43,8 +43,9 @@ assert(
 );
 
 const nav = index.slice(index.indexOf('<nav id="topnav"'), index.indexOf("{/* ══════════════════════════ HERO"));
-assert(nav.includes("{NAV_TRIAL_LABEL}"), "nav shows Start free trial");
-assert(NAV_TRIAL_LABEL === "Start free trial", "trial button label");
+assert(nav.includes("{NAV_TRIAL_LABEL}"), "nav shows the firm trial label");
+assert(NAV_TRIAL_LABEL === "Start 14-day trial", "trial button label matches /for-accountants");
+assert(copy.includes("FIRM_TRIAL_CTA_LABEL"), "nav trial label reuses FIRM_TRIAL_CTA_LABEL");
 assert(nav.includes(`aria-label={NAV_TRIAL_ARIA}`), "nav trial button has the trial aria-label");
 assert(NAV_TRIAL_ARIA === "Start my 14-day free trial", "trial aria-label text");
 assert(!nav.includes("Create firm account"), "top nav has no Create firm account");
