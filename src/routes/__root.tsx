@@ -19,6 +19,7 @@ import { NotesProvider } from "@/contexts/notes";
 import { FloatingNoteButton } from "@/components/floating-note-button";
 import { NoteArchiveSheet } from "@/components/note-archive";
 import { reportClientError } from "@/lib/monitoring";
+import { StaleBundleBar } from "@/components/stale-bundle-bar";
 
 import appCss from "../styles.css?url";
 import { notFoundHead, organizationGraphJson } from "@/lib/seo";
@@ -306,6 +307,7 @@ function RootComponent() {
                 <LandingFloatGate />
                 <NoteArchiveSheet />
                 <Toaster position="top-right" richColors offset={16} style={{ zIndex: 70 }} />
+                <StaleBundleBar />
               </ViewModeProvider>
             </NotesProvider>
           </AnalyticsProvider>

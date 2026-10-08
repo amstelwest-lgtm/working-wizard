@@ -382,6 +382,8 @@ type Inputs = {
   periodMonthsChosen?: string;
   periodStart?: string;
   periodEnd?: string;
+  /** Date of the balance-sheet cash line. The Cash tab labels the opening with this. */
+  cashAsOf?: string;
 };
 
 // All fields start empty — no demo/placeholder data pre-filled.
@@ -5997,7 +5999,22 @@ function Index() {
                 setHistoryUpload(false);
                 setReplaceLiveOnHistory(false);
                 if (allEntries.length > 0) {
-                  setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) }) as Inputs);
+                  const periodEndForCash =
+                    extractionForReview?.document_metadata?.period_end_date ?? null;
+                  const uploadKindForCash = statementKindFromMetadata(reviewMeta);
+                  const importedCash = allEntries.some(
+                    ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
+                  );
+                  setV((prev) => ({
+                    ...prev,
+                    ...Object.fromEntries(allEntries),
+                    ...(uploadKindForCash === "balance_sheet" &&
+                    importedCash &&
+                    periodEndForCash &&
+                    /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
+                      ? { cashAsOf: periodEndForCash.slice(0, 10) }
+                      : {}),
+                  }) as Inputs);
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();
                   track("financials_uploaded", {

@@ -4,7 +4,29 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
+import { mkdirSync, writeFileSync } from "node:fs";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { currentBuildId, versionJson } from "./src/lib/build-version";
+
+const buildId = currentBuildId();
+
+/** Writes /version.json so an open tab can tell a deploy has shipped. */
+function emitVersionJson() {
+  const body = versionJson(buildId);
+  const writePublic = () => {
+    mkdirSync("public", { recursive: true });
+    writeFileSync("public/version.json", body);
+  };
+  return {
+    name: "milon-version-json",
+    buildStart: writePublic,
+    configureServer: writePublic,
+    closeBundle() {
+      mkdirSync("dist/client", { recursive: true });
+      writeFileSync("dist/client/version.json", body);
+    },
+  };
+}
 
 // DEPLOY_TARGET=vercel disables the Cloudflare Worker plugin so the build produces a
 // portable Node server output (dist/server/index.js) that we wrap for Vercel's Build
@@ -14,6 +36,7 @@ const isVercel = process.env.DEPLOY_TARGET === "vercel";
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
 export default defineConfig({
+  plugins: [emitVersionJson()],
   cloudflare: isVercel ? false : undefined,
   tanstackStart: {
     server: { entry: "server" },
@@ -48,6 +71,7 @@ export default defineConfig({
           process.env.VITE_STRIPE_PUBLISHABLE_KEY ??
           ""
       ),
+      "import.meta.env.VITE_BUILD_ID": JSON.stringify(buildId),
     },
   },
 });

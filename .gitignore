@@ -34,6 +34,9 @@ dist-ssr
 # Vercel
 .vercel
 
+# Emitted at dev/build from the git sha. Not a source file.
+public/version.json
+
 # Stripe Projects CLI vault (credentials; never commit)
 .projects/
 
