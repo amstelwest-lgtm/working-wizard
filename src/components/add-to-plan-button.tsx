@@ -2,6 +2,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, ListPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { SIGNOFF_GOLD_BTN } from "@/components/review-signoff";
+
+const STRIP_GOLD_BTN = `${SIGNOFF_GOLD_BTN} answer-strip__primary`;
 
 function defaultPeriodLabel() {
   const now = new Date();
@@ -23,6 +26,8 @@ interface Props {
   onAssign: (moveKey: string) => void;
   /** Studio gold button on the accountant Moves tab. Owner board keeps the compact chip. */
   variant?: "owner" | "studio";
+  /** `strip` is the one gold primary. `quiet` is a later row. */
+  tone?: "strip" | "quiet";
 }
 
 /**
@@ -37,6 +42,7 @@ export function AddToPlanButton({
   outcomeWhy,
   onAssign,
   variant = "owner",
+  tone,
 }: Props) {
   const [state, setState] = useState<"idle" | "adding" | "added">("idle");
 
@@ -109,7 +115,9 @@ export function AddToPlanButton({
         title="Open in Action Plan to assign an owner"
         className={
           variant === "studio"
-            ? "btn ghost mini"
+            ? tone === "strip"
+              ? STRIP_GOLD_BTN
+              : "btn ghost mini"
             : "inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-1 text-[10px] text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300"
         }
       >
@@ -126,7 +134,11 @@ export function AddToPlanButton({
       title="Add to Action Plan"
       className={
         variant === "studio"
-          ? "btn gold mini"
+          ? tone === "strip"
+            ? STRIP_GOLD_BTN
+            : tone === "quiet"
+              ? "btn ghost mini"
+              : "btn gold mini"
           : "inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-1.5 py-1 text-[10px] text-sky-700 transition hover:bg-sky-500/25 disabled:opacity-60 dark:text-sky-200"
       }
     >

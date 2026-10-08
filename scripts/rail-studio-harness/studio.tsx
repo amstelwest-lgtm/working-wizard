@@ -3,6 +3,7 @@
  * Supabase is the local stub. Nothing here has a project URL.
  */
 import { Component, useState, type ReactNode } from "react";
+import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -15,6 +16,8 @@ import { finalizeCollections } from "@/lib/collections";
 import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { ClientBriefing } from "@/components/client-briefing";
+import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
+import { rankStrategicMoves } from "@/lib/strategic-moves";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { ProductMixPanel } from "@/components/product-mix-panel";
@@ -37,6 +40,15 @@ import {
   type HealthPillarId,
 } from "@/lib/health-score";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
+import { healthHeadline } from "@/lib/client-briefing";
+import type { NextStep } from "@/lib/next-step";
+import {
+  overviewAnswerSentence,
+  overviewSectionCards,
+  snapshotFigure,
+} from "@/lib/overview-moves-copy";
+import { NextStepCard } from "@/components/next-step-card";
+import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { currencySymbol } from "@/lib/market";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { preferStatementPeriod, readStatementMeta } from "@/lib/statement-period";
@@ -148,6 +160,7 @@ export function RailStudio() {
             ) : null}
             {pane === "ask" ? <BotPane /> : null}
             {pane === "overview" ? <BriefingPane /> : null}
+            {pane === "moves" ? <MovesPane /> : null}
             {pane === "ratios" ? (
               <HealthPane
                 clientId={clientId}
@@ -178,9 +191,105 @@ function BotPane() {
   );
 }
 
+function harnessMoves() {
+  return rankStrategicMoves({
+    healthByKey: { debtorDays: 40, creditorDays: 70, grossMargin: 55 },
+    limit: 3,
+  });
+}
+
+const HARNESS_STEP: NextStep = {
+  key: "diagnosis",
+  state: "diagnosis",
+  stateLabel: "Diagnosis",
+  audience: "accountant",
+  urgency: "now",
+  title: "Review the health diagnosis",
+  reason: "The figures are on file. The next step is the review already on this page.",
+  cta: {
+    label: "Review diagnosis",
+    route: {
+      path: "/clients/harness-client",
+      tab: "ratios",
+      search: {},
+      href: "/clients/harness-client?tab=overview&section=health",
+    },
+  },
+  outstanding: {
+    openQuestions: 0,
+    proposedRecommendations: 0,
+    approvedWithoutAction: 0,
+    openActions: 0,
+    overdueActions: 0,
+    blockedActions: 0,
+    actionedUnmeasured: 0,
+    openDataRequests: 0,
+  },
+  daysToReview: null,
+  openDataRequestKinds: [],
+};
+
+function MovesPane() {
+  return (
+    <div className="tabpane on" id="pane-moves">
+      <StrategicMovesPanel moves={harnessMoves()} clientId={CLIENT_ID} onOpenPlan={() => {}} />
+    </div>
+  );
+}
+
 function BriefingPane() {
+  const snapshot = [
+    { key: "cash", label: "Cash", value: "R186k" },
+    { key: "revenue", label: "Revenue", value: "R420k" },
+    { key: "runway", label: "Runway", value: "11 weeks" },
+  ];
+  const matters = "Collections are the gap before payroll.";
+  const cards = overviewSectionCards({
+    health: healthHeadline(72, "Stable"),
+    cash: snapshotFigure(snapshot, "runway") ?? snapshotFigure(snapshot, "cash"),
+    profit: snapshotFigure(snapshot, "om"),
+    moves: harnessMoves()[0]?.title ?? null,
+  });
   return (
     <div className="tabpane on" id="pane-overview">
+      <DeliverableAnswerStrip
+        heading="Overview"
+        sentence={overviewAnswerSentence({ whatMatters: matters, score: 72, label: "Stable" })}
+        chip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
+        scope="financials"
+        clientId={CLIENT_ID}
+        clientName="Harbour Glass"
+        signoff={null}
+        isStale={false}
+        onSignoffChange={() => {}}
+        extraActions={
+          <button type="button" className={ARAP_GOLD_BTN} data-next-step-cta={HARNESS_STEP.key}>
+            {HARNESS_STEP.cta.label}
+          </button>
+        }
+      />
+      <ReviewInputsDrawer hint="Connections, exports">
+        <div className="briefing-actions">
+          <button type="button" className="btn ghost mini">
+            Ask Milōn Bot
+          </button>
+          <button type="button" className="btn ghost mini">
+            Upload
+          </button>
+          <button type="button" className="btn ghost mini">
+            Generate report
+          </button>
+        </div>
+      </ReviewInputsDrawer>
+      <OverviewSectionCards cards={cards} onOpen={() => {}} />
+      <NextStepCard
+        clientId={CLIENT_ID}
+        audience="accountant"
+        surface="accountant_portal"
+        fixtureStep={HARNESS_STEP}
+        hideCta
+        onAct={() => {}}
+      />
       <ClientBriefing
         clientName="Harbour Glass"
         clientCode="HG-14"
@@ -189,14 +298,12 @@ function BriefingPane() {
         healthScore={72}
         healthLabel="Stable"
         healthStatus="healthy"
-        snapshot={[
-          { key: "cash", label: "Cash", value: "R186k" },
-          { key: "revenue", label: "Revenue", value: "R420k" },
-          { key: "runway", label: "Runway", value: "11 weeks" },
-        ]}
+        snapshot={snapshot}
         about="A small glass workshop. These figures are local fixture data."
         profile={null}
-        whatMatters="Collections are the gap before payroll."
+        whatMatters={matters}
+        hideWhatMatters
+        hideConnectionActions
         workflow={null}
         workflowLoading={false}
         openQueries={1}

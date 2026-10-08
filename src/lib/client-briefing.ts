@@ -321,7 +321,7 @@ export function whatMatters(s: BriefingSignals): string | null {
     return `${profitable ? "Profitable, but" : "Cash is the constraint:"} runway is ${runwayText}. Worth understanding what is driving the cash position before anything else.`;
   }
   if (revDown && marginsDown) {
-    return "Revenue and operating margin both slipped against the prior period. Understand whether this is volume, price or cost before client management reacts.";
+    return "Revenue and operating margin both slipped against the prior period. Understand whether this is volume, price or cost before the client reacts.";
   }
   if (revUp && marginsDown) {
     return "Revenue is growing but operating margin has narrowed — growth is being bought with cost. Margin discipline is the theme this month.";
@@ -348,7 +348,7 @@ export function whatMatters(s: BriefingSignals): string | null {
     return `The business appears financially healthy${runway != null ? `, with ${runwayText} of cash runway` : ""} and no single metric demanding attention this month.`;
   }
   if (s.healthStatus === "critical") {
-    return "Several indicators are weak at the same time. Start with cash, then profitability — this is a month for a focused conversation with client management.";
+    return "Several indicators are weak at the same time. Start with cash, then profitability — this is a month for a focused conversation with the client.";
   }
   if (s.healthStatus === "at_risk") {
     return `The overall position is watchful rather than urgent${

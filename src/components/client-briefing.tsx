@@ -201,6 +201,10 @@ export type ClientBriefingProps = {
    * the workflow kicker does not call the work "this month".
    */
   figuresPeriodLabel?: string | null;
+  /** When the answer strip shows this line, the briefing does not repeat it. */
+  hideWhatMatters?: boolean;
+  /** Upload, connect, and the other secondary links live in Review inputs. */
+  hideConnectionActions?: boolean;
   /** Primary upload — always in the briefing, not behind a tab. */
   onUpload?: () => void;
   onConnectQuickBooks?: () => void;
@@ -298,6 +302,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               fallbackName="Organisation connected"
             />
           ) : null}
+          {p.hideConnectionActions ? null : (
           <div className="briefing-actions">
             {p.onUpload ? (
               <button
@@ -377,6 +382,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               </span>
             ) : null}
           </div>
+          )}
         </div>
       </div>
 
@@ -407,7 +413,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
 
       {p.hasFigures && (
         <div className="briefing-brief">
-          {p.whatMatters ? (
+          {p.whatMatters && !p.hideWhatMatters ? (
             <div>
               <span className="briefing-kicker">What matters</span>
               <p>{p.whatMatters}</p>

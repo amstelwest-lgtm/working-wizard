@@ -1,9 +1,12 @@
 import { AddToPlanButton } from "@/components/add-to-plan-button";
+import { ArapAnswerStrip } from "@/components/arap-answer-strip";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
+import { movesAnswerSentence } from "@/lib/overview-moves-copy";
 import type { RankedStrategicMove } from "@/lib/strategic-moves";
 
 /**
- * Accountant Moves tab. Same ranked list the Action Plan imports and labels
- * “From strategic moves”.
+ * Accountant Moves tab. Same ranked list the Action Plan imports.
+ * No review scope, so the strip has no status pill and no source chip.
  */
 export function StrategicMovesPanel({
   moves,
@@ -14,49 +17,73 @@ export function StrategicMovesPanel({
   clientId: string;
   onOpenPlan: (moveKey: string) => void;
 }) {
+  const first = moves[0];
+  const assumptions = moves.filter((move) => move.impactLine.trim());
   return (
-    <section className="card pad">
-      <span className="eyebrow">Strategic Moves</span>
-      <p className="brain-purpose">
-        Ranked from the ratios already on this file. Action Plan items marked From strategic moves
-        come from this list. Add one when it is the next thing to chase.
-      </p>
-      {moves.length === 0 ? (
-        <p className="sub" style={{ margin: 0 }}>
-          No moves yet. Add figures on Overview and this list fills from the ratios.
-        </p>
-      ) : (
-        <ol className="brain-list" style={{ marginTop: 14 }}>
-          {moves.map((move, index) => (
-            <li key={move.key} className="brain-row">
-              <div>
-                <div className="brain-row-title">
-                  {index + 1}. {move.title}
-                </div>
-                <div className="brain-row-meta">
-                  {move.ratioName}
-                  {Number.isFinite(move.health) ? ` · health ${move.health.toFixed(0)}%` : ""}
-                </div>
-                {index < 3 && move.impactLine ? (
+    <>
+      <ArapAnswerStrip
+        heading="Moves"
+        sentence={movesAnswerSentence(moves)}
+        primary={
+          first ? (
+            <AddToPlanButton
+              clientId={clientId}
+              moveKey={first.key}
+              title={first.title}
+              outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+              onAssign={onOpenPlan}
+              variant="studio"
+              tone="strip"
+            />
+          ) : null
+        }
+      />
+      {assumptions.length > 0 ? (
+        <ReviewInputsDrawer hint="Assumptions">
+          <ul className="brain-list" style={{ margin: 0 }}>
+            {assumptions.map((move) => (
+              <li key={move.key} className="brain-row">
+                <div>
+                  <div className="brain-row-title">{move.title}</div>
                   <p className="sub" style={{ margin: "6px 0 0" }}>
                     {move.impactLine}
                   </p>
-                ) : null}
-              </div>
-              <div className="brain-row-actions">
-                <AddToPlanButton
-                  clientId={clientId}
-                  moveKey={move.key}
-                  title={move.title}
-                  outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
-                  onAssign={onOpenPlan}
-                  variant="studio"
-                />
-              </div>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </ReviewInputsDrawer>
+      ) : null}
+      {moves.length > 0 ? (
+        <section className="card pad">
+          <span className="eyebrow">Strategic Moves</span>
+          <ol className="brain-list" style={{ marginTop: 14 }}>
+            {moves.map((move, index) => (
+              <li key={move.key} className="brain-row">
+                <div>
+                  <div className="brain-row-title">
+                    {index + 1}. {move.title}
+                  </div>
+                  <div className="brain-row-meta">{move.ratioName}</div>
+                </div>
+                {index === 0 ? null : (
+                  <div className="brain-row-actions">
+                    <AddToPlanButton
+                      clientId={clientId}
+                      moveKey={move.key}
+                      title={move.title}
+                      outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
+                      onAssign={onOpenPlan}
+                      variant="studio"
+                      tone="quiet"
+                    />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+    </>
   );
 }

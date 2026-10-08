@@ -39,9 +39,24 @@ type Props = {
   className?: string;
   /** Surface name for analytics. */
   surface: "owner_app" | "accountant_portal";
+  /** Harness only. Skips the server resolve and shows this step. */
+  fixtureStep?: NextStep;
+  /** The answer strip owns the gold CTA. The card keeps the reason. */
+  hideCta?: boolean;
+  onResolved?: (step: NextStep | null) => void;
 };
 
-export function NextStepCard({ clientId, audience, onAct, refreshKey, className, surface }: Props) {
+export function NextStepCard({
+  clientId,
+  audience,
+  onAct,
+  refreshKey,
+  className,
+  surface,
+  fixtureStep,
+  hideCta = false,
+  onResolved,
+}: Props) {
   const fetchNextStep = useServerFn(getNextStep);
   const syncRequests = useServerFn(syncDataRequests);
   const workflow = useServerFn(runWorkflow);
@@ -56,7 +71,7 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
   const seq = useRef(0);
 
   const load = useCallback(async () => {
-    if (!clientId) return;
+    if (fixtureStep || !clientId) return;
     const mine = ++seq.current;
     setError(null);
     try {
@@ -81,11 +96,23 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
     } finally {
       if (mine === seq.current) setLoading(false);
     }
-  }, [clientId, audience, fetchNextStep, syncRequests, measure, workflow]);
+  }, [clientId, audience, fetchNextStep, syncRequests, measure, workflow, fixtureStep]);
 
   useEffect(() => {
-    if (!clientId) {
-      setLoading(false);
+    if (!fixtureStep) return;
+    setStep(fixtureStep);
+    setDerived(false);
+    setError(null);
+    setLoading(false);
+  }, [fixtureStep]);
+
+  useEffect(() => {
+    onResolved?.(fixtureStep ? fixtureStep : step);
+  }, [fixtureStep, step, onResolved]);
+
+  useEffect(() => {
+    if (fixtureStep || !clientId) {
+      if (!clientId && !fixtureStep) setLoading(false);
       return;
     }
     setLoading((prev) => prev || step === null);
@@ -97,13 +124,13 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
   // Coming back to the tab after doing work elsewhere (email link, upload in
   // another window) should show the new step without a manual reload.
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    if (fixtureStep || typeof document === "undefined") return;
     const onVisible = () => {
       if (document.visibilityState === "visible") void load();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [load]);
+  }, [load, fixtureStep]);
 
   const lastTracked = useRef<string | null>(null);
   useEffect(() => {
@@ -208,14 +235,16 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
       <h3 className="milon-next-step__title">{step.title}</h3>
       <p className="milon-next-step__reason">{step.reason}</p>
       <div className="milon-next-step__actions">
-        <button
-          type="button"
-          className="milon-next-step__cta"
-          onClick={() => act()}
-          data-next-step-cta={step.key}
-        >
-          {step.cta.label} <ArrowRight className="h-4 w-4" aria-hidden />
-        </button>
+        {hideCta ? null : (
+          <button
+            type="button"
+            className="milon-next-step__cta"
+            onClick={() => act()}
+            data-next-step-cta={step.key}
+          >
+            {step.cta.label} <ArrowRight className="h-4 w-4" aria-hidden />
+          </button>
+        )}
         {step.key === "diagnosis" ? (
           <button
             type="button"
