@@ -18,6 +18,7 @@ import {
   parseAgentObjective,
   persistedCreateIntent,
   routeMilonIntent,
+  teamDeskOwnsMount,
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
 import { friendlyReachMessage } from "./reach-error.ts";
@@ -171,6 +172,7 @@ export function renderMarkdown(md) {
 }
 
 export function mountAskAi(container, options) {
+  if (teamDeskOwnsMount(container)) return;
   const {
     endpoint,
     botEndpoint: botEndpointOverride,

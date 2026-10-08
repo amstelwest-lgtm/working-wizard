@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export { teamDeskOwnsMount } from "@/lib/milon-bot-copy";
+
 export type MilonBotAudience = "accountant" | "owner";
 export type MilonBotToolStatus = "ok" | "empty" | "error";
 

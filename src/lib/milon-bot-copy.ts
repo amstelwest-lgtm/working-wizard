@@ -32,6 +32,11 @@ export const MILON_BOT_OWNER_CHIPS = [
 
 export type MilonBotIntent = "ask-ai" | "milon-bot";
 
+/** The team desk owns this node. The chat widget must not replace its children. */
+export function teamDeskOwnsMount(container: { dataset?: { teamDesk?: string } } | null | undefined): boolean {
+  return container?.dataset?.teamDesk === "1";
+}
+
 /**
  * Route a free-text question to the numbers copilot (ask-ai) or Client Brain
  * tools (milon-bot). Default is ask-ai so health / cash / hire questions stay

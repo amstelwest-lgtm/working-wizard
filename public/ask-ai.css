@@ -400,6 +400,13 @@
   overflow: hidden;
   min-height: min(72vh, 720px);
 }
+
+/* The team desk owns this node. Do not clip it with the studio shell. */
+#ask-ai-accountant[data-team-desk="1"] {
+  overflow: visible;
+  min-height: 0;
+  height: 100%;
+}
 .ask-ai-studio-shell::before {
   content: "";
   pointer-events: none;
