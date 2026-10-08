@@ -90,9 +90,9 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   brain: "Books",
   books: "Books",
   "client-brain": "Books",
-  ask: "Bot",
-  bot: "Bot",
-  "milon-bot": "Bot",
+  ask: "Milōn Bot",
+  bot: "Milōn Bot",
+  "milon-bot": "Milōn Bot",
 };
 
 export function noteTabLabel(tab: string): string {

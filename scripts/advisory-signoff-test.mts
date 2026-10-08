@@ -283,7 +283,10 @@ assert(panelSrc.includes("packDisplayedSignoffLine"), "a stale approval still sh
 
 const tabSrc = readFileSync(resolve("src/components/advisory-tab-signoff.tsx"), "utf8");
 assert(tabSrc.includes("SIGNOFF_GOLD_BTN"), "one gold primary");
-assert(tabSrc.includes("data-advisory-mismatch"), "a leftover page stamp is shown as a mismatch");
+assert(
+  !tabSrc.includes("data-advisory-mismatch") && !tabSrc.includes("advisoryLegacyMismatchLine"),
+  "the pack status line already covers a leftover stamp",
+);
 assert(tabSrc.includes("data-approve"), "the gold button approves the pack");
 assert(!tabSrc.includes("SIGNED OFF"), "the tab does not paint a bare SIGNED badge");
 

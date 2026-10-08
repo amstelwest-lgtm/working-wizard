@@ -46,16 +46,28 @@ import {
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { planAnswerSentence, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
-import { healthHeadline } from "@/lib/client-briefing";
+import { buildFinancialSnapshot, healthHeadline } from "@/lib/client-briefing";
+import { buildVarianceChips } from "@/lib/prior-period";
+import { booksCoverPeriod, booksSyncSubline } from "@/lib/books-answer";
+import { statementArApMoney } from "@/components/statement-arap-fallback";
+import { fmtBudgetMoney } from "@/lib/budget.compute";
+import { createBudgetDocument } from "@/lib/budget.months";
+import {
+  budgetSeededFromStatement,
+  budgetVersusStatement,
+  seedBudgetFromFinancials,
+} from "@/lib/budget.bridges";
+import type { BudgetQualification } from "@/lib/budget.types";
 import type { NextStep } from "@/lib/next-step";
 import {
   overviewAnswerSentence,
   overviewSectionCards,
   snapshotFigure,
+  storedAmountFigure,
 } from "@/lib/overview-moves-copy";
 import { NextStepCard } from "@/components/next-step-card";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
-import { currencySymbol } from "@/lib/market";
+import { currencySymbol, ZA_MARKET } from "@/lib/market";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { preferStatementPeriod, readStatementMeta } from "@/lib/statement-period";
 import { derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
@@ -75,6 +87,10 @@ import {
 } from "@/components/client-studio-chrome";
 
 const CLIENT_ID = "harness-client";
+/** Same freshness line the Books pane already shows. */
+const HARNESS_BOOKS_FRESHNESS = "Snapshot on file · September 2026";
+/** Same clock as the collections fixture sync. */
+const HARNESS_FIGURES_UPDATED_AT = "2026-10-01T00:00:00.000Z";
 
 class PaneBoundary extends Component<{ label: string; children: ReactNode }, { error: string | null }> {
   state = { error: null as string | null };
@@ -150,11 +166,18 @@ export function RailStudio() {
               <ClientRailButton
                 key={item.id}
                 id={item.id}
-                landing={item.landing}
                 label={item.label}
                 active={group === item.id}
-                clientId={clientId}
                 primary={item.id === "ask"}
+                onSelect={() => {
+                  const tab = item.id === "deliverables" ? "reports" : item.id;
+                  void navigate({
+                    to: "/clients/$clientId",
+                    params: { clientId },
+                    search: (prev) => accountantClientTabSearch(prev, tab),
+                    replace: true,
+                  });
+                }}
               />
             ))}
           </nav>
@@ -248,7 +271,7 @@ function BooksPane({ clientId }: { clientId: string }) {
         clientId={clientId}
         returnPath={`/clients/${clientId}`}
         onUpload={() => {}}
-        freshness="Snapshot on file · September 2026"
+        freshness={HARNESS_BOOKS_FRESHNESS}
         chip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
         fixtureOpenKinds={["bank_statement"]}
       />
@@ -271,12 +294,7 @@ function BriefingPane() {
     { key: "runway", label: "Runway", value: "11 weeks" },
   ];
   const matters = "Collections are the gap before payroll.";
-  const cards = overviewSectionCards({
-    health: healthHeadline(72, "Stable"),
-    cash: snapshotFigure(snapshot, "runway") ?? snapshotFigure(snapshot, "cash"),
-    profit: snapshotFigure(snapshot, "om"),
-    moves: harnessMoves()[0]?.title ?? null,
-  });
+  const cards = harnessOverviewCards(snapshot);
   return (
     <div className="tabpane on" id="pane-overview">
       <DeliverableAnswerStrip
@@ -553,6 +571,88 @@ const HARNESS_ARAP = {
   debtorDays: 48,
   creditorDays: 31,
 };
+
+/**
+ * Overview tiles read the same fixture the other panes already use.
+ * The hand-built snapshot only has cash, revenue, and runway, so profit,
+ * collections, payables, budget, and books stay blank unless filled here.
+ */
+function harnessOverviewCards(snapshot: readonly { key: string; value: string }[]) {
+  const revenue = Number(HARNESS_FINANCIALS.revenue);
+  const cogs = Number(HARNESS_FINANCIALS.cogs);
+  const fixedCosts = Number(HARNESS_FINANCIALS.fixedCosts);
+  const operatingMargin = (revenue - cogs - fixedCosts) / revenue;
+  const marginSnapshot = buildFinancialSnapshot({
+    chips: buildVarianceChips({
+      currentFinancials: HARNESS_FINANCIALS,
+      currentRatios: { "Operating Margin": operatingMargin },
+      prior: null,
+    }),
+    financialsUpdatedAt: HARNESS_FIGURES_UPDATED_AT,
+    periodLabel: HARNESS_FINANCIALS.periodLabel,
+    datedPeriod: true,
+    market: ZA_MARKET,
+  });
+  const booksPeriod = booksCoverPeriod(HARNESS_BOOKS_FRESHNESS);
+  const qualification: BudgetQualification = {
+    payMotion: "mix",
+    volumeUnit: "units_sku",
+    driverKind: "units_price",
+    costShape: "balanced",
+    debtorDaysDefault: HARNESS_ARAP.debtorDays,
+    capexMode: "none",
+    confirmedAt: HARNESS_FIGURES_UPDATED_AT,
+  };
+  const seeded = seedBudgetFromFinancials(
+    createBudgetDocument({
+      templateId: "hybrid_primary",
+      qualification,
+      fyStartMonth: ZA_MARKET.fyStartMonthDefault,
+      ref: new Date("2026-09-30T12:00:00.000Z"),
+      market: ZA_MARKET,
+    }),
+    {
+      ...HARNESS_FINANCIALS,
+      receivables: String(HARNESS_ARAP.receivables),
+      payables: String(HARNESS_ARAP.payables),
+      periodMonths: "1",
+      periodStart: "2026-09-01",
+      periodEnd: "2026-09-30",
+    },
+  );
+  const compared = budgetVersusStatement(seeded.doc, {
+    ...HARNESS_FINANCIALS,
+    ebit: String(revenue - cogs - fixedCosts),
+    periodMonths: "1",
+    periodStart: "2026-09-01",
+    periodEnd: "2026-09-30",
+  });
+  let budget: string | null = null;
+  if (compared && budgetSeededFromStatement(compared)) {
+    budget = "Budget seeded from these figures";
+  } else if (compared) {
+    budget = `Revenue ${fmtBudgetMoney(compared.revenue, ZA_MARKET)} vs budget ${fmtBudgetMoney(compared.budgetRevenue, ZA_MARKET)}`;
+  }
+  return overviewSectionCards(
+    {
+      health: healthHeadline(72, "Stable"),
+      cash: snapshotFigure(snapshot, "runway") ?? snapshotFigure(snapshot, "cash"),
+      profit: snapshotFigure(marginSnapshot, "om"),
+      collections: storedAmountFigure(HARNESS_ARAP.receivables, (amount) =>
+        statementArApMoney(amount, ZA_MARKET),
+      ),
+      payables: storedAmountFigure(HARNESS_ARAP.payables, (amount) =>
+        statementArApMoney(amount, ZA_MARKET),
+      ),
+      budget,
+      moves: harnessMoves()[0]?.title ?? null,
+      books: booksPeriod ?? snapshotFigure(marginSnapshot, "updated"),
+    },
+    booksPeriod
+      ? { books: booksSyncSubline(snapshotFigure(marginSnapshot, "updated")) }
+      : undefined,
+  );
+}
 
 const HARNESS_COLLECTIONS = finalizeCollections({
   source: "xero",

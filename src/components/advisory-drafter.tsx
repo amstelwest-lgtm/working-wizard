@@ -99,7 +99,7 @@ export function AdvisoryDrafter({
     listDeliveries(clientId)
       .then((rows) => {
         if (cancelled) return;
-        setLastSent(rows.find((row) => row.channel !== "pdf_download") ?? null);
+        setLastSent(rows[0] ?? null);
       })
       .catch(() => {
         if (!cancelled) setLastSent(null);
@@ -201,16 +201,26 @@ export function AdvisoryDrafter({
         .replace(/\u00a0/g, " ")
     : "";
   const sentOn = plainSentDate(dateLabel);
-  const sentence = drafterAnswerSentence({
-    last:
-      lastSent && sentOn && sentOn !== "—"
-        ? {
-            kind: lastSent.kind,
-            recipient: clientName?.trim() || "the client",
-            dateLabel: sentOn,
-          }
-        : null,
-  });
+  const downloadedPack = (lastSent?.subject ?? "").match(/advisory pack v(\d+)/i);
+  const sentence =
+    lastSent?.channel === "pdf_download" && sentOn && sentOn !== "—"
+      ? `Last shared: ${
+          downloadedPack
+            ? `Advisory pack v${downloadedPack[1]} PDF downloaded`
+            : lastSent.report_key === "advisory_pack"
+              ? "Advisory pack PDF downloaded"
+              : "PDF downloaded"
+        } · ${sentOn}.`
+      : drafterAnswerSentence({
+          last:
+            lastSent && sentOn && sentOn !== "—"
+              ? {
+                  kind: lastSent.kind,
+                  recipient: clientName?.trim() || "the client",
+                  dateLabel: sentOn,
+                }
+              : null,
+        });
 
   return (
     <div id="drafter">

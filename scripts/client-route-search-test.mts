@@ -8,6 +8,7 @@ import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
   drafterSectionForHash,
+  routerHash,
   type CanonicalClientSearch,
 } from "../src/lib/client-route-search";
 import { STRATEGIC_MOVE_CATALOG, rankStrategicMoves } from "../src/lib/strategic-moves";
@@ -160,7 +161,7 @@ assert(
   route.includes('resolveAccountantTab(search) ?? "overview"'),
   "the first paint uses the parsed tab and section",
 );
-assert(route.includes('{ id: "ask", label: "Bot"'), "Bot is a rail item");
+assert(route.includes('{ id: "ask", label: "Milōn Bot"'), "Milōn Bot is a rail item");
 assert(route.includes('{ id: "overview", label: "Overview"'), "Overview is a rail item");
 assert(
   route.includes('{ id: "deliverables", label: "Deliverables"'),
@@ -201,6 +202,10 @@ for (const id of deliverableOrder) {
 }
 assert(route.includes('id: "pack", label: "Advisory pack"'), "Deliverables keeps the pack");
 assert(route.includes('id: "drafter", label: "Advisory"'), "Deliverables has an Advisory section");
+assert(routerHash("#drafter") === "drafter", "a single hash is not doubled");
+assert(routerHash("##drafter") === "drafter", "a doubled hash is collapsed");
+assert(routerHash("") === undefined, "an empty hash is omitted");
+assert(drafterSectionForHash("pack", "##drafter") === "drafter", "a doubled drafter hash still opens the drafter");
 assert(drafterSectionForHash("pack", "#drafter") === "drafter", "pack#drafter opens the drafter");
 assert(drafterSectionForHash("pack", "#sent-history") === "drafter", "sent history hash opens the drafter");
 assert(drafterSectionForHash("drafter", "#drafter") === null, "a drafter hash stays on the drafter");

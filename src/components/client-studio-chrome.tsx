@@ -1,13 +1,8 @@
 import type { KeyboardEvent } from "react";
-import { Link } from "@tanstack/react-router";
-import {
-  accountantClientTabSearch,
-  DELIVERABLE_SECTIONS,
-  OVERVIEW_SECTIONS,
-} from "@/lib/client-route-search";
+import { DELIVERABLE_SECTIONS, OVERVIEW_SECTIONS } from "@/lib/client-route-search";
 
 export const CLIENT_RAIL: { id: "ask" | "overview" | "deliverables"; label: string; landing: string }[] = [
-  { id: "ask", label: "Bot", landing: "ask" },
+  { id: "ask", label: "Milōn Bot", landing: "ask" },
   { id: "overview", label: "Overview", landing: "overview" },
   { id: "deliverables", label: "Deliverables", landing: "reports" },
 ];
@@ -46,32 +41,30 @@ export function selectedSectionId(tab: string, section: string | undefined): str
 
 export function ClientRailButton({
   id,
-  landing,
   label,
   active,
-  clientId,
   primary,
+  onSelect,
 }: {
   id: "ask" | "overview" | "deliverables";
-  landing: string;
   label: string;
   active: boolean;
-  clientId: string;
   primary?: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <Link
-      to="/clients/$clientId"
-      params={{ clientId }}
-      search={(prev) => accountantClientTabSearch(prev, landing)}
+    <button
+      type="button"
       className={`tab${active ? " on" : ""}${primary ? " bot-primary" : ""}`}
       data-tab={id}
       data-bot-rail={primary ? "true" : undefined}
       aria-current={active ? "page" : undefined}
-      replace
+      aria-label={label}
+      title={label}
+      onClick={onSelect}
     >
       {label}
-    </Link>
+    </button>
   );
 }
 
