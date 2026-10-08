@@ -95,6 +95,41 @@ export function showFigureSourceChip(source: string | null | undefined): boolean
   return Boolean(source?.trim());
 }
 
+/**
+ * Short title-case chip, same shape as Cash's "Bank".
+ * Sentences keep figureSourcePhrase ("an uploaded statement").
+ */
+export function figureSourceChipLabel(source: string | null | undefined): string | null {
+  if (!showFigureSourceChip(source)) return null;
+  switch (source) {
+    case "xero":
+      return "Xero";
+    case "qbo":
+      return "QuickBooks";
+    case "sage":
+      return "Sage";
+    case "upload":
+    case "pdf_upload":
+      return "Uploaded statement";
+    case "financial_statement":
+      return "Imported statement";
+    case "bank_pack":
+      return "Bank";
+    case "manual":
+      return "Manual";
+    case "autosave":
+      return "Saved figures";
+    case "lighthouse_import":
+      return "Import";
+    default: {
+      const raw = source?.trim() ?? "";
+      if (/trial|tb/i.test(raw)) return "Trial balance";
+      if (/import/i.test(raw)) return "Import";
+      return "Statement";
+    }
+  }
+}
+
 function hasSyncTimestamp(iso: string | null | undefined): iso is string {
   return Boolean(iso) && Number.isFinite(Date.parse(iso as string));
 }

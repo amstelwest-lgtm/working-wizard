@@ -50,7 +50,7 @@ import {
   resolveMarket,
 } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
-import { computeOverviewCaption } from "@/lib/overview-insights";
+import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -82,6 +82,7 @@ import {
   overviewRatioInputs,
   overviewRatios,
   PILLAR_LABELS,
+  PILLAR_SHORT_LABELS,
   scorecardHealthFromFinancials,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -97,11 +98,14 @@ import { FeatureFinder } from "@/components/feature-finder";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
-import { ProfitabilityWaterfall, profitAnswerSentence } from "@/components/profitability-waterfall";
+import {
+  ProfitabilityWaterfall,
+  profitAnswerSentence,
+  type WaterfallExportApi,
+} from "@/components/profitability-waterfall";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
-import { healthHeadline } from "@/lib/client-briefing";
-import { figureSourcePhrase, showFigureSourceChip } from "@/lib/ledger-link-copy";
+import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
@@ -844,6 +848,7 @@ function ClientView() {
   }, [activeTab, clientId, firmId, track]);
   const [finOpen, setFinOpen] = useState(false);
   const [profitFinOpen, setProfitFinOpen] = useState(true);
+  const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
   const [planFocusMove, setPlanFocusMove] = useState<string | null>(null);
@@ -1183,12 +1188,19 @@ function ClientView() {
     cashHealth: pillarHealths.cash ?? NaN,
     displayStatus: overallHealth.displayStatus,
   });
-  const healthSentence =
-    healthCaption?.trim() ||
-    healthHeadline(Number.isFinite(avgHealth) ? avgHealth : null, overallHealth.displayLabel);
-  const healthChip = showFigureSourceChip(statementMeta.statementSource)
-    ? figureSourcePhrase(statementMeta.statementSource)
-    : null;
+  const healthPillarLines = (["profit", "assets", "financing", "cash"] as const).map((id) => ({
+    label: PILLAR_SHORT_LABELS[id],
+    score: pillarHealths[id],
+    status: pillarStatus[id],
+  }));
+  const healthSentence = healthAnswerSentence({
+    caption: healthCaption,
+    score: Number.isFinite(avgHealth) ? avgHealth : null,
+    bandLabel: overallHealth.displayLabel,
+    pillars: healthPillarLines,
+    includeScore: search.focus === "pillars",
+  });
+  const healthChip = figureSourceChipLabel(statementMeta.statementSource);
 
   const sphereRatioMeta = useMemo(
     () =>
@@ -3137,7 +3149,8 @@ function ClientView() {
                   </ReviewInputsDrawer>
                   {/* One Health view — orb and pillar cards. No Simplified/Complex switch. */}
                   <div style={{ marginBottom: 32 }}>
-                      {/* Orb — always-dark container so sphere colours read correctly */}
+                      {/* Orb stays on Health. Pillars leads with the cards. */}
+                      {search.focus === "pillars" ? null : (
                       <div
                         style={{
                           background: "#0a0e1a",
@@ -3172,6 +3185,7 @@ function ClientView() {
                           })()}
                         />
                       </div>
+                      )}
                       {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
                       <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
                         <SimplifiedRatios
@@ -3251,11 +3265,7 @@ function ClientView() {
                       periodLabel: statementMeta.periodLabel,
                       preferPeriod: preferStatementPeriod(financials),
                     })}
-                    chip={
-                      showFigureSourceChip(statementMeta.statementSource)
-                        ? figureSourcePhrase(statementMeta.statementSource)
-                        : null
-                    }
+                    chip={figureSourceChipLabel(statementMeta.statementSource)}
                     scope="profitability"
                     clientId={clientId}
                     clientName={client?.name}
@@ -3266,6 +3276,20 @@ function ClientView() {
                     )}
                     onSignoffChange={patchSignoff("profitability")}
                     canSign
+                    extraActions={
+                      <button
+                        type="button"
+                        className="answer-strip__icon"
+                        aria-label="Export PDF"
+                        title="Export PDF"
+                        disabled={profitExport?.exporting}
+                        onClick={() => profitExport?.exportPdf()}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                        </svg>
+                      </button>
+                    }
                   />
                   <ReviewInputsDrawer hint={deliverableDrawerHint("profit", deliverableInputContext)}>
                   <DeliverableInputConfig
@@ -3424,6 +3448,8 @@ function ClientView() {
                         pageSignoffStale(profitabilitySignoff, client?.financials_updated_at ?? null),
                       )}
                       hideLead
+                      hideCardExport
+                      onExportReady={setProfitExport}
                     />
                   </div>
 

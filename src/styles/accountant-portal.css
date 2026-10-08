@@ -1365,6 +1365,7 @@ html[data-theme="dark"] .reports-studio .reports-settings{
 .review-inputs{
   grid-column:1 / -1;
   width:100%;
+  margin:0 0 16px;
   border:1px solid var(--line,rgba(212,175,55,.16));
   border-radius:14px;
   background:color-mix(in srgb, var(--glass,rgba(13,13,20,.78)) 88%, transparent);

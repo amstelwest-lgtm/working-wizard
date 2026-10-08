@@ -7,6 +7,7 @@
  * cash forecasts from P&L heuristics. Prefer null / empty + honest copy.
  */
 
+import { healthHeadline } from "@/lib/client-briefing";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 
 export type WeekChange = {
@@ -116,6 +117,44 @@ export function computeOverviewCaption(input: {
   if (tier === "healthy") return `${band}. Keep building momentum.`;
   if (tier === "at_risk") return `${band}. Start with the priority below.`;
   return `${band}. Start with the priority below.`;
+}
+
+const GENERIC_HEALTH_CAPTION =
+  /^(Healthy|Watch|Critical)\. (Keep building momentum|Start with the priority below)\.$/;
+
+/**
+ * The strip sentence. A band word plus "start with the priority below" is not
+ * an answer, so this uses pillar scores already on the page. The orb already
+ * shows the number, so Health leaves it out.
+ */
+export function healthAnswerSentence(input: {
+  caption?: string | null;
+  score: number | null;
+  bandLabel: string;
+  pillars: { label: string; score: number; status?: HealthTier | null }[];
+  includeScore?: boolean;
+}): string {
+  const caption = input.caption?.trim() ?? "";
+  if (caption && !GENERIC_HEALTH_CAPTION.test(caption)) {
+    return input.includeScore ? caption : caption.replace(/^(Healthy|Watch|Critical)\.\s+/, "");
+  }
+
+  const scored = input.pillars.filter((pillar) => Number.isFinite(pillar.score));
+  if (scored.length === 0) {
+    return input.includeScore ? healthHeadline(input.score, input.bandLabel) : "Not scored yet";
+  }
+
+  const weakest = scored.reduce((best, pillar) => (pillar.score < best.score ? pillar : best));
+  const strongest = scored.reduce((best, pillar) => (pillar.score > best.score ? pillar : best));
+  let body = `${weakest.label} is the weakest pillar`;
+  if (strongest.label !== weakest.label && strongest.status === "healthy") {
+    body += `; ${strongest.label} is strong`;
+  }
+  body += ".";
+  if (input.includeScore && input.score != null && Number.isFinite(input.score)) {
+    return `${Math.round(input.score)}, ${input.bandLabel}: ${body}`;
+  }
+  return body;
 }
 
 export function computeNextMoveImpactLabel(input: {

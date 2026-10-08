@@ -6,7 +6,8 @@ import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import { healthHeadline } from "../src/lib/client-briefing";
 import { deliverableDrawerHint } from "../src/components/deliverable-answer-strip";
-import { figureSourcePhrase, showFigureSourceChip } from "../src/lib/ledger-link-copy";
+import { figureSourceChipLabel, figureSourcePhrase, showFigureSourceChip } from "../src/lib/ledger-link-copy";
+import { healthAnswerSentence } from "../src/lib/overview-insights";
 import { legacyPaneForSearch } from "../src/lib/client-route-search";
 import { profitAnswerSentence } from "../src/components/profitability-waterfall";
 
@@ -15,8 +16,52 @@ assert(!showFigureSourceChip(""), "a blank source is not a chip");
 assert(!showFigureSourceChip("   "), "whitespace is not a chip");
 assert(showFigureSourceChip("xero"), "a saved Xero statement is a chip");
 assert(figureSourcePhrase("xero") === "a saved Xero statement", "xero maps through figureSourcePhrase");
+assert(figureSourcePhrase("upload") === "an uploaded statement", "the sentence phrase stays lowercase");
 assert(figureSourcePhrase("") === "figures already on file", "the phrase still exists for other callers");
+assert(figureSourceChipLabel(null) === null, "a missing source has no chip label");
+assert(figureSourceChipLabel("") === null, "a blank source has no chip label");
+assert(figureSourceChipLabel("upload") === "Uploaded statement", "an upload is a short chip");
+assert(figureSourceChipLabel("pdf_upload") === "Uploaded statement", "a pdf upload is the same chip");
+assert(figureSourceChipLabel("qbo") === "QuickBooks", "QuickBooks is a short chip");
+assert(figureSourceChipLabel("xero") === "Xero", "Xero is a short chip");
+assert(figureSourceChipLabel("sage") === "Sage", "Sage is a short chip");
+assert(figureSourceChipLabel("bank_pack") === "Bank", "a bank import matches Cash's chip");
 assert(healthHeadline(null, "Watch") === "Not scored yet", "an empty caption can fall back to the headline");
+
+const pillars = [
+  { label: "Profit", score: 67, status: "at_risk" as const },
+  { label: "Cash", score: 85, status: "healthy" as const },
+];
+assert(
+  healthAnswerSentence({
+    caption: "Watch. Start with the priority below.",
+    score: 76,
+    bandLabel: "Watch",
+    pillars,
+    includeScore: false,
+  }) === "Profit is the weakest pillar; Cash is strong.",
+  "health leaves the score on the orb",
+);
+assert(
+  healthAnswerSentence({
+    caption: "Watch. Start with the priority below.",
+    score: 76,
+    bandLabel: "Watch",
+    pillars,
+    includeScore: true,
+  }) === "76, Watch: Profit is the weakest pillar; Cash is strong.",
+  "pillars can carry the score because the orb is gone",
+);
+assert(
+  healthAnswerSentence({
+    caption: "Watch. Cash conversion is holding the score back.",
+    score: 76,
+    bandLabel: "Watch",
+    pillars,
+    includeScore: false,
+  }) === "Cash conversion is holding the score back.",
+  "a specific caption stays, without repeating the band",
+);
 
 const month = profitAnswerSentence({
   currency: "R",
@@ -58,6 +103,7 @@ const strip = readFileSync(resolve("src/components/deliverable-answer-strip.tsx"
 const waterfall = readFileSync(resolve("src/components/profitability-waterfall.tsx"), "utf8");
 const owner = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 const sage = readFileSync(resolve("src/components/sage-connect.tsx"), "utf8");
+const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
 
 const ratiosPane = sliceBetween(route, 'id="pane-ratios"', 'id="pane-profit"');
 const profitPane = sliceBetween(route, 'id="pane-profit"', 'id="pane-cash"');
@@ -72,9 +118,14 @@ assert(count(profitPane, "<ReviewSignoffButton") === 0, "profit does not render 
 assert(strip.includes("hideStatus"), "the gold button does not repeat the status line");
 assert(strip.includes("data-source-chip"), "the strip can show one source chip");
 assert(strip.includes("{chip ?"), "a blank chip is omitted");
-assert(route.includes("const healthChip = showFigureSourceChip"), "health uses the chip-omit rule");
+assert(route.includes("const healthChip = figureSourceChipLabel"), "health uses the chip label");
 assert(ratiosPane.includes("chip={healthChip}"), "health strip receives that chip");
-assert(profitPane.includes("showFigureSourceChip"), "profit uses the chip-omit rule");
+assert(profitPane.includes("figureSourceChipLabel"), "profit uses the chip label");
+assert(ratiosPane.includes('search.focus === "pillars" ? null'), "pillars skip the orb");
+assert(profitPane.includes('aria-label="Export PDF"'), "profit export sits on the strip");
+assert(profitPane.includes("hideCardExport"), "the waterfall card does not repeat export");
+assert(!waterfall.includes("ChevronUp"), "the chart collapse chevron is gone");
+assert(!waterfall.includes("ChevronDown"), "the chart collapse chevron is gone");
 assert(ratiosPane.includes("<ReviewInputsDrawer"), "health inputs sit in the shared drawer");
 assert(profitPane.includes("<ReviewInputsDrawer"), "profit inputs sit in the shared drawer");
 assert(ratiosPane.includes("hideCaption"), "the orb does not repeat the sentence");
@@ -98,6 +149,8 @@ for (const label of ["Business Health", "Profit", "Cash Forecast", "Budget", "Ne
   assert(owner.includes(`label: "${label}"`), `owner tab ${label} stays`);
 }
 assert(!sage.includes("DeliverableAnswerStrip"), "sage connect is untouched");
+const drawerRule = portalCss.slice(portalCss.indexOf(".review-inputs{"), portalCss.indexOf(".review-inputs__summary"));
+assert(drawerRule.includes("margin:0 0 16px"), "the drawer keeps a 16px gap under it");
 assert(owner.includes("stretched across a full year"), "the owner period tooltip uses the same plain words");
 
 console.log("answer-strip health + profit ok");

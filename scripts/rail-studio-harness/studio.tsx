@@ -2,7 +2,7 @@
  * Mounts the accountant studio shell from the client route, with fixture panes.
  * Supabase is the local stub. Nothing here has a project URL.
  */
-import { Component, type ReactNode } from "react";
+import { Component, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -14,7 +14,11 @@ import { ClientBriefing } from "@/components/client-briefing";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { ProductMixPanel } from "@/components/product-mix-panel";
-import { ProfitabilityWaterfall, profitAnswerSentence } from "@/components/profitability-waterfall";
+import {
+  ProfitabilityWaterfall,
+  profitAnswerSentence,
+  type WaterfallExportApi,
+} from "@/components/profitability-waterfall";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { SageConnectCard } from "@/components/sage-connect";
@@ -22,11 +26,15 @@ import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { XeroConnectCard } from "@/components/xero-connect";
-import { healthHeadline } from "@/lib/client-briefing";
-import { PILLAR_LABELS, scorecardHealthFromFinancials, type HealthPillarId } from "@/lib/health-score";
-import { figureSourcePhrase, showFigureSourceChip } from "@/lib/ledger-link-copy";
+import {
+  PILLAR_LABELS,
+  PILLAR_SHORT_LABELS,
+  scorecardHealthFromFinancials,
+  type HealthPillarId,
+} from "@/lib/health-score";
+import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { currencySymbol } from "@/lib/market";
-import { computeOverviewCaption } from "@/lib/overview-insights";
+import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { preferStatementPeriod, readStatementMeta } from "@/lib/statement-period";
 import { derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
 import { FeatureFinder } from "@/components/feature-finder";
@@ -219,11 +227,18 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
     cashHealth: pillarById.cash ?? Number.NaN,
     displayStatus: overall.displayStatus,
   });
-  const sentence =
-    caption?.trim() || healthHeadline(Number.isFinite(avg) ? avg : null, overall.displayLabel);
-  const chip = showFigureSourceChip(HARNESS_FINANCIALS.statementSource)
-    ? figureSourcePhrase(HARNESS_FINANCIALS.statementSource)
-    : null;
+  const sentence = healthAnswerSentence({
+    caption,
+    score: Number.isFinite(avg) ? avg : null,
+    bandLabel: overall.displayLabel,
+    includeScore: pillars,
+    pillars: (["profit", "assets", "financing", "cash"] as const).map((id) => ({
+      label: PILLAR_SHORT_LABELS[id],
+      score: pillarById[id],
+      status: pillarStatus[id],
+    })),
+  });
+  const chip = figureSourceChipLabel(HARNESS_FINANCIALS.statementSource);
   const spherePillars = buildSpherePillars({
     overallHealth: avg,
     pillarHealths: pillarById,
@@ -279,6 +294,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
       </ReviewInputsDrawer>
       <PaneBoundary label="Health score">
         <div style={{ marginBottom: 32 }}>
+          {pillars ? null : (
           <div style={{ background: "#0a0e1a", borderRadius: 20, padding: "16px 8px", marginBottom: 20 }}>
             <SphereHero
               onDark
@@ -288,6 +304,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
               pillars={spherePillars}
             />
           </div>
+          )}
           <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
             <SimplifiedRatios sections={sections} />
           </div>
@@ -305,6 +322,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
 function ProfitPane({ clientId }: { clientId: string }) {
   const meta = readStatementMeta(HARNESS_FINANCIALS);
   const preferPeriod = preferStatementPeriod(HARNESS_FINANCIALS);
+  const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
   return (
     <div className="tabpane on" id="pane-profit">
       <DeliverableAnswerStrip
@@ -314,7 +332,7 @@ function ProfitPane({ clientId }: { clientId: string }) {
           periodLabel: meta.periodLabel,
           preferPeriod,
         })}
-        chip={showFigureSourceChip(meta.statementSource) ? figureSourcePhrase(meta.statementSource) : null}
+        chip={figureSourceChipLabel(meta.statementSource)}
         scope="profitability"
         clientId={clientId}
         clientName="Harbour Glass"
@@ -322,6 +340,20 @@ function ProfitPane({ clientId }: { clientId: string }) {
         isStale={false}
         onSignoffChange={() => {}}
         canSign
+        extraActions={
+          <button
+            type="button"
+            className="answer-strip__icon"
+            aria-label="Export PDF"
+            title="Export PDF"
+            disabled={profitExport?.exporting}
+            onClick={() => profitExport?.exportPdf()}
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+            </svg>
+          </button>
+        }
       />
       <ReviewInputsDrawer hint={deliverableDrawerHint("profit", { financials: HARNESS_FINANCIALS })}>
         <DeliverableInputConfig
@@ -365,6 +397,8 @@ function ProfitPane({ clientId }: { clientId: string }) {
             preferPeriod={preferPeriod}
             statementSource={meta.statementSource}
             hideLead
+            hideCardExport
+            onExportReady={setProfitExport}
           />
         </PaneBoundary>
       </div>
