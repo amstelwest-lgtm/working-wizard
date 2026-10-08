@@ -17,6 +17,12 @@ import {
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
+import {
+  budgetDaysNeedReview,
+  budgetDaysSourceLabel,
+  budgetOpeningSourceLabel,
+} from "@/lib/budget.bridges";
+import { varianceLine } from "@/lib/budget.variance";
 import { currencySymbol, formatMoney, type ResolvedMarket } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 
@@ -42,8 +48,7 @@ function MoneyField({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown =
-    draft ??
-    formatMoney(value, market, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    draft ?? formatMoney(value, market);
   return (
     <Input
       type="text"
@@ -498,15 +503,35 @@ export function BudgetSimpleView({
         </div>
       </section>
 
-      {actuals && (actuals.revenue || actuals.cogs || actuals.fixedCosts) && focus && (
+      {actuals && actuals.chip !== "None" && (actuals.revenue || actuals.cogs || actuals.fixedCosts) && focus && (
         <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
-          <div className="mb-2 font-semibold text-slate-700 dark:text-slate-200">
+          <div className="mb-2 flex flex-wrap items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
             vs {actuals.label}
+            {actuals.chip ? (
+              <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700">
+                {actuals.chip}
+              </span>
+            ) : null}
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
-            <CompareMini label="Revenue" budget={focus.revenue} actual={actuals.revenue} />
-            <CompareMini label="COGS" budget={focus.cogs} actual={actuals.cogs} />
-            <CompareMini label="Overheads" budget={focus.overheads} actual={actuals.fixedCosts} />
+            <CompareMini
+              label="Revenue"
+              budget={actuals.budgetRevenue ?? focus.revenue}
+              actual={actuals.revenue}
+              higherIsBetter
+            />
+            <CompareMini
+              label="COGS"
+              budget={actuals.budgetCogs ?? focus.cogs}
+              actual={actuals.cogs}
+              higherIsBetter={false}
+            />
+            <CompareMini
+              label="Overheads"
+              budget={actuals.budgetOverheads ?? focus.overheads}
+              actual={actuals.fixedCosts}
+              higherIsBetter={false}
+            />
           </div>
         </div>
       )}
@@ -526,6 +551,11 @@ export function BudgetSimpleView({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Opening cash
+              {budgetOpeningSourceLabel(doc.openingCashSource) ? (
+                <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
+                  {budgetOpeningSourceLabel(doc.openingCashSource)}
+                </span>
+              ) : null}
             </Label>
             <Input
               type="number"
@@ -535,6 +565,7 @@ export function BudgetSimpleView({
                 onChange({
                   ...doc,
                   openingCash: parseFloat(e.target.value) || 0,
+                  openingCashSource: "manual",
                   updatedAt: new Date().toISOString(),
                 })
               }
@@ -548,6 +579,14 @@ export function BudgetSimpleView({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Debtor days
+              <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
+                {budgetDaysSourceLabel(doc.wcDaysSource)}
+              </span>
+              {budgetDaysNeedReview(doc.wc.debtorDays) ? (
+                <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
+                  Review
+                </span>
+              ) : null}
             </Label>
             <Input
               type="number"
@@ -557,6 +596,7 @@ export function BudgetSimpleView({
                 onChange({
                   ...doc,
                   wc: { ...doc.wc, debtorDays: parseFloat(e.target.value) || 0 },
+                  wcDaysSource: "manual",
                   updatedAt: new Date().toISOString(),
                 })
               }
@@ -570,6 +610,14 @@ export function BudgetSimpleView({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Creditor days
+              <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-slate-500">
+                {budgetDaysSourceLabel(doc.wcDaysSource)}
+              </span>
+              {budgetDaysNeedReview(doc.wc.creditorDays) ? (
+                <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
+                  Review
+                </span>
+              ) : null}
             </Label>
             <Input
               type="number"
@@ -579,6 +627,7 @@ export function BudgetSimpleView({
                 onChange({
                   ...doc,
                   wc: { ...doc.wc, creditorDays: parseFloat(e.target.value) || 0 },
+                  wcDaysSource: "manual",
                   updatedAt: new Date().toISOString(),
                 })
               }
@@ -690,19 +739,33 @@ function CascadeRow({
   );
 }
 
-function CompareMini({ label, budget, actual }: { label: string; budget: number; actual: number }) {
+function CompareMini({
+  label,
+  budget,
+  actual,
+  higherIsBetter,
+}: {
+  label: string;
+  budget: number;
+  actual: number;
+  higherIsBetter: boolean;
+}) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
-  const delta = budget - actual;
+  const line = varianceLine("revenue", label, budget, actual, higherIsBetter);
+  const tone =
+    line.signal === "adverse"
+      ? "text-red-600 dark:text-red-400"
+      : line.signal === "favourable"
+        ? "text-emerald-600 dark:text-emerald-400"
+        : "text-slate-500";
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className="tabular-nums text-slate-800 dark:text-slate-100">
         Budget {money(budget)} · Actual {money(actual)}
       </div>
-      <div className={`tabular-nums ${delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-        Δ {money(delta)}
-      </div>
+      <div className={`tabular-nums ${tone}`}>Δ {money(line.delta)}</div>
     </div>
   );
 }

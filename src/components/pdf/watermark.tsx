@@ -51,18 +51,18 @@ export function DraftWatermark() {
       <Text
         style={{
           position: "absolute",
-          top: 400,
-          left: 40,
-          width: 515,
+          bottom: 22,
+          left: 48,
+          width: 500,
           textAlign: "center",
-          fontSize: 22,
+          fontSize: 8,
           fontFamily: "Helvetica-Bold",
           color: C.blueDeep,
-          opacity: 0.05,
-          letterSpacing: 4,
+          opacity: 0.35,
+          letterSpacing: 1.2,
         }}
       >
-        DRAFT
+        DRAFT — NOT SIGNED OFF
       </Text>
     </View>
   );
@@ -131,11 +131,11 @@ export function DemoNotice() {
 }
 
 /** Unsigned deliverable — download is allowed; the page says it is still a draft. */
-export function DraftNotice() {
+export function DraftNotice({ text = "Draft — not signed off" }: { text?: string }) {
   return (
     <View style={chip.wrap}>
       <View style={chip.dot} />
-      <Text style={chip.text}>Draft — not signed off</Text>
+      <Text style={chip.text}>{text}</Text>
     </View>
   );
 }

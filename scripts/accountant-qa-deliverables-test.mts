@@ -291,15 +291,20 @@ assert(
 );
 assert(
   budgetPanel.includes("reseedBudgetIfScaleBroken"),
-  "an order-of-magnitude plan is rebuilt on load",
+  "the accountant can accept a rebuild",
+);
+assert(
+  budgetPanel.includes("Nothing is rebuilt on load"),
+  "an order-of-magnitude plan is not replaced on load",
 );
 assert(
   budgetPanel.includes("This budget was rebuilt from the latest actuals"),
   "the rebuild is visible on the budget tab",
 );
+const reportsIndex = read("src/routes/_authenticated/reports.index.tsx");
 assert(
-  read("src/routes/_authenticated/reports.index.tsx").includes("reseedBudgetIfScaleBroken"),
-  "budget reports do not trust a stored plan that is 10× the actuals",
+  reportsIndex.includes("publishBudgetDocument") && !reportsIndex.includes("reseedBudgetIfScaleBroken"),
+  "budget reports publish the stored plan and do not rebuild it",
 );
 
 assert(laborProductivityTitle({ copyPack: "us" }) === "Labor Productivity", "US card title");

@@ -194,6 +194,10 @@ export type BudgetDocument = {
   tax?: IndirectTaxProfile;
   /** Opening bank balance at FY start (Phase 2). */
   openingCash: number;
+  /** Where opening cash was taken from. Manual is the only value that sticks across a reload. */
+  openingCashSource?: "bank" | "statement" | "manual";
+  /** Ratios days, unless the accountant typed debtor or creditor days. */
+  wcDaysSource?: "ratios" | "manual";
   activeScenario: BudgetScenarioId;
   scenarios: Record<BudgetScenarioId, BudgetScenarioPayload>;
   revenueLines: BudgetRevenueLine[];
@@ -246,6 +250,12 @@ export type BudgetActuals = {
   revenue: number;
   cogs: number;
   fixedCosts: number;
+  /** Uploaded month, statement pace, or none. */
+  chip?: "Uploaded month" | "Statement pace, prorated" | "None";
+  /** Plan slice for the same window as the statement. Falls back to the focus month. */
+  budgetRevenue?: number;
+  budgetCogs?: number;
+  budgetOverheads?: number;
 };
 
 export type UnmappedDriver = {

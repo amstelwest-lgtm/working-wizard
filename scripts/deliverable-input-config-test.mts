@@ -280,8 +280,12 @@ assert(ratiosMerged.assumptionValues.daysAp === 37, "stored 28 does not replace 
 const ratiosLive = liveAssumptionOverlay(ratiosDef, { financials: qaUs });
 assert(ratiosLive.daysAr === 25 && ratiosLive.daysAp === 37, "Ratios overlay is the shared helper");
 assert(
-  defaultDaysAr({ financials: qaUs, operatingProfile: { debtorDaysDefault: 44 } as never }) === 44,
-  "cash Days AR still prefers the profile",
+  defaultDaysAr({ financials: qaUs, operatingProfile: { debtorDaysDefault: 44 } as never }) === 25,
+  "Days AR follows the statement when it can be computed",
+);
+assert(
+  defaultDaysAr({ operatingProfile: { debtorDaysDefault: 44 } as never }) === 44,
+  "a profile default is used when the statement cannot compute days",
 );
 const ratiosApplied = markConfigApplied(
   mergeDeliverableInputState(ratiosDef, null, { financials: qaUs }),

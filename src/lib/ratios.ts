@@ -115,9 +115,15 @@ export function benchmarkHealthyEnd(
   return { top: p75, lowerIsBetter: false };
 }
 
-export type BenchmarkPosition = "top_quartile" | "above_median" | "below_median";
+export type BenchmarkPosition = "top_quartile" | "above_median" | "below_median" | "in_band";
 
-/** Where a value sits versus the median and the healthy-end quartile. */
+/**
+ * Where a value sits versus the median and the healthy-end quartile.
+ * A sweet spot inside the same band as the median is "in band", not a
+ * quartile win: creditor days of 37 versus a median of 40 are both inside
+ * 30–60. Top quartile is only a figure strictly closer to the band than
+ * both the median and the healthy-end percentile.
+ */
 export function benchmarkPosition(input: {
   value: number;
   median: number;
@@ -132,8 +138,9 @@ export function benchmarkPosition(input: {
     const valueDist = dist(input.value);
     const medianDist = dist(input.median);
     const topDist = dist(input.top);
-    if (valueDist <= topDist && valueDist <= medianDist) return "top_quartile";
-    if (valueDist <= medianDist) return "above_median";
+    if (valueDist === medianDist) return "in_band";
+    if (valueDist < topDist && valueDist < medianDist) return "top_quartile";
+    if (valueDist < medianDist) return "above_median";
     return "below_median";
   }
   const better =

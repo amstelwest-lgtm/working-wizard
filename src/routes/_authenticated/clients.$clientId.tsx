@@ -856,6 +856,7 @@ function ClientView() {
     import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null
   >(null);
   const [budgetReloadToken, setBudgetReloadToken] = useState(0);
+  const [budgetReviewStale, setBudgetReviewStale] = useState(false);
   const [autoPopulateState, setAutoPopulateState] = useState<AutoPopulateState | null>(null);
   const refreshAutoPopulateState = useCallback(async () => {
     try {
@@ -3543,7 +3544,7 @@ function ClientView() {
                           clientName={client?.name}
                           scope="budget"
                           signoff={budgetSignoff}
-                          isStale={false}
+                          isStale={budgetReviewStale}
                           onChange={patchSignoff("budget")}
                         />
                       }
@@ -3557,6 +3558,7 @@ function ClientView() {
                       simplified={viewMode === "simplified"}
                       role="accountant"
                       reloadToken={budgetReloadToken}
+                      onReviewStale={setBudgetReviewStale}
                       canSign
                       hideInlineSignOff
                       signoff={budgetSignoff}

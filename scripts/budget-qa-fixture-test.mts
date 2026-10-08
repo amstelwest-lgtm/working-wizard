@@ -193,8 +193,11 @@ const hiddenOpex = mergeMonthActuals(
   { label: "Live", revenue: 10000, cogs: 3750, fixedCosts: 3500 },
 );
 assert(hiddenOpex?.fixedCosts === 3500, "a snapshot with no opex does not zero the live overheads");
-assert(budgetActualsBadge(0, true) === "Statement pace", "statement pace is not 'no actuals'");
-assert(budgetActualsBadge(0, false) === "No actuals yet", "empty variance card still says so");
+assert(
+  budgetActualsBadge(0, true) === "Statement pace, prorated",
+  "statement pace is not 'no actuals'",
+);
+assert(budgetActualsBadge(0, false) === "None", "empty variance card still says so");
 
 const pushed = budgetToCashForecastPayload(
   { ...seeded.doc, wc: { ...seeded.doc.wc, debtorDays: 56 } },
