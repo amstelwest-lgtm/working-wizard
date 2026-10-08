@@ -5,7 +5,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { LooseAdmin } from "@/lib/owner-ops.guard";
 import {
-  MEMBERSHIP_LABELS,
+  CLASSIFICATION_LABELS,
   parseClassification,
   parseMembershipRole,
   type MembershipRole,
@@ -183,7 +183,7 @@ export async function rotateFirmStaffInviteLink(
     recipientName: String(invite.name ?? "").trim() || email.split("@")[0],
     firmName: String(firmRow?.name ?? "Practice"),
     inviterName: inviter.name,
-    roleLabel: MEMBERSHIP_LABELS[parseMembershipRole(invite.membership_role)],
+    roleLabel: CLASSIFICATION_LABELS[parseClassification(invite.classification)],
     url: inviteUrl,
   });
   const send = opts.send ?? sendAccessEmail;
@@ -218,7 +218,13 @@ export async function revokeFirmStaffInviteRecord(
   if (invite.accepted_at) throw new Error("This invitation was already accepted.");
   const firmId = String(invite.firm_id);
   await assertManager(admin, opts.actorId, firmId);
-  const { error: tokenErr } = await admin.from("access_approval_tokens").delete().eq("invite_id", invite.id);
+  // Keep a tombstone so the old link still resolves. Deleting the invite cascades
+  // away the token and the landing cannot tell a revoked staff invite from a typo.
+  const revokedAt = new Date(Date.now() - 1000).toISOString();
+  const { error: tokenErr } = await admin
+    .from("access_approval_tokens")
+    .update({ expires_at: revokedAt, invite_id: null })
+    .eq("invite_id", invite.id);
   if (tokenErr) throw new Error(tokenErr.message);
   const { error: delErr } = await admin
     .from("firm_staff_invites")

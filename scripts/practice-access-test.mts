@@ -19,7 +19,11 @@ import {
   parseClassification,
 } from "../src/lib/practice-access";
 import { createHash } from "node:crypto";
-import { accessApproveUrl, accessGrantedEmail, publicEmailError } from "../src/lib/practice-access-email";
+import { accessApproveUrl, accessGrantedEmail, firmInviteEmail, publicEmailError } from "../src/lib/practice-access-email";
+import {
+  STAFF_INVITE_INVALID_MESSAGE,
+  staffInvitePhase,
+} from "../src/lib/staff-invite-landing";
 import {
   STAFF_INVITE_TTL_MS,
   revokeFirmStaffInviteRecord,
@@ -75,6 +79,38 @@ const notify = accessGrantedEmail({
 assert(notify.subject.includes("Thandi"), "owner notify names the person");
 assert(notify.text.includes("notice"), "owner mail is a notice, not an approval ask");
 assert(!notify.html.includes("Approve or decline"), "owner notify has no approve link");
+
+const staffMail = firmInviteEmail({
+  recipientName: "Nia",
+  firmName: "Ben Accountants",
+  inviterName: "Bo",
+  roleLabel: "Read only",
+  url: "https://www.milonfinance.com/access/abc",
+});
+assert(staffMail.subject === "Join Ben Accountants on Milōn", "staff invite subject names the firm");
+assert(
+  staffMail.text.includes(
+    "Ben Accountants invited you to join their Milōn workspace as Read only. Open the link to create your account with this email address; it takes a minute.",
+  ),
+  "staff invite tells a new hire to create an account with this email",
+);
+assert(!staffMail.text.includes("already approved"), "staff invite drops owner-portal approval copy");
+assert(!staffMail.html.includes("business owner"), "staff invite html drops the owner sentence");
+assert(staffMail.text.includes("https://www.milonfinance.com/access/abc"), "staff invite keeps the access link");
+const existingStaffMail = firmInviteEmail({
+  recipientName: "Nia",
+  firmName: "Ben Accountants",
+  inviterName: "Bo",
+  roleLabel: "Read only",
+  url: "https://www.milonfinance.com/auth",
+  accountExists: true,
+});
+assert(
+  existingStaffMail.text.includes("Sign in with this email address to accept"),
+  "existing staff are asked to sign in",
+);
+assert(!existingStaffMail.text.includes("create your account"), "existing staff are not told to create an account");
+assert(!existingStaffMail.html.includes("already approved"), "existing staff mail also drops owner copy");
 
 const mig = readFileSync(
   resolve("supabase/migrations/20260901160000_practice_client_access.sql"),
@@ -207,6 +243,11 @@ assert(
 assert(settings.includes('"Copy link"'), "failed invite has a copy button");
 assert(settings.includes("Copy invite link"), "pending invite can copy a fresh link");
 assert(settings.includes("revokeFirmStaffInvite"), "pending invite can be revoked");
+assert(settings.includes("Revoke invite for"), "revoke asks before it runs");
+assert(
+  settings.includes("Their link will stop working."),
+  "revoke confirm says the link will stop working",
+);
 assert(settings.includes("sendEmail: true"), "resend emails the fresh link");
 assert(settings.includes("if (r.emailed)"), "success toast runs only after a real send");
 assert(settings.includes('toast.success('), "a successful invite still toasts");
@@ -528,7 +569,30 @@ async function expectThrow(run: () => Promise<unknown>, includes: string): Promi
   assert(revoked.firm_staff_invites.length === 0, "an admin revoke removes the invite");
   assert(
     !revoked.access_approval_tokens.some((row) => row.invite_id === INVITE),
-    "revoke invalidates every token for that invite",
+    "revoke detaches every token for that invite",
+  );
+  const tombstone = revoked.access_approval_tokens.find((row) => row.token_hash === sha(OLD));
+  assert(Boolean(tombstone), "a revoked token still resolves");
+  assert(tombstone?.invite_id == null, "revoked token is no longer tied to the invite");
+  assert(
+    Date.parse(String(tombstone?.expires_at)) < Date.parse(NOW.toISOString()) ||
+      Date.parse(String(tombstone?.expires_at)) < Date.now(),
+    "revoked token is expired",
+  );
+  assert(
+    staffInvitePhase({
+      expired: true,
+      used: Boolean(tombstone?.used_at),
+      accountExists: false,
+      signedInEmail: null,
+      invitedEmail: "nia@practice.co.za",
+    }) === "invalid",
+    "a revoked token renders as no longer valid",
+  );
+  assert(
+    STAFF_INVITE_INVALID_MESSAGE ===
+      "This invite is no longer valid. Ask your firm admin to send a new one.",
+    "revoked and expired staff invites use the firm-admin message",
   );
 }
 

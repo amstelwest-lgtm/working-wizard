@@ -25,6 +25,8 @@ export type GoogleOAuthHop = {
   join?: string;
   /** Firm-band Checkout to resume after Google (`starter` / `solo` / …). */
   checkout?: string;
+  /** Staff-invite return. Only `/access/…` is written onto the callback URL. */
+  next?: string;
   interval?: string;
   market?: string;
   promo?: string;
@@ -41,6 +43,8 @@ export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): str
   }
   const join = hop?.join?.trim();
   if (join) q.set("join", join);
+  const next = hop?.next?.trim();
+  if (next?.startsWith("/access/") && !next.startsWith("//")) q.set("next", next);
   const checkout = hop?.checkout?.trim();
   if (checkout) {
     q.set("checkout", checkout);
@@ -282,6 +286,8 @@ export async function startGoogleSignIn(opts: {
     const { accountantInviteLandingPath } = await import("@/lib/accountant-invite");
     hop.join = opts.accountantJoin.token.trim();
     if (!next) next = accountantInviteLandingPath(hop.join);
+  } else if (next?.startsWith("/access/")) {
+    hop.next = next;
   } else {
     const { peekPendingCheckout, billingStartPath } = await import("@/lib/pending-checkout");
     const pending = peekPendingCheckout();

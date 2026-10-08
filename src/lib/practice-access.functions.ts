@@ -16,7 +16,6 @@ import {
 } from "@/lib/owner-ops.guard";
 import {
   CLASSIFICATION_LABELS,
-  MEMBERSHIP_LABELS,
   PRACTICE_ACCESS_AMENDMENT_MIGRATION,
   PRACTICE_ACCESS_MIGRATION,
   PRACTICE_CLIENT_ACCESS_CAP,
@@ -677,8 +676,9 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
         recipientName: existing.name || name,
         firmName: firm.name,
         inviterName: inviter.name,
-        roleLabel: MEMBERSHIP_LABELS[data.membershipRole],
+        roleLabel: CLASSIFICATION_LABELS[data.classification],
         url: inviteUrl,
+        accountExists: true,
       });
       const sent = await sendAccessEmail({
         to: email,
@@ -735,7 +735,7 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
       recipientName: name,
       firmName: firm.name,
       inviterName: inviter.name,
-      roleLabel: MEMBERSHIP_LABELS[data.membershipRole],
+      roleLabel: CLASSIFICATION_LABELS[data.classification],
       url: inviteUrl,
     });
     const sent = await sendAccessEmail({
@@ -1380,6 +1380,8 @@ export type AccessTokenPreview = {
   firmName: string | null;
   expired: boolean;
   used: boolean;
+  /** Firm invite only. True when the invited address already has a profile. */
+  accountExists: boolean;
 };
 
 export const previewAccessToken = createServerFn({ method: "GET" })
@@ -1403,6 +1405,7 @@ export const previewAccessToken = createServerFn({ method: "GET" })
         firmName: null,
         expired: false,
         used: false,
+        accountExists: false,
       };
     }
     const expired = tok.expires_at ? Date.parse(String(tok.expires_at)) < Date.now() : false;
@@ -1443,6 +1446,11 @@ export const previewAccessToken = createServerFn({ method: "GET" })
         firmName = firm?.name ?? null;
       }
     }
+    let accountExists = false;
+    if (String(tok.purpose ?? "") === "firm_invite" && !expired && !used && memberEmail) {
+      const existing = await profileByEmail(loose, memberEmail.trim().toLowerCase());
+      accountExists = Boolean(existing);
+    }
     return {
       purpose: String(tok.purpose ?? ""),
       clientName,
@@ -1452,6 +1460,7 @@ export const previewAccessToken = createServerFn({ method: "GET" })
       firmName,
       expired,
       used,
+      accountExists,
     };
   });
 
