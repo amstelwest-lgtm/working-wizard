@@ -16,6 +16,7 @@ import { finalizeCollections } from "@/lib/collections";
 import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { ClientBriefing } from "@/components/client-briefing";
+import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
@@ -161,6 +162,7 @@ export function RailStudio() {
             {pane === "ask" ? <BotPane /> : null}
             {pane === "overview" ? <BriefingPane /> : null}
             {pane === "moves" ? <MovesPane /> : null}
+            {pane === "summary" ? <BooksPane clientId={clientId} /> : null}
             {pane === "ratios" ? (
               <HealthPane
                 clientId={clientId}
@@ -228,6 +230,21 @@ const HARNESS_STEP: NextStep = {
   daysToReview: null,
   openDataRequestKinds: [],
 };
+
+function BooksPane({ clientId }: { clientId: string }) {
+  return (
+    <div className="tabpane on" id="pane-summary">
+      <DataUpToDate
+        clientId={clientId}
+        returnPath={`/clients/${clientId}`}
+        onUpload={() => {}}
+        freshness="Snapshot on file · September 2026"
+        chip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
+        fixtureOpenKinds={["bank_statement"]}
+      />
+    </div>
+  );
+}
 
 function MovesPane() {
   return (

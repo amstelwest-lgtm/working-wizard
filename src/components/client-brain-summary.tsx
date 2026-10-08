@@ -175,6 +175,7 @@ export function ClientBrainSummary({
   onOpenTab,
   onAnswerProfile,
   figureFacts,
+  renderFrame,
 }: {
   clientId: string;
   clientName: string;
@@ -187,6 +188,8 @@ export function ClientBrainSummary({
   onAnswerProfile?: () => void;
   /** Live Overview margins and period. Stored GAP / draft copy is aligned to these. */
   figureFacts?: StatementFigureFacts;
+  /** Places the profile and product questions. The draft list stays in `body`. */
+  renderFrame?: (frame: { inputs: ReactNode; body: ReactNode }) => ReactNode;
 }) {
   const { user } = useAuth();
   const assertDeliverable = useServerFn(assertFirmCanGenerateDeliverable);
@@ -546,59 +549,8 @@ export function ClientBrainSummary({
     }
   };
 
-  return (
-    <div>
-      <div id="wizard-brain-hero" className="card hero-card pad brain-hero">
-        <span className="eyebrow">Client brain</span>
-        <h2 className="h-sec" style={{ marginBottom: 6 }}>
-          The background on {clientName}
-        </h2>
-        <p className="sub">
-          This is the collection of context around this client — how they make money, what is on
-          file, and the short facts numbers miss. You and Milōn Bot use it so advice is about{" "}
-          <em>this</em> business, not a generic SME.
-        </p>
-        <p className="sub" style={{ marginTop: 8 }}>
-          Empty blocks below are waiting for a fact, an upload, or a draft. They fill as you work
-          this file. They are not broken. Agreed work that client management will chase lives on the Action Plan
-          tab — not here.
-        </p>
-        <div className="brain-actions">
-          <button
-            type="button"
-            className={portalButtonClass("primary")}
-            onClick={() => void proposeFromBrain()}
-            disabled={proposing || drafting || loading}
-          >
-            {proposing ? "Proposing…" : "Propose from brain"}
-          </button>
-          <button
-            type="button"
-            className={portalButtonClass("secondary")}
-            onClick={() => void draftAdvisoryFromBrain()}
-            disabled={proposing || drafting || loading}
-          >
-            {drafting ? "Drafting…" : "Draft advisory from brain"}
-          </button>
-          {onOpenTab && (
-            <button type="button" className={portalButtonClass("secondary")} onClick={() => onOpenTab("plan")}>
-              Open Action Plan
-            </button>
-          )}
-        </div>
-        <p className="brain-purpose" style={{ marginTop: 10 }}>
-          Propose fills GAP drafts, competitor stubs, and suggested moves from what is already on
-          this file. Draft advisory writes a pack that lands under Deliverable drafts — nothing is
-          sent until you sign it off.
-        </p>
-        <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
-        {precardOpen ? <PrecardCapCard /> : null}
-      </div>
-
-      {loading ? (
-        <PanelSkeleton rows={6} className="card pad bg-[var(--card)]" />
-      ) : (
-        <div className="brain-stack">
+  const inputQuestions = (
+    <>
           {/* 1. Profile strip */}
           <section className="card pad">
             <span className="eyebrow">Profile</span>
@@ -698,6 +650,63 @@ export function ClientBrainSummary({
               </div>
             )}
           </section>
+    </>
+  );
+
+  const body = (
+    <div>
+      <div id="wizard-brain-hero" className="card hero-card pad brain-hero">
+        <span className="eyebrow">Client brain</span>
+        <h2 className="h-sec" style={{ marginBottom: 6 }}>
+          The background on {clientName}
+        </h2>
+        <p className="sub">
+          This is the collection of context around this client — how they make money, what is on
+          file, and the short facts numbers miss. You and Milōn Bot use it so advice is about{" "}
+          <em>this</em> business, not a generic SME.
+        </p>
+        <p className="sub" style={{ marginTop: 8 }}>
+          Empty blocks below are waiting for a fact, an upload, or a draft. They fill as you work
+          this file. They are not broken. Agreed work that client management will chase lives on the Action Plan
+          tab — not here.
+        </p>
+        <div className="brain-actions">
+          <button
+            type="button"
+            className={portalButtonClass("secondary")}
+            onClick={() => void proposeFromBrain()}
+            disabled={proposing || drafting || loading}
+          >
+            {proposing ? "Proposing…" : "Propose from brain"}
+          </button>
+          <button
+            type="button"
+            className={portalButtonClass("secondary")}
+            onClick={() => void draftAdvisoryFromBrain()}
+            disabled={proposing || drafting || loading}
+          >
+            {drafting ? "Drafting…" : "Draft advisory from brain"}
+          </button>
+          {onOpenTab && (
+            <button type="button" className={portalButtonClass("secondary")} onClick={() => onOpenTab("plan")}>
+              Open Action Plan
+            </button>
+          )}
+        </div>
+        <p className="brain-purpose" style={{ marginTop: 10 }}>
+          Propose fills GAP drafts, competitor stubs, and suggested moves from what is already on
+          this file. Draft advisory writes a pack that lands under Deliverable drafts — nothing is
+          sent until you sign it off.
+        </p>
+        <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+        {precardOpen ? <PrecardCapCard /> : null}
+      </div>
+
+      {loading ? (
+        <PanelSkeleton rows={6} className="card pad bg-[var(--card)]" />
+      ) : (
+        <div className="brain-stack">
+          {renderFrame ? null : inputQuestions}
 
           {/* Mini GAP report */}
           <section className="card pad">
@@ -1086,4 +1095,7 @@ export function ClientBrainSummary({
       </Dialog>
     </div>
   );
+
+  if (renderFrame) return renderFrame({ inputs: inputQuestions, body });
+  return body;
 }

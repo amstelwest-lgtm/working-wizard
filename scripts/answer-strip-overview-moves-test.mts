@@ -116,8 +116,14 @@ const ranked = rankStrategicMoves({
 });
 assert(ranked.length === 2, "the fixture ranks two moves");
 assert(
-  movesAnswerSentence(ranked) === `2 moves. ${ranked[0]!.title}`,
+  movesAnswerSentence(ranked) ===
+    `2 moves ready. Start with: ${ranked[0]!.title.charAt(0).toLowerCase()}${ranked[0]!.title.slice(1)}.`,
   "without a rand impact the sentence is the count and the first title",
+);
+assert(
+  movesAnswerSentence([{ title: ranked[0]!.title }]) ===
+    `1 move ready. Start with: ${ranked[0]!.title.charAt(0).toLowerCase()}${ranked[0]!.title.slice(1)}.`,
+  "one move uses the singular",
 );
 assert(!movesAnswerSentence(ranked).includes("R "), "the count sentence does not invent a rand amount");
 assert(

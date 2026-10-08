@@ -347,7 +347,7 @@ export function factSourceLabel(source: FactSource | string | null): string {
   if (source === "note") return "Note";
   if (source === "profile") return "Profile";
   if (source === "manual") return "Manual";
-  if (source === "extract") return "Extract";
+  if (source === "extract") return "From the file";
   if (source === "other") return "Other";
   return "Unknown";
 }

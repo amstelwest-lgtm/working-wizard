@@ -74,6 +74,17 @@ export const MOVES_EMPTY_SENTENCE =
  * and `impactLine` is prose), so the accountant list uses the count and the
  * first title.
  */
+/**
+ * Every title uses "Start with:". A catalogue title that starts with a capital
+ * and a lowercase letter drops that first letter. An acronym stays as written.
+ */
+function moveLeadIn(title: string): string {
+  const shown = /^[A-Z][a-z]/.test(title)
+    ? `${title.charAt(0).toLowerCase()}${title.slice(1)}`
+    : title;
+  return `Start with: ${shown.endsWith(".") ? shown : `${shown}.`}`;
+}
+
 export function movesAnswerSentence(
   moves: readonly { title: string }[],
   randImpact?: string | null,
@@ -82,6 +93,6 @@ export function movesAnswerSentence(
   const title = moves[0]?.title.trim() ?? "";
   const impact = randImpact?.trim() ?? "";
   if (impact) return title ? `${title}. ${impact}` : impact;
-  const noun = moves.length === 1 ? "move" : "moves";
-  return title ? `${moves.length} ${noun}. ${title}` : `${moves.length} ${noun}.`;
+  const ready = moves.length === 1 ? "1 move ready" : `${moves.length} moves ready`;
+  return title ? `${ready}. ${moveLeadIn(title)}` : `${ready}.`;
 }

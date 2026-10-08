@@ -59,8 +59,8 @@ assert(hero.includes("Propose from brain"), "Propose from brain stays the hero a
 assert(hero.includes("Draft advisory from brain"), "Draft advisory stays reachable");
 assert(hero.includes("Open Action Plan"), "Action Plan stays reachable");
 assert(
-  (hero.match(/portalButtonClass\("primary"\)/g) ?? []).length === 1,
-  "the brain hero has one primary",
+  (hero.match(/portalButtonClass\("primary"\)/g) ?? []).length === 0,
+  "the brain hero leaves the gold primary to the Books strip",
 );
 assert(hero.includes('portalButtonClass("secondary")'), "draft and the plan link are secondary");
 assert(!hero.includes("btn gold"), "the hero does not hard-code a second gold pill");
