@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import { healthHeadline, whatMatters } from "../src/lib/client-briefing";
 import { booksTileLines } from "../src/lib/books-answer";
 import { overviewBudgetTileFigure } from "../src/lib/budget-chart-table";
+import { formatMoneyCompact } from "../src/lib/market/format";
+import { ZA_MARKET } from "../src/lib/market/resolve";
 import { overviewCashTileFigure } from "../src/lib/cash-forecast-parity";
 import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import { OVERVIEW_SECTION_TABS } from "../src/components/client-studio-chrome";
@@ -207,18 +209,18 @@ assert(
     budgetRevenue: 583333,
     actualRevenue: 583333,
     seeded: true,
-    money: (n) => `$${n.toLocaleString("en-US")}`,
-  }) === "YTD budget $583,333",
-  "a seeded budget tile shows the YTD figure",
+    money: (n) => formatMoneyCompact(n, { currency: "USD", locale: "en-US" }),
+  }) === "$583k budget",
+  "a seeded budget tile stays short",
 );
 assert(
   overviewBudgetTileFigure({
-    budgetRevenue: 583333,
-    actualRevenue: 500000,
+    budgetRevenue: 425833,
+    actualRevenue: 420000,
     seeded: false,
-    money: (n) => `$${n.toLocaleString("en-US")}`,
-  }) === "YTD actual $500,000 vs budget $583,333",
-  "a compared budget tile shows actual vs budget",
+    money: (n) => formatMoneyCompact(n, ZA_MARKET),
+  }) === "R 420k vs R 426k budget",
+  "a compared budget tile uses the cash compact formatter",
 );
 assert(
   overviewBudgetTileFigure({ budgetRevenue: 0, seeded: true, money: (n) => String(n) }) === null,
@@ -276,9 +278,15 @@ assert.deepEqual(
 );
 assert(route.includes("booksTileLines"), "the books tile uses the chip source");
 assert(route.includes("overviewBudgetTileFigure"), "the budget tile uses the YTD figure");
+assert(
+  route.includes("const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);"),
+  "the budget tile uses the cash compact formatter",
+);
+assert(!route.includes("fmtBudgetMoney"), "the overview tile does not spell the full budget amount");
 assert(route.includes("overviewCashTileFigure"), "the cash tile uses the shared runway figure");
 assert(route.includes("signoffKnown={signoffsKnown}"), "the financials chip waits for the sign-off fetch");
-assert(statusChip.includes('data-signoff-pending="true"'), "an unknown sign-off is not Draft");
+assert(/if\s*\(\s*!known\s*\)\s*return null;/.test(statusChip), "an unknown sign-off renders nothing");
+assert(!statusChip.includes("data-signoff-pending"), "an unknown sign-off is not an empty pill");
 assert(!route.includes("Budget seeded from these figures"), "the budget tile is not the seeded sentence");
 
 console.log("answer-strip overview + moves ok");

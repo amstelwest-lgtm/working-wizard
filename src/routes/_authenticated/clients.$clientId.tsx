@@ -114,7 +114,7 @@ import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
 import { booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
-import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
+import { computeBudgetMonths } from "@/lib/budget.compute";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
 import { budgetSeededFromStatement, budgetVersusStatement } from "@/lib/budget.bridges";
@@ -1419,7 +1419,7 @@ function ClientView() {
   const budgetCompared = budgetDoc
     ? budgetVersusStatement(budgetDoc, financials as Record<string, unknown>)
     : null;
-  const budgetMoney = (amount: number) => fmtBudgetMoney(amount, clientMarket);
+  const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);
   let budgetFigure: string | null = null;
   if (budgetCompared) {
     budgetFigure = overviewBudgetTileFigure({
