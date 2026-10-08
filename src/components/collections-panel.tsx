@@ -9,6 +9,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getCollections } from "@/lib/collections.functions";
 import {
+  agedArProofLine,
   buildCollectionsDraft,
   collectionsAnswerSentence,
   collectionsNoFiguresLead,
@@ -25,6 +26,7 @@ import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import {
+  statementArApMoney,
   StatementArApActions,
   StatementArApFallback,
   StatementArApTiles,
@@ -38,6 +40,10 @@ type Props = {
   market?: CopyMarket;
   /** Receivables, payables, debtor days, and creditor days already on the statements. */
   position?: StatementWorkingCapital | null;
+  /** Ledger behind those statement totals. Same value Health chips. */
+  statementSource?: string | null;
+  /** Harness only. When set, the panel does not call the server. */
+  fixtureSnapshot?: CollectionsSnapshot | null;
   periodLabel?: string | null;
   onUploadAged?: () => void;
   onConnectXero?: () => void;
@@ -58,6 +64,8 @@ export function CollectionsPanel({
   clientId,
   market,
   position = null,
+  statementSource = null,
+  fixtureSnapshot,
   periodLabel = null,
   onUploadAged,
   onConnectXero,
@@ -67,13 +75,19 @@ export function CollectionsPanel({
 }: Props) {
   const loadCollections = useServerFn(getCollections);
   const propose = useServerFn(createRecommendation);
-  const [snapshot, setSnapshot] = useState<CollectionsSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<CollectionsSnapshot | null>(fixtureSnapshot ?? null);
   const [line, setLine] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(fixtureSnapshot === undefined);
   const [filing, setFiling] = useState(false);
   const [filed, setFiled] = useState(false);
 
   useEffect(() => {
+    if (fixtureSnapshot !== undefined) {
+      setSnapshot(fixtureSnapshot);
+      setLine(fixtureSnapshot ? agedArProofLine(fixtureSnapshot) : "");
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     loadCollections({ data: { clientId } })
@@ -95,7 +109,7 @@ export function CollectionsPanel({
     };
     // loadCollections is a server-fn binding; reload when the client changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [clientId, fixtureSnapshot]);
 
   const draft = buildCollectionsDraft(snapshot);
   const fromStatements = hasStatementWorkingCapital(position);
@@ -103,12 +117,11 @@ export function CollectionsPanel({
     snapshot != null && snapshot.status === "applied" && snapshot.contacts.length > 0;
   const buckets = namedList ? rollupAgeBuckets(snapshot.contacts) : [];
   const pack = copyPackOf(market);
-  const sentence = loading ? "" : collectionsAnswerSentence(snapshot);
+  const tileMoney = (n: number) => statementArApMoney(n, market);
+  const sentence = loading ? "" : collectionsAnswerSentence(snapshot, position, tileMoney);
   const chip = snapshot?.source
     ? figureSourceChipLabel(snapshot.source)
-    : fromStatements
-      ? figureSourceChipLabel("statement")
-      : null;
+    : figureSourceChipLabel(statementSource);
 
   const fileDraft = async () => {
     if (!draft || filing || filed) return;
@@ -178,7 +191,15 @@ export function CollectionsPanel({
         chip={chip}
         primary={primary}
       />
-      <ReviewInputsDrawer hint={fromStatements ? "Statement totals and connections" : "Connections"}>
+      <ReviewInputsDrawer
+        hint={
+          snapshot
+            ? agedArProofLine(snapshot)
+            : fromStatements
+              ? "Statement totals and connections"
+              : "Connections"
+        }
+      >
         <p className="collections-note" id="collections-fallback-lead">
           {fromStatements
             ? collectionsStatementLead(pack)

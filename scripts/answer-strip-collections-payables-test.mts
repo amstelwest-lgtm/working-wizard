@@ -1,5 +1,5 @@
 /**
- * Collections and Payables answer strips: one Draft status, one chip label.
+ * Collections and Payables answer strips: sentences from figures already on the page, no status pill.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,6 +11,7 @@ import {
   collectionsStatementLead,
   finalizeCollections,
   XERO_AGED_RECONNECT,
+  type StatementWorkingCapital,
 } from "../src/lib/collections";
 import {
   agedApProofLine,
@@ -20,17 +21,27 @@ import {
   payablesStatementLead,
   XERO_AGED_AP_RECONNECT,
 } from "../src/lib/payables";
-import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
-import { signoffStatusLine } from "../src/lib/signoff-status";
+import { figureSourceChipLabel, showFigureSourceChip } from "../src/lib/ledger-link-copy";
 import { legacyPaneForSearch } from "../src/lib/client-route-search";
+import { statementArApMetricOrder, statementArApMoney } from "../src/components/statement-arap-fallback";
 
-assert(signoffStatusLine({ kind: "draft" }) === "Draft", "Draft is the shared status line");
+const money = (n: number) => statementArApMoney(n);
+const position: StatementWorkingCapital = {
+  receivables: 92000,
+  payables: 41000,
+  debtorDays: 48,
+  creditorDays: 31,
+};
+
 assert(figureSourceChipLabel("xero") === "Xero", "a Xero snapshot chips as Xero");
 assert(figureSourceChipLabel("qbo") === "QuickBooks", "a QuickBooks snapshot chips as QuickBooks");
 assert(figureSourceChipLabel("sage") === "Sage", "a Sage snapshot chips as Sage");
-assert(figureSourceChipLabel("statement") === "Statement", "statement totals chip as Statement");
+assert(figureSourceChipLabel("upload") === "Uploaded statement", "an uploaded statement chips like Health");
 assert(figureSourceChipLabel(null) === null, "a missing source is not a chip");
 assert(figureSourceChipLabel("") === null, "a blank source is not a chip");
+assert(!showFigureSourceChip(null), "a missing source is omitted");
+assert(!showFigureSourceChip(""), "a blank source is omitted");
+assert(!showFigureSourceChip("   "), "whitespace is omitted");
 
 const chased = finalizeCollections({
   source: "xero",
@@ -57,20 +68,85 @@ const chased = finalizeCollections({
   ],
 });
 assert(
-  collectionsAnswerSentence(chased) === agedArProofLine(chased),
-  "a collections snapshot uses the proof line",
+  collectionsAnswerSentence(chased, position, money) ===
+    "R 800 is overdue across 1 customer; North Glass is the largest at R 800.",
+  "a collections list uses the stored overdue total and the first name",
+);
+const chasedBook = finalizeCollections({
+  source: "xero",
+  asOf: "2026-09-30",
+  syncedAt: "2026-10-01T00:00:00.000Z",
+  contacts: [
+    {
+      contactId: "c-small",
+      name: "Lane & Co",
+      outstanding: 3000,
+      overdue: 3000,
+      ageBucket: "1 Month",
+      buckets: [],
+      invoices: [],
+    },
+    {
+      contactId: "c-acme",
+      name: "Acme",
+      outstanding: 21000,
+      overdue: 21000,
+      ageBucket: "91+",
+      buckets: [],
+      invoices: [],
+    },
+    {
+      contactId: "c-north",
+      name: "North Glass",
+      outstanding: 9000,
+      overdue: 9000,
+      ageBucket: "2 Months",
+      buckets: [],
+      invoices: [],
+    },
+    {
+      contactId: "c-fit",
+      name: "Harbour Fit",
+      outstanding: 5000,
+      overdue: 5000,
+      ageBucket: "Current",
+      buckets: [],
+      invoices: [],
+    },
+  ],
+});
+assert(chasedBook.contacts[0]?.name === "Acme", "the stored list already leads with the largest overdue");
+assert(chasedBook.totalOverdue === 38000, "the overdue total is the stored sum");
+assert(chasedBook.contactCount === 4, "the customer count is the stored count");
+assert(
+  collectionsAnswerSentence(chasedBook, position, money) ===
+    "R 38 000 is overdue across 4 customers; Acme is the largest at R 21 000.",
+  "the populated collections sentence reads the stored total, count, and first name",
 );
 assert(
-  collectionsAnswerSentence(chased) === "Aged receivables as of 2026-09-30 · 1 contact · 1 invoice",
-  "the collections sentence is the aged proof line",
+  !collectionsAnswerSentence(chased, position, money).includes("Aged receivables"),
+  "the proof line is not the collections answer",
 );
 assert(
-  collectionsAnswerSentence(null) === collectionsNoFiguresLead(),
-  "collections without a snapshot uses the empty sentence",
+  agedArProofLine(chased) === "Aged receivables as of 2026-09-30 · 1 contact · 1 invoice",
+  "the proof line stays available for the drawer",
 );
 assert(
-  !collectionsAnswerSentence(null).includes("next Sync"),
-  "the empty collections sentence is not the pending sync line",
+  collectionsAnswerSentence(null, position, money) ===
+    "R 92 000 is owed to you and customers take 48 days to pay. Upload the aged debtors report to see who to chase.",
+  "collections leads with the statement figures",
+);
+assert(
+  collectionsAnswerSentence(null, { ...position, debtorDays: null }, money) === collectionsNoFiguresLead(),
+  "a missing day count keeps the collections empty sentence",
+);
+assert(
+  collectionsAnswerSentence(null, { ...position, receivables: null }, money) === collectionsNoFiguresLead(),
+  "a missing receivables total keeps the collections empty sentence",
+);
+assert(
+  collectionsAnswerSentence(null, null, money) === collectionsNoFiguresLead(),
+  "no statement figures keeps the collections empty sentence",
 );
 
 const supplied = finalizePayables({
@@ -98,17 +174,76 @@ const supplied = finalizePayables({
   ],
 });
 assert(
-  payablesAnswerSentence(supplied) === agedApProofLine(supplied),
-  "a payables snapshot uses the proof line",
+  payablesAnswerSentence(supplied, position, money) ===
+    "R 640 is overdue across 1 supplier; Kiln Gas is the largest at R 640.",
+  "a payables list uses the stored overdue total and the first name",
+);
+const suppliedBook = finalizePayables({
+  source: "xero",
+  asOf: "2026-09-30",
+  syncedAt: "2026-10-01T00:00:00.000Z",
+  suppliers: [
+    {
+      supplierId: "s-freight",
+      name: "Freight",
+      outstanding: 3000,
+      overdue: 3000,
+      ageBucket: "Current",
+      buckets: [],
+      bills: [],
+    },
+    {
+      supplierId: "s-kiln",
+      name: "Kiln Gas",
+      outstanding: 9000,
+      overdue: 9000,
+      ageBucket: "2 Months",
+      buckets: [],
+      bills: [],
+    },
+    {
+      supplierId: "s-sand",
+      name: "Sand Co",
+      outstanding: 6000,
+      overdue: 6000,
+      ageBucket: "1 Month",
+      buckets: [],
+      bills: [],
+    },
+  ],
+});
+assert(suppliedBook.suppliers[0]?.name === "Kiln Gas", "the stored list already leads with the largest overdue");
+assert(suppliedBook.totalOverdue === 18000, "the overdue total is the stored sum");
+assert(suppliedBook.supplierCount === 3, "the supplier count is the stored count");
+assert(
+  payablesAnswerSentence(suppliedBook, position, money) ===
+    "R 18 000 is overdue across 3 suppliers; Kiln Gas is the largest at R 9 000.",
+  "the populated payables sentence reads the stored total, count, and first name",
 );
 assert(
-  payablesAnswerSentence(supplied) === "Aged payables as of 2026-09-30 · 1 supplier · 1 bill",
-  "the payables sentence is the aged proof line",
+  !payablesAnswerSentence(supplied, position, money).includes("Aged payables"),
+  "the proof line is not the payables answer",
 );
 assert(
-  payablesAnswerSentence(null) === payablesNoFiguresLead(),
-  "payables without a snapshot uses the empty sentence",
+  agedApProofLine(supplied) === "Aged payables as of 2026-09-30 · 1 supplier · 1 bill",
+  "the proof line stays available for the drawer",
 );
+assert(
+  payablesAnswerSentence(null, position, money) ===
+    "You owe suppliers R 41 000 and pay in 31 days. Upload the aged creditors report to see who to pay first.",
+  "payables leads with the statement figures",
+);
+assert(
+  payablesAnswerSentence(null, { ...position, creditorDays: null }, money) === payablesNoFiguresLead(),
+  "a missing day count keeps the payables empty sentence",
+);
+assert(
+  payablesAnswerSentence(null, { ...position, payables: null }, money) === payablesNoFiguresLead(),
+  "a missing payables total keeps the payables empty sentence",
+);
+assert(statementArApMetricOrder()[0] === "dso", "collections keeps debtor cards first");
+assert(statementArApMetricOrder("creditors")[0] === "dpo", "payables leads with creditor days");
+assert(statementArApMetricOrder("creditors")[1] === "ap", "payables leads with the creditors total");
 
 for (const lead of [collectionsStatementLead("za"), collectionsStatementLead("us"), payablesStatementLead("za"), payablesStatementLead("us")]) {
   for (const banned of ["Days AR", "Days AP", "Ratios", "DSO"]) {
@@ -149,17 +284,28 @@ const payablesPane = sliceBetween(route, 'id="pane-payables"', 'id="pane-budget"
 
 assert(count(collections, "<ArapAnswerStrip") === 1, "collections has one strip");
 assert(count(payables, "<ArapAnswerStrip") === 1, "payables has one strip");
-assert(count(strip, "data-signoff-status") === 1, "the strip renders one status");
-assert(strip.includes('signoffStatusLine({ kind: "draft" })'), "status is the shared Draft line");
+assert(!strip.includes("data-signoff-status"), "no status pill without a review scope");
+assert(!strip.includes("signoffStatusLine"), "these tabs do not invent a Draft status");
+assert(!collections.includes("data-signoff-status"), "collections does not render a status");
+assert(!payables.includes("data-signoff-status"), "payables does not render a status");
 assert(!strip.includes("ReviewSignoffButton"), "these tabs do not add a sign-off scope");
 assert(strip.includes("data-source-chip"), "the strip can show one source chip");
 assert(strip.includes("{chip ?"), "a blank chip is omitted");
 assert(collections.includes("figureSourceChipLabel(snapshot.source)"), "collections chips the snapshot source");
-assert(collections.includes('figureSourceChipLabel("statement")'), "collections chips Statement for totals only");
+assert(collections.includes("figureSourceChipLabel(statementSource)"), "collections chips the statement source");
+assert(!collections.includes('figureSourceChipLabel("statement")'), "collections does not invent a Statement chip");
 assert(payables.includes("figureSourceChipLabel(snapshot.source)"), "payables chips the snapshot source");
-assert(payables.includes('figureSourceChipLabel("statement")'), "payables chips Statement for totals only");
-assert(collections.includes("collectionsAnswerSentence"), "collections sentence is the proof line or the empty line");
-assert(payables.includes("payablesAnswerSentence"), "payables sentence is the proof line or the empty line");
+assert(payables.includes("figureSourceChipLabel(statementSource)"), "payables chips the statement source");
+assert(!payables.includes('figureSourceChipLabel("statement")'), "payables does not invent a Statement chip");
+assert(collections.includes("agedArProofLine(snapshot)"), "the collections proof line is the drawer hint");
+assert(payables.includes("agedApProofLine(snapshot)"), "the payables proof line is the drawer hint");
+assert(collections.includes("collectionsAnswerSentence"), "collections sentence comes from the stored figures");
+assert(payables.includes("payablesAnswerSentence"), "payables sentence comes from the stored figures");
+assert(payables.includes('lead="creditors"'), "payables puts creditor cards first on the list");
+assert(payables.includes('cardLead="creditors"'), "payables puts creditor cards first when only totals are showing");
+assert(!collections.includes('lead="creditors"'), "collections keeps the debtor card order");
+assert(collectionsPane.includes("statementSource={statementMeta.statementSource}"), "collections receives the statement source");
+assert(payablesPane.includes("statementSource={statementMeta.statementSource}"), "payables receives the statement source");
 assert(collections.includes("<ReviewInputsDrawer"), "collections inputs sit in the drawer");
 assert(payables.includes("<ReviewInputsDrawer"), "payables inputs sit in the drawer");
 assert(collections.includes("collectionsStatementLead"), "the collections statement explanation stays available");

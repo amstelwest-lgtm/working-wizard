@@ -3508,6 +3508,7 @@ function ClientView() {
                     market={clientMarket}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
                     position={ratiosStatementFigures(financials)}
+                    statementSource={statementMeta.statementSource}
                     onUploadAged={() => {
                       setUploadPurpose("aged");
                       setUploadOpen(true);
@@ -3530,6 +3531,7 @@ function ClientView() {
                     runwayWeeks={effectiveRunway}
                     periodLabel={statementDated ? statementMeta.periodLabel : null}
                     position={ratiosStatementFigures(financials)}
+                    statementSource={statementMeta.statementSource}
                     onUploadAged={() => {
                       setUploadPurpose("aged");
                       setUploadOpen(true);

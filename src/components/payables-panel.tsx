@@ -8,6 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getPayables } from "@/lib/payables.functions";
 import {
+  agedApProofLine,
   buildPayablesDraft,
   payablesAnswerSentence,
   payablesNoFiguresLead,
@@ -22,6 +23,7 @@ import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import {
+  statementArApMoney,
   StatementArApActions,
   StatementArApFallback,
   StatementArApTiles,
@@ -35,6 +37,10 @@ type Props = {
   runwayWeeks?: number | null;
   /** Receivables, payables, debtor days, and creditor days already on the statements. */
   position?: StatementWorkingCapital | null;
+  /** Ledger behind those statement totals. Same value Health chips. */
+  statementSource?: string | null;
+  /** Harness only. When set, the panel does not call the server. */
+  fixtureSnapshot?: PayablesSnapshot | null;
   periodLabel?: string | null;
   onUploadAged?: () => void;
   onConnectXero?: () => void;
@@ -56,6 +62,8 @@ export function PayablesPanel({
   market,
   runwayWeeks = null,
   position = null,
+  statementSource = null,
+  fixtureSnapshot,
   periodLabel = null,
   onUploadAged,
   onConnectXero,
@@ -65,13 +73,19 @@ export function PayablesPanel({
 }: Props) {
   const loadPayables = useServerFn(getPayables);
   const propose = useServerFn(createRecommendation);
-  const [snapshot, setSnapshot] = useState<PayablesSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<PayablesSnapshot | null>(fixtureSnapshot ?? null);
   const [line, setLine] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(fixtureSnapshot === undefined);
   const [filing, setFiling] = useState(false);
   const [filed, setFiled] = useState(false);
 
   useEffect(() => {
+    if (fixtureSnapshot !== undefined) {
+      setSnapshot(fixtureSnapshot);
+      setLine(fixtureSnapshot ? agedApProofLine(fixtureSnapshot) : "");
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setFiled(false);
@@ -94,19 +108,18 @@ export function PayablesPanel({
     };
     // loadPayables is a server-fn binding; reload when the client changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [clientId, fixtureSnapshot]);
 
   const draft = buildPayablesDraft(snapshot, runwayWeeks);
   const fromStatements = hasStatementWorkingCapital(position);
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.suppliers.length > 0;
   const pack = copyPackOf(market);
-  const sentence = loading ? "" : payablesAnswerSentence(snapshot);
+  const tileMoney = (n: number) => statementArApMoney(n, market);
+  const sentence = loading ? "" : payablesAnswerSentence(snapshot, position, tileMoney);
   const chip = snapshot?.source
     ? figureSourceChipLabel(snapshot.source)
-    : fromStatements
-      ? figureSourceChipLabel("statement")
-      : null;
+    : figureSourceChipLabel(statementSource);
 
   const fileDraft = async () => {
     if (!draft || filing || filed) return;
@@ -171,7 +184,15 @@ export function PayablesPanel({
         chip={chip}
         primary={primary}
       />
-      <ReviewInputsDrawer hint={fromStatements ? "Statement totals and connections" : "Connections"}>
+      <ReviewInputsDrawer
+        hint={
+          snapshot
+            ? agedApProofLine(snapshot)
+            : fromStatements
+              ? "Statement totals and connections"
+              : "Connections"
+        }
+      >
         <p className="collections-note" id="payables-fallback-lead">
           {fromStatements
             ? payablesStatementLead(pack)
@@ -208,6 +229,7 @@ export function PayablesPanel({
               position={position}
               market={market}
               id="payables-statement-position"
+              lead="creditors"
             />
           ) : null}
           <div className="payables-scroll">
@@ -279,6 +301,7 @@ export function PayablesPanel({
           kickerWhenEmpty="Payables"
           omitLead
           hideActions
+          cardLead="creditors"
         />
       )}
     </>

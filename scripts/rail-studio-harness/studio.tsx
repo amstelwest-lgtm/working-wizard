@@ -11,6 +11,8 @@ import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
 import { PayablesPanel } from "@/components/payables-panel";
+import { finalizeCollections } from "@/lib/collections";
+import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { ClientBriefing } from "@/components/client-briefing";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
@@ -83,6 +85,7 @@ export function RailStudio() {
     tab?: string;
     section?: string;
     focus?: string;
+    aged?: string | number;
   };
   const navigate = useNavigate();
   const pane = legacyPaneForSearch(search) ?? "overview";
@@ -153,8 +156,8 @@ export function RailStudio() {
             ) : null}
             {pane === "profit" ? <ProfitPane clientId={clientId} /> : null}
             {pane === "cash" ? <CashPane clientId={clientId} /> : null}
-            {pane === "collections" ? <CollectionsPane /> : null}
-            {pane === "payables" ? <PayablesPane /> : null}
+            {pane === "collections" ? <CollectionsPane aged={search.aged === 1 || search.aged === "1"} /> : null}
+            {pane === "payables" ? <PayablesPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} /> : null}
             {pane === "plan" ? <PlanPane clientId={clientId} /> : null}
@@ -417,7 +420,100 @@ const HARNESS_ARAP = {
   creditorDays: 31,
 };
 
-function CollectionsPane() {
+const HARNESS_COLLECTIONS = finalizeCollections({
+  source: "xero",
+  asOf: "2026-09-30",
+  syncedAt: "2026-10-01T00:00:00.000Z",
+  contacts: [
+    {
+      contactId: "c-acme",
+      name: "Acme",
+      outstanding: 21000,
+      overdue: 21000,
+      ageBucket: "91+",
+      buckets: [],
+      invoices: [
+        { invoiceId: "i1", reference: "INV-14", dueDate: "2026-06-01", amount: 21000, ageBucket: "91+" },
+      ],
+    },
+    {
+      contactId: "c-north",
+      name: "North Glass",
+      outstanding: 9000,
+      overdue: 9000,
+      ageBucket: "2 Months",
+      buckets: [],
+      invoices: [
+        { invoiceId: "i2", reference: "INV-22", dueDate: "2026-08-01", amount: 9000, ageBucket: "2 Months" },
+      ],
+    },
+    {
+      contactId: "c-fit",
+      name: "Harbour Fit",
+      outstanding: 5000,
+      overdue: 5000,
+      ageBucket: "1 Month",
+      buckets: [],
+      invoices: [
+        { invoiceId: "i3", reference: "INV-30", dueDate: "2026-09-01", amount: 5000, ageBucket: "1 Month" },
+      ],
+    },
+    {
+      contactId: "c-lane",
+      name: "Lane & Co",
+      outstanding: 3000,
+      overdue: 3000,
+      ageBucket: "1 Month",
+      buckets: [],
+      invoices: [
+        { invoiceId: "i4", reference: "INV-31", dueDate: "2026-09-04", amount: 3000, ageBucket: "1 Month" },
+      ],
+    },
+  ],
+});
+
+const HARNESS_PAYABLES = finalizePayables({
+  source: "xero",
+  asOf: "2026-09-30",
+  syncedAt: "2026-10-01T00:00:00.000Z",
+  suppliers: [
+    {
+      supplierId: "s-kiln",
+      name: "Kiln Gas",
+      outstanding: 9000,
+      overdue: 9000,
+      ageBucket: "2 Months",
+      buckets: [],
+      bills: [
+        { billId: "b1", reference: "BILL-3", dueDate: "2026-08-12", amount: 9000, ageBucket: "2 Months" },
+      ],
+    },
+    {
+      supplierId: "s-sand",
+      name: "Sand Co",
+      outstanding: 6000,
+      overdue: 6000,
+      ageBucket: "1 Month",
+      buckets: [],
+      bills: [
+        { billId: "b2", reference: "BILL-8", dueDate: "2026-09-02", amount: 6000, ageBucket: "1 Month" },
+      ],
+    },
+    {
+      supplierId: "s-freight",
+      name: "Freight",
+      outstanding: 3000,
+      overdue: 3000,
+      ageBucket: "Current",
+      buckets: [],
+      bills: [
+        { billId: "b3", reference: "BILL-9", dueDate: "2026-09-20", amount: 3000, ageBucket: "Current" },
+      ],
+    },
+  ],
+});
+
+function CollectionsPane({ aged }: { aged: boolean }) {
   return (
     <div className="tabpane on" id="pane-collections">
       <PaneBoundary label="Collections">
@@ -425,6 +521,8 @@ function CollectionsPane() {
           clientId={CLIENT_ID}
           periodLabel="September 2026"
           position={HARNESS_ARAP}
+          statementSource={HARNESS_FINANCIALS.statementSource}
+          fixtureSnapshot={aged ? HARNESS_COLLECTIONS : undefined}
           onUploadAged={() => {}}
           onConnectXero={() => {}}
           onConnectQbo={() => {}}
@@ -436,7 +534,7 @@ function CollectionsPane() {
   );
 }
 
-function PayablesPane() {
+function PayablesPane({ aged }: { aged: boolean }) {
   return (
     <div className="tabpane on" id="pane-payables">
       <PaneBoundary label="Payables">
@@ -445,6 +543,8 @@ function PayablesPane() {
           runwayWeeks={11}
           periodLabel="September 2026"
           position={HARNESS_ARAP}
+          statementSource={HARNESS_FINANCIALS.statementSource}
+          fixtureSnapshot={aged ? HARNESS_PAYABLES : undefined}
           onUploadAged={() => {}}
           onConnectXero={() => {}}
           onConnectQbo={() => {}}

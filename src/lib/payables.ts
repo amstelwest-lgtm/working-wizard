@@ -288,10 +288,50 @@ export function payablesSourceLabel(source: PayablesSource): string {
   return "QuickBooks";
 }
 
-/** Proof line when an aged snapshot is on file. Otherwise the one-sentence empty state. */
-export function payablesAnswerSentence(snap: PayablesSnapshot | null | undefined): string {
-  if (snap) return agedApProofLine(snap);
-  return payablesNoFiguresLead();
+function finiteFigure(n: number | null | undefined): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+/**
+ * What the statements already show, then the next step.
+ * Both the amount and the day count have to be on the page.
+ */
+export function payablesFiguresSentence(
+  position: { payables: number | null; creditorDays: number | null } | null | undefined,
+  money: (n: number) => string,
+): string {
+  if (!position || !finiteFigure(position.payables) || !finiteFigure(position.creditorDays)) {
+    return payablesNoFiguresLead();
+  }
+  return `You owe suppliers ${money(position.payables)} and pay in ${position.creditorDays} days. Upload the aged creditors report to see who to pay first.`;
+}
+
+/**
+ * Overdue total and supplier count are already on the snapshot. The first stored
+ * name is the largest overdue row: finalizePayables sorts that way, and this
+ * does not scan or re-sum the list. There is no snapshot-level oldest bucket.
+ */
+export function payablesListSentence(snap: PayablesSnapshot, money: (n: number) => string): string {
+  const suppliers = `${snap.supplierCount} supplier${snap.supplierCount === 1 ? "" : "s"}`;
+  if (!(snap.totalOverdue >= 0.005)) return `Nothing is overdue across ${suppliers}.`;
+  const head = `${money(snap.totalOverdue)} is overdue across ${suppliers}`;
+  const lead = snap.suppliers[0];
+  if (lead?.name && lead.overdue >= 0.005) {
+    return `${head}; ${lead.name} is the largest at ${money(lead.overdue)}.`;
+  }
+  return `${head}.`;
+}
+
+/** Named list when a snapshot has suppliers. Otherwise the statement sentence, or the empty fallback. */
+export function payablesAnswerSentence(
+  snap: PayablesSnapshot | null | undefined,
+  position: { payables: number | null; creditorDays: number | null } | null | undefined,
+  money: (n: number) => string,
+): string {
+  if (snap && snap.status === "applied" && snap.suppliers.length > 0) {
+    return payablesListSentence(snap, money);
+  }
+  return payablesFiguresSentence(position, money);
 }
 
 export function agedApProofLine(snap: PayablesSnapshot | null | undefined): string {

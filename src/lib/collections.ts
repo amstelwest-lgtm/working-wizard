@@ -298,10 +298,51 @@ export function collectionsStatementLead(copyPack: "za" | "us"): string {
   return "Debtor days, creditor days, and the debtors and creditors totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
 }
 
-/** Proof line when an aged snapshot is on file. Otherwise the one-sentence empty state. */
-export function collectionsAnswerSentence(snap: CollectionsSnapshot | null | undefined): string {
-  if (snap) return agedArProofLine(snap);
-  return collectionsNoFiguresLead();
+function finite(n: number | null | undefined): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+/**
+ * What the statements already show, then the next step.
+ * Both the amount and the day count have to be on the page. A missing figure
+ * keeps the empty-state sentence.
+ */
+export function collectionsFiguresSentence(
+  position: StatementWorkingCapital | null | undefined,
+  money: (n: number) => string,
+): string {
+  if (!position || !finite(position.receivables) || !finite(position.debtorDays)) {
+    return collectionsNoFiguresLead();
+  }
+  return `${money(position.receivables)} is owed to you and customers take ${position.debtorDays} days to pay. Upload the aged debtors report to see who to chase.`;
+}
+
+/**
+ * Overdue total and customer count are already on the snapshot. The first stored
+ * name is the largest overdue row: finalizeCollections sorts that way, and this
+ * does not scan or re-sum the list. There is no snapshot-level oldest bucket.
+ */
+export function collectionsListSentence(snap: CollectionsSnapshot, money: (n: number) => string): string {
+  const customers = `${snap.contactCount} customer${snap.contactCount === 1 ? "" : "s"}`;
+  if (!(snap.totalOverdue >= 0.005)) return `Nothing is overdue across ${customers}.`;
+  const head = `${money(snap.totalOverdue)} is overdue across ${customers}`;
+  const lead = snap.contacts[0];
+  if (lead?.name && lead.overdue >= 0.005) {
+    return `${head}; ${lead.name} is the largest at ${money(lead.overdue)}.`;
+  }
+  return `${head}.`;
+}
+
+/** Named list when a snapshot has customers. Otherwise the statement sentence, or the empty fallback. */
+export function collectionsAnswerSentence(
+  snap: CollectionsSnapshot | null | undefined,
+  position: StatementWorkingCapital | null | undefined,
+  money: (n: number) => string,
+): string {
+  if (snap && snap.status === "applied" && snap.contacts.length > 0) {
+    return collectionsListSentence(snap, money);
+  }
+  return collectionsFiguresSentence(position, money);
 }
 
 export function collectionsNoFiguresLead(): string {

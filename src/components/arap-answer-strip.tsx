@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 import { SIGNOFF_GOLD_BTN } from "@/components/review-signoff";
-import { signoffStatusLine } from "@/lib/signoff-status";
 
 /** Gold primary on the strip. Full width under 480px via `.answer-strip__primary`. */
 export const ARAP_GOLD_BTN = `${SIGNOFF_GOLD_BTN} answer-strip__primary`;
 
 /**
- * Collections and Payables have no review scope, so this strip shows Draft
- * from the shared status line and does not offer Sign off.
+ * Collections and Payables have no review scope, so this strip has no status
+ * pill. A blank chip is omitted the same way as the other deliverable strips.
  */
 export function ArapAnswerStrip({
   heading,
@@ -27,16 +26,13 @@ export function ArapAnswerStrip({
         {sentence ? <p className="answer-strip__sentence">{sentence}</p> : null}
       </div>
       <div className="answer-strip__actions">{primary}</div>
-      <div className="answer-strip__meta">
-        {chip ? (
+      {chip ? (
+        <div className="answer-strip__meta">
           <span className="answer-strip__chip" data-source-chip>
             {chip}
           </span>
-        ) : null}
-        <p data-signoff-status className="answer-strip__status">
-          {signoffStatusLine({ kind: "draft" })}
-        </p>
-      </div>
+        </div>
+      ) : null}
     </section>
   );
 }
