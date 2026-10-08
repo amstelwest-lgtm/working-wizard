@@ -19,7 +19,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Check, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
+import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
+import { isPrecardCapFailure } from "@/lib/precard-cap";
 import {
   createActionFromRecommendation,
   decideRecommendation,
@@ -108,6 +110,7 @@ export function RecommendationsPanel({
   const decide = useServerFn(decideRecommendation);
   const toAction = useServerFn(createActionFromRecommendation);
   const trialBlock = useTrialEndedAction();
+  const [precardOpen, setPrecardOpen] = useState(false);
 
   const [rows, setRows] = useState<Recommendation[]>([]);
   const [migrated, setMigrated] = useState(true);
@@ -201,6 +204,7 @@ export function RecommendationsPanel({
   const handlePropose = async () => {
     if (!clientId || proposing) return;
     setProposing(true);
+    setPrecardOpen(false);
     trialBlock.reset();
     try {
       const res = await invokeBrainPropose(clientId);
@@ -228,6 +232,10 @@ export function RecommendationsPanel({
       }
       await afterWrite();
     } catch (err: unknown) {
+      if (isPrecardCapFailure(err)) {
+        setPrecardOpen(true);
+        return;
+      }
       trialBlock.report(err, "Could not suggest moves.");
     } finally {
       setProposing(false);
@@ -280,6 +288,7 @@ export function RecommendationsPanel({
       </div>
 
       <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+      {precardOpen ? <PrecardCapCard /> : null}
 
       {error ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-300/50 bg-rose-500/5 px-3 py-2 text-[12px] text-rose-700 dark:text-rose-300">

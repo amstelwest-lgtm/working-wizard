@@ -22,6 +22,9 @@ import {
 import { deliverableHandoff } from "./workflow-coach.ts";
 import { friendlyReachMessage } from "./reach-error.ts";
 import { parseAskAiBody, parseAskAiPayload } from "./ask-ai-response.ts";
+import { PRECARD_CAP_MESSAGE, precardBotRemainingLabel } from "./precard-cap.ts";
+import { billingStartPath, peekPendingCheckout } from "./pending-checkout.ts";
+import { firmSignupCheckoutIntent } from "./stripe-plans.ts";
 import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
 
 export {
@@ -200,6 +203,8 @@ export function mountAskAi(container, options) {
   let pendingIntent = null;
   let question = "";
   let answer = "";
+  let precardCap = null;
+  let precardRemaining = null;
   let answerChips = [];
   let toolHints = [];
   let agentRun = null;
@@ -403,6 +408,8 @@ export function mountAskAi(container, options) {
       cancelBtn.addEventListener("click", () => {
         question = "";
         answer = "";
+        precardCap = null;
+        precardRemaining = null;
         answerChips = [];
         toolHints = [];
         agentRun = null;
@@ -457,13 +464,41 @@ export function mountAskAi(container, options) {
         shown.forEach((turn, index) => {
           const latestAssistant =
             turn.role === "assistant" && index === shown.length - 1 && !loading && Boolean(answer);
+          const capBubble = Boolean(latestAssistant && precardCap);
           const bubble = document.createElement("div");
-          bubble.className =
-            turn.role === "user" ? "ask-ai-turn ask-ai-turn-user" : "ask-ai-turn ask-ai-answer";
+          bubble.className = turn.role === "user"
+            ? "ask-ai-turn ask-ai-turn-user"
+            : capBubble
+              ? "ask-ai-turn ask-ai-answer precard-cap-card"
+              : "ask-ai-turn ask-ai-answer";
           if (latestAssistant) bubble.dataset.latest = "1";
-          if (turn.role === "user") bubble.textContent = turn.content;
-          else bubble.innerHTML = renderMarkdown(turn.content);
-          if (latestAssistant) decorateLatestAnswer(bubble);
+          if (capBubble) {
+            bubble.dataset.precardCap = precardCap.limit || "bot";
+            const title = document.createElement("p");
+            title.className = "precard-cap-title";
+            title.textContent = PRECARD_CAP_MESSAGE;
+            const link = document.createElement("a");
+            link.className = "precard-cap-button";
+            link.href = billingStartPath(peekPendingCheckout() ?? firmSignupCheckoutIntent());
+            link.textContent = "Add a card";
+            bubble.appendChild(title);
+            bubble.appendChild(link);
+          } else if (turn.role === "user") {
+            bubble.textContent = turn.content;
+          } else {
+            bubble.innerHTML = renderMarkdown(turn.content);
+          }
+          if (latestAssistant && !capBubble) {
+            decorateLatestAnswer(bubble);
+            const left =
+              typeof precardRemaining === "number" ? precardBotRemainingLabel(precardRemaining) : null;
+            if (left) {
+              const note = document.createElement("p");
+              note.className = "precard-cap-remaining";
+              note.textContent = left;
+              bubble.appendChild(note);
+            }
+          }
           thread.appendChild(bubble);
         });
         panel.appendChild(thread);
@@ -691,6 +726,8 @@ export function mountAskAi(container, options) {
     pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
     loading = true;
     answer = "";
+    precardCap = null;
+    precardRemaining = null;
     answerChips = [];
     toolHints = [];
     agentRun = null;
@@ -755,10 +792,12 @@ export function mountAskAi(container, options) {
       if (!turn.ok) throw new Error(turn.error || "Something went wrong.");
 
       answer = turn.answer;
-      if (answer.includes("Your trial has ended, choose a plan")) {
+      precardCap = turn.precardCap || null;
+      precardRemaining = turn.precardCap ? null : turn.precardRemaining ?? null;
+      if (!precardCap && answer.includes("Your trial has ended, choose a plan")) {
         window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
       }
-      answerChips = turn.chips;
+      answerChips = precardCap ? [] : turn.chips;
       agentRun = turn.run;
       toolHints = turn.tools.map((t) => toolHint(t.name, t.status));
       history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
@@ -780,6 +819,8 @@ export function mountAskAi(container, options) {
     } catch (e) {
       question = q;
       answer = "";
+      precardCap = null;
+      precardRemaining = null;
       answerChips = [];
       toolHints = [];
       agentRun = null;

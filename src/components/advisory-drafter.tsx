@@ -13,7 +13,9 @@ import {
   FileText,
   MessageCircle,
 } from "lucide-react";
+import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
+import { isPrecardCapFailure } from "@/lib/precard-cap";
 import { draftAdvisory } from "@/lib/advisory.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
@@ -76,6 +78,7 @@ export function AdvisoryDrafter({
   const trialBlock = useTrialEndedAction();
 
   const [kind, setKind] = useState<Kind>("client_email");
+  const [precardOpen, setPrecardOpen] = useState(false);
   const [steer, setSteer] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DraftResult | null>(null);
@@ -84,6 +87,7 @@ export function AdvisoryDrafter({
   const generate = async () => {
     setLoading(true);
     setResult(null);
+    setPrecardOpen(false);
     trialBlock.reset();
     try {
       const res = (await run({
@@ -98,6 +102,10 @@ export function AdvisoryDrafter({
       })) as DraftResult;
       setResult(res);
     } catch (e) {
+      if (isPrecardCapFailure(e)) {
+        setPrecardOpen(true);
+        return;
+      }
       trialBlock.report(e, "Could not draft advisory");
     } finally {
       setLoading(false);
@@ -220,6 +228,7 @@ export function AdvisoryDrafter({
       </button>
 
       <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+      {precardOpen ? <PrecardCapCard /> : null}
 
       {result && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-4">

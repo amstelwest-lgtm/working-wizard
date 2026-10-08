@@ -37,6 +37,7 @@ import { parseMarketSelection } from "@/lib/market/parse";
 import type { FirmBandId, FirmInterval } from "@/lib/stripe-plans";
 import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
+import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
 
 export type EntitlingFirmSubscription = {
@@ -276,6 +277,35 @@ async function loadFirm(
   );
 }
 
+/**
+ * True when this firm has no entitling subscription (phase none).
+ * Reuses the subscription lookup the client-cap gate already uses.
+ * Writes the edge mirror. Does not create Stripe customers or prices.
+ */
+export async function firmPrecardCapApplies(input: {
+  supabase: unknown;
+  userId: string;
+  email: string;
+  firmId: string;
+}): Promise<boolean> {
+  if (!stripeConfigured()) return false;
+  const userDb = asCapDb(input.supabase);
+  let email = input.email.trim();
+  if (!email && userDb.auth) {
+    const { data } = await userDb.auth.getUser();
+    email = data.user?.email?.trim() ?? "";
+  }
+  const admin = getSupabaseAdminOrNull();
+  const db = admin ? asCapDb(admin) : userDb;
+  const firm = await loadFirm(db, input.firmId, input.userId);
+  if (!firm) return false;
+  const billing = await billingEmailForFirm(input.userId, email, firm.ownerUserId);
+  const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+  const applies = (sub?.phase ?? "none") === "none";
+  await writePrecardCapApplies(firm.id, applies);
+  return applies;
+}
+
 function trialBannerFor(
   firm: LoadedFirm | null,
   sub: EntitlingFirmSubscription | null,
@@ -415,6 +445,7 @@ export async function loadFirmClientCreateAllowance(input: {
   });
   const starterTrial = trialBannerFor(firm, sub);
   await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
+  await writePrecardCapApplies(firm.id, (sub?.phase ?? "none") === "none");
   const decision = decideFirmClientCreate({
     stripeConfigured: true,
     phase: sub?.phase ?? "none",
@@ -519,6 +550,7 @@ export async function loadFirmPlanDisplay(input: {
   });
   const starterTrial = trialBannerFor(firm, sub);
   await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
+  await writePrecardCapApplies(firm.id, (sub?.phase ?? "none") === "none");
   return {
     configured: true,
     ...formatFirmPlanStatus({
@@ -574,6 +606,7 @@ export async function syncStarterTrialMirrorForActor(input: {
     const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
     const trial = trialBannerFor(firm, sub);
     await writeStarterTrialGenerationBlock(firm.id, trial.expired);
+    await writePrecardCapApplies(firm.id, (sub?.phase ?? "none") === "none");
   } catch (err) {
     console.warn(
       "[starter-trial] mirror sync skipped",

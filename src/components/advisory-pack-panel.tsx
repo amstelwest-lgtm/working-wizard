@@ -28,7 +28,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
+import { PRECARD_CAP_CODE } from "@/lib/precard-cap";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { useMarket } from "@/contexts/market";
@@ -168,6 +170,7 @@ export function AdvisoryPackPanel({
   const [showDraft, setShowDraft] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [precardOpen, setPrecardOpen] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
 
@@ -274,7 +277,10 @@ export function AdvisoryPackPanel({
   ) => {
     if (busy) return;
     setBusy(label);
-    if (label === "generate") trialBlock.reset();
+    if (label === "generate") {
+      trialBlock.reset();
+      setPrecardOpen(false);
+    }
     try {
       const res = await fn();
       if (res) {
@@ -303,6 +309,10 @@ export function AdvisoryPackPanel({
         seq.current += 1;
         const res = await generate({ data: { clientId } });
         if (!res.ok) {
+          if (res.reason === PRECARD_CAP_CODE) {
+            setPrecardOpen(true);
+            return null;
+          }
           toast.message(
             res.reason === "no_figures"
               ? "Upload at least one period of figures before building a pack."
@@ -639,6 +649,7 @@ export function AdvisoryPackPanel({
       </div>
 
       <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
+      {precardOpen ? <PrecardCapCard /> : null}
 
       {pack && liveStats && liveStats.edit_rate >= HIGH_EDIT_RATE && audience === "accountant" ? (
         <p
