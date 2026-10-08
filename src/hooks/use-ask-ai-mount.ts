@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { teamDeskOwnsMount } from "@/lib/milon-bot-client";
 
 /**
  * Mount the unified Milōn Bot widget into any #ask-ai-* containers present.
@@ -35,7 +34,7 @@ export function useAskAiMount(deps: {
       if (cancelled) return;
       const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
         .map((id) => document.getElementById(id))
-        .filter((el): el is HTMLElement => !!el && !teamDeskOwnsMount(el));
+        .filter((el): el is HTMLElement => !!el);
 
       if (effectiveClientId) {
         (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;

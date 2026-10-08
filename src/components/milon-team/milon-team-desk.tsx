@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { PrecardCapCard } from "@/components/precard-cap-card";
 import {
   AGENT_ORDER,
@@ -9,6 +9,7 @@ import {
   agentMarkPath,
   agentShortName,
   formatAgo,
+  formatAsOf,
   teamAgentHeaderStatus,
 } from "@/lib/milon-team";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
@@ -37,35 +38,17 @@ export function MilonTeamDesk({
   feed,
   now,
   initialFilter = "all",
-  onCompose,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
   initialFilter?: FilterKey;
-  onCompose?: (text: string) => void;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
-  const [task, setTask] = useState("");
-  const [held, setHeld] = useState(false);
   const [blocked, setBlocked] = useState<Record<string, "precard_cap">>({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [opened, setOpened] = useState<Record<string, string>>({});
   const [dropped, setDropped] = useState<Record<string, true>>({});
-  const rootRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const root = rootRef.current;
-    const dock = dockRef.current;
-    if (!root || !dock) return;
-    const apply = () => {
-      root.style.setProperty("--desk-dock", `${dock.offsetHeight + 12}px`);
-    };
-    apply();
-    window.addEventListener("resize", apply);
-    return () => window.removeEventListener("resize", apply);
-  }, [held, feed.loading, feed.error, feed.signoffLine]);
 
   function onFilterKey(event: KeyboardEvent<HTMLDivElement>) {
     const index = FILTERS.indexOf(filter);
@@ -109,15 +92,6 @@ export function MilonTeamDesk({
     if (result.message) setFailures((current) => ({ ...current, [job.id]: result.message as string }));
   }
 
-  function submitTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = task.trim();
-    if (!text) return;
-    setTask("");
-    setHeld(true);
-    onCompose?.(text);
-  }
-
   const briefing = feed.briefing.filter((item) => matches(item.agent, filter));
   const jobs = feed.jobs.filter(
     (job) => job.status !== "dismissed" && !dropped[job.id] && matches(job.agent, filter),
@@ -128,7 +102,7 @@ export function MilonTeamDesk({
   const quietError = Boolean(feed.error) && emptyFeed;
 
   return (
-    <div className="milon-desk" ref={rootRef} data-desk-ready="true" aria-busy={feed.loading || undefined}>
+    <div className="milon-desk" data-desk-ready="true" aria-busy={feed.loading || undefined}>
       <div className="milon-desk-scroll">
         {feed.error ? (
           <section className="milon-desk-card" role="alert">
@@ -184,7 +158,8 @@ export function MilonTeamDesk({
                     >
                       <AgentMark agent={agent} />
                       <span className="milon-desk-agent-copy">
-                        <strong>{name}</strong>
+                        <strong className="milon-desk-agent-name">{name}</strong>
+                        <span className="milon-desk-agent-short">{agentShortName(agent)}</span>
                         <span className="milon-desk-visually-hidden">{agentJobLine(agent)}</span>
                         {header.lastRun ? <span className="milon-desk-ran">{header.lastRun}</span> : null}
                         <span className={`milon-desk-status is-${header.tone}`}>
@@ -216,7 +191,9 @@ export function MilonTeamDesk({
                         {item.detail ? <p className="milon-desk-why">{item.detail}</p> : null}
                         <div className="milon-desk-meta">
                           <span className="milon-desk-source">{item.source.label}</span>
-                          {item.source.asOf ? <span className="milon-desk-why">as of {item.source.asOf}</span> : null}
+                          {item.source.asOf ? (
+                            <span className="milon-desk-why">as of {formatAsOf(item.source.asOf, clock)}</span>
+                          ) : null}
                         </div>
                       </div>
                     </li>
@@ -233,10 +210,13 @@ export function MilonTeamDesk({
                     const readyHref = opened[job.id];
                     const ready = job.status === "draft_ready" || readyHref !== undefined;
                     const href = job.href || readyHref || undefined;
+                    const jobCapped =
+                      blocked[job.id] === "precard_cap" ||
+                      (job.status === "proposed" && !job.canApprove && job.blockedReason === "precard_cap");
+                    const showApprove =
+                      !ready && job.status === "proposed" && job.canApprove && !blocked[job.id] && !feed.precard.capped;
                     const showCap =
-                      !ready &&
-                      (blocked[job.id] === "precard_cap" ||
-                        (job.status === "proposed" && !job.canApprove && job.blockedReason === "precard_cap"));
+                      !ready && (jobCapped || (feed.precard.capped && job.status === "proposed" && job.canApprove));
                     const noData = !ready && job.status === "proposed" && !job.canApprove && job.blockedReason === "no_data";
                     return (
                       <li key={job.id} className="milon-desk-job" data-job={job.id} data-job-status={job.status}>
@@ -246,18 +226,18 @@ export function MilonTeamDesk({
                             <p>{job.title}</p>
                             {job.summary ? <p className="milon-desk-why">{job.summary}</p> : null}
                           </div>
-                          {job.status === "proposed" && job.canApprove && !blocked[job.id] && !ready ? (
-                            <div className="milon-desk-actions">
-                              <button type="button" className="milon-desk-btn approve" data-approve={job.id} onClick={() => void approve(job)}>
-                                Approve
-                              </button>
-                              <button type="button" className="milon-desk-btn ghost" data-dismiss={job.id} onClick={() => void dismiss(job)}>
-                                Dismiss
-                              </button>
-                            </div>
-                          ) : null}
                           {job.status === "drafting" ? <span className="milon-desk-spinner" role="status" aria-label="Drafting" /> : null}
                         </div>
+                        {showApprove ? (
+                          <div className="milon-desk-actions">
+                            <button type="button" className="milon-desk-btn approve" data-approve={job.id} onClick={() => void approve(job)}>
+                              Approve
+                            </button>
+                            <button type="button" className="milon-desk-btn ghost" data-dismiss={job.id} onClick={() => void dismiss(job)}>
+                              Dismiss
+                            </button>
+                          </div>
+                        ) : null}
                         {showCap ? <PrecardCapCard /> : null}
                         {noData ? <p className="milon-desk-muted">Not enough on file to draft this.</p> : null}
                         {ready ? (
@@ -313,23 +293,6 @@ export function MilonTeamDesk({
             ) : null}
           </>
         )}
-      </div>
-      <div className="milon-desk-dock" ref={dockRef}>
-        {held ? <p className="milon-desk-held">Held as a task. Nothing was sent.</p> : null}
-        <form className="milon-desk-composer" onSubmit={submitTask}>
-          <label className="milon-desk-visually-hidden" htmlFor="milon-desk-task">
-            Ask or assign a task
-          </label>
-          <input
-            id="milon-desk-task"
-            value={task}
-            placeholder="Ask or assign a task…"
-            onChange={(event) => setTask(event.target.value)}
-          />
-          <button type="submit" className="milon-desk-btn outline">
-            Ask
-          </button>
-        </form>
       </div>
     </div>
   );

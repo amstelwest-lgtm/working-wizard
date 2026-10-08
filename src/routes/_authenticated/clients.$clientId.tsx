@@ -1559,7 +1559,7 @@ function ClientView() {
     if (!client) return;
     let cancelled = false;
     const el = document.getElementById("ask-ai-accountant");
-    if (!el || el.dataset.teamDesk === "1") return;
+    if (!el) return;
     // Always refresh the client context — submit() reads dataset.clientId at
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
@@ -3168,8 +3168,9 @@ function ClientView() {
 
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-                  <div id="ask-ai-accountant" data-team-desk="1" className="ask-ai-studio-shell">
+                  <div className="milon-desk-host">
                     <MilonTeamPane clientId={clientId} />
+                    <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
                   </div>
                 </div>
 

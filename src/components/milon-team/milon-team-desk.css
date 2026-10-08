@@ -5,13 +5,22 @@
   scroll-margin-top: 88px;
 }
 
-#ask-ai-accountant[data-team-desk="1"] {
+.milon-desk-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+}
+
+.accountant-portal:has(.milon-desk) #pane-ask.on {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .milon-desk {
@@ -24,9 +33,9 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  height: 100%;
+  height: auto;
   color: var(--desk-ink);
   min-width: 0;
 }
@@ -41,7 +50,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-bottom: var(--desk-dock, 108px);
+  padding-bottom: 12px;
   box-sizing: border-box;
 }
 
@@ -197,11 +206,18 @@
   min-width: 0;
 }
 
-.milon-desk-agent-copy strong {
+.milon-desk-agent-name {
   display: block;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.milon-desk-agent-short {
+  display: none;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .milon-desk-ran {
@@ -402,9 +418,7 @@
 
 .milon-desk-btn:focus-visible,
 .milon-desk-all:focus-visible,
-.milon-desk-agent:focus-visible,
-.milon-desk-composer input:focus-visible,
-.milon-desk-composer button:focus-visible {
+.milon-desk-agent:focus-visible {
   outline: 2px solid var(--desk-gold);
   outline-offset: 2px;
 }
@@ -418,7 +432,9 @@
 }
 
 .milon-desk-job .milon-desk-actions {
-  margin-left: auto;
+  width: 100%;
+  margin-left: 0;
+  justify-content: flex-end;
 }
 
 .milon-desk-job p,
@@ -510,31 +526,6 @@
   color: inherit;
 }
 
-.milon-desk-dock {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 2px 2px;
-  background: var(--desk-plate);
-  border-top: 1px solid rgba(212, 175, 55, 0.32);
-  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.45);
-}
-
-.milon-desk-composer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 14px;
-  border-radius: 16px;
-  background: var(--desk-plate);
-  border: 1px solid rgba(212, 175, 55, 0.28);
-}
-
 .milon-desk-visually-hidden {
   position: absolute;
   width: 1px;
@@ -545,27 +536,6 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.milon-desk-composer input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--desk-ink);
-  font: inherit;
-  font-size: 14px;
-  padding: 8px 0;
-}
-
-.milon-desk-composer input::placeholder {
-  color: rgba(242, 236, 220, 0.42);
-}
-
-.milon-desk-held {
-  margin: 0 4px;
-  font-size: 12.5px;
-  color: var(--desk-gold);
 }
 
 html[data-theme="light"] .milon-desk {
@@ -579,36 +549,34 @@ html[data-theme="light"] .milon-desk {
   }
 
   .milon-desk-agents {
-    display: flex;
-    overflow-x: auto;
-    gap: 8px;
-    padding-bottom: 2px;
-    scroll-snap-type: x proximity;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    gap: 6px;
   }
 
   .milon-desk-agent {
-    flex: 0 0 auto;
     align-items: center;
-    gap: 8px;
-    border-radius: 999px;
-    padding: 7px 12px 7px 8px;
-    scroll-snap-align: start;
+    gap: 6px;
+    border-radius: 14px;
+    padding: 8px 6px;
     box-shadow: none;
   }
 
   .milon-desk-agent .milon-desk-mark,
   .milon-desk-agent .milon-desk-ran,
-  .milon-desk-agent .milon-desk-status span {
+  .milon-desk-agent .milon-desk-status span,
+  .milon-desk-agent-name {
     display: none;
+  }
+
+  .milon-desk-agent-short {
+    display: block;
+    white-space: nowrap;
   }
 
   .milon-desk-agent .milon-desk-status {
     margin: 0;
-  }
-
-  .milon-desk-agent-copy strong {
-    font-size: 13px;
-    white-space: nowrap;
   }
 
   .milon-desk-job-line {
@@ -616,14 +584,87 @@ html[data-theme="light"] .milon-desk {
     align-items: stretch;
   }
 
-  .milon-desk-job .milon-desk-actions,
-  .milon-desk-row .milon-desk-actions {
-    width: auto;
-    margin-left: 0;
-    justify-content: flex-start;
+  .milon-desk-job .milon-desk-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .milon-desk-signoff {
     align-items: flex-start;
+  }
+}
+
+/* The widget under the desk is the composer. Hero copy stays in ask-ai.css. */
+.milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+  background: #101018;
+  border-top: 1px solid rgba(212, 175, 55, 0.32);
+  padding: 8px 2px 2px;
+  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.milon-desk-host #ask-ai-accountant.ask-ai-studio-shell::before {
+  content: none;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-brand,
+.milon-desk-host #ask-ai-accountant .ask-ai-subtitle,
+.milon-desk-host #ask-ai-accountant .ask-ai-blurb,
+.milon-desk-host #ask-ai-accountant .ask-ai-chips,
+.milon-desk-host #ask-ai-accountant .ask-ai-note {
+  display: none;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding: 0;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-thread,
+.milon-desk-host #ask-ai-accountant .ask-ai-thinking,
+.milon-desk-host #ask-ai-accountant .ask-ai-error {
+  grid-column: 1 / -1;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-thread {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-textarea {
+  min-height: 44px;
+  max-height: 88px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  border-radius: 14px;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-send,
+.milon-desk-host #ask-ai-accountant .ask-ai-cancel {
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
+  background: #f6f3ea;
+}
+
+@media (max-width: 767px) {
+  body:has(#pane-ask.on) button[aria-label="Share Milōn"] {
+    display: none !important;
   }
 }

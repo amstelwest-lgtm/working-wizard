@@ -20,15 +20,39 @@ const written: string[] = [];
 
 await mkdir(outDir, { recursive: true });
 
-async function assertClearOfDock(page: Page, label: string) {
+async function assertAboveComposer(page: Page, label: string) {
   const loc = page.getByText(label, { exact: false }).first();
   await loc.waitFor({ timeout: 8000 });
-  const dock = await page.locator(".milon-desk-dock").boundingBox();
+  const composer = await page.locator("#ask-ai-accountant").boundingBox();
   const target = await loc.boundingBox();
-  if (!dock || !target) throw new Error(`${label} or the composer dock is missing`);
-  if (target.y + target.height > dock.y + 1) {
-    throw new Error(`${label} sits under the composer dock`);
+  if (!composer || !target) throw new Error(`${label} or the chat composer is missing`);
+  if (target.y + target.height > composer.y + 1) {
+    throw new Error(`${label} sits under the chat composer`);
   }
+}
+
+async function stubReply(page: Page) {
+  await page.route("**/__harness/bot-reply", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ answer: "The cash floor is the item to watch." }),
+    }),
+  );
+}
+
+async function askAndWait(page: Page) {
+  await stubReply(page);
+  const field = page.locator("#ask-ai-accountant textarea");
+  await field.waitFor({ timeout: 8000 });
+  await field.fill("What should we watch this week?");
+  await page.locator("#ask-ai-accountant .ask-ai-send").click();
+  await page.locator("#ask-ai-accountant").getByText("What should we watch this week?").waitFor();
+  await page.locator("#ask-ai-accountant").getByText("The cash floor is the item to watch.").waitFor();
+  const team = await page.locator(".milon-desk-team").boundingBox();
+  const chat = await page.locator("#ask-ai-accountant").boundingBox();
+  if (!team || !chat) throw new Error("the desk or the chat is missing");
+  if (chat.y < team.y + 8) throw new Error("the chat is not under the desk");
 }
 
 async function shot(name: string, width: number, height: number, path: string, prepare?: (page: Page) => Promise<void>) {
@@ -37,7 +61,7 @@ async function shot(name: string, width: number, height: number, path: string, p
   page.setDefaultTimeout(15000);
   page.on("request", (request) => {
     const url = request.url();
-    if (url.includes("functions/v1") || url.includes("ask-ai") || url.includes("milon-bot")) leaked.push(url);
+    if (url.includes("/functions/v1/")) leaked.push(url);
   });
   page.on("pageerror", (error) => {
     console.error(`[pageerror] ${name}: ${error.message}`);
@@ -72,7 +96,7 @@ await shot("desk-desktop-1280", 1280, 1440, "/milon-team-desk?fixture=populated"
   if (Math.abs(rowContentRight - (dismiss.x + dismiss.width)) > 2) {
     throw new Error(`Approve/Dismiss are not on the Today row edge (${rowContentRight} vs ${dismiss.x + dismiss.width})`);
   }
-  await assertClearOfDock(page, "September close is ready for your sign-off.");
+  await assertAboveComposer(page, "September close is ready for your sign-off.");
   await page.locator(".milon-desk-scroll").evaluate((el) => {
     el.scrollTop = 0;
   });
@@ -109,20 +133,34 @@ await shot("desk-desktop-1280-approved", 1280, 1200, "/milon-team-desk?fixture=p
   await page.locator("[data-desk-jobs='true']").evaluate((el) => {
     el.scrollIntoView({ block: "center", inline: "nearest" });
   });
-  await assertClearOfDock(page, "Draft ready. Nothing was sent.");
+  await assertAboveComposer(page, "Draft ready. Nothing was sent.");
 });
 
 await shot("desk-mobile-390", 390, 844, "/milon-team-desk?fixture=populated", async (page) => {
   const agents = page.locator(".milon-desk-agents");
-  const overflow = await agents.evaluate((el) => ({
-    overflow: getComputedStyle(el).overflowX,
-    scrollWidth: el.scrollWidth,
-    clientWidth: el.clientWidth,
-  }));
-  if (overflow.overflow !== "auto" && overflow.overflow !== "scroll") {
-    throw new Error(`team pills are not a horizontal scroller (${overflow.overflow})`);
+  const fit = await agents.evaluate((el) => {
+    const chips = [...el.querySelectorAll<HTMLElement>(".milon-desk-agent")];
+    const box = el.getBoundingClientRect();
+    return chips.map((chip) => {
+      const name = chip.querySelector<HTMLElement>(".milon-desk-agent-short");
+      const dot = chip.querySelector<HTMLElement>(".milon-desk-status i");
+      const nameBox = name?.getBoundingClientRect();
+      const chipBox = chip.getBoundingClientRect();
+      return {
+        text: name?.textContent ?? "",
+        nameFits: !!name && name.scrollWidth <= name.clientWidth + 1,
+        dot: !!dot && getComputedStyle(dot).display !== "none",
+        inside: chipBox.left >= box.left - 1 && chipBox.right <= box.right + 1 && chipBox.right <= 390,
+        visibleName: !!nameBox && nameBox.width > 0 && getComputedStyle(name!).display !== "none",
+      };
+    });
+  });
+  if (fit.length !== 3) throw new Error(`expected three team chips, saw ${fit.length}`);
+  for (const chip of fit) {
+    if (!chip.visibleName || !chip.nameFits) throw new Error(`team chip is cut off (${chip.text})`);
+    if (!chip.dot) throw new Error(`team chip is missing its status dot (${chip.text})`);
+    if (!chip.inside) throw new Error(`team chip sits outside the row (${chip.text})`);
   }
-  if (overflow.scrollWidth <= overflow.clientWidth) throw new Error("team pills do not overflow at 390");
   const rail = await page.locator(".deliverable-rail").boundingBox();
   const team = await page.locator(".milon-desk-team").boundingBox();
   if (!rail || !team) throw new Error("rail or team header is missing");
@@ -136,13 +174,29 @@ await shot("desk-mobile-390", 390, 844, "/milon-team-desk?fixture=populated", as
 });
 
 await shot("desk-mobile-390-composer", 390, 844, "/milon-team-desk?fixture=populated", async (page) => {
-  const input = page.locator("#milon-desk-task");
-  await input.click();
-  await input.fill("Chase the September debtors");
-  await page.locator(".milon-desk-composer button").click();
-  await page.getByText("Held as a task. Nothing was sent.").waitFor();
-  const dock = await page.locator(".milon-desk-dock").boundingBox();
-  if (!dock || dock.y + dock.height > 844 + 1) throw new Error("composer is off the phone viewport");
+  const ask = page.locator("#ask-ai-accountant .ask-ai-send");
+  await ask.waitFor({ timeout: 8000 });
+  await page.waitForFunction(() => {
+    const share = document.querySelector('button[aria-label="Share Milōn"]');
+    return !!share && getComputedStyle(share).display === "none";
+  });
+  const askBox = await ask.boundingBox();
+  if (!askBox) throw new Error("Ask button is missing");
+  if (askBox.y + askBox.height > 844 + 1 || askBox.y < 0) throw new Error("Ask button is off the phone viewport");
+  const shareBox = await page.locator('button[aria-label="Share Milōn"]').boundingBox();
+  if (shareBox) throw new Error("share FAB covers the Bot tab");
+});
+
+await shot("desk-chat-1280", 1280, 1440, "/milon-team-desk?fixture=populated", async (page) => {
+  await askAndWait(page);
+});
+
+await shot("desk-chat-390", 390, 844, "/milon-team-desk?fixture=populated", async (page) => {
+  await askAndWait(page);
+  const askBox = await page.locator("#ask-ai-accountant .ask-ai-send").boundingBox();
+  const shareBox = await page.locator('button[aria-label="Share Milōn"]').boundingBox();
+  if (!askBox) throw new Error("Ask button is missing after the reply");
+  if (shareBox) throw new Error("share FAB covers the answered chat");
 });
 
 await shot("desk-empty-1280", 1280, 900, "/milon-team-desk?fixture=empty", async (page) => {

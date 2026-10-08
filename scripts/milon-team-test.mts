@@ -11,7 +11,7 @@ import type { MilonTeamFeedApi } from "../src/hooks/use-milon-team-feed";
 import type { AgentKey, MilonTeamFeed, TeamAgentStatus, TeamJob } from "../src/lib/milon-team-feed";
 import { AGENT_KEYS, emptyMilonTeamFeed } from "../src/lib/milon-team-feed";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
-import { agentAriaLabel, agentDisplayName, agentInitial, agentShortName, teamAgentHeaderStatus } from "../src/lib/milon-team";
+import { agentAriaLabel, agentDisplayName, agentInitial, agentShortName, formatAsOf, teamAgentHeaderStatus } from "../src/lib/milon-team";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -87,7 +87,20 @@ assert(!prodImportsStub, "production must not import the harness stub");
 const client = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
 assert(client.includes('id="ask-ai-accountant"'), "the current Bot mount stays in the ask pane");
 assert(client.includes("<MilonTeamPane"), "the ask pane has one desk seam");
+assert(
+  /<MilonTeamPane[\s\S]*id="ask-ai-accountant"/.test(client),
+  "the desk renders above the chat mount",
+);
+assert(!client.includes("data-team-desk"), "the chat node is not marked as the desk");
+assert(!client.includes("dataset.teamDesk"), "the client effect still mounts the chat");
 assert(client.includes('resolveAccountantTab(search) ?? "overview"'), "default tab stays Overview");
+for (const file of ["src/lib/ask-ai.js", "public/ask-ai.css", "src/hooks/use-ask-ai-mount.ts", "src/lib/milon-bot-client.ts", "src/lib/milon-bot-copy.ts"]) {
+  assert(!readFileSync(file, "utf8").includes("teamDeskOwnsMount"), `${file} does not own the desk mount`);
+  assert(!readFileSync(file, "utf8").includes("data-team-desk"), `${file} does not special-case the desk`);
+}
+assert(formatAsOf("2026-10-08", NOW) === "8 Oct", "a date in the current year is day and short month");
+assert(formatAsOf("2025-03-01", NOW) === "1 Mar 2025", "a date in another year keeps the year");
+assert(formatAsOf(null, NOW) === null, "a missing as-of date stays hidden");
 
 const idle: Record<AgentKey, TeamAgentStatus> = {
   bookkeeper: { agent: "bookkeeper", lastRunAt: null, lastRunKind: null },
@@ -199,7 +212,7 @@ const populated = html(
       advisor: { agent: "advisor", lastRunAt: "2026-10-08T09:00:00.000Z", lastRunKind: "diagnosis" },
     },
     briefing: [
-      { id: "floor", agent: "advisor", title: "Cash floor is close", severity: "act", source: { label: "Cash", asOf: null } },
+      { id: "floor", agent: "advisor", title: "Cash floor is close", severity: "act", source: { label: "Cash", asOf: "2026-10-08" } },
     ],
     signoffLine: "September close is ready for your sign-off.",
     jobs: [
@@ -228,6 +241,15 @@ assert(populated.includes(agentDisplayName("bookkeeper")), "the team row prints 
 assert(populated.includes(agentShortName("bookkeeper")), "tags use the Bookkeeper short name");
 assert(populated.includes('data-agent-initial="B"'), "the Bookkeeper avatar letter is B");
 assert(!populated.includes(BOT_ROLE), "rendered desk copy does not say the old role");
+assert(populated.includes("as of 8 Oct"), "as-of dates use the short form");
+assert(!populated.includes("as of 2026-10-08"), "as-of dates do not keep the ISO form");
+assert(populated.includes("milon-desk-agent-short"), "narrow screens can show the short team name");
+assert(!populated.includes("milon-desk-task"), "the desk has no composer of its own");
+assert(!populated.includes("Held as a task"), "the desk does not hold a local task");
+assert(
+  populated.includes('</div></div><div class="milon-desk-actions"><button type="button" class="milon-desk-btn approve"'),
+  "Approve sits on its own row",
+);
 assert(populated.includes("Cash watch: 1 alert"), "the header uses the derived cash-watch line");
 assert(populated.includes("Books clean ✓"), "the header uses the derived books line");
 assert(populated.includes("Forecast updated"), "the header uses the derived forecast line");
@@ -276,6 +298,15 @@ const refreshing = html(
   }),
 );
 assert(refreshing.includes("Still on the desk"), "a refresh keeps the briefing that is already there");
+
+const capped = html(
+  api({
+    precard: { capped: true, remaining: 0, limit: "bot" },
+    jobs: [job({ id: "board", status: "proposed", canApprove: true, title: "Draft the board note" })],
+  }),
+);
+assert(!capped.includes('data-approve="board"'), "a capped desk does not offer Approve");
+assert(capped.includes(PRECARD_CAP_MESSAGE), "the cap card covers a job when the desk is capped");
 
 const broken = html(api({ error: "The desk could not load." }));
 assert(broken.includes("The desk could not load."), "an error shows the feed message");
