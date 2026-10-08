@@ -88,7 +88,7 @@ await shot("desk-desktop-1280", 1280, 1440, "/milon-team-desk?fixture=populated"
   await page.getByText("Books clean ✓").waitFor();
   await page.getByText("Forecast updated").waitFor();
   await page.getByText("Cash watch: 1 alert").waitFor();
-  await page.getByText("Milōn Bot").waitFor();
+  await page.getByRole("button", { name: "Milōn Bot" }).waitFor();
   const row = await page.locator(".milon-desk-row").first().boundingBox();
   const dismiss = await page.locator("[data-dismiss='board']").boundingBox();
   if (!row || !dismiss) throw new Error("Offered actions or the Today row is missing");

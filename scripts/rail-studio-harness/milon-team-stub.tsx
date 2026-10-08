@@ -96,7 +96,7 @@ const POPULATED: MilonTeamFeed = {
     advisor: { agent: "advisor", lastRunAt: "2026-10-08T09:00:00.000Z", lastRunKind: "diagnosis" },
   },
   signoffLine: "September close is ready for your sign-off.",
-  precard: { capped: true, remaining: 0, limit: 3 },
+  precard: { capped: false, remaining: 3, limit: 3 },
   loading: false,
   error: null,
 };

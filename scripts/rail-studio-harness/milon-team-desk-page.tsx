@@ -7,7 +7,7 @@ import { useEffect, type ReactNode } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { CLIENT_RAIL, ClientRailButton } from "@/components/client-studio-chrome";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
-import "../../../public/ask-ai.css";
+import "../../public/ask-ai.css";
 import { DESK_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 
 function Frame({

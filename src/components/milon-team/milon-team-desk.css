@@ -627,18 +627,16 @@ html[data-theme="light"] .milon-desk {
   padding: 0;
 }
 
-.milon-desk-host #ask-ai-accountant .ask-ai-thread,
-.milon-desk-host #ask-ai-accountant .ask-ai-thinking,
-.milon-desk-host #ask-ai-accountant .ask-ai-error {
-  grid-column: 1 / -1;
-}
-
 .milon-desk-host #ask-ai-accountant .ask-ai-thread {
+  grid-column: 1 / -1;
+  grid-row: 1;
   max-height: 220px;
   overflow: auto;
 }
 
 .milon-desk-host #ask-ai-accountant .ask-ai-textarea {
+  grid-column: 1;
+  grid-row: 2;
   min-height: 44px;
   max-height: 88px;
   padding: 10px 14px;
@@ -648,9 +646,17 @@ html[data-theme="light"] .milon-desk {
 }
 
 .milon-desk-host #ask-ai-accountant .ask-ai-actions {
+  grid-column: 2;
+  grid-row: 2;
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.milon-desk-host #ask-ai-accountant .ask-ai-thinking,
+.milon-desk-host #ask-ai-accountant .ask-ai-error {
+  grid-column: 1 / -1;
+  grid-row: 3;
 }
 
 .milon-desk-host #ask-ai-accountant .ask-ai-send,
