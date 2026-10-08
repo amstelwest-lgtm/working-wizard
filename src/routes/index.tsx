@@ -3,6 +3,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { toast } from "sonner";
 import { notifySignup } from "@/lib/signup-notify";
 import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
@@ -241,6 +242,7 @@ function LandingPage() {
   const { showSaPricing } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
+  const { firmId } = useAccountantProfile();
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
   const doSendWelcome = useServerFn(sendSignupWelcome);
@@ -883,7 +885,10 @@ function LandingPage() {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
         setPortalIntent("accountant");
-        if (readInsightSeen()) {
+        const signedInId = granted.data.user?.id ?? null;
+        const { activeFirmIdForUser } = await import("@/lib/firm-brand");
+        const insightFirmId = signedInId ? await activeFirmIdForUser(signedInId) : null;
+        if (readInsightSeen(insightFirmId)) {
           void navigate({
             to: "/billing/start",
             search: billingStartSearch(pendingCheckout),
@@ -930,14 +935,19 @@ function LandingPage() {
         try {
           const resumeFirmBilling = consumeResumeFirmBilling();
           if (resumeFirmBilling) {
-            const { listUserFirms } = await import("@/lib/firm-brand");
+            const { listUserFirms, readActiveFirmId } = await import("@/lib/firm-brand");
             const firms = await listUserFirms(uid);
             const ownsFirm = firms.some((f) => f.owner_user_id === uid);
+            const preferred = readActiveFirmId(uid);
+            const insightFirmId =
+              firms.find((f) => f.id === preferred)?.id ??
+              firms.find((f) => f.owner_user_id === uid)?.id ??
+              null;
             const resume = decidePostLoginBillingResume({
               hasPendingFirmCheckout: false,
               ownsFirm,
               resumeFirmBilling: true,
-              insightSeen: readInsightSeen(),
+              insightSeen: readInsightSeen(insightFirmId),
             });
             if (resume === "workspace") {
               setPortalIntent("accountant");
@@ -1199,14 +1209,9 @@ function LandingPage() {
           if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
           await welcomeWithoutBlockingSignup(() => doSendWelcome());
           forcePortal("accountant");
-          if (readInsightSeen()) {
-            navigate({
-              to: "/billing/start",
-              search: billingStartSearch(pending),
-            });
-          } else {
-            navigate({ to: "/dashboard" });
-          }
+          // This firm was just created. It has not shown figures, so Checkout
+          // waits. A flag stored for another firm must not send them to Stripe.
+          navigate({ to: "/dashboard" });
           return;
         }
         setRegDone(true);
@@ -1307,7 +1312,7 @@ function LandingPage() {
     setRegRole("Accountant / Advisory firm");
     setPortalIntent("accountant");
     if (user) {
-      if (readInsightSeen()) {
+      if (readInsightSeen(firmId)) {
         void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
       } else {
         void navigate({ to: "/dashboard" });
@@ -1331,7 +1336,7 @@ function LandingPage() {
     setRegisterReady(true);
     setMobileNavOpen(false);
     if (user) {
-      if (readInsightSeen()) {
+      if (readInsightSeen(firmId)) {
         void navigate({
           to: "/billing/start",
           search: billingStartSearch({ plan, interval: firmInterval, market }),
@@ -1360,7 +1365,7 @@ function LandingPage() {
     return () => {
       delete (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup;
     };
-  }, [draftMarket, firmInterval, user]);
+  }, [draftMarket, firmInterval, user, firmId]);
 
   const activeInviteToken =
     inviteClientId ?? pendingInviteTokenFromUrl() ?? peekPendingOwnerInvite()?.token ?? null;
@@ -1746,6 +1751,7 @@ function LandingPage() {
             inviteClientId={inviteClientId}
             regClientCode={regClientCode}
             copyMarket={copyMarket}
+            firmId={firmId}
             onClose={() => {
               setSigninOpen(false);
               setFpMode(false);

@@ -1155,8 +1155,8 @@ function ClientView() {
   useEffect(() => {
     // Mark only once Overview is showing the score. A bot tab or an import
     // in flight must not count as "figures seen" and pull the card wall.
-    if (hasFigures && activeTab === "overview") markInsightSeen();
-  }, [hasFigures, activeTab]);
+    if (hasFigures && activeTab === "overview") markInsightSeen(firmId);
+  }, [hasFigures, activeTab, firmId]);
   const startStudioTourAfterFigures = useCallback(() => {
     markOnboardingDone(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
     setFirstDataOpen(false);

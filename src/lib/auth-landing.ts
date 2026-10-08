@@ -4,8 +4,9 @@
  * Viewing Create firm stashes `?plan=&interval=` in sessionStorage. Plain
  * Sign in must ignore that leftover for Checkout. An account that already has
  * a firm or a live subscription must never be sent to Stripe Checkout from
- * this page. Create firm opens the workspace. Checkout waits until an insight
- * has been seen, including an explicit `/billing/start` resume.
+ * this page. Create firm opens the workspace and never Checkout: the new
+ * firm has not shown figures. Sign-in opens Checkout only after that firm's
+ * insight, including an explicit `/billing/start` resume.
  */
 import {
   isBillingStartPath,
@@ -36,9 +37,11 @@ export function safeAccountantRedirect(next: string | undefined): string | null 
 
 /**
  * Where this auth attempt goes.
- * Checkout opens after an insight (`insightSeen`). Before that, Create firm
- * and a stashed band open the workspace and keep the plan. An explicit
- * `/billing/start` next still opens Checkout once an insight exists.
+ * Create firm (no firm yet) always opens the workspace. A stored insight
+ * flag cannot open Checkout on that signup. Sign-in opens Checkout after
+ * this firm's insight (`insightSeen`). Before that, a stashed band opens
+ * the workspace and keeps the plan. An explicit `/billing/start` next still
+ * opens Checkout once an insight exists.
  * An account that already has a firm or a live subscription is never sent
  * to Stripe from this page.
  */
@@ -55,11 +58,9 @@ export function decideAccountantAuthLanding(input: {
 }): AccountantAuthLanding {
   const explicit = isBillingStartPath(input.next) ? pendingCheckoutFromNext(input.next) : null;
   if (input.hadFirmBefore || input.hasLiveEntitlement) return { kind: "app" };
+  // The firm created on this submit has no insight of its own.
+  if (input.flow === "signup") return { kind: "workspace" };
   const insightSeen = input.insightSeen === true;
-  if (input.flow === "signup") {
-    if (explicit && insightSeen) return { kind: "billing", pending: explicit };
-    return { kind: "workspace" };
-  }
   if (explicit && insightSeen) return { kind: "billing", pending: explicit };
   if (explicit || input.pending) return { kind: "workspace" };
   return { kind: "app" };

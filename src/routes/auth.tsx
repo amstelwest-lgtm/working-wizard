@@ -33,7 +33,7 @@ import {
 import { decideAccountantAuthLanding, safeAccountantRedirect } from "@/lib/auth-landing";
 import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
 import { readInsightSeen } from "@/lib/funnel-timing";
-import { listUserFirms } from "@/lib/firm-brand";
+import { activeFirmIdForUser, listUserFirms } from "@/lib/firm-brand";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { practiceLocationHint } from "@/lib/firm-signup-copy";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
@@ -286,7 +286,10 @@ function AuthPage() {
         hasLiveEntitlement,
         pending,
         next,
-        insightSeen: readInsightSeen(),
+        insightSeen:
+          flow === "signup" && !firmsKnown
+            ? false
+            : readInsightSeen(await activeFirmIdForUser(userId)),
       });
       if (decision.kind === "billing") {
         const path = billingStartPath(decision.pending);

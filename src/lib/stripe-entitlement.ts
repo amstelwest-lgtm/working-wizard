@@ -14,7 +14,7 @@
  * firms.starter_trial_enforced, not this status check.
  */
 
-import { isPreInsightWorkspacePath } from "@/lib/funnel-timing";
+import { isPreInsightWorkspacePath, routePathname } from "@/lib/funnel-timing";
 
 export const ENTITLING_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
 export type EntitlingSubscriptionStatus = (typeof ENTITLING_SUBSCRIPTION_STATUSES)[number];
@@ -229,10 +229,11 @@ export function decideFirmBillingPathGate(input: {
   /** Oldest firm client. Required to keep that file open once a second exists. */
   firstClientId?: string | null;
 }): FirmBillingPathDecision {
-  if (isBillingExemptPath(input.pathname)) return "allow";
-  if (isOwnerSparkPath(input.pathname)) return "allow";
-  if (isOpsPath(input.pathname)) return "allow";
-  if (!isFirmProductPath(input.pathname)) return "allow";
+  const pathname = routePathname(input.pathname);
+  if (isBillingExemptPath(pathname)) return "allow";
+  if (isOwnerSparkPath(pathname)) return "allow";
+  if (isOpsPath(pathname)) return "allow";
+  if (!isFirmProductPath(pathname)) return "allow";
   if (input.isMilonItMember) return "allow";
   if (!input.isAccountantFirmUser) return "allow";
   if (input.entitled) return "allow";
@@ -242,13 +243,16 @@ export function decideFirmBillingPathGate(input: {
   if (
     input.firmClientCount !== undefined &&
     isFirstClientFiguresPath({
-      pathname: input.pathname,
+      pathname,
       firmClientCount: input.firmClientCount,
       firstClientId: input.firstClientId,
     })
   ) {
     return "allow";
   }
-  if (input.insightSeen === false && isPreInsightWorkspacePath(input.pathname)) return "allow";
+  // Zero clients means this firm has not shown figures. null is unknown;
+  // omitted is a legacy caller. Neither is treated as zero.
+  if (input.firmClientCount === 0 && isPreInsightWorkspacePath(pathname)) return "allow";
+  if (input.insightSeen === false && isPreInsightWorkspacePath(pathname)) return "allow";
   return "require_billing";
 }
