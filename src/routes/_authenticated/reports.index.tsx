@@ -3241,6 +3241,7 @@ function SettingsPanel({
   clientSector = null,
   statementPeriod = null,
   nameExample,
+  pin = true,
 }: {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
@@ -3250,12 +3251,18 @@ function SettingsPanel({
   /** Statement span. Wins over the calendar month the studio opens on. */
   statementPeriod?: string | null;
   nameExample: string;
+  /**
+   * Standalone studio pins settings while the catalogue scrolls.
+   * The embedded tab must not: a sticky brand panel stays under the
+   * history rows and shows through them.
+   */
+  pin?: boolean;
 }) {
   const inputCls =
     "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
 
   return (
-    <div className="reports-settings space-y-5 sticky top-6">
+    <div className={`reports-settings space-y-5${pin ? " sticky top-6" : ""}`}>
       <div className="flex items-center gap-2">
         <Settings className="h-4 w-4 text-[#c9962b]" />
         <h2 className="text-sm font-semibold text-foreground">Report Settings</h2>
@@ -3737,7 +3744,7 @@ export type ReportsStudioProps = {
   onSearchCleared?: () => void;
   /** `figureSourceChipLabel` for the statement already on the file. */
   sourceChip?: string | null;
-  /** Configure-inputs block. The embedded tab keeps it in the closed drawer. */
+  /** Configure-inputs block. The embedded tab keeps it in the closed drawer with settings. */
   inputs?: ReactNode;
 };
 
@@ -4403,10 +4410,18 @@ export function ReportsStudio({
                 Generating {zipProgress.done}/{zipProgress.total} reports…
               </p>
             ) : null}
-            <ReviewInputsDrawer hint="Templates, settings, exports">
+            {clientId ? (
+              <AdvisorySentHistory
+                variant="reports"
+                clientId={clientId}
+                statementPeriodLabel={clientData?.dataPeriodLabel ?? null}
+              />
+            ) : null}
+            {reportCatalogue}
+            <ReviewInputsDrawer hint="Settings, exports">
               {inputs}
-              {reportCatalogue}
               <SettingsPanel
+                pin={false}
                 settings={settings}
                 onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
                 profile={profile}
@@ -4414,12 +4429,6 @@ export function ReportsStudio({
                 statementPeriod={clientData?.dataPeriodLabel ?? null}
                 nameExample={t("entityExample", clientData?.market ?? firmMarket)}
               />
-              {clientId ? (
-                <AdvisorySentHistory
-                  clientId={clientId}
-                  statementPeriodLabel={clientData?.dataPeriodLabel ?? null}
-                />
-              ) : null}
             </ReviewInputsDrawer>
           </section>
         ) : null}
