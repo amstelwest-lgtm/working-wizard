@@ -255,7 +255,7 @@ export function BudgetVariancePanel({
   const imported = rows.length;
   const accountantEmpty = statementPace
     ? "The strip above is the statement, prorated. Upload a month’s management accounts when that file exists."
-    : "Closed until a month’s management accounts are on file.";
+    : "Closed until a month’s management accounts are on file — until then there is nothing to compare, and that is expected.";
   const accountantLoaded = `${imported} month${imported === 1 ? "" : "s"} of management accounts on file. Open to see where the plan is off.`;
 
   return (

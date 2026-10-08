@@ -459,7 +459,10 @@ export function BudgetSimpleView({
       </section>
       </CollapsibleGoldCard>
 
-      <section className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50">
+      <section
+        id="wizard-budget-cash-timing"
+        className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50"
+      >
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
