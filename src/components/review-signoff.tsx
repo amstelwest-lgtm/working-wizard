@@ -76,7 +76,9 @@ function SignoffCertificate({
 }) {
   const { market } = useMarketFormat();
   const when = formatReviewDateTime(signoff.signed_off_at, market);
-  const initials = (signoff.signed_off_by_initials || signoff.signed_off_by_name.slice(0, 2)).toUpperCase();
+  const initials = (
+    signoff.signed_off_by_initials || signoff.signed_off_by_name.slice(0, 2)
+  ).toUpperCase();
   const title = isStale
     ? `Reviewed by ${signerLine(signoff)} on ${when} — data has changed since`
     : `Reviewed by ${signerLine(signoff)} on ${when}`;
@@ -188,7 +190,9 @@ function SignoffCertificate({
           )}
           {isStale && (
             <p className="mt-2 text-[11px] text-[#b8860b]">
-              {SCOPE_LABEL[scope]} {scope === "cash_forecast" || scope === "budget" ? "has" : "have"} changed since this review.
+              {SCOPE_LABEL[scope]}{" "}
+              {scope === "cash_forecast" || scope === "budget" ? "has" : "have"} changed since this
+              review.
             </p>
           )}
           {signoff.note && !isStale && (
@@ -202,6 +206,11 @@ function SignoffCertificate({
   );
 }
 
+/** A sign-off needs a stroke drawn in this dialog. A saved image is not a stroke. */
+export function signatureReady(signature: string | null): boolean {
+  return typeof signature === "string" && signature.startsWith("data:image/");
+}
+
 function SignaturePad({
   value,
   onChange,
@@ -211,7 +220,7 @@ function SignaturePad({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
-  const stroked = useRef(Boolean(value));
+  const stroked = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -229,11 +238,13 @@ function SignaturePad({
     ctx.strokeStyle = GOLD_DEEP;
     ctx.lineWidth = 2.2;
     ctx.clearRect(0, 0, w, h);
-    if (value) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0, w, h);
-      img.src = value;
+    if (!value) {
+      stroked.current = false;
+      return;
     }
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, w, h);
+    img.src = value;
   }, [value]);
 
   const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -257,7 +268,11 @@ function SignaturePad({
           onClick={() => {
             const canvas = canvasRef.current;
             const ctx = canvas?.getContext("2d");
-            if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (canvas && ctx) {
+              const w = canvas.clientWidth || 360;
+              const h = canvas.clientHeight || 110;
+              ctx.clearRect(0, 0, w, h);
+            }
             stroked.current = false;
             onChange(null);
           }}
@@ -297,7 +312,9 @@ function SignaturePad({
           }
         }}
       />
-      <p className="mt-1 text-[10px] text-slate-500">Draw with your mouse or finger. Saved to this deliverable only.</p>
+      <p className="mt-1 text-[10px] text-slate-500">
+        Draw with your mouse or finger. Sign stays off until there is a stroke.
+      </p>
     </div>
   );
 }
@@ -407,7 +424,8 @@ export function ReviewSignoffButton({
   const [note, setNote] = useState("");
   const [changeComment, setChangeComment] = useState("");
   const [askChanges, setAskChanges] = useState(false);
-  const [signature, setSignature] = useState<string | null>(profile.signatureDataUrl ?? null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [padEpoch, setPadEpoch] = useState(0);
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -437,7 +455,11 @@ export function ReviewSignoffButton({
 
   const shownSignoff = signoffForDisplay(signoff);
   const cycleStatus =
-    shownSignoff && !isStale ? "signed_off" : (workflow?.status === "ready_for_review" ? "ready_for_review" : "draft");
+    shownSignoff && !isStale
+      ? "signed_off"
+      : workflow?.status === "ready_for_review"
+        ? "ready_for_review"
+        : "draft";
   const canSubmit = workflow?.canSubmit ?? false;
   const canReview = workflow?.canReview ?? false;
   const canSignOff = workflow?.canSignOff ?? false;
@@ -522,7 +544,13 @@ export function ReviewSignoffButton({
   }
 
   return (
-    <div className={compact ? "flex flex-col items-end gap-2" : "mt-2 flex w-full max-w-md flex-col items-end gap-2"}>
+    <div
+      className={
+        compact
+          ? "flex flex-col items-end gap-2"
+          : "mt-2 flex w-full max-w-md flex-col items-end gap-2"
+      }
+    >
       {shownSignoff && isStale && (
         <SignoffCertificate
           signoff={shownSignoff}
@@ -539,70 +567,61 @@ export function ReviewSignoffButton({
         />
       ) : (
         <>
-      {workflow ? (
-        <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
-          {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
-          {workflow.changeComment ? ` · ${workflow.changeComment}` : ""}
-        </p>
-      ) : !shownSignoff ? (
-        <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Not signed off</p>
-      ) : null}
-      <div className="flex flex-wrap justify-end gap-2">
-        {workflow == null ||
-        (canSignOff && (cycleStatus === "draft" || cycleStatus === "ready_for_review")) ? (
-          <button
-            type="button"
-            onClick={() => {
-              setSignature(profile.signatureDataUrl ?? null);
-              setOpen(true);
-            }}
-            className={SIGNOFF_GOLD_BTN}
-          >
-            <PenLine className="h-3.5 w-3.5" />
-            {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
-          </button>
-        ) : null}
-        {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
-            disabled={saving}
-            onClick={() => {
-              const previous = workflow;
-              setWorkflow({ ...previous, status: "ready_for_review", changeComment: null });
-              setSaving(true);
-              toast.success("Sent for partner review");
-              void doSubmit({ data: { clientId, scope } })
-                .then((r) => {
-                  setWorkflow((w) =>
-                    w ? { ...w, status: r.status, changeComment: null } : w,
-                  );
-                })
-                .catch((e) => {
-                  setWorkflow(previous);
-                  toast.error(e instanceof Error ? e.message : "Submit failed");
-                })
-                .finally(() => setSaving(false));
-            }}
-          >
-            Submit for review
-          </Button>
-        ) : null}
-        {canReview && cycleStatus === "ready_for_review" ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 text-[11px] uppercase tracking-[0.12em] text-slate-400"
-            disabled={saving}
-            onClick={() => setAskChanges(true)}
-          >
-            Request changes
-          </Button>
-        ) : null}
-      </div>
+          {workflow ? (
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+              {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
+              {workflow.changeComment ? ` · ${workflow.changeComment}` : ""}
+            </p>
+          ) : !shownSignoff ? (
+            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Not signed off</p>
+          ) : null}
+          <div className="flex flex-wrap justify-end gap-2">
+            {workflow == null ||
+            (canSignOff && (cycleStatus === "draft" || cycleStatus === "ready_for_review")) ? (
+              <button type="button" onClick={() => setOpen(true)} className={SIGNOFF_GOLD_BTN}>
+                <PenLine className="h-3.5 w-3.5" />
+                {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
+              </button>
+            ) : null}
+            {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
+                disabled={saving}
+                onClick={() => {
+                  const previous = workflow;
+                  setWorkflow({ ...previous, status: "ready_for_review", changeComment: null });
+                  setSaving(true);
+                  toast.success("Sent for partner review");
+                  void doSubmit({ data: { clientId, scope } })
+                    .then((r) => {
+                      setWorkflow((w) => (w ? { ...w, status: r.status, changeComment: null } : w));
+                    })
+                    .catch((e) => {
+                      setWorkflow(previous);
+                      toast.error(e instanceof Error ? e.message : "Submit failed");
+                    })
+                    .finally(() => setSaving(false));
+                }}
+              >
+                Submit for review
+              </Button>
+            ) : null}
+            {canReview && cycleStatus === "ready_for_review" ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 text-[11px] uppercase tracking-[0.12em] text-slate-400"
+                disabled={saving}
+                onClick={() => setAskChanges(true)}
+              >
+                Request changes
+              </Button>
+            ) : null}
+          </div>
         </>
       )}
       <Dialog open={askChanges} onOpenChange={setAskChanges}>
@@ -610,7 +629,8 @@ export function ReviewSignoffButton({
           <DialogHeader>
             <DialogTitle>Request changes</DialogTitle>
             <DialogDescription className="text-slate-400">
-              Returns {SCOPE_LABEL[scope]} to draft. The business cannot see it until a partner signs off again.
+              Returns {SCOPE_LABEL[scope]} to draft. The business cannot see it until a partner
+              signs off again.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -634,13 +654,17 @@ export function ReviewSignoffButton({
                 })
                   .then((r) => {
                     setWorkflow((w) =>
-                      w ? { ...w, status: r.status, changeComment: changeComment.trim() || null } : w,
+                      w
+                        ? { ...w, status: r.status, changeComment: changeComment.trim() || null }
+                        : w,
                     );
                     setAskChanges(false);
                     setChangeComment("");
                     toast.success("Returned to draft");
                   })
-                  .catch((e) => toast.error(e instanceof Error ? e.message : "Could not request changes"))
+                  .catch((e) =>
+                    toast.error(e instanceof Error ? e.message : "Could not request changes"),
+                  )
                   .finally(() => setSaving(false));
               }}
             >
@@ -654,7 +678,12 @@ export function ReviewSignoffButton({
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          if (next) setSignature(profile.signatureDataUrl ?? null);
+          if (next) {
+            setSignature(null);
+            setPadEpoch((n) => n + 1);
+          } else {
+            setSignature(null);
+          }
         }}
       >
         <DialogContent className="border-[#d4a550]/30 bg-[#0d1117] text-slate-100 sm:max-w-lg">
@@ -662,11 +691,11 @@ export function ReviewSignoffButton({
             <DialogTitle className="text-[#e1b85e]">Sign off {SCOPE_LABEL[scope]}</DialogTitle>
             <DialogDescription className="text-slate-400">
               You are formally endorsing {SCOPE_LABEL[scope]}
-              {clientName ? ` for ${clientName}` : ""}. Your name, date and signature are logged
-              on this deliverable only — not across the whole profile.
+              {clientName ? ` for ${clientName}` : ""}. Your name, date and signature are logged on
+              this deliverable only — not across the whole profile.
             </DialogDescription>
           </DialogHeader>
-          <SignaturePad value={signature} onChange={setSignature} />
+          <SignaturePad key={padEpoch} value={signature} onChange={setSignature} />
           <div className="space-y-2">
             <Label htmlFor={`signoff-note-${scope}`} className="text-xs text-slate-300">
               Add a note (optional)
@@ -685,8 +714,17 @@ export function ReviewSignoffButton({
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <button type="button" onClick={handleSignoff} disabled={saving} className={SIGNOFF_GOLD_BTN}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            <button
+              type="button"
+              onClick={handleSignoff}
+              disabled={saving || !signatureReady(signature)}
+              className={`${SIGNOFF_GOLD_BTN} disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
               Sign off
             </button>
           </DialogFooter>

@@ -35,6 +35,7 @@ import { useMarket } from "@/contexts/market";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
+import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
@@ -85,6 +86,11 @@ type Props = {
     firm_name: string | null;
     signed_off_at: string;
   } | null;
+  /**
+   * Accountant tab head. When set, that head is the only gold sign-off
+   * button and this panel keeps comments, changes, and reject.
+   */
+  onSignoffAction?: (action: AdvisorySignoffAction | null) => void;
   /** Live Overview figures. A stored pack that disagrees shows a regenerate note. */
   currentFigures?: {
     runwayLabel: string | null;
@@ -141,6 +147,7 @@ export function AdvisoryPackPanel({
   className,
   currentFigures = null,
   signoff = null,
+  onSignoffAction,
 }: Props) {
   const track = useTrack();
   const { user } = useAuth();
@@ -170,6 +177,7 @@ export function AdvisoryPackPanel({
   const [exportingPdf, setExportingPdf] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
+  const approveRef = useRef<() => void>(() => {});
 
   const signOffGate = useMemo(
     () =>
@@ -216,6 +224,11 @@ export function AdvisoryPackPanel({
     void load();
     // refreshKey is intentionally a dependency: hosts bump it after writes.
   }, [clientId, refreshKey, load]);
+
+  useEffect(() => {
+    setPack(null);
+    setLoaded(false);
+  }, [clientId]);
 
   // Owner opening an approved pack = delivery (recorded once per pack per mount).
   // A stale sign-off is not delivery — the figures no longer match Overview.
@@ -467,9 +480,6 @@ export function AdvisoryPackPanel({
       "Comment added",
     );
 
-  if (!clientId || !loaded || !migrated) return null;
-  if (!pack && audience === "owner" && !canGenerate) return null;
-
   const identityFor = (actorId: string | null | undefined): RecordedActor | null => {
     if (!actorId) return null;
     const recorded = actors[actorId];
@@ -506,7 +516,63 @@ export function AdvisoryPackPanel({
     firmName: signerIdentity?.firmName ?? signoff?.firm_name,
     market,
   });
+  const advisoryState = useMemo(
+    () =>
+      resolveAdvisorySignoffState({
+        version: pack?.version ?? null,
+        packStatus: pack?.status ?? null,
+        figuresChanged: signOffGate.figuresChanged,
+        signedBy: signerIdentity?.name ?? null,
+        firmName: signerIdentity?.firmName ?? null,
+        signedAt: pack?.reviewed_at ?? null,
+        reviewedByKind: pack?.reviewed_by_kind ?? null,
+        zone: market.timezone,
+      }),
+    [
+      pack?.version,
+      pack?.status,
+      pack?.reviewed_at,
+      pack?.reviewed_by_kind,
+      signOffGate.figuresChanged,
+      signerIdentity?.name,
+      signerIdentity?.firmName,
+      market.timezone,
+    ],
+  );
+  approveRef.current = () => {
+    void decide("approve");
+  };
 
+  useEffect(() => {
+    if (!onSignoffAction) return;
+    if (!loaded || !clientId || (pack && pack.client_id !== clientId)) {
+      onSignoffAction(null);
+      return;
+    }
+    onSignoffAction({
+      state: advisoryState,
+      line: headerSignoffLine,
+      canSignOff,
+      blocked: signOffBlocked,
+      busy: busy === "approve",
+      signOff: () => approveRef.current(),
+    });
+  }, [
+    onSignoffAction,
+    loaded,
+    clientId,
+    pack?.client_id,
+    advisoryState,
+    headerSignoffLine,
+    canSignOff,
+    signOffBlocked,
+    busy,
+  ]);
+
+  if (!clientId || !loaded || !migrated) return null;
+  if (!pack && audience === "owner" && !canGenerate) return null;
+
+  const headerOwnsSignOff = audience === "accountant" && Boolean(onSignoffAction);
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
     className,
@@ -520,6 +586,7 @@ export function AdvisoryPackPanel({
       id="advisory-pack"
       data-audience={audience}
       data-status={shownStatus ?? "none"}
+      data-advisory-signoff={advisoryState.status}
       data-signoff-blocked={signOffBlocked ? "true" : "false"}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -798,25 +865,27 @@ export function AdvisoryPackPanel({
             </button>
             {canSignOff ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (signOffBlocked) return;
-                    void decide("approve");
-                  }}
-                  disabled={busy !== null || signOffBlocked}
-                  title={signOffBlocked ? ADVISORY_PACK_STALE_NOTE : undefined}
-                  className={GOLD_BTN}
-                  data-approve
-                  data-signoff-blocked={signOffBlocked ? "true" : "false"}
-                >
-                  {busy === "approve" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                  {hasFirm ? "Sign off pack" : "Accept pack"}
-                </button>
+                {headerOwnsSignOff ? null : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (signOffBlocked) return;
+                      void decide("approve");
+                    }}
+                    disabled={busy !== null || signOffBlocked}
+                    title={signOffBlocked ? ADVISORY_PACK_STALE_NOTE : undefined}
+                    className={GOLD_BTN}
+                    data-approve
+                    data-signoff-blocked={signOffBlocked ? "true" : "false"}
+                  >
+                    {busy === "approve" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" aria-hidden />
+                    )}
+                    {hasFirm ? "Sign off pack" : "Accept pack"}
+                  </button>
+                )}
                 {canOtherDecisions && audience === "accountant" ? (
                   <>
                     <button
