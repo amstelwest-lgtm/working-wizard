@@ -9,6 +9,8 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
 import { packSectionsForPdf, type AdvisoryPack, type PackStatus } from "@/lib/advisory-pack";
 import { packStatusLabel } from "@/lib/advisory-pack";
+import { resolveAdvisorySignoffState } from "@/lib/advisory-signoff";
+import { SIGNOFF_STATUS_DRAFT, SIGNOFF_STATUS_READY } from "@/lib/signoff-status";
 import { isSamplePracticeSignoff, packDisplayedSignoffLine } from "@/lib/review-signoff-stamp";
 
 /** Same shape as the report footer stamp. Kept local so this module does not import react-pdf. */
@@ -209,12 +211,24 @@ export async function downloadAdvisoryPackPdf(input: {
         })
       : null;
 
+  const advisoryState = resolveAdvisorySignoffState({
+    version: input.pack.version,
+    packStatus: input.pack.status,
+    figuresChanged: input.figuresChanged === true,
+    signedBy: stamp?.signedOffByName ?? null,
+    firmName: stamp?.firmName ?? null,
+    signedAt: stamp?.signedOffAt ?? null,
+    reviewedByKind: input.pack.reviewed_by_kind,
+  });
+  const unsignedReady = !stamp && advisoryState.status === "in_review";
   const blob = await pdf(
     AdvisoryPackPDF({
       smeData: { name: pdfSafeText(clientName), period: advisoryPackPdfPeriodLine(input.pack) },
       accountantProfile: input.profile,
       sections,
-      draftDisclosure: stamp ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,
+      draftDisclosure: stamp || unsignedReady ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,
+      draftLabel: stamp ? null : unsignedReady ? SIGNOFF_STATUS_READY : SIGNOFF_STATUS_DRAFT,
+      draftMark: stamp ? null : unsignedReady ? "READY FOR REVIEW" : "DRAFT",
       staleNotice,
       reviewSignoff: stamp,
       sample: input.sample,

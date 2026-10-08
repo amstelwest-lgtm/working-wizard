@@ -95,7 +95,7 @@ export function BudgetSimpleView({
   actuals,
   onChangeModel,
   role = "owner",
-  reviewStatus = "Not signed off",
+  reviewStatus = "",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;

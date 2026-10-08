@@ -208,6 +208,7 @@ export function BenchmarkReportPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
+      draft={!isDemo && !sample && !reviewSignoff}
       reviewSignoff={reviewSignoff}
       market={market ?? ZA_MARKET}
     >

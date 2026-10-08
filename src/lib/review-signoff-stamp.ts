@@ -9,6 +9,7 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { formatReviewDateTime } from "@/lib/market";
 import type { ResolvedMarket } from "@/lib/market";
+import { signoffStatusLine } from "@/lib/signoff-status";
 
 export type SignoffStampContext = {
   /** Firm row name for this client. A stamp that names a different firm is dropped. */
@@ -134,25 +135,26 @@ function firmMatchesClient(stampFirm: string | null, clientFirmName: string | nu
 }
 
 /**
- * Page-1 sign-off line. Name and firm from the stamp; the clock is the shared
- * zoned formatter (no seconds, no leading zero on the hour).
- * Example: "Reviewed & signed off · James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT"
+ * Page-1 status line. Same words as the tab: a signed-by line, or the
+ * figures-changed line when the stamp is still on file but the figures moved.
  */
 export function pdfSignoffBadgeLine(
   stamp: {
     signedOffByName: string;
     firmName?: string | null;
     signedOffAt: string;
+    figuresChanged?: boolean;
   },
   market?: Pick<ResolvedMarket, "locale" | "timezone">,
 ): string {
   const name = stamp.signedOffByName.trim();
+  if (stamp.figuresChanged) return signoffStatusLine({ kind: "stale", name });
   const when = formatReviewDateTime(stamp.signedOffAt, market);
-  const parts = ["Reviewed & signed off", name];
-  const firm = stamp.firmName?.trim();
-  if (firm) parts.push(firm);
-  if (when && when !== "—") parts.push(when);
-  return parts.join(" · ");
+  return signoffStatusLine({
+    kind: "signed",
+    name,
+    date: when && when !== "—" ? when : null,
+  });
 }
 
 /**
@@ -184,7 +186,7 @@ export function stampFromSignoff(
   isStale: boolean,
   context?: SignoffStampContext,
 ): ReportSignoffStamp | null {
-  if (!signoff || isStale) return null;
+  if (!signoff) return null;
   if (
     isSamplePracticeSignoff({
       name: signoff.signed_off_by_name,
@@ -201,5 +203,6 @@ export function stampFromSignoff(
     firmName: signoff.firm_name,
     signedOffAt: signoff.signed_off_at,
     signatureData: signoff.signature_data ?? null,
+    figuresChanged: isStale,
   };
 }

@@ -543,13 +543,6 @@ export function BudgetPanel({
         onChangeModel={beginModelChange}
         role={role}
         clientId={clientId}
-        reviewStatus={
-          !budgetSignoff
-            ? "Not signed off"
-            : computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)
-              ? "Sign-off stale"
-              : "Signed off"
-        }
       />
 
       <div className="mt-6 space-y-4">

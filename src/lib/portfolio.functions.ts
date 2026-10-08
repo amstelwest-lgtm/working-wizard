@@ -262,10 +262,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
             : null,
         packVersion: pack?.version ?? null,
         packEditRate: pack?.edit_rate ?? null,
-        packFiguresStale:
-          pack != null &&
-          (pack.status === "in_review" || pack.status === "changes_requested") &&
-          packFiguresAreStale(c, pack.content),
+        packFiguresStale: pack != null && packFiguresAreStale(c, pack.content),
         outcomesMissed: missed.get(c.id) ?? 0,
         outcomesMeasured: measured.get(c.id) ?? 0,
         lastLoginAt: c.last_login_at,
