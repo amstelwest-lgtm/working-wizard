@@ -19,6 +19,7 @@ import { formatSnapshotRatio, groundAdvisoryNarrative } from "@/lib/advisory-nar
 import { ratiosStatementFigures } from "@/lib/deliverable-input-config";
 import type { Json } from "@/integrations/supabase/types";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import { forecastLowestPoint } from "@/lib/cash-forecast-parity";
 import {
   type HealthPillarId,
   type OverallHealth,
@@ -516,6 +517,8 @@ export type LivePackMetrics = {
   cashRunwayWeeks: number | null;
   openingBalance: number | null;
   closings: number[] | null;
+  /** Canonical floor from the resolved weekly outflows. */
+  floor: number | null;
   runwayLabel: string | null;
 };
 
@@ -567,6 +570,7 @@ export function livePackMetrics(input: {
     cashRunwayWeeks: runwayWeeks,
     openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
     closings: assessed.outlook.closing,
+    floor: assessed.outlook.floor,
     runwayLabel,
   };
 }
@@ -617,6 +621,11 @@ export type PackInputs = {
   openingBalance: number | null;
   /** Weekly closing balances from the saved 13-week forecast; null = no forecast. */
   closings: number[] | null;
+  /**
+   * Canonical minimum-cash floor (`forecastMinimumCash`). Omitted callers
+   * keep the R50,000 fallback, which is only for a forecast with no outflows.
+   */
+  floor?: number | null;
   cashRunwayWeeks: number | null;
   /** Same label Overview prints. Weeks are null when the business is cash generative. */
   runwayLabel?: string | null;
@@ -670,21 +679,20 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   let forecast: PackForecastBlock | null = null;
+  const comfortFloor =
+    typeof input.floor === "number" && input.floor > 0 ? input.floor : CASH_RUNWAY_THRESHOLD_RAND;
   if (input.closings && input.closings.length > 0) {
-    let lowest = Number.POSITIVE_INFINITY;
-    let lowestWeek = 0;
-    input.closings.forEach((c, i) => {
-      if (c < lowest) {
-        lowest = c;
-        lowestWeek = i + 1;
-      }
-    });
+    const opening =
+      typeof input.openingBalance === "number" && Number.isFinite(input.openingBalance)
+        ? input.openingBalance
+        : Number.POSITIVE_INFINITY;
+    const lowestPoint = forecastLowestPoint(opening, input.closings);
     forecast = {
       openingBalance: input.openingBalance,
-      lowestClosing: lowest,
-      lowestWeek,
-      breachesZero: lowest < 0,
-      breachesThreshold: lowest < CASH_RUNWAY_THRESHOLD_RAND,
+      lowestClosing: lowestPoint.amount,
+      lowestWeek: lowestPoint.week,
+      breachesZero: lowestPoint.amount < 0,
+      breachesThreshold: lowestPoint.amount < comfortFloor,
       runwayWeeks: input.cashRunwayWeeks,
       horizonWeeks: input.closings.length,
     };
@@ -760,12 +768,12 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
           ? `The 13-week cash forecast stays positive but dips to ${fmtMoney(
               forecast.lowestClosing ?? 0,
               cur,
-            )} in week ${forecast.lowestWeek}, under the ${fmtMoney(CASH_RUNWAY_THRESHOLD_RAND, cur)} comfort line.`
+            )} ${forecast.lowestWeek === 0 ? "at the opening" : `in week ${forecast.lowestWeek}`}, under the ${fmtMoney(comfortFloor, cur)} comfort line.`
           : `The 13-week cash forecast stays above the ${fmtMoney(
-              CASH_RUNWAY_THRESHOLD_RAND,
+              comfortFloor,
               cur,
-            )} comfort line throughout (lowest ${fmtMoney(forecast.lowestClosing ?? 0, cur)} in week ${
-              forecast.lowestWeek
+            )} comfort line throughout (lowest ${fmtMoney(forecast.lowestClosing ?? 0, cur)} ${
+              forecast.lowestWeek === 0 ? "at the opening" : `in week ${forecast.lowestWeek}`
             }).`,
     );
   }
@@ -804,7 +812,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   }
   if (forecast?.breachesZero) {
     mattersBullets.push(
-      `Cash runs out in week ${forecast.lowestWeek} on current assumptions. Every recommendation below is judged first on whether it moves that week.`,
+      `Cash runs out ${forecast.lowestWeek === 0 ? "at the opening" : `in week ${forecast.lowestWeek}`} on current assumptions. Every recommendation below is judged first on whether it moves that week.`,
     );
   } else if (forecast?.breachesThreshold) {
     mattersBullets.push(
@@ -973,7 +981,11 @@ function buildHeadline(
     parts.push(`${name} has no health score yet`);
   }
   if (forecast?.breachesZero) {
-    parts.push(`cash goes negative in week ${forecast.lowestWeek}`);
+    parts.push(
+      forecast.lowestWeek === 0
+        ? "cash opens below zero"
+        : `cash goes negative in week ${forecast.lowestWeek}`,
+    );
   } else if (weak[0]) {
     parts.push(`${weak[0].name} at ${weak[0].formatted} is the number to move`);
   }

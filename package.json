@@ -87,6 +87,7 @@
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
     "test:owner-tour": "vite-node --config scripts/vite-test.config.ts scripts/owner-tour-sale-test.mts",
     "test:cash-forecast-detail": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-detail-test.mts",
+    "test:cash-forecast-parity": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-parity-test.mts",
     "test:deliverable-input-config": "vite-node --config scripts/vite-test.config.ts scripts/deliverable-input-config-test.mts",
     "test:edge-no-smoke-stubs": "vite-node --config scripts/vite-test.config.ts scripts/edge-no-smoke-stubs-test.mts",
     "test:edge-deno-imports": "vite-node --config scripts/vite-test.config.ts scripts/edge-deno-imports-test.mts",

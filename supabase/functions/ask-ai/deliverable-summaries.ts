@@ -5,6 +5,7 @@
  */
 
 import {
+  baseCashflow,
   rollForwardForecast,
   resolveThirteenWeekForecast,
   type ClientRunway,
@@ -341,7 +342,10 @@ export type SavedCashflow = {
 
 export function closingBalancesFromCashflow(cf: SavedCashflow | null | undefined): number[] | null {
   if (!cf) return null;
-  return rollForwardForecast(cf as unknown as Record<string, unknown>, HORIZON)?.closing ?? null;
+  return (
+    rollForwardForecast(baseCashflow(cf as unknown as Record<string, unknown>), HORIZON)?.closing ??
+    null
+  );
 }
 
 export function summarizeCashForecast(

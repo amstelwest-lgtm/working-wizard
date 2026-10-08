@@ -41,6 +41,41 @@ export const RUNWAY_INSUFFICIENT_LABEL = "Not enough data";
 export const RUNWAY_PROFITABLE_LABEL =
   "Profitable on the P&L — add a cash-flow statement or bank balance to estimate runway";
 
+/**
+ * Scenario knobs (collection delay, growth, capex, headcount) are an overlay.
+ * Overview, Health, the PDF, and the Bot read the base forecast. The cash tab
+ * keeps the knobs in memory until the accountant resets them.
+ */
+export function baseCashflow<T extends Record<string, unknown>>(cf: T): T {
+  return {
+    ...cf,
+    collectDelay: 0,
+    revAdj: 100,
+    expAdj: 100,
+    headcountDelta: 0,
+    avgSalary: 0,
+    fixedCostDelta: 0,
+    revGrowthPct: 0,
+    capexAmount: 0,
+    capexWeek: 1,
+  };
+}
+
+/**
+ * A ledger opening (Xero / QuickBooks) is cash evidence. A bank draft that
+ * was never published is not. Budget lines that only stamped
+ * `seededFromBanksAt` are handled separately by `cashflowIsRealBankSeed`.
+ */
+export function ledgerOpeningIsCashEvidence(
+  cf: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!cf) return false;
+  const opening = cf.openingBalanceSource;
+  if (opening === "xero" || opening === "qbo") return true;
+  const lines = cf.forecastLinesSource;
+  return lines === "xero-bank-summary" || lines === "qbo-bank-activity";
+}
+
 export type ClientRunway = {
   /** Null when unknown or cash-generative. Do not score those as 0 weeks. */
   weeks: number | null;
@@ -248,14 +283,13 @@ export function assessClientMetrics(input: {
     periodExpenses: periodOperatingOutflows(fin),
     periodMonths: fin ? periodMonthsOf(fin) : null,
     operatingCashflow: finiteNum(fin?.operatingCashflow),
-    hasBankCashflow: Boolean(seededAt),
+    hasBankCashflow: Boolean(seededAt) || ledgerOpeningIsCashEvidence(cf),
   });
-  // The stored cashflow, including a collection delay that is actually on,
-  // is the series. Zeroing those knobs made Overview say cash generative
-  // while the forecast on file nets cash out.
+  // Published figures ignore scenario knobs. A collection delay saved on the
+  // row is an overlay, not the base forecast Overview and the PDF share.
   const outlook = resolveThirteenWeekForecast({
     financials: input.financials,
-    cashflow: input.cashflow,
+    cashflow: cf ? baseCashflow(cf) : input.cashflow,
     openingCash: cash.amount,
     runway,
     now: input.now,
@@ -1117,7 +1151,8 @@ export function resolveThirteenWeekForecast(input: {
   const anchor = forecastAnchorDate({ now: input.now, periodEnd, timeZone: input.timeZone });
   const opening = finiteNum(input.openingCash) ?? finiteNum(fin?.cash) ?? 0;
   const runway = input.runway ?? { weeks: null, kind: "unknown" as const, label: "—" };
-  const cf = asRecord(input.cashflow);
+  const storedCf = asRecord(input.cashflow);
+  const cf = storedCf ? baseCashflow(storedCf) : null;
 
   const months = fin ? periodMonthsOf(fin) : 12;
   const operating = fin ? periodOperatingOutflows(fin) : null;
@@ -1134,9 +1169,9 @@ export function resolveThirteenWeekForecast(input: {
     const creditorDays = ratios["Creditor Days"];
     const debtorDays = ratios["Debtor Days"];
     if (Number.isFinite(creditorDays) && creditorDays > 90) {
-      cycleNote = `Creditor days are ${Math.round(creditorDays)}. Weekly payments follow the scaled monthly run-rate, not a payoff of the payable balance inside 13 weeks.`;
+      cycleNote = `Creditor days are ${Math.round(creditorDays)} on Ratios. That figure is not applied to this forecast — weekly payments follow the scaled monthly run-rate, and collection delay in weeks is what shifts receipts.`;
     } else if (Number.isFinite(debtorDays) && debtorDays > 0) {
-      cycleNote = `Debtor days are ${Math.round(debtorDays)}. Collections use the same monthly revenue run-rate.`;
+      cycleNote = `Debtor days are ${Math.round(debtorDays)} on Ratios. That figure is not applied to this forecast. Collections follow the monthly revenue run-rate unless a collection delay in weeks is set.`;
     }
   }
 

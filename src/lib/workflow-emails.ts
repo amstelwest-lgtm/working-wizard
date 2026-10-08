@@ -48,7 +48,13 @@ export type WorkflowFacts = {
     deliveredAt: string | null;
   } | null;
   /** Saved forecast: weekly closings + when it was published. */
-  forecast: { lastForecastAt: string; closings: number[] } | null;
+  forecast: {
+    lastForecastAt: string;
+    closings: number[];
+    opening?: number | null;
+    /** Canonical floor. Absent callers keep the R50,000 fallback. */
+    floor?: number | null;
+  } | null;
   /** Most recent cycle.restarted advisory event, if any. */
   lastRestart: { eventId: number | string; at: string } | null;
   /** P3: marketplace requests for this client (any status, newest first). */
@@ -101,6 +107,11 @@ export function planWorkflowEmails(f: WorkflowFacts): WorkflowEmailIntent[] {
   if (f.forecast && f.forecast.closings.length > 0) {
     let lowest = Number.POSITIVE_INFINITY;
     let week = 0;
+    const opening = f.forecast.opening;
+    if (typeof opening === "number" && Number.isFinite(opening)) {
+      lowest = opening;
+      week = 0;
+    }
     f.forecast.closings.forEach((c, i) => {
       if (c < lowest) {
         lowest = c;
@@ -108,7 +119,11 @@ export function planWorkflowEmails(f: WorkflowFacts): WorkflowEmailIntent[] {
       }
     });
     if (lowest < 0) {
-      const data = { lowest, week, horizon: f.forecast.closings.length };
+      const floor =
+        typeof f.forecast.floor === "number" && f.forecast.floor > 0
+          ? f.forecast.floor
+          : CASH_RUNWAY_THRESHOLD_RAND;
+      const data = { lowest, week, horizon: f.forecast.closings.length, floor };
       out.push({
         kind: "forecast_break",
         refKey: f.forecast.lastForecastAt,
@@ -302,13 +317,18 @@ export function renderWorkflowEmail(input: RenderInput): RenderedEmail {
     case "forecast_break": {
       const lowest = Number(intent.data.lowest);
       const week = Number(intent.data.week);
+      const floor =
+        typeof intent.data.floor === "number" && intent.data.floor > 0
+          ? intent.data.floor
+          : CASH_RUNWAY_THRESHOLD_RAND;
+      const where = week === 0 ? "at the opening" : `in week ${week}`;
       subject =
         intent.audience === "accountant"
-          ? `${clientName}: cash forecast goes negative in week ${week}`
-          : `${clientName}: your cash forecast goes negative in week ${week}`;
+          ? `${clientName}: cash forecast goes negative ${where}`
+          : `${clientName}: your cash forecast goes negative ${where}`;
       lines = [
-        `On the saved assumptions, the 13-week cash forecast reaches ${fmtMoney(lowest)} in week ${week} — below zero, and well under the ${fmtMoney(
-          CASH_RUNWAY_THRESHOLD_RAND,
+        `On the saved assumptions, the 13-week cash forecast reaches ${fmtMoney(lowest)} ${where} — below zero, and well under the ${fmtMoney(
+          floor,
         )} comfort line.`,
         intent.audience === "accountant"
           ? "The owner has been told too. The recommendations MILŌN proposes are judged first on whether they move that week."

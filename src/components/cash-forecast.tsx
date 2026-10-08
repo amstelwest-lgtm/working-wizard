@@ -83,16 +83,21 @@ import {
   forecastScenarioLabel,
   runwayFromForecastNet,
   periodOperatingOutflows,
+  ledgerOpeningIsCashEvidence,
   persistedRunwayWeeks,
   plBankDisagreement,
   runwayDisplayLabel,
-  RUNWAY_INSUFFICIENT_LABEL,
-  RUNWAY_PROFITABLE_LABEL,
   resolveClientCash,
   resolveThirteenWeekForecast,
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
+import {
+  forecastLowestPoint,
+  forecastPositionPhrase,
+  forecastRunwayHeadlineShared,
+  openingSourceLabel,
+} from "@/lib/cash-forecast-parity";
 import {
   hashFigures,
   latestSnapshotId,
@@ -451,6 +456,10 @@ export function CashForecastPanel({
   const cur = currencySymbol(market);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [openingSourceChip, setOpeningSourceChip] = useState<string | null>(null);
+  const [publishedBankEvidence, setPublishedBankEvidence] = useState(false);
+  const [resetNonce, setResetNonce] = useState(0);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
   );
@@ -494,6 +503,19 @@ export function CashForecastPanel({
   // otherwise merely opening the forecast bumps last_forecast_at and falsely
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
+  const loadedCashflowRef = useRef<Record<string, unknown> | null>(null);
+  const loadedKnobsRef = useRef({
+    collectDelay: 0,
+    revAdj: 100,
+    expAdj: 100,
+    headcountDelta: 0,
+    avgSalary: 0 as string | number,
+    fixedCostDelta: 0 as string | number,
+    revGrowthPct: 0,
+    capexAmount: 0 as string | number,
+    capexWeek: 1,
+  });
+  const baseResetRef = useRef(false);
   const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(null);
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(null);
   const xeroBankNoteRef = useRef<string | null>(null);
@@ -693,6 +715,27 @@ export function CashForecastPanel({
           : null;
       xeroBankNoteRef.current = bankNote;
       setXeroBankNote(bankNote);
+      loadedCashflowRef.current = cf ? { ...(cf as Record<string, unknown>) } : null;
+      loadedKnobsRef.current = {
+        collectDelay: cf?.collectDelay ?? 0,
+        revAdj: cf?.revAdj ?? 100,
+        expAdj: cf?.expAdj ?? 100,
+        headcountDelta: cf?.headcountDelta ?? 0,
+        avgSalary: cf?.avgSalary ?? 0,
+        fixedCostDelta: cf?.fixedCostDelta ?? 0,
+        revGrowthPct: cf?.revGrowthPct ?? 0,
+        capexAmount: cf?.capexAmount ?? 0,
+        capexWeek: cf?.capexWeek ?? 1,
+      };
+      setOpeningSourceChip(openingSourceLabel(cf as Record<string, unknown> | null));
+      const lineNames = [...(cf?.revenue ?? []), ...(cf?.expenses ?? []), ...(cf?.other ?? [])].map(
+        (line) => String(line?.name ?? ""),
+      );
+      const budgetNamed = lineNames.some((name) => /\(from budget\)/i.test(name));
+      setPublishedBankEvidence(
+        (Boolean(bankAt) && !budgetNamed) ||
+          ledgerOpeningIsCashEvidence(cf as Record<string, unknown> | null),
+      );
       if (seededOpening && cf && clientId) {
         const corrected = runwayFromOpening(seededOpening, finRecord, {
           hasBankCashflow: Boolean(bankAt),
@@ -838,21 +881,27 @@ export function CashForecastPanel({
       const linesUntouched =
         markers.linesSource != null &&
         JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
+      const knobs = baseResetRef.current
+        ? {
+            collectDelay: 0,
+            revAdj: 100,
+            expAdj: 100,
+            headcountDelta: 0,
+            avgSalary: 0,
+            fixedCostDelta: 0,
+            revGrowthPct: 0,
+            capexAmount: 0,
+            capexWeek: 1,
+          }
+        : loadedKnobsRef.current;
       const payload = {
+        ...(loadedCashflowRef.current ?? {}),
         startDate,
         openingBalance,
         revenue,
         expenses,
         other,
-        revAdj,
-        expAdj,
-        collectDelay,
-        headcountDelta,
-        avgSalary,
-        fixedCostDelta,
-        revGrowthPct,
-        capexAmount,
-        capexWeek,
+        ...knobs,
         ...(markers.openingSource && openingBalance === markers.openingBalance
           ? { openingBalanceSource: markers.openingSource }
           : {}),
@@ -884,7 +933,24 @@ export function CashForecastPanel({
         })
         .eq("id", clientId);
       if (error) toast.error(`Cash forecast save failed: ${error.message}`);
-      else setLastForecastAt(forecastUpdatedAt);
+      else {
+        setLastForecastAt(forecastUpdatedAt);
+        loadedCashflowRef.current = payload;
+        if (baseResetRef.current) {
+          loadedKnobsRef.current = {
+            collectDelay: 0,
+            revAdj: 100,
+            expAdj: 100,
+            headcountDelta: 0,
+            avgSalary: 0,
+            fixedCostDelta: 0,
+            revGrowthPct: 0,
+            capexAmount: 0,
+            capexWeek: 1,
+          };
+          baseResetRef.current = false;
+        }
+      }
     }, 800);
     return () => clearTimeout(t);
   }, [
@@ -895,15 +961,7 @@ export function CashForecastPanel({
     revenue,
     expenses,
     other,
-    revAdj,
-    expAdj,
-    collectDelay,
-    headcountDelta,
-    avgSalary,
-    fixedCostDelta,
-    revGrowthPct,
-    capexAmount,
-    capexWeek,
+    resetNonce,
     inputFinancials,
     inputHasBankDraft,
     market.timezone,
@@ -1081,20 +1139,21 @@ export function CashForecastPanel({
     setList(c);
   };
 
-  const lowestBal = Math.min(...calc.closing);
-  const lowestWeek = calc.closing.indexOf(lowestBal) + 1;
+  const publishedLowest = forecastLowestPoint(baseCalc.opening, baseCalc.closing);
+  const lowestBal = publishedLowest.amount;
+  const lowestWeek = publishedLowest.week;
   const closingW13 = calc.closing[WEEKS - 1];
   const trajectory = closingW13 - calc.opening;
   const screenRunway = useMemo(
     () =>
       runwayFromOpening(openingBalance, inputFinancials, {
-        hasBankCashflow: inputHasBankDraft,
+        hasBankCashflow: publishedBankEvidence,
       }),
-    [openingBalance, inputFinancials, inputHasBankDraft],
+    [openingBalance, inputFinancials, publishedBankEvidence],
   );
   const minimumCash = useMemo(
-    () => forecastMinimumCash({ weeklyOutflows: calc.outflow }),
-    [calc.outflow],
+    () => forecastMinimumCash({ weeklyOutflows: baseCalc.outflow }),
+    [baseCalc.outflow],
   );
   const scenarioActive =
     revAdj !== 100 ||
@@ -1113,44 +1172,56 @@ export function CashForecastPanel({
   }));
 
   /**
-   * Professional PDF export — renders the branded react-pdf CashForecastPDF
-   * report (same one used on the accountant side) from the active scenario's
-   * computed figures and downloads it.
+   * Professional PDF export — the base forecast, same series as Overview.
+   * A scenario open on screen is labelled there and is not written into the PDF.
    */
   const exportPDF = async () => {
     setExporting(true);
+    setExportError(null);
     try {
-      const [{ pdf }, { CashForecastPDF }] = await Promise.all([
-        import("@react-pdf/renderer"),
-        import("@/reports/cash-forecast"),
-      ]);
+      const loadPdf = () =>
+        Promise.all([import("@react-pdf/renderer"), import("@/reports/cash-forecast")]);
+      let pdfModules: Awaited<ReturnType<typeof loadPdf>>;
+      try {
+        pdfModules = await loadPdf();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!/Failed to fetch dynamically imported module/i.test(message)) throw err;
+        pdfModules = await loadPdf();
+      }
+      const [{ pdf }, { CashForecastPDF }] = pdfModules;
 
       const derivedRunway = screenRunway.weeks ?? 0;
       const forecastWeeks = weeks.map((_, i) => ({
         period_label: `Week ${i + 1}`,
-        opening_balance: Math.round(i === 0 ? calc.opening : calc.closing[i - 1]),
-        total_receipts: Math.round(calc.inflow[i]),
-        total_payments: Math.round(calc.outflow[i]),
-        net_movement: Math.round(calc.net[i]),
-        closing_balance: Math.round(calc.closing[i]),
+        opening_balance: Math.round(i === 0 ? baseCalc.opening : baseCalc.closing[i - 1]),
+        total_receipts: Math.round(baseCalc.inflow[i]),
+        total_payments: Math.round(baseCalc.outflow[i]),
+        net_movement: Math.round(baseCalc.net[i]),
+        closing_balance: Math.round(baseCalc.closing[i]),
         scenario: "moderate" as const,
         runway_weeks: Math.max(0, derivedRunway - i),
       }));
 
+      const baseInflow = baseCalc.inflow.reduce((sum, n) => sum + n, 0);
+      const baseOutflow = baseCalc.outflow.reduce((sum, n) => sum + n, 0);
+      const publishedDirection = runwayFromForecastNet({
+        base: screenRunway,
+        opening: baseCalc.opening,
+        totalInflow: baseInflow,
+        totalOutflow: baseOutflow,
+      });
+      const publishedGenerative =
+        publishedDirection.kind === "cash_generative" &&
+        forecastIsCashGenerative(baseInflow, baseOutflow);
+
       const assumptions = [
-        `Forecast starts ${startLabel} with an opening bank balance of ${fmtR(calc.opening)}.`,
-        `Revenue assumed at ${revAdj}% of entered amounts${revGrowthPct !== 0 ? `, growing ${revGrowthPct > 0 ? "+" : ""}${revGrowthPct}% per week (compounding)` : ""}.`,
-        `Expenses assumed at ${expAdj}% of entered amounts.`,
-        collectDelay > 0
-          ? `Customer collections are delayed by ${collectDelay} week${collectDelay === 1 ? "" : "s"}.`
-          : "Customer collections land in the week they are invoiced.",
-        ...(headcountDelta !== 0
-          ? [
-              `Headcount change of ${headcountDelta > 0 ? "+" : ""}${headcountDelta} at ${fmtR(parseFloat(avgSalary) || 0)} average monthly salary.`,
-            ]
-          : []),
-        ...((parseFloat(capexAmount) || 0) !== 0
-          ? [`One-off capex of ${fmtR(parseFloat(capexAmount) || 0)} in week ${capexWeek}.`]
+        `Forecast starts ${startLabel} with an opening bank balance of ${fmtR(baseCalc.opening)}${openingSourceChip ? ` (${openingSourceChip})` : ""}.`,
+        "Revenue and expenses are the amounts entered, with no scenario adjustment.",
+        "Customer collections land in the week they are invoiced.",
+        "Collection delay in weeks is what shifts receipts. Days AR and Days AP are Ratios figures and are not applied.",
+        ...(scenarioActive
+          ? ["A scenario is open on screen. This PDF is the base forecast and does not include it."]
           : []),
       ];
 
@@ -1166,8 +1237,8 @@ export function CashForecastPanel({
           accountantProfile: profile,
           market,
           minimumThreshold: minimumCash,
-          runwayLabel: runwayDisplayLabel(direction),
-          cashGenerative: seriesCashGenerative,
+          runwayLabel: runwayDisplayLabel(publishedDirection),
+          cashGenerative: publishedGenerative,
           assumptions,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
         }) as Parameters<typeof pdf>[0],
@@ -1192,8 +1263,8 @@ export function CashForecastPanel({
           reportKey: "forecast",
           snapshotId: snapId,
           figuresHash: hashFigures({
-            opening: calc.opening,
-            closings: calc.closing,
+            opening: baseCalc.opening,
+            closings: baseCalc.closing,
             runway: derivedRunway,
             threshold: minimumCash,
           }),
@@ -1205,7 +1276,13 @@ export function CashForecastPanel({
         warnIfPdfArchiveFailed(logged.pdfError);
       }
     } catch (err) {
-      toast.error(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);
+      const message = err instanceof Error ? err.message : String(err);
+      if (/Failed to fetch dynamically imported module/i.test(message)) {
+        setExportError("This page is out of date. Reload to export the PDF.");
+      } else {
+        setExportError(`PDF export failed: ${message}`);
+        toast.error(`PDF export failed: ${message}`);
+      }
     } finally {
       setExporting(false);
     }
@@ -1294,6 +1371,30 @@ export function CashForecastPanel({
 
   const totalInflow = calc.inflow.reduce((sum, n) => sum + n, 0);
   const totalOutflow = calc.outflow.reduce((sum, n) => sum + n, 0);
+  const baseInflow = baseCalc.inflow.reduce((sum, n) => sum + n, 0);
+  const baseOutflow = baseCalc.outflow.reduce((sum, n) => sum + n, 0);
+  const publishedDirection = runwayFromForecastNet({
+    base: screenRunway,
+    opening: baseCalc.opening,
+    totalInflow: baseInflow,
+    totalOutflow: baseOutflow,
+  });
+  const publishedGenerative =
+    publishedDirection.kind === "cash_generative" &&
+    forecastIsCashGenerative(baseInflow, baseOutflow);
+  const publishedStory = forecastRunwayHeadlineShared({
+    opening: baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: minimumCash,
+    runwayLabel: runwayDisplayLabel(publishedDirection),
+    cashGenerative: publishedGenerative,
+  });
+  const positionPhrase = forecastPositionPhrase({
+    opening: baseCalc.opening,
+    closings: baseCalc.closing,
+    floor: minimumCash,
+  });
+  const lowestUnderFloor = lowestBal < minimumCash;
   const direction = runwayFromForecastNet({
     base: screenRunway,
     opening: calc.opening,
@@ -1500,39 +1601,18 @@ export function CashForecastPanel({
               <Stat
                 label="Lowest balance"
                 value={fmtCompact(lowestBal)}
-                tone={showShortfall ? "bad" : "good"}
-                sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
+                tone={lowestUnderFloor ? "bad" : "good"}
+                sub={
+                  publishedLowest.isOpening
+                    ? "Opening balance"
+                    : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
+                }
               />
               <Stat
                 label="Cash runway"
-                value={
-                  seriesCashGenerative
-                    ? "Cash generative"
-                    : direction.kind === "unknown"
-                      ? (runwayDisplayLabel(direction) ?? "—")
-                      : direction.kind === "zero"
-                        ? "0 wk"
-                        : direction.kind === "weeks"
-                          ? `${direction.weeks} wk`
-                          : "Net outflow"
-                }
-                tone={
-                  seriesCashGenerative
-                    ? "good"
-                    : direction.kind === "zero" || (direction.weeks ?? 99) < 8
-                      ? "bad"
-                      : "neutral"
-                }
-                sub={
-                  seriesCashGenerative
-                    ? "Not burning cash"
-                    : direction.kind === "weeks"
-                      ? "Forecast nets cash out"
-                      : direction.label === RUNWAY_INSUFFICIENT_LABEL ||
-                          direction.label === RUNWAY_PROFITABLE_LABEL
-                        ? "No cash-flow or bank data"
-                        : `Above ${fmtCompact(minimumCash)} floor`
-                }
+                value={publishedStory.headline}
+                tone={publishedStory.note === "above the floor" ? "good" : "bad"}
+                sub={publishedStory.note}
               />
               <Stat
                 label="Net cash · next 4 weeks"
@@ -1610,8 +1690,8 @@ export function CashForecastPanel({
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Opening balance"
-              value={fmtCompact(calc.opening)}
-              sub={`Start ${startLabel}`}
+              value={fmtCompact(baseCalc.opening)}
+              sub={`Start ${startLabel}${openingSourceChip ? ` · ${openingSourceChip}` : ""}`}
             />
             <Stat
               label="Closing · Week 13"
@@ -1645,8 +1725,12 @@ export function CashForecastPanel({
             <Stat
               label="Lowest balance"
               value={fmtCompact(lowestBal)}
-              tone={showShortfall ? "bad" : "good"}
-              sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
+              tone={lowestUnderFloor ? "bad" : "good"}
+              sub={
+                publishedLowest.isOpening
+                  ? "Opening balance"
+                  : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
+              }
             />
             <Stat
               label="Total net movement"
@@ -1655,6 +1739,22 @@ export function CashForecastPanel({
               sub={`Inflows ${fmtCompact(calc.inflow.reduce((a, b) => a + b, 0))} · Outflows ${fmtCompact(calc.outflow.reduce((a, b) => a + b, 0))}`}
             />
           </div>
+          <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
+            Cash {positionPhrase}. Runway {publishedStory.headline}. Floor {fmtCompact(minimumCash)}.
+          </p>
+          {exportError ? (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
+              <span>{exportError}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => window.location.reload()}
+              >
+                Reload
+              </Button>
+            </div>
+          ) : null}
           <div className="mb-1 flex items-center justify-between">
             <div className={LABEL_CLS}>Closing balance trajectory</div>
             {scenarioActive && (
@@ -1691,9 +1791,11 @@ export function CashForecastPanel({
                 setRevGrowthPct(0);
                 setCapexAmount("0");
                 setCapexWeek(1);
+                baseResetRef.current = true;
+                setResetNonce((n) => n + 1);
               }}
             >
-              Reset all
+              Reset to base
             </Button>
           ) : undefined
         }
@@ -2003,7 +2105,14 @@ export function CashForecastPanel({
             />
           </div>
           <div>
-            <Label className={LABEL_CLS}>Opening bank balance ({cur})</Label>
+            <Label className={LABEL_CLS}>
+              Opening bank balance ({cur})
+              {openingSourceChip ? (
+                <span className="ml-2 rounded-full border border-[#d4a550]/40 bg-[#d4a550]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]">
+                  {openingSourceChip}
+                </span>
+              ) : null}
+            </Label>
             <Input
               type="number"
               value={openingBalance}
