@@ -1,12 +1,12 @@
-import { ZA_VAT_RATE } from "./defaults";
-import { assertMarketSelection } from "./parse";
+import { ZA_VAT_RATE } from "./defaults.ts";
+import { assertMarketSelection } from "./parse.ts";
 import type {
   IndirectTaxProfile,
   MarketSelection,
   MarketTaxOverrides,
   ResolvedMarket,
-} from "./types";
-import { usState } from "./us-states";
+} from "./types.ts";
+import { usState } from "./us-states.ts";
 
 export { ZA_VAT_RATE };
 

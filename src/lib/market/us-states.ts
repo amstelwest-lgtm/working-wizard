@@ -8,7 +8,7 @@
  * live tax API and does not model destination tax, nexus, or exemptions.
  */
 
-import { US_STATE_CODES, type UsStateCode } from "./types";
+import { US_STATE_CODES, type UsStateCode } from "./types.ts";
 
 export type UsSourcing = "origin" | "destination" | "mixed";
 

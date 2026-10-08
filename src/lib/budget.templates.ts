@@ -9,11 +9,11 @@ import type {
   BudgetTemplateId,
   BudgetVolumeUnit,
   BudgetWc,
-} from "@/lib/budget.types";
+} from "./budget.types.ts";
 import {
   migrateLegacyQualification,
   resolveKitFromPath,
-} from "@/lib/budget.taxonomy";
+} from "./budget.taxonomy.ts";
 
 export type TemplateDef = {
   id: BudgetTemplateId;

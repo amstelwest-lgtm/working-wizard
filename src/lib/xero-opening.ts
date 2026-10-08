@@ -1,4 +1,4 @@
-import { CASH_FORECAST_WEEKS } from "@/lib/cash-runway";
+import { CASH_FORECAST_WEEKS } from "./cash-runway.ts";
 
 /**
  * Starting cash and a weekly run-rate for the 13-week forecast after a

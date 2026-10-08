@@ -7,8 +7,8 @@
  * equity total was plugged from assets − liabilities.
  */
 
-import { PERIOD_MONTHS_CHOSEN_KEY, PERIOD_MONTHS_KEY, periodMonthsOf } from "@/lib/ratios";
-import { defaultPeriodCoverage } from "@/lib/statement-period";
+import { PERIOD_MONTHS_CHOSEN_KEY, PERIOD_MONTHS_KEY, periodMonthsOf } from "./ratios.ts";
+import { defaultPeriodCoverage } from "./statement-period.ts";
 
 export const EQUITY_CROSSCHECK_WARNING =
   "Equity lines plus current-period profit differ from assets minus liabilities by more than 1%.";

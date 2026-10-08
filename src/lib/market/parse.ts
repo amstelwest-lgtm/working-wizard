@@ -4,8 +4,8 @@ import {
   type MarketId,
   type MarketSelection,
   type UsStateCode,
-} from "./types";
-import { isUsStateCode } from "./us-states";
+} from "./types.ts";
+import { isUsStateCode } from "./us-states.ts";
 
 export class MarketSelectionError extends Error {
   constructor(message: string) {

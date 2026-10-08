@@ -1,5 +1,5 @@
-import type { ResolvedMarket } from "./types";
-import { ZA_MARKET } from "./resolve";
+import type { ResolvedMarket } from "./types.ts";
+import { ZA_MARKET } from "./resolve.ts";
 
 export type MoneyMarket = Pick<ResolvedMarket, "currency" | "locale">;
 

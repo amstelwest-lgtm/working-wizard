@@ -8,12 +8,12 @@ import {
   parseOperatingProfile,
   profileNeedsCompletion,
   type ClientOperatingProfile,
-} from "@/lib/client-profile";
-import { periodMonthsOf } from "@/lib/ratios";
-import type { BudgetSeasonality } from "@/lib/budget.types";
-import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
-import type { StatementWorkingCapital } from "@/lib/collections";
-import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+} from "./client-profile.ts";
+import { periodMonthsOf } from "./ratios.ts";
+import type { BudgetSeasonality } from "./budget.types.ts";
+import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
+import type { StatementWorkingCapital } from "./collections.ts";
+import { formatMoney, type MoneyMarket } from "./market/format.ts";
 
 export const DELIVERABLE_INPUT_IDS = [
   "cash",

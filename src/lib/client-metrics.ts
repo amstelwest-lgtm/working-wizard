@@ -764,7 +764,7 @@ export function plBankDisagreement(input: {
   cashflow?: unknown;
 }): PlBankDisagreement | null {
   const cf = asRecord(input.cashflow);
-  if (!cashflowIsRealBankSeed(cf)) return null;
+  if (!cf || !cashflowIsRealBankSeed(cf)) return null;
   const fin = asRecord(input.financials);
   if (!fin) return null;
   const months = periodMonthsOf(fin);

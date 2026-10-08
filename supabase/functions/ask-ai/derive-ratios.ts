@@ -8,7 +8,7 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
-import { flatToRatioInputs } from "../../../src/lib/health-score.ts";
+import { flatToRatioInputs, type FlatFinancials } from "../../../src/lib/health-score.ts";
 import { computeRatios } from "../../../src/lib/ratios.ts";
 
 export const DISPLAY_TO_CAMEL: Record<string, string> = {
@@ -71,7 +71,10 @@ export function computeRatiosFromFinancials(
   opts?: { fyStartMonth?: number | null },
 ): Record<string, number> {
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return {};
-  return computeRatios(flatToRatioInputs(financials, { fyStartMonth: opts?.fyStartMonth }));
+  // Blob values are unknown here; flatToRatioInputs stringifies each field.
+  return computeRatios(
+    flatToRatioInputs(financials as FlatFinancials, { fyStartMonth: opts?.fyStartMonth }),
+  );
 }
 
 function clamp(n: number): number {
