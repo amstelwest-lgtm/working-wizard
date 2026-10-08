@@ -351,7 +351,7 @@ assert(
 const owner = read("src/routes/app.tsx");
 const studio = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(owner.includes("runSyncAutoPopulate"), "owner sync runs auto-populate");
-assert((owner.match(/runSyncAutoPopulate\(/g) ?? []).length >= 2, "owner QuickBooks and Xero both populate");
+assert((owner.match(/runSyncAutoPopulate\(/g) ?? []).length >= 3, "owner QuickBooks, Xero, and Sage populate");
 assert(studio.includes("runSyncAutoPopulate"), "accountant sync runs auto-populate");
 assert(studio.includes("populateAfterSync"), "accountant sync handlers share one populate path");
 const qboFn = read("src/lib/qbo.functions.ts");
@@ -368,6 +368,11 @@ assert(
   "a sync that owns the file hides Connect QuickBooks and Connect Xero",
 );
 assert(qboFn.includes("ledgerSyncWouldWipe"), "QuickBooks sync refuses an empty report");
+const sageServer = read("src/lib/sage-sync.server.ts");
+assert(sageServer.includes("sageSyncWriteDecision"), "Sage sync refuses an empty report");
+assert(sageServer.includes('applyLedgerSyncFinancials(prev, fields, "sage")'), "Sage sync owns the live file");
+assert(owner.includes("auto-populate after Sage sync:"), "owner Sage sync runs auto-populate");
+assert(studio.includes('populateAfterSync(inputs, "Sage")'), "accountant Sage sync runs auto-populate");
 assert(qboFn.includes("balanceSheetCash"), "QuickBooks sync passes balance-sheet cash into the forecast seed");
 const qboComplete = studio.slice(
   studio.indexOf("const onQboSyncComplete"),

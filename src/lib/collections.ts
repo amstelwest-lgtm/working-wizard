@@ -4,7 +4,7 @@
  * Milōn reads the books. It does not send chases or record receipts.
  */
 
-export type CollectionsSource = "xero" | "qbo";
+export type CollectionsSource = "xero" | "qbo" | "sage";
 export type CollectionsStatus = "applied" | "empty" | "skipped";
 
 export type CollectionsInvoice = {
@@ -51,7 +51,7 @@ export type XeroContactCandidate = {
   hasBalances: boolean;
 };
 
-const SOURCES = new Set<CollectionsSource>(["xero", "qbo"]);
+const SOURCES = new Set<CollectionsSource>(["xero", "qbo", "sage"]);
 const STATUSES = new Set<CollectionsStatus>(["applied", "empty", "skipped"]);
 
 export const XERO_AGED_RECONNECT =
@@ -256,7 +256,9 @@ export function chooseCollections(
 }
 
 export function sourceLabel(source: CollectionsSource): string {
-  return source === "xero" ? "Xero" : "QuickBooks";
+  if (source === "xero") return "Xero";
+  if (source === "sage") return "Sage";
+  return "QuickBooks";
 }
 
 export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): string {

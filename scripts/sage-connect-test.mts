@@ -226,10 +226,14 @@ assert(fn.includes('from "@/lib/sage-password"'), "connect encrypts with the sha
 assert(fn.includes("encryptSagePassword"), "connect encrypts the password");
 assert(!fn.includes("SESSION_SECRET"), "connect does not key the password off the session secret");
 assert(fn.includes("sage_connections"), "connect stores the connection");
-assert(fn.includes("sageSyncWriteDecision"), "sync uses the empty-sync guard");
-assert(fn.includes("TODO(Eng1)"), "sync leaves an Eng1 hook");
-assert(!fn.includes("runAutoPopulate"), "sync does not auto-populate");
-assert(!fn.includes("applyLedgerSyncFinancials"), "sync does not write statement figures");
+assert(fn.includes("executeSageSync"), "sync fills the connect stub");
+assert(
+  read("src/lib/sage-sync.server.ts").includes("sageSyncWriteDecision"),
+  "sync uses the empty-sync guard",
+);
+assert(!fn.includes("TODO(Eng1)"), "the connect stub is filled");
+assert(!fn.includes("runAutoPopulate"), "sync does not auto-populate inside connect");
+assert(!fn.includes("applyLedgerSyncFinancials"), "statement writes stay out of the connect module");
 assert(!fn.includes("password_enc"), "status select does not return the password column");
 
 const card = read("src/components/sage-connect.tsx");

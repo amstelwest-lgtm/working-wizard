@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { readStatementMeta, resolveSnapshotPeriodLabel } from "@/lib/statement-period";
 
-export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "pdf_upload";
+export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "sage" | "pdf_upload";
 
 export type SnapshotRecency = {
   created_at?: string | null;
@@ -106,7 +106,9 @@ export async function upsertPeriodSnapshot(opts: {
   const periodLabel = resolveSnapshotPeriodLabel(existing?.period_label, requestedLabel);
   const statementSource = readStatementMeta(opts.financials).statementSource;
   const ledgerSource =
-    statementSource === "qbo" || statementSource === "xero" ? statementSource : null;
+    statementSource === "qbo" || statementSource === "xero" || statementSource === "sage"
+      ? statementSource
+      : null;
 
   if (existingId) {
     const { error } = await supabase

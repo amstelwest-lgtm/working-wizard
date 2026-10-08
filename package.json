@@ -128,6 +128,7 @@
     "test:qbo-mapper": "vite-node --config scripts/vite-test.config.ts scripts/qbo-mapper-test.mts",
     "test:ledger-link-copy": "vite-node --config scripts/vite-test.config.ts scripts/ledger-link-copy-test.mts",
     "test:sync-auto-populate": "vite-node --config scripts/vite-test.config.ts scripts/sync-auto-populate-test.mts",
+    "test:sage-sync": "vite-node --config scripts/vite-test.config.ts scripts/sage-sync-test.mts",
     "test:qbo-intuit-tid": "vite-node --config scripts/vite-test.config.ts scripts/qbo-intuit-tid-test.mts",
     "test:qa-statement-fixes": "vite-node --config scripts/vite-test.config.ts scripts/qa-statement-fixes-test.mts",
     "test:accountant-qa-medium": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-medium-test.mts",
