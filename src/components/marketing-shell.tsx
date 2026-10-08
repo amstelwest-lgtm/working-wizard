@@ -7,7 +7,7 @@
  */
 
 import { useEffect, type ReactNode } from "react";
-import { DUAL_MARKET_FOOTER } from "@/lib/firm-signup-copy";
+import { DUAL_MARKET_FOOTER, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
 import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
 import {
   applyVisitorMarketToDocument,
@@ -140,6 +140,7 @@ export function MarketingShell({
 
         <footer className="mk-foot">
           <span>{DUAL_MARKET_FOOTER}</span>
+          <span>{FIRM_CARD_TIMING}</span>
           <span>Works with QuickBooks Online and Xero.</span>
           <a href="/">milonfinance.com</a>
           <a href="/about">About</a>

@@ -33,7 +33,7 @@ function TermsPage() {
       ctaTitle={<>Privacy and the AI notice sit next to this</>}
       ctaBody={
         <>
-          How we hold figures, and how Claude is used, are on their own pages — not buried in this
+          How we hold figures, and how AI is used, are on their own pages — not buried in this
           one.
         </>
       }
@@ -56,9 +56,10 @@ function TermsPage() {
         file returns with the IRS or a state department of revenue.
       </p>
       <p>
-        Spark is free during early access and does not ask for a card. Accounting firms start with a
-        14-day free trial · up to 3 clients (card on file), then a paid USD client-count band
-        through Stripe Checkout. Owner Spark stays free.
+        Spark is free during early access and does not ask for a card. Accounting firms: see your
+        first client&apos;s figures with no card, then add a card to start a 14-day free trial (up
+        to 3 clients). After day 14 a paid USD client-count band bills through Stripe Checkout.
+        Owner Spark stays free.
       </p>
       <p className="mk-copy-us">
         US list prices: Solo {LIST_PRICES.us.firmSolo}/mo after a 14-day free trial · up to 3
@@ -83,7 +84,7 @@ function TermsPage() {
 
       <h2>AI</h2>
       <p>
-        Some features use AI. They are powered by <strong>Claude</strong>. {AI_IDENTIFIERS_LINE} The{" "}
+        Some features use AI. They are powered by <strong>Milōn Bot</strong>. {AI_IDENTIFIERS_LINE} The{" "}
         <a href="/ai">AI notice</a> is the full version of that sentence. AI output can be wrong;
         you (or the accountant who signs a draft) remain responsible for what you send a client.
       </p>

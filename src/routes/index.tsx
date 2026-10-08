@@ -12,7 +12,7 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
-import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE } from "@/lib/firm-signup-copy";
+import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
   applyVisitorMarketToDocument,
@@ -53,7 +53,6 @@ import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import {
-  FIRM_TRIAL_SENTENCE,
   firmSignupCheckoutIntent,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -2714,9 +2713,8 @@ function LandingPage() {
               <span className="gold-text">AI prepares; you sign off.</span>
             </h2>
             <p className="sub">
-              Set up your practice and start a {FIRM_TRIAL_SENTENCE} (card required). After day 14
-              the paid band bills automatically. Business owners can still start on Spark below,
-              free during early access.
+              {FIRM_CARD_TIMING} After day 14 the paid band bills automatically. Business owners can
+              still start on Spark below, free during early access.
             </p>
           </div>
 
@@ -2806,6 +2804,7 @@ function LandingPage() {
             </button>
           </nav>
           <div className="copy">
+            <span>{FIRM_CARD_TIMING}</span>
             <span>Works with QuickBooks Online and Xero.</span>
             <span>
               © {new Date().getFullYear()} Eish2oh (Pty) Ltd. Trading as MILŌN. All rights reserved.

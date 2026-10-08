@@ -24,7 +24,7 @@ import {
   budgetDaysSourceLabel,
   budgetOpeningSourceLabel,
 } from "@/lib/budget.bridges";
-import { currencySymbol, formatMoney, type ResolvedMarket } from "@/lib/market";
+import { currencySymbol, formatMoney, localizeCopy, type ResolvedMarket } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
@@ -289,13 +289,13 @@ export function BudgetSimpleView({
         <div className="mt-5 grid items-stretch gap-3 pl-3 sm:pl-4 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
           <DriverPad
             kicker="How many"
-            label={line?.volumeLabel ?? "Volume"}
+            label={localizeCopy(line?.volumeLabel ?? "Volume", market)}
             hint={line?.name ? `${line.name}` : "Units they move this month"}
           >
             <Input
               type="number"
               inputMode="decimal"
-              aria-label={line?.volumeLabel ?? "Volume"}
+              aria-label={localizeCopy(line?.volumeLabel ?? "Volume", market)}
               className="budget-driver-input mt-2 h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
               value={cell.volume}
               onChange={(e) => patchFocus({ volume: parseFloat(e.target.value) || 0 })}
@@ -304,7 +304,7 @@ export function BudgetSimpleView({
           <EquationOp symbol="×" label="times" />
           <DriverPad
             kicker="At what price"
-            label={line?.priceLabel ?? "Price"}
+            label={localizeCopy(line?.priceLabel ?? "Price", market)}
             hint={`Per unit, ${symbol}`}
           >
             <div className="mt-2 flex items-baseline gap-1.5">
@@ -312,7 +312,7 @@ export function BudgetSimpleView({
               <Input
                 type="number"
                 inputMode="decimal"
-                aria-label={line?.priceLabel ?? "Price"}
+                aria-label={localizeCopy(line?.priceLabel ?? "Price", market)}
                 className="budget-driver-input h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
                 value={cell.price}
                 onChange={(e) => patchFocus({ price: parseFloat(e.target.value) || 0 })}

@@ -164,7 +164,14 @@ export function localizeCopy(
     .replace(/\bdebit order\b/gi, "ACH / autopay")
     .replace(/\bLabour\b/g, "Labor")
     .replace(/\blabour\b/g, "labor")
-    .replace(/\bVAT\b/g, "sales tax");
+    .replace(/\bVAT\b/g, "sales tax")
+    .replace(/\bMedical aid\b/g, "Health insurance")
+    .replace(/\bPetrol \/ diesel forecourts\b/g, "Gas stations")
+    .replace(/\bLitres pumped\b/g, "Gallons pumped")
+    .replace(/\blitres pumped\b/g, "gallons pumped")
+    .replace(/\bLitres\b/g, "Gallons")
+    .replace(/\blitres\b/g, "gallons")
+    .replace(/\blitre\b/g, "gallon");
 }
 
 export const SALES_TAX_HONESTY =

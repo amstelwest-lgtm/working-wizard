@@ -144,6 +144,8 @@ import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/prof
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
 import { NextStepCard } from "@/components/next-step-card";
+import { BalanceSheetPrompt } from "@/components/balance-sheet-prompt";
+import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -3822,15 +3824,17 @@ function Index() {
                       >
                         Xero
                       </button>
-                      <button
-                        type="button"
-                        id="owner-header-sage"
-                        onClick={() => setShowSageDialog(true)}
-                        className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
-                        title="Connect Sage Accounting"
-                      >
-                        Sage
-                      </button>
+                      {!isUsCopy(boardMarket) ? (
+                        <button
+                          type="button"
+                          id="owner-header-sage"
+                          onClick={() => setShowSageDialog(true)}
+                          className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
+                          title="Connect Sage Accounting"
+                        >
+                          Sage
+                        </button>
+                      ) : null}
                     </>
                   )}
                   <FeatureFinder audience="owner" clientId={effectiveClientId} chrome="owner" />
@@ -3971,13 +3975,15 @@ function Index() {
                             >
                               <Plug2 className="h-3.5 w-3.5" /> Connect Xero
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowSageDialog(true)}
-                              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                            >
-                              <Plug2 className="h-3.5 w-3.5" /> Connect Sage
-                            </button>
+                            {!isUsCopy(boardMarket) ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowSageDialog(true)}
+                                className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                <Plug2 className="h-3.5 w-3.5" /> Connect Sage
+                              </button>
+                            ) : null}
                           </>
                         )}
                         <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -4131,7 +4137,7 @@ function Index() {
                 </DialogHeader>
                 <div className="flex flex-col gap-3 pt-2">
                   {(isUsCopy(boardMarket)
-                    ? (["files", "qbo", "xero", "sage", "bank"] as const)
+                    ? (["files", "qbo", "xero", "bank"] as const)
                     : (["bank", "xero", "sage", "files", "qbo"] as const)
                   ).map((id) => {
                     const hero =
@@ -4284,6 +4290,9 @@ function Index() {
                   }|${advisoryBump}`}
                   onAct={handleNextStepAct}
                 />
+                {needsBalanceSheetPrompt(v) ? (
+                  <BalanceSheetPrompt onUpload={() => setShowFinData(true)} />
+                ) : null}
                 {/* P0.6 — tracked asks for missing / stale data; hidden when nothing is open. */}
                 {userRole !== "client_member" ? (
                   <DataRequestsPanel
@@ -4529,15 +4538,17 @@ function Index() {
                                           <Plug2 className="h-4 w-4" />
                                           Connect Xero
                                         </button>
-                                        <button
-                                          type="button"
-                                          id="owner-empty-sage"
-                                          onClick={() => setShowSageDialog(true)}
-                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                        >
-                                          <Plug2 className="h-4 w-4" />
-                                          Connect Sage
-                                        </button>
+                                        {!isUsCopy(boardMarket) ? (
+                                          <button
+                                            type="button"
+                                            id="owner-empty-sage"
+                                            onClick={() => setShowSageDialog(true)}
+                                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                          >
+                                            <Plug2 className="h-4 w-4" />
+                                            Connect Sage
+                                          </button>
+                                        ) : null}
                                         <button
                                           onClick={() => {
                                             setShowFinData(true);
@@ -5524,23 +5535,25 @@ function Index() {
                     Live sync of P&amp;L and balance sheet, same path as QuickBooks.
                   </span>
                 </button>
-                <button
-                  type="button"
-                  id="owner-connect-sage"
-                  onClick={() => {
-                    setShowFinData(false);
-                    setShowSageDialog(true);
-                  }}
-                  className="flex flex-col items-start gap-1.5 rounded-lg border border-slate-300 bg-white p-4 text-left transition-colors hover:border-[#b7872a]/70 hover:bg-[#d4a550]/10 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#d4a550]/60 dark:hover:bg-slate-800"
-                >
-                  <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    <Plug2 className="h-4 w-4" />
-                    Connect Sage
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Sage Business Cloud Accounting (South Africa). Email, password, and Company ID.
-                  </span>
-                </button>
+                {!isUsCopy(boardMarket) ? (
+                  <button
+                    type="button"
+                    id="owner-connect-sage"
+                    onClick={() => {
+                      setShowFinData(false);
+                      setShowSageDialog(true);
+                    }}
+                    className="flex flex-col items-start gap-1.5 rounded-lg border border-slate-300 bg-white p-4 text-left transition-colors hover:border-[#b7872a]/70 hover:bg-[#d4a550]/10 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#d4a550]/60 dark:hover:bg-slate-800"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <Plug2 className="h-4 w-4" />
+                      Connect Sage
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">
+                      Sage Business Cloud Accounting (South Africa). Email, password, and Company ID.
+                    </span>
+                  </button>
+                ) : null}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
@@ -5600,7 +5613,7 @@ function Index() {
                     Build cash forecast from bank statements
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Claude groups repeating cash movements; classify cadence, then publish to Cash
+                    Milōn groups repeating cash movements; classify cadence, then publish to Cash
                     Forecast.
                   </span>
                 </button>

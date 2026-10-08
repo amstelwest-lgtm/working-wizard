@@ -5,6 +5,8 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useMarket } from "@/contexts/market";
+import { localizeCopy } from "@/lib/market";
 import type {
   BudgetCapexMode,
   BudgetCostShape,
@@ -77,6 +79,8 @@ export function BudgetFunnel({
   }) => void;
   initialFyStartMonth?: number;
 }) {
+  const { market } = useMarket();
+  const loc = (text: string) => localizeCopy(text, market);
   const [step, setStep] = useState(0);
   const [payMotion, setPayMotion] = useState<BudgetPayMotion | null>(null);
   const [primary, setPrimary] = useState<VolumeUnitOption | null>(null);
@@ -189,9 +193,9 @@ export function BudgetFunnel({
                 setStep(1);
               }}
             >
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loc(o.label)}</div>
               <div className="text-xs text-slate-500">{o.hint}</div>
-              <div className="mt-1 text-[11px] text-slate-400">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
             </button>
           ))}
         </div>
@@ -211,9 +215,9 @@ export function BudgetFunnel({
                 setStep(2);
               }}
             >
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loc(o.label)}</div>
               <div className="text-xs text-slate-500">{o.hint}</div>
-              <div className="mt-1 text-[11px] text-slate-400">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
             </button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => setStep(0)}>
@@ -253,9 +257,9 @@ export function BudgetFunnel({
                 >
                   <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {on ? "✓ " : ""}
-                    {o.label}
+                    {loc(o.label)}
                   </div>
-                  <div className="mt-1 text-[11px] text-slate-400">e.g. {o.examples}</div>
+                  <div className="mt-1 text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
                 </button>
               );
             })}
@@ -287,8 +291,8 @@ export function BudgetFunnel({
                 setStep(4);
               }}
             >
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-400">e.g. {o.examples}</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loc(o.label)}</div>
+              <div className="mt-1 text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
             </button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => setStep(2)}>
@@ -301,7 +305,7 @@ export function BudgetFunnel({
         <div className="grid gap-2">
           {PAY_TIMING.map((o) => (
             <button
-              key={o.label}
+              key={loc(o.label)}
               type="button"
               className={`${card} ${debtorDays === o.days ? cardOn : ""}`}
               onClick={() => {
@@ -309,8 +313,8 @@ export function BudgetFunnel({
                 setStep(5);
               }}
             >
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-400">e.g. {o.examples}</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loc(o.label)}</div>
+              <div className="mt-1 text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
             </button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => setStep(3)}>
@@ -331,8 +335,8 @@ export function BudgetFunnel({
                 setStep(6);
               }}
             >
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-400">e.g. {o.examples}</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loc(o.label)}</div>
+              <div className="mt-1 text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
             </button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => setStep(4)}>
@@ -380,8 +384,8 @@ export function BudgetFunnel({
                     className={`${card} ${seasonality === o.id ? cardOn : ""}`}
                     onClick={() => setSeasonality(o.id)}
                   >
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{o.label}</div>
-                    <div className="text-[11px] text-slate-400">e.g. {o.examples}</div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{loc(o.label)}</div>
+                    <div className="text-[11px] text-slate-400">e.g. {loc(o.examples)}</div>
                   </button>
                 ))}
               </div>
