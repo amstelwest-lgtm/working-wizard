@@ -115,6 +115,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
+import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
+import type { AdvisorySignoffAction } from "@/lib/advisory-signoff";
 import {
   parseOperatingProfile,
   stampProfileProvenance,
@@ -1012,6 +1014,7 @@ function ClientView() {
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
+  const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
 
   // Accountant sign-off — one stamp per deliverable tab
@@ -3707,15 +3710,7 @@ function ClientView() {
                     title="Write the note"
                     lede="Draft the advisory pack or email from this client's figures. Sign it off when it is ready to send."
                     signoff={
-                      <ReviewSignoffButton
-                        compact
-                        clientId={clientId}
-                        clientName={client?.name}
-                        scope="advisory"
-                        signoff={advisorySignoff}
-                        isStale={false}
-                        onChange={patchSignoff("advisory")}
-                      />
+                      <AdvisoryTabSignoff action={packSignoff} pageSignoff={advisorySignoff} />
                     }
                   />
                   {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
@@ -3729,6 +3724,7 @@ function ClientView() {
                     hasFirm={Boolean(client.firm_id)}
                     refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    onSignoffAction={setPackSignoff}
                     currentFigures={{
                       runwayLabel: runwayDisplayLabel(metricRunway),
                       cash: cashOutlook.opening,
