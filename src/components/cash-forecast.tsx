@@ -92,6 +92,7 @@ import {
   type ClientRunway,
 } from "@/lib/client-metrics";
 import {
+  cashEmptyPresentation,
   forecastLowestPoint,
   forecastPositionPhrase,
   forecastRunwayHeadlineShared,
@@ -1421,6 +1422,10 @@ export function CashForecastPanel({
   const balanceSheetHold =
     isQboBalanceSheetHoldNote(xeroBankNote) && (parseFloat(openingBalance) || 0) !== 0;
   const forecastEmpty = loaded && linesBlank && !plEstimateRef.current && !balanceSheetHold;
+  const emptyPresentation = cashEmptyPresentation({
+    opening: parseFloat(openingBalance) || 0,
+    linesBlank,
+  });
 
   const heroBadge = forecastEmpty ? (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-400/50 bg-slate-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
@@ -1584,12 +1589,14 @@ export function CashForecastPanel({
               />
               <Stat
                 label="Lowest balance"
-                value={fmtCompact(lowestBal)}
-                tone={lowestUnderFloor ? "bad" : "good"}
+                value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+                tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
                 sub={
-                  publishedLowest.isOpening
-                    ? "Opening balance"
-                    : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
+                  emptyPresentation.lowestBlank
+                    ? "Add an opening balance"
+                    : publishedLowest.isOpening
+                      ? "Opening balance"
+                      : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
                 }
               />
               <Stat
@@ -1605,7 +1612,13 @@ export function CashForecastPanel({
                 sub="Inflows minus outflows"
               />
             </div>
-            {heroChart(180)}
+            {emptyPresentation.showChart ? (
+              heroChart(180)
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                The 13-week chart appears once a forecast line is entered.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1678,12 +1691,14 @@ export function CashForecastPanel({
             />
             <Stat
               label="Lowest point"
-              value={fmtCompact(lowestBal)}
-              tone={lowestUnderFloor ? "bad" : "good"}
+              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
               sub={
-                publishedLowest.isOpening
-                  ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-                  : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+                emptyPresentation.lowestBlank
+                  ? "Add an opening balance"
+                  : publishedLowest.isOpening
+                    ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+                    : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
               }
             />
             <Stat
@@ -1707,13 +1722,13 @@ export function CashForecastPanel({
               }
             />
           </div>
-          <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
-            {forecastEmpty
-              ? "Nothing is forecast yet. Upload bank statements, or enter the opening cash and the lines below."
-              : publishedStory.note === "above the floor"
+          {!forecastEmpty ? (
+            <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
+              {publishedStory.note === "above the floor"
                 ? `Cash stays above the ${fmtCompact(minimumCash)} floor across these 13 weeks.`
                 : `Cash ${positionPhrase} (floor ${fmtCompact(minimumCash)}). ${publishedStory.headline} — action needed.`}
-          </p>
+            </p>
+          ) : null}
           {exportError ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
               <span>{exportError}</span>
@@ -1727,13 +1742,21 @@ export function CashForecastPanel({
               </Button>
             </div>
           ) : null}
-          <div className="mb-1 flex items-center justify-between">
-            <div className={LABEL_CLS}>Closing balance</div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">
-              Gold line is the {fmtCompact(minimumCash)} floor
-            </div>
-          </div>
-          {heroChart(240)}
+          {emptyPresentation.showChart ? (
+            <>
+              <div className="mb-1 flex items-center justify-between">
+                <div className={LABEL_CLS}>Closing balance</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                  Gold line is the {fmtCompact(minimumCash)} floor
+                </div>
+              </div>
+              {heroChart(240)}
+            </>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              The 13-week chart appears once a forecast line is entered.
+            </p>
+          )}
         </CardContent>
       </Card>
 
