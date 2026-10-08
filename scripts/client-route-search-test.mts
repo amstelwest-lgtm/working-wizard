@@ -8,6 +8,8 @@ import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
   drafterSectionForHash,
+  legacyHashDestination,
+  railSearchForHash,
   routerHash,
   type CanonicalClientSearch,
 } from "../src/lib/client-route-search";
@@ -95,7 +97,8 @@ lands("strategic-moves", { tab: "overview", section: "moves" }, "?tab=strategic-
 
 lands("reports", { tab: "deliverables", section: "reports" }, "?tab=reports opens Reports");
 lands("report", { tab: "deliverables", section: "reports" }, "?tab=report opens Reports");
-lands("advisory", { tab: "deliverables", section: "drafter" }, "?tab=advisory opens the drafter");
+lands("advisory", { tab: "deliverables", section: "pack" }, "?tab=advisory opens the Advisory pack");
+lands("pack", { tab: "deliverables", section: "pack" }, "?tab=pack opens the Advisory pack");
 lands("plan", { tab: "deliverables", section: "plan" }, "?tab=plan opens Action Plan");
 lands("actions", { tab: "deliverables", section: "plan" }, "?tab=actions opens Action Plan");
 lands("action", { tab: "deliverables", section: "plan" }, "?tab=action opens Action Plan");
@@ -109,6 +112,71 @@ lands("tasks", { tab: "deliverables", section: "plan" }, "?tab=tasks opens Actio
 lands("overview", { tab: "overview", section: "cash" }, "canonical cash stays cash", {
   section: "cash",
 });
+assert(
+  canonicalizeAccountantSearch({ section: "pack" }).tab === "deliverables" &&
+    canonicalizeAccountantSearch({ section: "pack" }).section === "pack",
+  "?section=pack opens Deliverables > Advisory pack",
+);
+assert(
+  canonicalizeAccountantSearch({ tab: "overview", section: "pack" }).section === "pack" &&
+    canonicalizeAccountantSearch({ tab: "overview", section: "pack" }).tab === "deliverables",
+  "the overview default does not swallow section=pack",
+);
+assert(
+  canonicalizeAccountantSearch({ section: "advisory" }).section === "pack",
+  "?section=advisory opens the Advisory pack",
+);
+assert(
+  canonicalizeAccountantSearch({ section: "cash" }).tab === "overview" &&
+    canonicalizeAccountantSearch({ section: "cash" }).section === "cash",
+  "?section=cash stays on Overview cash",
+);
+assert(
+  canonicalizeAccountantSearch({ section: "budget" }).section === "budget",
+  "?section=budget stays on Overview budget",
+);
+assert(
+  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "ask" &&
+    canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).section === undefined,
+  "an explicit Bot tab wins over section=pack",
+);
+assert(
+  canonicalizeAccountantSearch({ tab: "deliverables", section: "reports" }).section === "reports",
+  "an explicit Deliverables tab keeps its section",
+);
+assert(
+  railSearchForHash("#cash")?.section === "cash" && railSearchForHash("#cash")?.tab === "overview",
+  "#cash opens Overview cash",
+);
+assert(
+  railSearchForHash("#budget")?.section === "budget",
+  "#budget opens Overview budget",
+);
+assert(
+  railSearchForHash("#advisory")?.tab === "deliverables" &&
+    railSearchForHash("#advisory")?.section === "pack",
+  "#advisory opens the Advisory pack",
+);
+assert(
+  legacyHashDestination({ tab: "ask" }, "#budget") === null,
+  "an explicit Bot tab wins over #budget",
+);
+assert(
+  legacyHashDestination({ tab: "overview" }, "#advisory") === null,
+  "an explicit Overview tab wins over #advisory",
+);
+assert(
+  legacyHashDestination({}, "#budget")?.section === "budget",
+  "a bare #budget selects the budget section",
+);
+assert(
+  legacyHashDestination({ tab: "overview" }, "#budget")?.section === "budget",
+  "#budget on Overview selects the budget section",
+);
+assert(
+  legacyHashDestination({ tab: "deliverables", section: "pack" }, "#drafter")?.section === "drafter",
+  "pack#drafter still opens the drafter",
+);
 lands("deliverables", { tab: "deliverables", section: "pack" }, "canonical pack stays pack", {
   section: "pack",
 });

@@ -101,6 +101,7 @@ export function BudgetSimpleView({
   isStale = false,
   canSign = false,
   onSignoffChange,
+  signoffKnown = true,
   drawer = null,
   lens,
   onLensChange,
@@ -116,6 +117,7 @@ export function BudgetSimpleView({
   isStale?: boolean;
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  signoffKnown?: boolean;
   drawer?: ReactNode;
   lens?: BudgetLens;
   onLensChange?: (next: BudgetLens) => void;
@@ -221,6 +223,7 @@ export function BudgetSimpleView({
         isStale={isStale}
         canSign={canSign}
         onSignoffChange={onSignoffChange}
+        signoffKnown={signoffKnown}
         extraActions={
           <BudgetPdfExportButton
             quiet

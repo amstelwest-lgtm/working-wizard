@@ -1600,6 +1600,10 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(state.includes(status), state);
   assert(forecast.includes(status), forecast);
   assert(forecast.includes(story.headline), forecast);
+  assert(
+    !forecast.includes("Profitable on the P&L"),
+    `pack runway follows the cash strip (${story.headline}): ${forecast}`,
+  );
   assert(forecast.includes("$128,450"), forecast);
   assert(forecast.includes("$128k"), forecast);
   assert(forecast.includes("the opening balance"), forecast);

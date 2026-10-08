@@ -82,7 +82,8 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   "strategic-moves": { tab: "overview", section: "moves" },
   reports: { tab: "deliverables", section: "reports" },
   report: { tab: "deliverables", section: "reports" },
-  advisory: { tab: "deliverables", section: "drafter" },
+  pack: { tab: "deliverables", section: "pack" },
+  advisory: { tab: "deliverables", section: "pack" },
   plan: { tab: "deliverables", section: "plan" },
   actions: { tab: "deliverables", section: "plan" },
   action: { tab: "deliverables", section: "plan" },
@@ -118,7 +119,18 @@ export function canonicalizeAccountantSearch(input: {
 
   if (!tab && !section) return { tab: "overview" };
 
+  // An explicit Bot tab wins over a section or hash default.
   if (tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "ask" };
+
+  // `pack` is a Deliverables section. `?section=pack` and the old
+  // `?section=pack&tab=overview` redirect both mean the Advisory pack.
+  // `tab=overview` there is the default, not a request to drop the section.
+  if (
+    DELIVERABLE_SECTION_SET.has(section) &&
+    (tab === "" || tab === "overview" || tab === "deliverables")
+  ) {
+    return { tab: "deliverables", section: section as DeliverableSection };
+  }
 
   if (tab === "overview" || tab === "deliverables" || (!tab && section)) {
     const rail: ClientRailTab = tab === "deliverables" ? "deliverables" : "overview";
@@ -126,10 +138,16 @@ export function canonicalizeAccountantSearch(input: {
       if (DELIVERABLE_SECTION_SET.has(section)) {
         return { tab: "deliverables", section: section as DeliverableSection };
       }
+      const fromSection = LEGACY_DESTINATIONS[section];
+      if (fromSection?.tab === "deliverables") return fromSection;
       return { tab: "deliverables" };
     }
     const overview = overviewSection(section, focus);
     if (overview) return overview;
+    if (!tab) {
+      const legacy = LEGACY_DESTINATIONS[section];
+      if (legacy) return legacy;
+    }
     if (focus === "pillars") return { tab: "overview", section: "pillars", focus: "pillars" };
     return { tab: "overview" };
   }
@@ -240,4 +258,47 @@ export function drafterSectionForHash(
   if (!DRAFTER_HASHES.has(id)) return null;
   if ((section ?? "").trim() === "drafter") return null;
   return "drafter";
+}
+
+const HASH_DESTINATIONS: Record<string, CanonicalClientSearch> = {
+  cash: { tab: "overview", section: "cash" },
+  budget: { tab: "overview", section: "budget" },
+  advisory: { tab: "deliverables", section: "pack" },
+  pack: { tab: "deliverables", section: "pack" },
+};
+
+/** `#cash`, `#budget`, `#advisory`, and the old drafter hashes. */
+export function railSearchForHash(hash: string | null | undefined): CanonicalClientSearch | null {
+  const id = (routerHash(hash) ?? "").toLowerCase();
+  if (!id) return null;
+  if (DRAFTER_HASHES.has(id)) return { tab: "deliverables", section: "drafter" };
+  return HASH_DESTINATIONS[id] ?? null;
+}
+
+/**
+ * Where a legacy hash should navigate, given the search already on the URL.
+ * An explicit rail tab on a different rail wins (`?tab=ask#budget` stays on Bot).
+ * A hash that names a section of the current rail is selected.
+ * Drafter hashes still leave the pack for the drafter, unless Bot was explicit.
+ */
+export function legacyHashDestination(
+  search: { tab?: string | null; section?: string | null },
+  hash: string | null | undefined,
+): CanonicalClientSearch | null {
+  const id = (routerHash(hash) ?? "").toLowerCase();
+  if (!id) return null;
+  const tab = (search.tab ?? "").trim();
+  const section = (search.section ?? "").trim();
+  if (DRAFTER_HASHES.has(id)) {
+    if (tab === "ask") return null;
+    if (section === "drafter") return null;
+    return { tab: "deliverables", section: "drafter" };
+  }
+  const mapped = HASH_DESTINATIONS[id];
+  if (!mapped) return null;
+  const explicit = tab === "ask" || tab === "overview" || tab === "deliverables";
+  if (explicit && tab !== mapped.tab) return null;
+  if (section && section !== mapped.section) return null;
+  if (tab === mapped.tab && section === mapped.section) return null;
+  return mapped;
 }

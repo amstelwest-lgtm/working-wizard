@@ -138,6 +138,35 @@ export function forecastRunwayHeadlineShared(input: {
   return { headline: `${horizon}+ wks`, note: "above the floor" };
 }
 
+function finiteCashAmount(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value === 0) return null;
+  return value;
+}
+
+/**
+ * Overview Cash tile. "No shortfall" keeps a real figure when one exists
+ * (lowest closing, otherwise the opening). A missing forecast stays blank.
+ */
+export function overviewCashTileFigure(input: {
+  headline?: string | null;
+  opening?: number | null;
+  lowest?: number | null;
+  lowestIsOpening?: boolean;
+  money: (n: number) => string;
+}): string | null {
+  const headline = input.headline?.trim() ?? "";
+  const lowest = finiteCashAmount(input.lowest);
+  const opening = finiteCashAmount(input.opening);
+  const amount = input.lowestIsOpening ? (opening ?? lowest) : (lowest ?? opening);
+  if (!headline && amount == null) return null;
+  if (!headline) return input.money(amount as number);
+  const bare =
+    headline === "No shortfall" || headline === "Cash generative" || headline === "Profitable";
+  if (!bare || amount == null) return headline;
+  const kind = !input.lowestIsOpening && lowest != null ? "lowest" : "opening";
+  return `${headline} · ${kind} ${input.money(amount)}`;
+}
+
 /**
  * Weeks-below readout shared by the cash PDF and the tab.
  * An opening under the floor is not "0 / none projected".

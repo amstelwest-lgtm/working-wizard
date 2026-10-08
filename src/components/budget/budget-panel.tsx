@@ -61,6 +61,7 @@ export function BudgetPanel({
   hideReadOnlyStamp,
   hideInlineSignOff,
   signoff: signoffProp,
+  signoffKnown = true,
   onSignoffChange,
   firstActualsMonth,
   reloadToken,
@@ -88,6 +89,8 @@ export function BudgetPanel({
   /** Parent already renders Sign off in the tab header. */
   hideInlineSignOff?: boolean;
   signoff?: ClientReviewSignoff | null;
+  /** False until the parent sign-off fetch has settled. */
+  signoffKnown?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   /** YYYY-MM of the earliest month with real figures; the budget window starts no earlier. */
   firstActualsMonth?: string | null;
@@ -612,6 +615,7 @@ export function BudgetPanel({
         isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
         canSign={Boolean(canSign && clientId)}
         onSignoffChange={patchBudgetSignoff}
+        signoffKnown={signoffKnown}
         drawer={reviewDrawer}
         lens={lens}
         onLensChange={onLensChange}

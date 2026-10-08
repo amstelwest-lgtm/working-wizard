@@ -62,6 +62,26 @@ export function budgetYtdSignal(input: { budget: number; actual: number | null }
   return varianceLine("revenue", "Revenue", input.budget, input.actual, true).signal;
 }
 
+/**
+ * Overview Budget tile. A seeded plan still has a YTD budget figure.
+ * The "seeded from these figures" sentence is not the value. No budget stays blank.
+ */
+export function overviewBudgetTileFigure(input: {
+  budgetRevenue?: number | null;
+  actualRevenue?: number | null;
+  seeded?: boolean;
+  money: (n: number) => string;
+}): string | null {
+  const budget = input.budgetRevenue;
+  if (typeof budget !== "number" || !Number.isFinite(budget) || Math.abs(budget) < 1) return null;
+  const budgetText = input.money(budget);
+  const actual = input.actualRevenue;
+  if (input.seeded || typeof actual !== "number" || !Number.isFinite(actual)) {
+    return `YTD budget ${budgetText}`;
+  }
+  return `YTD actual ${input.money(actual)} vs budget ${budgetText}`;
+}
+
 /** Revenue year-to-date. Months without actuals stay out of the comparison. */
 export function budgetYtdSentence(input: {
   budget: number;

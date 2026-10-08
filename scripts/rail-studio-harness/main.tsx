@@ -1,4 +1,5 @@
 import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter, useSearch } from "@tanstack/react-router";
+import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { toast, Toaster } from "sonner";
@@ -69,10 +70,18 @@ const rootRoute = createRootRoute({
 const clientRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/clients/$clientId",
-  validateSearch: (search: Record<string, unknown>) => ({
-    tab: typeof search.tab === "string" ? search.tab : undefined,
-    section: typeof search.section === "string" ? search.section : undefined,
-    focus: search.focus === "health" || search.focus === "pillars" ? search.focus : undefined,
+  validateSearch: (search: Record<string, unknown>) => {
+    const rawTab = typeof search.tab === "string" ? search.tab : undefined;
+    const rawSection = typeof search.section === "string" ? search.section : undefined;
+    const rawFocus = typeof search.focus === "string" ? search.focus : undefined;
+    const canonical =
+      rawTab || rawSection
+        ? canonicalizeAccountantSearch({ tab: rawTab, section: rawSection, focus: rawFocus })
+        : null;
+    return {
+    tab: canonical?.tab,
+    section: canonical?.section,
+    focus: canonical?.focus,
     aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
     packView:
       search.packView === "draft" ||
@@ -88,7 +97,8 @@ const clientRoute = createRoute({
       search.view === "table" || search.view === "13week" || search.view === "chart"
         ? search.view
         : undefined,
-  }),
+    };
+  },
   component: function ClientHarness() {
     return (
       <MarketProvider selection={{ country: "ZA", regionCode: null }}>

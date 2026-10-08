@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { openPracticeSettings } from "@/lib/user-roles";
-import { useEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -113,8 +113,9 @@ import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { figureSourceChipLabel, resolveFigureSource } from "@/lib/ledger-link-copy";
-import { booksCoverPeriod, booksSyncSubline } from "@/lib/books-answer";
+import { booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
+import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
 import { budgetSeededFromStatement, budgetVersusStatement } from "@/lib/budget.bridges";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
@@ -150,7 +151,7 @@ import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
-  drafterSectionForHash,
+  legacyHashDestination,
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
@@ -184,7 +185,7 @@ import {
   plBankDisagreement,
   runwayDisplayLabel,
 } from "@/lib/client-metrics";
-import { forecastRunwayHeadlineShared } from "@/lib/cash-forecast-parity";
+import { forecastLowestPoint, forecastRunwayHeadlineShared, overviewCashTileFigure } from "@/lib/cash-forecast-parity";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
@@ -851,18 +852,31 @@ function ClientView() {
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
   }, [search, requestOpenNote, openArchive]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-    const next = drafterSectionForHash(search.section, window.location.hash);
-    if (!next) return;
-    void navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: (prev) => accountantClientTabSearch(prev, "deliverables", { section: next }),
-      hash: routerHash(window.location.hash),
-      replace: true,
-    });
-  }, [search.section, clientId, navigate]);
+    const apply = () => {
+      const hash = window.location.hash;
+      const next = legacyHashDestination({ tab: search.tab, section: search.section }, hash);
+      if (next) {
+        void navigate({
+          to: "/clients/$clientId",
+          params: { clientId },
+          search: (prev) => accountantClientTabSearch(prev, next.tab, { section: next.section }),
+          hash: routerHash(hash),
+          replace: true,
+        });
+        return;
+      }
+      const id = (routerHash(hash) ?? "").toLowerCase();
+      if (id !== "cash" && id !== "budget" && id !== "advisory" && id !== "pack") return;
+      const pane = legacyPaneForSearch({ tab: search.tab, section: search.section });
+      if (!pane) return;
+      document.getElementById(`pane-${pane}`)?.scrollIntoView({ block: "start" });
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, [search.tab, search.section, clientId, navigate]);
   // Landing tab: Overview — the client explanation, profile, and upload.
   // Deliverables stay clean. Decided once per client, after load, and never
   // over a ?tab= deep link.
@@ -1079,6 +1093,7 @@ function ClientView() {
   const [reviewSignoffs, setReviewSignoffs] = useState<
     Partial<Record<ReviewScope, ClientReviewSignoff>>
   >({});
+  const [signoffsKnown, setSignoffsKnown] = useState(false);
   const financialsSignoff = reviewSignoffs.financials ?? null;
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
   const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
@@ -1404,15 +1419,23 @@ function ClientView() {
   const budgetCompared = budgetDoc
     ? budgetVersusStatement(budgetDoc, financials as Record<string, unknown>)
     : null;
+  const budgetMoney = (amount: number) => fmtBudgetMoney(amount, clientMarket);
   let budgetFigure: string | null = null;
-  if (budgetDoc && budgetCompared && budgetSeededFromStatement(budgetCompared)) {
-    budgetFigure = "Budget seeded from these figures";
-  } else if (budgetCompared) {
-    budgetFigure = `Revenue ${fmtBudgetMoney(budgetCompared.revenue, clientMarket)} vs budget ${fmtBudgetMoney(budgetCompared.budgetRevenue, clientMarket)}`;
+  if (budgetCompared) {
+    budgetFigure = overviewBudgetTileFigure({
+      budgetRevenue: budgetCompared.budgetRevenue,
+      actualRevenue: budgetCompared.revenue,
+      seeded: budgetSeededFromStatement(budgetCompared),
+      money: budgetMoney,
+    });
   } else if (budgetDoc) {
     const rows = computeBudgetMonths(budgetDoc, budgetDoc.activeScenario);
     const row = rows.find((entry) => entry.revenue > 0) ?? rows[0];
-    if (row && row.revenue > 0) budgetFigure = `Revenue ${fmtBudgetMoney(row.revenue, clientMarket)}`;
+    budgetFigure = overviewBudgetTileFigure({
+      budgetRevenue: row?.revenue,
+      seeded: true,
+      money: budgetMoney,
+    });
   }
   const statementFigureFacts = {
     grossMargin: ratios["Gross Margin"],
@@ -1426,18 +1449,22 @@ function ClientView() {
     profile: briefingProfile,
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
   });
+  const cashRunwayHeadline = hasFigures
+    ? forecastRunwayHeadlineShared({
+        opening: cashOutlook.opening,
+        closings: cashOutlook.closing,
+        floor: cashOutlook.floor,
+        runwayLabel: runwayDisplayLabel(metricRunway),
+        cashGenerative: metricRunway.kind === "cash_generative",
+      }).headline
+    : null;
+  const cashLowPoint = hasFigures
+    ? forecastLowestPoint(cashOutlook.opening, cashOutlook.closing)
+    : null;
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
-    runwayLabel: hasFigures
-      ? forecastRunwayHeadlineShared({
-          opening: cashOutlook.opening,
-          closings: cashOutlook.closing,
-          floor: cashOutlook.floor,
-          runwayLabel: runwayDisplayLabel(metricRunway),
-          cashGenerative: metricRunway.kind === "cash_generative",
-        }).headline
-      : null,
+    runwayLabel: cashRunwayHeadline,
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
@@ -1471,9 +1498,22 @@ function ClientView() {
     label: overallHealth.displayLabel,
   });
   const statementPosition = ratiosStatementFigures(financials);
+  const booksLines = booksTileLines({
+    period: booksPeriod ?? snapshotFigure(briefingSnapshot, "updated"),
+    source: figureSource,
+    sourceLabel: healthChip,
+    syncedStamp: snapshotFigure(briefingSnapshot, "updated"),
+  });
   const overviewCards = overviewSectionCards({
     health: hasFigures ? healthHeadline(overallHealth.overall, overallHealth.displayLabel) : null,
-    cash: snapshotFigure(briefingSnapshot, "runway") ?? snapshotFigure(briefingSnapshot, "cash"),
+    cash:
+      overviewCashTileFigure({
+        headline: cashRunwayHeadline,
+        opening: hasFigures ? cashOutlook.opening : null,
+        lowest: cashLowPoint?.amount ?? null,
+        lowestIsOpening: cashLowPoint?.isOpening ?? true,
+        money: (amount) => formatMoneyCompact(amount, clientMarket),
+      }) ?? snapshotFigure(briefingSnapshot, "cash"),
     profit: snapshotFigure(briefingSnapshot, "om"),
     collections: storedAmountFigure(statementPosition.receivables, (amount) =>
       statementArApMoney(amount, clientMarket),
@@ -1483,8 +1523,8 @@ function ClientView() {
     ),
     budget: budgetFigure,
     moves: strategicMoves[0]?.title ?? null,
-    books: booksPeriod ?? snapshotFigure(briefingSnapshot, "updated"),
-  }, booksPeriod ? { books: booksSyncSubline(snapshotFigure(briefingSnapshot, "updated")) } : undefined);
+    books: booksLines.figure,
+  }, booksLines.detail ? { books: booksLines.detail } : undefined);
   const [overviewNextStep, setOverviewNextStep] = useState<NextStep | null>(null);
   const onOverviewNextStep = useCallback((step: NextStep | null) => {
     setOverviewNextStep(step);
@@ -1780,13 +1820,19 @@ function ClientView() {
 
   useEffect(() => {
     if (!clientId) return;
+    let cancelled = false;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
+        if (cancelled) return;
         setReviewSignoffs(indexReviewSignoffs(signoffs));
+        setSignoffsKnown(true);
       })
       .catch(() => {
-        // Sign-off state is a trust-signal enhancement, never block the page.
+        if (!cancelled) setSignoffsKnown(true);
       });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, activeTab, cashForecastReloadToken]);
 
@@ -2843,6 +2889,7 @@ function ClientView() {
                     client?.financials_updated_at ?? null,
                   )}
                   onSignoffChange={patchSignoff("financials")}
+                  signoffKnown={signoffsKnown}
                   extraActions={
                     overviewNextStep ? (
                       <button
@@ -3187,6 +3234,7 @@ function ClientView() {
                       client?.financials_updated_at ?? null,
                     )}
                     onSignoffChange={patchSignoff("financials")}
+                  signoffKnown={signoffsKnown}
                     canSign
                     extraActions={
                       <button
@@ -3485,6 +3533,7 @@ function ClientView() {
                       client?.financials_updated_at ?? null,
                     )}
                     onSignoffChange={patchSignoff("profitability")}
+                    signoffKnown={signoffsKnown}
                     canSign
                     extraActions={
                       <button
@@ -3675,6 +3724,7 @@ function ClientView() {
                         client?.last_forecast_at ?? null,
                       )}
                       signoff={cashForecastSignoff}
+                      signoffKnown={signoffsKnown}
                       onSignoffChange={patchSignoff("cash_forecast")}
                       reloadToken={cashForecastReloadToken}
                       openBankUploadToken={cashBankUploadToken}
@@ -3776,6 +3826,7 @@ function ClientView() {
                       canSign
                       hideInlineSignOff
                       signoff={budgetSignoff}
+                      signoffKnown={signoffsKnown}
                       onSignoffChange={patchSignoff("budget")}
                       businessTypeId={client.business_type}
                       operatingProfile={parseOperatingProfile(client.operating_profile)}
@@ -3851,6 +3902,7 @@ function ClientView() {
                     signoff={actionPlanSignoff}
                     isStale={false}
                     onSignoffChange={patchSignoff("action_plan")}
+                    signoffKnown={signoffsKnown}
                     canSign={planCount > 0}
                     signoffVerbOnly
                     extraActions={
