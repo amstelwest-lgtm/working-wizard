@@ -37,7 +37,6 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Area,
-  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -1167,8 +1166,7 @@ export function CashForecastPanel({
   const chartData = weeks.map((w, i) => ({
     week: `W${i + 1}`,
     label: w,
-    base: Math.round(baseCalc.closing[i]),
-    scenario: Math.round(calc.closing[i]),
+    closing: Math.round(baseCalc.closing[i]),
   }));
 
   /**
@@ -1301,16 +1299,13 @@ export function CashForecastPanel({
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
           <XAxis
-            dataKey="label"
+            dataKey="week"
             stroke="#94a3b8"
             fontSize={10}
             tickLine={false}
             axisLine={false}
             interval={0}
-            minTickGap={18}
-            angle={-35}
-            textAnchor="end"
-            height={48}
+            height={28}
           />
           <YAxis
             stroke="#94a3b8"
@@ -1329,33 +1324,23 @@ export function CashForecastPanel({
               color: "#f1f5f9",
             }}
             labelStyle={{ color: "#d4a550", fontWeight: 700 }}
-            formatter={(v: number, name: string) => [
-              fmtR(v),
-              name === "base" ? "Base" : "Scenario",
-            ]}
+            formatter={(v: number) => [fmtR(v), "Closing"]}
             labelFormatter={(l, payload) => {
               const p = payload?.[0]?.payload as { label?: string } | undefined;
               return p?.label ? `${l} · ${p.label}` : String(l);
             }}
           />
           <ReferenceLine y={0} stroke={RED} strokeDasharray="3 3" strokeOpacity={0.7} />
-          {scenarioActive && (
-            <Line
-              type="monotone"
-              dataKey="base"
-              name="base"
-              stroke="#94a3b8"
-              strokeDasharray="5 5"
-              dot={false}
-              strokeWidth={1.5}
-              isAnimationActive
-              animationDuration={900}
-            />
-          )}
+          <ReferenceLine
+            y={minimumCash}
+            stroke={GOLD}
+            strokeDasharray="4 4"
+            strokeOpacity={0.85}
+          />
           <Area
             type="monotone"
-            dataKey="scenario"
-            name="scenario"
+            dataKey="closing"
+            name="closing"
             stroke={GOLD}
             strokeWidth={2.5}
             fill="url(#cfGoldFill)"
@@ -1401,7 +1386,6 @@ export function CashForecastPanel({
     totalInflow,
     totalOutflow,
   });
-  const inTheBlack = forecastInTheBlack(totalInflow, totalOutflow, closingW13);
   const seriesCashGenerative =
     direction.kind === "cash_generative" && forecastIsCashGenerative(totalInflow, totalOutflow);
   const scenarioLabel = forecastScenarioLabel({
@@ -1445,19 +1429,19 @@ export function CashForecastPanel({
   ) : (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
-        showShortfall
+        lowestUnderFloor
           ? "border-[#e05c5c] bg-[#e05c5c]/10 text-[#c0392b] dark:text-[#ef6b6b]"
-          : inTheBlack
+          : publishedStory.note === "above the floor"
             ? "border-[#4caf82] bg-[#4caf82]/10 text-[#3f9c72] dark:text-[#5cc492]"
             : "border-[#d4a550] bg-[#d4a550]/15 text-[#8a6a12] dark:text-[#e2b964]"
       }`}
     >
-      {showShortfall || !inTheBlack ? (
+      {lowestUnderFloor ? (
         <AlertTriangle className="h-3 w-3" />
       ) : (
         <CheckCircle2 className="h-3 w-3" />
       )}
-      {showShortfall ? `Shortfall W${lowestWeek}` : inTheBlack ? "In the black" : "Net cash out"}
+      {lowestUnderFloor ? "Under the floor" : "Above the floor"}
     </span>
   );
 
@@ -1631,7 +1615,6 @@ export function CashForecastPanel({
   // ── Complex mode ──────────────────────────────────────────────────────────
   return (
     <div id="wizard-cash-outlook" className="space-y-5">
-      {configureInputs}
       {/* Hero: summary + chart */}
       <Card className={CARD_SHELL}>
         <div className={GOLD_RULE} />
@@ -1651,7 +1634,7 @@ export function CashForecastPanel({
             </div>
             <div className="flex items-center gap-2">
               {heroBadge}
-              {!hideReadOnlyStamp && (
+              {!hideReadOnlyStamp && !canSign && (
                 <ReviewSignoffBadge
                   signoff={forecastSignoff}
                   scope="cash_forecast"
@@ -1659,15 +1642,15 @@ export function CashForecastPanel({
                   placement="corner"
                 />
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+              <button
+                type="button"
+                className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-100"
                 disabled={exporting}
                 onClick={exportPDF}
               >
-                <Download className="h-3 w-3" /> {exporting ? "Preparing…" : "Export PDF"}
-              </Button>
+                <Download className="mr-1 inline h-3 w-3" />
+                {exporting ? "Preparing…" : "Export PDF"}
+              </button>
             </div>
           </div>
         </CardHeader>
@@ -1689,58 +1672,47 @@ export function CashForecastPanel({
           {forecastNotes}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
-              label="Opening balance"
+              label="Opening bank"
               value={fmtCompact(baseCalc.opening)}
-              sub={`Start ${startLabel}${openingSourceChip ? ` · ${openingSourceChip}` : ""}`}
+              sub={`${startLabel}${openingSourceChip ? ` · ${openingSourceChip}` : ""}`}
             />
             <Stat
-              label="Closing · Week 13"
-              value={fmtCompact(closingW13)}
-              tone={closingW13 < 0 ? "bad" : "neutral"}
-              sub={
-                scenarioActive ? (
-                  <span
-                    className={
-                      closingW13 - baseCalc.closing[WEEKS - 1] >= 0
-                        ? "text-[#3f9c72] dark:text-[#5cc492]"
-                        : "text-[#c0392b] dark:text-[#ef6b6b]"
-                    }
-                  >
-                    {closingW13 - baseCalc.closing[WEEKS - 1] >= 0 ? "+" : ""}
-                    {fmtCompact(closingW13 - baseCalc.closing[WEEKS - 1])} vs base
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    {trajectory >= 0 ? (
-                      <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3 text-[#c0392b]" />
-                    )}
-                    {trajectory >= 0 ? "+" : ""}
-                    {fmtCompact(trajectory)} over 13 weeks
-                  </span>
-                )
-              }
-            />
-            <Stat
-              label="Lowest balance"
+              label="Lowest point"
               value={fmtCompact(lowestBal)}
               tone={lowestUnderFloor ? "bad" : "good"}
               sub={
                 publishedLowest.isOpening
-                  ? "Opening balance"
-                  : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
+                  ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+                  : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
               }
             />
             <Stat
-              label="Total net movement"
-              value={fmtCompact(calc.net.reduce((a, b) => a + b, 0))}
-              tone={calc.net.reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
-              sub={`Inflows ${fmtCompact(calc.inflow.reduce((a, b) => a + b, 0))} · Outflows ${fmtCompact(calc.outflow.reduce((a, b) => a + b, 0))}`}
+              label="Runway"
+              value={forecastEmpty ? "—" : publishedStory.headline}
+              tone={forecastEmpty ? "neutral" : publishedStory.note === "above the floor" ? "good" : "bad"}
+              sub={forecastEmpty ? "Add a bank balance or lines" : publishedStory.note}
+            />
+            <Stat
+              label="Review"
+              value={
+                !forecastSignoff ? "Not signed off" : forecastStale ? "Stale" : "Signed off"
+              }
+              tone={!forecastSignoff || forecastStale ? "bad" : "good"}
+              sub={
+                forecastStale
+                  ? "Inputs changed after sign-off"
+                  : forecastSignoff?.signed_off_by_name
+                    ? forecastSignoff.signed_off_by_name
+                    : "Review the inputs, then sign off"
+              }
             />
           </div>
           <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
-            Cash {positionPhrase}. Runway {publishedStory.headline}. Floor {fmtCompact(minimumCash)}.
+            {forecastEmpty
+              ? "Nothing is forecast yet. Upload bank statements, or enter the opening cash and the lines below."
+              : publishedStory.note === "above the floor"
+                ? `Cash stays above the ${fmtCompact(minimumCash)} floor across these 13 weeks.`
+                : `Cash ${positionPhrase} (floor ${fmtCompact(minimumCash)}). ${publishedStory.headline} — action needed.`}
           </p>
           {exportError ? (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
@@ -1756,24 +1728,30 @@ export function CashForecastPanel({
             </div>
           ) : null}
           <div className="mb-1 flex items-center justify-between">
-            <div className={LABEL_CLS}>Closing balance trajectory</div>
-            {scenarioActive && (
-              <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                Dashed = base · Gold = scenario
-              </div>
-            )}
+            <div className={LABEL_CLS}>Closing balance</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">
+              Gold line is the {fmtCompact(minimumCash)} floor
+            </div>
           </div>
           {heroChart(240)}
         </CardContent>
       </Card>
+
+      <CollapsibleGoldCard
+        icon={Settings2}
+        title="Inputs"
+        subtitle="Only collection delay and weekly growth change the 13-week maths. Other rows are noted, not applied."
+      >
+        {configureInputs}
+      </CollapsibleGoldCard>
 
       {/* Scenario sliders */}
       <CollapsibleGoldCard
         id="wizard-cash-scenario"
         icon={SlidersHorizontal}
         title="Scenario Studio"
-        subtitle="Stress-test the forecast — what if revenue drops 20% or customers pay 2 weeks late?"
-        defaultOpen
+        subtitle="Stress-test the forecast — what if revenue drops 20% or customers pay 2 weeks late? Nothing here is saved as the base."
+        defaultOpen={false}
         headerRight={
           scenarioActive ? (
             <Button
@@ -1800,6 +1778,18 @@ export function CashForecastPanel({
           ) : undefined
         }
       >
+        {scenarioActive ? (
+          <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
+            {scenarioLabel}. Week 13 would close at {fmtCompact(closingW13)}, against{" "}
+            {fmtCompact(baseCalc.closing[WEEKS - 1])} on the base. The chart and the signed
+            forecast stay on the base until you choose Reset to base.
+          </p>
+        ) : (
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            The figures above are the base forecast. These sliders stay on this page and are not
+            saved.
+          </p>
+        )}
         <div className="grid gap-5 md:grid-cols-3">
           <div>
             <div className="mb-2 flex items-center justify-between text-xs">
@@ -1960,14 +1950,14 @@ export function CashForecastPanel({
         subtitle="Double-click a figure to edit · red = shortfall, act early"
       >
         <ScrollableTable hint="Swipe sideways to see weeks →">
-          <table className="milon-data-table w-full min-w-[900px] text-xs">
+          <table className="milon-data-table w-full min-w-[1180px] text-xs">
             <thead>
               <tr className="border-b border-amber-900/15 text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                <th className="sticky left-0 bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">
+                <th className="sticky left-0 z-10 whitespace-nowrap bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">
                   Item
                 </th>
                 {weeks.map((w, i) => (
-                  <th key={i} className="px-2 py-2 text-right">
+                  <th key={i} className="whitespace-nowrap px-2 py-2 text-right">
                     W{i + 1}
                     <div className="text-[9px] font-normal text-slate-400 dark:text-slate-500">
                       {w}
@@ -1977,7 +1967,7 @@ export function CashForecastPanel({
               </tr>
             </thead>
             <tbody>
-              {calc.revRows.map((r, i) => (
+              {baseCalc.revRows.filter((r) => r.vals.some((v) => v)).map((r, i) => (
                 <tr
                   key={`r${i}`}
                   className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300"
@@ -2001,13 +1991,13 @@ export function CashForecastPanel({
                 <td className="sticky left-0 bg-[#f2f8f2] px-2 py-1 dark:bg-[#0e1a20]">
                   Total inflow
                 </td>
-                {calc.inflow.map((v, j) => (
-                  <td key={j} className="px-2 py-1 text-right">
-                    {fmtR(v)}
+                {baseCalc.inflow.map((v, j) => (
+                  <td key={j} className="whitespace-nowrap px-2 py-1 text-right tabular-nums">
+                    {v ? fmtR(v) : "—"}
                   </td>
                 ))}
               </tr>
-              {calc.expRows.map((r, i) => (
+              {baseCalc.expRows.filter((r) => r.vals.some((v) => v)).map((r, i) => (
                 <tr
                   key={`e${i}`}
                   className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300"
@@ -2039,15 +2029,15 @@ export function CashForecastPanel({
                 <td className="sticky left-0 bg-[#faf1f0] px-2 py-1 dark:bg-[#1a1216]">
                   Total outflow
                 </td>
-                {calc.outflow.map((v, j) => (
-                  <td key={j} className="px-2 py-1 text-right">
-                    ({fmtR(v)})
+                {baseCalc.outflow.map((v, j) => (
+                  <td key={j} className="whitespace-nowrap px-2 py-1 text-right tabular-nums">
+                    {v ? `(${fmtR(v)})` : "—"}
                   </td>
                 ))}
               </tr>
               <tr className="border-b border-amber-900/15 font-semibold text-slate-900 dark:border-slate-700 dark:text-slate-100">
                 <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">Net cash</td>
-                {calc.net.map((v, j) => (
+                {baseCalc.net.map((v, j) => (
                   <td
                     key={j}
                     className={`px-2 py-1 text-right ${v < 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-[#3f9c72] dark:text-[#5cc492]"}`}
@@ -2060,7 +2050,7 @@ export function CashForecastPanel({
                 <td className="sticky left-0 bg-[#f7efdd] px-2 py-1 dark:bg-[#1c1a12]">
                   Closing balance
                 </td>
-                {calc.closing.map((v, j) => (
+                {baseCalc.closing.map((v, j) => (
                   <td
                     key={j}
                     className={`px-2 py-1 text-right ${v < 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : ""}`}
@@ -2079,20 +2069,7 @@ export function CashForecastPanel({
         id="wizard-cash-setup"
         icon={Settings2}
         title="Forecast Setup"
-        subtitle="Start date, opening balance and bank statement upload"
-        headerRight={
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowBankUpload(true);
-            }}
-          >
-            <Upload className="h-3 w-3" /> Upload bank statements
-          </Button>
-        }
+        subtitle="Start date and opening balance"
       >
         <div className="grid gap-3 md:grid-cols-2">
           <div>
