@@ -15,7 +15,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { interventionNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { localizePlaybookStep, spellForMarket, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -40,6 +40,8 @@ export type InterventionPriorityPDFProps = {
   interventions: Intervention[];
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
 };
@@ -73,11 +75,14 @@ export function InterventionPriorityPDF({
   interventions,
   accountantProfile,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   market,
 }: InterventionPriorityPDFProps) {
   const theme = resolveTheme(accountantProfile);
+  const mkt = market ?? ZA_MARKET;
+  const spell = (text: string) => spellForMarket(text, mkt);
 
   const critical = interventions.filter((x) => x.health_tier === "critical");
   const atRisk = interventions.filter((x) => x.health_tier === "at_risk");
@@ -122,13 +127,14 @@ export function InterventionPriorityPDF({
   const renderCards = (items: Intervention[]) =>
     items.map((iv) => {
       counter += 1;
+      const step = localizePlaybookStep(iv, mkt);
       return (
         <InsightBox
           key={`${iv.ratio_key}-${iv.step_number}-${counter}`}
           stepNumber={counter}
-          ratioName={iv.ratio_name}
-          stepTitle={iv.step_title}
-          description={iv.step_description}
+          ratioName={spell(iv.ratio_name)}
+          stepTitle={spell(step.step_title)}
+          description={spell(step.step_description)}
           timeframe={iv.timeframe}
           effort={iv.effort}
           impact={iv.impact}
@@ -145,8 +151,9 @@ export function InterventionPriorityPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
-      market={market ?? ZA_MARKET}
+      market={mkt}
     >
       <ReportTitle
         kicker={reportKicker("intervention")}
@@ -180,7 +187,7 @@ export function InterventionPriorityPDF({
 
       {atRisk.length > 0 && (
         <View>
-          <SectionHeader title="Wave 2 — Stabilise" color={C.amber} />
+          <SectionHeader title={spell("Wave 2 — Stabilise")} color={C.amber} />
           <Text style={S.waveDesc}>
             These steps target ratios under pressure. Schedule them over the next 30–60 days, once
             Wave 1 is underway.

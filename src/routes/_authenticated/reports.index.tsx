@@ -1164,6 +1164,8 @@ type ClientReportData = {
   overallHealth: OverallHealth | null;
   /** Firm row name for this client. Sign-off stamps from another firm are dropped. */
   clientFirmName: string | null;
+  /** `clients.is_demo`. Live figures and the sign-off stay; the PDF stamps SAMPLE. */
+  isSample: boolean;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -1206,6 +1208,7 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   periodYear: null,
   overallHealth: null,
   clientFirmName: null,
+  isSample: false,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -2035,7 +2038,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     supabase
       .from("clients")
       .select(
-        "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at",
+        "id, name, firm_id, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at, is_demo",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -2081,6 +2084,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     market?: unknown;
     budget?: unknown;
     budget_updated_at?: string | null;
+    is_demo?: boolean | null;
   } | null;
   const market = resolveMarket(
     parseMarketSelection(clientRow?.market) ?? coerceMarketSelection(clientRow?.market ?? null),
@@ -2159,6 +2163,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
     clientFirmName,
+    isSample: Boolean(clientRow?.is_demo),
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -2301,6 +2306,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     periodYear: periodParts?.year ?? null,
     overallHealth,
     clientFirmName,
+    isSample: Boolean(clientRow.is_demo),
   };
 }
 
@@ -2420,6 +2426,7 @@ function makeSmeWithNote(
 
 function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
   const cd = clientData?.hasData ? clientData : null;
+  const sample = Boolean(clientData?.isSample);
   const operatingProfile = clientData?.operatingProfile ?? null;
   const market = clientData?.market ?? ZA_MARKET;
   const financialsStamp = signoffStampFor("financials", clientData);
@@ -2431,7 +2438,14 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     slice: T | null | undefined,
     missingMsg: string,
   ): { isDemo: boolean; data: T | null } {
-    if (!cd) return { isDemo: true, data: null };
+    if (!cd) {
+      if (sample) {
+        throw new Error(
+          `${missingMsg} Sample mode keeps the live figures and does not invent demo numbers.`,
+        );
+      }
+      return { isDemo: true, data: null };
+    }
     if (slice == null) throw new Error(missingMsg);
     return { isDemo: false, data: slice };
   }
@@ -2444,6 +2458,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
           "No scorable ratios yet — complete financials before generating the scorecard.",
         );
       }
+      if (sample && !cd) {
+        throw new Error(
+          "This sample client has no financial figures yet. Sample mode keeps live numbers and does not invent demo data.",
+        );
+      }
       const isDemo = !cd;
       const ratioRows = (isDemo ? MOCK_RATIOS : cd!.ratioResults).map((row) =>
         row.unscored ? row : { ...row, health_tier: scoreTier(row.health_score) },
@@ -2453,6 +2472,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         ratioResults: s.includePrior ? ratioRows : stripPriorFromRatios(ratioRows),
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         cashRunwayWeeks: isDemo ? null : (cd!.cashRunwayWeeks ?? null),
@@ -2467,6 +2487,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
           "No scorable ratios yet — complete financials before generating interventions.",
         );
       }
+      if (sample && !cd) {
+        throw new Error(
+          "This sample client has no financial figures yet. Sample mode keeps live numbers and does not invent demo data.",
+        );
+      }
       const isDemo = !cd;
       const interventions = isDemo
         ? MOCK_INTERVENTIONS
@@ -2476,6 +2501,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         interventions,
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2493,6 +2519,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         scenario: "moderate",
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: forecastStamp,
         operatingProfile,
         market,
@@ -2512,6 +2539,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         workingCapitalData: isDemo ? MOCK_WC : data!,
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2531,6 +2559,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         })(),
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: profitabilityStamp,
         operatingProfile,
         market,
@@ -2547,6 +2576,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         data: isDemo ? MOCK_LEVERAGE : data!,
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2563,6 +2593,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         data: isDemo ? MOCK_ASSETS : data!,
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2579,10 +2610,16 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
           unavailableReason: `${laborProductivityTitle(market)} is not scored — revenue, headcount, and ${laborCostLabel(market).toLowerCase()} are all missing.`,
           accountantProfile: p,
           isDemo: false,
+          sample,
           reviewSignoff: financialsStamp,
           operatingProfile,
           market,
         });
+      }
+      if (sample && !cd) {
+        throw new Error(
+          "This sample client has no financial figures yet. Sample mode keeps live numbers and does not invent demo data.",
+        );
       }
       const isDemo = !cd;
       const laborData = isDemo ? MOCK_LABOR : cd!.labor!;
@@ -2591,6 +2628,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         data: s.includePrior ? laborData : withoutPriorLabor(laborData),
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2600,6 +2638,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const { RatioMovementPDF } = await import("@/reports/ratio-movement");
       // A live client with figures but no history still gets a report: the PDF
       // renders its own "first period on record" state instead of erroring.
+      if (sample && !cd) {
+        throw new Error(
+          "This sample client has no financial figures yet. Sample mode keeps live numbers and does not invent demo data.",
+        );
+      }
       const isDemo = !cd;
       return renderToBlob(RatioMovementPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
@@ -2607,6 +2650,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         periodLabels: isDemo ? undefined : cd!.movementPeriodLabels,
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2635,6 +2679,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         error.emptyCta = empty.cta;
         throw error;
       }
+      if (sample && !cd) {
+        throw new Error(
+          "This sample client has no financial figures yet. Sample mode keeps live numbers and does not invent demo data.",
+        );
+      }
       const isDemo = !cd;
       return renderToBlob(BenchmarkReportPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
@@ -2647,6 +2696,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         benchmarkRows: isDemo ? MOCK_BENCHMARK : cd!.benchmark,
         accountantProfile: p,
         isDemo,
+        sample,
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
@@ -2654,6 +2704,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     budget: async (s, p) => {
       const { BudgetVariancePDF } = await import("@/reports/budget-variance");
+      if (sample && !cd) {
+        throw new Error(
+          "This sample client has no financial figures yet. Sample mode keeps live numbers and does not invent demo data.",
+        );
+      }
       const isDemo = !cd;
       const pack = isDemo ? illustrativeBudgetPack() : null;
       const doc = isDemo ? pack!.doc : cd!.budget;
@@ -2674,6 +2729,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         model,
         accountantProfile: p,
         isDemo,
+        sample,
         draft: !isDemo && !budgetStamp,
         reviewSignoff: budgetStamp,
         market,

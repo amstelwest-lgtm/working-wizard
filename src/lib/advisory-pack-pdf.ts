@@ -7,7 +7,7 @@
  */
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ResolvedMarket } from "@/lib/market";
-import type { AdvisoryPack, PackStatus } from "@/lib/advisory-pack";
+import { packSectionsForPdf, type AdvisoryPack, type PackStatus } from "@/lib/advisory-pack";
 import { packStatusLabel } from "@/lib/advisory-pack";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
 
@@ -160,6 +160,8 @@ export async function downloadAdvisoryPackPdf(input: {
   } | null;
   market?: ResolvedMarket;
   recordedSigner?: { name: string; firmName: string | null } | null;
+  /** Fictional client. Stamps SAMPLE and keeps the live pack and the sign-off. */
+  sample?: boolean;
 }): Promise<{ blob: Blob; filename: string; signed: boolean }> {
   const [{ pdf }, { AdvisoryPackPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -180,7 +182,10 @@ export async function downloadAdvisoryPackPdf(input: {
     recordedSignerName: input.recordedSigner?.name ?? null,
     recordedFirmName: input.recordedSigner?.firmName ?? null,
   });
-  const sections: AdvisoryPackPdfSection[] = input.pack.content.sections.map((s) => ({
+  const sections: AdvisoryPackPdfSection[] = packSectionsForPdf(input.pack.content.sections, {
+    signed: Boolean(stamp),
+    firmName: stamp?.firmName ?? input.profile.firmName,
+  }).map((s) => ({
     title: s.title,
     body: s.body,
     bullets: s.bullets,
@@ -193,6 +198,7 @@ export async function downloadAdvisoryPackPdf(input: {
       sections,
       draftDisclosure: stamp ? null : ADVISORY_PACK_DRAFT_DISCLOSURE,
       reviewSignoff: stamp,
+      sample: input.sample,
       market: input.market,
     }) as Parameters<typeof pdf>[0],
   ).toBlob();

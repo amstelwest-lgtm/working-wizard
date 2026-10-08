@@ -68,6 +68,8 @@ export type LaborProductivityPDFProps = {
   data: LaborProductivityData | null;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
   /** Live client missing headcount or labor cost. The ZIP still includes the report. */
@@ -209,6 +211,7 @@ export function LaborProductivityPDF({
   data: d,
   accountantProfile,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   market,
@@ -225,6 +228,7 @@ export function LaborProductivityPDF({
         smeData={smeData}
         accountantProfile={accountantProfile}
         isDemo={isDemo}
+        sample={sample}
         reviewSignoff={reviewSignoff}
         market={m}
       >
@@ -329,6 +333,7 @@ export function LaborProductivityPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
       market={m}
     >

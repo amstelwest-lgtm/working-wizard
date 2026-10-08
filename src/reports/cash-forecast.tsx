@@ -55,6 +55,8 @@ export type CashForecastPDFProps = {
   cashGenerative?: boolean;
   assumptions?: string[];
   isDemo?: boolean;
+  /** Fictional client (`clients.is_demo`). Live figures, SAMPLE stamp. */
+  sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
 };
@@ -341,6 +343,7 @@ export function CashForecastPDF({
   cashGenerative = false,
   assumptions = DEFAULT_ASSUMPTIONS,
   isDemo,
+  sample,
   reviewSignoff,
   operatingProfile,
   market,
@@ -423,6 +426,7 @@ export function CashForecastPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      sample={sample}
       reviewSignoff={reviewSignoff}
       market={m}
     >

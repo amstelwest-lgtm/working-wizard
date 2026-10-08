@@ -262,11 +262,11 @@ assert(
 );
 
 const blankOcf = presentScorecardRatio({ name: "OCF / EBITDA", value: 0, cashFlowKnown: false });
-assert(blankOcf.unscored && blankOcf.scoredValue == null, "OCF 0 without a cash-flow statement is Not scored");
+assert(!blankOcf.include && blankOcf.unscored && blankOcf.scoredValue == null, "OCF 0 without a cash-flow statement is omitted");
 const realZero = presentScorecardRatio({ name: "OCF / EBITDA", value: 0, cashFlowKnown: true });
 assert(!realZero.unscored && realZero.scoredValue === 0, "a genuine zero from a cash-flow statement still scores");
 const missingOcf = presentScorecardRatio({ name: "OCF / EBITDA", value: Number.NaN });
-assert(missingOcf.unscored, "a blank cash flow is Not scored");
+assert(!missingOcf.include && missingOcf.unscored, "a blank cash flow is omitted");
 
 const qa = reportInputsFromFinancials({
   revenue: "120000",

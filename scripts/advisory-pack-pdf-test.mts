@@ -169,7 +169,7 @@ const draftText = await textOf(draftBuf);
 assert(draftText.includes(ADVISORY_PACK_DRAFT_DISCLOSURE), "draft pdf contains the disclosure");
 assert(draftText.includes("QA US Test LLC"), "draft pdf names the client");
 assert(draftText.includes("Milon"), "product name survives Helvetica");
-assert(!draftText.includes("Reviewed & signed off by"), "draft pdf has no sign-off stamp");
+assert(!draftText.includes("Reviewed & signed off"), "draft pdf has no sign-off stamp");
 assert(!/claude|anthropic/i.test(draftText), "draft pdf hides vendor names");
 
 const signedBuf = await renderToBuffer(
@@ -187,7 +187,12 @@ const signedBuf = await renderToBuffer(
 );
 const signedText = await textOf(signedBuf);
 assert(signedText.includes("Alex Accountant"), "signed pdf stamps the accountant name");
-assert(signedText.includes("Reviewed & signed off by"), "signed pdf uses the report footer stamp");
+assert(
+  signedText.includes("Reviewed & signed off · Alex Accountant"),
+  "signed pdf uses the report footer stamp",
+);
+assert(!signedText.includes("· AA ·") && !/\bAA\b/.test(signedText), "footer drops the initials token");
+assert(signedText.includes("North Books"), "firm is on the footer");
 assert(
   !signedText.includes(ADVISORY_PACK_DRAFT_DISCLOSURE),
   "signed pdf drops the draft disclosure",

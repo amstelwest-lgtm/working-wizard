@@ -110,6 +110,37 @@ export const DEFERRED_PROFILE_CONFIRM_KEYS = [
   "operating_profile.debtPosition",
 ] as const;
 
+/** Human labels for internal profile keys. Never show the raw field name. */
+const PROFILE_QUESTION_LABEL: Record<string, string> = {
+  "operating_profile.payMotion": "How they earn",
+  "operating_profile.volumeUnit": "What they sell",
+  "operating_profile.secondaryVolumeUnits": "Second revenue stream",
+  "operating_profile.debtorDaysDefault": "How customers pay",
+  "operating_profile.costShape": "Cost base",
+  "operating_profile.seasonality": "Seasonality",
+  "operating_profile.inventoryIntensity": "Inventory",
+  "operating_profile.customerConcentration": "Customer concentration",
+  "operating_profile.debtPosition": "Debt",
+  "operating_profile.ownerGoal": "Goal this year",
+};
+
+export function humanQuestionLabel(key: string): string {
+  const known = PROFILE_QUESTION_LABEL[key];
+  if (known) return known;
+  const bare = key.replace(/^operating_profile\./, "");
+  if (bare === key) return key;
+  return bare.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim();
+}
+
+/** Replace leaked field keys in generated copy with the same human labels. */
+export function humanizeInternalFieldNames(text: string): string {
+  if (!text) return text;
+  return Object.entries(PROFILE_QUESTION_LABEL).reduce(
+    (out, [key, label]) => out.split(key).join(label),
+    text,
+  );
+}
+
 export const OPERATING_PROFILE_PROMPTS: Array<{
   key: string;
   prompt: string;
