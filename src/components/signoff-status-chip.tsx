@@ -55,17 +55,7 @@ export function SignoffStatusChip({
     };
   }, [clientId, scope, shown, loadWorkflow]);
 
-  if (!known) {
-    return (
-      <p
-        data-signoff-status
-        data-signoff-scope={scope}
-        data-signoff-pending="true"
-        className="answer-strip__status"
-        aria-busy="true"
-      />
-    );
-  }
+  if (!known) return null;
 
   const kind = signoffStatusKind({
     hasSignoff: Boolean(shown),

@@ -63,8 +63,9 @@ export function budgetYtdSignal(input: { budget: number; actual: number | null }
 }
 
 /**
- * Overview Budget tile. A seeded plan still has a YTD budget figure.
- * The "seeded from these figures" sentence is not the value. No budget stays blank.
+ * Overview Budget tile. Callers pass the same compact money formatter as Cash.
+ * Seeded or no actual: "R 426k budget". Compared: "R 420k vs R 426k budget".
+ * No budget stays blank.
  */
 export function overviewBudgetTileFigure(input: {
   budgetRevenue?: number | null;
@@ -77,9 +78,9 @@ export function overviewBudgetTileFigure(input: {
   const budgetText = input.money(budget);
   const actual = input.actualRevenue;
   if (input.seeded || typeof actual !== "number" || !Number.isFinite(actual)) {
-    return `YTD budget ${budgetText}`;
+    return `${budgetText} budget`;
   }
-  return `YTD actual ${input.money(actual)} vs budget ${budgetText}`;
+  return `${input.money(actual)} vs ${budgetText} budget`;
 }
 
 /** Revenue year-to-date. Months without actuals stay out of the comparison. */

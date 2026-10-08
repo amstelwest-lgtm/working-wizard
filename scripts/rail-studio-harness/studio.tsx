@@ -53,7 +53,6 @@ import { booksCoverPeriod, booksTileLines } from "@/lib/books-answer";
 import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { overviewCashTileFigure } from "@/lib/cash-forecast-parity";
 import { statementArApMoney } from "@/components/statement-arap-fallback";
-import { fmtBudgetMoney } from "@/lib/budget.compute";
 import { createBudgetDocument } from "@/lib/budget.months";
 import {
   budgetSeededFromStatement,
@@ -665,7 +664,7 @@ function harnessOverviewCards(snapshot: readonly { key: string; value: string }[
     budgetRevenue: compared?.budgetRevenue,
     actualRevenue: compared?.revenue,
     seeded: budgetSeededFromStatement(compared),
-    money: (amount) => fmtBudgetMoney(amount, ZA_MARKET),
+    money: (amount) => formatMoneyCompact(amount, ZA_MARKET),
   });
   const books = booksTileLines({
     period: booksPeriod ?? snapshotFigure(marginSnapshot, "updated"),
