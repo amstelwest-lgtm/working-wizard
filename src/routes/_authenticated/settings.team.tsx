@@ -18,9 +18,12 @@ import {
   inviteFirmStaff,
   removeFirmMember,
   revokeClientAccess,
+  revokeFirmStaffInvite,
+  rotateFirmStaffInvite,
   saveClientAssignments,
   updateFirmMember,
   type PracticeAccessBoard,
+  type PracticeInviteRow,
 } from "@/lib/practice-access.functions";
 import {
   CLASSIFICATION_HELP,
@@ -84,12 +87,28 @@ function ClassificationSelect({
   );
 }
 
+function formatInviteExpiry(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "—";
+  const label = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(t));
+  return t < Date.now() ? `Expired ${label}` : label;
+}
+
+const INVITE_EMAIL_FAILED =
+  "Invite saved, but the email didn't send. Copy the link and send it yourself.";
+
 function TeamAccessPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const loadRoster = useServerFn(getPracticeTeamRoster);
   const loadBoard = useServerFn(getPracticeAccessBoard);
   const invite = useServerFn(inviteFirmStaff);
+  const rotateInvite = useServerFn(rotateFirmStaffInvite);
+  const revokeInvite = useServerFn(revokeFirmStaffInvite);
   const updateMember = useServerFn(updateFirmMember);
   const removeMember = useServerFn(removeFirmMember);
   const saveAssignments = useServerFn(saveClientAssignments);
@@ -106,6 +125,10 @@ function TeamAccessPage() {
   const [invRole, setInvRole] = useState<"admin" | "member">("member");
   const [invClass, setInvClass] = useState<PracticeClassification>("staff");
   const [saving, setSaving] = useState(false);
+  const [unsentInvite, setUnsentInvite] = useState<{ url: string; email: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [busyInvite, setBusyInvite] = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
   const [grantUser, setGrantUser] = useState("");
   const [clientSearch, setClientSearch] = useState("");
@@ -203,6 +226,76 @@ function TeamAccessPage() {
       for (const c of visibleClients) delete next[c.id];
       return next;
     });
+  };
+
+  const copyText = async (url: string) => {
+    await navigator.clipboard.writeText(url);
+  };
+
+  const copyBannerLink = async () => {
+    if (!unsentInvite) return;
+    try {
+      await copyText(unsentInvite.url);
+      setLinkCopied(true);
+    } catch {
+      setLinkCopied(false);
+      toast.error("Could not copy the link. Select it and copy it yourself.");
+    }
+  };
+
+  const copyPendingLink = async (row: PracticeInviteRow) => {
+    setBusyInvite(row.id);
+    try {
+      const result = await rotateInvite({ data: { inviteId: row.id, sendEmail: false } });
+      setUnsentInvite((current) =>
+        current?.email === row.email ? { url: result.inviteUrl, email: row.email } : current,
+      );
+      try {
+        await copyText(result.inviteUrl);
+        setCopiedInviteId(row.id);
+      } catch {
+        setUnsentInvite({ url: result.inviteUrl, email: row.email });
+        setLinkCopied(false);
+        toast.error("Could not copy the link. Select it and copy it yourself.");
+      }
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not copy the invite link");
+    } finally {
+      setBusyInvite(null);
+    }
+  };
+
+  const resendPending = async (row: PracticeInviteRow) => {
+    setBusyInvite(row.id);
+    try {
+      const result = await rotateInvite({ data: { inviteId: row.id, sendEmail: true } });
+      if (result.emailed) {
+        toast.success("Invite emailed", { id: `firm-invite-resend-${row.id}-${Date.now()}` });
+        setUnsentInvite((current) => (current?.email === row.email ? null : current));
+      } else {
+        setUnsentInvite({ url: result.inviteUrl, email: row.email });
+        setLinkCopied(false);
+      }
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not resend the invite");
+    } finally {
+      setBusyInvite(null);
+    }
+  };
+
+  const revokePending = async (row: PracticeInviteRow) => {
+    setBusyInvite(row.id);
+    try {
+      await revokeInvite({ data: { inviteId: row.id } });
+      setUnsentInvite((current) => (current?.email === row.email ? null : current));
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not revoke the invite");
+    } finally {
+      setBusyInvite(null);
+    }
   };
 
   return (
@@ -306,13 +399,21 @@ function TeamAccessPage() {
                         },
                       })
                         .then((r) => {
-                          toast.success(
-                            r.addedExisting
-                              ? "Team member added — assign them to client files below"
-                              : r.emailed
-                                ? "Invite emailed"
-                                : "Invite saved — email was not sent (check Resend)",
-                          );
+                          const invitedEmail = invEmail.trim().toLowerCase();
+                          if (r.emailed) {
+                            toast.success(
+                              r.addedExisting
+                                ? "Team member added — assign them to client files below"
+                                : "Invite emailed",
+                              { id: `firm-invite-ok-${Date.now()}` },
+                            );
+                            setUnsentInvite(null);
+                          } else if (r.inviteUrl) {
+                            setLinkCopied(false);
+                            setUnsentInvite({ url: r.inviteUrl, email: invitedEmail });
+                          } else {
+                            toast.error(r.error || "Invite saved, but the email didn't send.");
+                          }
                           setInvEmail("");
                           setInvName("");
                           return refresh();
@@ -323,6 +424,22 @@ function TeamAccessPage() {
                   >
                     {saving ? "Sending…" : "Invite team member"}
                   </Button>
+                  {unsentInvite ? (
+                    <div
+                      role="status"
+                      className="sm:col-span-2 rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200"
+                    >
+                      <p>{INVITE_EMAIL_FAILED}</p>
+                      <p className="mt-2 break-all text-xs">{unsentInvite.url}</p>
+                      <button
+                        type="button"
+                        className="mt-3 rounded-md border border-slate-700 px-3 py-1.5 text-xs font-semibold"
+                        onClick={() => void copyBannerLink()}
+                      >
+                        {linkCopied ? "Copied" : "Copy link"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <p className="mb-4 text-xs text-slate-500">
@@ -403,8 +520,56 @@ function TeamAccessPage() {
                 ))}
               </ul>
               {(board?.invites.length ?? 0) > 0 && (
-                <div className="mt-4 text-xs text-slate-500">
-                  Pending invites: {board?.invites.map((i) => i.email).join(", ")}
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Pending invites
+                  </p>
+                  <ul className="space-y-2">
+                    {board?.invites.map((row) => (
+                      <li
+                        key={row.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 px-3 py-3"
+                      >
+                        <div>
+                          <div className="text-sm font-medium">{row.name || row.email}</div>
+                          <div className="text-xs text-slate-500">{row.email}</div>
+                          <div className="text-xs text-slate-400">
+                            {MEMBERSHIP_LABELS[row.membershipRole]} ·{" "}
+                            {CLASSIFICATION_LABELS[row.classification]} · Expires{" "}
+                            {formatInviteExpiry(row.expiresAt)}
+                          </div>
+                        </div>
+                        {view.canManage ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-200"
+                              disabled={busyInvite === row.id}
+                              onClick={() => void copyPendingLink(row)}
+                            >
+                              {copiedInviteId === row.id ? "Copied" : "Copy invite link"}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-200"
+                              disabled={busyInvite === row.id}
+                              onClick={() => void resendPending(row)}
+                            >
+                              Resend
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-rose-300"
+                              disabled={busyInvite === row.id}
+                              onClick={() => void revokePending(row)}
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </section>

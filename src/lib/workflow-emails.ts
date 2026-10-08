@@ -236,6 +236,45 @@ export function dropAlreadySent<
   return planned.filter((p) => !sent.has(`${p.kind}|${p.refKey}|${p.email.toLowerCase()}`));
 }
 
+/** Don't hammer Resend for the same template, recipient, and entity. */
+export const WORKFLOW_FAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+export const WORKFLOW_FAIL_ATTEMPT_CAP = 3;
+
+export type WorkflowAttemptLogEntry = SentLogEntry & {
+  created_at?: string | null;
+};
+
+function attemptKey(kind: string, refKey: string, email: string): string {
+  return `${kind}|${refKey}|${email.toLowerCase()}`;
+}
+
+/**
+ * A failed send is done for 24 hours, and done for good after three failures,
+ * for the same template (kind) + recipient + entity (ref key).
+ */
+export function dropFailedAttempts<
+  T extends { kind: string; refKey: string; email: string },
+>(planned: T[], log: WorkflowAttemptLogEntry[], nowIso: string): T[] {
+  const nowMs = Date.parse(nowIso);
+  const failures = new Map<string, { count: number; latest: number | null }>();
+  for (const row of log) {
+    if (row.status !== "failed") continue;
+    const key = attemptKey(row.kind, row.ref_key, row.recipient_email);
+    const info = failures.get(key) ?? { count: 0, latest: null };
+    info.count += 1;
+    const at = Date.parse(String(row.created_at ?? ""));
+    if (Number.isFinite(at)) info.latest = info.latest == null ? at : Math.max(info.latest, at);
+    failures.set(key, info);
+  }
+  return planned.filter((item) => {
+    const info = failures.get(attemptKey(item.kind, item.refKey, item.email));
+    if (!info) return true;
+    if (info.count >= WORKFLOW_FAIL_ATTEMPT_CAP) return false;
+    if (info.latest == null || !Number.isFinite(nowMs)) return false;
+    return nowMs - info.latest >= WORKFLOW_FAIL_COOLDOWN_MS;
+  });
+}
+
 // ── Templates ────────────────────────────────────────────────────────────────
 
 function escapeHtml(s: string): string {

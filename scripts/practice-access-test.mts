@@ -18,7 +18,14 @@ import {
   effectiveClassification,
   parseClassification,
 } from "../src/lib/practice-access";
-import { accessApproveUrl, accessGrantedEmail } from "../src/lib/practice-access-email";
+import { createHash } from "node:crypto";
+import { accessApproveUrl, accessGrantedEmail, publicEmailError } from "../src/lib/practice-access-email";
+import {
+  STAFF_INVITE_TTL_MS,
+  revokeFirmStaffInviteRecord,
+  rotateFirmStaffInviteLink,
+} from "../src/lib/practice-access.functions";
+import type { LooseAdmin } from "../src/lib/owner-ops.guard";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -192,5 +199,337 @@ assert(
   settings.includes("${a.clientId}:${a.userId}"),
   "per-client access table keys rows by client and user",
 );
+
+assert(
+  settings.includes("Invite saved, but the email didn't send. Copy the link and send it yourself."),
+  "failed invite email stays on the page",
+);
+assert(settings.includes('"Copy link"'), "failed invite has a copy button");
+assert(settings.includes("Copy invite link"), "pending invite can copy a fresh link");
+assert(settings.includes("revokeFirmStaffInvite"), "pending invite can be revoked");
+assert(settings.includes("sendEmail: true"), "resend emails the fresh link");
+assert(settings.includes("if (r.emailed)"), "success toast runs only after a real send");
+assert(settings.includes('toast.success('), "a successful invite still toasts");
+assert(fns.includes("if (tokenError)"), "approval-token insert failure fails the invite");
+assert(fns.includes('console.error("inviteFirmStaff email failed"'), "invite logs the send error");
+assert(fns.includes("accessApproveUrl(token)"), "new invite returns a copyable link");
+assert(fns.includes("error: sent.ok ? null : sent.error"), "existing-user invite returns the send error");
+assert(fns.includes("rotateFirmStaffInviteLink"), "token rotation is a firm-scoped server action");
+
+const emailSrc = readFileSync(resolve("src/lib/practice-access-email.ts"), "utf8");
+assert(emailSrc.includes("AbortSignal.timeout(RESEND_SEND_TIMEOUT_MS)"), "access email aborts a hung send");
+assert(emailSrc.includes('console.error("sendAccessEmail failed"'), "Resend failures are logged with status and message");
+assert(emailSrc.includes("from: `Milōn <${fromAddr}>`"), "from-address construction is unchanged");
+assert(
+  publicEmailError(
+    403,
+    '{"message":"API key not authorized to send emails from trymilon.com","key":"re_live_secretkey123456"}',
+  ) === "Resend 403: API key not authorized to send emails from trymilon.com",
+  "email errors keep the Resend message and drop secrets",
+);
+assert(
+  publicEmailError(null, "Bearer re_test_abcdefghijklmnopqrstuvwxyz timed out") ===
+    "Bearer [redacted] timed out",
+  "bearer tokens are not returned",
+);
+
+type Row = Record<string, unknown>;
+
+function sha(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function memoryAdmin(tables: Record<string, Row[]>): LooseAdmin {
+  const live = (table: string) => {
+    if (!tables[table]) tables[table] = [];
+    return tables[table];
+  };
+  const match = (table: string, filters: Array<[string, unknown]>) =>
+    live(table).filter((row) => filters.every(([col, val]) => row[col] === val));
+  return {
+    from(table: string) {
+      return {
+        select() {
+          const filters: Array<[string, unknown]> = [];
+          const builder = {
+            eq(col: string, val: unknown) {
+              filters.push([col, val]);
+              return builder;
+            },
+            maybeSingle() {
+              return Promise.resolve({ data: match(table, filters)[0] ?? null, error: null });
+            },
+            then(
+              onFulfilled?: (value: { data: Row[]; error: null }) => unknown,
+              onRejected?: (reason: unknown) => unknown,
+            ) {
+              return Promise.resolve({ data: match(table, filters), error: null }).then(
+                onFulfilled,
+                onRejected,
+              );
+            },
+          };
+          return builder;
+        },
+        update(patch: Row) {
+          const filters: Array<[string, unknown]> = [];
+          const builder = {
+            eq(col: string, val: unknown) {
+              filters.push([col, val]);
+              return builder;
+            },
+            then(
+              onFulfilled?: (value: { error: null }) => unknown,
+              onRejected?: (reason: unknown) => unknown,
+            ) {
+              return Promise.resolve().then(() => {
+                for (const row of match(table, filters)) Object.assign(row, patch);
+                return { error: null };
+              }).then(onFulfilled, onRejected);
+            },
+          };
+          return builder;
+        },
+        insert(row: Row) {
+          live(table).push({ ...row });
+          return Promise.resolve({ error: null });
+        },
+        delete() {
+          const filters: Array<[string, unknown]> = [];
+          const builder = {
+            eq(col: string, val: unknown) {
+              filters.push([col, val]);
+              return builder;
+            },
+            then(
+              onFulfilled?: (value: { error: null }) => unknown,
+              onRejected?: (reason: unknown) => unknown,
+            ) {
+              return Promise.resolve().then(() => {
+                const drop = new Set(match(table, filters));
+                tables[table] = live(table).filter((row) => !drop.has(row));
+                return { error: null };
+              }).then(onFulfilled, onRejected);
+            },
+          };
+          return builder;
+        },
+      };
+    },
+    rpc: async () => ({ data: null, error: null }),
+    auth: {
+      admin: {
+        getUserById: async () => ({ data: { user: null } }),
+        listUsers: async () => ({ data: { users: [] } }),
+      },
+    },
+  } as LooseAdmin;
+}
+
+const FIRM = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const OTHER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const OWNER = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const ADMIN = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const MEMBER = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const OUTSIDER = "99999999-9999-4999-8999-999999999999";
+const INVITE = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const OLD = "0123456789abcdef0123456789abcdef";
+const NEW = "fedcba9876543210fedcba9876543210";
+const NOW = new Date("2026-10-08T11:56:00.000Z");
+const EXPIRES = new Date(NOW.getTime() + STAFF_INVITE_TTL_MS).toISOString();
+
+function seed(): Record<string, Row[]> {
+  return {
+    firms: [
+      { id: FIRM, name: "Ada & Co", owner_user_id: OWNER },
+      { id: OTHER, name: "Other Practice", owner_user_id: OUTSIDER },
+    ],
+    firm_memberships: [
+      { firm_id: FIRM, user_id: ADMIN, role: "admin", classification: "manager" },
+      { firm_id: FIRM, user_id: MEMBER, role: "member", classification: "staff" },
+      { firm_id: OTHER, user_id: OUTSIDER, role: "admin", classification: "partner" },
+    ],
+    profiles: [
+      { id: OWNER, email: "ada@ada.co", full_name: "Ada" },
+      { id: ADMIN, email: "bo@ada.co", full_name: "Bo" },
+    ],
+    firm_staff_invites: [
+      {
+        id: INVITE,
+        firm_id: FIRM,
+        email: "nia@practice.co.za",
+        name: "Nia",
+        membership_role: "member",
+        classification: "staff",
+        accepted_at: null,
+        token_hash: sha(OLD),
+        expires_at: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    access_approval_tokens: [
+      {
+        id: "token-old",
+        purpose: "firm_invite",
+        invite_id: INVITE,
+        email: "nia@practice.co.za",
+        token_hash: sha(OLD),
+        used_at: "2026-10-02T00:00:00.000Z",
+        expires_at: "2026-10-01T00:00:00.000Z",
+      },
+      {
+        id: "token-extra",
+        purpose: "firm_invite",
+        invite_id: INVITE,
+        email: "nia@practice.co.za",
+        token_hash: sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        used_at: null,
+        expires_at: "2026-10-01T00:00:00.000Z",
+      },
+      {
+        id: "token-other",
+        purpose: "owner_approve",
+        invite_id: INVITE,
+        email: "owner@client.co.za",
+        token_hash: "leave-this-hash",
+        used_at: null,
+        expires_at: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    audit_log: [],
+  };
+}
+
+function hashes(tables: Record<string, Row[]>): string[] {
+  return [
+    ...tables.firm_staff_invites.map((row) => String(row.token_hash)),
+    ...tables.access_approval_tokens.map((row) => String(row.token_hash)),
+  ];
+}
+
+async function expectThrow(run: () => Promise<unknown>, includes: string): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    assert(error instanceof Error && error.message.includes(includes), `expected throw containing ${includes}`);
+    return;
+  }
+  throw new Error(`expected a throw containing ${includes}`);
+}
+
+{
+  const denied = seed();
+  const before = hashes(denied).join("|");
+  await expectThrow(
+    () =>
+      rotateFirmStaffInviteLink(memoryAdmin(denied), {
+        actorId: MEMBER,
+        inviteId: INVITE,
+        sendEmail: false,
+        now: NOW,
+        mintToken: () => NEW,
+      }),
+    "practice owner or a firm admin",
+  );
+  await expectThrow(
+    () =>
+      rotateFirmStaffInviteLink(memoryAdmin(denied), {
+        actorId: OUTSIDER,
+        inviteId: INVITE,
+        sendEmail: true,
+        now: NOW,
+        mintToken: () => NEW,
+      }),
+    "practice owner or a firm admin",
+  );
+  assert(hashes(denied).join("|") === before, "unauthorized rotation does not replace hashes");
+  assert(denied.access_approval_tokens.some((row) => row.token_hash === sha(OLD)), "old token still valid after a refused rotation");
+
+  const accepted = seed();
+  accepted.firm_staff_invites[0].accepted_at = "2026-10-03T00:00:00.000Z";
+  await expectThrow(
+    () =>
+      rotateFirmStaffInviteLink(memoryAdmin(accepted), {
+        actorId: OWNER,
+        inviteId: INVITE,
+        sendEmail: false,
+        now: NOW,
+        mintToken: () => NEW,
+      }),
+    "already accepted",
+  );
+  assert(accepted.firm_staff_invites[0].token_hash === sha(OLD), "accepted invite keeps its hash");
+
+  const tables = seed();
+  let sends = 0;
+  const quiet = await rotateFirmStaffInviteLink(memoryAdmin(tables), {
+    actorId: ADMIN,
+    inviteId: INVITE,
+    sendEmail: false,
+    now: NOW,
+    mintToken: () => NEW,
+    send: async () => {
+      sends += 1;
+      return { ok: true };
+    },
+  });
+  assert(sends === 0, "copy link does not email");
+  assert(quiet.emailed === false && quiet.error === null, "copy link reports that nothing was emailed");
+  assert(quiet.inviteUrl.endsWith(`/access/${NEW}`), "copy link returns the new invite url");
+  assert(tables.firm_staff_invites[0].token_hash === sha(NEW), "invite hash is replaced");
+  assert(tables.firm_staff_invites[0].expires_at === EXPIRES, "invite expiry extends 14 days");
+  const firmTokens = tables.access_approval_tokens.filter((row) => row.purpose === "firm_invite");
+  assert(firmTokens.length === 1, "extra firm-invite tokens are removed");
+  assert(firmTokens[0].token_hash === sha(NEW), "approval token hash is replaced");
+  assert(firmTokens[0].expires_at === EXPIRES, "approval token expiry extends 14 days");
+  assert(firmTokens[0].used_at === null, "rotated token is unused");
+  assert(
+    !tables.access_approval_tokens.some((row) => row.token_hash === sha(OLD)),
+    "old token no longer matches an approval row",
+  );
+  assert(
+    !tables.firm_staff_invites.some((row) => row.token_hash === sha(OLD)),
+    "old token no longer matches the invite",
+  );
+  assert(
+    tables.access_approval_tokens.some((row) => row.token_hash === "leave-this-hash"),
+    "unrelated approval tokens stay",
+  );
+
+  const mailed = seed();
+  const captured: string[] = [];
+  const failedSend = await rotateFirmStaffInviteLink(memoryAdmin(mailed), {
+    actorId: OWNER,
+    inviteId: INVITE,
+    sendEmail: true,
+    now: NOW,
+    mintToken: () => NEW,
+    send: async (opts) => {
+      captured.push(opts.text);
+      return { ok: false, error: "Resend 403: API key not authorized to send emails from trymilon.com" };
+    },
+  });
+  assert(failedSend.emailed === false, "resend reports emailed false");
+  assert(
+    failedSend.error === "Resend 403: API key not authorized to send emails from trymilon.com",
+    "resend returns the safe error",
+  );
+  assert(failedSend.inviteUrl.endsWith(`/access/${NEW}`), "resend still returns the new link");
+  assert(captured.length === 1 && captured[0].includes(`/access/${NEW}`), "resent mail uses the new link");
+  assert(!captured[0].includes(OLD), "resent mail does not include the old token");
+  assert(mailed.firm_staff_invites[0].token_hash === sha(NEW), "owner rotation replaces the invite hash");
+
+  const revoked = seed();
+  await expectThrow(
+    () => revokeFirmStaffInviteRecord(memoryAdmin(revoked), { actorId: MEMBER, inviteId: INVITE }),
+    "practice owner or a firm admin",
+  );
+  assert(revoked.firm_staff_invites.length === 1, "a team member cannot revoke an invite");
+  await revokeFirmStaffInviteRecord(memoryAdmin(revoked), { actorId: ADMIN, inviteId: INVITE });
+  assert(revoked.firm_staff_invites.length === 0, "an admin revoke removes the invite");
+  assert(
+    !revoked.access_approval_tokens.some((row) => row.invite_id === INVITE),
+    "revoke invalidates every token for that invite",
+  );
+}
 
 console.log("practice-access-test: ok");

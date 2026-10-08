@@ -672,20 +672,22 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
         { onConflict: "user_id,role" },
       );
       const inviter = await profileById(admin, ctx.userId);
+      const inviteUrl = `${inviteSiteUrl()}/auth`;
       const mail = firmInviteEmail({
         recipientName: existing.name || name,
         firmName: firm.name,
         inviterName: inviter.name,
         roleLabel: MEMBERSHIP_LABELS[data.membershipRole],
-        url: `${inviteSiteUrl()}/auth`,
+        url: inviteUrl,
       });
-      await sendAccessEmail({
+      const sent = await sendAccessEmail({
         to: email,
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
         idempotencyKey: `firm-add-${firm.id}-${email}`,
       });
+      if (!sent.ok) console.error("inviteFirmStaff email failed", { error: sent.error });
       await writeAudit(admin, {
         actorId: ctx.userId,
         action: "member_invited",
@@ -693,7 +695,13 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
         subjectUserId: existing.id,
         details: { email, membershipRole: data.membershipRole, classification: data.classification, existing: true },
       });
-      return { addedExisting: true as const, invited: false as const };
+      return {
+        addedExisting: true as const,
+        invited: false as const,
+        emailed: sent.ok,
+        error: sent.ok ? null : sent.error,
+        inviteUrl,
+      };
     }
 
     const token = newToken();
@@ -711,19 +719,24 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    await admin.from("access_approval_tokens").insert({
+    const { error: tokenError } = await admin.from("access_approval_tokens").insert({
       purpose: "firm_invite",
       email,
       invite_id: invite.id,
       token_hash: hashToken(token),
     });
+    if (tokenError) {
+      await admin.from("firm_staff_invites").delete().eq("id", invite.id);
+      throw new Error(tokenError.message);
+    }
     const inviter = await profileById(admin, ctx.userId);
+    const inviteUrl = accessApproveUrl(token);
     const mail = firmInviteEmail({
       recipientName: name,
       firmName: firm.name,
       inviterName: inviter.name,
       roleLabel: MEMBERSHIP_LABELS[data.membershipRole],
-      url: accessApproveUrl(token),
+      url: inviteUrl,
     });
     const sent = await sendAccessEmail({
       to: email,
@@ -732,13 +745,182 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
       text: mail.text,
       idempotencyKey: `firm-invite-${invite.id}`,
     });
+    if (!sent.ok) console.error("inviteFirmStaff email failed", { error: sent.error });
     await writeAudit(admin, {
       actorId: ctx.userId,
       action: "member_invited",
       firmId: firm.id,
       details: { email, membershipRole: data.membershipRole, classification: data.classification, existing: false },
     });
-    return { addedExisting: false as const, invited: true as const, emailed: sent.ok };
+    return {
+      addedExisting: false as const,
+      invited: true as const,
+      emailed: sent.ok,
+      error: sent.ok ? null : sent.error,
+      inviteUrl,
+    };
+  });
+
+/** Fresh staff-invite links stay valid for two weeks. */
+export const STAFF_INVITE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+
+export async function rotateFirmStaffInviteLink(
+  admin: LooseAdmin,
+  opts: {
+    actorId: string;
+    inviteId: string;
+    sendEmail: boolean;
+    now?: Date;
+    mintToken?: () => string;
+    send?: typeof sendAccessEmail;
+  },
+): Promise<{ inviteUrl: string; emailed: boolean; error: string | null }> {
+  const { data: invite, error: inviteErr } = await admin
+    .from("firm_staff_invites")
+    .select("id, firm_id, email, name, membership_role, classification, accepted_at")
+    .eq("id", opts.inviteId)
+    .maybeSingle();
+  if (inviteErr) throw new Error(inviteErr.message);
+  if (!invite) throw new Error("Invitation not found.");
+  if (invite.accepted_at) throw new Error("This invitation was already accepted.");
+
+  const firmId = String(invite.firm_id);
+  await assertManager(admin, opts.actorId, firmId);
+
+  const now = opts.now ?? new Date();
+  const token = (opts.mintToken ?? newToken)();
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(now.getTime() + STAFF_INVITE_TTL_MS).toISOString();
+  const email = String(invite.email ?? "").trim().toLowerCase();
+
+  const { data: tokenRows, error: tokenReadErr } = await admin
+    .from("access_approval_tokens")
+    .select("id")
+    .eq("invite_id", invite.id)
+    .eq("purpose", "firm_invite");
+  if (tokenReadErr) throw new Error(tokenReadErr.message);
+
+  const tokenIds = ((tokenRows ?? []) as Array<{ id?: string }>)
+    .map((row) => String(row.id ?? ""))
+    .filter(Boolean);
+  if (tokenIds.length === 0) {
+    const { error: insErr } = await admin.from("access_approval_tokens").insert({
+      purpose: "firm_invite",
+      email,
+      invite_id: invite.id,
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+      used_at: null,
+    });
+    if (insErr) throw new Error(insErr.message);
+  } else {
+    const [keep, ...rest] = tokenIds;
+    const { error: upErr } = await admin
+      .from("access_approval_tokens")
+      .update({ token_hash: tokenHash, expires_at: expiresAt, used_at: null })
+      .eq("id", keep);
+    if (upErr) throw new Error(upErr.message);
+    for (const extra of rest) {
+      const { error: delErr } = await admin.from("access_approval_tokens").delete().eq("id", extra);
+      if (delErr) throw new Error(delErr.message);
+    }
+  }
+
+  const { error: hashErr } = await admin
+    .from("firm_staff_invites")
+    .update({ token_hash: tokenHash, expires_at: expiresAt })
+    .eq("id", invite.id)
+    .eq("firm_id", firmId);
+  if (hashErr) throw new Error(hashErr.message);
+
+  const inviteUrl = accessApproveUrl(token);
+  if (!opts.sendEmail) return { inviteUrl, emailed: false, error: null };
+
+  const { data: firmRow } = await admin.from("firms").select("name").eq("id", firmId).maybeSingle();
+  const inviter = await profileById(admin, opts.actorId);
+  const mail = firmInviteEmail({
+    recipientName: String(invite.name ?? "").trim() || email.split("@")[0],
+    firmName: String(firmRow?.name ?? "Practice"),
+    inviterName: inviter.name,
+    roleLabel: MEMBERSHIP_LABELS[parseMembershipRole(invite.membership_role)],
+    url: inviteUrl,
+  });
+  const send = opts.send ?? sendAccessEmail;
+  const sent = await send({
+    to: email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    idempotencyKey: `firm-invite-${invite.id}-${tokenHash.slice(0, 16)}`,
+  });
+  if (!sent.ok) console.error("rotateFirmStaffInviteLink email failed", { error: sent.error });
+  await writeAudit(admin, {
+    actorId: opts.actorId,
+    action: "member_invited",
+    firmId,
+    details: { email, rotated: true, emailed: sent.ok },
+  });
+  return { inviteUrl, emailed: sent.ok, error: sent.ok ? null : sent.error };
+}
+
+export const rotateFirmStaffInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        inviteId: z.string().uuid(),
+        sendEmail: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    return rotateFirmStaffInviteLink(admin, {
+      actorId: ctx.userId,
+      inviteId: data.inviteId,
+      sendEmail: data.sendEmail === true,
+    });
+  });
+
+export async function revokeFirmStaffInviteRecord(
+  admin: LooseAdmin,
+  opts: { actorId: string; inviteId: string },
+): Promise<{ ok: true }> {
+  const { data: invite, error } = await admin
+    .from("firm_staff_invites")
+    .select("id, firm_id, email, accepted_at")
+    .eq("id", opts.inviteId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!invite) throw new Error("Invitation not found.");
+  if (invite.accepted_at) throw new Error("This invitation was already accepted.");
+  const firmId = String(invite.firm_id);
+  await assertManager(admin, opts.actorId, firmId);
+  const { error: tokenErr } = await admin.from("access_approval_tokens").delete().eq("invite_id", invite.id);
+  if (tokenErr) throw new Error(tokenErr.message);
+  const { error: delErr } = await admin
+    .from("firm_staff_invites")
+    .delete()
+    .eq("id", invite.id)
+    .eq("firm_id", firmId);
+  if (delErr) throw new Error(delErr.message);
+  await writeAudit(admin, {
+    actorId: opts.actorId,
+    action: "member_removed",
+    firmId,
+    details: { email: invite.email, invite: true },
+  });
+  return { ok: true as const };
+}
+
+export const revokeFirmStaffInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ inviteId: z.string().uuid() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    return revokeFirmStaffInviteRecord(admin, { actorId: ctx.userId, inviteId: data.inviteId });
   });
 
 export const updateFirmMember = createServerFn({ method: "POST" })

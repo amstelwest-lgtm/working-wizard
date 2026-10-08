@@ -3,10 +3,11 @@
  *
  * `runWorkflow` is called by the Next Step card after it syncs data requests.
  * It gathers facts, asks the pure planner what is due, drops anything the log
- * already shows as sent, resolves recipients through the `workflow_recipients`
- * RPC, sends via Resend and records every attempt. Idempotent by construction:
- * the partial unique index on the log makes a second identical send a no-op
- * even under concurrent page loads.
+ * already shows as sent, and treats a recent or repeated failure as done for
+ * the same template, recipient, and entity. Recipients come from the
+ * `workflow_recipients` RPC. Idempotent by construction: the partial unique
+ * index on the log makes a second identical send a no-op even under concurrent
+ * page loads.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -17,6 +18,7 @@ import { inviteSiteUrl } from "@/lib/client-invite-email";
 import { sendAccessEmail } from "@/lib/practice-access-email";
 import {
   dropAlreadySent,
+  dropFailedAttempts,
   planWorkflowEmails,
   renderWorkflowEmail,
   type WorkflowEmailIntent,
@@ -202,16 +204,17 @@ export const runWorkflow = createServerFn({ method: "POST" })
 
     const { data: logRows, error: logErr } = await sb
       .from("workflow_email_log")
-      .select("kind, ref_key, recipient_email, status")
+      .select("kind, ref_key, recipient_email, status, created_at")
       .eq("client_id", data.clientId)
       .in("kind", Array.from(new Set(fanned.map((f) => f.kind))))
-      .eq("status", "sent");
+      .in("status", ["sent", "failed"]);
     if (logErr) {
       if (isMissingWorkflowRelation(logErr))
         return { migrated: false, planned: intents.length, sent: 0, skipped };
       throw new Error(logErr.message);
     }
-    const due = dropAlreadySent(fanned, (logRows ?? []) as Parameters<typeof dropAlreadySent>[1]);
+    const logged = (logRows ?? []) as Parameters<typeof dropFailedAttempts>[1];
+    const due = dropFailedAttempts(dropAlreadySent(fanned, logged), logged, now);
 
     let sent = 0;
     const siteUrl = inviteSiteUrl();
