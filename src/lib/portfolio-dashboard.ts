@@ -4,7 +4,7 @@
  * cards, and insight chips from already-loaded client rows.
  */
 
-import type { OverallHealth } from "@/lib/health-score";
+import { PILLAR_LABELS, type OverallHealth } from "@/lib/health-score";
 import type { HealthTier } from "@/lib/ratios";
 
 export type ScoreHistoryPoint = {
@@ -210,18 +210,10 @@ export function attentionFootnote(summary: PortfolioAttentionSummary): string {
 }
 
 function pillarLabel(id: string | undefined): string {
-  switch (id) {
-    case "profit":
-      return "Profitability";
-    case "assets":
-      return "Asset Efficiency";
-    case "financing":
-      return "Financing";
-    case "cash":
-      return "Cash Stability";
-    default:
-      return "Health";
+  if (id === "profit" || id === "assets" || id === "financing" || id === "cash") {
+    return PILLAR_LABELS[id];
   }
+  return "Health";
 }
 
 /** Build the Needs Attention list (worst first, max `limit`). */

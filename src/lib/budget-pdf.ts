@@ -29,6 +29,7 @@ import {
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
 import { formatMoney, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { presentBudgetRebuildNote } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { periodMonthsOf } from "@/lib/ratios";
 import { inAppAccountantSignoffLine } from "@/lib/review-signoff-stamp";
@@ -228,7 +229,7 @@ function fromVariance(v: VarianceLine, label: string, emphasis = false): BudgetP
 }
 
 function contiguousLabel(months: string[], market: Pick<ResolvedMarket, "locale">): string {
-  if (months.length === 0) return "No month actuals uploaded";
+  if (months.length === 0) return "No monthly management accounts uploaded yet";
   if (months.length === 1) return formatMonthLabel(months[0], market);
   const first = formatMonthLabel(months[0], market);
   const last = formatMonthLabel(months[months.length - 1], market);
@@ -296,7 +297,7 @@ function headlineFor(
 ): string {
   const draftBit = includesDraft ? "Some compared months are still unconfirmed drafts. " : "";
   if (!hasActuals) {
-    return "No month actuals are on file for this financial year. The figures are the saved budget. Variance fills in after management accounts are uploaded on the Budget tab.";
+    return "No monthly management accounts uploaded yet. The figures are the saved budget. Variance fills in after management accounts are uploaded on the Budget tab.";
   }
   const adverse = summary
     .filter((r) => r.signal === "adverse" && r.delta != null)
@@ -345,12 +346,19 @@ export function budgetReviewLine(input: {
   });
   if (signed && !input.isStale) return { text: signed, unsigned: false };
   if (signed && input.isStale) {
-    return { text: `${signed} · inputs changed after sign-off`, unsigned: true };
+    return { text: `${signed} · then changed`, unsigned: true };
   }
   if (input.workflowStatus === "ready_for_review") {
-    return { text: "Ready for review — not signed off", unsigned: true };
+    return { text: "Ready for review", unsigned: true };
   }
-  return { text: "Draft — not signed off", unsigned: true };
+  return { text: "Draft", unsigned: true };
+}
+
+/** Footer mark for an unsigned Budget PDF. Matches the tab status, not a generic draft. */
+export function budgetDraftMark(reviewText: string): string {
+  if (reviewText.startsWith("Ready for review")) return "READY FOR REVIEW";
+  if (/then changed/i.test(reviewText)) return "SIGNED OFF, THEN CHANGED";
+  return "DRAFT";
 }
 
 export function budgetActualFromFinancials(
@@ -608,7 +616,7 @@ export function buildBudgetPdfModel(
       ? monthsAreContiguous(fy, labelMonths)
         ? contiguousLabel(labelMonths, market)
         : `${labelMonths.length} months with actuals (not consecutive)`
-      : "No month actuals uploaded";
+      : "No monthly management accounts uploaded yet";
 
   const fySum = sumBudget(results);
   const fullYearNote = hasActuals
@@ -622,7 +630,11 @@ export function buildBudgetPdfModel(
     .filter((n) => n.text)
     .sort((a, b) => (a.at < b.at ? 1 : -1))
     .slice(0, 4)
-    .map((n) => ({ at: n.at, by: n.by || "Partner", text: n.text }));
+    .map((n) => ({
+      at: n.at,
+      by: n.by || "Partner",
+      text: presentBudgetRebuildNote(n.text),
+    }));
 
   const scenarioLabel = doc.scenarios[doc.activeScenario]?.label || doc.activeScenario;
 

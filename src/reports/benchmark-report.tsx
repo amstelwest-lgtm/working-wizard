@@ -18,7 +18,14 @@ import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { industryBenchmarkCaption, isUsCopy, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
-import { benchmarkPosition, benchmarkTrack, type MetricDirection } from "@/lib/ratios";
+import { PILLAR_LABELS } from "@/lib/health-score";
+import {
+  benchmarkTone,
+  benchmarkTrack,
+  MEDIAN_RELATION_LABEL,
+  medianRelation,
+  type MetricDirection,
+} from "@/lib/ratios";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -60,37 +67,28 @@ export type BenchmarkReportPDFProps = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-type Position = "top_quartile" | "above_median" | "below_median" | "in_band";
-
 function rowDirection(row: BenchmarkRow): MetricDirection {
   if (row.direction) return row.direction;
   return row.lower_is_better ? "lower_is_better" : "higher_is_better";
 }
 
-function getPosition(row: BenchmarkRow): Position {
-  return benchmarkPosition({
+function rowBadge(row: BenchmarkRow): {
+  label: string;
+  fg: string;
+  bg: string;
+  tone: "better" | "worse" | "neutral";
+} {
+  const rel = medianRelation(row.current_value, row.sector_median);
+  const tone = benchmarkTone({
     value: row.current_value,
     median: row.sector_median,
-    top: row.sector_top_quartile,
     direction: rowDirection(row),
-    healthyMin: row.healthy_min,
-    healthyMax: row.healthy_max,
   });
+  const label = MEDIAN_RELATION_LABEL[rel];
+  if (tone === "worse") return { label, fg: C.redDeep, bg: C.redSoft, tone };
+  if (tone === "better") return { label, fg: C.greenDeep, bg: C.greenSoft, tone };
+  return { label, fg: C.muted, bg: C.soft, tone };
 }
-
-const POS_META: Record<Position, { label: string; fg: string; bg: string }> = {
-  top_quartile: { label: "TOP QUARTILE", fg: C.greenDeep, bg: C.greenSoft },
-  above_median: { label: "ABOVE MEDIAN", fg: C.blueDeep, bg: C.blueSoft },
-  below_median: { label: "BELOW MEDIAN", fg: C.redDeep, bg: C.redSoft },
-  in_band: { label: "IN BAND", fg: C.muted, bg: C.soft },
-};
-
-const PILLAR_LABEL: Record<string, string> = {
-  profit: "Profit Drivers",
-  assets: "Asset Productivity",
-  financing: "Leverage & Finance",
-  cash: "Cash Flow",
-};
 
 /** Normalise value, median, topQ onto a 0..1 track (healthy end on the right). */
 function normalise(row: BenchmarkRow): { pos: number; bandStart: number; bandEnd: number } {
@@ -169,28 +167,28 @@ export function BenchmarkReportPDF({
   const industryLabel = spellLabor(industryName, market ?? ZA_MARKET);
 
   const comparable = benchmarkRows.filter((row) => !row.unscored);
-  const positions = comparable.map(getPosition);
-  const topQ = positions.filter((p) => p === "top_quartile").length;
-  const above = positions.filter((p) => p === "above_median").length;
-  const below = positions.filter((p) => p === "below_median").length;
+  let above = 0;
+  let below = 0;
+  let atMedian = 0;
+  for (const row of comparable) {
+    const rel = medianRelation(row.current_value, row.sector_median);
+    if (rel === "above_median") above += 1;
+    else if (rel === "below_median") below += 1;
+    else atMedian += 1;
+  }
 
   const figures: HeadlineFigure[] = [
     { label: "Ratios Compared", value: `${comparable.length}`, note: industryLabel },
-    { label: "Top Quartile", value: `${topQ}`, direction: "up", good: topQ > 0 },
-    { label: "Above Median", value: `${above}`, good: true },
-    {
-      label: "Below Median",
-      value: `${below}`,
-      direction: below > 0 ? "down" : "flat",
-      good: below === 0,
-    },
+    { label: "Above Median", value: `${above}` },
+    { label: "Below Median", value: `${below}` },
+    { label: "At Median", value: `${atMedian}` },
   ];
 
   const narrative = benchmarkNarrative(
     {
-      topQ,
       above,
       below,
+      at: atMedian,
       total: comparable.length,
       industryName: industryLabel,
     },
@@ -230,7 +228,7 @@ export function BenchmarkReportPDF({
         const rows = benchmarkRows.filter((r) => r.pillar === pillar);
         return (
           <View key={pillar}>
-            <SectionHeader title={PILLAR_LABEL[pillar]} color={theme.accent} />
+            <SectionHeader title={PILLAR_LABELS[pillar]} color={theme.accent} />
             <View style={S.headerRow}>
               <Text style={[S.headerCell, { flex: 2 }]}>Ratio</Text>
               <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>You</Text>
@@ -242,8 +240,7 @@ export function BenchmarkReportPDF({
               <View style={{ width: 70 }} />
             </View>
             {rows.map((row, i) => {
-              const pos = row.unscored ? null : getPosition(row);
-              const meta = pos ? POS_META[pos] : null;
+              const meta = row.unscored ? null : rowBadge(row);
               const n = row.unscored ? null : normalise(row);
               return (
                 <View
@@ -262,7 +259,7 @@ export function BenchmarkReportPDF({
                         bandEnd={n.bandEnd}
                         width={90}
                         markerColor={
-                          pos === "below_median" ? C.red : pos === "top_quartile" ? C.green : C.blue
+                          meta?.tone === "worse" ? C.red : meta?.tone === "better" ? C.green : C.blue
                         }
                       />
                     ) : (

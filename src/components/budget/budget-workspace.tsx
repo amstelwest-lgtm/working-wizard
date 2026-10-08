@@ -1118,7 +1118,12 @@ function BudgetComplexWorkspace({
           </div>
         )}
 
-        <ScrollableTable cardRows className="rounded-xl border border-slate-200/80 dark:border-slate-800">
+        {/* pr-16 keeps closing cash clear of the floating note button. */}
+        <ScrollableTable
+          cardRows
+          className="rounded-xl border border-slate-200/80 dark:border-slate-800"
+          viewportClassName="sm:pr-16"
+        >
           <table className="milon-data-table w-full min-w-[880px] text-xs text-[#0f172a] dark:text-slate-100">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">

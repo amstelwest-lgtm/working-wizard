@@ -96,8 +96,8 @@ import {
   cashEmptyPresentation,
   forecastLinesSourceLabel,
   forecastLowestPoint,
-  forecastPositionPhrase,
   forecastRunwayHeadlineShared,
+  forecastStatusSentence,
   openingSourceLabel,
 } from "@/lib/cash-forecast-parity";
 import {
@@ -1345,11 +1345,6 @@ export function CashForecastPanel({
     runwayLabel: runwayDisplayLabel(publishedDirection),
     cashGenerative: publishedGenerative,
   });
-  const positionPhrase = forecastPositionPhrase({
-    opening: baseCalc.opening,
-    closings: baseCalc.closing,
-    floor: minimumCash,
-  });
   const lowestUnderFloor = lowestBal < minimumCash;
   const direction = runwayFromForecastNet({
     base: screenRunway,
@@ -1702,9 +1697,14 @@ export function CashForecastPanel({
           </div>
           {!forecastEmpty ? (
             <p className="mb-4 text-sm text-slate-700 dark:text-slate-300">
-              {publishedStory.note === "above the floor"
-                ? `Cash stays above the ${fmtCompact(minimumCash)} floor across these 13 weeks.`
-                : `Cash ${positionPhrase} (floor ${fmtCompact(minimumCash)}). ${publishedStory.headline} — action needed.`}
+              {forecastStatusSentence({
+                opening: baseCalc.opening,
+                closings: baseCalc.closing,
+                floor: minimumCash,
+                floorText: fmtCompact(minimumCash),
+                runwayLabel: runwayDisplayLabel(publishedDirection),
+                cashGenerative: publishedGenerative,
+              })}
             </p>
           ) : null}
           {exportError ? (

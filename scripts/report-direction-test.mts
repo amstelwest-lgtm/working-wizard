@@ -12,7 +12,9 @@ import {
   SLOW_CREDITOR_DAYS_STEP,
   benchmarkHealthyEnd,
   benchmarkPosition,
+  benchmarkTone,
   computeRatios,
+  medianRelation,
   creditorDaysPaysSlowly,
   metricDirection,
 } from "../src/lib/ratios";
@@ -93,6 +95,38 @@ assert(
   }) === "above_median",
   "37 debtor days beat a 40-day median without reaching the top quartile",
 );
+assert(medianRelation(37, 40) === "below_median", "37 creditor days are numerically below a 40-day median");
+assert(
+  benchmarkTone({ value: 37, median: 40, direction: "sweet_spot" }) === "neutral",
+  "DPO stays neutral when the direction is a sweet spot",
+);
+assert(medianRelation(25, 15) === "above_median", "25 debtor days are numerically above a 15-day median");
+assert(
+  benchmarkTone({ value: 25, median: 15, direction: "lower_is_better" }) === "worse",
+  "debtor days above the median are worse",
+);
+assert(
+  benchmarkTone({ value: 10, median: 15, direction: "lower_is_better" }) === "better",
+  "debtor days below the median are better",
+);
+{
+  const rows = [
+    { value: 37, median: 40 },
+    { value: 25, median: 15 },
+    { value: 10, median: 15 },
+    { value: 40, median: 40 },
+  ];
+  let above = 0;
+  let below = 0;
+  let at = 0;
+  for (const row of rows) {
+    const rel = medianRelation(row.value, row.median);
+    if (rel === "above_median") above += 1;
+    else if (rel === "below_median") below += 1;
+    else at += 1;
+  }
+  assert(above + below + at === rows.length, `median buckets ${above}+${below}+${at} must equal ${rows.length}`);
+}
 assert(scoreCreditorDays(329) === 0, "329 creditor days still score 0");
 assert(creditorDaysPaysSlowly(329) && !creditorDaysPaysSlowly(45), "only days past the band are slow payment");
 assert(!/too quickly/i.test(SLOW_CREDITOR_DAYS_STEP.step_description), "advice must not say paying too quickly");
@@ -197,7 +231,14 @@ assert(
 
 const { doc } = illustrativeBudgetPack("2026-01");
 const bare = buildBudgetPdfModel(doc, []);
-assert(/No month actuals/.test(bare.comparedLabel), "empty uploads say no month actuals");
+assert(
+  bare.comparedLabel === "No monthly management accounts uploaded yet",
+  bare.comparedLabel,
+);
+assert(
+  bare.headline.startsWith("No monthly management accounts uploaded yet"),
+  bare.headline,
+);
 const actual = budgetActualFromFinancials({
   periodStart: "2026-09-01",
   periodEnd: "2026-09-21",
@@ -210,6 +251,6 @@ assert(actual?.month === "2026-09", `statement month ${actual?.month}`);
 const withActuals = buildBudgetPdfModel(doc, actual ? [actual] : []);
 assert(withActuals.hasActuals, "statement figures count as month actuals");
 assert(!/No month actuals/i.test(withActuals.comparedLabel), withActuals.comparedLabel);
-assert(!/No month actuals/i.test(withActuals.headline), withActuals.headline);
+assert(!/monthly management accounts uploaded yet/i.test(withActuals.headline), withActuals.headline);
 
 console.log("report-direction-test ok");

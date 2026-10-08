@@ -39,7 +39,7 @@ import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
   isSamplePracticeSignoff,
-  packHeldSignoffLine,
+  packDisplayedSignoffLine,
   reviewActorLabel,
 } from "@/lib/review-signoff-stamp";
 import type { ResolvedMarket } from "@/lib/market";
@@ -170,7 +170,6 @@ export function AdvisoryPackPanel({
   const [exportingPdf, setExportingPdf] = useState(false);
   const seq = useRef(0);
   const readMarked = useRef<string | null>(null);
-  const staleCleared = useRef<string | null>(null);
 
   const signOffGate = useMemo(
     () =>
@@ -234,41 +233,6 @@ export function AdvisoryPackPanel({
       })
       .catch(() => null);
   }, [clientId, pack, audience, review, onChanged, signOffGate.figuresChanged]);
-
-  // Clear a stored SIGNED OFF once the baked snapshot drifts. Regenerate
-  // builds a new version; sign-off stays blocked until that snapshot matches.
-  useEffect(() => {
-    if (!signOffGate.figuresChanged) {
-      staleCleared.current = null;
-      return;
-    }
-    if (!clientId || !pack || pack.status !== "approved") return;
-    if (staleCleared.current === pack.id) return;
-    staleCleared.current = pack.id;
-    const seen = seq.current;
-    void review({
-      data: {
-        clientId,
-        packId: pack.id,
-        action: "invalidate",
-        liveFigures: currentFigures
-          ? {
-              runwayLabel: currentFigures.runwayLabel,
-              cash: currentFigures.cash,
-              healthScore: currentFigures.healthScore,
-            }
-          : undefined,
-      },
-    })
-      .then((res) => {
-        if (seq.current !== seen) return;
-        setPack(res.pack);
-        setReviews(res.reviews);
-        if (res.actors) setActors(res.actors);
-        onChanged?.();
-      })
-      .catch(() => null);
-  }, [clientId, pack, currentFigures, review, onChanged, signOffGate.figuresChanged]);
 
   const isWriter = audience === "accountant" || !hasFirm;
   const canEdit =
@@ -336,7 +300,6 @@ export function AdvisoryPackPanel({
       "generate",
       async () => {
         if (!clientId) return null;
-        // Drop an in-flight "figures changed" clear so it cannot put the old pack back.
         seq.current += 1;
         const res = await generate({ data: { clientId } });
         if (!res.ok) {
@@ -438,36 +401,26 @@ export function AdvisoryPackPanel({
     if (!clientId || !pack || exportingPdf) return;
     setExportingPdf(true);
     try {
-      const exportPack =
-        pack.status === "approved" && signOffGate.figuresChanged && shownStatus
-          ? {
-              ...pack,
-              status: shownStatus,
-              reviewed_by: null,
-              reviewed_by_kind: null,
-              reviewed_at: null,
-              review_note: null,
-            }
-          : pack;
-      const recordedSigner = identityFor(exportPack.reviewed_by);
+      const recordedSigner = identityFor(pack.reviewed_by);
       const { data: demoRow } = await supabase
         .from("clients")
         .select("is_demo")
         .eq("id", clientId)
         .maybeSingle();
       const { blob, filename, signed } = await downloadAdvisoryPackPdf({
-        pack: exportPack,
+        pack,
         profile,
         userId: user?.id ?? null,
         user,
         market,
         recordedSigner,
         sample: Boolean(demoRow?.is_demo),
+        figuresChanged: pack.status === "approved" && signOffGate.figuresChanged,
       });
       track("advisory_pack_pdf_exported", {
         clientId,
         audience,
-        status: exportPack.status,
+        status: pack.status,
         signed,
         filename,
       });
@@ -544,8 +497,9 @@ export function AdvisoryPackPanel({
   };
 
   const signerIdentity = identityFor(pack?.reviewed_by);
-  const headerSignoffLine = packHeldSignoffLine({
-    signedOff: signOffGate.signOffHolds,
+  const headerSignoffLine = packDisplayedSignoffLine({
+    signedOff: pack?.status === "approved",
+    figuresChanged: signOffGate.figuresChanged,
     reviewedByKind: pack?.reviewed_by_kind,
     reviewedAt: pack?.reviewed_at,
     name: signerIdentity?.name ?? signoff?.signed_off_by_name,
@@ -581,11 +535,11 @@ export function AdvisoryPackPanel({
                   {pack.period_label ? ` · ${pack.period_label}` : ""}
                 </span>
                 <span
-                  className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${STATUS_CLASS[shownStatus ?? pack.status]}`}
+                  className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${STATUS_CLASS[pack.status]}`}
                 >
-                  {packStatusLabel(shownStatus ?? pack.status, pack.requires_review)}
+                  {packStatusLabel(pack.status, pack.requires_review)}
                 </span>
-                {signOffGate.figuresChanged ? (
+                {signOffGate.figuresChanged && pack.status !== "approved" ? (
                   <span className="text-[12px] font-semibold normal-case tracking-normal text-amber-700 dark:text-amber-300">
                     {ADVISORY_PACK_STALE_NOTE}
                   </span>

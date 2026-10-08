@@ -32,6 +32,7 @@ import {
   computeOverallHealth,
   overviewRatioInputs,
   overviewRatios,
+  PILLAR_LABELS,
   scorecardHealthFromFinancials,
 } from "../src/lib/health-score";
 import { computeRatios } from "../src/lib/ratios";
@@ -50,8 +51,10 @@ import {
   scorecardRatiosFromFinancials,
 } from "../src/lib/scorecard-rows";
 import { ratiosStatementFigures } from "../src/lib/deliverable-input-config";
-import { formatSignedOffDateTime } from "../src/lib/market/format";
-import { ZA_MARKET } from "../src/lib/market/resolve";
+import { formatMoneyCompact, formatSignedOffDateTime } from "../src/lib/market/format";
+import { resolveMarket, ZA_MARKET } from "../src/lib/market/resolve";
+import { forecastRunwayHeadlineShared, forecastStatusSentence } from "../src/lib/cash-forecast-parity";
+import { packDisplayedSignoffLine } from "../src/lib/review-signoff-stamp";
 import type { DataRequest } from "../src/lib/data-requests";
 
 function assert(cond: boolean, msg: string) {
@@ -209,7 +212,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   eq(a.forecast?.breachesZero, true, "breaches zero");
   const fc = a.sections.find((s) => s.key === "forecast")!.body;
   assert(
-    fc.includes("R125 000") && fc.includes("−R12 000") && fc.includes("week 6"),
+    fc.includes("R125 000") && fc.includes("-R 12.0k") && fc.includes("week 6"),
     `forecast copy: ${fc}`,
   );
 
@@ -362,7 +365,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(
     safe.sections
       .find((s) => s.key === "state_of_business")!
-      .body.includes("stays above the R50 000 comfort line"),
+      .body.includes("stays above the R 50.0k floor"),
     "healthy forecast copy",
   );
   assert(!safe.sections[0].body.includes("cash goes negative"), "no break in headline");
@@ -622,14 +625,17 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(panel.includes("Show AI draft"), "AI draft vs final diff visible");
   assert(panel.includes('hasFirm ? "Sign off pack" : "Accept pack"'), "sign-off vs accept copy");
   assert(panel.includes("advisoryPackSignOffGate"), "panel gates sign-off on the baked snapshot");
-  assert(panel.includes('action: "invalidate"'), "a stale SIGNED OFF is cleared");
+  assert(
+    !panel.includes('action: "invalidate"'),
+    "opening a stale pack does not clear the stored sign-off",
+  );
   assert(
     panel.includes("data-signoff-blocked={signOffBlocked ? \"true\" : \"false\"}"),
     "sign-off control is blocked while figures drift",
   );
   assert(
-    panel.includes("signOffGate.signOffHolds"),
-    "signed-off copy is hidden when the snapshot drifted",
+    panel.includes("packDisplayedSignoffLine") && panel.includes("figuresChanged: signOffGate.figuresChanged"),
+    "a stale approval still names the signer",
   );
   assert(
     fns.includes("throw new Error(ADVISORY_PACK_STALE_NOTE)") &&
@@ -648,10 +654,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     !fns.includes("computeOverallHealth({ ratios: current.ratios"),
     "regen does not bake stored snapshot ratios",
   );
-  assert(
-    panel.includes("if (seq.current !== seen) return") && panel.includes("seq.current += 1"),
-    "regen drops an in-flight stale clear so the new pack stays on screen",
-  );
+  assert(panel.includes("seq.current += 1"), "regen ignores an in-flight pack load");
   assert(
     fns.includes("data.liveFigures") && panel.includes("liveFigures:"),
     "the figures on screen count as drift even if the server recompute lags",
@@ -728,17 +731,19 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   assert(stale.figuresChanged, "health 69 vs live 71 is drift");
   assert(!stale.signOffHolds, "SIGNED OFF does not hold against Overview");
   assert(stale.signOffBlocked, "a new sign-off is blocked while stale");
-  eq(stale.presentedStatus, "in_review", "firm sign-off reverts to review");
-  assert(
-    packStatusLabel(stale.presentedStatus, true) !== "Signed off",
-    "reverted firm pack is not labelled Signed off",
+  eq(stale.presentedStatus, "approved", "a stale approval stays approved");
+  eq(
+    packStatusLabel(stale.presentedStatus, true),
+    "Signed off",
+    "a stale firm pack is not relabelled Draft",
   );
 
   const owner = advisoryPackSignOffGate("approved", false, qaContent, qaLive);
-  eq(owner.presentedStatus, "draft", "owner acceptance reverts to draft");
-  assert(
-    packStatusLabel(owner.presentedStatus, false) !== "Accepted",
-    "reverted owner pack is not labelled Accepted",
+  eq(owner.presentedStatus, "approved", "owner acceptance stays approved");
+  eq(
+    packStatusLabel(owner.presentedStatus, false),
+    "Accepted",
+    "a stale owner pack is not relabelled Draft",
   );
 
   const blockedDraft = advisoryPackSignOffGate("in_review", true, qaContent, qaLive);
@@ -1475,6 +1480,144 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     readFileSync(resolve("src/lib/market/format.ts"), "utf8").includes('timeZoneName: "short"'),
     "the sign-off formatter asks for a short zone name",
   );
+}
+
+{
+  const line = packDisplayedSignoffLine({
+    signedOff: true,
+    figuresChanged: true,
+    reviewedByKind: "accountant",
+    reviewedAt: "2026-10-07T23:01:31.000Z",
+    name: "James Fleming",
+    firmName: "Ben Accountants",
+    market: resolveMarket({ country: "US", regionCode: "NY" }),
+  });
+  eq(
+    line,
+    "Signed off by James Fleming · Ben Accountants · Oct 7, 2026, 7:01 PM EDT — figures have changed since; regenerate and re-review",
+    line ?? "missing stale sign-off line",
+  );
+  const held = packDisplayedSignoffLine({
+    signedOff: true,
+    figuresChanged: false,
+    reviewedByKind: "accountant",
+    reviewedAt: "2026-10-07T23:01:31.000Z",
+    name: "James Fleming",
+    firmName: "Ben Accountants",
+    market: resolveMarket({ country: "US", regionCode: "NY" }),
+  });
+  assert(held != null && !held.includes("figures have changed"), held ?? "");
+}
+
+{
+  // Published QA US statement (revenue 700k, opex 351k, inventory 62k) plus a
+  // bank forecast whose weekly payments are four-week floor $64.7k. Receipts
+  // match, so the opening balance stays the low. Health is whatever the
+  // scorecard scores from this file — the same number the pack stores.
+  const qaUs = {
+    revenue: "700000",
+    cogs: "280000",
+    fixedCosts: "351000",
+    ebit: "60000",
+    ebitda: "69000",
+    ebt: "60000",
+    netIncome: "60000",
+    receivables: "48500",
+    payables: "28500",
+    inventory: "62000",
+    cash: "128450",
+    totalAssets: "230263",
+    equity: "112323",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  };
+  const cashflow = {
+    openingBalance: "128450",
+    seededFromBanksAt: "2026-10-01T00:00:00.000Z",
+    forecastLinesSource: "qbo-bank-activity",
+    startDate: "2026-10-12",
+    revenue: [{ id: "in", name: "Collections", amount: "16175", frequency: "recurring-weekly", startWeek: 1 }],
+    expenses: [{ id: "out", name: "Payments", amount: "16175", frequency: "recurring-weekly", startWeek: 1 }],
+  };
+  const us = resolveMarket({ country: "US", regionCode: "NY" });
+  const live = livePackMetrics({
+    financials: qaUs,
+    cashflow,
+    fyStartMonth: 1,
+    market: us,
+    now: new Date("2026-10-08T12:00:00.000Z"),
+  });
+  eq(live.floor, 64700, `forecast floor ${live.floor}`);
+  eq(live.openingBalance, 128450, "opening cash is the statement balance");
+  const low = Math.min(live.openingBalance ?? Infinity, ...(live.closings ?? []));
+  eq(low, 128450, `lowest point includes the opening, got ${low}`);
+  eq(Math.round(live.ratios["Inventory Days"]), 81, `inventory days ${live.ratios["Inventory Days"]}`);
+  const scorecard = scorecardHealthFromFinancials({
+    financials: qaUs,
+    fyStartMonth: 1,
+    periodMonths: 12,
+    cashRunwayWeeks: live.cashRunwayWeeks,
+    market: us,
+  });
+  eq(live.health.overall, scorecard.overall, "regenerated pack health is the scorecard");
+  const strongest = [...scorecard.pillars].filter((p) => p.score != null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+  const weakest = scorecard.weakestPillar;
+  const pack = buildAdvisoryPack(
+    inputs({
+      clientName: "QA US",
+      currency: "USD",
+      health: live.health,
+      ratios: live.ratios,
+      openingBalance: live.openingBalance,
+      closings: live.closings,
+      floor: live.floor,
+      cashRunwayWeeks: live.cashRunwayWeeks,
+      runwayLabel: live.runwayLabel,
+      recommendations: [],
+      dataRequests: [],
+      openActions: 0,
+      overdueActions: 0,
+    }),
+  );
+  const state = pack.sections.find((s) => s.key === "state_of_business")!.body;
+  const forecast = pack.sections.find((s) => s.key === "forecast")!.body;
+  const floorText = formatMoneyCompact(live.floor, { currency: "USD", locale: "en-US" });
+  eq(floorText, "$64.7k", floorText);
+  const status = forecastStatusSentence({
+    opening: live.openingBalance ?? 0,
+    closings: live.closings ?? [],
+    floor: live.floor,
+    floorText,
+    runwayLabel: live.runwayLabel,
+  });
+  const story = forecastRunwayHeadlineShared({
+    opening: live.openingBalance ?? 0,
+    closings: live.closings ?? [],
+    floor: live.floor,
+    runwayLabel: live.runwayLabel,
+  });
+  assert(state.includes(status), state);
+  assert(forecast.includes(status), forecast);
+  assert(forecast.includes(story.headline), forecast);
+  assert(forecast.includes("$128,450"), forecast);
+  assert(forecast.includes("$128k"), forecast);
+  assert(forecast.includes("the opening balance"), forecast);
+  assert(!forecast.includes("R") && !state.includes("R"), forecast);
+  assert(!state.includes("comfort line") && !forecast.includes("comfort line"), state);
+  assert(state.includes(String(scorecard.overall)), state);
+  assert(state.includes(strongest?.label ?? ""), state);
+  assert(state.includes(weakest?.label ?? ""), state);
+  for (const label of Object.values(PILLAR_LABELS)) {
+    assert(
+      pack.health?.pillars.some((pillar) => pillar.label === label),
+      `pack pillar ${label}`,
+    );
+  }
+  assert(!state.includes("Profitability") && !state.includes("Financing"), state);
+  eq(pack.health?.overall, scorecard.overall, "stored pack health");
+  eq(pack.health?.weakest, weakest?.label ?? null, "weakest pillar matches the scorecard");
+  const inventory = pack.ratios.find((row) => row.name === "Inventory Days");
+  eq(inventory ? Math.round(inventory.value) : null, 81, "regenerated pack stores inventory days 81");
 }
 
 console.log("advisory-pack: all checks passed");

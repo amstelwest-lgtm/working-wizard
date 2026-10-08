@@ -16,7 +16,11 @@ import { industryBenchmarkCaption, isUsCopy } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { newId } from "@/lib/budget.templates";
-import { seedBudgetFromFinancials, budgetToCashForecastPayload } from "@/lib/budget.bridges";
+import {
+  budgetToCashForecastPayload,
+  presentBudgetRebuildNote,
+  seedBudgetFromFinancials,
+} from "@/lib/budget.bridges";
 import { runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 
@@ -373,7 +377,9 @@ export function BudgetAdvancedPanel({
                     })}
                   </span>
                 </div>
-                <div className="mt-1 text-slate-800 dark:text-slate-100">{n.text}</div>
+                <div className="mt-1 text-slate-800 dark:text-slate-100">
+                  {presentBudgetRebuildNote(n.text)}
+                </div>
               </li>
             ))}
             {!(doc.notes ?? []).length && (

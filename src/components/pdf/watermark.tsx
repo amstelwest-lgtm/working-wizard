@@ -45,7 +45,7 @@ export function DemoWatermark() {
  * Unsigned budget. A flat line in the page body. The old rotated header
  * word wrapped, and the last two letters sat in the top margin.
  */
-export function DraftWatermark() {
+export function DraftWatermark({ text = "DRAFT — NOT SIGNED OFF" }: { text?: string }) {
   return (
     <View style={styles.layer} fixed>
       <Text
@@ -62,7 +62,7 @@ export function DraftWatermark() {
           letterSpacing: 1.2,
         }}
       >
-        DRAFT — NOT SIGNED OFF
+        {text}
       </Text>
     </View>
   );
