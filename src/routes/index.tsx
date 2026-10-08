@@ -112,6 +112,7 @@ import {
   LANDING_FONT_CSS,
   LANDING_SKY_CSS,
   NOTO_LATIN_HREF,
+  NOTO_MACRON_HREF,
   PREFERRED_SOURCE_HREF,
   PREFERRED_SOURCE_LABEL,
 } from "@/lib/landing-assets";
@@ -168,6 +169,13 @@ export const Route = createFileRoute("/")({
         {
           rel: "preload",
           href: NOTO_LATIN_HREF,
+          as: "font",
+          type: "font/woff2",
+          crossOrigin: "anonymous",
+        },
+        {
+          rel: "preload",
+          href: NOTO_MACRON_HREF,
           as: "font",
           type: "font/woff2",
           crossOrigin: "anonymous",
