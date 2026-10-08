@@ -1,6 +1,10 @@
 /* Desk mockup. Opaque cards on the portal's near-black / gold glass.
    Scoped so the live Bot widget is unchanged. */
 
+.milon-desk [data-desk-jobs="true"] {
+  scroll-margin-top: 88px;
+}
+
 .milon-desk {
   --desk-card: rgba(16, 16, 24, 0.94);
   --desk-ink: var(--ink, #f2ecdc);
@@ -356,14 +360,14 @@ html[data-theme="light"] .milon-desk {
     align-items: stretch;
   }
 
-  .milon-desk-actions,
-  .milon-desk-btn {
-    width: 100%;
-  }
-
   .milon-desk-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .milon-desk-actions .milon-desk-btn {
+    width: 100%;
   }
 
   .milon-desk-signoff {

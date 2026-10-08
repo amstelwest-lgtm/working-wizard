@@ -28,12 +28,12 @@ async function shot(
   await page.waitForSelector("[data-desk-ready='true']");
   if (prepare) await prepare(page);
   const file = `${outDir}/${name}.png`;
-  await page.screenshot({ path: file });
+  await page.screenshot({ path: file, fullPage: width > 400 && !name.includes("workqueue") && !name.includes("composer") && !name.startsWith("current") });
   written.push(file);
   await page.close();
 }
 
-await shot("mockup-desktop-1280", 1280, 1100, "/milon-bot-mockup?fixture=populated");
+await shot("mockup-desktop-1280", 1280, 900, "/milon-bot-mockup?fixture=populated");
 
 await shot("mockup-desktop-1280-workqueue", 1280, 1100, "/milon-bot-mockup?fixture=populated", async (page) => {
   await page.locator("[data-desk-jobs='true']").scrollIntoViewIfNeeded();
@@ -41,8 +41,16 @@ await shot("mockup-desktop-1280-workqueue", 1280, 1100, "/milon-bot-mockup?fixtu
   await page.locator("[data-approve='collections']").click();
   await page.getByText("Draft only. Nothing was sent.").waitFor();
   await page.getByRole("region", { name: "Add a card to start your 14-day free trial" }).waitFor();
-  await page.locator("[data-job='collections']").scrollIntoViewIfNeeded();
-  await page.waitForTimeout(200);
+  await page.evaluate(() => {
+    const el = document.querySelector("[data-desk-jobs='true']");
+    if (!el) return;
+    const y = el.getBoundingClientRect().top + window.scrollY - 78;
+    window.scrollTo(0, Math.max(0, y));
+  });
+  const box = await page.getByText("Draft only. Nothing was sent.").boundingBox();
+  if (!box || box.y < 40 || box.y > 980) {
+    throw new Error(`draft confirm is outside the work-queue frame: ${JSON.stringify(box)}`);
+  }
 });
 
 await shot("mockup-mobile-390", 390, 844, "/milon-bot-mockup?fixture=populated");
@@ -50,7 +58,7 @@ await shot("mockup-mobile-390", 390, 844, "/milon-bot-mockup?fixture=populated")
 await shot("mockup-mobile-390-composer", 390, 844, "/milon-bot-mockup?fixture=populated", async (page) => {
   const composer = page.locator("[data-desk-composer='true']");
   await composer.scrollIntoViewIfNeeded();
-  await page.locator("#milon-desk-ask").click();
+  await page.locator("#milon-desk-ask").fill("What should we tell the owner about payroll?");
   await page.waitForTimeout(200);
 });
 
