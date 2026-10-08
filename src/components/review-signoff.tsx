@@ -401,6 +401,7 @@ export function ReviewSignoffButton({
   onChange,
   compact = false,
   hideStatus = false,
+  verbOnly = false,
 }: {
   clientId: string;
   clientName?: string;
@@ -412,6 +413,8 @@ export function ReviewSignoffButton({
   compact?: boolean;
   /** The answer strip already shows the status line. */
   hideStatus?: boolean;
+  /** Strip label is "Sign off", without the scope name. */
+  verbOnly?: boolean;
 }) {
   const { profile, updateProfile } = useAccountantProfile();
   const doSignoff = useServerFn(signoffReview);
@@ -580,7 +583,8 @@ export function ReviewSignoffButton({
             (canSignOff && (cycleStatus === "draft" || cycleStatus === "ready_for_review")) ? (
               <button type="button" onClick={() => setOpen(true)} className={SIGNOFF_GOLD_BTN}>
                 <PenLine className="h-3.5 w-3.5" />
-                {shownSignoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
+                {shownSignoff && isStale ? "Re-sign off" : "Sign off"}
+                {verbOnly ? "" : ` ${SCOPE_SHORT_LABEL[scope]}`}
               </button>
             ) : null}
             {workflow && canSubmit && !canSignOff && cycleStatus === "draft" ? (

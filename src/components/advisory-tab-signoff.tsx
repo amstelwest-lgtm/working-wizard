@@ -12,6 +12,7 @@ import { advisoryLegacyMismatchLine, type AdvisorySignoffAction } from "@/lib/ad
 export function AdvisoryTabSignoff({
   action,
   pageSignoff,
+  hideLine = false,
 }: {
   action: AdvisorySignoffAction | null;
   pageSignoff?: {
@@ -19,6 +20,8 @@ export function AdvisoryTabSignoff({
     firm_name: string | null;
     signed_off_at: string;
   } | null;
+  /** The strip sentence already carries the sign-off line. */
+  hideLine?: boolean;
 }) {
   const { market } = useMarketFormat();
   if (!action) return null;
@@ -35,13 +38,15 @@ export function AdvisoryTabSignoff({
         market,
       });
 
+  if (hideLine && !mismatch && !action.canSignOff) return null;
+
   return (
     <div
       className="flex max-w-sm flex-col items-end gap-2"
       data-advisory-signoff={state.status}
       data-advisory-version={state.version ?? ""}
     >
-      {approved && action.line ? (
+      {!hideLine && approved && action.line ? (
         <p
           className="text-right text-[12px] font-semibold leading-snug text-[#3d2e00] dark:text-[#f4e7c2]"
           data-signoff-line
@@ -66,7 +71,8 @@ export function AdvisoryTabSignoff({
           }}
           disabled={action.busy || action.blocked}
           title={action.blocked ? ADVISORY_PACK_STALE_NOTE : undefined}
-          className={`${SIGNOFF_GOLD_BTN} disabled:cursor-not-allowed disabled:opacity-40`}
+          className={`${SIGNOFF_GOLD_BTN} answer-strip__primary disabled:cursor-not-allowed disabled:opacity-40`}
+          style={{ textTransform: "none", letterSpacing: 0 }}
           data-approve
           data-signoff-blocked={action.blocked ? "true" : "false"}
         >
@@ -75,7 +81,7 @@ export function AdvisoryTabSignoff({
           ) : (
             <Check className="h-3.5 w-3.5" />
           )}
-          Sign off v{state.version}
+          Sign off
         </button>
       ) : null}
     </div>

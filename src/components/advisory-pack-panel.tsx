@@ -9,7 +9,7 @@
  *
  * The panel never navigates; the host decides where it lives.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Check,
@@ -27,7 +27,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { PrecardCapCard } from "@/components/precard-cap-card";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { PRECARD_CAP_CODE } from "@/lib/precard-cap";
@@ -38,7 +39,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { recordedActorIdentity, type RecordedActor } from "@/lib/accountant-identity";
 import { resolveAdvisorySignoffState, type AdvisorySignoffAction } from "@/lib/advisory-signoff";
-import { signoffStatusLine } from "@/lib/signoff-status";
+import { packAnswerSentence, packDrawerHint, packStatusText, type PackAnswerStatus } from "@/lib/plan-pack-copy";
 import { downloadAdvisoryPackPdf } from "@/lib/advisory-pack-pdf";
 import { formatReviewDateTime } from "@/lib/market";
 import {
@@ -99,15 +100,24 @@ type Props = {
     cash: number | null;
     healthScore: number | null;
   } | null;
-};
-
-const STATUS_CLASS: Record<AdvisoryPack["status"], string> = {
-  draft: "border-[#b7872a]/45 bg-[#d4a550]/15 text-[#7a5a0e] dark:text-[#f1d28b]",
-  in_review: "border-sky-400/50 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  changes_requested: "border-amber-400/60 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  approved: "border-emerald-400/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  rejected: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  superseded: "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:text-slate-300",
+  /** Statement source already on the file. Blank omits the chip. */
+  chip?: string | null;
+  /** The one Sign off control. The panel does not render a second one. */
+  primary?: ReactNode;
+  /** Configure-inputs block. It sits in the closed drawer. */
+  inputs?: ReactNode;
+  /**
+   * Display-only pack. When set, the panel does not fetch or generate.
+   * Harness screenshots use it for Draft, Ready for review, and stale.
+   */
+  fixture?: {
+    periodLabel: string;
+    sectionCount: number;
+    status: PackAnswerStatus;
+    signedBy?: string | null;
+    signedDate?: string | null;
+    version?: number | null;
+  } | null;
 };
 
 const GOLD_BTN =
@@ -150,6 +160,10 @@ export function AdvisoryPackPanel({
   currentFigures = null,
   signoff = null,
   onSignoffAction,
+  chip = null,
+  primary = null,
+  inputs = null,
+  fixture = null,
 }: Props) {
   const track = useTrack();
   const { user } = useAuth();
@@ -223,10 +237,11 @@ export function AdvisoryPackPanel({
   );
 
   useEffect(() => {
+    if (fixture) return;
     if (!clientId) return;
     void load();
     // refreshKey is intentionally a dependency: hosts bump it after writes.
-  }, [clientId, refreshKey, load]);
+  }, [clientId, refreshKey, load, fixture]);
 
   useEffect(() => {
     setPack(null);
@@ -579,16 +594,81 @@ export function AdvisoryPackPanel({
     busy,
   ]);
 
-  if (!clientId || !loaded || !migrated) return null;
-  if (!pack && audience === "owner" && !canGenerate) return null;
-
-  const headerOwnsSignOff = audience === "accountant" && Boolean(onSignoffAction);
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
     className,
   ]
     .filter(Boolean)
     .join(" ");
+
+  if (fixture) {
+    const sentence = packAnswerSentence(fixture);
+    const statusText = packStatusText(fixture);
+    const fixtureStale = fixture.status === "signed_stale";
+    return (
+      <section className={shell} id="advisory-pack" data-audience={audience} data-advisory-signoff={fixture.status}>
+        <PackStrip
+          sentence={sentence}
+          chip={chip}
+          statusText={statusText}
+          primary={
+            <>
+              {primary}
+              {fixtureStale ? (
+                <button
+                  type="button"
+                  onClick={() => void doGenerate()}
+                  disabled={busy !== null}
+                  className={ARAP_GOLD_BTN}
+                  style={{ textTransform: "none", letterSpacing: 0 }}
+                  data-generate
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate pack
+                </button>
+              ) : null}
+            </>
+          }
+          onExport={() => {}}
+          exporting={false}
+        />
+        <ReviewInputsDrawer hint={packDrawerHint(fixture.version, !fixtureStale)}>
+          <div className="flex flex-wrap items-center gap-2">
+            {fixtureStale ? null : (
+              <button type="button" onClick={() => void doGenerate()} className={GHOST_BTN} data-generate>
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Regenerate
+              </button>
+            )}
+            <button type="button" className={GHOST_BTN}>
+              Read
+            </button>
+          </div>
+          {inputs}
+        </ReviewInputsDrawer>
+        {precardOpen ? <PrecardCapCard /> : null}
+      </section>
+    );
+  }
+
+  if (!clientId || !loaded || !migrated) return null;
+  if (!pack && audience === "owner" && !canGenerate) return null;
+
+  const headerOwnsSignOff = audience === "accountant" && Boolean(onSignoffAction);
+  const packIsStale = advisoryState.status === "signed_stale";
+  const canRegenerate = Boolean(pack && isWriter && canGenerate);
+  const sentence = pack
+    ? packAnswerSentence({
+        periodLabel: pack.period_label,
+        sectionCount: pack.content.sections.length,
+        status: advisoryState.status,
+        signedBy: advisoryState.signedBy,
+        signedDate: advisoryState.signedAt ? fmtWhen(advisoryState.signedAt, market) : null,
+      })
+    : packAnswerSentence({ periodLabel: null, sectionCount: 0, status: "draft" });
+  const statusText = packStatusText({
+    status: advisoryState.status,
+    signedBy: advisoryState.signedBy,
+    signedDate: advisoryState.signedAt ? fmtWhen(advisoryState.signedAt, market) : null,
+  });
 
   return (
     <section
@@ -599,57 +679,52 @@ export function AdvisoryPackPanel({
       data-advisory-signoff={advisoryState.status}
       data-signoff-blocked={signOffBlocked ? "true" : "false"}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
-            Advisory pack
-          </span>
-          <h3 className="mt-0.5 flex flex-wrap items-center gap-2 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
-            {pack ? (
-              <>
-                <span>
-                  v{pack.version}
-                  {pack.period_label ? ` · ${pack.period_label}` : ""}
-                </span>
-                {advisoryState.status === "signed" ||
-                advisoryState.status === "signed_stale" ? null : signOffGate.figuresChanged ? (
-                  <span className="text-[12px] font-semibold normal-case tracking-normal text-amber-700 dark:text-amber-300">
-                    {ADVISORY_PACK_STALE_NOTE}
-                  </span>
+      <PackStrip
+        sentence={sentence}
+        chip={chip}
+        statusText={statusText}
+        primary={
+          <>
+            {primary}
+            {canRegenerate && packIsStale ? (
+              <button
+                type="button"
+                onClick={() => void doGenerate()}
+                disabled={busy !== null}
+                className={ARAP_GOLD_BTN}
+                style={{ textTransform: "none", letterSpacing: 0 }}
+                data-generate
+              >
+                {busy === "generate" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                 ) : (
-                  <span
-                    className={`rounded-full border px-2 py-[1px] text-[11px] font-semibold normal-case tracking-normal ${STATUS_CLASS[pack.status]}`}
-                  >
-                    {signoffStatusLine({
-                      kind: advisoryState.status === "in_review" ? "ready" : "draft",
-                    })}
-                  </span>
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                 )}
-              </>
-            ) : (
-              "No pack yet"
-            )}
-          </h3>
-          {headerSignoffLine ? (
-            <p
-              className="mt-1 text-[12.5px] font-semibold leading-snug text-slate-900 dark:text-[#f4e7c2]"
-              data-signoff-line
-            >
-              {headerSignoffLine}
-            </p>
-          ) : null}
-          <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
-            {pack
-              ? audience === "accountant"
-                ? "Diagnosis, forecast, moves and gaps in one place. Edit what you disagree with — the client only reads what you sign off."
-                : hasFirm
-                  ? "Your accountant reviews this before you act on it."
-                  : "Built from your figures. Read it, then accept it to move on to the recommendations."
-              : audience === "accountant"
-                ? "Wrap the current diagnosis, forecast and proposed moves into one reviewable pack."
-                : "MILŌN can turn the current figures into a short, plain-language pack."}
-          </p>
-        </div>
+                Regenerate pack
+              </button>
+            ) : null}
+            {!pack && isWriter && canGenerate ? (
+              <button
+                type="button"
+                onClick={() => void doGenerate()}
+                disabled={busy !== null}
+                className={ARAP_GOLD_BTN}
+                data-generate
+              >
+                {busy === "generate" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                )}
+                Generate pack
+              </button>
+            ) : null}
+          </>
+        }
+        onExport={pack ? () => void exportPdf() : undefined}
+        exporting={exportingPdf || busy !== null}
+      />
+      <ReviewInputsDrawer hint={packDrawerHint(pack?.version, canRegenerate && !packIsStale)}>
         <div className="flex flex-wrap items-center gap-2">
           {versions.length > 1 ? (
             <select
@@ -666,12 +741,12 @@ export function AdvisoryPackPanel({
               ))}
             </select>
           ) : null}
-          {isWriter && canGenerate ? (
+          {canRegenerate && !packIsStale ? (
             <button
               type="button"
               onClick={() => void doGenerate()}
               disabled={busy !== null}
-              className={pack ? GHOST_BTN : GOLD_BTN}
+              className={GHOST_BTN}
               data-generate
             >
               {busy === "generate" ? (
@@ -679,27 +754,8 @@ export function AdvisoryPackPanel({
               ) : (
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden />
               )}
-              {pack ? "Regenerate" : "Generate pack"}
+              Regenerate
             </button>
-          ) : null}
-          {pack ? (
-            <Button
-              id="advisory-pack-export-pdf"
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
-              disabled={exportingPdf || busy !== null}
-              onClick={() => void exportPdf()}
-              data-export-pdf
-            >
-              {exportingPdf ? (
-                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-              ) : (
-                <Download className="h-3 w-3" aria-hidden />
-              )}
-              {exportingPdf ? "Preparing…" : "Export PDF"}
-            </Button>
           ) : null}
           {pack ? (
             <button
@@ -717,7 +773,8 @@ export function AdvisoryPackPanel({
             </button>
           ) : null}
         </div>
-      </div>
+        {inputs}
+      </ReviewInputsDrawer>
 
       <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
       {precardOpen ? <PrecardCapCard /> : null}
@@ -958,6 +1015,70 @@ export function AdvisoryPackPanel({
             </li>
           ))}
         </ol>
+      ) : null}
+    </section>
+  );
+}
+
+function PackStrip({
+  sentence,
+  chip,
+  statusText,
+  primary,
+  onExport,
+  exporting,
+}: {
+  sentence: string;
+  chip?: string | null;
+  statusText?: string | null;
+  primary?: ReactNode;
+  onExport?: () => void;
+  exporting: boolean;
+}) {
+  return (
+    <section className="answer-strip" data-answer-strip>
+      <div className="answer-strip__lead">
+        <h2 className="answer-strip__heading">Advisory pack</h2>
+        {sentence ? (
+          <p className="answer-strip__sentence" data-signoff-line>
+            {sentence}
+          </p>
+        ) : null}
+      </div>
+      <div className="answer-strip__actions">
+        {primary}
+        {onExport ? (
+          <button
+            id="advisory-pack-export-pdf"
+            type="button"
+            className="answer-strip__icon"
+            aria-label="Export PDF"
+            title="Export PDF"
+            data-export-pdf
+            disabled={exporting}
+            onClick={onExport}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Download className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </button>
+        ) : null}
+      </div>
+      {chip || statusText ? (
+        <div className="answer-strip__meta">
+          {chip ? (
+            <span className="answer-strip__chip" data-source-chip>
+              {chip}
+            </span>
+          ) : null}
+          {statusText ? (
+            <p className="answer-strip__status" data-signoff-status>
+              {statusText}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

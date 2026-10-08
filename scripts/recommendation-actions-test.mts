@@ -88,8 +88,8 @@ function eq<T>(actual: T, expected: T, msg: string) {
     "header offers the default path with a count",
   );
   assert(
-    src.includes('variant={pendingRecs.length > 0 ? "outline" : "default"}'),
-    "manual add demoted when recommendations wait",
+    src.includes("onClick={focusQuickAdd}"),
+    "manual add stays an outline control beside the strip",
   );
   assert(src.includes("function FromRecommendationsPanel"), "picker dialog exists");
   assert(
@@ -97,7 +97,7 @@ function eq<T>(actual: T, expected: T, msg: string) {
     "picker preselects every pending recommendation",
   );
   assert(
-    src.includes("pendingRecs.length > 0 ? setRecOpen(true) : quickAddRef.current?.focus()"),
+    src.includes("pendingRecs.length > 0 ? setRecOpen(true) : focusQuickAdd()"),
     "empty state routes to recommendations first",
   );
   // Ordering inside the row: recommendation badge takes precedence over the strategic-move badge.

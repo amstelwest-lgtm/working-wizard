@@ -95,7 +95,19 @@ const TABLES: Record<string, unknown> = {
 
 type Mode = "list" | "single" | "maybe";
 
+function actionItemRows(): unknown[] {
+  if (typeof location !== "undefined" && /(?:^|[?&])planView=empty(?:&|$)/.test(location.search)) {
+    return [];
+  }
+  return [ACTION_ITEM];
+}
+
 function materialize(table: string, mode: Mode): { data: unknown; error: null } {
+  if (table === "action_items" || table === "action_items_v") {
+    const rows = actionItemRows();
+    if (mode === "list") return { data: rows, error: null };
+    return { data: rows[0] ?? null, error: null };
+  }
   const row = TABLES[table];
   if (mode === "list") {
     if (Array.isArray(row)) return { data: row, error: null };
