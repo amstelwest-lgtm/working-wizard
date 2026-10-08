@@ -65,6 +65,38 @@
   flex-direction: column;
 }
 
+/* Phone: the segmented rail is its own row. The team header sits below it. */
+@media (max-width: 860px) {
+  .milon-desk-portal:has(.milon-desk) .client-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 16px;
+    align-content: start;
+  }
+
+  .milon-desk-portal:has(.milon-desk) .deliverable-rail {
+    grid-row: 1;
+    grid-column: 1;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: auto;
+    min-width: 0;
+  }
+
+  .milon-desk-portal:has(.milon-desk) .deliverable-main {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .milon-desk-portal:has(.milon-desk) .deliverable-rail .tab {
+    padding: 8px 6px;
+    font-size: 12px;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
 .milon-desk-card {
   background: var(--desk-card);
   border: 1px solid rgba(212, 175, 55, 0.22);
@@ -277,12 +309,21 @@
 }
 
 .milon-desk-row,
-.milon-desk-job,
 .milon-desk-activity li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.milon-desk-job {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  gap: 8px;
+  padding: 0 12px;
+  box-sizing: border-box;
 }
 
 .milon-desk-briefing,
@@ -374,12 +415,16 @@
   outline-offset: 2px;
 }
 
-.milon-desk-job,
 .milon-desk-job-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   gap: 16px;
+}
+
+.milon-desk-job .milon-desk-actions {
+  margin-left: auto;
 }
 
 .milon-desk-job.is-ready,
@@ -559,7 +604,6 @@ html[data-theme="light"] .milon-desk {
     white-space: nowrap;
   }
 
-  .milon-desk-job,
   .milon-desk-job-line {
     flex-direction: column;
     align-items: stretch;
@@ -568,7 +612,8 @@ html[data-theme="light"] .milon-desk {
   .milon-desk-job .milon-desk-actions,
   .milon-desk-row .milon-desk-actions {
     width: auto;
-    justify-content: flex-end;
+    margin-left: 0;
+    justify-content: flex-start;
   }
 
   .milon-desk-row .milon-desk-btn,
