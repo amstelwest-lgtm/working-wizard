@@ -2949,6 +2949,7 @@ function ClientView() {
                     ) : null}
                   </div>
                 </ReviewInputsDrawer>
+                <div data-notes-tray-slot="" />
                 <OverviewSectionCards cards={overviewCards} onOpen={openOverviewCard} />
                 {/* ===== NEXT STEP — one CTA, on Overview only (P0.4) ===== */}
                 <NextStepCard
