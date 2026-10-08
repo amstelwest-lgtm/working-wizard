@@ -12,10 +12,10 @@ import type { FaqItem } from "@/lib/seo";
 export const WALKTHROUGH_URL = String(import.meta.env.VITE_WALKTHROUGH_URL ?? "").trim();
 
 export const HERO_BADGE = "For accounting firms and the businesses they advise";
-export const HERO_H1_LEAD = "QuickBooks Online and Xero,";
-export const HERO_H1_GOLD = "plug-and-play.";
+export const HERO_H1_LEAD = "Your AI finance team.";
+export const HERO_H1_GOLD = "You sign off.";
 export const HERO_LEDE =
-  "Your AI finance team reads the numbers, diagnoses the business, and drafts the advisory deliverables. The accountant reviews and signs off.";
+  "Plug in QuickBooks Online or Xero. Milōn Bookkeeper, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 export const HERO_CTA_NOTE = `${FIRM_CARD_TIMING} Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
@@ -33,7 +33,7 @@ export const HERO_SIGNOFF_POINT = "You review and sign off every advisory pack."
 
 export const HERO_POINTS = [
   "Connect a client's QuickBooks Online or Xero file, or upload a P&L and balance sheet.",
-  "Milōn Accountant, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
+  "Milōn Bookkeeper, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
   HERO_SIGNOFF_POINT,
 ] as const;
 
@@ -69,7 +69,7 @@ export const BRIDGE_DRAFT_BODY =
 /** Three distinct agents on /for-accountants. Same <strong> + body pattern as the old single bullet. */
 export const FIRM_TEAM_BULLETS = [
   {
-    title: "Milōn Accountant, your team's newest accountant.",
+    title: "Milōn Bookkeeper, your AI bookkeeper for QBO and Xero.",
     body: "Checks each client's books are up to date every month and flags what's missing, so your firm can stamp them clean.",
   },
   {
@@ -77,16 +77,16 @@ export const FIRM_TEAM_BULLETS = [
     body: "Budget vs actual, a 13-week cash flow forecast and plain-word variance explanations, plus a first-draft board report.",
   },
   {
-    title: "Milōn Advisor.",
-    body: "Watches the cash floor and debtors between reports and drafts next moves and the advisory. You correct, sign off and send — the judgement stays yours.",
+    title: "Milōn Advisor, the AI CFO legwork.",
+    body: "Watches the cash floor and debtors between reports and drafts next moves and the advisory. You correct, sign off and send. The judgement stays yours.",
   },
 ] as const;
 
 /** Role strip in #problem. Reuses .bridge-facts / .bridge-fact; no new CSS. */
 export const FINANCE_TEAM = [
   {
-    name: "Milōn Accountant",
-    body: "Your team's newest accountant. Checks each client's books are up to date every month and flags what's missing.",
+    name: "Milōn Bookkeeper",
+    body: "Your AI bookkeeper for QuickBooks and Xero. Checks each client's books are up to date for month-end and flags what's missing.",
     bold: "Your firm stamps them clean.",
   },
   {
@@ -96,7 +96,7 @@ export const FINANCE_TEAM = [
   },
   {
     name: "Milōn Advisor",
-    body: "Watches the cash floor and debtors between reports.",
+    body: "Does the AI CFO legwork: watches the cash floor and debtors between reports.",
     bold: "Drafts next moves and advisory for your sign-off.",
   },
 ] as const;

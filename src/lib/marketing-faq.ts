@@ -72,7 +72,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "What does the AI finance team do, and what's left to me?",
     answer:
-      "Three AI agents work from the client's QuickBooks Online, Xero or uploaded figures. Milōn Accountant checks the books are up to date and flags what's missing. Milōn Analyst calculates the health score and 19 ratios, compares budget vs actual and builds the 13-week cash forecast. Milōn Advisor watches the cash floor and debtors and drafts next moves and the advisory deliverables. Each works only from what's on file and stops when a decision needs you. You review, edit and sign off every advisory pack.",
+      "Three AI agents work in Milōn Bot from the client's QuickBooks Online, Xero or uploaded figures. Milōn Bookkeeper checks the books are up to date and flags what's missing. Milōn Analyst calculates the health score and 19 ratios, compares budget vs actual and builds the 13-week cash forecast. Milōn Advisor watches the cash floor and debtors and drafts next moves and the advisory deliverables. Each works only from what's on file and stops when a decision needs you. You review, edit and sign off every advisory pack.",
   },
   {
     question: "What happens when the trial ends?",

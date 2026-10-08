@@ -2409,9 +2409,9 @@ function LandingPage() {
             forecast cash, and turn analysis into action.
           </p>
           <p className="sub" style={{ marginTop: 18 }}>
-            MILŌN gives accountants a way to install that capability for their clients: a triple-A
-            finance team of AI agents that does the heavy analytical work, while the accountant
-            stays in control of the advice.
+            MILŌN gives accountants a way to install that capability for their clients: an AI
+            finance team that does the heavy analytical work, while the accountant stays in control
+            of the advice.
           </p>
           <div className="bridge-facts stagger" aria-label="Your AI finance team">
             {FINANCE_TEAM.map((r) => (
