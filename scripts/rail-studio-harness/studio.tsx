@@ -23,6 +23,7 @@ import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
+import { FirmDashboardCrumb } from "@/components/firm-dashboard-crumb";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
@@ -155,7 +156,7 @@ export function RailStudio() {
           <span className="spacer" />
         </div>
         <div className="crumb">
-          <span>Firm dashboard</span>
+          <FirmDashboardCrumb linked={false} onBack={() => {}} />
           <span>/</span>
           <span>
             <b style={{ color: "var(--ink)" }}>Harbour Glass</b>

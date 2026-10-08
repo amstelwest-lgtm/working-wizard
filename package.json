@@ -52,6 +52,7 @@
     "test:notes-archive": "vite-node --config scripts/vite-test.config.ts scripts/notes-archive-test.mts",
     "test:notes-tabs": "vite-node --config scripts/vite-test.config.ts scripts/notes-tabs-test.mts",
     "test:mobile-retest-m1-m2": "vite-node --config scripts/vite-test.config.ts scripts/mobile-retest-m1-m2-test.mts",
+    "test:precard-dashboard-crumb": "vite-node --config scripts/vite-test.config.ts scripts/precard-dashboard-crumb-test.mts",
     "test:lighthouse-it": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-it-test.mts",
     "test:practice-access": "vite-node --config scripts/vite-test.config.ts scripts/practice-access-test.mts",
     "test:staff-invite": "vite-node --config scripts/vite-test.config.ts scripts/staff-invite-landing-test.mts",

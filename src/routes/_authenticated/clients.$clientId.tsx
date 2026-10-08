@@ -19,6 +19,8 @@ import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { CheckoutAfterInsight } from "@/components/checkout-after-insight";
+import { FirmDashboardCrumb, firmDashboardCrumbIsLink } from "@/components/firm-dashboard-crumb";
+import { useFirmBillingEntitled } from "@/contexts/firm-billing-access";
 import { markInsightSeen } from "@/lib/funnel-timing";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
@@ -680,6 +682,7 @@ function ClientView() {
     clearFocusNote,
   } = useNotes();
   const navigate = useNavigate();
+  const firmDashboardLinked = firmDashboardCrumbIsLink(useFirmBillingEntitled());
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
   const [showQboDialog, setShowQboDialog] = useState(false);
@@ -2762,26 +2765,7 @@ function ClientView() {
 
             {/* ===== BREADCRUMB ===== */}
             <div className="crumb">
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  exitImpersonation();
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                >
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                Firm dashboard
-              </a>
+              <FirmDashboardCrumb linked={firmDashboardLinked} onBack={() => void exitImpersonation()} />
               <span>/</span>
               <span>
                 <b style={{ color: "var(--ink)" }}>
