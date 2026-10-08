@@ -20,6 +20,7 @@ import {
   isMilonItMember,
 } from "@/lib/user-roles";
 import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
+import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
 
 export const Route = createFileRoute("/_authenticated")({
   // Portal, finder, and settings sheets for every child. Preload plus
@@ -34,6 +35,7 @@ function AuthGate() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const entitledRef = useRef(false);
+  const [firmEntitled, setFirmEntitled] = useState<boolean | null>(null);
   const [firmGate, setFirmGate] = useState<"idle" | "checking" | "allow">("idle");
 
   useLayoutEffect(() => {
@@ -64,11 +66,13 @@ function AuthGate() {
       if (await isMilonItMember(user.id)) {
         if (!cancelled) {
           entitledRef.current = true;
+          setFirmEntitled(true);
           setFirmGate("allow");
         }
         return;
       }
       if (entitledRef.current) {
+        setFirmEntitled(true);
         setFirmGate("allow");
         return;
       }
@@ -79,6 +83,7 @@ function AuthGate() {
         entitled = result.entitled;
         if (entitled) {
           entitledRef.current = true;
+          setFirmEntitled(true);
           setFirmGate("allow");
           return;
         }
@@ -97,6 +102,7 @@ function AuthGate() {
         firstClientId: clients.firstClientId,
       });
       if (gate === "allow") {
+        setFirmEntitled(false);
         setFirmGate("allow");
         return;
       }
@@ -126,5 +132,9 @@ function AuthGate() {
       </div>
     );
   }
-  return <Outlet />;
+  return (
+    <FirmBillingAccessProvider entitled={firmEntitled}>
+      <Outlet />
+    </FirmBillingAccessProvider>
+  );
 }

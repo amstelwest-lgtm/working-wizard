@@ -9,9 +9,31 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { applyPortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
+import { ShareButton } from "@/components/share";
+import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
 import { OwnerCashBoard, RailStudio } from "./studio";
+
+const HARNESS_PREVIEW_NOTES: ClientNote[] = [
+  {
+    id: "harness-note-1",
+    clientId: "harness-client",
+    tab: "overview",
+    x: 48,
+    y: 220,
+    ratioKey: null,
+    text: "Check the health figure before the next review.",
+    authorId: "harness",
+    author: "Harbour & Co",
+    authorEmail: null,
+    timestamp: "2026-10-08T08:00:00.000Z",
+    resolved: false,
+    taggedMilonIt: false,
+    mentions: [],
+    replies: [],
+  },
+];
 
 // Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
 // palette, which is what a dark signed-in session does.
@@ -53,7 +75,10 @@ const clientRoute = createRoute({
     focus: search.focus === "health" || search.focus === "pillars" ? search.focus : undefined,
     aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
     packView:
-      search.packView === "draft" || search.packView === "ready" || search.packView === "stale"
+      search.packView === "draft" ||
+      search.packView === "ready" ||
+      search.packView === "stale" ||
+      search.packView === "cycle"
         ? search.packView
         : undefined,
     planView:
@@ -128,8 +153,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AuthProvider>
       <AccountantProfileProvider>
-        <NotesProvider>
+        <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
           <RouterProvider router={router} />
+          <ShareButton />
           <Toaster />
         </NotesProvider>
       </AccountantProfileProvider>

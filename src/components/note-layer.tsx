@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Trash2,
@@ -239,6 +239,7 @@ export function NoteLayer({
   const [tagIt, setTagIt] = useState(false);
   const [trayExpanded, setTrayExpanded] = useState(false);
   const [trayHidden, setTrayHidden] = useState(false);
+  const [traySlot, setTraySlot] = useState<HTMLElement | null>(null);
   const [highlightNoteId, setHighlightNoteId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const replyRef = useRef<HTMLInputElement>(null);
@@ -249,6 +250,14 @@ export function NoteLayer({
     setMounted(true);
     setScrollY(window.scrollY);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!mounted || tab !== "overview") {
+      setTraySlot(null);
+      return;
+    }
+    setTraySlot(document.querySelector<HTMLElement>("[data-notes-tray-slot]"));
+  }, [mounted, tab]);
 
   useEffect(() => {
     if (!clientId) {
@@ -419,20 +428,17 @@ export function NoteLayer({
   if (!mounted || !clientId) return null;
   if (!pinMode && tabNotes.length === 0 && !composing && !openNoteId && !focusNoteId) return null;
 
-  const overlay = (
-    <>
-      {pinMode && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 99990, cursor: "crosshair" }}
-          onClick={handleCrosshairClick}
-        />
-      )}
-
-      {/* Collapsed-by-default tray — existing notes stay findable without covering the page */}
-      {tabNotes.length > 0 && !trayHidden && (
+  const trayInFlow = traySlot != null;
+  const tray =
+    tabNotes.length > 0 && !trayHidden ? (
         <div
           data-note="true"
-          className="fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+          data-notes-tray=""
+          className={
+            trayInFlow
+              ? "notes-tray relative z-[1] mb-3 w-full max-w-full rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+              : "notes-tray fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+          }
         >
           <div className="flex items-center justify-between gap-1 px-1">
             <button
@@ -535,7 +541,17 @@ export function NoteLayer({
             </ul>
           )}
         </div>
+    ) : null;
+
+  const overlay = (
+    <>
+      {pinMode && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 99990, cursor: "crosshair" }}
+          onClick={handleCrosshairClick}
+        />
       )}
+      {tray && !trayInFlow ? tray : null}
 
       {pinNotes.map((note) => {
         const vpX = note.x - window.scrollX;
@@ -837,5 +853,10 @@ export function NoteLayer({
     </>
   );
 
-  return createPortal(overlay, document.body);
+  return (
+    <>
+      {tray && traySlot ? createPortal(tray, traySlot) : null}
+      {createPortal(overlay, document.body)}
+    </>
+  );
 }

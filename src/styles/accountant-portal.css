@@ -1520,6 +1520,12 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   gap:14px;
   padding:0 14px 14px;
 }
+@media (max-width: 767px) {
+  .advisory-pack__read{
+    padding-right:calc(4.75rem + env(safe-area-inset-right, 0px));
+    padding-bottom:calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
 .overview-cards{
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(148px,1fr));

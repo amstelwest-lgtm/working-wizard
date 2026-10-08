@@ -23,6 +23,7 @@ import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
+import { FirmDashboardCrumb } from "@/components/firm-dashboard-crumb";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
@@ -66,6 +67,7 @@ import {
   storedAmountFigure,
 } from "@/lib/overview-moves-copy";
 import { NextStepCard } from "@/components/next-step-card";
+import { NoteLayer } from "@/components/note-layer";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { currencySymbol, ZA_MARKET } from "@/lib/market";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
@@ -154,7 +156,7 @@ export function RailStudio() {
           <span className="spacer" />
         </div>
         <div className="crumb">
-          <span>Firm dashboard</span>
+          <FirmDashboardCrumb linked={false} onBack={() => {}} />
           <span>/</span>
           <span>
             <b style={{ color: "var(--ink)" }}>Harbour Glass</b>
@@ -294,7 +296,9 @@ function BriefingPane() {
     { key: "runway", label: "Runway", value: "11 weeks" },
   ];
   const matters = "Collections are the gap before payroll.";
-  const cards = harnessOverviewCards(snapshot);
+  const cards = harnessOverviewCards(snapshot).map((card) =>
+    card.id === "health" ? { ...card, figure: healthHeadline(67, "Watch") } : card,
+  );
   return (
     <div className="tabpane on" id="pane-overview">
       <DeliverableAnswerStrip
@@ -326,6 +330,7 @@ function BriefingPane() {
           </button>
         </div>
       </ReviewInputsDrawer>
+      <div data-notes-tray-slot="" />
       <OverviewSectionCards cards={cards} onOpen={() => {}} />
       <NextStepCard
         clientId={CLIENT_ID}
@@ -356,6 +361,13 @@ function BriefingPane() {
         movementReportAvailable={false}
         hasFigures
         figuresPeriodLabel="September 2026"
+      />
+      <NoteLayer
+        clientId={CLIENT_ID}
+        tab="overview"
+        workspace="accountant"
+        authorName="Harbour & Co"
+        clientName="Harbour Glass"
       />
     </div>
   );
@@ -914,8 +926,22 @@ function harnessPackAction(status: PackAnswerStatus, signedBy: string | null): A
 }
 
 function PackPane({ clientId, packView }: { clientId: string; packView?: string }) {
+  const cycleSection = {
+    key: "last_cycle_results",
+    title: "What the last cycle achieved",
+    body: "No recommendations were actioned in the last cycle, so there is nothing to measure yet. From the next pack on, this section reports whether the moves you accepted actually moved the numbers. Expected versus actual comes from the statements, not from memory. The right edge of this paragraph has to stay readable when the share button sits over the last lines. Collections, cash, and the health score are unchanged by this note. A signed pack still names who reviewed it and when.",
+  };
   const fixture =
-    packView === "draft"
+    packView === "cycle"
+      ? {
+          periodLabel: "September 2026",
+          sectionCount: 1,
+          status: "draft" as const,
+          signedBy: null,
+          version: 3,
+          sections: [cycleSection],
+        }
+      : packView === "draft"
       ? { periodLabel: "September 2026", sectionCount: 6, status: "draft" as const, signedBy: null, version: 3 }
       : packView === "ready"
         ? { periodLabel: "September 2026", sectionCount: 6, status: "in_review" as const, signedBy: null, version: 3 }

@@ -123,6 +123,8 @@ type Props = {
     signedBy?: string | null;
     signedDate?: string | null;
     version?: number | null;
+    /** Harness only. Renders the same section list the live pack uses. */
+    sections?: { key: string; title: string; body: string }[] | null;
   } | null;
 };
 
@@ -652,6 +654,24 @@ export function AdvisoryPackPanel({
           </div>
           {inputs}
         </ReviewInputsDrawer>
+        {fixture.sections?.length ? (
+          <ol className="advisory-pack__read mt-4 space-y-3">
+            {fixture.sections.map((s) => (
+              <li
+                key={s.key}
+                data-section={s.key}
+                className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+              >
+                <h4 className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-[#7a5a0e] dark:text-[#f1d28b]">
+                  {s.title}
+                </h4>
+                <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-800 dark:text-slate-100/90">
+                  {s.body}
+                </p>
+              </li>
+            ))}
+          </ol>
+        ) : null}
         {precardOpen ? <PrecardCapCard /> : null}
       </section>
     );
@@ -805,7 +825,7 @@ export function AdvisoryPackPanel({
       ) : null}
 
       {pack && expanded ? (
-        <ol className="mt-4 space-y-3">
+        <ol className="advisory-pack__read mt-4 space-y-3">
           {packSectionsForPdf(pack.content.sections, {
             signed: pack.status === "approved",
             firmName: signoff?.firm_name ?? profile.firmName,
