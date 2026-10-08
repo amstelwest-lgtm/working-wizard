@@ -2139,6 +2139,7 @@ export function CashForecastPanel({
               closing={baseCalc.closing}
               floor={minimumCash}
               floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
+              openingNote={openingAsOf ? openingLabel : null}
               symbol={cur}
               format={fmtR}
               openingChip={openingChipKey}

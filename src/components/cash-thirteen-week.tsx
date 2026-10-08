@@ -157,6 +157,7 @@ export function CashThirteenWeekGrid({
   closing,
   floor,
   floorNote,
+  openingNote,
   symbol,
   format,
   openingChip,
@@ -173,6 +174,7 @@ export function CashThirteenWeekGrid({
   closing: number[];
   floor: number;
   floorNote?: string | null;
+  openingNote?: string | null;
   symbol: string;
   format: (n: number) => string;
   openingChip: string;
@@ -373,6 +375,7 @@ export function CashThirteenWeekGrid({
                 money={money}
                 onCommit={onCommit}
                 floorNote={section.rows.some((row) => row.key === "floor") ? floorNote : null}
+                openingNote={section.rows.some((row) => row.key === "opening") ? openingNote : null}
               />
             ))}
           </tbody>
@@ -395,6 +398,7 @@ function SectionRows({
   money,
   onCommit,
   floorNote,
+  openingNote,
 }: {
   label: string;
   rows: GridRow[];
@@ -403,6 +407,7 @@ function SectionRows({
   money: (value: number, row: GridRow) => string;
   onCommit: CashThirteenWeekGridProps["onCommit"];
   floorNote?: string | null;
+  openingNote?: string | null;
 }) {
   return (
     <>
@@ -446,6 +451,11 @@ function SectionRows({
               {row.key === "floor" && floorNote ? (
                 <span className="text-[10px] font-normal normal-case tracking-normal text-slate-500 dark:text-slate-400">
                   {floorNote}
+                </span>
+              ) : null}
+              {row.key === "opening" && openingNote ? (
+                <span className="text-[10px] font-normal normal-case tracking-normal text-slate-500 dark:text-slate-400">
+                  {openingNote}
                 </span>
               ) : null}
               <SourceChip source={row.chip} />
