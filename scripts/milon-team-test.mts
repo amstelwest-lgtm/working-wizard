@@ -34,14 +34,36 @@ function walk(dir: string, visit: (file: string, text: string) => void) {
   }
 }
 
+/** Public marketing may name the team. In-app surfaces must read milon-team.ts. */
+function isPublicMarketing(file: string): boolean {
+  return (
+    file === "src/lib/marketing-faq.ts" ||
+    file === "src/lib/seo.ts" ||
+    file === "src/lib/landing-copy.ts" ||
+    file === "src/routes/index.tsx" ||
+    /^src\/routes\/for-[^/]+\.tsx$/.test(file)
+  );
+}
+
+function isInAppSurface(file: string): boolean {
+  if (file === "src/lib/milon-team.ts" || isPublicMarketing(file)) return false;
+  return (
+    file.startsWith("src/components/") ||
+    file.startsWith("src/routes/_authenticated/") ||
+    file === "src/routes/_authenticated.tsx" ||
+    file.startsWith("src/hooks/") ||
+    file.startsWith("src/lib/")
+  );
+}
+
 const hits: string[] = [];
-walk(".", (file, text) => {
-  if (file === "src/lib/milon-team.ts") return;
+walk("src", (file, text) => {
+  if (!isInAppSurface(file)) return;
   for (const name of NAMES) {
     if (text.includes(name)) hits.push(`${file} contains ${name}`);
   }
 });
-assert(hits.length === 0, hits.join("\n"));
+assert(hits.length === 0, hits.join("\n") || "an in-app surface hardcodes a team display name");
 const config = readFileSync("src/lib/milon-team.ts", "utf8");
 for (const name of NAMES) assert(config.includes(name), `config is missing ${name}`);
 assert(!config.includes(BOT_ROLE), "the config does not name the old bookkeeping role");
