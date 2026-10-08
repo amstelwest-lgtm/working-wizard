@@ -6,6 +6,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import { healthHeadline, whatMatters } from "../src/lib/client-briefing";
+import { booksTileLines } from "../src/lib/books-answer";
+import { overviewBudgetTileFigure } from "../src/lib/budget-chart-table";
+import { formatMoneyCompact } from "../src/lib/market/format";
+import { ZA_MARKET } from "../src/lib/market/resolve";
+import { overviewCashTileFigure } from "../src/lib/cash-forecast-parity";
 import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
 import { OVERVIEW_SECTION_TABS } from "../src/components/client-studio-chrome";
 import { rankStrategicMoves } from "../src/lib/strategic-moves";
@@ -198,5 +203,90 @@ for (const label of ["Business Health", "Profit", "Cash Forecast", "Budget", "Ne
 const drawerRule = portalCss.slice(portalCss.indexOf(".review-inputs{"), portalCss.indexOf(".review-inputs__summary"));
 assert(drawerRule.includes("margin:0 0 16px"), "the drawer keeps a 16px gap under it");
 assert(portalCss.includes(".answer-strip__primary{width:100%;justify-content:center}"), "the gold primary is full width on a phone");
+
+assert(
+  overviewBudgetTileFigure({
+    budgetRevenue: 583333,
+    actualRevenue: 583333,
+    seeded: true,
+    money: (n) => formatMoneyCompact(n, { currency: "USD", locale: "en-US" }),
+  }) === "$583k budget",
+  "a seeded budget tile stays short",
+);
+assert(
+  overviewBudgetTileFigure({
+    budgetRevenue: 425833,
+    actualRevenue: 420000,
+    seeded: false,
+    money: (n) => formatMoneyCompact(n, ZA_MARKET),
+  }) === "R 420k vs R 426k budget",
+  "a compared budget tile uses the cash compact formatter",
+);
+assert(
+  overviewBudgetTileFigure({ budgetRevenue: 0, seeded: true, money: (n) => String(n) }) === null,
+  "a missing budget stays missing",
+);
+assert(
+  overviewCashTileFigure({
+    headline: "No shortfall",
+    opening: 128450,
+    lowest: 120000,
+    lowestIsOpening: false,
+    money: (n) => `$${n.toLocaleString("en-US")}`,
+  }) === "No shortfall · lowest $120,000",
+  "no shortfall keeps the lowest point",
+);
+assert(
+  overviewCashTileFigure({
+    headline: "No shortfall",
+    opening: 128450,
+    lowest: 128450,
+    lowestIsOpening: true,
+    money: (n) => `$${n.toLocaleString("en-US")}`,
+  }) === "No shortfall · opening $128,450",
+  "no shortfall keeps the opening when that is the low",
+);
+assert(
+  overviewCashTileFigure({
+    headline: "No shortfall",
+    opening: 0,
+    lowest: 0,
+    lowestIsOpening: true,
+    money: (n) => String(n),
+  }) === "No shortfall",
+  "a missing cash figure stays off the tile",
+);
+assert.deepEqual(
+  booksTileLines({
+    period: "Sep 2026",
+    source: "upload",
+    sourceLabel: "Uploaded statement",
+    syncedStamp: "Oct 7, 2026",
+  }),
+  { figure: "Sep 2026 · Uploaded statement", detail: null },
+  "an uploaded statement is not labelled Synced",
+);
+assert.deepEqual(
+  booksTileLines({
+    period: "Sep 2026",
+    source: "xero",
+    sourceLabel: "Xero",
+    syncedStamp: "Oct 7, 2026",
+  }),
+  { figure: "Sep 2026", detail: "Synced Oct 7, 2026" },
+  "a ledger sync still says Synced",
+);
+assert(route.includes("booksTileLines"), "the books tile uses the chip source");
+assert(route.includes("overviewBudgetTileFigure"), "the budget tile uses the YTD figure");
+assert(
+  route.includes("const budgetMoney = (amount: number) => formatMoneyCompact(amount, clientMarket);"),
+  "the budget tile uses the cash compact formatter",
+);
+assert(!route.includes("fmtBudgetMoney"), "the overview tile does not spell the full budget amount");
+assert(route.includes("overviewCashTileFigure"), "the cash tile uses the shared runway figure");
+assert(route.includes("signoffKnown={signoffsKnown}"), "the financials chip waits for the sign-off fetch");
+assert(/if\s*\(\s*!known\s*\)\s*return null;/.test(statusChip), "an unknown sign-off renders nothing");
+assert(!statusChip.includes("data-signoff-pending"), "an unknown sign-off is not an empty pill");
+assert(!route.includes("Budget seeded from these figures"), "the budget tile is not the seeded sentence");
 
 console.log("answer-strip overview + moves ok");

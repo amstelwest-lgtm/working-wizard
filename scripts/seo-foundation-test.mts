@@ -29,8 +29,11 @@ import {
   WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
 import {
+  FIRM_TEAM_BULLETS,
+  FINANCE_TEAM,
   HERO_BADGE,
   HERO_H1_GOLD,
+  HERO_H1_LEAD,
   HERO_LEDE,
   PRICING_H2_USD,
   homepageFaqItems,
@@ -243,9 +246,13 @@ assert(
   "hero badge is the audience, not the brand",
 );
 assert(landing.includes("{HERO_H1_GOLD}"), "hero gold line comes from landing copy");
-assert(HERO_H1_GOLD === "plug-and-play.", "hero gold line is plug-and-play");
+assert(
+  `${HERO_H1_LEAD} ${HERO_H1_GOLD}` === "Your AI finance team. You sign off.",
+  "home H1 is the finance-team sign-off line",
+);
+assert(HERO_LEDE.startsWith("Plug in QuickBooks Online or Xero."), "hero lede keeps the ledger plug-in");
 assert(landing.includes("{HERO_LEDE}"), "hero lede comes from landing copy");
-assert(HERO_LEDE.includes("diagnoses the business"), "hero lede lists diagnosis as a deliverable");
+assert(HERO_LEDE.includes("diagnose the business"), "hero lede lists diagnosis as a deliverable");
 assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
 assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
@@ -334,7 +341,18 @@ assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");
 assert(!firms.includes("South African accounting"), "firm page meta is not SA-first");
 assert(!/white-label/i.test(firms), "firm page does not claim white-label");
 assert(firms.includes("Portfolio triage."), "firm page keeps portfolio triage");
-assert(firms.includes("Drafted advisory reports."), "firm page keeps drafted advisory reports");
+assert(firms.includes("FIRM_TEAM_BULLETS"), "firm page renders the three finance-team bullets");
+assert(!firms.includes("ACCOUNTANTS_DRAFT_BULLET"), "firm page drops the single drafted-reports bullet");
+assert(!firms.includes("Drafted advisory reports."), "firm page drops the drafted advisory reports label");
+assert(
+  FIRM_TEAM_BULLETS.map((bullet) => bullet.title).join("|") ===
+    [
+      "Milōn Bookkeeper, your AI bookkeeper for QBO and Xero.",
+      "Milōn Analyst, your AI financial analyst.",
+      "Milōn Advisor, the AI CFO legwork.",
+    ].join("|"),
+  "firm page names three distinct agents",
+);
 assert(firms.includes("A risk radar."), "firm page keeps the risk radar");
 assert(firms.includes("A recurring reason to talk."), "firm page keeps the recurring reason to talk");
 assert(
@@ -343,10 +361,36 @@ assert(
 );
 assert(firms.includes("SA_FOUNDING_LINE"), "firm page keeps the SA founding line");
 assert(
-  SEO_PAGES.forAccountants.title ===
-    "Advisory drafts from QBO & Xero for accounting firms | MILŌN",
-  "firm page title names advisory drafts from QBO and Xero",
+  SEO_PAGES.forAccountants.title === "AI Finance Team for Accountants on QBO & Xero | MILŌN",
+  "firm page title names the AI finance team on QBO and Xero",
 );
+assert(
+  SEO_PAGES.home.title === "AI Bookkeeper & AI CFO for QuickBooks and Xero | MILŌN",
+  "home title names the bookkeeper and AI CFO",
+);
+assert(SEO_PAGES.home.title.length <= 60, "home title stays within 60 characters");
+assert(SEO_PAGES.forAccountants.title.length <= 60, "firm title stays within 60 characters");
+assert(SEO_PAGES.home.description.length <= 155, "home description stays within 155 characters");
+assert(
+  SEO_PAGES.forAccountants.description.length <= 155,
+  "firm description stays within 155 characters",
+);
+assert(
+  SEO_PAGES.home.description.endsWith("14-day free trial · up to 3 clients."),
+  "home description keeps the trial line",
+);
+assert(!landing.includes("triple-A") && !landing.includes("Triple-A"), "landing drops the triple-A line");
+assert(!landing.includes("Milōn Accountant"), "landing drops Milōn Accountant");
+assert(
+  FINANCE_TEAM.map((role) => role.name).join("|") ===
+    "Milōn Bookkeeper|Milōn Analyst|Milōn Advisor",
+  "home role strip names bookkeeper, analyst, and advisor",
+);
+assert(
+  HOMEPAGE_FAQ_ITEMS[4].answer.includes("work in Milōn Bot"),
+  "homepage FAQ places the team in Milōn Bot",
+);
+assert(!HOMEPAGE_FAQ_ITEMS[4].answer.includes("Milōn Accountant"), "homepage FAQ drops Milōn Accountant");
 assert(firms.includes("Works with QuickBooks Online and Xero"), "firm page names both ledgers");
 assert(firms.includes("Connect QuickBooks Online or Xero"), "firm page says connect either ledger");
 assert(!firms.includes("certified"), "firm page does not claim certification");
@@ -360,7 +404,8 @@ assert(owners.includes("Xero"), "owners page names Xero");
 assert(!owners.includes("certified"), "owners page does not claim certification");
 
 for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwners, SEO_PAGES.faq]) {
-  assert(page.description.includes("QuickBooks Online"), `${page.path} meta names QuickBooks Online`);
+  const ledgerName = page.path === "/for-accountants" ? "QBO" : "QuickBooks Online";
+  assert(page.description.includes(ledgerName), `${page.path} meta names ${ledgerName}`);
   assert(page.description.includes("Xero"), `${page.path} meta names Xero`);
   assert(page.description.length <= 170, `${page.path} meta description stays snippet-length`);
   assert(!page.description.includes("certified"), `${page.path} meta does not claim certification`);

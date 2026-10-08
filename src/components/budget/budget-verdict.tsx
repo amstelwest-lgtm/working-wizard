@@ -63,6 +63,7 @@ export function BudgetVerdictStrip({
   canSign = false,
   onSignoffChange,
   extraActions = null,
+  signoffKnown = true,
 }: {
   periodLabel: string;
   revenueBudget: number;
@@ -77,6 +78,8 @@ export function BudgetVerdictStrip({
   isStale?: boolean;
   canSign?: boolean;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
+  /** False until the sign-off row has loaded. */
+  signoffKnown?: boolean;
   extraActions?: ReactNode;
 }) {
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -167,6 +170,7 @@ export function BudgetVerdictStrip({
           scope="budget"
           signoff={signoff}
           isStale={isStale}
+          known={signoffKnown}
         />
       </div>
     </section>

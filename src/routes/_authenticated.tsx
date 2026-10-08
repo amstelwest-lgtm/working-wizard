@@ -127,8 +127,12 @@ function AuthGate() {
   if (!user) return null;
   if (isFirmProductPath(pathname) && firmGate !== "allow") {
     return (
-      <div className="min-h-screen grid place-items-center bg-background text-foreground">
-        Checking billing…
+      <div
+        className="bg-background px-6 py-8 text-foreground"
+        data-billing-gate="pending"
+        aria-busy="true"
+      >
+        <div className="h-4 w-48 animate-pulse rounded bg-muted" />
       </div>
     );
   }

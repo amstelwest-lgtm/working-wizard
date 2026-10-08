@@ -62,6 +62,27 @@ export function budgetYtdSignal(input: { budget: number; actual: number | null }
   return varianceLine("revenue", "Revenue", input.budget, input.actual, true).signal;
 }
 
+/**
+ * Overview Budget tile. Callers pass the same compact money formatter as Cash.
+ * Seeded or no actual: "R 426k budget". Compared: "R 420k vs R 426k budget".
+ * No budget stays blank.
+ */
+export function overviewBudgetTileFigure(input: {
+  budgetRevenue?: number | null;
+  actualRevenue?: number | null;
+  seeded?: boolean;
+  money: (n: number) => string;
+}): string | null {
+  const budget = input.budgetRevenue;
+  if (typeof budget !== "number" || !Number.isFinite(budget) || Math.abs(budget) < 1) return null;
+  const budgetText = input.money(budget);
+  const actual = input.actualRevenue;
+  if (input.seeded || typeof actual !== "number" || !Number.isFinite(actual)) {
+    return `${budgetText} budget`;
+  }
+  return `${input.money(actual)} vs ${budgetText} budget`;
+}
+
 /** Revenue year-to-date. Months without actuals stay out of the comparison. */
 export function budgetYtdSentence(input: {
   budget: number;
