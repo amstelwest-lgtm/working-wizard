@@ -25,8 +25,10 @@ import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { forecastIsCashGenerative } from "@/lib/client-metrics";
 import {
+  forecastFloorPosition,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
+  forecastWeeksBelowReadout,
 } from "@/lib/cash-forecast-parity";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -47,7 +49,8 @@ export type CashForecastPDFProps = {
   operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   cashForecast: CashForecastWeek[];
-  scenario: "critical" | "moderate" | "growth";
+  /** "base" is the published forecast. Named scenarios are only for a scenario export. */
+  scenario: "base" | "critical" | "moderate" | "growth";
   accountantProfile: AccountantProfile;
   minimumThreshold?: number;
   /** Shared runway label ("Cash generative", "6 weeks"). Wins over the floor index. */
@@ -69,6 +72,7 @@ const CHART_H = 130;
 const LABEL_H = 20;
 
 const SCENARIO_META: Record<string, { label: string; color: string }> = {
+  base: { label: "Base forecast", color: C.blue },
   critical: { label: "Critical scenario", color: C.red },
   moderate: { label: "Moderate scenario", color: C.blue },
   growth: { label: "Growth scenario", color: C.green },
@@ -351,20 +355,23 @@ export function CashForecastPDF({
   const theme = resolveTheme(accountantProfile);
   const m = market ?? ZA_MARKET;
   const weeks = cashForecast;
-  const scenarioMeta = SCENARIO_META[scenario] ?? SCENARIO_META.moderate;
+  const scenarioMeta = SCENARIO_META[scenario] ?? SCENARIO_META.base;
   const resolvedAssumptions = [...assumptions, ...profileCashAssumptions(operatingProfile)];
 
   const closings = weeks.map((w) => w.closing_balance);
   const startBalance = weeks[0]?.opening_balance ?? 0;
   const lowestPoint = forecastLowestPoint(startBalance, closings);
   const minBalance = lowestPoint.amount;
-  const weeksBelow = weeks.filter((w) => w.closing_balance < minimumThreshold).length;
-  const firstBreach = weeks.findIndex((w) => w.closing_balance < minimumThreshold);
+  const floorPos = forecastFloorPosition({
+    opening: startBalance,
+    closings,
+    floor: minimumThreshold,
+  });
+  const weeksReadout = forecastWeeksBelowReadout(floorPos);
   const totalReceipts = weeks.reduce((s, w) => s + w.total_receipts, 0);
   const totalPayments = weeks.reduce((s, w) => s + Math.abs(w.total_payments), 0);
   const endBalance = weeks[weeks.length - 1]?.closing_balance ?? 0;
 
-  const firstBreachWeek = firstBreach === -1 ? null : firstBreach + 1;
   const netFlow = totalReceipts - totalPayments;
   const generative =
     Boolean(cashGenerative) && forecastIsCashGenerative(totalReceipts, totalPayments);
@@ -373,10 +380,10 @@ export function CashForecastPDF({
     closings,
     floor: minimumThreshold,
     runwayLabel,
-    cashGenerative: generative && startBalance >= minimumThreshold && firstBreach === -1,
+    cashGenerative: generative && floorPos.staysAbove,
   });
   const runwayValue = sharedRunway.headline;
-  const runwayWeeks = firstBreach === -1 ? weeks.length : firstBreach;
+  const runwayWeeks = floorPos.firstDipWeek == null ? weeks.length : floorPos.firstDipWeek - 1;
   const figures: HeadlineFigure[] = [
     {
       label: "Runway",
@@ -408,12 +415,13 @@ export function CashForecastPDF({
 
   const narrative = cashForecastNarrative(
     {
-      runwayWeeks: generative ? null : runwayWeeks,
-      cashGenerative: generative,
+      runwayWeeks: generative && floorPos.staysAbove ? null : runwayWeeks,
+      cashGenerative: generative && floorPos.staysAbove,
       minBalance,
       threshold: minimumThreshold,
-      weeksBelow,
-      firstBreachWeek,
+      weeksBelow: floorPos.weeksBelow,
+      firstBreachWeek: floorPos.firstDipWeek,
+      opensBelow: floorPos.opensBelow,
     },
     operatingProfile,
     m,
@@ -427,6 +435,7 @@ export function CashForecastPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       sample={sample}
+      draft={!isDemo && !sample && !reviewSignoff}
       reviewSignoff={reviewSignoff}
       market={m}
     >
@@ -458,9 +467,9 @@ export function CashForecastPDF({
         />
         <MetricBox
           label="Weeks Below Minimum"
-          value={`${weeksBelow}`}
-          accentColor={weeksBelow > 0 ? C.red : C.green}
-          note={weeksBelow > 0 ? "action required" : "none projected"}
+          value={weeksReadout.value}
+          accentColor={weeksReadout.clear ? C.green : C.red}
+          note={weeksReadout.note}
         />
       </View>
 

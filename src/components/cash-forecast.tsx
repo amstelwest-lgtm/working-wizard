@@ -68,11 +68,12 @@ import type {
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
 import { periodMonthsOf } from "@/lib/ratios";
-import { formatCalendarDay } from "@/lib/market/format";
+import { formatCalendarDay, formatMoneyChartTick } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
   assessClientMetrics,
+  baseCashflow,
   clientRunway,
   distributeForecastLine,
   forecastAnchorDate,
@@ -93,6 +94,7 @@ import {
 } from "@/lib/client-metrics";
 import {
   cashEmptyPresentation,
+  forecastLinesSourceLabel,
   forecastLowestPoint,
   forecastPositionPhrase,
   forecastRunwayHeadlineShared,
@@ -295,11 +297,13 @@ function LineEditor({
   onChange,
   onRemove,
   tone,
+  sourceChip,
 }: {
   line: LineItem;
   onChange: (l: LineItem) => void;
   onRemove?: () => void;
   tone: "revenue" | "expense";
+  sourceChip?: string | null;
 }) {
   const { market } = useMarketFormat();
   const cur = currencySymbol(market);
@@ -311,7 +315,14 @@ function LineEditor({
       className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
     >
       <div className="md:col-span-3">
-        <Label className={LABEL_CLS}>Line item</Label>
+        <Label className={LABEL_CLS}>
+          Line item
+          {sourceChip ? (
+            <span className="ml-2 rounded-full border border-[#d4a550]/40 bg-[#d4a550]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]">
+              {sourceChip}
+            </span>
+          ) : null}
+        </Label>
         <Input
           value={line.name}
           onChange={(e) => onChange({ ...line, name: e.target.value })}
@@ -459,7 +470,6 @@ export function CashForecastPanel({
   const [exportError, setExportError] = useState<string | null>(null);
   const [openingSourceChip, setOpeningSourceChip] = useState<string | null>(null);
   const [publishedBankEvidence, setPublishedBankEvidence] = useState(false);
-  const [resetNonce, setResetNonce] = useState(0);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
   );
@@ -504,18 +514,7 @@ export function CashForecastPanel({
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
   const loadedCashflowRef = useRef<Record<string, unknown> | null>(null);
-  const loadedKnobsRef = useRef({
-    collectDelay: 0,
-    revAdj: 100,
-    expAdj: 100,
-    headcountDelta: 0,
-    avgSalary: 0 as string | number,
-    fixedCostDelta: 0 as string | number,
-    revGrowthPct: 0,
-    capexAmount: 0 as string | number,
-    capexWeek: 1,
-  });
-  const baseResetRef = useRef(false);
+  const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
   const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(null);
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(null);
   const xeroBankNoteRef = useRef<string | null>(null);
@@ -716,18 +715,8 @@ export function CashForecastPanel({
       xeroBankNoteRef.current = bankNote;
       setXeroBankNote(bankNote);
       loadedCashflowRef.current = cf ? { ...(cf as Record<string, unknown>) } : null;
-      loadedKnobsRef.current = {
-        collectDelay: cf?.collectDelay ?? 0,
-        revAdj: cf?.revAdj ?? 100,
-        expAdj: cf?.expAdj ?? 100,
-        headcountDelta: cf?.headcountDelta ?? 0,
-        avgSalary: cf?.avgSalary ?? 0,
-        fixedCostDelta: cf?.fixedCostDelta ?? 0,
-        revGrowthPct: cf?.revGrowthPct ?? 0,
-        capexAmount: cf?.capexAmount ?? 0,
-        capexWeek: cf?.capexWeek ?? 1,
-      };
       setOpeningSourceChip(openingSourceLabel(cf as Record<string, unknown> | null));
+      setLinesSourceChip(forecastLinesSourceLabel(cf as Record<string, unknown> | null));
       const lineNames = [...(cf?.revenue ?? []), ...(cf?.expenses ?? []), ...(cf?.other ?? [])].map(
         (line) => String(line?.name ?? ""),
       );
@@ -813,18 +802,18 @@ export function CashForecastPanel({
         if (cf.revenue) setRevenue(cf.revenue);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
-        // The stored knobs are the series Overview already scored. Leaving
-        // the collection delay off made this tab print a different net.
-        if (cf.revAdj != null) setRevAdj(cf.revAdj);
-        if (cf.expAdj != null) setExpAdj(cf.expAdj);
-        const storedCollectDelay = cf.collectDelay;
-        if (storedCollectDelay != null) setCollectDelay(Math.max(0, Math.round(storedCollectDelay)));
-        if (cf.headcountDelta != null) setHeadcountDelta(cf.headcountDelta);
-        if (cf.avgSalary != null) setAvgSalary(String(cf.avgSalary));
-        if (cf.fixedCostDelta != null) setFixedCostDelta(String(cf.fixedCostDelta));
-        if (cf.revGrowthPct != null) setRevGrowthPct(cf.revGrowthPct);
-        if (cf.capexAmount != null) setCapexAmount(String(cf.capexAmount));
-        if (cf.capexWeek != null) setCapexWeek(cf.capexWeek);
+        // Scenario knobs (collection delay, growth, capex) are session-only.
+        // A value saved before the base forecast ignored them is leakage, not
+        // the base. Opening this tab always starts on the base.
+        setRevAdj(100);
+        setExpAdj(100);
+        setCollectDelay(0);
+        setHeadcountDelta(0);
+        setAvgSalary("0");
+        setFixedCostDelta("0");
+        setRevGrowthPct(0);
+        setCapexAmount("0");
+        setCapexWeek(1);
       }
       setInputFinancials(
         (data?.financials as Record<string, string | number | null | undefined> | null) ?? null,
@@ -881,19 +870,6 @@ export function CashForecastPanel({
       const linesUntouched =
         markers.linesSource != null &&
         JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
-      const knobs = baseResetRef.current
-        ? {
-            collectDelay: 0,
-            revAdj: 100,
-            expAdj: 100,
-            headcountDelta: 0,
-            avgSalary: 0,
-            fixedCostDelta: 0,
-            revGrowthPct: 0,
-            capexAmount: 0,
-            capexWeek: 1,
-          }
-        : loadedKnobsRef.current;
       const payload = {
         ...(loadedCashflowRef.current ?? {}),
         startDate,
@@ -901,7 +877,7 @@ export function CashForecastPanel({
         revenue,
         expenses,
         other,
-        ...knobs,
+        ...baseCashflow({}),
         ...(markers.openingSource && openingBalance === markers.openingBalance
           ? { openingBalanceSource: markers.openingSource }
           : {}),
@@ -936,20 +912,6 @@ export function CashForecastPanel({
       else {
         setLastForecastAt(forecastUpdatedAt);
         loadedCashflowRef.current = payload;
-        if (baseResetRef.current) {
-          loadedKnobsRef.current = {
-            collectDelay: 0,
-            revAdj: 100,
-            expAdj: 100,
-            headcountDelta: 0,
-            avgSalary: 0,
-            fixedCostDelta: 0,
-            revGrowthPct: 0,
-            capexAmount: 0,
-            capexWeek: 1,
-          };
-          baseResetRef.current = false;
-        }
       }
     }, 800);
     return () => clearTimeout(t);
@@ -961,7 +923,6 @@ export function CashForecastPanel({
     revenue,
     expenses,
     other,
-    resetNonce,
     inputFinancials,
     inputHasBankDraft,
     market.timezone,
@@ -1155,6 +1116,14 @@ export function CashForecastPanel({
     () => forecastMinimumCash({ weeklyOutflows: baseCalc.outflow }),
     [baseCalc.outflow],
   );
+  const hasWeeklyOutflows = baseCalc.outflow.some((n) => n > 0);
+  const liveFloorLabel = hasWeeklyOutflows
+    ? `${fmtCompact(minimumCash)} · about 4 weeks of outflows`
+    : null;
+  const linesMatchLoaded =
+    xeroCashMarkers.current.linesKey != null &&
+    JSON.stringify({ revenue, expenses, other }) === xeroCashMarkers.current.linesKey;
+  const shownLineSource = linesMatchLoaded ? linesSourceChip : null;
   const scenarioActive =
     revAdj !== 100 ||
     expAdj !== 100 ||
@@ -1232,7 +1201,7 @@ export function CashForecastPanel({
         CashForecastPDF({
           smeData: { name, period },
           cashForecast: forecastWeeks,
-          scenario: "moderate",
+          scenario: "base",
           accountantProfile: profile,
           market,
           minimumThreshold: minimumCash,
@@ -1313,8 +1282,9 @@ export function CashForecastPanel({
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => fmtCompact(v)}
-            width={54}
+            tickFormatter={(v) => formatMoneyChartTick(v, market)}
+            width={68}
+            tick={{ fill: "#94a3b8", fontSize: 10 }}
           />
           <Tooltip
             contentStyle={{
@@ -1500,6 +1470,14 @@ export function CashForecastPanel({
         collectDelay,
         revGrowthPct,
         openingBalance,
+        cashLineSource: shownLineSource as
+          | "Statement"
+          | "Bank"
+          | "Sync"
+          | "Manual"
+          | "Estimate"
+          | null,
+        liveFloorLabel,
       }}
       onEngineBoundChange={(patch) => {
         if (typeof patch.collectDelay === "number") {
@@ -1792,8 +1770,6 @@ export function CashForecastPanel({
                 setRevGrowthPct(0);
                 setCapexAmount("0");
                 setCapexWeek(1);
-                baseResetRef.current = true;
-                setResetNonce((n) => n + 1);
               }}
             >
               Reset to base
@@ -2146,6 +2122,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="revenue"
+                sourceChip={shownLineSource}
                 onChange={(n) => updateAt(revenue, setRevenue, i, n)}
                 onRemove={
                   revenue.length > 1
@@ -2172,6 +2149,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
+                sourceChip={shownLineSource}
                 onChange={(n) => updateAt(expenses, setExpenses, i, n)}
               />
             ))}
@@ -2183,6 +2161,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
+                sourceChip={shownLineSource}
                 onChange={(n) => updateAt(other, setOther, i, n)}
                 onRemove={
                   other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined

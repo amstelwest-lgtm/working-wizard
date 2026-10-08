@@ -2565,7 +2565,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       return renderToBlob(CashForecastPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         cashForecast: isDemo ? MOCK_FORECAST : data!,
-        scenario: "moderate",
+        scenario: "base",
         accountantProfile: p,
         isDemo,
         sample,

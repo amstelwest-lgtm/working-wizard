@@ -182,7 +182,6 @@ export function buildCashflowPublishPayload(input: {
   });
 
   const adopt = input.adoptBankBalances !== false;
-  const keepScenario = policy === "merge" && existing;
 
   return {
     startDate: adopt || !existing?.startDate ? input.startDate : existing.startDate,
@@ -193,15 +192,15 @@ export function buildCashflowPublishPayload(input: {
     revenue,
     expenses,
     other,
-    revAdj: keepScenario ? (existing?.revAdj ?? 100) : 100,
-    expAdj: keepScenario ? (existing?.expAdj ?? 100) : 100,
-    collectDelay: keepScenario ? (existing?.collectDelay ?? 0) : 0,
-    headcountDelta: keepScenario ? (existing?.headcountDelta ?? 0) : 0,
-    avgSalary: keepScenario ? (existing?.avgSalary ?? "0") : "0",
-    fixedCostDelta: keepScenario ? (existing?.fixedCostDelta ?? "0") : "0",
-    revGrowthPct: keepScenario ? (existing?.revGrowthPct ?? 0) : 0,
-    capexAmount: keepScenario ? (existing?.capexAmount ?? "0") : "0",
-    capexWeek: keepScenario ? (existing?.capexWeek ?? 1) : 1,
+    revAdj: 100,
+    expAdj: 100,
+    collectDelay: 0,
+    headcountDelta: 0,
+    avgSalary: "0",
+    fixedCostDelta: "0",
+    revGrowthPct: 0,
+    capexAmount: "0",
+    capexWeek: 1,
     seededFromBanksAt: new Date().toISOString(),
   };
 }
