@@ -3503,11 +3503,6 @@ function ClientView() {
                   className={`tabpane${activeTab === "collections" ? " on" : ""}`}
                   id="pane-collections"
                 >
-                  <DeliverableTabHead
-                    eyebrow="Collections"
-                    title="Who to chase this week"
-                    lede="Named contacts and age buckets when an aged receivables report is on file. Until then, this tab shows the same Days AR, Days AP, accounts receivable, and accounts payable as Ratios. Upload the aged report, or connect Xero or QuickBooks, for the chase list."
-                  />
                   <CollectionsPanel
                     clientId={client.id}
                     market={clientMarket}
@@ -3529,11 +3524,6 @@ function ClientView() {
                   className={`tabpane${activeTab === "payables" ? " on" : ""}`}
                   id="pane-payables"
                 >
-                  <DeliverableTabHead
-                    eyebrow="Payables"
-                    title="Who to pay, delay, or renegotiate"
-                    lede="Named suppliers and age buckets when an aged payables report is on file. Until then, this tab shows the same Days AR, Days AP, accounts receivable, and accounts payable as Ratios. Upload the aged report, or connect Xero or QuickBooks, for the supplier list."
-                  />
                   <PayablesPanel
                     clientId={client.id}
                     market={clientMarket}

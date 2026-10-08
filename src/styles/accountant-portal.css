@@ -1360,7 +1360,8 @@ html[data-theme="dark"] .reports-studio .reports-settings{
   }
   .answer-strip__signoff,
   .answer-strip__signoff > div{width:100%}
-  .answer-strip__signoff button{width:100%;justify-content:center}
+  .answer-strip__signoff button,
+  .answer-strip__primary{width:100%;justify-content:center}
 }
 .review-inputs{
   grid-column:1 / -1;

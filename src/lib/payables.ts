@@ -64,15 +64,15 @@ const SOURCES = new Set<PayablesSource>(["xero", "qbo", "sage"]);
 const STATUSES = new Set<PayablesStatus>(["applied", "empty", "skipped"]);
 
 export const XERO_AGED_AP_RECONNECT =
-  "Aged payables need a reconnect. Enable accounting.reports.aged.read and accounting.contacts.read on the Xero app, then disconnect and connect again.";
+  "Aged payables need a reconnect. Disconnect Xero, connect again, and grant aged-payables access.";
 
 export const AGED_AP_PENDING = "Aged payables appear after the next Sync";
 
 export function payablesStatementLead(copyPack: "za" | "us"): string {
   if (copyPack === "us") {
-    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the Ratios Days AR, Days AP, accounts receivable, and accounts payable figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
+    return "Days sales outstanding, days payable outstanding, and the receivables and payables totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
   }
-  return "Debtor days, creditor days, and the debtors and creditors totals below are the Ratios Days AR, Days AP, debtors, and creditors figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
+  return "Debtor days, creditor days, and the debtors and creditors totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
 }
 
 export function payablesNoFiguresLead(): string {
@@ -286,6 +286,12 @@ export function payablesSourceLabel(source: PayablesSource): string {
   if (source === "xero") return "Xero";
   if (source === "sage") return "Sage";
   return "QuickBooks";
+}
+
+/** Proof line when an aged snapshot is on file. Otherwise the one-sentence empty state. */
+export function payablesAnswerSentence(snap: PayablesSnapshot | null | undefined): string {
+  if (snap) return agedApProofLine(snap);
+  return payablesNoFiguresLead();
 }
 
 export function agedApProofLine(snap: PayablesSnapshot | null | undefined): string {

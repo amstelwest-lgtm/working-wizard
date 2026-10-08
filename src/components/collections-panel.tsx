@@ -1,9 +1,8 @@
 /**
  * Accountant Collections — a weekly chase list from the aged receivables cache.
- * When that cache is empty, the tab still shows AR $, AP $, Days AR, and Days AP
- * from ratiosStatementFigures — the same helper as the Ratios tab — with a way
- * to upload the age analysis or connect Xero or QuickBooks. Drafts go through
- * the recommendation → Action Plan loop.
+ * When that cache is empty, the tab still shows debtor days, creditor days, and
+ * the debtors and creditors totals, with a way to upload the age analysis or
+ * connect Xero or QuickBooks. Drafts go through the recommendation → Action Plan loop.
  */
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -11,17 +10,22 @@ import { toast } from "sonner";
 import { getCollections } from "@/lib/collections.functions";
 import {
   buildCollectionsDraft,
+  collectionsAnswerSentence,
   collectionsNoFiguresLead,
   collectionsStatementLead,
+  COLLECTIONS_UPLOAD_CTA,
   hasStatementWorkingCapital,
   rollupAgeBuckets,
-  sourceLabel,
   type CollectionsSnapshot,
   type StatementWorkingCapital,
 } from "@/lib/collections";
+import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { createRecommendation } from "@/lib/recommendations.functions";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
+import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import {
+  StatementArApActions,
   StatementArApFallback,
   StatementArApTiles,
   type StatementCopyMarket,
@@ -32,7 +36,7 @@ type CopyMarket = StatementCopyMarket;
 type Props = {
   clientId: string;
   market?: CopyMarket;
-  /** Receivables, payables, Days AR, and Days AP from ratiosStatementFigures. */
+  /** Receivables, payables, debtor days, and creditor days already on the statements. */
   position?: StatementWorkingCapital | null;
   periodLabel?: string | null;
   onUploadAged?: () => void;
@@ -66,7 +70,6 @@ export function CollectionsPanel({
   const [snapshot, setSnapshot] = useState<CollectionsSnapshot | null>(null);
   const [line, setLine] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filing, setFiling] = useState(false);
   const [filed, setFiled] = useState(false);
 
@@ -78,11 +81,11 @@ export function CollectionsPanel({
         if (cancelled) return;
         setSnapshot(view.snapshot);
         setLine(view.line);
-        setError(null);
       })
-      .catch((err: unknown) => {
+      .catch(() => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Could not load collections");
+        setSnapshot(null);
+        setLine("");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -99,6 +102,13 @@ export function CollectionsPanel({
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.contacts.length > 0;
   const buckets = namedList ? rollupAgeBuckets(snapshot.contacts) : [];
+  const pack = copyPackOf(market);
+  const sentence = loading ? "" : collectionsAnswerSentence(snapshot);
+  const chip = snapshot?.source
+    ? figureSourceChipLabel(snapshot.source)
+    : fromStatements
+      ? figureSourceChipLabel("statement")
+      : null;
 
   const fileDraft = async () => {
     if (!draft || filing || filed) return;
@@ -129,129 +139,159 @@ export function CollectionsPanel({
     }
   };
 
-  if (namedList && snapshot) {
-    return (
-      <div className="collections" id="collections-chase">
-        <p className="collections-kicker">
-          {sourceLabel(snapshot.source)}
-          {snapshot.asOf ? ` · as of ${snapshot.asOf}` : ""} · {line}
-        </p>
-        {snapshot.note ? <p className="collections-note">{snapshot.note}</p> : null}
-        {fromStatements && position ? (
-          <StatementArApTiles
-            position={position}
-            market={market}
-            id="collections-statement-position"
-          />
-        ) : null}
-        {buckets.length > 0 ? (
-          <div className="collections-buckets" id="collections-age-buckets">
-            {buckets.map((bucket) => (
-              <span key={bucket.label}>
-                {bucket.label}
-                <strong>{money(bucket.amount, market)}</strong>
-              </span>
-            ))}
-          </div>
-        ) : null}
-        <div className="collections-scroll">
-          <table className="collections-table">
-            <thead>
-              <tr>
-                <th>Who</th>
-                <th>Outstanding</th>
-                <th>Overdue</th>
-                <th>Age</th>
-                <th>Books ref</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snapshot.contacts.map((contact) => (
-                <tr key={contact.contactId}>
-                  <td>{contact.name}</td>
-                  <td>{money(contact.outstanding, market)}</td>
-                  <td>{money(contact.overdue, market)}</td>
-                  <td>{contact.ageBucket || "—"}</td>
-                  <td>
-                    {contact.invoices.length
-                      ? contact.invoices
-                          .slice(0, 4)
-                          .map((invoice) => invoice.reference)
-                          .join(", ")
-                      : "Contact total only"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {draft ? (
-          <div className="collections-script">
-            <p className="collections-kicker">Chase script</p>
-            <pre>{draft.rationale}</pre>
-            <div className="collections-actions">
-              <button
-                type="button"
-                className="btn gold mini"
-                disabled={filing || filed}
-                onClick={fileDraft}
-              >
-                {filed ? "Draft added" : filing ? "Adding…" : "Add chase draft"}
-              </button>
-              {onOpenDrafts ? (
-                <button type="button" className="btn ghost mini" onClick={onOpenDrafts}>
-                  Review drafts
-                </button>
-              ) : null}
-              {onOpenActions ? (
-                <button type="button" className="btn ghost mini" onClick={onOpenActions}>
-                  Action Plan
-                </button>
-              ) : null}
-            </div>
-            <p className="collections-note">
-              Accept works the same way as other recommendations. Partner sign-off stays on the
-              Action Plan. Milōn does not email the customer or record the receipt.
-            </p>
-          </div>
-        ) : (
-          <p className="collections-note">
-            Nothing is overdue on this report, so there is no chase draft.
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  const pack = copyPackOf(market);
   const booksNote =
     snapshot?.status === "skipped"
-      ? (snapshot.skipReason ?? line)
+      ? snapshot.skipReason && snapshot.skipReason !== sentence
+        ? snapshot.skipReason
+        : null
       : snapshot && (snapshot.status === "empty" || snapshot.contacts.length === 0)
         ? `${line}${snapshot.note ? ` ${snapshot.note}` : ""} Nothing outstanding on that pull.`
         : null;
 
+  const primary =
+    namedList && draft ? (
+      <button
+        type="button"
+        className={`${ARAP_GOLD_BTN} disabled:cursor-not-allowed disabled:opacity-40`}
+        id="collections-file-draft"
+        disabled={filing || filed}
+        onClick={fileDraft}
+      >
+        {filed ? "Draft added" : filing ? "Adding…" : "Add chase draft"}
+      </button>
+    ) : !namedList && onUploadAged ? (
+      <button
+        type="button"
+        className={ARAP_GOLD_BTN}
+        id="collections-upload-aged"
+        onClick={onUploadAged}
+      >
+        {COLLECTIONS_UPLOAD_CTA}
+      </button>
+    ) : null;
+
   return (
     <>
-      {error ? <p className="collections-muted">{error}</p> : null}
-      <StatementArApFallback
-        idPrefix="collections"
-        position={position}
-        market={market}
-        periodLabel={periodLabel}
-        fromStatements={fromStatements}
-        lead={fromStatements ? collectionsStatementLead(pack) : collectionsNoFiguresLead()}
-        loading={loading}
-        loadingLead="Checking Xero and QuickBooks for named customers."
-        booksNote={!loading && booksNote ? booksNote : null}
-        booksNoteId={snapshot?.status === "skipped" ? "collections-skip" : "collections-empty"}
-        footnote="Milōn drafts the chase once the aged report is on file. It does not email the customer or record the receipt."
-        kickerWhenEmpty="Collections"
-        onUploadAged={onUploadAged}
-        onConnectXero={onConnectXero}
-        onConnectQbo={onConnectQbo}
+      <ArapAnswerStrip
+        heading="Who to chase this week"
+        sentence={sentence}
+        chip={chip}
+        primary={primary}
       />
+      <ReviewInputsDrawer hint={fromStatements ? "Statement totals and connections" : "Connections"}>
+        <p className="collections-note" id="collections-fallback-lead">
+          {fromStatements
+            ? collectionsStatementLead(pack)
+            : "An aged debtors and creditors report names who to chase. Connect the books, or upload that report, when the statement totals are not enough."}
+        </p>
+        <StatementArApActions
+          idPrefix="collections"
+          onUploadAged={namedList ? onUploadAged : undefined}
+          uploadClassName="btn ghost mini"
+          onConnectXero={onConnectXero}
+          onConnectQbo={onConnectQbo}
+        />
+        {onOpenDrafts || onOpenActions ? (
+          <div className="collections-actions">
+            {onOpenDrafts ? (
+              <button type="button" className="btn ghost mini" onClick={onOpenDrafts}>
+                Review drafts
+              </button>
+            ) : null}
+            {onOpenActions ? (
+              <button type="button" className="btn ghost mini" onClick={onOpenActions}>
+                Action Plan
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </ReviewInputsDrawer>
+
+      {namedList && snapshot ? (
+        <div className="collections" id="collections-chase">
+          {snapshot.note ? <p className="collections-note">{snapshot.note}</p> : null}
+          {fromStatements && position ? (
+            <StatementArApTiles
+              position={position}
+              market={market}
+              id="collections-statement-position"
+            />
+          ) : null}
+          {buckets.length > 0 ? (
+            <div className="collections-buckets" id="collections-age-buckets">
+              {buckets.map((bucket) => (
+                <span key={bucket.label}>
+                  {bucket.label}
+                  <strong>{money(bucket.amount, market)}</strong>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className="collections-scroll">
+            <table className="collections-table">
+              <thead>
+                <tr>
+                  <th>Who</th>
+                  <th>Outstanding</th>
+                  <th>Overdue</th>
+                  <th>Age</th>
+                  <th>Books ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snapshot.contacts.map((contact) => (
+                  <tr key={contact.contactId}>
+                    <td>{contact.name}</td>
+                    <td>{money(contact.outstanding, market)}</td>
+                    <td>{money(contact.overdue, market)}</td>
+                    <td>{contact.ageBucket || "—"}</td>
+                    <td>
+                      {contact.invoices.length
+                        ? contact.invoices
+                            .slice(0, 4)
+                            .map((invoice) => invoice.reference)
+                            .join(", ")
+                        : "Contact total only"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {draft ? (
+            <div className="collections-script">
+              <p className="collections-kicker">Chase script</p>
+              <pre>{draft.rationale}</pre>
+              <p className="collections-note">
+                Accept works the same way as other recommendations. Partner sign-off stays on the
+                Action Plan. Milōn does not email the customer or record the receipt.
+              </p>
+            </div>
+          ) : (
+            <p className="collections-note">
+              Nothing is overdue on this report, so there is no chase draft.
+            </p>
+          )}
+        </div>
+      ) : (
+        <StatementArApFallback
+          idPrefix="collections"
+          position={position}
+          market={market}
+          periodLabel={periodLabel}
+          fromStatements={fromStatements}
+          lead={fromStatements ? collectionsStatementLead(pack) : collectionsNoFiguresLead()}
+          loading={loading}
+          loadingLead="Checking the aged report on file."
+          booksNote={!loading && booksNote ? booksNote : null}
+          booksNoteId={snapshot?.status === "skipped" ? "collections-skip" : "collections-empty"}
+          footnote="Milōn drafts the chase once the aged report is on file. It does not email the customer or record the receipt."
+          kickerWhenEmpty="Collections"
+          omitLead
+          hideActions
+        />
+      )}
     </>
   );
 }

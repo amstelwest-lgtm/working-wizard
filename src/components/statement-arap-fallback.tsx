@@ -1,7 +1,7 @@
 /**
  * Shared empty surface for Collections and Payables.
- * Tiles are the Ratios Days AR / Days AP / AR $ / AP $ helper. The three
- * actions upload the aged report or connect the books.
+ * Tiles are the statement debtor days, creditor days, and the debtors and
+ * creditors totals. Upload and connect can sit here or on the answer strip.
  */
 import {
   COLLECTIONS_QBO_CTA,
@@ -78,11 +78,13 @@ export function StatementArApActions({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  uploadClassName = "btn gold mini",
 }: {
   idPrefix: string;
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  uploadClassName?: string;
 }) {
   if (!onUploadAged && !onConnectXero && !onConnectQbo) return null;
   return (
@@ -90,7 +92,7 @@ export function StatementArApActions({
       {onUploadAged ? (
         <button
           type="button"
-          className="btn gold mini"
+          className={uploadClassName}
           id={`${idPrefix}-upload-aged`}
           onClick={onUploadAged}
         >
@@ -137,6 +139,8 @@ export function StatementArApFallback({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  omitLead = false,
+  hideActions = false,
 }: {
   idPrefix: string;
   position?: StatementWorkingCapital | null;
@@ -153,6 +157,10 @@ export function StatementArApFallback({
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  /** The answer strip owns the sentence. The long lead stays in the drawer. */
+  omitLead?: boolean;
+  /** The strip or the drawer owns upload and connect. */
+  hideActions?: boolean;
 }) {
   return (
     <div className="collections" id={`${idPrefix}-from-statements`}>
@@ -165,9 +173,11 @@ export function StatementArApFallback({
         {fromStatements ? "From the statements" : kickerWhenEmpty}
         {fromStatements && periodLabel ? ` · ${periodLabel}` : ""}
       </p>
-      <p className="collections-note" id={`${idPrefix}-fallback-lead`}>
-        {loading ? loadingLead : lead}
-      </p>
+      {omitLead ? null : (
+        <p className="collections-note" id={`${idPrefix}-fallback-lead`}>
+          {loading ? loadingLead : lead}
+        </p>
+      )}
       {fromStatements && position ? (
         <StatementArApTiles
           position={position}
@@ -175,12 +185,14 @@ export function StatementArApFallback({
           id={`${idPrefix}-statement-position`}
         />
       ) : null}
-      <StatementArApActions
-        idPrefix={idPrefix}
-        onUploadAged={onUploadAged}
-        onConnectXero={onConnectXero}
-        onConnectQbo={onConnectQbo}
-      />
+      {hideActions ? null : (
+        <StatementArApActions
+          idPrefix={idPrefix}
+          onUploadAged={onUploadAged}
+          onConnectXero={onConnectXero}
+          onConnectQbo={onConnectQbo}
+        />
+      )}
       <p className="collections-note">{footnote}</p>
     </div>
   );

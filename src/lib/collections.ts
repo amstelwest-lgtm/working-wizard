@@ -55,7 +55,7 @@ const SOURCES = new Set<CollectionsSource>(["xero", "qbo", "sage"]);
 const STATUSES = new Set<CollectionsStatus>(["applied", "empty", "skipped"]);
 
 export const XERO_AGED_RECONNECT =
-  "Aged receivables need a reconnect. Enable accounting.reports.aged.read and accounting.contacts.read on the Xero app, then disconnect and connect again.";
+  "Aged receivables need a reconnect. Disconnect Xero, connect again, and grant aged-receivables access.";
 
 export const AGED_AR_PENDING = "Aged receivables appear after the next Sync";
 
@@ -277,7 +277,7 @@ export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): s
 }
 
 /**
- * Balance-sheet totals and Ratios Days AR / Days AP.
+ * Balance-sheet totals plus debtor days and creditor days already on the statements.
  * Zero is a real figure. Blank fields stay null. This is not an age analysis.
  */
 export type StatementWorkingCapital = {
@@ -293,9 +293,15 @@ export const COLLECTIONS_QBO_CTA = "Connect QuickBooks";
 
 export function collectionsStatementLead(copyPack: "za" | "us"): string {
   if (copyPack === "us") {
-    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the Ratios Days AR, Days AP, accounts receivable, and accounts payable figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+    return "Days sales outstanding, days payable outstanding, and the receivables and payables totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
   }
-  return "Debtor days, creditor days, and the debtors and creditors totals below are the Ratios Days AR, Days AP, debtors, and creditors figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+  return "Debtor days, creditor days, and the debtors and creditors totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to chase and split the balance into age buckets.";
+}
+
+/** Proof line when an aged snapshot is on file. Otherwise the one-sentence empty state. */
+export function collectionsAnswerSentence(snap: CollectionsSnapshot | null | undefined): string {
+  if (snap) return agedArProofLine(snap);
+  return collectionsNoFiguresLead();
 }
 
 export function collectionsNoFiguresLead(): string {

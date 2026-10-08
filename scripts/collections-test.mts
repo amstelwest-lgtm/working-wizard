@@ -382,12 +382,15 @@ eq(rolled.length, 2, "zero columns drop out of the age rollup");
 eq(rolled[0]?.label, "Current", "age columns keep report order");
 eq(rolled[0]?.amount, 125, "current balances add across contacts");
 eq(rolled[1]?.amount, 40, "aged balances add across contacts");
-assert(collectionsStatementLead("us").includes("Days sales outstanding"), "US lead names DSO");
-assert(collectionsStatementLead("us").includes("Days AR"), "US lead names Ratios Days AR");
+assert(collectionsStatementLead("us").includes("Days sales outstanding"), "US lead names the statement days");
+assert(!collectionsStatementLead("us").includes("Days AR"), "US lead drops Days AR");
+assert(!collectionsStatementLead("us").includes("Days AP"), "US lead drops Days AP");
+assert(!collectionsStatementLead("us").includes("Ratios"), "US lead does not send people to Ratios");
 assert(collectionsStatementLead("us").includes("QuickBooks"), "US lead offers QuickBooks");
 assert(!collectionsStatementLead("us").includes("Overview"), "US lead does not claim Overview");
 assert(collectionsStatementLead("za").includes("Debtor days"), "ZA lead names debtor days");
-assert(collectionsStatementLead("za").includes("Ratios"), "ZA lead names Ratios");
+assert(!collectionsStatementLead("za").includes("Days AR"), "ZA lead drops Days AR");
+assert(!collectionsStatementLead("za").includes("Ratios"), "ZA lead does not send people to Ratios");
 assert(!collectionsStatementLead("za").includes("Overview"), "ZA lead does not claim Overview");
 assert(collectionsNoFiguresLead().includes("QuickBooks"), "no-figures lead is not Xero-only");
 

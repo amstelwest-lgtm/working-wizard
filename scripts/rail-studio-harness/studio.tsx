@@ -9,6 +9,8 @@ import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { CollectionsPanel } from "@/components/collections-panel";
+import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { ClientBriefing } from "@/components/client-briefing";
 import { DeliverableAnswerStrip, deliverableDrawerHint } from "@/components/deliverable-answer-strip";
@@ -151,6 +153,8 @@ export function RailStudio() {
             ) : null}
             {pane === "profit" ? <ProfitPane clientId={clientId} /> : null}
             {pane === "cash" ? <CashPane clientId={clientId} /> : null}
+            {pane === "collections" ? <CollectionsPane /> : null}
+            {pane === "payables" ? <PayablesPane /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} /> : null}
             {pane === "plan" ? <PlanPane clientId={clientId} /> : null}
@@ -402,6 +406,52 @@ function ProfitPane({ clientId }: { clientId: string }) {
           />
         </PaneBoundary>
       </div>
+    </div>
+  );
+}
+
+const HARNESS_ARAP = {
+  receivables: 92000,
+  payables: 41000,
+  debtorDays: 48,
+  creditorDays: 31,
+};
+
+function CollectionsPane() {
+  return (
+    <div className="tabpane on" id="pane-collections">
+      <PaneBoundary label="Collections">
+        <CollectionsPanel
+          clientId={CLIENT_ID}
+          periodLabel="September 2026"
+          position={HARNESS_ARAP}
+          onUploadAged={() => {}}
+          onConnectXero={() => {}}
+          onConnectQbo={() => {}}
+          onOpenDrafts={() => {}}
+          onOpenActions={() => {}}
+        />
+      </PaneBoundary>
+    </div>
+  );
+}
+
+function PayablesPane() {
+  return (
+    <div className="tabpane on" id="pane-payables">
+      <PaneBoundary label="Payables">
+        <PayablesPanel
+          clientId={CLIENT_ID}
+          runwayWeeks={11}
+          periodLabel="September 2026"
+          position={HARNESS_ARAP}
+          onUploadAged={() => {}}
+          onConnectXero={() => {}}
+          onConnectQbo={() => {}}
+          onOpenDrafts={() => {}}
+          onOpenActions={() => {}}
+        />
+      </PaneBoundary>
     </div>
   );
 }
