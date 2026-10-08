@@ -51,6 +51,7 @@ import {
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { accessTokenFromNext } from "@/lib/practice-access";
+import { callbackNextParam } from "@/lib/staff-invite-landing";
 import { listUserFirms } from "@/lib/firm-brand";
 import {
   clearForcePortal,
@@ -125,7 +126,9 @@ function AuthCallbackPage() {
       }
 
       const consumed = consumeGoogleAuthIntent();
-      const { next } = consumed;
+      // Email confirmation puts the staff invite on ?next=. That survives a new
+      // tab. Session storage still covers a Google hop that kept the same origin.
+      const next = callbackNextParam(window.location.search) ?? consumed.next;
       // URL (OAuth redirectTo) survives origin hops and storage loss. Do not
       // consume the cookie until redeem succeeds — a remount must not drop it.
       const pendingInvite = resolvePendingOwnerInvite({
@@ -188,6 +191,18 @@ function AuthCallbackPage() {
             setError(msg);
             setInviteContinue(ownerInviteLandingPath(pendingInvite.token));
           }
+        }
+        return;
+      }
+
+      // Staff (and other) /access links must not mint a practice firm or stash
+      // firm Checkout. The access page accepts the invite after this hop.
+      const accessTok = accessTokenFromNext(next);
+      if (accessTok) {
+        setPortalIntent("accountant");
+        forcePortal("accountant");
+        if (!cancelled) {
+          void navigate({ to: "/access/$token", params: { token: accessTok }, replace: true });
         }
         return;
       }
@@ -319,12 +334,6 @@ function AuthCallbackPage() {
         /* ignore */
       }
 
-      const accessTok = accessTokenFromNext(next);
-      if (accessTok) {
-        if (!cancelled)
-          void navigate({ to: "/access/$token", params: { token: accessTok }, replace: true });
-        return;
-      }
       let path: "/app" | "/dashboard" | "/ops" = "/app";
       let opsTab: string | undefined;
       if (goOps || isOpsNext(next)) {
