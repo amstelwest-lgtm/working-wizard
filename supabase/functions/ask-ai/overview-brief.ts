@@ -54,6 +54,11 @@ export type OverviewBrief = {
   grossMargin: number | null;
   operatingMargin: number | null;
   netMargin: number | null;
+  /** Stored P&L headlines. Null when that line is not on the file. */
+  grossProfit: number | null;
+  operatingProfit: number | null;
+  profitBeforeTax: number | null;
+  netProfit: number | null;
   /** Balance-sheet totals the Health grid can show. Null when the file has none. */
   equity: number | null;
   totalAssets: number | null;
@@ -284,6 +289,10 @@ export function buildOverviewBrief(input: {
     grossMargin: Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null,
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
+    grossProfit: asNumber(financials?.grossProfit),
+    operatingProfit: asNumber(financials?.ebit),
+    profitBeforeTax: asNumber(financials?.ebt),
+    netProfit: asNumber(financials?.netIncome),
     equity: asNumber(financials?.equity),
     totalAssets: asNumber(financials?.totalAssets),
     totalLiabilities: liabilities?.amount ?? null,
@@ -309,6 +318,20 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
   if (brief.revenue != null) {
     lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}`);
+  }
+  if (brief.grossProfit != null) {
+    lines.push(`Gross profit: ${money(brief.grossProfit, brief.copyPack)} (stored)`);
+  }
+  if (brief.operatingProfit != null) {
+    lines.push(`Operating profit: ${money(brief.operatingProfit, brief.copyPack)} (stored)`);
+  }
+  if (brief.profitBeforeTax != null) {
+    lines.push(`Profit before tax: ${money(brief.profitBeforeTax, brief.copyPack)} (stored)`);
+  }
+  if (brief.netProfit != null) {
+    lines.push(
+      `Net profit: ${money(brief.netProfit, brief.copyPack)} (stored net income — quote this amount; do not multiply net margin by revenue)`,
+    );
   }
   const runwayFact = overviewRunwayFact(brief);
   if (runwayFact) lines.push(runwayFact);
@@ -361,6 +384,16 @@ export function formatOverviewForPrompt(
       "Operating margin is EBIT divided by revenue. Net margin is net income divided by revenue. Quote those labels. Do not call operating margin EBIT, and do not replace either figure with a waterfall percentage.",
     );
   }
+  if (
+    brief.grossProfit != null ||
+    brief.operatingProfit != null ||
+    brief.profitBeforeTax != null ||
+    brief.netProfit != null
+  ) {
+    lines.push(
+      "Quote stored Gross profit, Operating profit, Profit before tax, and Net profit when they are listed. Do not recreate them by multiplying a margin by revenue.",
+    );
+  }
   if (brief.cash != null) {
     lines.push(
       "Cash on file is already recorded. Do not say the bank balance or the cash figure is missing. If runway is not estimated, the only gap you may name is that no cash-flow statement is on file.",
@@ -372,7 +405,7 @@ export function formatOverviewForPrompt(
     );
   }
   lines.push(
-    "Every figure listed above is already on file. Never ask the user to supply health, cash, revenue, runway, margin, debtor days, creditor days, total assets, total liabilities, or total equity when that line is present.",
+    "Every figure listed above is already on file. Never ask the user to supply health, cash, revenue, gross profit, operating profit, net profit, runway, margin, debtor days, creditor days, total assets, total liabilities, or total equity when that line is present.",
   );
   return lines.join("\n");
 }

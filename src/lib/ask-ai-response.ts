@@ -7,6 +7,7 @@ import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, isPrecardLimitKind } from "@/lib
 
 export const ASK_EMPTY_REPLY = "Milōn Bot didn't return an answer. Try again.";
 export const ASK_UNREADABLE_REPLY = "Couldn't read Milōn's reply. Try again.";
+export const ASK_TIMEOUT_REPLY = "Milōn Bot took too long. Try again.";
 
 export type AskAiTool = { name: string; status: string };
 

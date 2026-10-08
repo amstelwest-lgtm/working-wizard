@@ -590,10 +590,12 @@ const ask = read("src/lib/ask-ai.js");
 const submit = ask.slice(ask.indexOf("async function submit"));
 assert(submit.includes('question = ""'), "submit clears the composer");
 assert(
-  submit.indexOf("await fetch") < submit.indexOf('question = ""'),
-  "the composer clears only after the request returns a reply",
+  submit.indexOf('{ role: "user"') < submit.indexOf('question = ""') &&
+    submit.indexOf('question = ""') < submit.indexOf("return fetch"),
+  "the composer clears after the question is echoed, before the request",
 );
-assert(submit.includes("question = q"), "a failed send restores the draft");
+assert(submit.includes("turnId"), "a retry reuses the same turn");
+assert(ask.includes("ask-ai-retry"), "a failed or timed-out send offers Retry");
 assert(ask.includes("compositionstart"), "IME composition guard stays");
 assert(!ask.includes("e.isComposing"), "Enter does not trust the intermittent isComposing flag");
 

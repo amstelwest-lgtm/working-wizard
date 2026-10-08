@@ -1226,6 +1226,7 @@ html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
   background: #fffdf8;
   color: #1b1608;
 }
+.precard-cap-reason { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
 .precard-cap-title { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
 .precard-cap-button {
   display: inline-flex;

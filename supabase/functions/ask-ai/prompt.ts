@@ -32,12 +32,13 @@ Rules:
 - Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
 - Operating margin is EBIT divided by revenue. Net margin is net income divided by revenue. Use those names from OVERVIEW FIGURES. Do not relabel operating margin as EBIT, and do not quote a waterfall percentage in place of either.
+- When OVERVIEW FIGURES lists Net profit, Gross profit, Operating profit, or Profit before tax, quote that stored amount. Do not multiply a margin by revenue to recreate it.
 - When cash on file is listed, that balance is present. Never say there is no bank balance or that cash is missing. If runway cannot be estimated, say no cash-flow statement is on file.
 - When asked which deliverable to prepare first, recommend one deliverable and why, using OVERVIEW FIGURES. Do not say a draft or a pack version was saved.
 - Advisory pack sign-off and version come only from the ADVISORY PACK SIGN-OFF block. Quote its Status line. Do not say no sign-off or version is on file when that block is present. Do not create or save a pack version while answering.
 - Offer 1–2 concrete next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
-- Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.
+- Do not invent statement line items. Quote Net profit, Gross profit, Operating profit, and Profit before tax when OVERVIEW FIGURES lists them. Do not multiply a margin by revenue in their place. Raw income-statement and balance-sheet lines other than those stored headlines are not provided — use the outputs above.
 ${locale}`;
 }
 

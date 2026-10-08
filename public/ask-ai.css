@@ -301,6 +301,24 @@
   border-radius: 6px;
   padding: 8px 12px;
 }
+.ask-ai-inline-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ask-ai-retry {
+  border: 0;
+  border-radius: 999px;
+  background: #1b1608;
+  color: #fffdf8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.ask-ai-retry:hover { background: #3a2e10; }
 
 .ask-ai-signoff-row {
   display: flex;
