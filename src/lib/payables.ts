@@ -64,15 +64,15 @@ const SOURCES = new Set<PayablesSource>(["xero", "qbo", "sage"]);
 const STATUSES = new Set<PayablesStatus>(["applied", "empty", "skipped"]);
 
 export const XERO_AGED_AP_RECONNECT =
-  "Aged payables need a reconnect. Enable accounting.reports.aged.read and accounting.contacts.read on the Xero app, then disconnect and connect again.";
+  "Aged payables need a reconnect. Disconnect Xero, connect again, and grant aged-payables access.";
 
 export const AGED_AP_PENDING = "Aged payables appear after the next Sync";
 
 export function payablesStatementLead(copyPack: "za" | "us"): string {
   if (copyPack === "us") {
-    return "Days sales outstanding, days payable outstanding, accounts receivable, and accounts payable below are the Ratios Days AR, Days AP, accounts receivable, and accounts payable figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
+    return "Days sales outstanding, days payable outstanding, and the receivables and payables totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
   }
-  return "Debtor days, creditor days, and the debtors and creditors totals below are the Ratios Days AR, Days AP, debtors, and creditors figures. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
+  return "Debtor days, creditor days, and the debtors and creditors totals below are the figures already on the statements. Upload an aged debtors and creditors report, or connect Xero or QuickBooks, to name who to pay and split the balance into age buckets.";
 }
 
 export function payablesNoFiguresLead(): string {
@@ -286,6 +286,52 @@ export function payablesSourceLabel(source: PayablesSource): string {
   if (source === "xero") return "Xero";
   if (source === "sage") return "Sage";
   return "QuickBooks";
+}
+
+function finiteFigure(n: number | null | undefined): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+/**
+ * What the statements already show, then the next step.
+ * Both the amount and the day count have to be on the page.
+ */
+export function payablesFiguresSentence(
+  position: { payables: number | null; creditorDays: number | null } | null | undefined,
+  money: (n: number) => string,
+): string {
+  if (!position || !finiteFigure(position.payables) || !finiteFigure(position.creditorDays)) {
+    return payablesNoFiguresLead();
+  }
+  return `You owe suppliers ${money(position.payables)} and pay in ${position.creditorDays} days. Upload the aged creditors report to see who to pay first.`;
+}
+
+/**
+ * Overdue total and supplier count are already on the snapshot. The first stored
+ * name is the largest overdue row: finalizePayables sorts that way, and this
+ * does not scan or re-sum the list. There is no snapshot-level oldest bucket.
+ */
+export function payablesListSentence(snap: PayablesSnapshot, money: (n: number) => string): string {
+  const suppliers = `${snap.supplierCount} supplier${snap.supplierCount === 1 ? "" : "s"}`;
+  if (!(snap.totalOverdue >= 0.005)) return `Nothing is overdue across ${suppliers}.`;
+  const head = `${money(snap.totalOverdue)} is overdue across ${suppliers}`;
+  const lead = snap.suppliers[0];
+  if (lead?.name && lead.overdue >= 0.005) {
+    return `${head}; ${lead.name} is the largest at ${money(lead.overdue)}.`;
+  }
+  return `${head}.`;
+}
+
+/** Named list when a snapshot has suppliers. Otherwise the statement sentence, or the empty fallback. */
+export function payablesAnswerSentence(
+  snap: PayablesSnapshot | null | undefined,
+  position: { payables: number | null; creditorDays: number | null } | null | undefined,
+  money: (n: number) => string,
+): string {
+  if (snap && snap.status === "applied" && snap.suppliers.length > 0) {
+    return payablesListSentence(snap, money);
+  }
+  return payablesFiguresSentence(position, money);
 }
 
 export function agedApProofLine(snap: PayablesSnapshot | null | undefined): string {

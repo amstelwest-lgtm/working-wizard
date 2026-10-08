@@ -22,6 +22,7 @@
     "test:budget-redesign": "vite-node --config scripts/vite-test.config.ts scripts/budget-redesign-test.mts",
     "test:answer-strip-cash-budget": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-cash-budget-test.mts",
     "test:answer-strip-health-profit": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-health-profit-test.mts",
+    "test:answer-strip-collections-payables": "vite-node --config scripts/vite-test.config.ts scripts/answer-strip-collections-payables-test.mts",
     "test:report-period-basis": "vite-node --config scripts/vite-test.config.ts scripts/report-period-basis-test.mts",
     "test:ask-ai-client-switch": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-client-switch-test.mts",
     "test:ask-ai-context": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-context-test.mts",

@@ -1,7 +1,7 @@
 /**
  * Shared empty surface for Collections and Payables.
- * Tiles are the Ratios Days AR / Days AP / AR $ / AP $ helper. The three
- * actions upload the aged report or connect the books.
+ * Tiles are the statement debtor days, creditor days, and the debtors and
+ * creditors totals. Upload and connect can sit here or on the answer strip.
  */
 import {
   COLLECTIONS_QBO_CTA,
@@ -14,7 +14,7 @@ import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 
 export type StatementCopyMarket = MoneyMarket & { copyPack?: "za" | "us" };
 
-function statementMoney(n: number, market?: MoneyMarket) {
+export function statementArApMoney(n: number, market?: MoneyMarket) {
   const cents = Math.abs(n - Math.round(n)) >= 0.005;
   return formatMoney(
     n,
@@ -29,37 +29,50 @@ function copyPackOf(market?: StatementCopyMarket): "za" | "us" {
   return market?.copyPack === "us" ? "us" : "za";
 }
 
+export function statementArApMetricOrder(lead: "debtors" | "creditors" = "debtors") {
+  return lead === "creditors"
+    ? (["dpo", "ap", "dso", "ar"] as const)
+    : (["dso", "ar", "dpo", "ap"] as const);
+}
+
 export function StatementArApTiles({
   position,
   market,
   id,
+  lead = "debtors",
 }: {
   position: StatementWorkingCapital;
   market?: StatementCopyMarket;
   id: string;
+  /** Creditor cards lead on Payables. Collections keeps debtor cards first. */
+  lead?: "debtors" | "creditors";
 }) {
   const copy = { copyPack: copyPackOf(market) } as const;
-  const metrics: { key: string; label: string; value: string }[] = [];
+  const byKey = new Map<string, { key: string; label: string; value: string }>();
   if (typeof position.debtorDays === "number" && Number.isFinite(position.debtorDays)) {
-    metrics.push({ key: "dso", label: t("dso", copy), value: `${position.debtorDays} days` });
+    byKey.set("dso", { key: "dso", label: t("dso", copy), value: `${position.debtorDays} days` });
   }
   if (typeof position.receivables === "number" && Number.isFinite(position.receivables)) {
-    metrics.push({
+    byKey.set("ar", {
       key: "ar",
       label: t("receivables", copy),
-      value: statementMoney(position.receivables, market),
+      value: statementArApMoney(position.receivables, market),
     });
   }
   if (typeof position.creditorDays === "number" && Number.isFinite(position.creditorDays)) {
-    metrics.push({ key: "dpo", label: t("dpo", copy), value: `${position.creditorDays} days` });
+    byKey.set("dpo", { key: "dpo", label: t("dpo", copy), value: `${position.creditorDays} days` });
   }
   if (typeof position.payables === "number" && Number.isFinite(position.payables)) {
-    metrics.push({
+    byKey.set("ap", {
       key: "ap",
       label: t("payables", copy),
-      value: statementMoney(position.payables, market),
+      value: statementArApMoney(position.payables, market),
     });
   }
+  const metrics = statementArApMetricOrder(lead).flatMap((key) => {
+    const metric = byKey.get(key);
+    return metric ? [metric] : [];
+  });
   if (!metrics.length) return null;
   return (
     <dl className="statement-arap-position" id={id}>
@@ -78,11 +91,13 @@ export function StatementArApActions({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  uploadClassName = "btn gold mini",
 }: {
   idPrefix: string;
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  uploadClassName?: string;
 }) {
   if (!onUploadAged && !onConnectXero && !onConnectQbo) return null;
   return (
@@ -90,7 +105,7 @@ export function StatementArApActions({
       {onUploadAged ? (
         <button
           type="button"
-          className="btn gold mini"
+          className={uploadClassName}
           id={`${idPrefix}-upload-aged`}
           onClick={onUploadAged}
         >
@@ -137,6 +152,9 @@ export function StatementArApFallback({
   onUploadAged,
   onConnectXero,
   onConnectQbo,
+  omitLead = false,
+  hideActions = false,
+  cardLead = "debtors",
 }: {
   idPrefix: string;
   position?: StatementWorkingCapital | null;
@@ -153,6 +171,11 @@ export function StatementArApFallback({
   onUploadAged?: () => void;
   onConnectXero?: () => void;
   onConnectQbo?: () => void;
+  /** The answer strip owns the sentence. The long lead stays in the drawer. */
+  omitLead?: boolean;
+  /** The strip or the drawer owns upload and connect. */
+  hideActions?: boolean;
+  cardLead?: "debtors" | "creditors";
 }) {
   return (
     <div className="collections" id={`${idPrefix}-from-statements`}>
@@ -165,22 +188,27 @@ export function StatementArApFallback({
         {fromStatements ? "From the statements" : kickerWhenEmpty}
         {fromStatements && periodLabel ? ` · ${periodLabel}` : ""}
       </p>
-      <p className="collections-note" id={`${idPrefix}-fallback-lead`}>
-        {loading ? loadingLead : lead}
-      </p>
+      {omitLead ? null : (
+        <p className="collections-note" id={`${idPrefix}-fallback-lead`}>
+          {loading ? loadingLead : lead}
+        </p>
+      )}
       {fromStatements && position ? (
         <StatementArApTiles
           position={position}
           market={market}
           id={`${idPrefix}-statement-position`}
+          lead={cardLead}
         />
       ) : null}
-      <StatementArApActions
-        idPrefix={idPrefix}
-        onUploadAged={onUploadAged}
-        onConnectXero={onConnectXero}
-        onConnectQbo={onConnectQbo}
-      />
+      {hideActions ? null : (
+        <StatementArApActions
+          idPrefix={idPrefix}
+          onUploadAged={onUploadAged}
+          onConnectXero={onConnectXero}
+          onConnectQbo={onConnectQbo}
+        />
+      )}
       <p className="collections-note">{footnote}</p>
     </div>
   );
