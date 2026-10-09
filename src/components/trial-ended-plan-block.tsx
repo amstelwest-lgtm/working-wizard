@@ -13,19 +13,20 @@ import { getFirmPlanDisplay, upgradeFirmBand } from "@/lib/stripe-checkout.funct
 export type TrialEndedUpgrade = {
   band: FirmBandId | null;
   interval: FirmInterval;
-  priceCurrency: "USD" | "ZAR";
+  priceCurrency: "USD" | "zar";
   zarByBand?: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
   canUpgrade: boolean;
   clientCount?: number | null;
   usageLabel?: string | null;
   saDiscount?: boolean;
+  zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   /** Live subscription phase. Active / CURRENT is not an ended trial. */
   phase?: FirmSubscriptionPhase | null;
 };
 
 /**
  * One "Your trial has ended, choose a plan" card. The band list is the
- * existing picker. South Africa 50% copy stays inside that picker.
+ * existing picker. An SA firm sees the rand lines the server built.
  */
 export function TrialEndedPlanCard({
   upgrade,
@@ -69,6 +70,7 @@ export function TrialEndedPlanCard({
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
           saDiscount={upgrade.saDiscount}
+          zaLabels={upgrade.zaLabels}
           upgrading={upgrading}
           onUpgrade={onUpgrade}
           onValidateVoucher={onValidateVoucher}

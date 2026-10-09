@@ -1,5 +1,4 @@
 import type { FirmUpgradeAllowance } from "@/lib/firm-client-cap";
-import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import { firmStarterTrialCountdownCopy, type StarterTrialBanner } from "@/lib/firm-starter-trial";
 
 /**
@@ -22,8 +21,8 @@ export function FirmStarterTrialBanner({
   return (
     <section className="trial-ended-block bg-card text-foreground" role="status" aria-label="Trial">
       <p className="trial-ended-title text-foreground">{countdown}</p>
-      {upgrade?.saDiscount ? (
-        <p className="trial-ended-note text-muted-foreground">{SA_FIRM_DISCOUNT_NOTE}</p>
+      {upgrade?.zaPriceLabel ? (
+        <p className="trial-ended-note text-muted-foreground">{upgrade.zaPriceLabel}</p>
       ) : null}
     </section>
   );

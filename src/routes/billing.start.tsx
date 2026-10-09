@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
-import { adaptivePricingNote } from "@/lib/stripe-checkout.core";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import {
   billingStartPath,
   consumePendingCheckout,
@@ -23,8 +23,13 @@ import {
 } from "@/lib/stripe-plans";
 
 export const Route = createFileRoute("/billing/start")({
-  validateSearch: (search: Record<string, unknown>): PendingCheckout => {
-    return parsePendingCheckout(search) ?? firmSignupCheckoutIntent();
+  validateSearch: (search: Record<string, unknown>) => {
+    const pending = parsePendingCheckout(search) ?? firmSignupCheckoutIntent();
+    return { ...pending, hold: search.hold === "1" || search.hold === 1 || search.hold === true };
+  },
+  loader: async () => {
+    const saPricing = await readSaPricingCopy();
+    return { saPricing };
   },
   component: BillingStartPage,
   head: () => ({
@@ -35,14 +40,28 @@ export const Route = createFileRoute("/billing/start")({
   }),
 });
 
-function priceLabel(plan: FirmCheckoutBand, interval: FirmInterval): string {
+function priceLabel(
+  plan: FirmCheckoutBand,
+  interval: FirmInterval,
+  saPricing: { labels: Partial<Record<string, { month: string; year: string }>> } | null,
+): string {
+  const local = saPricing?.labels?.[plan]?.[interval];
+  if (local) return local;
   const amount = firmUsdListPrice(plan, interval);
   if (!amount) return FIRM_BAND_CATALOG[plan].name;
   return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
 }
 
 function BillingStartPage() {
-  const pending = Route.useSearch();
+  const search = Route.useSearch();
+  const pending: PendingCheckout = {
+    plan: search.plan,
+    interval: search.interval,
+    market: search.market,
+    promo: search.promo,
+  };
+  const hold = search.hold;
+  const { saPricing } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const startCheckout = useServerFn(createStripeCheckout);
@@ -51,9 +70,10 @@ function BillingStartPage() {
 
   useEffect(() => {
     stashPendingCheckout(pending);
-  }, [pending]);
+  }, [pending.plan, pending.interval, pending.market, pending.promo]);
 
   useEffect(() => {
+    if (import.meta.env.DEV && hold) return;
     if (loading) return;
     if (!user) {
       void navigate({
@@ -82,10 +102,10 @@ function BillingStartPage() {
         startedRef.current = false;
         setError(ex instanceof Error ? ex.message : "Could not start Stripe Checkout.");
       });
-  }, [loading, user, pending, navigate, startCheckout]);
+  }, [loading, user, pending.plan, pending.interval, pending.market, pending.promo, navigate, startCheckout, hold]);
 
   const planName = registerLabelForPlan(pending.plan);
-  const zarNote = adaptivePricingNote(pending.market);
+  const shownPrice = priceLabel(pending.plan, pending.interval, saPricing);
 
   if (error) {
     return (
@@ -134,8 +154,8 @@ function BillingStartPage() {
         </h1>
         <p className="mt-2 text-sm text-slate-400">
           {user
-            ? `Redirecting to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.${zarNote ? ` ${zarNote}` : ""}`
-            : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
+            ? `Redirecting to Stripe for ${planName} (${shownPrice}). Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.`
+            : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${shownPrice}). Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
         </p>
         {user ? (
           <div className="mt-5">

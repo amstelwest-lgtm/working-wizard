@@ -409,6 +409,7 @@ function FirmClientCapNotice({
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
           saDiscount={upgrade.saDiscount}
+          zaLabels={upgrade.zaLabels}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
           onValidateVoucher={onValidateVoucher}

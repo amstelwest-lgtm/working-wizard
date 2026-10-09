@@ -227,10 +227,10 @@ export function benchmarkTrack(input: {
  * disagrees with itself. Dust below 1 stays unscored. One floor per
  * currency, shared by the scorecard and the asset report.
  */
-export const ROE_EQUITY_FLOOR = { USD: 1, ZAR: 1 } as const;
+export const ROE_EQUITY_FLOOR = { USD: 1, local: 1 } as const;
 
 export function roeEquityFloor(currency: string | null | undefined): number {
-  return currency === "USD" ? ROE_EQUITY_FLOOR.USD : ROE_EQUITY_FLOOR.ZAR;
+  return (currency ?? "").toLowerCase() === "usd" ? ROE_EQUITY_FLOOR.USD : ROE_EQUITY_FLOOR.local;
 }
 
 /** True when equity is large enough for ROE to be shown and scored. */

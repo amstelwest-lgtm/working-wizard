@@ -12,13 +12,12 @@ import { isSaPricingCountry } from "../src/lib/geo-country";
 import {
   HERO_LEDE,
   HERO_SIGNOFF_POINT,
-  SA_FOUNDING_LINE,
-  SA_ZAR_LINE,
   TRUST_IDENTIFIERS,
   TRUST_TRAINING,
   homepageFaqItems,
-  publicFaqItems,
 } from "../src/lib/landing-copy";
+import { publicFaqItems } from "../src/lib/public-faq";
+import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { AI_MODEL_DISCLOSURE } from "../src/lib/marketing-faq";
 import { faqPageJson } from "../src/lib/seo";
 
@@ -44,8 +43,13 @@ function count(haystack: string, needle: string): number {
 }
 
 function surface(showSaPricing: boolean): string {
+  const copy = showSaPricing ? loadSaPricingCopy() : null;
   const table = renderToStaticMarkup(
-    createElement(FirmBandPricingTable, { interval: "month", showSaPricing }),
+    createElement(FirmBandPricingTable, {
+      interval: "month",
+      showSaPricing,
+      saLabels: copy?.labels ?? null,
+    }),
   );
   const home = homepageFaqItems(showSaPricing)
     .map((item) => `${item.question} ${item.answer}`)
@@ -62,22 +66,17 @@ assert(isSaPricingCountry("za") === false, "country match is case-sensitive ZA")
 
 const us = surface(false);
 assert(!LEAK.test(us), `US render leaked a forbidden string: ${us.match(LEAK)?.[0]}`);
-assert(!us.includes(SA_ZAR_LINE), "US render omits the ZAR line");
-assert(!us.includes(SA_FOUNDING_LINE), "US render omits the founding line");
+assert(!us.includes("R799"), "US render omits the rand price");
+assert(!us.includes("South African"), "US render omits the rand heading");
 
 const za = surface(true);
-assert(za.includes(SA_ZAR_LINE), "ZA render shows the ZAR checkout line");
-assert(za.includes(SA_FOUNDING_LINE), "ZA render shows the founding line");
-assert((za.match(/South African firms can pay in ZAR at Checkout\./g) ?? []).length >= 1, "ZAR line is present");
-assert(
-  (za.match(/FOUNDING: 50% off monthly paid plans after the trial\. Doesn't combine with annual billing\./g) ?? [])
-    .length >= 1,
-  "founding line is present",
-);
+assert(za.includes("R799/mo · about R53 per client"), "ZA render shows the solo rand price");
+assert(!za.toLowerCase().includes("vat"), "ZA render has no tax wording");
+assert(!/FOUNDING|50% off/.test(za), "ZA render drops the old founding line");
 
 assert(!faqPageJson(homepageFaqItems(false)).includes("ZAR"), "US homepage JSON-LD has no ZAR");
 assert(!faqPageJson(publicFaqItems(false)).includes("ZAR"), "US FAQ JSON-LD has no ZAR");
-assert(faqPageJson(publicFaqItems(true)).includes(SA_ZAR_LINE), "ZA FAQ JSON-LD includes the ZAR line");
+assert(!faqPageJson(publicFaqItems(true)).includes("R799"), "FAQ JSON-LD does not embed the rand price");
 
 assert(!/claude/i.test(HERO_LEDE), "wedge line does not name a vendor");
 assert(

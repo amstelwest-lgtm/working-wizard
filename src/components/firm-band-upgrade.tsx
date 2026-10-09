@@ -8,7 +8,6 @@ import {
   type FirmPriceCurrency,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
-import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import { FUNNEL_SOLO_FIRST } from "@/lib/funnel-timing";
 import { FIRM_VOUCHER_INVALID_MESSAGE } from "@/lib/firm-voucher";
 import {
@@ -38,6 +37,8 @@ type Props = {
   upgrading?: boolean;
   /** Server says this signed-in firm is SA. Never set from a public page. */
   saDiscount?: boolean;
+  /** Server-built rand lines. When set, these are the prices Checkout charges. */
+  zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   /** Checks the code with Stripe. Absent on previews that cannot bill. */
   onValidateVoucher?: (input: {
@@ -54,22 +55,22 @@ function rowPrice(
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>> | undefined,
   customQuote: boolean,
   yearlyUsdCents: number | null,
-  saDiscount: boolean,
+  zaLabels: Partial<Record<FirmBandId, { month: string; year: string }>> | null | undefined,
 ): string {
   if (customQuote) return "Custom";
+  const pricedInterval: FirmInterval =
+    interval === "year" && yearlyUsdCents == null ? "month" : interval;
+  const local = zaLabels?.[bandId]?.[pricedInterval];
+  if (local) return local;
   // Starter has no annual price. $0 on the annual toggle is $0/yr, not $0/mo.
   if (
     interval === "year" &&
     yearlyUsdCents == null &&
     FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0
   ) {
-    return currency === "ZAR" ? "R0/yr" : "$0/yr";
+    return currency.toLowerCase() === "zar" ? "R0/yr" : "$0/yr";
   }
-  const pricedInterval: FirmInterval =
-    interval === "year" && yearlyUsdCents == null ? "month" : interval;
-  const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand, {
-    saDiscount,
-  });
+  const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand);
   if (!label) return "—";
   return pricedInterval === "year" ? `${label}/yr` : `${label}/mo`;
 }
@@ -84,6 +85,7 @@ export function FirmBandUpgrade({
   usageLabel,
   upgrading = false,
   saDiscount = false,
+  zaLabels = null,
   onUpgrade,
   onValidateVoucher,
 }: Props) {
@@ -115,7 +117,7 @@ export function FirmBandUpgrade({
   const soloLeads =
     selected === "solo" && (currentBand == null || currentBand === "starter");
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
-  const showSa = saDiscount && !voucherApplied;
+  void saDiscount;
 
   async function applyVoucher(): Promise<boolean> {
     if (!selected || !onValidateVoucher) return false;
@@ -167,11 +169,6 @@ export function FirmBandUpgrade({
           {usageLabel}
         </p>
       ) : null}
-      {showSa ? (
-        <p className="text-muted-foreground" style={{ margin: "0 0 12px", fontSize: 12 }}>
-          {SA_FIRM_DISCOUNT_NOTE}
-        </p>
-      ) : null}
       {canUpgrade ? (
         <div
           style={{ display: "flex", gap: 8, marginBottom: 12 }}
@@ -211,7 +208,7 @@ export function FirmBandUpgrade({
             zarByBand,
             band.customQuote,
             band.yearlyUsdCents,
-            showSa,
+            zaLabels,
           );
           return (
             <label

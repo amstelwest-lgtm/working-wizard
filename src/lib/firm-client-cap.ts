@@ -45,11 +45,13 @@ export type FirmUpgradeAllowance = {
   clientCount: number;
   clientLimit: number | null;
   usageLabel: string;
-  priceCurrency: "USD" | "ZAR";
+  priceCurrency: "USD" | "zar";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
   /** Server-derived. False for every non-SA firm. */
   saDiscount: boolean;
+  zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  zaPriceLabel?: string | null;
 };
 
 export type FirmClientCreateAllowance = FirmClientCreateDecision & {
@@ -180,11 +182,13 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   /** e.g. "3 of 3 clients". Null when the plan could not be loaded. */
   usageLabel: string | null;
   canUpgrade: boolean;
-  priceCurrency: "USD" | "ZAR";
+  priceCurrency: "USD" | "zar";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
   starterTrial: StarterTrialBanner;
   saDiscount: boolean;
+  zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  zaPriceLabel?: string | null;
 };
 
 /** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */

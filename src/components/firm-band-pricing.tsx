@@ -4,8 +4,6 @@ import { ENTERPRISE_CONTACT_HREF, firmSignupHref } from "@/lib/firm-signup-copy"
 import {
   PRICING_TRIAL_AFTER,
   PRICING_WATCHLIST_NOTE,
-  SA_FOUNDING_LINE,
-  SA_ZAR_LINE,
   SOLO_CARD_NOTE,
   SOLO_TRIAL_BUTTON,
 } from "@/lib/landing-copy";
@@ -25,17 +23,25 @@ type Props = {
   onSelectBand?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
   enterpriseHref?: string;
   compact?: boolean;
-  /** Server geo only. Defaults off so a missed prop cannot leak the SA discount. */
+  /** Server geo only. Defaults off so a missed prop cannot show local prices. */
   showSaPricing?: boolean;
+  /** Server-built lines. Absent unless the edge is ZA. */
+  saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
 };
 
 function pricedInterval(band: FirmBand, interval: FirmInterval): FirmInterval {
   return interval === "year" && band.yearlyUsdCents == null ? "month" : interval;
 }
 
-function bandPriceLabel(band: FirmBand, interval: FirmInterval): string {
+function bandPriceLabel(
+  band: FirmBand,
+  interval: FirmInterval,
+  saLabels?: Partial<Record<string, { month: string; year: string }>> | null,
+): string {
   if (band.customQuote) return "Custom";
   const billed = pricedInterval(band, interval);
+  const local = saLabels?.[band.id]?.[billed];
+  if (local) return local;
   if (interval === "year" && band.yearlyUsdCents == null) return "Monthly only";
   const price = firmUsdListPrice(band.id, billed);
   if (!price) return "Custom";
@@ -57,10 +63,12 @@ function BandTable({
   bands,
   interval,
   startControl,
+  saLabels,
 }: {
   bands: FirmBand[];
   interval: FirmInterval;
   startControl: StartControl;
+  saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
 }) {
   return (
     <div className="firm-bands-table-wrap">
@@ -75,7 +83,7 @@ function BandTable({
         </thead>
         <tbody>
           {bands.map((band) => {
-            const price = bandPriceLabel(band, interval);
+            const price = bandPriceLabel(band, interval, saLabels);
             return (
               <tr
                 key={band.id}
@@ -103,15 +111,17 @@ function BandCards({
   bands,
   interval,
   startControl,
+  saLabels,
 }: {
   bands: FirmBand[];
   interval: FirmInterval;
   startControl: StartControl;
+  saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
 }) {
   return (
     <ul className="firm-band-cards">
       {bands.map((band) => {
-        const price = bandPriceLabel(band, interval);
+        const price = bandPriceLabel(band, interval, saLabels);
         const solo = band.id === "solo";
         const enterprise = band.customQuote;
         return (
@@ -145,7 +155,9 @@ export function FirmBandPricingTable({
   enterpriseHref = ENTERPRISE_CONTACT_HREF,
   compact = false,
   showSaPricing = false,
+  saLabels = null,
 }: Props) {
+  const labels = showSaPricing ? saLabels : null;
   const bands = FIRM_BAND_TABLE.filter((band) => band.id !== "starter");
   const solo = bands.find((band) => band.id === "solo");
   const largerBands = solo ? bands.filter((band) => band.id !== solo.id) : bands;
@@ -183,15 +195,9 @@ export function FirmBandPricingTable({
 
   return (
     <div className={compact ? "firm-bands firm-bands-compact" : "firm-bands"}>
-      <div className="firm-trial-bar">
+      <div className={labels ? "firm-trial-bar firm-trial-bar-za" : "firm-trial-bar"}>
         <p className="firm-trial-bar-lead">{FIRM_TRIAL_SENTENCE}</p>
         <p className="firm-trial-bar-sub">{PRICING_TRIAL_AFTER}</p>
-        {showSaPricing ? (
-          <>
-            <p className="firm-trial-bar-za">{SA_ZAR_LINE}</p>
-            <p className="firm-trial-bar-za">{SA_FOUNDING_LINE}</p>
-          </>
-        ) : null}
       </div>
       {onIntervalChange ? (
         <div className="firm-bands-toggle" role="group" aria-label="Billing interval">
@@ -214,14 +220,14 @@ export function FirmBandPricingTable({
       <div data-funnel={FUNNEL_SOLO_FIRST}>
         {solo ? (
           <>
-            <BandTable bands={[solo]} interval={interval} startControl={startControl} />
-            <BandCards bands={[solo]} interval={interval} startControl={startControl} />
+            <BandTable bands={[solo]} interval={interval} startControl={startControl} saLabels={labels} />
+            <BandCards bands={[solo]} interval={interval} startControl={startControl} saLabels={labels} />
           </>
         ) : null}
         <details className="firm-bands-more">
           <summary>Larger bands, from Small to Scale</summary>
-          <BandTable bands={largerBands} interval={interval} startControl={startControl} />
-          <BandCards bands={largerBands} interval={interval} startControl={startControl} />
+          <BandTable bands={largerBands} interval={interval} startControl={startControl} saLabels={labels} />
+          <BandCards bands={largerBands} interval={interval} startControl={startControl} saLabels={labels} />
         </details>
       </div>
       <p className="firm-bands-watchlist">{PRICING_WATCHLIST_NOTE}</p>

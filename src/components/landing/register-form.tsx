@@ -278,7 +278,7 @@ export function LandingRegisterForm({
                     const market = draftToSelection(draftMarket);
                     if (!market) {
                       showRegisterError(
-                        "Pick South Africa or the United States (and a state) first.",
+                        "Choose a practice location first. A United States practice also needs a state.",
                       );
                       return false;
                     }

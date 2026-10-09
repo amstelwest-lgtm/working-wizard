@@ -43,7 +43,7 @@ export function practiceLocationHint(draft: {
   regionCode: string | null;
 }): string | null {
   if (!draft.country) {
-    return "Choose where this practice is — South Africa or the United States.";
+    return "Choose where this practice is. A United States practice also needs a state.";
   }
   if (draft.country === "US" && !draft.regionCode) {
     return "Required. Your practice's state.";
@@ -63,9 +63,9 @@ export const BUSINESS_LOCATION_PROMPT = "Where is this business?";
 
 /** One framing line for homepage and collateral footers. */
 export const DUAL_MARKET_TAGLINE =
-  "for accounting firms and small businesses in South Africa and the United States.";
+  "for accounting firms and small businesses in the United States.";
 
 export const DUAL_MARKET_FOOTER =
-  "MILŌN — the AI finance function for accounting firms and the businesses they serve in South Africa and the United States.";
+  "MILŌN — the AI finance function for accounting firms and the businesses they serve in the United States.";
 
-export const DUAL_MARKET_BUILT = "Built for South Africa and the United States";
+export const DUAL_MARKET_BUILT = "Built for the United States";

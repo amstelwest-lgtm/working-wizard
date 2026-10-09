@@ -10,7 +10,6 @@
 import {
   type FirmCouponDiscount,
   type StoredDiscountRef,
-  zaSubscriptionDiscounts,
 } from "./firm-sa-market";
 import {
   FIRM_BAND_CATALOG,
@@ -268,9 +267,10 @@ export function withVoucherInterval(
 }
 
 /**
- * One discount on the subscription update. A voucher replaces the SA coupon
- * and any other discount already on the subscription. Without a voucher,
- * an SA firm still gets the SA coupon and a US firm gets none.
+ * One discount on the subscription update. A voucher replaces every other
+ * discount. Without a voucher, an existing rand-market coupon is removed
+ * so it cannot stack on the local price. Undefined leaves discounts alone.
+ * An empty list clears them.
  */
 export function firmUpgradeDiscounts(input: {
   promotionCodeId?: string | null;
@@ -288,10 +288,20 @@ export function firmUpgradeDiscounts(input: {
     if (voucherAlreadyOnly) return undefined;
     return [{ promotion_code: promo }];
   }
-  return zaSubscriptionDiscounts({
-    couponId: input.zaCouponId,
-    existing: input.existing,
-  });
+  const za = input.zaCouponId?.trim() ?? "";
+  if (!za) return undefined;
+  const existing = input.existing ?? [];
+  if (!existing.some((row) => row.couponId === za)) return undefined;
+  const kept: FirmCouponDiscount[] = [];
+  const seen = new Set<string>();
+  for (const row of existing) {
+    if (row.couponId === za) continue;
+    const id = row.id?.trim() ?? "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    kept.push({ discount: id });
+  }
+  return kept;
 }
 
 export function firmUpgradeResultMessage(base: string, notice?: string | null): string {

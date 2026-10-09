@@ -113,11 +113,11 @@ const zarByBand = Object.fromEntries(
   Record<(typeof FIRM_CHECKOUT_BANDS)[number], { month: number | null; year: number | null }>
 >;
 assert(
-  firmUpgradePriceCurrency({ billingCurrency: "zar", interval: "month", zarByBand }) === "ZAR",
+  firmUpgradePriceCurrency({ billingCurrency: "zar", interval: "month", zarByBand }) === "zar",
   "complete Stripe ZAR amounts use ZAR",
 );
 assert(
-  firmBandPriceLabel("solo", "month", "ZAR", zarByBand) === "R1",
+  firmBandPriceLabel("solo", "month", "zar", zarByBand) === "R1",
   "ZAR price uses the Stripe amount",
 );
 assert(
@@ -343,7 +343,7 @@ assert(
   checkout.subscription_data?.metadata?.milon_plan === "solo",
   "new subscription is tagged Solo",
 );
-assert(checkout.adaptive_pricing?.enabled === true, "upgrade checkout keeps adaptive pricing");
+assert(checkout.adaptive_pricing?.enabled === false, "upgrade checkout does not use adaptive pricing");
 assert(
   !("managed_payments" in checkout) || checkout.managed_payments == null,
   "upgrade checkout does not override managed payments",
@@ -408,12 +408,12 @@ assert(
   firmSetupCheckoutMessage({
     bandName: "Solo",
     clientLimit: 15,
-    unitAmount: 9_900,
-    currency: "usd",
+    unitAmount: 79_900,
+    currency: "zar",
     interval: "month",
     saMarket: true,
-  }).includes("50% off"),
-  "SA setup copy still shows the discount",
+  }).includes("R799/month"),
+  "SA setup copy shows the rand amount",
 );
 assert(setup.metadata?.milon_setup_upgrade === "1", "setup session is marked as an upgrade");
 assert(setup.metadata?.milon_subscription_id === "sub_starter", "setup session names the subscription");
@@ -446,8 +446,8 @@ const usYearly = firmSetupCheckoutMessage({
 const saMonthly = firmSetupCheckoutMessage({
   bandName: "Solo",
   clientLimit: 15,
-  unitAmount: 9_900,
-  currency: "usd",
+  unitAmount: 79_900,
+  currency: "zar",
   interval: "month",
   saMarket: true,
 });
@@ -463,9 +463,10 @@ assert(
 );
 assert(
   saMonthly ===
-    "Saving this card moves you to MILŌN Solo at $49.50/month (South Africa pricing: 50% off) (15 clients). Billed in USD, cancel anytime.",
-  "SA monthly setup copy shows the discounted charge",
+    "Saving this card moves you to MILŌN Solo at R799/month (15 clients). Billed in the price currency, cancel anytime.",
+  "SA monthly setup copy shows the rand price",
 );
+assert(!saMonthly.toLowerCase().includes("vat"), "setup copy has no tax wording");
 assert(!usMonthly.includes("50% off") && !usYearly.includes("South Africa"), "US copy has no discount text");
 assert(
   firmSetupCheckoutMessage({
@@ -838,52 +839,49 @@ assert(
 );
 const saCheckout = firmCheckoutSessionParams({
   ...checkoutBase,
+  lookupKey: "milon_za_solo_monthly",
+  priceId: "price_za_solo",
   market: "za",
   zaCouponId: "MILON_ZA_50",
+  promotionCodeId: null,
 });
-assert(saCheckout.discounts?.length === 1, "SA checkout has one discount");
-assert(
-  saCheckout.discounts?.[0] &&
-    "coupon" in saCheckout.discounts[0] &&
-    saCheckout.discounts[0].coupon === "MILON_ZA_50",
-  "SA checkout attaches the coupon",
-);
+assert(!saCheckout.discounts?.length, "SA checkout does not attach the old coupon");
+assert(saCheckout.automatic_tax?.enabled === false, "SA checkout does not enable automatic tax");
 assert(saCheckout.allow_promotion_codes == null, "SA checkout does not open the promo box");
 assert(
-  !JSON.stringify(saCheckout.discounts).includes("promo_founding"),
+  !JSON.stringify(saCheckout.discounts ?? []).includes("promo_founding"),
   "SA checkout does not stack FOUNDING",
 );
 const saAgain = withFirmZaCoupon(saCheckout, "MILON_ZA_50");
 assert(saAgain.discounts?.length === 1, "applying the SA coupon twice does not stack it");
 const saUpgrade = firmUpgradeCheckoutSessionParams({
   ...checkoutBase,
+  lookupKey: "milon_za_solo_monthly",
   market: "za",
   zaCouponId: "MILON_ZA_50",
+  promotionCodeId: null,
   replacesSubscriptionId: "sub_starter",
 });
-assert(
-  saUpgrade.discounts?.[0] &&
-    "coupon" in saUpgrade.discounts[0] &&
-    saUpgrade.discounts[0].coupon === "MILON_ZA_50",
-  "replacing a Starter subscription still attaches the SA coupon",
-);
+assert(!saUpgrade.discounts?.length, "replacing a Starter subscription does not attach the old coupon");
+assert(saUpgrade.automatic_tax?.enabled === false, "the rand upgrade session does not enable automatic tax");
 
 const saUpdate = firmSubscriptionUpgradeParams({
   itemId: "si_test",
-  priceId: "price_test_solo",
+  priceId: "price_za_solo",
   band: "solo",
   interval: "month",
-  lookupKey: "milon_solo_monthly",
+  lookupKey: "milon_za_solo_monthly",
   endTrial: false,
-  discounts: zaSubscriptionDiscounts({ couponId: "MILON_ZA_50", existing: [] }),
+  discounts: [],
 });
-assert(saUpdate.discounts?.length === 1, "an SA subscription update attaches the coupon");
+assert(JSON.stringify(saUpdate.discounts) === "[]", "an SA subscription update can clear discounts");
+assert(saUpdate.automatic_tax?.enabled === false, "a rand subscription update does not enable automatic tax");
 assert(
   zaSubscriptionDiscounts({
     couponId: "MILON_ZA_50",
     existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
   }) === undefined,
-  "a subscription that already has the coupon is not updated twice",
+  "the legacy helper does not re-attach a coupon that is already present",
 );
 const usUpdate = firmSubscriptionUpgradeParams({
   itemId: "si_test",
@@ -896,12 +894,12 @@ const usUpdate = firmSubscriptionUpgradeParams({
 });
 assert(usUpdate.discounts == null, "a US subscription update has no SA coupon");
 assert(
-  firmBandPriceLabel("solo", "month", "USD", null, { saDiscount: true }) === "$49.50",
-  "SA Solo monthly is half of $99",
+  firmBandPriceLabel("solo", "month", "USD", null, { saDiscount: true }) === "$99",
+  "the USD catalog is not halved",
 );
 assert(
-  firmBandPriceLabel("solo", "year", "USD", null, { saDiscount: true }) === "$475",
-  "SA Solo yearly is half of $950",
+  firmBandPriceLabel("solo", "year", "USD", null, { saDiscount: true }) === "$950",
+  "the annual USD catalog is not halved",
 );
 assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "US Solo monthly stays $99");
 
@@ -942,11 +940,15 @@ const saPicker = renderToStaticMarkup(
     canUpgrade: true,
     clientCount: 1,
     saDiscount: true,
+    zaLabels: {
+      solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
+    },
     onUpgrade: () => undefined,
   }),
 );
-assert(saPicker.includes("$49.50"), "an SA picker shows the discounted USD amount");
-assert(saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker names the South Africa price");
+assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows the rand price");
+assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker has no discount note");
+assert(!saPicker.toLowerCase().includes("vat"), "an SA picker has no tax wording");
 
 for (const publicFile of [
   "src/components/firm-band-pricing.tsx",

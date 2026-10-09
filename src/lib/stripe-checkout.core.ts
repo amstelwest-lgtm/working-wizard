@@ -6,7 +6,9 @@
 import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
-import { isSaMarketFirm, SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
+import { isSaMarketFirm } from "@/lib/firm-sa-market";
+import { isZaCatalogLookup } from "@/lib/pricing/za-checkout";
+import { zaLookupKey } from "@/lib/pricing/za-ladder";
 import {
   FIRM_SETUP_PROMOTION_CODE,
   FIRM_SETUP_PROMOTION_CODE_ID,
@@ -65,8 +67,9 @@ export async function resolveFirmCatalogPrice(
   stripe: PriceLister,
   band: FirmCheckoutBand,
   interval: FirmInterval,
+  market: StripePlanMarket = "us",
 ): Promise<{ price: CatalogPrice; lookupKey: string }> {
-  const lookupKey = firmLookupKey(band, interval);
+  const lookupKey = market === "za" ? zaLookupKey(band, interval) : firmLookupKey(band, interval);
   const price = await resolvePriceByLookupKey(stripe, lookupKey);
   const priceInterval = price.recurring?.interval;
   if (priceInterval && priceInterval !== interval) {
@@ -114,11 +117,12 @@ export type FirmCheckoutSessionInput = {
   /** Stripe promotion_code id (promo_…), already resolved. */
   promotionCodeId?: string | null;
   /**
-   * SA firms only. Server passes STRIPE_ZA_COUPON_ID (default MILON_ZA_50).
-   * Not a client flag. When set, this replaces the promo box so the two
-   * cannot stack.
+   * Ignored. The rand price replaces the old coupon, so Checkout never
+   * attaches it. Kept so older callers still type-check.
    */
   zaCouponId?: string | null;
+  /** SA firm whose billing country is already known and is not ZA. */
+  billingFallback?: boolean;
   integrationIdentifier: string;
   /**
    * First firm subscription only. A customer with any prior subscription
@@ -127,16 +131,13 @@ export type FirmCheckoutSessionInput = {
   includeTrial: boolean;
 };
 
-/** ZAR presentment is for South African firms only. US Checkout stays USD. */
-export function adaptivePricingForMarket(market: StripePlanMarket): boolean {
-  return market === "za";
+/** Both markets pin the catalog currency. A rand price must not be toggled. */
+export function adaptivePricingForMarket(_market: StripePlanMarket): boolean {
+  return false;
 }
 
-export const SA_ADAPTIVE_PRICING_NOTE =
-  "South African firms may be charged in ZAR via Adaptive Pricing.";
-
-export function adaptivePricingNote(market: StripePlanMarket): string | null {
-  return adaptivePricingForMarket(market) ? SA_ADAPTIVE_PRICING_NOTE : null;
+export function adaptivePricingNote(_market: StripePlanMarket): string | null {
+  return null;
 }
 
 /**
@@ -153,20 +154,20 @@ export function resolveFirmCheckoutMarket(
 
 /**
  * Checkout Session create payload for a firm band.
- * Adaptive Pricing is on for SA firms so they can pay ZAR against the USD catalog.
- * US sessions turn it off so Checkout does not offer a ZAR toggle.
+ * Adaptive Pricing stays off. A rand lookup is the line item for an SA firm.
+ * That session does not collect tax and does not open the promotion box.
  * Managed Payments is left at the account default (do not force-disable).
- * automatic_tax is omitted unless registrations exist.
  *
  * Card is always collected. A first subscription starts a 14-day trial on the
- * chosen paid band. FOUNDING applies to the paid invoices after that trial,
- * not as a forever-free price.
+ * chosen paid band. FOUNDING applies to monthly USD invoices after that trial,
+ * not as a forever-free price, and not on a rand price.
  */
 export function firmCheckoutSessionParams(
   input: FirmCheckoutSessionInput,
 ): Stripe.Checkout.SessionCreateParams {
   const origin = appRedirectOrigin([input.origin]);
   const monthlyPaid = input.interval === "month";
+  const localZar = isZaCatalogLookup(input.lookupKey);
   const meta: Record<string, string> = {
     milon_plan: input.band,
     milon_interval: input.interval,
@@ -175,11 +176,11 @@ export function firmCheckoutSessionParams(
     milon_lookup_key: input.lookupKey,
   };
   if (input.includeTrial) meta.milon_trial_days = String(FIRM_TRIAL_DAYS);
-  const zaCoupon = adaptivePricingForMarket(input.market) ? input.zaCouponId : null;
+  if (input.billingFallback) meta.milon_za_billing_fallback = "usd";
 
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
-    adaptive_pricing: { enabled: adaptivePricingForMarket(input.market) },
+    adaptive_pricing: { enabled: false },
     billing_address_collection: "required",
     tax_id_collection: { enabled: true },
     payment_method_collection: "always",
@@ -206,18 +207,25 @@ export function firmCheckoutSessionParams(
     params.customer_email = input.email;
   }
 
-  // Promo box only on monthly paid Checkout so FOUNDING cannot be typed on yearly.
-  // The coupon discounts invoices after the trial. It does not zero the plan forever.
+  if (localZar) {
+    params.automatic_tax = { enabled: false };
+    if (input.promotionCodeId) {
+      params.discounts = [{ promotion_code: input.promotionCodeId }];
+    }
+    return params;
+  }
+
+  // Promo box only on monthly USD Checkout so FOUNDING cannot be typed on yearly.
   if (monthlyPaid) {
     params.allow_promotion_codes = true;
   }
 
-  if (input.promotionCodeId && !zaCoupon?.trim()) {
+  if (input.promotionCodeId) {
     params.discounts = [{ promotion_code: input.promotionCodeId }];
     delete params.allow_promotion_codes;
   }
 
-  return withFirmZaCoupon(params, zaCoupon);
+  return params;
 }
 
 /**
@@ -277,10 +285,20 @@ export type FirmSetupUpgradeRequest = {
 /** Stripe custom_text.submit.message max length. */
 export const FIRM_SETUP_CHECKOUT_TEXT_MAX = 1200;
 
+function formatSetupAmount(cents: number, currency: string): string {
+  if (currency === "zar") {
+    const rands = cents / 100;
+    const body = Number.isInteger(rands)
+      ? rands.toLocaleString("en-US")
+      : rands.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `R${body}`;
+  }
+  return formatUsdFromCents(cents);
+}
+
 /**
  * Copy on the card-setup Checkout page, shown once above Save.
- * Amount, currency, and interval come from the resolved Stripe price.
- * An SA firm sees half of that USD amount.
+ * Amount and interval come from the resolved Stripe price.
  */
 export function firmSetupCheckoutMessage(input: {
   bandName: string;
@@ -289,19 +307,14 @@ export function firmSetupCheckoutMessage(input: {
   currency: string;
   interval: FirmInterval;
   saMarket: boolean;
-  /** Set when a voucher replaces the SA coupon. Shown instead of the 50% line. */
+  /** Set when a voucher changes the amount shown above Save. */
   voucherPreview?: string | null;
 }): string {
   const currency = input.currency.trim().toLowerCase();
-  const cents = input.saMarket ? saDiscountedUsdCents(input.unitAmount) : input.unitAmount;
-  const amount = formatUsdFromCents(cents);
-  const billed = currency === "usd" ? "USD" : currency.toUpperCase();
+  const amount = formatSetupAmount(input.unitAmount, currency);
+  const billed = currency === "usd" ? "USD" : "the price currency";
   const preview = input.voucherPreview?.trim() ?? "";
-  const priced = preview
-    ? preview
-    : input.saMarket
-      ? `${amount}/${input.interval} (${SA_FIRM_DISCOUNT_NOTE})`
-      : `${amount}/${input.interval}`;
+  const priced = preview ? preview : `${amount}/${input.interval}`;
   const message = `Saving this card moves you to MILŌN ${input.bandName} at ${priced} (${input.clientLimit} clients). Billed in ${billed}, cancel anytime.`;
   return message.length <= FIRM_SETUP_CHECKOUT_TEXT_MAX
     ? message
@@ -355,7 +368,7 @@ export function firmSetupCheckoutSessionParams(input: {
     metadata[FIRM_SETUP_PROMOTION_CODE] = promotionCode;
   }
   const unitAmount = input.price.unit_amount;
-  const currency = input.price.currency?.trim() ?? "";
+  const currency = input.price.currency?.trim().toLowerCase() ?? "";
   const band = FIRM_BAND_CATALOG[input.band];
   if (typeof unitAmount !== "number" || !currency || band.clientLimit == null) {
     throw new Error("Setup Checkout needs the resolved Stripe price amount.");
@@ -372,7 +385,7 @@ export function firmSetupCheckoutSessionParams(input: {
   return {
     mode: "setup",
     customer: input.customerId,
-    currency: "usd",
+    currency: currency === "zar" ? "zar" : "usd",
     client_reference_id: input.userId,
     success_url: `${origin}${firmUpgradeReturnPath("success")}`,
     cancel_url: `${origin}${firmUpgradeReturnPath("cancelled")}`,

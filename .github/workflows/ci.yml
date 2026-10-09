@@ -24,6 +24,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build:vercel
+      - name: US-reachable assets must not contain SA pricing copy
+        run: node scripts/za-bundle-leak.mjs
       - name: Client bundle must not contain the Node Sentry SDK
         run: |
           if grep -rl "@sentry/node\|@opentelemetry" dist/client >/dev/null 2>&1; then

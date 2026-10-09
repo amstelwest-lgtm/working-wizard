@@ -5,7 +5,8 @@ import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { readRequestGeoCountry } from "@/lib/geo-country.functions";
 import { isSaPricingCountry } from "@/lib/geo-country";
-import { FIRM_TEAM_BULLETS, SA_FOUNDING_LINE, SA_ZAR_LINE } from "@/lib/landing-copy";
+import { FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
@@ -16,7 +17,9 @@ import marketingCss from "../styles/marketing.css?inline";
 export const Route = createFileRoute("/for-accountants")({
   loader: async () => {
     const geoCountry = await readRequestGeoCountry();
-    return { showSaPricing: isSaPricingCountry(geoCountry) };
+    const showSaPricing = isSaPricingCountry(geoCountry);
+    const saPricing = showSaPricing ? await readSaPricingCopy() : null;
+    return { showSaPricing, saPricing };
   },
   component: ForAccountantsPage,
   head: () => ({
@@ -27,7 +30,7 @@ export const Route = createFileRoute("/for-accountants")({
 });
 
 function ForAccountantsPage() {
-  const { showSaPricing } = Route.useLoaderData();
+  const { saPricing } = Route.useLoaderData();
   const navigate = useNavigate();
   const [interval, setInterval] = useState<FirmInterval>("month");
 
@@ -53,7 +56,7 @@ function ForAccountantsPage() {
         <>
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
-          history rather than help. Built for firms in South Africa and the United States.
+          history rather than help. {saPricing?.accountantsLead ?? "Built for firms in the United States."}
         </>
       }
       heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: FIRM_SIGNUP_HREF }}
@@ -68,6 +71,7 @@ function ForAccountantsPage() {
       }
       ctaLabel="Set up your firm account ✦"
       ctaHref={FIRM_SIGNUP_HREF}
+      footerLine={saPricing?.footerLine}
     >
       <h2>Works with QuickBooks Online and Xero</h2>
       <p>
@@ -178,28 +182,25 @@ function ForAccountantsPage() {
         </li>
       </ol>
 
-      <h2>Pricing for firms</h2>
+      <h2>{saPricing?.heading ?? "Pricing for firms"}</h2>
       <p>
-        Flat USD monthly or annual bands by active client count. {WATCHLIST_DEFINITION}
-        {showSaPricing ? (
-          <>
-            {" "}
-            {SA_ZAR_LINE} {SA_FOUNDING_LINE} We do not publish a separate rand catalog.
-          </>
-        ) : null}
+        {saPricing
+          ? saPricing.accountantsIntro
+          : "Flat USD monthly or annual bands by active client count."}{" "}
+        {WATCHLIST_DEFINITION}
       </p>
       <FirmBandPricingTable
         interval={interval}
         onIntervalChange={setInterval}
         onSelectBand={startBand}
-        showSaPricing={showSaPricing}
+        showSaPricing={Boolean(saPricing)}
+        saLabels={saPricing?.labels}
       />
       <ul className="mk-list">
         <li>
           <strong>See your first client&apos;s figures with no card.</strong> Add a card to start a
           14-day free trial (up to 3 clients). After day 14 the paid band bills automatically.
         </li>
-        {showSaPricing ? <li>{SA_FOUNDING_LINE}</li> : null}
       </ul>
 
       <div className="mk-note">

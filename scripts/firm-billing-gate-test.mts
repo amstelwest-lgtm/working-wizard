@@ -644,7 +644,8 @@ assert(start.includes("createStripeCheckout"), "billing start still creates Chec
 assert(start.includes("BillingSignOutButton"), "billing start can sign out");
 const signOut = readFileSync(resolve("src/components/billing-sign-out.tsx"), "utf8");
 assert(signOut.includes("Sign out"), "sign out label is visible");
-assert(start.includes("adaptivePricingNote(pending.market)"), "ZAR line follows the market");
+assert(start.includes("readSaPricingCopy"), "billing start loads the rand price from the server");
+assert(!start.includes("adaptivePricingNote"), "billing start does not mention adaptive pricing");
 assert(
   !start.includes("South African firms may be charged in ZAR via Adaptive Pricing."),
   "US interstitial does not hard-code the SA line",

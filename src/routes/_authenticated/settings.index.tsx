@@ -405,6 +405,7 @@ function SettingsPage() {
                     clientCount: plan.clientCount,
                     usageLabel: plan.usageLabel,
                     saDiscount: plan.saDiscount,
+                    zaLabels: plan.zaLabels,
                     phase: plan.phase,
                   }}
                   onUpgrade={handlePlanUpgrade}
@@ -420,6 +421,7 @@ function SettingsPage() {
                   canUpgrade={plan.canUpgrade}
                   clientCount={plan.clientCount}
                   saDiscount={plan.saDiscount}
+                  zaLabels={plan.zaLabels}
                   upgrading={upgrading}
                   onValidateVoucher={onValidateVoucher}
                   onUpgrade={handlePlanUpgrade}

@@ -64,8 +64,10 @@ import {
   UPGRADE_FAILED_MESSAGE,
 } from "@/lib/firm-band-upgrade";
 import { requestAppOrigin } from "@/lib/app-origin";
+import { priceMarketForFirm, readStripeCustomerCountry } from "@/lib/pricing/za-checkout";
 import {
   completeFirmSetupUpgrade,
+  enforceZaCheckoutBillingCountry,
   syncCheckoutSessionSubscription,
 } from "@/lib/stripe-billing-sync.server";
 import {
@@ -285,8 +287,19 @@ async function createPaidCheckoutSession(input: {
     includeTrial = eligibleForIntroTrial(prior.data.length);
   }
 
-  const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, input.plan, input.interval);
-  const promotionCodeId = await resolveFoundingPromotionCodeId(input.promo);
+  const billingCountry = await readStripeCustomerCountry(stripe, customerId);
+  const priceMarket = priceMarketForFirm({
+    firmMarket: input.market,
+    billingCountry,
+  });
+  const { price, lookupKey } = await resolveFirmCatalogPrice(
+    stripe,
+    input.plan,
+    input.interval,
+    priceMarket,
+  );
+  const promotionCodeId =
+    priceMarket === "za" ? undefined : await resolveFoundingPromotionCodeId(input.promo);
 
   const params = firmCheckoutSessionParams({
     priceId: price.id,
@@ -299,7 +312,7 @@ async function createPaidCheckoutSession(input: {
     customerId,
     market: input.market,
     promotionCodeId,
-    zaCouponId: input.zaCouponId,
+    billingFallback: input.market === "za" && priceMarket === "us",
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial,
   });
@@ -532,7 +545,8 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       email,
       firmId: data.firmId,
     });
-    const zaCouponId = zaCouponIdForMarket(firmMarket);
+    const saFirm = isSaMarketFirm({ market: firmMarket });
+    const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail);
@@ -544,7 +558,13 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     });
 
     const stripe = getStripe();
-    const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval);
+    const countryCustomerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail));
+    const billingCountry = await readStripeCustomerCountry(stripe, countryCustomerId);
+    const priceMarket = priceMarketForFirm({
+      firmMarket: saFirm ? "za" : "us",
+      billingCountry,
+    });
+    const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval, priceMarket);
     const voucherCode = normalizeVoucherCode(data.voucherCode);
     if (data.voucherCode?.trim() && !voucherCode) {
       throw new Error(FIRM_VOUCHER_INVALID_MESSAGE);
@@ -678,7 +698,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         );
       }
     }
-    const checkoutMarket: StripePlanMarket = zaCouponId ? "za" : "us";
     const params = firmUpgradeCheckoutSessionParams({
       priceId: price.id,
       lookupKey,
@@ -688,12 +707,12 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       userId,
       email: billingEmail,
       customerId,
-      market: checkoutMarket,
+      market: saFirm ? "za" : "us",
       integrationIdentifier: firmIntegrationIdentifier(band, interval),
       includeTrial: false,
       replacesSubscriptionId,
       promotionCodeId: voucherPromotionCodeId,
-      zaCouponId: voucherPromotionCodeId ? null : zaCouponId,
+      billingFallback: saFirm && priceMarket === "us",
     });
     assertNoManagedPaymentsOverride(params);
     let session: { url: string | null };
@@ -744,6 +763,13 @@ export const finalizeFirmBandCheckout = createServerFn({ method: "POST" })
       const message = firmUpgradeResultMessage(base, applied?.notice);
       return { ok: true as const, message, band, notice: applied?.notice ?? null };
     }
+    await enforceZaCheckoutBillingCountry({
+      mode: session.mode,
+      subscription:
+        typeof session.subscription === "string" ? session.subscription : session.subscription?.id,
+      metadata: session.metadata ?? undefined,
+      customer_details: session.customer_details ?? null,
+    });
     const synced = await syncCheckoutSessionSubscription({
       mode: session.mode,
       subscription:

@@ -349,7 +349,7 @@ function AuthPage() {
     if (submitLock.current) return;
     const market = mode === "signup" ? draftToSelection(draftMarket) : null;
     if (mode === "signup" && !market) {
-      toast.error("Pick South Africa or the United States (and a state) first.");
+      toast.error("Choose a practice location first. A United States practice also needs a state.");
       return;
     }
     submitLock.current = true;
@@ -358,7 +358,7 @@ function AuthPage() {
     try {
       if (mode === "signup") {
         if (!market) {
-          toast.error("Pick South Africa or the United States (and a state) first.");
+          toast.error("Choose a practice location first. A United States practice also needs a state.");
           return;
         }
         const pending = pendingForSignup(market.country);
@@ -617,7 +617,7 @@ function AuthPage() {
                         const market = draftToSelection(draftMarket);
                         if (!market) {
                           toast.error(
-                            "Pick South Africa or the United States (and a state) first.",
+                            "Choose a practice location first. A United States practice also needs a state.",
                           );
                           return false;
                         }

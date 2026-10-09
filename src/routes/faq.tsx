@@ -2,14 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
 import { readRequestGeoCountry } from "@/lib/geo-country.functions";
 import { isSaPricingCountry } from "@/lib/geo-country";
-import { publicFaqItems } from "@/lib/landing-copy";
-import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { publicFaqItems } from "@/lib/public-faq";
+import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market/marketing";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
-  SA_PRODUCT_ANSWER,
-  SA_PRODUCT_QUESTION,
 } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
@@ -20,14 +18,15 @@ export const Route = createFileRoute("/faq")({
     return { showSaPricing: isSaPricingCountry(geoCountry) };
   },
   component: FaqPage,
-  head: ({ loaderData }) => {
+  head: async ({ loaderData }) => {
     const showSaPricing = loaderData?.showSaPricing === true;
+    const { publicFaqItems: faqItems } = await import("@/lib/public-faq");
     return {
       ...pageHead(SEO_PAGES.faq),
       styles: [{ children: marketingCss }],
       scripts: [
         { children: VISITOR_MARKET_BOOT_SCRIPT },
-        { type: "application/ld+json", children: faqPageJson(publicFaqItems(showSaPricing)) },
+        { type: "application/ld+json", children: faqPageJson(faqItems(showSaPricing)) },
       ],
     };
   },
@@ -161,11 +160,6 @@ function FaqPage() {
         </p>
       </Qa>
 
-      {showSaPricing ? (
-        <Qa q={SA_PRODUCT_QUESTION}>
-          <p>{SA_PRODUCT_ANSWER}</p>
-        </Qa>
-      ) : null}
       <div className="mk-copy-us">
         <Qa q="Is this a South African product with a dollar sign glued on?">
           <p>
