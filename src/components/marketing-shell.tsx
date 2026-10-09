@@ -6,8 +6,9 @@
  * anyone having to open a design tool.
  */
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { DUAL_MARKET_FOOTER, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
+import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
 import {
   applyVisitorMarketToDocument,
@@ -37,6 +38,31 @@ export function RegionCopy({
   us: ReactNode;
 }) {
   return <>{pack === "us" ? us : za}</>;
+}
+
+/**
+ * Same Sign in control as the homepage nav. The modal chunk (and Supabase)
+ * load on click, not with this shell.
+ */
+function MarketingSignIn() {
+  const [open, setOpen] = useState(false);
+  const [Session, setSession] = useState<ComponentType<{ onClose: () => void }> | null>(null);
+
+  return (
+    <>
+      <LandingSignInButton
+        className="mk-top-signin"
+        onClick={() => {
+          setOpen(true);
+          if (Session) return;
+          void import("@/components/landing/landing-sign-in-session").then((mod) => {
+            setSession(() => mod.LandingSignInSession);
+          });
+        }}
+      />
+      {open && Session ? <Session onClose={() => setOpen(false)} /> : null}
+    </>
+  );
 }
 
 function applyPack(country: DraftMarket["country"]) {
@@ -104,6 +130,7 @@ export function MarketingShell({
         <a className="mk-top-link" href="/faq">
           Questions
         </a>
+        <MarketingSignIn />
         <a className="mk-top-cta" href={navCtaHref}>
           {navCtaLabel}
         </a>
