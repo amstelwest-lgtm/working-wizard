@@ -964,6 +964,10 @@ html .mk .firm-bands-table .firm-bands-name strong {
 }
 .mk .firm-trial-bar-sub { font-size: 15px; }
 .mk .firm-trial-bar-za { font-size: 14px; }
+.mk .firm-trial-bar.firm-trial-bar-za {
+  margin: 0 auto 20px;
+  text-align: center;
+}
 .mk .firm-bands-more { margin-top: 18px; }
 .mk .firm-bands-more > summary { cursor: pointer; font-size: 14px; color: var(--ink-dim); }
 .mk .firm-bands-watchlist {

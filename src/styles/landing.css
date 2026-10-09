@@ -1239,6 +1239,9 @@ html[data-landing="1"] .firm-trial-bar-sub{
 html[data-landing="1"] .firm-trial-bar-za{
   margin:6px 0 0;font-size:14px;line-height:1.45;color:var(--ink);-webkit-text-fill-color:var(--ink);
 }
+html[data-landing="1"] .firm-trial-bar.firm-trial-bar-za{
+  margin:0 auto 20px;text-align:center;
+}
 html[data-landing="1"] .firm-bands-more{margin-top:18px}
 html[data-landing="1"] .firm-bands-more > summary{cursor:pointer;font-size:14px;color:var(--ink-dim)}
 html[data-landing="1"] .firm-bands-more[open]{margin-top:18px}
