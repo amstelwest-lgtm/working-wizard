@@ -174,8 +174,17 @@ assert(
   "callback is a root-level route",
 );
 assert(
-  callbackSrc.includes("forcePortal(intent)"),
-  "callback pins the consumed door for owner and accountant",
+  callbackSrc.includes("resolveSignedInDestination"),
+  "callback pins the door through the shared sign-in resolver",
+);
+assert(
+  callbackSrc.includes("destinationAfterSignIn"),
+  "owner-stashed Google still opens the practice workspace for a practice account",
+);
+assert(
+  callbackSrc.indexOf('destinationAfterSignIn(landingRoles, "landing")') <
+    callbackSrc.indexOf("ensure_own_client"),
+  "a practice account is reclassified before ensure_own_client can mint a business seat",
 );
 assert(
   callbackSrc.includes("inferGoogleIntentFromRoles("),

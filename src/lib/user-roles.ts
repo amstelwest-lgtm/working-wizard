@@ -283,6 +283,9 @@ export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/ap
   if (d.hasPracticeRole) return "/dashboard";
   if (d.hasClientRole) return "/app";
   if (d.hasFirm) return "/dashboard";
+  // Practice signup metadata is already on the session. Role and firm rows
+  // can still be empty for a beat after sign-in. That is not a new owner.
+  if (d.practiceSignup && !d.hasClientRole) return "/dashboard";
   return "/app";
 }
 

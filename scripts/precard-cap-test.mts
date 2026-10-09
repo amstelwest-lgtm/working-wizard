@@ -20,6 +20,7 @@ import {
   finishPrecardAttempt,
   isPrecardCapFailure,
   normalizePrecardTurnId,
+  precardBotLastQuestionHint,
   precardBotRemainingLabel,
   precardCapApplies,
   precardCapError,
@@ -126,10 +127,12 @@ assert(
 
 assert(precardBotRemainingLabel(3) === "3 Bot messages left before trial", "plural remaining copy");
 assert(precardBotRemainingLabel(2) === "2 Bot messages left before trial", "two left still counts");
+assert(precardBotRemainingLabel(1) === "1 question left", "one left keeps the singular counter");
 assert(
-  precardBotRemainingLabel(1) === "This is your last free Bot question.",
-  "one left is the last-question hint",
+  precardBotLastQuestionHint(1) === "This is your last free Bot question.",
+  "one left still shows the last-question hint",
 );
+assert(precardBotLastQuestionHint(2) === null, "the hint is only on the last question");
 assert(precardBotRemainingLabel(0) === null, "zero remaining stays quiet");
 assert(precardBotRemainingLabel(0.4) === null, "a fraction under 1 stays quiet");
 for (let used = 0; used < PRECARD_BOT_LIMIT; used += 1) {
@@ -139,8 +142,12 @@ for (let used = 0; used < PRECARD_BOT_LIMIT; used += 1) {
 }
 assert(precardMessagesLeft(9, 2) === 1, "after question 9, one question is left");
 assert(
-  precardBotRemainingLabel(precardMessagesLeft(9, 2)!) === "This is your last free Bot question.",
-  "the ninth answer shows the last-question line",
+  precardBotRemainingLabel(precardMessagesLeft(9, 2)!) === "1 question left",
+  "the ninth answer keeps the 1 question left counter",
+);
+assert(
+  precardBotLastQuestionHint(precardMessagesLeft(9, 2)!) === "This is your last free Bot question.",
+  "the ninth answer still shows the last-question hint",
 );
 assert(precardMessagesLeft(null, 2) === 1, "a missing counter still shows the last question");
 assert(precardMessagesLeft(PRECARD_BOT_LIMIT, 1) === null, "the used-up allowance is not a counter");
@@ -346,6 +353,8 @@ const widget = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
 assert(widget.includes("precard-cap-card"), "the Bot paints the cap as a reply bubble");
 assert(widget.includes("precardCap"), "the Bot keeps the cap off the error path");
 assert(widget.includes("precardCapReason"), "the cap reason uses the shared helper");
+assert(widget.includes("precardBotLastQuestionHint"), "the last question keeps the hint beside the counter");
+assert(widget.includes("precardBotRemainingLabel"), "the Bot still paints the remaining counter");
 assert(!widget.includes("You've used your 10"), "the Bot widget does not hardcode the allowance");
 const reasonSrc = readFileSync(resolve("src/lib/precard-cap.ts"), "utf8");
 const reasonFn = reasonSrc.slice(

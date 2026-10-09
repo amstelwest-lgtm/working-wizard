@@ -550,12 +550,19 @@ function LandingPage() {
         }
       }
       try {
-        const { resolvePostLoginPath } = await import("@/lib/user-roles");
-        const path = await resolvePostLoginPath(user.id);
-        if (!cancelled) navigate({ to: path });
+        const { resolveSignedInDestination } = await import("@/lib/landing-sign-in-destination");
+        const path = await resolveSignedInDestination(user.id, {
+          door: "landing",
+          knownMeta: user.user_metadata as Record<string, unknown> | undefined,
+        });
+        if (!cancelled) navigate({ to: path, replace: true });
       } catch (err) {
         console.warn("[landing] post-login redirect failed:", err);
-        if (!cancelled) navigate({ to: "/app" });
+        const { isPracticeSignupMeta } = await import("@/lib/user-roles");
+        const practice = isPracticeSignupMeta(
+          user.user_metadata as Record<string, unknown> | undefined,
+        );
+        if (!cancelled) navigate({ to: practice ? "/dashboard" : "/app", replace: true });
       }
     })();
     return () => {
@@ -1003,12 +1010,16 @@ function LandingPage() {
               return;
             }
           }
-          // Owner door: owners and dual-role accounts go to /app. A practice
-          // account with no business seat opens /dashboard.
-          const { resolveLandingSignInDestination } = await import(
+          // Same resolver as /auth. Practice accounts, including a profile
+          // that has not loaded yet, open /dashboard. Owners and dual-role
+          // accounts open /app.
+          const { resolveSignedInDestination } = await import(
             "@/lib/landing-sign-in-destination"
           );
-          const path = await resolveLandingSignInDestination(uid);
+          const path = await resolveSignedInDestination(uid, {
+            door: "landing",
+            knownMeta: granted.data.user?.user_metadata as Record<string, unknown> | undefined,
+          });
           void navigate({ to: path, replace: true });
         } catch (err) {
           console.warn("[landing] post-login path failed:", err);

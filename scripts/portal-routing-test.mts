@@ -282,7 +282,11 @@ assert(settingsSrc.includes("settingsBackPath"), "settings Back follows the door
 assert(!settingsSrc.includes("primaryRole"), "settings no longer treats dual-role as accountant via primaryRole");
 
 const authSrc = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
-assert(authSrc.includes("resolvePostLoginPath"), "accountant /auth lands via role-aware path");
+assert(authSrc.includes("resolveSignedInDestination"), "accountant /auth lands via the shared sign-in resolver");
+assert(
+  decidePostLoginPath(d({ practiceSignup: true })) === "/dashboard",
+  "practice signup whose role rows are not loaded yet → portal",
+);
 assert(
   authSrc.includes("This sign-in is for accounting firms"),
   "accountant /auth tells SME-only users they are on the wrong door",

@@ -58,10 +58,14 @@ import {
   clearForcePortal,
   forcePortal,
   resolvePortalRoles,
-  resolvePostLoginPath,
   setPortalIntent,
   shouldOpenItInbox,
 } from "@/lib/user-roles";
+import {
+  destinationAfterSignIn,
+  loadSignInRoleSnapshot,
+  resolveSignedInDestination,
+} from "@/lib/landing-sign-in-destination";
 import {
   AuthEntryCard,
   AuthEntryEyebrow,
@@ -215,6 +219,19 @@ function AuthCallbackPage() {
       });
 
       if (intent === "owner") {
+        // The landing modal stashes the owner door for Google. A practice
+        // account (including one whose role rows are not visible yet) still
+        // opens the practice workspace, and must not be given a business seat.
+        const landingRoles = await loadSignInRoleSnapshot(
+          user.id,
+          user.user_metadata as Record<string, unknown> | undefined,
+        );
+        if (destinationAfterSignIn(landingRoles, "landing") === "/dashboard") {
+          intent = "accountant";
+        }
+      }
+
+      if (intent === "owner") {
         try {
           await supabase.auth.updateUser({
             data: {
@@ -349,8 +366,10 @@ function AuthCallbackPage() {
         path = "/ops";
         opsTab = "it";
       } else {
-        forcePortal(intent);
-        path = await resolvePostLoginPath(user.id);
+        path = await resolveSignedInDestination(user.id, {
+          door: intent === "accountant" ? "accountant" : "landing",
+          knownMeta: user.user_metadata as Record<string, unknown> | undefined,
+        });
         if (intent === "accountant" && path === "/app") {
           clearForcePortal();
           setPortalIntent("owner");
