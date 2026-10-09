@@ -31,7 +31,7 @@ assert(
   "generation on a readable client page still shows the refusal card",
 );
 
-const gateSrc = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
+const gateSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 assert(gateSrc.includes("applyPortalTheme(resolvePortalTheme())"), "the billing check applies the saved theme");
 const billingGate = gateSrc.slice(gateSrc.indexOf('data-billing-gate="pending"') - 80, gateSrc.indexOf('data-billing-gate="pending"') + 280);
 assert(

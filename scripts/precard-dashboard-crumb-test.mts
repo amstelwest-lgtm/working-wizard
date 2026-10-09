@@ -29,7 +29,7 @@ assert(route.includes("firmDashboardCrumbIsLink"), "the crumb uses that entitlem
 assert(route.includes("<FirmDashboardCrumb"), "the client page renders the shared crumb");
 assert(!route.includes(">Firm dashboard</a>"), "the client page does not hard-code a dashboard link");
 
-const layout = read("src/routes/_authenticated.tsx");
+const layout = read("src/routes/_authenticated.gate.tsx");
 assert(layout.includes("FirmBillingAccessProvider"), "the shell shares the entitlement it already loaded");
 assert(layout.includes("setFirmEntitled(false)"), "a firm with no card is recorded as not entitled");
 assert(layout.includes("getFirmBillingEntitlement"), "the shell still calls the existing entitlement check");

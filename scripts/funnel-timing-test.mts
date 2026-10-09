@@ -415,7 +415,7 @@ const overview = client.slice(client.indexOf('id="pane-overview"'), client.index
 assert(!overview.includes("btn gold"), "Overview chrome still has no gold button");
 assert(!overview.includes('portalButtonClass("primary")'), "this pass does not mint an Overview primary");
 
-const shell = read("src/routes/_authenticated.tsx");
+const shell = read("src/routes/_authenticated.gate.tsx");
 assert(
   shell.includes("clients.firmClientCount === 0 ? false : readInsightSeen(firmId)"),
   "shell treats a 0-client firm as not yet seen",
