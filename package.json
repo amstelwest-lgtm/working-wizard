@@ -130,6 +130,7 @@
     "test:landing-pr1-geo": "vite-node --config scripts/vite-test.config.ts scripts/landing-pr1-geo-test.mts",
     "test:landing-pr2": "vite-node --config scripts/vite-test.config.ts scripts/landing-pr2-test.mts",
     "test:landing-pr3": "vite-node --config scripts/vite-test.config.ts scripts/landing-pr3-test.mts",
+    "test:marketing-geo-gate": "vite-node --config scripts/vite-test.config.ts scripts/marketing-geo-gate-test.mts",
     "test:marketing-sign-in": "vite-node --config scripts/vite-test.config.ts scripts/marketing-sign-in-test.mts",
     "test:advisory-state": "vite-node --config scripts/vite-test.config.ts scripts/advisory-state-test.mts",
     "test:recommendations": "vite-node --config scripts/vite-test.config.ts scripts/recommendations-test.mts",

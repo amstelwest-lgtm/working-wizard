@@ -6,23 +6,28 @@ import {
   LEGAL_ENTITY,
   LEGAL_INFORMATION_OFFICER,
 } from "@/lib/legal";
-import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { visitorMarketBootScript } from "@/lib/market";
 import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/privacy")({
+  loader: () => readMarketingVisitor(),
   component: PrivacyPage,
-  head: () => ({
+  head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.privacy),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
 
 function PrivacyPage() {
+  const { copyPack, geoZa } = Route.useLoaderData();
   return (
     <MarketingShell
+      copyPack={copyPack}
+      geoZa={geoZa}
       eyebrow="Privacy"
       title={
         <>
@@ -62,7 +67,7 @@ function PrivacyPage() {
       </p>
 
       <h2>Who we are</h2>
-      <div className="mk-copy-za">
+      {copyPack === "za" ? <div className="mk-copy-za">
         <p>
           {LEGAL_ENTITY} is a South African company. We trade as Milōn — a financial-health
           workspace for business owners and the accountants they invite. The responsible party for
@@ -72,8 +77,7 @@ function PrivacyPage() {
           The Information Officer is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
           reply to the email that brought you here, or write from inside the product.
         </p>
-      </div>
-      <div className="mk-copy-us">
+      </div> : <div className="mk-copy-us">
         <p>
           {LEGAL_ENTITY} is a South African company trading as Milōn. US workspaces are early
           access: the same product, offered by the same company, from the same address. We have not
@@ -83,7 +87,7 @@ function PrivacyPage() {
           The privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
           reply to the email that brought you here, or write from inside the product.
         </p>
-      </div>
+      </div>}
       <p className="mk-legal-address">
         {LEGAL_ENTITY}
         <br />
@@ -161,7 +165,7 @@ function PrivacyPage() {
       </p>
 
       <h2>Your rights</h2>
-      <div className="mk-copy-za">
+      {copyPack === "za" ? <div className="mk-copy-za">
         <p>
           Under the Protection of Personal Information Act you can ask what we hold, ask us to
           correct it, or ask us to delete it. The fastest path for deletion is Settings. For
@@ -172,8 +176,7 @@ function PrivacyPage() {
           </a>
           .
         </p>
-      </div>
-      <div className="mk-copy-us">
+      </div> : <div className="mk-copy-us">
         <p>
           You can ask what we hold, ask us to correct it, or ask us to delete it. The fastest path
           for deletion is Settings. For anything else, write to {LEGAL_INFORMATION_OFFICER} (privacy
@@ -182,7 +185,7 @@ function PrivacyPage() {
           contact — we will respond; this is not a claim that we are a CCPA “business” with a full
           statutory notice yet.
         </p>
-      </div>
+      </div>}
 
       <h2>Cookies and local storage</h2>
       <p>

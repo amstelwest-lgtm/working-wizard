@@ -291,10 +291,20 @@ async function createPaidCheckoutSession(input: {
   }
 
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
+  let geoCountry = "";
+  try {
+    geoCountry = (getRequest().headers.get("x-vercel-ip-country") ?? "").trim();
+  } catch {
+    // No request scope.
+  }
+  if (!geoCountry && process.env.NODE_ENV !== "production") {
+    geoCountry = (process.env.MILON_DEV_GEO ?? "").trim();
+  }
   const charge = firmCheckoutCharge({
     firmMarket: input.firmMarket,
     requested: input.requested,
     billingCountry,
+    geoCountry,
     band: input.plan,
     interval: input.interval,
   });

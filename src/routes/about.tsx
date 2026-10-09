@@ -1,21 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
-import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { visitorMarketBootScript } from "@/lib/market";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/about")({
+  loader: () => readMarketingVisitor(),
   component: AboutPage,
-  head: () => ({
+  head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.about),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
 
 function AboutPage() {
+  const { copyPack, geoZa } = Route.useLoaderData();
   return (
     <MarketingShell
+      copyPack={copyPack}
+      geoZa={geoZa}
       eyebrow="About"
       title={<>Why MILŌN exists</>}
       lead={

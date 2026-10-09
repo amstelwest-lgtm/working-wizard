@@ -10,7 +10,7 @@ import { wakeAuth } from "@/hooks/use-auth";
 import { browserAppUrl } from "@/lib/app-origin";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { resolveSignedInDestination } from "@/lib/landing-sign-in-destination";
-import { readVisitorDraft, visitorCopyPack } from "@/lib/market";
+import type { VisitorCopyPack } from "@/lib/market";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import {
   billingStartSearch,
@@ -38,13 +38,16 @@ async function landingSupabase() {
 export function LandingSignInSession({
   onClose,
   createAccountHref = "/#register",
+  copyPack = "us",
 }: {
   onClose: () => void;
   /** Same create-account target as the homepage modal: the register section. */
   createAccountHref?: string;
+  /** Server geo pack. Defaults to US so a stored market cannot open rand copy. */
+  copyPack?: VisitorCopyPack;
 }) {
   const navigate = useNavigate();
-  const copyMarket = { copyPack: visitorCopyPack(readVisitorDraft()) };
+  const copyMarket = { copyPack };
   const [fpMode, setFpMode] = useState(false);
   const [fpDone, setFpDone] = useState(false);
   const [fpEmail, setFpEmail] = useState("");
@@ -111,7 +114,7 @@ export function LandingSignInSession({
       const storedPending =
         peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
       const pendingCheckout = storedPending
-        ? await checkoutIntentForUser(userId, storedPending, storedPending.market)
+        ? await checkoutIntentForUser(userId, storedPending, copyPack)
         : null;
       if (pendingCheckout) {
         consumeResumeFirmBilling();
@@ -158,7 +161,7 @@ export function LandingSignInSession({
           const pending = await checkoutIntentForUser(
             userId,
             peekPendingCheckout(),
-            visitorCopyPack(readVisitorDraft()),
+            copyPack,
           );
           stashPendingCheckout(pending);
           const { setPortalIntent } = await import("@/lib/user-roles");

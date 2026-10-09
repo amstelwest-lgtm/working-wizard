@@ -70,7 +70,17 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
-const GEO_VARY_PATHS = new Set(["/", "/faq", "/for-accountants"]);
+const GEO_VARY_PATHS = new Set([
+  "/",
+  "/faq",
+  "/for-accountants",
+  "/for-owners",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/ai",
+  "/billing/start",
+]);
 
 /** Pricing HTML differs by country. Don't let a shared cache mix ZA and US. */
 function withGeoVary(request: Request, response: Response): Response {

@@ -141,15 +141,16 @@ export function adaptivePricingNote(_market: StripePlanMarket): string | null {
 }
 
 /**
- * A stored US firm stays USD even if the request says za.
- * No firm row yet: trust an explicit za request, otherwise us.
+ * A stored firm wins over the request. No firm row: the edge country.
+ * A za request never opens rand pricing when the edge is not ZA.
  */
 export function resolveFirmCheckoutMarket(
   firmMarket: unknown,
-  requested: StripePlanMarket,
+  _requested: StripePlanMarket,
+  geoCountry?: string | null,
 ): StripePlanMarket {
-  if (firmMarket == null) return requested === "za" ? "za" : "us";
-  return isSaMarketFirm({ market: firmMarket }) ? "za" : "us";
+  if (firmMarket != null) return isSaMarketFirm({ market: firmMarket }) ? "za" : "us";
+  return geoCountry === "ZA" ? "za" : "us";
 }
 
 /**
@@ -161,6 +162,7 @@ export function firmCheckoutCharge(input: {
   firmMarket: unknown;
   requested: StripePlanMarket;
   billingCountry?: string | null;
+  geoCountry?: string | null;
   band: FirmCheckoutBand;
   interval: FirmInterval;
 }): {
@@ -169,7 +171,11 @@ export function firmCheckoutCharge(input: {
   lookupKey: string;
   billingFallback: boolean;
 } {
-  const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested);
+  const firmMarket = resolveFirmCheckoutMarket(
+    input.firmMarket,
+    input.requested,
+    input.geoCountry,
+  );
   const priceMarket = priceMarketForFirm({
     firmMarket,
     billingCountry: input.billingCountry,

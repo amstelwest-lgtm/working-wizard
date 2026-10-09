@@ -6,7 +6,7 @@
  * anyone having to open a design tool.
  */
 
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DUAL_MARKET_FOOTER, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
@@ -15,38 +15,28 @@ import {
   applyVisitorMarketToDocument,
   type VisitorCopyPack,
 } from "@/lib/market/marketing";
-import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
-import type { DraftMarket } from "@/lib/market/types";
+import { RegionCopy } from "@/components/region-copy";
 
+export { RegionCopy };
+
+const MarketingPackContext = createContext<VisitorCopyPack>("us");
+
+/** Only the active pack is in the document. A hidden twin could be revealed by CSS. */
 export function MarketCopy({ za, us }: { za: ReactNode; us: ReactNode }) {
-  return (
-    <>
-      <span className="mk-copy-za">{za}</span>
-      <span className="mk-copy-us">{us}</span>
-    </>
-  );
-}
-
-/** Landing / stateful surfaces — only the active region's copy is rendered. */
-export function RegionCopy({
-  pack,
-  za,
-  us,
-}: {
-  pack: VisitorCopyPack;
-  za: ReactNode;
-  us: ReactNode;
-}) {
-  return <>{pack === "us" ? us : za}</>;
+  const pack = useContext(MarketingPackContext);
+  return <>{pack === "za" ? za : us}</>;
 }
 
 /**
  * Same Sign in control as the homepage nav. The modal chunk (and Supabase)
  * load on click, not with this shell.
  */
-function MarketingSignIn() {
+function MarketingSignIn({ copyPack }: { copyPack: VisitorCopyPack }) {
   const [open, setOpen] = useState(false);
-  const [Session, setSession] = useState<ComponentType<{ onClose: () => void }> | null>(null);
+  const [Session, setSession] = useState<ComponentType<{
+    onClose: () => void;
+    copyPack?: VisitorCopyPack;
+  }> | null>(null);
   // The header uses backdrop-filter, which traps position:fixed. Portal the
   // modal onto the page shell so it covers the viewport, same as the homepage.
   const [host, setHost] = useState<HTMLElement | null>(null);
@@ -65,22 +55,10 @@ function MarketingSignIn() {
         }}
       />
       {open && Session && host
-        ? createPortal(<Session onClose={() => setOpen(false)} />, host)
+        ? createPortal(<Session copyPack={copyPack} onClose={() => setOpen(false)} />, host)
         : null}
     </>
   );
-}
-
-function applyPack(country: DraftMarket["country"]) {
-  const cur = readVisitorDraft();
-  const next: DraftMarket =
-    country === "US"
-      ? { country: "US", regionCode: cur.regionCode }
-      : country === "ZA"
-        ? { country: "ZA", regionCode: null }
-        : { country: null, regionCode: null };
-  writeVisitorDraft(next);
-  applyVisitorMarketToDocument(next);
 }
 
 export function MarketingShell({
@@ -97,6 +75,8 @@ export function MarketingShell({
   heroCta,
   heroTone = "default",
   footerLine,
+  copyPack = "us",
+  geoZa = false,
 }: {
   eyebrow: string;
   title: ReactNode;
@@ -115,12 +95,20 @@ export function MarketingShell({
   heroTone?: "default" | "plain";
   /** Server-supplied line. The default footer has no second-country sentence. */
   footerLine?: string | null;
+  /** Server geo pack. Ignored unless geoZa, so a missed prop cannot show rand. */
+  copyPack?: VisitorCopyPack;
+  /** True only when x-vercel-ip-country is ZA. */
+  geoZa?: boolean;
 }) {
+  const pack: VisitorCopyPack = geoZa && copyPack === "za" ? "za" : "us";
   useEffect(() => {
-    applyVisitorMarketToDocument(readVisitorDraft());
-  }, []);
+    applyVisitorMarketToDocument(
+      pack === "za" ? { country: "ZA", regionCode: null } : { country: "US", regionCode: null },
+    );
+  }, [pack]);
 
   return (
+    <MarketingPackContext.Provider value={pack}>
     <div className="mk" data-milon-marketing>
       <header className="mk-top">
         <a className="mk-logo" href="/">
@@ -139,7 +127,7 @@ export function MarketingShell({
         <a className="mk-top-link" href="/faq">
           Questions
         </a>
-        <MarketingSignIn />
+        <MarketingSignIn copyPack={pack} />
         <a className="mk-top-cta" href={navCtaHref}>
           {navCtaLabel}
         </a>
@@ -187,18 +175,17 @@ export function MarketingShell({
           <a href={PREFERRED_SOURCE_HREF} target="_blank" rel="noopener">
             {PREFERRED_SOURCE_LABEL}
           </a>
-          <span className="mk-print-hide mk-market-switch">
-            <button type="button" onClick={() => applyPack("ZA")}>
-              South Africa
-            </button>
-            {" · "}
-            <button type="button" onClick={() => applyPack("US")}>
-              United States
-            </button>
-          </span>
+          {geoZa ? (
+            <span className="mk-print-hide mk-market-switch">
+              <a href={pack === "za" ? "?market=US" : "?market=ZA"}>
+                {pack === "za" ? "United States" : "South Africa"}
+              </a>
+            </span>
+          ) : null}
           <span className="mk-print-hide">Print this page to save it as a PDF.</span>
         </footer>
       </div>
     </div>
+    </MarketingPackContext.Provider>
   );
 }

@@ -13,16 +13,15 @@ import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
-import { RegionCopy } from "@/components/marketing-shell";
+import { RegionCopy } from "@/components/region-copy";
 import { withMarketRpcFallback } from "@/lib/market/compat";
 import {
   applyVisitorMarketToDocument,
   visitorCopyPack,
-  VISITOR_MARKET_BOOT_SCRIPT,
+  visitorMarketBootScript,
 } from "@/lib/market/marketing";
 import { draftToSelection, marketToJson } from "@/lib/market/parse";
 import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
-import { readVisitorMarketFromRequest } from "@/lib/market/request-market.functions";
 import type { DraftMarket } from "@/lib/market/types";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
@@ -53,9 +52,8 @@ import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 import { LiteYouTube } from "@/components/lite-youtube";
-import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
-import { isSaPricingCountry } from "@/lib/geo-country";
 import {
   ACCOUNTANT_TEASER,
   BRIDGE_DRAFT_BODY,
@@ -146,15 +144,14 @@ const LandingRegisterForm = lazy(() =>
 
 export const Route = createFileRoute("/")({
   loader: async () => {
-    const geoCountry = await readRequestGeoCountry();
-    const showSaPricing = isSaPricingCountry(geoCountry);
-    const saPricing = showSaPricing ? await readSaPricingCopy() : null;
-    const urlDraft = await readVisitorMarketFromRequest();
-    return { showSaPricing, saPricing, urlDraft };
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
   },
   component: LandingPage,
   head: ({ loaderData }) => {
     const showSaPricing = loaderData?.showSaPricing === true;
+    const copyPack = loaderData?.copyPack === "za" ? "za" : "us";
     const homeHead = pageHead(SEO_PAGES.home);
     return {
       ...homeHead,
@@ -191,7 +188,7 @@ export const Route = createFileRoute("/")({
         {
           children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
         },
-        { children: VISITOR_MARKET_BOOT_SCRIPT },
+        { children: visitorMarketBootScript(copyPack) },
         {
           type: "application/ld+json",
           children: faqPageJson(homepageFaqItems(showSaPricing)),
@@ -263,7 +260,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
-  const { showSaPricing, saPricing, urlDraft } = Route.useLoaderData();
+  const { showSaPricing, saPricing, urlDraft, copyPack, geoZa } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -388,24 +385,30 @@ function LandingPage() {
     urlDraft ?? { country: null, regionCode: null },
   );
   const marketReady = useRef(false);
-  const copyMarket = { copyPack: visitorCopyPack(draftMarket) };
+  // Hero and pricing copy follow the server pack, not this draft. The draft
+  // is the practice-location form, applied after mount.
+  const copyMarket = { copyPack };
   useEffect(() => {
     setMounted(true);
   }, []);
   // Storage is client-only. Apply it after the first paint so SSR and hydration agree.
+  // A stored ZA country is ignored unless the edge is ZA.
   useEffect(() => {
     const stored = readVisitorDraft();
-    setDraftMarket((current) => (current.country ? current : stored.country ? stored : current));
+    const allowed = geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null };
+    setDraftMarket((current) => (current.country ? current : allowed.country ? allowed : current));
     marketReady.current = true;
-  }, []);
+  }, [geoZa]);
 
   useEffect(() => {
     if (!mounted) return;
     if (!marketReady.current) return;
     writeVisitorDraft(draftMarket);
-    (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket = draftMarket;
-    applyVisitorMarketToDocument(draftMarket);
-  }, [draftMarket, mounted]);
+    const packDraft: DraftMarket =
+      copyPack === "za" ? { country: "ZA", regionCode: null } : { country: "US", regionCode: null };
+    (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket = packDraft;
+    applyVisitorMarketToDocument(packDraft);
+  }, [draftMarket, mounted, copyPack]);
 
   /* ── register form state ── */
   const [regRole, setRegRole] = useState("Accountant / Advisory firm");
@@ -1010,7 +1013,7 @@ function LandingPage() {
               const pending = await checkoutIntentForUser(
                 uid,
                 peekPendingCheckout(),
-                visitorCopyPack(draftMarket),
+                copyPack,
               );
               stashPendingCheckout(pending);
               await setLandingPortal("accountant");
@@ -1369,7 +1372,7 @@ function LandingPage() {
   };
 
   const startFirmPlan = async (plan: FirmCheckoutBand, interval: FirmInterval = "month") => {
-    const visitor = visitorCopyPack(draftMarket);
+    const visitor = copyPack;
     const pending = user
       ? await checkoutIntentForUser(user.id, { plan, interval, market: visitor }, visitor)
       : { plan, interval, market: visitor };
@@ -1395,7 +1398,7 @@ function LandingPage() {
     scrollTo?: "register" | "pricing";
   }) => {
     const plan = opts?.plan ?? "solo";
-    const visitor = visitorCopyPack(draftMarket);
+    const visitor = copyPack;
     const pending = user
       ? await checkoutIntentForUser(
           user.id,

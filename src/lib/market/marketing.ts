@@ -3,7 +3,7 @@
  * (URL / localStorage), never by the authenticated workspace.
  */
 
-import { MARKET_STORAGE_KEY, type DraftMarket } from "./types";
+import type { DraftMarket } from "./types";
 
 export type VisitorCopyPack = "za" | "us";
 
@@ -49,8 +49,13 @@ export function applyVisitorMarketToDocument(draft: DraftMarket | null | undefin
 }
 
 /**
- * Runs in <head> before paint. Unset visitors get US copy (primary market).
- * ZA is opt-in via ?market=ZA or the footer switch. Never geo-redirects.
- * Keep in sync with MARKET_STORAGE_KEY and URL ?market=&state=.
+ * Runs in <head> before paint. The server bakes the pack. This script does
+ * not read ?market= or localStorage — a stored ZA market must not repaint
+ * a non-ZA visitor. Never geo-redirects.
  */
-export const VISITOR_MARKET_BOOT_SCRIPT = `(function(){try{var d=document.documentElement;var m=null;try{var p=new URLSearchParams(location.search);var c=(p.get("market")||"").toUpperCase();if(c==="US"||c==="ZA")m=c;}catch(e){}if(!m){try{var raw=localStorage.getItem("${MARKET_STORAGE_KEY}");if(raw){var j=JSON.parse(raw);if(j&&(j.country==="US"||j.country==="ZA"))m=j.country;}}catch(e){}}if(m==="ZA"){d.dataset.market="za";}else{d.dataset.market="us";}}catch(e){}})();`;
+export const VISITOR_MARKET_BOOT_SCRIPT = `(function(){try{var d=document.documentElement;d.dataset.market="us";}catch(e){}})();`;
+
+export function visitorMarketBootScript(pack: VisitorCopyPack | null | undefined): string {
+  if (pack !== "za") return VISITOR_MARKET_BOOT_SCRIPT;
+  return `(function(){try{var d=document.documentElement;d.dataset.market="za";}catch(e){}})();`;
+}
