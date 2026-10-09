@@ -72,6 +72,10 @@ assert(
   shell.includes('import("@/components/landing/landing-sign-in-session")'),
   "Sign in loads the modal session on click",
 );
+assert(
+  shell.includes("createPortal") && shell.includes("[data-milon-marketing]"),
+  "sign-in modal is portaled out of the backdrop-filter header",
+);
 assert(!shell.includes('from "@/hooks/use-auth"'), "marketing shell does not attach auth on paint");
 
 assert(session.includes("LandingSignInModal"), "marketing Sign in opens the landing modal");

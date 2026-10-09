@@ -175,8 +175,10 @@ html.dark .mk .mk-top-cta {
   z-index: 200;
   display: flex;
   align-items: center;
+  align-items: safe center;
   justify-content: center;
-  padding: 0 16px;
+  overflow-y: auto;
+  padding: 24px 16px;
   background: rgba(247, 244, 236, 0.82);
   backdrop-filter: blur(8px);
 }

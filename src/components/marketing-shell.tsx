@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { DUAL_MARKET_FOOTER, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
@@ -47,12 +48,16 @@ export function RegionCopy({
 function MarketingSignIn() {
   const [open, setOpen] = useState(false);
   const [Session, setSession] = useState<ComponentType<{ onClose: () => void }> | null>(null);
+  // The header uses backdrop-filter, which traps position:fixed. Portal the
+  // modal onto the page shell so it covers the viewport, same as the homepage.
+  const [host, setHost] = useState<HTMLElement | null>(null);
 
   return (
     <>
       <LandingSignInButton
         className="mk-top-signin"
         onClick={() => {
+          setHost(document.querySelector("[data-milon-marketing]"));
           setOpen(true);
           if (Session) return;
           void import("@/components/landing/landing-sign-in-session").then((mod) => {
@@ -60,7 +65,9 @@ function MarketingSignIn() {
           });
         }}
       />
-      {open && Session ? <Session onClose={() => setOpen(false)} /> : null}
+      {open && Session && host
+        ? createPortal(<Session onClose={() => setOpen(false)} />, host)
+        : null}
     </>
   );
 }
