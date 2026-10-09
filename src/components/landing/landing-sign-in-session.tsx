@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { wakeAuth } from "@/hooks/use-auth";
 import { browserAppUrl } from "@/lib/app-origin";
 import { readInsightSeen } from "@/lib/funnel-timing";
-import { resolveLandingSignInDestination } from "@/lib/landing-sign-in-destination";
+import { resolveSignedInDestination } from "@/lib/landing-sign-in-destination";
 import { readVisitorDraft, visitorCopyPack } from "@/lib/market";
 import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 import {
@@ -165,7 +165,10 @@ export function LandingSignInSession({
         }
       }
 
-      const path = await resolveLandingSignInDestination(userId);
+      const path = await resolveSignedInDestination(userId, {
+        door: "landing",
+        knownMeta: granted.data.user?.user_metadata as Record<string, unknown> | undefined,
+      });
       void navigate({ to: path, replace: true });
     } catch (err: unknown) {
       const failure = explainPasswordSignInFailure(err);

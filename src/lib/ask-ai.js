@@ -31,6 +31,7 @@ import {
   PRECARD_CAP_MESSAGE,
   isPrecardLimitKind,
   normalizePrecardTurnId,
+  precardBotLastQuestionHint,
   precardBotRemainingLabel,
   precardCapReason,
 } from "./precard-cap.ts";
@@ -526,11 +527,20 @@ export function mountAskAi(container, options) {
             decorateLatestAnswer(bubble);
             const left =
               typeof precardRemaining === "number" ? precardBotRemainingLabel(precardRemaining) : null;
+            const lastHint =
+              typeof precardRemaining === "number" ? precardBotLastQuestionHint(precardRemaining) : null;
             if (left) {
               const note = document.createElement("p");
               note.className = "precard-cap-remaining";
               note.textContent = left;
               bubble.appendChild(note);
+            }
+            if (lastHint) {
+              const hint = document.createElement("p");
+              hint.className = "precard-cap-remaining";
+              hint.dataset.lastQuestion = "1";
+              hint.textContent = lastHint;
+              bubble.appendChild(hint);
             }
           }
           thread.appendChild(bubble);

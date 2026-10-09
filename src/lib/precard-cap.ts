@@ -121,8 +121,15 @@ export function missingPrecardColumn(message: string): boolean {
 
 export function precardBotRemainingLabel(remaining: number): string | null {
   if (!Number.isFinite(remaining) || remaining < 1) return null;
-  if (Math.floor(remaining) === 1) return "This is your last free Bot question.";
-  return `${Math.floor(remaining)} Bot messages left before trial`;
+  const left = Math.floor(remaining);
+  if (left === 1) return "1 question left";
+  return `${left} Bot messages left before trial`;
+}
+
+/** Shown with the counter when one free Bot question remains. */
+export function precardBotLastQuestionHint(remaining: number): string | null {
+  if (!Number.isFinite(remaining) || Math.floor(remaining) !== 1) return null;
+  return "This is your last free Bot question.";
 }
 
 /**

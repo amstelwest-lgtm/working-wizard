@@ -13,10 +13,10 @@ import { ensurePracticePortalAccess } from "@/lib/auth.functions";
 import {
   forcePortal,
   setPortalIntent,
-  resolvePostLoginPath,
   clearForcePortal,
   shouldOpenItInbox,
 } from "@/lib/user-roles";
+import { resolveSignedInDestination } from "@/lib/landing-sign-in-destination";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
   billingStartPath,
@@ -306,7 +306,7 @@ function AuthPage() {
         navigate({ to: "/ops", search: { tab: "it" } });
         return "/ops";
       }
-      const path = await resolvePostLoginPath(userId);
+      const path = await resolveSignedInDestination(userId, { door: "accountant" });
       if (path === "/app") {
         clearForcePortal();
         setPortalIntent("owner");

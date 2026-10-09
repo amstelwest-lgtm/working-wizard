@@ -7,7 +7,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   destinationAfterLandingSignIn,
+  destinationAfterSignIn,
   resolveLandingSignInDestination,
+  resolveSignedInDestination,
   type LandingSignInRoles,
 } from "../src/lib/landing-sign-in-destination";
 import { peekForcePortal, clearForcePortal, PORTAL_FORCE_KEY } from "../src/lib/user-roles";
@@ -81,7 +83,7 @@ assert(!shell.includes('from "@/hooks/use-auth"'), "marketing shell does not att
 assert(session.includes("LandingSignInModal"), "marketing Sign in opens the landing modal");
 assert(session.includes("wakeAuth()"), "opening Sign in wakes auth");
 assert(
-  session.includes("resolveLandingSignInDestination"),
+  session.includes("resolveSignedInDestination"),
   "marketing sign-in uses the shared redirect",
 );
 assert(
@@ -99,6 +101,14 @@ assert(nav.includes("LandingSignInButton"), "homepage uses the shared Sign in co
 assert(
   index.includes("@/lib/landing-sign-in-destination"),
   "homepage sign-in uses the shared redirect",
+);
+assert(
+  index.includes('door: "landing"'),
+  "homepage sign-in uses the landing door of the shared resolver",
+);
+assert(
+  read("src/routes/auth.tsx").includes("resolveSignedInDestination"),
+  "/auth uses the same sign-in resolver",
 );
 assert(
   !index.includes('from "@/integrations/supabase/client"'),
@@ -171,6 +181,46 @@ assert(
   }) === "/app",
   "a new owner with no roles opens /app",
 );
+const precardEmpty: LandingSignInRoles = {
+  hasPracticeRole: true,
+  hasClientRole: false,
+  hasFirm: true,
+  practiceSignup: true,
+  profileLoaded: true,
+};
+assert(
+  destinationAfterLandingSignIn(precardEmpty) === "/dashboard",
+  "pre-card practice account with no business seat opens /dashboard",
+);
+assert(
+  destinationAfterSignIn(precardEmpty, "accountant") === "/dashboard",
+  "/auth sends the same pre-card account to /dashboard",
+);
+const profileNotLoaded: LandingSignInRoles = {
+  hasPracticeRole: false,
+  hasClientRole: false,
+  hasFirm: false,
+  practiceSignup: true,
+  profileLoaded: false,
+};
+assert(
+  destinationAfterLandingSignIn(profileNotLoaded) === "/dashboard",
+  "practice signup whose profile is not loaded yet opens /dashboard",
+);
+assert(
+  destinationAfterSignIn(profileNotLoaded, "accountant") === "/dashboard",
+  "/auth sends an unloaded practice profile to /dashboard",
+);
+assert(
+  destinationAfterLandingSignIn({
+    hasPracticeRole: false,
+    hasClientRole: false,
+    hasFirm: false,
+    practiceSignup: false,
+    profileLoaded: false,
+  }) === "pending",
+  "an unfinished read with no practice evidence does not open /app",
+);
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -216,6 +266,34 @@ assert(peekForcePortal() === "owner", "owner sign-in pins the owner door");
 const dualPath = await resolveLandingSignInDestination("dual", async () => dual);
 assert(dualPath === "/app", "stubbed dual-role sign-in stays on the owner door");
 assert(peekForcePortal() === "owner", "dual-role owner door force stays owner");
+clearForcePortal();
+
+const unloadedPath = await resolveSignedInDestination("precard", {
+  door: "landing",
+  knownMeta: { signup_type: "accountant", firm_name: "Precard Practice" },
+  load: async () => profileNotLoaded,
+});
+assert(unloadedPath === "/dashboard", "unloaded practice profile navigates to /dashboard");
+assert(peekForcePortal() === "accountant", "unloaded practice profile pins the accountant door");
+clearForcePortal();
+
+let reads = 0;
+const pendingThenOwner = await resolveSignedInDestination("new-owner", {
+  door: "landing",
+  load: async () => {
+    reads += 1;
+    return {
+      hasPracticeRole: false,
+      hasClientRole: false,
+      hasFirm: false,
+      practiceSignup: false,
+      profileLoaded: false,
+    };
+  },
+});
+assert(reads === 2, "an unfinished read is tried once more before the owner board");
+assert(pendingThenOwner === "/app", "a finished empty profile still opens /app");
+assert(peekForcePortal() === "owner", "a new owner is pinned only after the profile read finishes");
 
 if (prevWindow === undefined) delete g.window;
 else g.window = prevWindow;
