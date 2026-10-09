@@ -20,6 +20,8 @@
   --gold-deep: #8a6300;
   --gold: #a8801a;
   --gold-bright: #d4af37;
+  --gold-ink: #8a6300;
+  --risk: #9b2c2c;
   --line: rgba(20, 22, 28, 0.12);
   --line-soft: rgba(20, 22, 28, 0.07);
   --card: #ffffff;
@@ -52,6 +54,8 @@ html.dark .mk {
   --gold-deep: #ac8400;
   --gold: #d9b64a;
   --gold-bright: #fdee79;
+  --gold-ink: #fdee79;
+  --risk: #e25c5c;
   --line: rgba(212, 175, 55, 0.2);
   --line-soft: rgba(255, 255, 255, 0.08);
   --card: rgba(255, 255, 255, 0.035);
@@ -138,6 +142,156 @@ html.dark .mk .mk-top-cta {
 
 .mk .mk-top-cta:hover {
   background: color-mix(in srgb, var(--gold) 12%, transparent);
+}
+
+/* Same header control as the homepage nav: text button immediately before the CTA. */
+.mk .mk-top-signin {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink-dim);
+  background: none;
+  border: 0;
+  padding: 8px 0;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mk .mk-top-signin:hover {
+  color: var(--ink);
+}
+
+.mk .mk-top-signin:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+/* Landing sign-in modal. Marketing pages do not set data-landing, so the
+   homepage rules do not apply. Scoped under .mk so the shell's tokens win. */
+.mk .milon-signin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  align-items: safe center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: rgba(247, 244, 236, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+html.dark .mk .milon-signin-modal {
+  background: rgba(5, 5, 7, 0.85);
+}
+
+.mk .milon-signin-box {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 24px;
+  padding: 40px 36px;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(150deg, rgba(172, 132, 0, 0.45), rgba(140, 110, 0, 0.12)) border-box;
+  border: 1px solid transparent;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.14);
+  color: var(--ink);
+}
+
+html.dark .mk .milon-signin-box {
+  background:
+    linear-gradient(rgba(13, 13, 20, 0.96), rgba(13, 13, 20, 0.96)) padding-box,
+    linear-gradient(150deg, rgba(253, 238, 121, 0.8), rgba(212, 175, 55, 0.12)) border-box;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.mk .milon-signin-box h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 24px;
+}
+
+.mk .milon-signin-box .field {
+  margin-bottom: 14px;
+}
+
+.mk .milon-signin-box .field label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-bottom: 7px;
+}
+
+.mk .milon-signin-box .field input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.mk .milon-signin-box .field input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
+
+.mk .milon-signin-box .btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 34px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.mk .milon-signin-box .btn-gold {
+  width: 100%;
+  justify-content: center;
+  background: var(--gold);
+  color: #1b1300;
+}
+
+.mk .milon-signin-box .btn-google {
+  width: 100%;
+  justify-content: center;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.mk .milon-signin-box .milon-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mk .milon-signin-box .milon-auth-divider::before,
+.mk .milon-signin-box .milon-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 
 @media (max-width: 640px) {
@@ -528,7 +682,8 @@ html .mk .mk-foot a:hover {
 
   .mk-top,
   .mk-cta .mk-btn-ghost,
-  .mk-print-hide {
+  .mk-print-hide,
+  .mk .milon-signin-modal {
     display: none !important;
   }
 

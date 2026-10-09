@@ -11,6 +11,7 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
@@ -1002,9 +1003,12 @@ function LandingPage() {
               return;
             }
           }
-          const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
-          forcePortal("owner");
-          const path = await resolvePostLoginPath(uid);
+          // Owner door: owners and dual-role accounts go to /app. A practice
+          // account with no business seat opens /dashboard.
+          const { resolveLandingSignInDestination } = await import(
+            "@/lib/landing-sign-in-destination"
+          );
+          const path = await resolveLandingSignInDestination(uid);
           void navigate({ to: path, replace: true });
         } catch (err) {
           console.warn("[landing] post-login path failed:", err);
@@ -1886,17 +1890,14 @@ function LandingPage() {
             >
               {landingTheme === "light" ? "☾" : "☀"}
             </button>
-            <button
-              type="button"
+            <LandingSignInButton
               className="btn btn-ghost nav-signin"
               onClick={() => {
                 setMobileNavOpen(false);
                 setSiError("");
                 setSigninOpen(true);
               }}
-            >
-              Sign in
-            </button>
+            />
             <a
               className="btn btn-gold nav-trial"
               href="#register"
