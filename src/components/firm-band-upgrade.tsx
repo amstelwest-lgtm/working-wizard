@@ -56,20 +56,19 @@ function rowPrice(
   customQuote: boolean,
   yearlyUsdCents: number | null,
   zaLabels: Partial<Record<FirmBandId, { month: string; year: string }>> | null | undefined,
+  saFirm: boolean,
 ): string {
   if (customQuote) return "Custom";
   const pricedInterval: FirmInterval =
     interval === "year" && yearlyUsdCents == null ? "month" : interval;
   const local = zaLabels?.[bandId]?.[pricedInterval];
   if (local) return local;
+  const starterZero = FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0;
   // Starter has no annual price. $0 on the annual toggle is $0/yr, not $0/mo.
-  if (
-    interval === "year" &&
-    yearlyUsdCents == null &&
-    FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0
-  ) {
-    return currency.toLowerCase() === "zar" ? "R0/yr" : "$0/yr";
+  if (interval === "year" && yearlyUsdCents == null && starterZero) {
+    return saFirm ? "R0/yr" : "$0/yr";
   }
+  if (saFirm && starterZero) return "R0/mo";
   const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand);
   if (!label) return "—";
   return pricedInterval === "year" ? `${label}/yr` : `${label}/mo`;
@@ -117,7 +116,7 @@ export function FirmBandUpgrade({
   const soloLeads =
     selected === "solo" && (currentBand == null || currentBand === "starter");
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
-  void saDiscount;
+  const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
   async function applyVoucher(): Promise<boolean> {
     if (!selected || !onValidateVoucher) return false;
@@ -209,6 +208,7 @@ export function FirmBandUpgrade({
             band.customQuote,
             band.yearlyUsdCents,
             zaLabels,
+            saFirm,
           );
           return (
             <label

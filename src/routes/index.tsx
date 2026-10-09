@@ -22,6 +22,7 @@ import {
 } from "@/lib/market/marketing";
 import { draftToSelection, marketToJson } from "@/lib/market/parse";
 import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
+import { readVisitorMarketFromRequest } from "@/lib/market/request-market.functions";
 import type { DraftMarket } from "@/lib/market/types";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
@@ -47,13 +48,10 @@ import {
   stashPendingCheckout,
   stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
+import { checkoutIntentForUser } from "@/lib/billing-market";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import { readInsightSeen } from "@/lib/funnel-timing";
-import {
-  firmSignupCheckoutIntent,
-  type FirmCheckoutBand,
-  type FirmInterval,
-} from "@/lib/stripe-plans";
+import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 import { LiteYouTube } from "@/components/lite-youtube";
 import { readRequestGeoCountry } from "@/lib/geo-country.functions";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
@@ -151,7 +149,8 @@ export const Route = createFileRoute("/")({
     const geoCountry = await readRequestGeoCountry();
     const showSaPricing = isSaPricingCountry(geoCountry);
     const saPricing = showSaPricing ? await readSaPricingCopy() : null;
-    return { showSaPricing, saPricing };
+    const urlDraft = await readVisitorMarketFromRequest();
+    return { showSaPricing, saPricing, urlDraft };
   },
   component: LandingPage,
   head: ({ loaderData }) => {
@@ -264,7 +263,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
-  const { showSaPricing, saPricing } = Route.useLoaderData();
+  const { showSaPricing, saPricing, urlDraft } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -385,16 +384,24 @@ function LandingPage() {
   // reads draftMarket on every render. A later const is a TDZ crash
   // (ReferenceError: Cannot access 'draftMarket' before initialization)
   // and white-screens the landing page.
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
-    typeof window !== "undefined" ? readVisitorDraft() : { country: null, regionCode: null },
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(
+    urlDraft ?? { country: null, regionCode: null },
   );
+  const marketReady = useRef(false);
   const copyMarket = { copyPack: visitorCopyPack(draftMarket) };
   useEffect(() => {
     setMounted(true);
   }, []);
+  // Storage is client-only. Apply it after the first paint so SSR and hydration agree.
+  useEffect(() => {
+    const stored = readVisitorDraft();
+    setDraftMarket((current) => (current.country ? current : stored.country ? stored : current));
+    marketReady.current = true;
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;
+    if (!marketReady.current) return;
     writeVisitorDraft(draftMarket);
     (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket = draftMarket;
     applyVisitorMarketToDocument(draftMarket);
@@ -1000,7 +1007,11 @@ function LandingPage() {
               return;
             }
             if (resume) {
-              const pending = firmSignupCheckoutIntent(visitorCopyPack(draftMarket));
+              const pending = await checkoutIntentForUser(
+                uid,
+                peekPendingCheckout(),
+                visitorCopyPack(draftMarket),
+              );
               stashPendingCheckout(pending);
               await setLandingPortal("accountant");
               void navigate({
@@ -1358,8 +1369,10 @@ function LandingPage() {
   };
 
   const startFirmPlan = async (plan: FirmCheckoutBand, interval: FirmInterval = "month") => {
-    const market = visitorCopyPack(draftMarket);
-    const pending = { plan, interval, market };
+    const visitor = visitorCopyPack(draftMarket);
+    const pending = user
+      ? await checkoutIntentForUser(user.id, { plan, interval, market: visitor }, visitor)
+      : { plan, interval, market: visitor };
     stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(plan));
     setRegRole("Accountant / Advisory firm");
@@ -1382,8 +1395,15 @@ function LandingPage() {
     scrollTo?: "register" | "pricing";
   }) => {
     const plan = opts?.plan ?? "solo";
-    const market = visitorCopyPack(draftMarket);
-    stashPendingCheckout({ plan, interval: firmInterval, market });
+    const visitor = visitorCopyPack(draftMarket);
+    const pending = user
+      ? await checkoutIntentForUser(
+          user.id,
+          { plan, interval: firmInterval, market: visitor },
+          visitor,
+        )
+      : { plan, interval: firmInterval, market: visitor };
+    stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(plan));
     setRegRole("Accountant / Advisory firm");
     await setLandingPortal("accountant");
@@ -1394,7 +1414,7 @@ function LandingPage() {
       if (readInsightSeen(id)) {
         void navigate({
           to: "/billing/start",
-          search: billingStartSearch({ plan, interval: firmInterval, market }),
+          search: billingStartSearch(pending),
         });
       } else {
         void navigate({ to: "/dashboard" });

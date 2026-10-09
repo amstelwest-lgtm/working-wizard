@@ -7,7 +7,7 @@ import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
 import { isSaMarketFirm } from "@/lib/firm-sa-market";
-import { isZaCatalogLookup } from "@/lib/pricing/za-checkout";
+import { isZaCatalogLookup, priceMarketForFirm } from "@/lib/pricing/za-checkout";
 import { zaLookupKey } from "@/lib/pricing/za-ladder";
 import {
   FIRM_SETUP_PROMOTION_CODE,
@@ -150,6 +150,40 @@ export function resolveFirmCheckoutMarket(
 ): StripePlanMarket {
   if (firmMarket == null) return requested === "za" ? "za" : "us";
   return isSaMarketFirm({ market: firmMarket }) ? "za" : "us";
+}
+
+/**
+ * Currency for one Checkout. The firm row wins over the URL market.
+ * A US firm stays on the USD lookup even when the billing country is ZA.
+ * A ZA firm with a known non-ZA billing country falls back to USD.
+ */
+export function firmCheckoutCharge(input: {
+  firmMarket: unknown;
+  requested: StripePlanMarket;
+  billingCountry?: string | null;
+  band: FirmCheckoutBand;
+  interval: FirmInterval;
+}): {
+  firmMarket: StripePlanMarket;
+  priceMarket: StripePlanMarket;
+  lookupKey: string;
+  billingFallback: boolean;
+} {
+  const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested);
+  const priceMarket = priceMarketForFirm({
+    firmMarket,
+    billingCountry: input.billingCountry,
+  });
+  const lookupKey =
+    priceMarket === "za"
+      ? zaLookupKey(input.band, input.interval)
+      : firmLookupKey(input.band, input.interval);
+  return {
+    firmMarket,
+    priceMarket,
+    lookupKey,
+    billingFallback: firmMarket === "za" && priceMarket === "us",
+  };
 }
 
 /**

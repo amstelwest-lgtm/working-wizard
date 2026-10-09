@@ -20,7 +20,7 @@ import {
   peekPendingCheckout,
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
-import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { checkoutIntentForUser } from "@/lib/billing-market";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 
 const LandingSignInModal = lazy(() =>
@@ -108,8 +108,11 @@ export function LandingSignInSession({
         return;
       }
 
-      const pendingCheckout =
+      const storedPending =
         peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
+      const pendingCheckout = storedPending
+        ? await checkoutIntentForUser(userId, storedPending, storedPending.market)
+        : null;
       if (pendingCheckout) {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
@@ -152,7 +155,11 @@ export function LandingSignInSession({
           return;
         }
         if (resume) {
-          const pending = firmSignupCheckoutIntent(visitorCopyPack(readVisitorDraft()));
+          const pending = await checkoutIntentForUser(
+            userId,
+            peekPendingCheckout(),
+            visitorCopyPack(readVisitorDraft()),
+          );
           stashPendingCheckout(pending);
           const { setPortalIntent } = await import("@/lib/user-roles");
           setPortalIntent("accountant");

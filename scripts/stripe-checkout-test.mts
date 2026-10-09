@@ -16,10 +16,17 @@ import {
   registerLabelForPlan,
 } from "../src/lib/pending-checkout";
 import { STRIPE_SAAS_BUSINESS_TAX_CODE, firmLookupKey } from "../src/lib/stripe-plans";
+import { zaLookupKey } from "../src/lib/pricing/za-ladder";
+import {
+  billingIntentForResolvedMarket,
+  firmBillingResumeIntent,
+  stripePlanMarketFromFirm,
+} from "../src/lib/billing-market";
 import {
   assertFoundingMonthlyOnly,
   adaptivePricingForMarket,
   adaptivePricingNote,
+  firmCheckoutCharge,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
   firmUpgradeCheckoutSessionParams,
@@ -195,8 +202,8 @@ assert(
 );
 assert(checkoutFn.includes("resolveFirmCatalogPrice"), "checkout resolves catalog lookup_keys");
 assert(
-  checkoutFn.includes("resolveFirmCheckoutMarket"),
-  "checkout market follows the firm, not a tampered US request",
+  checkoutFn.includes("firmCheckoutCharge"),
+  "checkout charge follows the firm, not a tampered URL market",
 );
 assert(!checkoutFn.includes("price_data"), "checkout does not build inline price_data");
 assert(checkoutFn.includes("assertFoundingMonthlyOnly"), "FOUNDING guard on create");
@@ -220,6 +227,67 @@ assert(
   "a SA firm keeps ZAR presentment",
 );
 assert(resolveFirmCheckoutMarket(null, "us") === "us", "no firm row and a US request stays USD");
+const usFirmZaBill = firmCheckoutCharge({
+  firmMarket: { country: "US", regionCode: "CA" },
+  requested: "za",
+  billingCountry: "ZA",
+  band: "solo",
+  interval: "month",
+});
+assert(usFirmZaBill.priceMarket === "us", "US firm with a ZA billing country stays USD");
+assert(usFirmZaBill.lookupKey === firmLookupKey("solo", "month"), "US firm never uses the ZAR lookup");
+assert(usFirmZaBill.firmMarket === "us", "a ?market=za request does not flip a US firm");
+const zaFirmUsBill = firmCheckoutCharge({
+  firmMarket: { country: "ZA", regionCode: null },
+  requested: "za",
+  billingCountry: "US",
+  band: "solo",
+  interval: "month",
+});
+assert(zaFirmUsBill.firmMarket === "za", "ZA firm market stays ZA");
+assert(zaFirmUsBill.priceMarket === "us", "ZA firm with a non-ZA billing country falls back to USD");
+assert(
+  zaFirmUsBill.lookupKey === firmLookupKey("solo", "month"),
+  "that fallback uses the USD lookup",
+);
+assert(zaFirmUsBill.billingFallback, "the fallback is recorded");
+const zaFirmZaBill = firmCheckoutCharge({
+  firmMarket: { country: "ZA" },
+  requested: "us",
+  billingCountry: "ZA",
+  band: "solo",
+  interval: "month",
+});
+assert(zaFirmZaBill.priceMarket === "za", "ZA firm with ZA billing ignores ?market=us");
+assert(zaFirmZaBill.lookupKey === zaLookupKey("solo", "month"), "ZA firm uses the ZAR lookup");
+const zaFirmUnknownBill = firmCheckoutCharge({
+  firmMarket: { country: "ZA" },
+  requested: "us",
+  billingCountry: null,
+  band: "solo",
+  interval: "month",
+});
+assert(
+  zaFirmUnknownBill.lookupKey === zaLookupKey("solo", "month"),
+  "ZA firm with an unknown billing country stays on the ZAR lookup",
+);
+assert(
+  stripePlanMarketFromFirm({ country: "ZA", regionCode: "GP" }) === "za",
+  "wall market reads the firm country",
+);
+assert(stripePlanMarketFromFirm({ country: "US" }) === "us", "a US firm country is USD");
+assert(stripePlanMarketFromFirm(null) === "us", "a missing firm market is not ZA");
+assert(stripePlanMarketFromFirm("za") === "us", "a bare za string is not a firm market");
+const walled = firmBillingResumeIntent(
+  { country: "ZA" },
+  { plan: "solo", interval: "month", promo: "FOUNDING" },
+);
+assert(walled.market === "za", "the billing wall URL uses the firm market");
+assert(walled.plan === "solo" && walled.interval === "month", "the wall keeps the chosen band");
+assert(
+  billingIntentForResolvedMarket("za", { plan: "solo", interval: "month" }).market === "za",
+  "a resolved ZA quote overrides a us URL market",
+);
 const usWithCoupon = firmCheckoutSessionParams({
   priceId: "price_test_solo_month",
   lookupKey: "milon_solo_monthly",

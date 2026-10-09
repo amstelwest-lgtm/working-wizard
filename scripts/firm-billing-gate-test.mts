@@ -612,17 +612,27 @@ assert(
 );
 
 const layout = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
-assert(layout.includes("getFirmBillingEntitlement"), "authenticated shell calls the Stripe gate");
-assert(layout.includes("isFirmProductPath"), "authenticated shell gates firm product paths");
-assert(layout.includes("/billing/required"), "unpaid firms redirect to billing required");
-assert(layout.includes("loadFirmClientGateContext"), "shell loads the first-client count");
-assert(layout.includes("firmClientCount"), "shell passes the first-client count into the gate");
+const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
+const shell = `${layout}\n${gate}`;
+assert(layout.includes("codeSplitGroupings: []"), "auth shell is not a split chunk");
+assert(layout.includes('import("./_authenticated.gate")'), "auth gate loads after the shell hydrates");
+assert(gate.includes("getFirmBillingEntitlement"), "authenticated shell calls the Stripe gate");
+assert(gate.includes("isFirmProductPath"), "authenticated shell gates firm product paths");
+assert(gate.includes("/billing/required"), "unpaid firms redirect to billing required");
+assert(gate.includes("firmBillingResumeIntent"), "shell builds the wall from the firm market");
 assert(
-  layout.includes("clients.firmClientCount === 0 ? false : readInsightSeen(firmId)"),
+  !shell.includes("firmSignupCheckoutIntent"),
+  "shell does not default an existing firm to a US signup intent",
+);
+assert(layout.includes("pendingComponent: FirmShellLoading"), "auth shell pending paint matches SSR");
+assert(gate.includes("loadFirmClientGateContext"), "shell loads the first-client count");
+assert(gate.includes("firmClientCount"), "shell passes the first-client count into the gate");
+assert(
+  gate.includes("clients.firmClientCount === 0 ? false : readInsightSeen(firmId)"),
   "shell treats a 0-client firm as not yet seen",
 );
 assert(
-  !layout.includes('to: "/app"') || layout.includes("shouldStayOnAccountantPortal"),
+  !gate.includes('to: "/app"') || gate.includes("shouldStayOnAccountantPortal"),
   "SME bounce to /app remains",
 );
 
@@ -638,13 +648,23 @@ assert(required.includes('href="/#pricing"'), "back to pricing shows pricing, no
 assert(!required.includes('to="/"'), "back to pricing does not link at /");
 assert(required.includes("BillingSignOutButton"), "billing wall can sign out");
 assert(required.includes('createFileRoute("/billing/required")'), "required route");
+assert(required.includes("readFirmBillingQuote"), "wall price comes from the firm quote");
+assert(required.includes("billingIntentForResolvedMarket"), "wall checkout ignores the URL market");
+assert(
+  required.includes('quote?.market === "us"'),
+  "USD copy is only shown for a US firm quote",
+);
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
 assert(start.includes("BillingSignOutButton"), "billing start can sign out");
 const signOut = readFileSync(resolve("src/components/billing-sign-out.tsx"), "utf8");
 assert(signOut.includes("Sign out"), "sign out label is visible");
-assert(start.includes("readSaPricingCopy"), "billing start loads the rand price from the server");
+assert(start.includes("readFirmBillingQuote"), "billing start loads the firm quote, not the URL market");
+assert(
+  !start.includes("readSaPricingCopy"),
+  "billing start does not paint geo rand copy for a signed-in firm",
+);
 assert(!start.includes("adaptivePricingNote"), "billing start does not mention adaptive pricing");
 assert(
   !start.includes("South African firms may be charged in ZAR via Adaptive Pricing."),

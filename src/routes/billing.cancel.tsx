@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { firmBillingResumeIntent } from "@/lib/billing-market";
+import { useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import {
   billingStartSearch,
   peekPendingCheckout,
@@ -18,11 +20,18 @@ export const Route = createFileRoute("/billing/cancel")({
 });
 
 function BillingCancelPage() {
+  const profile = useOptionalAccountantProfile();
   const [pending, setPending] = useState<PendingCheckout>(() => firmSignupCheckoutIntent());
 
   useEffect(() => {
-    setPending(peekPendingCheckout() ?? firmSignupCheckoutIntent());
-  }, []);
+    if (profile?.brandLoading) return;
+    const stored = peekPendingCheckout();
+    setPending(
+      profile?.hasFirm
+        ? firmBillingResumeIntent(profile.firmMarket, stored)
+        : stored ?? firmSignupCheckoutIntent(),
+    );
+  }, [profile?.brandLoading, profile?.hasFirm, profile?.firmMarket]);
 
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">

@@ -81,6 +81,10 @@ type AccountantProfileContextValue = {
   resetProfile: () => void;
   /** Firm row id when loaded; null if user has no firm yet. */
   firmId: string | null;
+  /** firms.market JSON. Null when there is no firm row. */
+  firmMarket: unknown;
+  /** True once a firm row is loaded. Missing market is not a ZA firm. */
+  hasFirm: boolean;
   /** All firms this user can access (owned + memberships). */
   firms: FirmBrandRow[];
   /** Switch active firm (G27). Re-hydrates brand from the chosen firm. */
@@ -411,6 +415,8 @@ export function AccountantProfileProvider({
         updateProfile,
         resetProfile,
         firmId: firm?.id ?? null,
+        firmMarket: firm?.market ?? null,
+        hasFirm: Boolean(firm),
         firms,
         setActiveFirm,
         canEditBrand,

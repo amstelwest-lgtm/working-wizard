@@ -46,13 +46,13 @@ import {
 } from "@/lib/stripe-plans";
 import {
   assertNoManagedPaymentsOverride,
+  firmCheckoutCharge,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
   firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
   resolveFirmCatalogPrice,
-  resolveFirmCheckoutMarket,
 } from "@/lib/stripe-checkout.core";
 import {
   assertUpgradeTarget,
@@ -248,7 +248,10 @@ async function createPaidCheckoutSession(input: {
   email: string;
   plan: FirmCheckoutBand;
   interval: FirmInterval;
-  market: StripePlanMarket;
+  /** URL / client request. Ignored when a firm row exists. */
+  requested: StripePlanMarket;
+  /** Raw firms.market. Null when this user has no firm yet. */
+  firmMarket: unknown;
   promo?: string | null;
   /** From the firm row. Never the client market flag. */
   zaCouponId?: string | null;
@@ -288,18 +291,21 @@ async function createPaidCheckoutSession(input: {
   }
 
   const billingCountry = await readStripeCustomerCountry(stripe, customerId);
-  const priceMarket = priceMarketForFirm({
-    firmMarket: input.market,
+  const charge = firmCheckoutCharge({
+    firmMarket: input.firmMarket,
+    requested: input.requested,
     billingCountry,
+    band: input.plan,
+    interval: input.interval,
   });
   const { price, lookupKey } = await resolveFirmCatalogPrice(
     stripe,
     input.plan,
     input.interval,
-    priceMarket,
+    charge.priceMarket,
   );
   const promotionCodeId =
-    priceMarket === "za" ? undefined : await resolveFoundingPromotionCodeId(input.promo);
+    charge.priceMarket === "za" ? undefined : await resolveFoundingPromotionCodeId(input.promo);
 
   const params = firmCheckoutSessionParams({
     priceId: price.id,
@@ -310,9 +316,9 @@ async function createPaidCheckoutSession(input: {
     userId: input.userId,
     email: input.email,
     customerId,
-    market: input.market,
+    market: charge.firmMarket,
     promotionCodeId,
-    billingFallback: input.market === "za" && priceMarket === "us",
+    billingFallback: charge.billingFallback,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial,
   });
@@ -340,15 +346,15 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
     const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
-    const market = resolveFirmCheckoutMarket(firmMarket, data.market as StripePlanMarket);
     return createPaidCheckoutSession({
       userId,
       email,
       plan: data.plan as FirmCheckoutBand,
       interval: data.interval as FirmInterval,
-      market,
+      requested: data.market as StripePlanMarket,
+      firmMarket,
       promo: data.promo,
-      zaCouponId: market === "za" ? zaCouponIdForMarket(firmMarket) : null,
+      zaCouponId: zaCouponIdForMarket(firmMarket),
     });
   });
 
