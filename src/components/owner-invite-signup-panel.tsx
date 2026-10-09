@@ -7,7 +7,7 @@ import {
   OwnerInviteNote,
   OwnerInvitePrimaryButton,
 } from "@/components/owner-invite-shell";
-import { t } from "@/lib/market";
+import { t } from "@/lib/market/copy";
 
 export type OwnerInviteSignupPanelProps = {
   inviteToken: string;

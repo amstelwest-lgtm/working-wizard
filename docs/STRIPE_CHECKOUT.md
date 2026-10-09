@@ -2,13 +2,13 @@
 
 Firm billing uses the Stripe catalog documented in **[STRIPE_FIRM_BANDS.md](./STRIPE_FIRM_BANDS.md)**.
 
-Owner Spark stays free. Orbit / Constellation are no longer inline `price_data` Checkout SKUs. Accounting firms subscribe on USD bands resolved by `lookup_key`, with Adaptive Pricing so SA firms can pay ZAR.
+Owner Spark stays free. Orbit / Constellation are no longer inline `price_data` Checkout SKUs. Accounting firms subscribe on catalog prices resolved by `lookup_key`. SA firms use the rand lookup keys. `adaptive_pricing` stays off.
 
 ## Merchant of record and tax
 
 Theo selected Stripe handling tax for a fee (**Managed Payments** account default) and set the Tax head office in Wilmington, DE. Catalog products already have `tax_code` `txcd_10103001`.
 
-Firm Checkout **does not** pass `managed_payments: { enabled: false }`. Leave Managed Payments at the account default. `automatic_tax` is not enabled here unless active registrations exist.
+Firm Checkout **does not** pass `managed_payments: { enabled: false }`. Leave Managed Payments at the account default. USD sessions omit `automatic_tax`. Rand sessions set `automatic_tax` enabled false and attach no tax rates. Billing stays with Milon, Inc.
 
 ## FOUNDING
 
@@ -24,7 +24,7 @@ Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack wit
 
 1. Open https://milonfinance.com, choose the accountant path, pick **Solo** (or another paid band). There is no Starter $0 signup.
 2. Create a firm account at `/auth` if needed.
-3. Stripe Checkout should open on **Milon, Inc.** for the catalog price resolved by lookup_key, collect a card, and start `trial_period_days: 14` (ZAR presentment possible via Adaptive Pricing). Copy: “14-day free trial · up to 3 clients”.
+3. Stripe Checkout should open on **Milon, Inc.** for the catalog price resolved by lookup_key, collect a card, and start `trial_period_days: 14`. An SA firm uses the rand price. Copy: “14-day free trial · up to 3 clients”.
 4. Success returns to `/billing/success`. Cancel charges nothing. A fourth client during the trial is blocked until the paid plan is active.
 5. Practice Settings → **Manage billing** opens the Stripe Customer Portal.
 

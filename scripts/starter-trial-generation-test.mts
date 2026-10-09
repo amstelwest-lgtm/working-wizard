@@ -307,14 +307,19 @@ assert(!usCard.includes(SA_FIRM_DISCOUNT_NOTE), "a US card has no South Africa n
 assert(!usCard.includes("50% off"), "a US card has no discount text");
 const saCard = renderToStaticMarkup(
   createElement(TrialEndedPlanCard, {
-    upgrade: { ...upgrade, saDiscount: true },
+    upgrade: {
+      ...upgrade,
+      saDiscount: true,
+      zaLabels: {
+        solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
+      },
+    },
     onUpgrade: () => undefined,
   }),
 );
-assert(
-  saCard.split(SA_FIRM_DISCOUNT_NOTE).length - 1 === 1,
-  "an SA card shows the South Africa note once",
-);
+assert(saCard.includes("R799/mo · about R53 per client"), "an SA card shows the rand price");
+assert(!saCard.includes(SA_FIRM_DISCOUNT_NOTE), "an SA card has no discount note");
+assert(!saCard.toLowerCase().includes("vat"), "an SA card has no tax wording");
 assert(
   (saCard.match(/trial-ended-title/g) ?? []).length === 1,
   "an SA card still shows the ended title once",

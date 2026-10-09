@@ -40,7 +40,7 @@ export function assertMarketSelection(sel: {
 }): MarketSelection {
   if (sel.country === "ZA") {
     if (sel.regionCode != null) {
-      throw new MarketSelectionError("South Africa does not take a US state.");
+      throw new MarketSelectionError("This country does not take a US state.");
     }
     return { country: "ZA", regionCode: null };
   }

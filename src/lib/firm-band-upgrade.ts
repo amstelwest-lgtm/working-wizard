@@ -4,7 +4,8 @@
  * Do not invent ZAR list prices. Adaptive Pricing presents ZAR at Checkout.
  */
 
-import { saDiscountedUsdCents, type FirmCouponDiscount } from "./firm-sa-market";
+import type { FirmCouponDiscount } from "./firm-sa-market";
+import { parseZaLookupKey } from "./pricing/za-ladder";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_IDS,
@@ -55,7 +56,7 @@ export function firmUpgradeBillsImmediately(input: {
   return input.unitAmount === 0;
 }
 
-export type FirmPriceCurrency = "USD" | "ZAR";
+export type FirmPriceCurrency = "USD" | "zar";
 
 export type ZarBandAmounts = { month: number | null; year: number | null };
 
@@ -73,6 +74,10 @@ export type FirmUpgradeSnapshot = {
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
   /** Signed-in SA firm only. Public pages never set this. */
   saDiscount: boolean;
+  /** Server-built rand lines for an SA firm. Absent for everyone else. */
+  zaLabels?: Partial<Record<FirmBandId, { month: string; year: string }>> | null;
+  /** The line Checkout will charge for the current band. */
+  zaPriceLabel?: string | null;
 };
 
 export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
@@ -87,6 +92,8 @@ export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
     interval: "month",
     zarByBand: {},
     saDiscount: false,
+    zaLabels: null,
+    zaPriceLabel: null,
   };
 }
 
@@ -342,8 +349,12 @@ export function pickEntitlingFirmSubscription<T extends RankedSubscription>(subs
   );
 }
 
+function pricedInZar(currency: string): boolean {
+  return currency.toLowerCase() === "zar";
+}
+
 export function formatFirmPriceCents(cents: number, currency: FirmPriceCurrency): string {
-  if (currency === "ZAR") {
+  if (pricedInZar(currency)) {
     const rands = cents / 100;
     const body = Number.isInteger(rands)
       ? rands.toLocaleString("en-ZA")
@@ -385,7 +396,7 @@ export function firmUpgradePriceCurrency(input: {
     const amount = input.interval === "year" ? zar?.year : zar?.month;
     return typeof amount === "number";
   });
-  return complete ? "ZAR" : "USD";
+  return complete ? "zar" : "USD";
 }
 
 export function firmBandPriceLabel(
@@ -393,21 +404,16 @@ export function firmBandPriceLabel(
   interval: FirmInterval,
   currency: FirmPriceCurrency,
   zarByBand?: Partial<Record<FirmBandId, ZarBandAmounts>> | null,
-  options?: { saDiscount?: boolean },
+  _options?: { saDiscount?: boolean },
 ): string | null {
   const entry = FIRM_BAND_CATALOG[band];
   if (entry.customQuote) return null;
-  if (options?.saDiscount) {
-    const usd = interval === "year" ? entry.yearlyUsdCents : entry.monthlyUsdCents;
-    if (usd == null) return null;
-    return formatFirmPriceCents(saDiscountedUsdCents(usd), "USD");
-  }
-  if (currency === "ZAR") {
+  if (pricedInZar(currency)) {
     const slot = zarByBand?.[band];
     const zar = interval === "year" ? slot?.year : slot?.month;
-    if (typeof zar === "number") return formatFirmPriceCents(zar, "ZAR");
+    if (typeof zar === "number") return formatFirmPriceCents(zar, "zar");
     const usd = interval === "year" ? entry.yearlyUsdCents : entry.monthlyUsdCents;
-    if (usd === 0) return formatFirmPriceCents(0, "ZAR");
+    if (usd === 0) return formatFirmPriceCents(0, "zar");
     return null;
   }
   const cents = interval === "year" ? entry.yearlyUsdCents : entry.monthlyUsdCents;
@@ -433,8 +439,9 @@ export type FirmSubscriptionUpgradeParams = {
   billing_cycle_anchor?: "now";
   metadata: Record<string, string>;
   trial_end?: "now";
-  /** Present only when the SA coupon or a voucher still needs attaching. */
+  /** Present when a voucher is attached, or an old coupon must be cleared. */
   discounts?: FirmCouponDiscount[];
+  automatic_tax?: { enabled: boolean };
 };
 
 export function firmSubscriptionUpgradeParams(input: {
@@ -480,7 +487,8 @@ export function firmSubscriptionUpgradeParams(input: {
   };
   if (startToday) params.billing_cycle_anchor = "now";
   if (trialing) params.trial_end = "now";
-  if (input.discounts?.length) params.discounts = input.discounts;
+  if (input.discounts) params.discounts = input.discounts;
+  if (parseZaLookupKey(input.lookupKey)) params.automatic_tax = { enabled: false };
   return params;
 }
 

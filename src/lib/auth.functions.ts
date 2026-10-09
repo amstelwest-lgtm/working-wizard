@@ -5,7 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { acceptOwnerInviteForUser, signUpInvitedMember } from "@/lib/invite-member.server";
 import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
 import { US_STATE_CODES } from "@/lib/market/types";
-import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
+import { isMissingMarketSupport } from "@/lib/market/compat";
+import { assertMarketSelection, marketToJson } from "@/lib/market/parse";
 
 /**
  * Admin signup — creates the user with email_confirm: true so no

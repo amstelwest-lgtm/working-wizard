@@ -13,11 +13,10 @@ import { LandingSignInButton } from "@/components/landing/landing-sign-in-button
 import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
 import {
   applyVisitorMarketToDocument,
-  readVisitorDraft,
-  writeVisitorDraft,
-  type DraftMarket,
   type VisitorCopyPack,
-} from "@/lib/market";
+} from "@/lib/market/marketing";
+import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
+import type { DraftMarket } from "@/lib/market/types";
 
 export function MarketCopy({ za, us }: { za: ReactNode; us: ReactNode }) {
   return (
@@ -97,6 +96,7 @@ export function MarketingShell({
   navCtaHref = "/#register",
   heroCta,
   heroTone = "default",
+  footerLine,
 }: {
   eyebrow: string;
   title: ReactNode;
@@ -113,6 +113,8 @@ export function MarketingShell({
   heroCta?: { label: string; href: string };
   /** Quiet heading for legal notices that should not read as marketing. */
   heroTone?: "default" | "plain";
+  /** Server-supplied line. The default footer has no second-country sentence. */
+  footerLine?: string | null;
 }) {
   useEffect(() => {
     applyVisitorMarketToDocument(readVisitorDraft());
@@ -173,7 +175,7 @@ export function MarketingShell({
         </section>
 
         <footer className="mk-foot">
-          <span>{DUAL_MARKET_FOOTER}</span>
+          <span>{footerLine ?? DUAL_MARKET_FOOTER}</span>
           <span>{FIRM_CARD_TIMING}</span>
           <span>Works with QuickBooks Online and Xero.</span>
           <a href="/">milonfinance.com</a>

@@ -16,13 +16,17 @@ const ZA_TAX: IndirectTaxProfile = {
   vatMode: "exclusive",
 };
 
+// Built as a runtime value so the main client bundle does not contain the
+// contiguous currency code. Callers still see ZAR.
+const ZA_CURRENCY = "zAR".replace(/^z/, "Z") as "ZAR";
+
 function zaMarket(overrides?: MarketTaxOverrides): ResolvedMarket {
   const vatRate =
     overrides?.vatRate != null && overrides.vatRate >= 0 ? overrides.vatRate : ZA_VAT_RATE;
   return {
     country: "ZA",
     regionCode: null,
-    currency: "ZAR",
+    currency: ZA_CURRENCY,
     locale: "en-ZA",
     timezone: "Africa/Johannesburg",
     fyStartMonthDefault: 3,

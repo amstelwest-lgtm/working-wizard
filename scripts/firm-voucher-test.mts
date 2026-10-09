@@ -166,10 +166,18 @@ assert(
   "an SA firm with a voucher keeps only the voucher",
 );
 assert(
+  firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: "MILON_ZA_50", existing: [] }) == null,
+  "an SA firm without a voucher does not get the old coupon",
+);
+assert(
   JSON.stringify(
-    firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: "MILON_ZA_50", existing: [] }),
-  ) === JSON.stringify([{ coupon: "MILON_ZA_50" }]),
-  "an SA firm without a voucher still gets 50% off",
+    firmUpgradeDiscounts({
+      promotionCodeId: null,
+      zaCouponId: "MILON_ZA_50",
+      existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
+    }),
+  ) === "[]",
+  "an existing coupon is cleared so it cannot stack",
 );
 assert(
   firmUpgradeDiscounts({ promotionCodeId: null, zaCouponId: null, existing: [] }) == null,
@@ -449,21 +457,22 @@ function starterSub() {
   };
 }
 
-function upgradedSub(invoice: unknown) {
+function upgradedSub(invoice: unknown, lookupKey = "milon_solo_monthly") {
+  const local = lookupKey.includes("_za_");
   return {
     id: "sub_starter",
     status: "active",
-    metadata: { milon_plan: "solo" },
+    metadata: { milon_plan: "solo", milon_lookup_key: lookupKey },
     latest_invoice: invoice,
     items: {
       data: [
         {
           id: "si_1",
           price: {
-            id: "price_solo",
-            lookup_key: "milon_solo_monthly",
-            unit_amount: 9900,
-            currency: "usd",
+            id: local ? "price_za" : "price_solo",
+            lookup_key: lookupKey,
+            unit_amount: local ? 79900 : 9900,
+            currency: local ? "zar" : "usd",
             recurring: { interval: "month" },
             product: "prod_solo",
           },
@@ -549,18 +558,22 @@ function stripeFor(input: {
         cancel: async () => ({}),
       },
       prices: {
-        list: async () => ({
-          data: [
-            {
-              id: "price_solo",
-              lookup_key: "milon_solo_monthly",
-              unit_amount: 9900,
-              currency: "usd",
-              recurring: { interval: "month" },
-              product: "prod_solo",
-            },
-          ],
-        }),
+        list: async (params?: { lookup_keys?: string[] }) => {
+          const key = params?.lookup_keys?.[0] ?? "milon_solo_monthly";
+          const local = key.includes("_za_");
+          return {
+            data: [
+              {
+                id: local ? "price_za" : "price_solo",
+                lookup_key: key,
+                unit_amount: local ? 79900 : 9900,
+                currency: local ? "zar" : "usd",
+                recurring: { interval: "month" },
+                product: "prod_solo",
+              },
+            ],
+          };
+        },
       },
       promotionCodes: {
         list: async () => ({ data: input.promos }),
@@ -574,7 +587,7 @@ function stripeFor(input: {
 
 const saVoucher = stripeFor({
   promos: [promo()],
-  onUpdate: () => upgradedSub(zeroInvoice),
+  onUpdate: (params) => upgradedSub(zeroInvoice, String(params.metadata?.milon_lookup_key ?? "milon_solo_monthly")),
 });
 const saApplied = await completeFirmSetupUpgrade(
   session({ milon_promotion_code_id: "promo_free", milon_promotion_code: "FREEMONTH" }),
@@ -608,16 +621,20 @@ assert(
 
 const saPlain = stripeFor({
   promos: [],
-  onUpdate: () =>
-    upgradedSub({ id: "in_1", amount_due: 4950, total: 4950, status: "paid", paid: true }),
+  onUpdate: (params) =>
+    upgradedSub(
+      { id: "in_1", amount_due: 79900, total: 79900, status: "paid", paid: true },
+      String(params.metadata?.milon_lookup_key ?? "milon_za_solo_monthly"),
+    ),
 });
 const saKept = await completeFirmSetupUpgrade(session(), saPlain.stripe as never, {
   firmMarket: { country: "ZA" },
 });
 assert(saKept?.notice == null, "an SA upgrade without a voucher has no voucher notice");
+assert(saPlain.calls[0]?.discounts == null, "an SA upgrade does not attach the old coupon");
 assert(
-  JSON.stringify(saPlain.calls[0]?.discounts) === JSON.stringify([{ coupon: "MILON_ZA_50" }]),
-  "SA 50% still applies when no voucher is entered",
+  saPlain.calls[0]?.metadata?.milon_lookup_key === "milon_za_solo_monthly",
+  "an SA upgrade bills the rand lookup key",
 );
 
 const usPlain = stripeFor({
@@ -637,7 +654,11 @@ assert(
 
 const wrong = stripeFor({
   promos: [promo({ customer: "cus_other" })],
-  onUpdate: () => upgradedSub({ id: "in_sa", amount_due: 4950, status: "paid", paid: true }),
+  onUpdate: (params) =>
+    upgradedSub(
+      { id: "in_sa", amount_due: 79900, status: "paid", paid: true },
+      String(params.metadata?.milon_lookup_key ?? "milon_za_solo_monthly"),
+    ),
 });
 const wrongResult = await completeFirmSetupUpgrade(
   session({ milon_promotion_code_id: "promo_free", milon_promotion_code: "FREEMONTH" }),
@@ -648,10 +669,7 @@ assert(
   wrongResult?.notice === FIRM_VOUCHER_NOT_APPLIED_MESSAGE,
   "a wrong-customer voucher is dropped with a notice",
 );
-assert(
-  JSON.stringify(wrong.calls[0]?.discounts) === JSON.stringify([{ coupon: "MILON_ZA_50" }]),
-  "the SA coupon remains when the voucher does not apply",
-);
+assert(wrong.calls[0]?.discounts == null, "a rejected voucher does not fall back to the old coupon");
 assert(
   firmUpgradeResultMessage(upgradeSuccessMessage("solo"), wrongResult?.notice).includes(
     FIRM_VOUCHER_NOT_APPLIED_MESSAGE,
@@ -661,7 +679,11 @@ assert(
 
 const inactiveUpgrade = stripeFor({
   promos: [],
-  onUpdate: () => upgradedSub({ id: "in_sa", amount_due: 4950, status: "paid", paid: true }),
+  onUpdate: (params) =>
+    upgradedSub(
+      { id: "in_sa", amount_due: 79900, status: "paid", paid: true },
+      String(params.metadata?.milon_lookup_key ?? "milon_za_solo_monthly"),
+    ),
 });
 const inactiveResult = await completeFirmSetupUpgrade(
   session({ milon_promotion_code_id: "promo_dead", milon_promotion_code: "DEAD" }),
@@ -808,14 +830,15 @@ const saPicker = renderToStaticMarkup(
     canUpgrade: true,
     clientCount: 1,
     saDiscount: true,
+    zaLabels: {
+      solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
+    },
     onUpgrade: () => undefined,
     onValidateVoucher: async () => ({ ok: false, message: FIRM_VOUCHER_INVALID_MESSAGE }),
   }),
 );
-assert(
-  saPicker.includes(SA_FIRM_DISCOUNT_NOTE),
-  "an SA picker still shows 50% off before a voucher",
-);
+assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows the rand price");
+assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker does not show the old discount note");
 assert(saPicker.includes("Have a voucher code?"), "an SA picker can enter a voucher");
 
 const lookup = readFileSync(resolve("src/lib/firm-voucher.server.ts"), "utf8");

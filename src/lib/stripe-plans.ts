@@ -4,8 +4,8 @@
  * Resolve Checkout line items by lookup_key — never hardcode price_ IDs.
  *
  * USD list amounts below are the published catalog unit_amount values for
- * marketing display. South African firms pay in ZAR via Checkout Adaptive
- * Pricing — do not invent hardcoded rand prices.
+ * marketing display. Rand amounts and their lookup keys live beside this
+ * catalog and are not mixed into ALL_FIRM_LOOKUP_KEYS.
  *
  * Watchlist clients are free and are not Stripe line items.
  * Owner Spark stays free and does not create a Checkout Session.
@@ -13,6 +13,8 @@
  * New firms do not get forever-free Starter. Signup Checkout is a paid band
  * (default Solo monthly) with a 14-day trial and a card on file.
  */
+
+import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 
 export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 
@@ -204,6 +206,8 @@ export function firmLookupKey(band: FirmCheckoutBand, interval: FirmInterval): s
 
 /** Catalog band for a Stripe price lookup_key. Unknown keys return null. */
 export function bandIdFromLookupKey(lookupKey: string | null | undefined): FirmBandId | null {
+  const parsed = parseZaLookupKey(lookupKey);
+  if (parsed) return parsed.band;
   const key = lookupKey?.trim();
   if (!key) return null;
   for (const band of FIRM_BAND_TABLE) {
@@ -213,6 +217,8 @@ export function bandIdFromLookupKey(lookupKey: string | null | undefined): FirmB
 }
 
 export function intervalFromLookupKey(lookupKey: string | null | undefined): FirmInterval | null {
+  const parsed = parseZaLookupKey(lookupKey);
+  if (parsed) return parsed.interval;
   const key = lookupKey?.trim();
   if (!key) return null;
   for (const band of FIRM_BAND_TABLE) {

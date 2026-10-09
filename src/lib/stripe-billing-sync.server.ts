@@ -19,6 +19,8 @@ import {
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
 import { readFirmSetupUpgrade, resolveFirmCatalogPrice } from "@/lib/stripe-checkout.core";
+import { priceMarketForFirm, readStripeCustomerCountry, zarBillingCountryOk } from "@/lib/pricing/za-checkout";
+import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 import {
   isSaMarketFirm,
   readSubscriptionDiscountRefs,
@@ -65,6 +67,7 @@ type SubscriptionUpdateParams = {
   default_payment_method?: string;
   discounts?: Array<{ discount: string } | { coupon: string } | { promotion_code: string }>;
   expand?: string[];
+  automatic_tax?: { enabled: boolean };
 };
 
 type StripeLike = {
@@ -393,20 +396,25 @@ export async function completeFirmSetupUpgrade(
 
   const sub = await retrieveFirmSubscription(stripe, intent.subscriptionId);
   const priceSnap = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
-  const { price, lookupKey } = await resolveFirmCatalogPrice(
-    stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
-    intent.band,
-    intent.interval,
-  );
   if (!priceSnap.itemId) throw new Error("Subscription has no item to update.");
 
   const firmMarket =
     options && "firmMarket" in options
       ? options.firmMarket
       : await firmMarketForBillingUser(intent.userId);
-  const zaCouponId = isSaMarketFirm({ market: firmMarket })
-    ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID)
-    : null;
+  const saFirm = isSaMarketFirm({ market: firmMarket });
+  const zaCouponId = saFirm ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
+  const billingCountry = await readStripeCustomerCountry(stripe, customerId);
+  const priceMarket = priceMarketForFirm({
+    firmMarket: saFirm ? "za" : "us",
+    billingCountry,
+  });
+  const { price, lookupKey } = await resolveFirmCatalogPrice(
+    stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
+    intent.band,
+    intent.interval,
+    priceMarket,
+  );
   const existing = readSubscriptionDiscountRefs(sub);
   const listCents =
     typeof price.unit_amount === "number"
@@ -526,6 +534,53 @@ export async function completeFirmSetupUpgrade(
   return { band: intent.band, updated: !already, notice };
 }
 
+/**
+ * A rand lookup is valid only when Checkout collected a ZA billing country.
+ * Anything else moves the new subscription onto the USD price before the
+ * band sync reads the lookup key. Tax stays off on that update.
+ */
+export async function enforceZaCheckoutBillingCountry(
+  session: {
+    mode?: string | null;
+    subscription?: string | { id?: string } | null;
+    metadata?: Record<string, string> | null;
+    customer_details?: { address?: { country?: string | null } | null } | null;
+  },
+  stripe: StripeLike = getStripe() as unknown as StripeLike,
+): Promise<boolean> {
+  if (session.mode && session.mode !== "subscription") return false;
+  const parsed = parseZaLookupKey(session.metadata?.milon_lookup_key);
+  if (!parsed) return false;
+  if (zarBillingCountryOk(session.customer_details?.address?.country)) return false;
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+  if (!subscriptionId) return false;
+  const { price, lookupKey } = await resolveFirmCatalogPrice(
+    stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
+    parsed.band,
+    parsed.interval,
+    "us",
+  );
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  const itemId = sub.items?.data?.[0]?.id;
+  if (!itemId || !price.id) return false;
+  const metadata: Record<string, string> = {};
+  for (const [key, value] of Object.entries(sub.metadata ?? {})) {
+    if (typeof value === "string") metadata[key] = value;
+  }
+  metadata.milon_plan = parsed.band;
+  metadata.milon_interval = parsed.interval;
+  metadata.milon_lookup_key = lookupKey;
+  metadata.milon_za_billing_fallback = "usd";
+  await stripe.subscriptions.update(subscriptionId, {
+    items: [{ id: itemId, price: price.id }],
+    metadata,
+    proration_behavior: "none",
+    automatic_tax: { enabled: false },
+  });
+  return true;
+}
+
 export async function syncCheckoutSessionSubscription(
   session: {
     mode?: string | null;
@@ -568,6 +623,7 @@ export const FIRM_BILLING_WEBHOOK_EVENTS = [
   "checkout.session.completed",
   "customer.subscription.created",
   "customer.subscription.updated",
+  "invoice.paid",
 ] as const;
 
 export function isFirmBillingWebhookEvent(type: string | undefined): boolean {

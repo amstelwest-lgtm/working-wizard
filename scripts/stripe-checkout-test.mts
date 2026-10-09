@@ -78,7 +78,7 @@ const monthly = firmCheckoutSessionParams({
   includeTrial: true,
 });
 
-assert(monthly.adaptive_pricing?.enabled === true, "adaptive_pricing enabled on session create");
+assert(monthly.adaptive_pricing?.enabled === false, "adaptive pricing stays off");
 assert(monthly.line_items?.[0] && "price" in monthly.line_items[0], "uses catalog price id");
 assert(
   monthly.line_items?.[0] && !("price_data" in monthly.line_items[0]),
@@ -207,13 +207,10 @@ assert(
 
 const core = readFileSync(resolve("src/lib/stripe-checkout.core.ts"), "utf8");
 assert(core.includes("adaptivePricingForMarket"), "core sets adaptive_pricing from the market");
-assert(adaptivePricingForMarket("za") === true, "SA sessions keep Adaptive Pricing");
+assert(adaptivePricingForMarket("za") === false, "rand prices do not use Adaptive Pricing");
 assert(adaptivePricingForMarket("us") === false, "US sessions turn Adaptive Pricing off");
-assert(adaptivePricingNote("us") === null, "US interstitial hides the ZAR line");
-assert(
-  adaptivePricingNote("za")?.includes("ZAR") === true,
-  "SA interstitial can mention ZAR",
-);
+assert(adaptivePricingNote("us") === null, "US interstitial hides a rand line");
+assert(adaptivePricingNote("za") === null, "the interstitial does not add a rand sentence");
 assert(
   resolveFirmCheckoutMarket({ country: "US", regionCode: "CA" }, "za") === "us",
   "a US firm stays USD even if the request says za",
@@ -243,7 +240,7 @@ assert(
 );
 const zaWithCoupon = firmCheckoutSessionParams({
   priceId: "price_test_solo_month",
-  lookupKey: "milon_solo_monthly",
+  lookupKey: "milon_za_solo_monthly",
   band: "solo",
   interval: "month",
   origin: "https://milonfinance.com",
@@ -254,11 +251,12 @@ const zaWithCoupon = firmCheckoutSessionParams({
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
   includeTrial: false,
 });
-assert(zaWithCoupon.adaptive_pricing?.enabled === true, "SA session keeps Adaptive Pricing");
+assert(zaWithCoupon.adaptive_pricing?.enabled === false, "a rand session does not use Adaptive Pricing");
+assert(zaWithCoupon.automatic_tax?.enabled === false, "a rand session does not enable automatic tax");
+assert(zaWithCoupon.allow_promotion_codes !== true, "a rand session hides the promotion box");
 assert(
-  zaWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50") ===
-    true,
-  "SA session still attaches the 50% coupon",
+  !zaWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50"),
+  "a rand session does not attach the old coupon",
 );
 const usUpgrade = firmUpgradeCheckoutSessionParams({
   priceId: "price_test_solo_month",
@@ -280,7 +278,8 @@ assert(core.includes("trial_period_days: FIRM_TRIAL_DAYS"), "core sets a 14-day 
 assert(core.includes('payment_method_collection: "always"'), "core always collects a card");
 assert(!core.includes("if_required"), "core does not waive the card for Starter");
 assert(core.includes("integration_identifier"), "keep integration_identifier on session create");
-assert(!core.includes("automatic_tax:"), "do not enable automatic_tax without a tax registration");
+assert(core.includes("automatic_tax"), "rand sessions can turn automatic tax off");
+assert(!/automatic_tax:\s*\{\s*enabled:\s*true/.test(core), "automatic tax is not enabled");
 assert(!core.includes("payment_method_types"), "dynamic payment methods in core");
 
 const checkoutDocs = readFileSync(resolve("docs/STRIPE_CHECKOUT.md"), "utf8");

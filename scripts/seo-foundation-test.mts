@@ -25,9 +25,9 @@ import {
   HOMEPAGE_FAQ_ITEMS,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
-  publicFaqUsItems,
   WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
+import { publicFaqItems, publicFaqUsItems } from "../src/lib/public-faq";
 import {
   FIRM_TEAM_BULLETS,
   FINANCE_TEAM,
@@ -37,9 +37,6 @@ import {
   HERO_LEDE,
   PRICING_H2_USD,
   homepageFaqItems,
-  publicFaqItems,
-  SA_FOUNDING_LINE,
-  SA_ZAR_LINE,
   TRUST_IDENTIFIERS,
 } from "../src/lib/landing-copy";
 import { visitorCopyPack } from "../src/lib/market";
@@ -256,7 +253,8 @@ assert(HERO_LEDE.includes("diagnose the business"), "hero lede lists diagnosis a
 assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
 assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
-assert(landing.includes("{PRICING_H2_USD}"), "home pricing leads with firm bands");
+assert(landing.includes("PRICING_H2_USD"), "home pricing leads with firm bands");
+assert(landing.includes("saPricing?.heading"), "home pricing can show the rand heading");
 assert(
   PRICING_H2_USD === "Flat USD pricing by active clients, Solo to Scale.",
   "USD band heading is the PR2 default",
@@ -359,7 +357,8 @@ assert(
   firms.includes("14-day free trial (up to 3 clients)."),
   "firm page keeps the trial line",
 );
-assert(firms.includes("SA_FOUNDING_LINE"), "firm page keeps the SA founding line");
+assert(firms.includes("readSaPricingCopy"), "firm page loads rand copy from the server");
+assert(!firms.includes("separate rand catalog"), "firm page drops the unpublished-catalog line");
 assert(
   SEO_PAGES.forAccountants.title === "AI Finance Team for Accountants on QBO & Xero | MILŌN",
   "firm page title names the AI finance team on QBO and Xero",
@@ -568,12 +567,12 @@ assert(
   "public FAQ defines watchlist",
 );
 assert(
-  publicFaqItems(true).some((item) => item.answer.includes(SA_ZAR_LINE)),
-  "ZA public FAQ includes the ZAR checkout line",
+  publicFaqItems(true).every((item) => !item.answer.includes("R799")),
+  "public FAQ does not embed the rand price",
 );
 assert(
-  publicFaqItems(true).some((item) => item.answer.includes(SA_FOUNDING_LINE)),
-  "ZA public FAQ includes the founding line",
+  JSON.stringify(publicFaqItems(true)) === JSON.stringify(publicFaqItems(false)),
+  "ZA and US public FAQ answers match",
 );
 assert(
   !publicFaqItems(false).some((item) => /FOUNDING|50% off|ZAR|Adaptive Pricing/i.test(item.answer)),
@@ -587,7 +586,8 @@ assert(
 const pricingTable = readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8");
 assert(pricingTable.includes("firm-trial-bar-za"), "firm pricing styles the ZA-only pricing notes");
 assert(!pricingTable.includes("firm-bands-founding"), "US HTML stylesheet does not contain the FOUNDING class name");
-assert(pricingTable.includes("SA_FOUNDING_LINE"), "firm pricing callout uses the ZA founding line");
+assert(pricingTable.includes("saLabels"), "firm pricing renders the server rand lines");
+assert(!pricingTable.includes("SA_FOUNDING_LINE"), "firm pricing drops the founding line");
 assert(pricingTable.includes("showSaPricing = false"), "firm pricing hides the SA discount by default");
 assert(pricingTable.includes("PRICING_WATCHLIST_NOTE"), "firm pricing defines watchlist");
 

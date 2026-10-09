@@ -14,17 +14,15 @@ import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
 import { RegionCopy } from "@/components/marketing-shell";
+import { withMarketRpcFallback } from "@/lib/market/compat";
 import {
   applyVisitorMarketToDocument,
-  draftToSelection,
-  marketToJson,
-  readVisitorDraft,
   visitorCopyPack,
   VISITOR_MARKET_BOOT_SCRIPT,
-  withMarketRpcFallback,
-  writeVisitorDraft,
-  type DraftMarket,
-} from "@/lib/market";
+} from "@/lib/market/marketing";
+import { draftToSelection, marketToJson } from "@/lib/market/parse";
+import { readVisitorDraft, writeVisitorDraft } from "@/lib/market/storage";
+import type { DraftMarket } from "@/lib/market/types";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
@@ -58,6 +56,7 @@ import {
 } from "@/lib/stripe-plans";
 import { LiteYouTube } from "@/components/lite-youtube";
 import { readRequestGeoCountry } from "@/lib/geo-country.functions";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { isSaPricingCountry } from "@/lib/geo-country";
 import {
   ACCOUNTANT_TEASER,
@@ -150,7 +149,9 @@ const LandingRegisterForm = lazy(() =>
 export const Route = createFileRoute("/")({
   loader: async () => {
     const geoCountry = await readRequestGeoCountry();
-    return { showSaPricing: isSaPricingCountry(geoCountry) };
+    const showSaPricing = isSaPricingCountry(geoCountry);
+    const saPricing = showSaPricing ? await readSaPricingCopy() : null;
+    return { showSaPricing, saPricing };
   },
   component: LandingPage,
   head: ({ loaderData }) => {
@@ -263,7 +264,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 /* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
-  const { showSaPricing } = Route.useLoaderData();
+  const { showSaPricing, saPricing } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
@@ -1203,7 +1204,7 @@ function LandingPage() {
 
     const market = draftToSelection(draftMarket);
     if (!market) {
-      showRegisterError("Pick South Africa or the United States (and a state) first.");
+      showRegisterError("Choose a practice location first. A United States practice also needs a state.");
       return;
     }
 
@@ -1963,7 +1964,7 @@ function LandingPage() {
                 </a>
               ) : null}
             </div>
-            <p className="hero-cta-note">{HERO_CTA_NOTE}</p>
+            <p className="hero-cta-note">{saPricing?.heroNote ?? HERO_CTA_NOTE}</p>
             <ul className="hero-points">
               {HERO_POINTS.map((point) => (
                 <li key={point}>{point}</li>
@@ -2651,7 +2652,7 @@ function LandingPage() {
         <div className="wrap">
           <div className="section-head center">
             <span className="eyebrow">Pricing for firms</span>
-            <h2>{PRICING_H2_USD}</h2>
+            <h2>{saPricing?.heading ?? PRICING_H2_USD}</h2>
             <p className="sub">{PRICING_INTRO}</p>
           </div>
 
@@ -2660,6 +2661,7 @@ function LandingPage() {
             onIntervalChange={setFirmInterval}
             onSelectBand={startFirmPlan}
             showSaPricing={showSaPricing}
+            saLabels={saPricing?.labels}
           />
 
           <div className="owner-spark-path">
@@ -2841,7 +2843,7 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The AI-powered finance function
               <br />
-              {DUAL_MARKET_TAGLINE}
+              {saPricing?.footerTagline ?? DUAL_MARKET_TAGLINE}
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">
@@ -2891,7 +2893,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              {DUAL_MARKET_BUILT}
+              {saPricing?.footerBuilt ?? DUAL_MARKET_BUILT}
             </span>
             <span>
               <a href={PREFERRED_SOURCE_HREF} target="_blank" rel="noopener">

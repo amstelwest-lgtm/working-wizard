@@ -1,11 +1,6 @@
 import { FIRM_CARD_TIMING, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { LIST_PRICES } from "@/lib/market/marketing";
-import {
-  HOMEPAGE_FAQ_ITEMS,
-  SA_PRODUCT_ANSWER,
-  SA_PRODUCT_QUESTION,
-  publicFaqUsItems,
-} from "@/lib/marketing-faq";
+import { HOMEPAGE_FAQ_ITEMS } from "@/lib/marketing-faq";
 import type { FaqItem } from "@/lib/seo";
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
@@ -124,11 +119,6 @@ export const OWNER_TEASER = {
 
 export const OWNER_TEASER_LINK = "Spark is free during early access →";
 
-/** ZA-only. Never render unless the server saw x-vercel-ip-country === "ZA". */
-export const SA_ZAR_LINE = "South African firms can pay in ZAR at Checkout.";
-export const SA_FOUNDING_LINE =
-  "FOUNDING: 50% off monthly paid plans after the trial. Doesn't combine with annual billing.";
-
 export const AI_USE_LEAD = "How we use AI is set out in our";
 
 export const DASH_ARIA_LABEL =
@@ -244,11 +234,9 @@ export const FAQ_MORE_LINK = "all questions";
 
 /** Must match the homepage cost question in `HOMEPAGE_FAQ_ITEMS`. */
 export const HOMEPAGE_COST_QUESTION = "What does it cost?";
-const PUBLIC_COST_QUESTION = "What does it cost?";
 
-export function withSaPricingLines(answer: string, showSaPricing: boolean): string {
-  if (!showSaPricing) return answer;
-  return `${answer} ${SA_ZAR_LINE} ${SA_FOUNDING_LINE}`;
+export function withSaPricingLines(answer: string, _showSaPricing: boolean): string {
+  return answer;
 }
 
 /** Visible homepage FAQ and its FAQPage JSON-LD. US by default. */
@@ -258,15 +246,4 @@ export function homepageFaqItems(showSaPricing: boolean): FaqItem[] {
       ? { ...item, answer: withSaPricingLines(item.answer, showSaPricing) }
       : item,
   );
-}
-
-/** Visible /faq answers that must match FAQPage JSON-LD. US by default. */
-export function publicFaqItems(showSaPricing: boolean): FaqItem[] {
-  const items = publicFaqUsItems().map((item) =>
-    item.question === PUBLIC_COST_QUESTION
-      ? { ...item, answer: withSaPricingLines(item.answer, showSaPricing) }
-      : item,
-  );
-  if (!showSaPricing) return items;
-  return [...items, { question: SA_PRODUCT_QUESTION, answer: SA_PRODUCT_ANSWER }];
 }

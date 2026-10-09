@@ -17,8 +17,6 @@ import {
   PROOF_RATIO_BODY,
   PROOF_SECURITY_FACTS,
   PROOF_SIGNOFF_BODY,
-  SA_FOUNDING_LINE,
-  SA_ZAR_LINE,
   homepageFaqItems,
 } from "../src/lib/landing-copy";
 
@@ -110,7 +108,7 @@ const usCost = homepageFaqItems(false).find((item) => item.question === HOMEPAGE
 const zaCost = homepageFaqItems(true).find((item) => item.question === HOMEPAGE_COST_QUESTION);
 assert(usCost != null && zaCost != null, "cost answers exist");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
-assert(zaCost!.answer.endsWith(`${SA_ZAR_LINE} ${SA_FOUNDING_LINE}`), "ZA cost answer appends both lines once");
+assert(zaCost!.answer === usCost!.answer, "ZA and US cost answers match");
 assert(
   PRICING_TRIAL_AFTER.startsWith("See your first client's figures with no card."),
   "VERIFY-2 after-trial sentence",

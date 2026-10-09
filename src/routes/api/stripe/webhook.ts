@@ -22,9 +22,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { previousPriceIdFromSubscriptionEvent } from "@/lib/firm-band-upgrade";
 import { readFirmSetupUpgrade } from "@/lib/stripe-checkout.core";
+import { recordPaidZarInvoice } from "@/lib/pricing/za-revenue.server";
 import {
   completeFirmSetupUpgrade,
   constructFirmBillingEvent,
+  enforceZaCheckoutBillingCountry,
   isFirmBillingWebhookEvent,
   stripeEventSubscriptionId,
   syncFirmSubscriptionBand,
@@ -58,13 +60,34 @@ export const Route = createFileRoute("/api/stripe/webhook")({
         if (!isFirmBillingWebhookEvent(event.type)) {
           return Response.json({ received: true, ignored: event.type });
         }
+        if (event.type === "invoice.paid") {
+          try {
+            await recordPaidZarInvoice(
+              event.data?.object as {
+                id?: string;
+                currency?: string | null;
+                amount_paid?: number | null;
+                status?: string | null;
+                status_transitions?: { paid_at?: number | null } | null;
+              },
+            );
+          } catch (err) {
+            console.warn(
+              "[stripe-webhook] revenue row skipped",
+              err instanceof Error ? err.message : err,
+            );
+          }
+          return Response.json({ received: true, recorded: true });
+        }
         if (event.type === "checkout.session.completed") {
           const session = event.data?.object as {
             id?: string;
             mode?: string | null;
             customer?: unknown;
             setup_intent?: unknown;
+            subscription?: string | { id?: string } | null;
             metadata?: Record<string, string> | null;
+            customer_details?: { address?: { country?: string | null } | null } | null;
           };
           if (readFirmSetupUpgrade(session?.metadata)) {
             try {
@@ -84,6 +107,15 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           return Response.json({ received: true, synced: false });
         }
         try {
+          if (event.type === "checkout.session.completed") {
+            const session = event.data?.object as {
+              mode?: string | null;
+              subscription?: string | { id?: string } | null;
+              metadata?: Record<string, string> | null;
+              customer_details?: { address?: { country?: string | null } | null } | null;
+            };
+            await enforceZaCheckoutBillingCountry(session);
+          }
           const result = await syncFirmSubscriptionBand(subscriptionId, undefined, {
             previousPriceId: previousPriceIdFromSubscriptionEvent(event),
           });

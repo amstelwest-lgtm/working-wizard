@@ -34,7 +34,7 @@ import {
   type FirmUpgradeSnapshot,
 } from "@/lib/firm-band-upgrade";
 import { parseMarketSelection } from "@/lib/market/parse";
-import type { FirmBandId, FirmInterval } from "@/lib/stripe-plans";
+import { isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
 import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
@@ -532,6 +532,8 @@ export async function loadFirmPlanDisplay(input: {
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
       saDiscount: false,
+      zaLabels: null,
+      zaPriceLabel: null,
     };
   }
 
@@ -567,6 +569,8 @@ export async function loadFirmPlanDisplay(input: {
     zarByBand: upgrade.zarByBand,
     starterTrial,
     saDiscount: upgrade.saDiscount,
+    zaLabels: upgrade.zaLabels ?? null,
+    zaPriceLabel: upgrade.zaPriceLabel ?? null,
   };
 }
 
@@ -632,6 +636,22 @@ async function buildUpgradeSnapshot(input: {
     marketCountry,
   });
   let zarByBand: FirmUpgradeSnapshot["zarByBand"] = {};
+  let zaLabels: FirmUpgradeSnapshot["zaLabels"] = null;
+  let zaPriceLabel: string | null = null;
+  if (isSaMarketFirm({ market: input.market })) {
+    try {
+      const { loadSaPricingCopy } = await import("@/lib/pricing/za-pricing-chunk.server");
+      const copy = loadSaPricingCopy();
+      zaLabels = copy.labels;
+      const key = band && isFirmCheckoutBand(band) ? band : "solo";
+      zaPriceLabel = copy.labels[key][interval];
+    } catch (err) {
+      console.warn(
+        "[stripe] local price labels unavailable",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
   if (billingCurrency === "zar" && stripeConfigured()) {
     try {
       const { loadZarCatalogAmounts } = await import("@/lib/stripe-billing-sync.server");
@@ -661,5 +681,7 @@ async function buildUpgradeSnapshot(input: {
     interval,
     zarByBand,
     saDiscount: isSaMarketFirm({ market: input.market }),
+    zaLabels,
+    zaPriceLabel,
   };
 }
