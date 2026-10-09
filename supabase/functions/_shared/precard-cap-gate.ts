@@ -124,13 +124,21 @@ export async function recordPrecardUse(
   }
 }
 
+/**
+ * Questions still free after this answer. `nextCount` is the counter the
+ * charge RPC just returned. `fallbackRemaining` is the allowance read
+ * before that charge. One left stays visible so the last-question line
+ * can show; zero is the cap card, not a counter.
+ */
 export function precardMessagesLeft(nextCount: number | null, fallbackRemaining: number | null): number | null {
+  let left: number | null = null;
   if (typeof nextCount === "number" && Number.isFinite(nextCount)) {
-    const left = Math.max(0, PRECARD_BOT_LIMIT - nextCount);
-    return left > 0 ? left : null;
+    left = PRECARD_BOT_LIMIT - Math.floor(nextCount);
+  } else if (typeof fallbackRemaining === "number" && Number.isFinite(fallbackRemaining)) {
+    left = Math.floor(fallbackRemaining) - 1;
   }
-  if (typeof fallbackRemaining === "number" && fallbackRemaining > 1) return fallbackRemaining - 1;
-  return null;
+  if (left == null || left < 1) return null;
+  return left;
 }
 
 export { finishPrecardAttempt };

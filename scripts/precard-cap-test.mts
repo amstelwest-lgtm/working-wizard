@@ -27,7 +27,11 @@ import {
   type PrecardLimitKind,
   type PrecardUsage,
 } from "../src/lib/precard-cap";
-import { readPrecardGate, recordPrecardUse } from "../supabase/functions/_shared/precard-cap-gate.ts";
+import {
+  precardMessagesLeft,
+  readPrecardGate,
+  recordPrecardUse,
+} from "../supabase/functions/_shared/precard-cap-gate.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -121,8 +125,26 @@ assert(
 );
 
 assert(precardBotRemainingLabel(3) === "3 Bot messages left before trial", "plural remaining copy");
-assert(precardBotRemainingLabel(1) === "1 Bot message left before trial", "singular remaining copy");
+assert(precardBotRemainingLabel(2) === "2 Bot messages left before trial", "two left still counts");
+assert(
+  precardBotRemainingLabel(1) === "This is your last free Bot question.",
+  "one left is the last-question hint",
+);
 assert(precardBotRemainingLabel(0) === null, "zero remaining stays quiet");
+assert(precardBotRemainingLabel(0.4) === null, "a fraction under 1 stays quiet");
+for (let used = 0; used < PRECARD_BOT_LIMIT; used += 1) {
+  const left = precardMessagesLeft(used, PRECARD_BOT_LIMIT - used + 1);
+  assert(left === PRECARD_BOT_LIMIT - used, `after ${used} answers, ${PRECARD_BOT_LIMIT - used} remain`);
+  assert(precardBotRemainingLabel(left!) != null, `counter stays visible at ${left}`);
+}
+assert(precardMessagesLeft(9, 2) === 1, "after question 9, one question is left");
+assert(
+  precardBotRemainingLabel(precardMessagesLeft(9, 2)!) === "This is your last free Bot question.",
+  "the ninth answer shows the last-question line",
+);
+assert(precardMessagesLeft(null, 2) === 1, "a missing counter still shows the last question");
+assert(precardMessagesLeft(PRECARD_BOT_LIMIT, 1) === null, "the used-up allowance is not a counter");
+assert(precardMessagesLeft(null, 1) === null, "the answer that spends the last question does not invent a zero");
 assert(isPrecardCapFailure(precardCapError("pack")), "the thrown cap is recognised");
 assert(isPrecardCapFailure(new Error(PRECARD_CAP_MESSAGE)), "the sentence is recognised");
 assert(!isPrecardCapFailure(new Error("Could not draft advisory")), "other errors are not the cap");

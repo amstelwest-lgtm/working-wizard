@@ -174,6 +174,7 @@ import { SageConnectCard } from "@/components/sage-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
 import {
+  figuresPeriodLabelFrom,
   preferStatementPeriod,
   readStatementMeta,
   reportDataPeriodLabel,
@@ -1394,10 +1395,10 @@ function ClientView() {
       weeklyInputs,
     ],
   );
-  const figuresPeriodLabel =
-    (statementDated ? statementMeta.periodLabel?.trim() : "") ||
-    pickCurrentSnapshot(snapshots)?.period_label?.trim() ||
-    null;
+  const figuresPeriodLabel = figuresPeriodLabelFrom(
+    financials,
+    pickCurrentSnapshot(snapshots)?.period_label,
+  );
   const dataFreshness = dataFreshnessLine({
     xero: xeroLink
       ? {
