@@ -1114,7 +1114,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     studio.includes("financials={financials}") && studio.includes("liveScorecard={renderOverviewScorecard}"),
     "Overview cards and history use the live figures, not a stored artifact",
   );
-  const reports = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+  const reports = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
   assert(
     reports.includes("scorecardRatiosFromFinancials"),
     "the reports scorecard uses the same day cover as Overview Export",

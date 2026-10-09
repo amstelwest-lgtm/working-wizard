@@ -82,6 +82,7 @@ import {
 } from "@/lib/lighthouse-targets";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
+import { LIGHTHOUSE_TABS, type LighthouseTab } from "@/lib/lighthouse-tab";
 import { nextWindowLine, sendWindowStatus } from "@/lib/lighthouse-send-windows";
 import { FunnelHealthPanel } from "@/components/funnel-health-panel";
 import { LighthouseAgentChat } from "@/components/lighthouse-agent-chat";
@@ -118,22 +119,7 @@ const ACCOUNTANT_STEP_HINT: Record<number, string> = {
 const ACCOUNTANT_ONESHOT_HINT =
   "One-shot · advisory banger — videos + both one-pagers, then a call. Both PDFs attach on send.";
 
-export const LIGHTHOUSE_TABS = ["agent", "firms", "system"] as const;
-
-export type LighthouseTab = (typeof LIGHTHOUSE_TABS)[number];
-
-const LIGHTHOUSE_TAB_ALIASES: Record<string, LighthouseTab> = {
-  pipeline: "firms",
-  settings: "system",
-  playbook: "agent",
-  assets: "agent",
-};
-
-export function parseLighthouseTab(raw: unknown): LighthouseTab | undefined {
-  if (typeof raw !== "string") return undefined;
-  if ((LIGHTHOUSE_TABS as readonly string[]).includes(raw)) return raw as LighthouseTab;
-  return LIGHTHOUSE_TAB_ALIASES[raw];
-}
+export { LIGHTHOUSE_TABS, parseLighthouseTab, type LighthouseTab } from "@/lib/lighthouse-tab";
 
 const TAB_LABEL: Record<LighthouseTab, string> = {
   agent: "Agent",

@@ -186,7 +186,7 @@ assert(!dashboard.includes("healthFromFlatFinancials"), "dashboard does not use 
 const portfolio = read("src/lib/portfolio.ts");
 assert(portfolio.includes("resolveAdvisorySignoffState"), "the firm queue uses the advisory resolver");
 
-const reports = read("src/routes/_authenticated/reports.index.tsx");
+const reports = read("src/routes/_authenticated/reports-studio.tsx");
 assert(!reports.includes('cycle: "cash_forecast"'), "cash flow cycle has no sign-off");
 assert(reports.includes("reviewSignoff: null"), "the cycle PDF is not stamped from another scope");
 assert(read("src/reports/profitability-waterfall.tsx").includes("draft={!isDemo && !sample && !reviewSignoff}"));

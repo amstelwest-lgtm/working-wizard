@@ -160,7 +160,7 @@ assert(
   pdfSrc.includes("draft={!isDemo && !sample && !reviewSignoff}"),
   "unsigned cash PDF gets the draft treatment",
 );
-const reportsSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+const reportsSrc = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(reportsSrc.includes('scenario: "base"'), "the reports studio exports the base forecast");
 const signoffSrc = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
 assert(signoffSrc.includes('"Draft"'), "an unsigned deliverable says Draft");

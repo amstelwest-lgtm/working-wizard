@@ -1,9 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
-import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { useAuth, wakeAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { notifySignup } from "@/lib/signup-notify";
 import { welcomeWithoutBlockingSignup } from "@/lib/welcome-email";
@@ -50,7 +48,6 @@ import {
   stashPendingCheckout,
   stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
-import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import {
@@ -115,9 +112,28 @@ import {
   LANDING_FONT_CSS,
   LANDING_SKY_CSS,
   NOTO_LATIN_HREF,
+  NOTO_MACRON_HREF,
   PREFERRED_SOURCE_HREF,
   PREFERRED_SOURCE_LABEL,
 } from "@/lib/landing-assets";
+
+async function landingSupabase() {
+  wakeAuth();
+  const { supabase } = await import("@/integrations/supabase/client");
+  return supabase;
+}
+
+async function setLandingPortal(intent: "accountant" | "owner") {
+  const { setPortalIntent } = await import("@/lib/user-roles");
+  setPortalIntent(intent);
+}
+
+/** Firm id for insight-seen, loaded only after a session exists. */
+async function landingFirmId(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const { activeFirmIdForUser } = await import("@/lib/firm-brand");
+  return activeFirmIdForUser(userId);
+}
 
 const LandingSignInModal = lazy(() =>
   import("@/components/landing/sign-in-modal").then((mod) => ({
@@ -153,6 +169,13 @@ export const Route = createFileRoute("/")({
         {
           rel: "preload",
           href: NOTO_LATIN_HREF,
+          as: "font",
+          type: "font/woff2",
+          crossOrigin: "anonymous",
+        },
+        {
+          rel: "preload",
+          href: NOTO_MACRON_HREF,
           as: "font",
           type: "font/woff2",
           crossOrigin: "anonymous",
@@ -242,7 +265,7 @@ function LandingPage() {
   const { showSaPricing } = Route.useLoaderData();
   const homeFaq = homepageFaqItems(showSaPricing);
   const { user, loading } = useAuth();
-  const { firmId } = useAccountantProfile();
+  const [firmId, setFirmId] = useState<string | null>(null);
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
   const doSendWelcome = useServerFn(sendSignupWelcome);
@@ -262,6 +285,21 @@ function LandingPage() {
 
   /* ── Lighthouse trial link (?lh=<token>) — attribute the signup back to the lead ── */
   const [lhToken, setLhToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) {
+      setFirmId(null);
+      return;
+    }
+    let cancelled = false;
+    void landingFirmId(uid).then((id) => {
+      if (!cancelled) setFirmId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -407,8 +445,8 @@ function LandingPage() {
     });
   };
 
-  const promptSignInToFinishFirmBilling = (email: string) => {
-    setPortalIntent("accountant");
+  const promptSignInToFinishFirmBilling = async (email: string) => {
+    await setLandingPortal("accountant");
     stashResumeFirmBilling();
     setRegError(FIRM_BILLING_SIGNIN_MESSAGE);
     toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
@@ -442,7 +480,7 @@ function LandingPage() {
     if (!target) return;
     setResendBusy(true);
     try {
-      const { error } = await supabase.auth.resend({
+      const { error } = await (await landingSupabase()).auth.resend({
         type: "signup",
         email: target,
         options: { emailRedirectTo: paidSignupRedirectTo() },
@@ -490,7 +528,7 @@ function LandingPage() {
       if (hash === "pricing") return;
       if (pendingCheckout) {
         if (!cancelled) {
-          setPortalIntent("accountant");
+          await setLandingPortal("accountant");
           navigate({ to: "/dashboard", replace: true });
         }
         return;
@@ -501,7 +539,7 @@ function LandingPage() {
           const firms = await listUserFirms(user.id);
           if (firms.some((f) => f.owner_user_id === user.id)) {
             if (!cancelled) {
-              setPortalIntent("accountant");
+              await setLandingPortal("accountant");
               navigate({ to: "/dashboard", replace: true });
             }
             return;
@@ -793,7 +831,7 @@ function LandingPage() {
     e.preventDefault();
     setFpBusy(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(fpEmail, {
+      const { error } = await (await landingSupabase()).auth.resetPasswordForEmail(fpEmail, {
         redirectTo: browserAppUrl("/reset-password"),
       });
       if (error) throw error;
@@ -850,7 +888,7 @@ function LandingPage() {
         throw new Error("Enter a valid email address.");
       }
 
-      const granted = await supabase.auth.signInWithPassword({
+      const granted = await (await landingSupabase()).auth.signInWithPassword({
         email: siEmail,
         password: siPassword,
       });
@@ -884,10 +922,8 @@ function LandingPage() {
       if (pendingCheckout) {
         consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
-        setPortalIntent("accountant");
-        const signedInId = granted.data.user?.id ?? null;
-        const { activeFirmIdForUser } = await import("@/lib/firm-brand");
-        const insightFirmId = signedInId ? await activeFirmIdForUser(signedInId) : null;
+        await setLandingPortal("accountant");
+        const insightFirmId = await landingFirmId(granted.data.user?.id);
         if (readInsightSeen(insightFirmId)) {
           void navigate({
             to: "/billing/start",
@@ -929,7 +965,7 @@ function LandingPage() {
         }
         return;
       }
-      const { data: auth } = await supabase.auth.getUser();
+      const { data: auth } = await (await landingSupabase()).auth.getUser();
       const uid = auth.user?.id;
       if (uid) {
         try {
@@ -950,14 +986,14 @@ function LandingPage() {
               insightSeen: readInsightSeen(insightFirmId),
             });
             if (resume === "workspace") {
-              setPortalIntent("accountant");
+              await setLandingPortal("accountant");
               void navigate({ to: "/dashboard", replace: true });
               return;
             }
             if (resume) {
               const pending = firmSignupCheckoutIntent(visitorCopyPack(draftMarket));
               stashPendingCheckout(pending);
-              setPortalIntent("accountant");
+              await setLandingPortal("accountant");
               void navigate({
                 to: resume === "billing_start" ? "/billing/start" : "/billing/required",
                 search: billingStartSearch(pending),
@@ -1080,7 +1116,7 @@ function LandingPage() {
         // A leftover accountant session on this browser must not keep the
         // invitee in the wrong portal after they accept as the owner.
         if (user && user.email?.toLowerCase() !== regEmail.trim().toLowerCase()) {
-          await supabase.auth.signOut({ scope: "local" });
+          await (await landingSupabase()).auth.signOut({ scope: "local" });
         }
 
         let clientId: string | null = null;
@@ -1107,7 +1143,7 @@ function LandingPage() {
         }
 
         if (!sameAccount) {
-          const { error: siErr } = await supabase.auth.signInWithPassword({
+          const { error: siErr } = await (await landingSupabase()).auth.signInWithPassword({
             email: regEmail,
             password: regPassword,
           });
@@ -1164,7 +1200,7 @@ function LandingPage() {
       }
       setRegBusy(true);
       try {
-        setPortalIntent("accountant");
+        await setLandingPortal("accountant");
         const promo = peekPendingCheckout()?.promo;
         const pending = {
           plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
@@ -1173,7 +1209,7 @@ function LandingPage() {
           ...(promo ? { promo } : {}),
         };
         stashPendingCheckout(pending);
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await (await landingSupabase()).auth.signUp({
           email: regEmail,
           password: regPassword,
           options: {
@@ -1202,12 +1238,13 @@ function LandingPage() {
           return;
         }
         if (data.user) {
-          const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
+          const { error: firmErr } = await (await landingSupabase()).rpc("ensure_practice_firm", {
             p_name: regFirmName.trim() || null,
             p_market: marketToJson(market),
           });
           if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
           await welcomeWithoutBlockingSignup(() => doSendWelcome());
+          const { forcePortal } = await import("@/lib/user-roles");
           forcePortal("accountant");
           // This firm was just created. It has not shown figures, so Checkout
           // waits. A flag stored for another firm must not send them to Stripe.
@@ -1232,7 +1269,7 @@ function LandingPage() {
     setRegBusy(true);
     try {
       const emailRedirectTo = paidSignupRedirectTo();
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await (await landingSupabase()).auth.signUp({
         email: regEmail,
         password: regPassword,
         options: {
@@ -1260,7 +1297,7 @@ function LandingPage() {
         // Auto-confirm is on: the owner goes straight to the board. Mark the
         // address as not-yet-verified so /app can offer a soft "verify later"
         // link instead of a hard stop at the inbox.
-        void supabase.auth
+        void (await landingSupabase()).auth
           .updateUser({ data: { email_verify_pending: true } })
           .catch(() => undefined);
         // Use ensure_own_client() RPC — direct INSERT via anon key is blocked by
@@ -1268,12 +1305,12 @@ function LandingPage() {
         // RPC is the reliable path for both auto-confirm and email-confirm signups.
         const clientName = regBusiness.trim() || regName.trim() || regEmail;
         const { error: rpcErr } = await withMarketRpcFallback(
-          () =>
-            supabase.rpc("ensure_own_client", {
+          async () =>
+            (await landingSupabase()).rpc("ensure_own_client", {
               p_name: clientName,
               p_market: { country: market.country, regionCode: market.regionCode },
             }),
-          () => supabase.rpc("ensure_own_client", { p_name: clientName }),
+          async () => (await landingSupabase()).rpc("ensure_own_client", { p_name: clientName }),
         );
         if (rpcErr) {
           // Don't block navigation — the /app effectiveClientId flow will retry.
@@ -1304,15 +1341,16 @@ function LandingPage() {
     }
   };
 
-  const startFirmPlan = (plan: FirmCheckoutBand, interval: FirmInterval = "month") => {
+  const startFirmPlan = async (plan: FirmCheckoutBand, interval: FirmInterval = "month") => {
     const market = visitorCopyPack(draftMarket);
     const pending = { plan, interval, market };
     stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(plan));
     setRegRole("Accountant / Advisory firm");
-    setPortalIntent("accountant");
+    await setLandingPortal("accountant");
     if (user) {
-      if (readInsightSeen(firmId)) {
+      const id = firmId ?? (await landingFirmId(user.id));
+      if (readInsightSeen(id)) {
         void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
       } else {
         void navigate({ to: "/dashboard" });
@@ -1323,7 +1361,7 @@ function LandingPage() {
     void navigate({ to: "/auth", search: { signup: true, plan, interval } });
   };
 
-  const goToFirmSignup = (opts?: {
+  const goToFirmSignup = async (opts?: {
     plan?: FirmCheckoutBand;
     scrollTo?: "register" | "pricing";
   }) => {
@@ -1332,11 +1370,12 @@ function LandingPage() {
     stashPendingCheckout({ plan, interval: firmInterval, market });
     setRegPlan(registerLabelForPlan(plan));
     setRegRole("Accountant / Advisory firm");
-    setPortalIntent("accountant");
+    await setLandingPortal("accountant");
     setRegisterReady(true);
     setMobileNavOpen(false);
     if (user) {
-      if (readInsightSeen(firmId)) {
+      const id = firmId ?? (await landingFirmId(user.id));
+      if (readInsightSeen(id)) {
         void navigate({
           to: "/billing/start",
           search: billingStartSearch({ plan, interval: firmInterval, market }),

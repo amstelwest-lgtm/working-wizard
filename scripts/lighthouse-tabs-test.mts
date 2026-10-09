@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LIGHTHOUSE_TABS, parseLighthouseTab } from "../src/components/lighthouse-panel";
+import { LIGHTHOUSE_TABS, parseLighthouseTab } from "../src/lib/lighthouse-tab";
 import {
   dedupeDueToday,
   dedupeLeadsById,
@@ -26,12 +26,13 @@ function assert(cond: boolean, msg: string) {
 }
 
 const src = readFileSync(resolve(process.cwd(), "src/components/lighthouse-panel.tsx"), "utf8");
+const tabSrc = readFileSync(resolve(process.cwd(), "src/lib/lighthouse-tab.ts"), "utf8");
 assert(
-  /export const LIGHTHOUSE_TABS\s*=\s*\[[^\]]*\]\s*as const/.test(src),
-  "lighthouse-panel.tsx must declare LIGHTHOUSE_TABS once",
+  /export const LIGHTHOUSE_TABS\s*=\s*\[[^\]]*\]\s*as const/.test(tabSrc),
+  "lighthouse-tab.ts must declare LIGHTHOUSE_TABS once",
 );
 assert(
-  src.split("export const LIGHTHOUSE_TABS").length === 2,
+  tabSrc.split("export const LIGHTHOUSE_TABS").length === 2,
   "LIGHTHOUSE_TABS is declared exactly once",
 );
 

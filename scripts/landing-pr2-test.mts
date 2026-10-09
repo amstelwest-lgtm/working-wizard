@@ -29,7 +29,6 @@ function assert(cond: boolean, msg: string) {
 const root = resolve(import.meta.dirname, "..");
 const index = readFileSync(resolve(root, "src/routes/index.tsx"), "utf8");
 const css = readFileSync(resolve(root, "src/styles/landing.css"), "utf8");
-const rootRoute = readFileSync(resolve(root, "src/routes/__root.tsx"), "utf8");
 const copy = readFileSync(resolve(root, "src/lib/landing-copy.ts"), "utf8");
 const faq = readFileSync(resolve(root, "src/lib/marketing-faq.ts"), "utf8");
 
@@ -119,8 +118,9 @@ assert(
 assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 3 clients", "trial sentence unchanged");
 
 assert(css.includes(".reveal,") && css.includes("opacity:1"), "reveal content is visible by default");
-assert(rootRoute.includes("max-width: 1023px"), "logged-out landing hides floaters under 1024");
-assert(rootRoute.includes("return null"), "narrow logged-out landing renders no floater");
+const chrome = readFileSync(resolve(root, "src/components/app-chrome.tsx"), "utf8");
+assert(chrome.includes("max-width: 1023px"), "logged-out landing hides floaters under 1024");
+assert(chrome.includes("return null"), "narrow logged-out landing renders no floater");
 assert(!/claude/i.test(index + copy), "homepage source has no Claude");
 assert(!/white-label/i.test(index), "homepage source has no white-label");
 assert(!index.includes("3 free clients"), "homepage source has no 3 free clients");

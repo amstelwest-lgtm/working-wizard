@@ -88,7 +88,7 @@ assert.ok(drafterPane.includes("AdvisoryDrafter"), "the drafter has its own sect
 assert.ok(drafterPane.includes("AdvisorySentHistory"), "sent history stays with the drafter");
 assert.ok(drafterPane.includes('id="pane-drafter"') || drafterPane.includes("AdvisoryDrafter"));
 
-const studio = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+const studio = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert.ok(studio.includes("ArapAnswerStrip"), "the embedded reports tab uses the no-status strip");
 assert.ok(studio.includes("data-reports-primary"), "one gold control opens a report");
 assert.ok(studio.includes('aria-label="Export all reports"'), "export is the quiet icon");

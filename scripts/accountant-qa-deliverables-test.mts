@@ -56,7 +56,7 @@ assert(reportKicker("budget") === "Advisory Report 11", "budget PDF matches card
 assert(reportKicker("forecast", "Base") === "Advisory Report 03 · Base", "forecast keeps its scenario tail");
 assert(REPORT_CATALOG.map((row) => row.number).join(",") === "1,2,3,4,5,6,7,8,9,10,11", "catalog is 1–11");
 
-const reportsSrc = read("src/routes/_authenticated/reports.index.tsx");
+const reportsSrc = read("src/routes/_authenticated/reports-studio.tsx");
 for (const row of REPORT_CATALOG) {
   assert(
     reportsSrc.includes(`reportNumber("${row.key}")`),
@@ -301,7 +301,7 @@ assert(
   budgetPanel.includes("This budget was rebuilt from the saved statement"),
   "the rebuild is visible on the budget tab",
 );
-const reportsIndex = read("src/routes/_authenticated/reports.index.tsx");
+const reportsIndex = read("src/routes/_authenticated/reports-studio.tsx");
 assert(
   reportsIndex.includes("publishBudgetDocument") && !reportsIndex.includes("reseedBudgetIfScaleBroken"),
   "budget reports publish the stored plan and do not rebuild it",

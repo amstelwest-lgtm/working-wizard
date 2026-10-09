@@ -44,7 +44,8 @@ import {
   opsRouteRenderDecision,
 } from "@/lib/ops-route-state";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
+import { LighthousePanel } from "@/components/lighthouse-panel";
+import { parseLighthouseTab } from "@/lib/lighthouse-tab";
 import { isPilotFlagVisible } from "@/lib/ops-pilot-flags";
 
 const LighthouseItPanel = lazy(() =>

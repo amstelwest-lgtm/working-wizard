@@ -104,7 +104,7 @@ assert(
   `a 1-month cover stays on September, budget ${oneRevenue?.budget} vs ${september?.revenue}`,
 );
 
-const studio = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+const studio = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(studio.includes("benchmarkEmptyCopy"), "the benchmark empty state names the sector");
 assert(studio.includes("benchmarkSectorForClient"), "the report builder uses the shared sector helper");
 assert(studio.includes("text-slate-800"), "the empty-state sentence is dark on the light preview sheet");

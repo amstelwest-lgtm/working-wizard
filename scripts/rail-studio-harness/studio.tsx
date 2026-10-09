@@ -9,7 +9,7 @@ import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
-import { ReportsStudio } from "@/routes/_authenticated/reports.index";
+import { ReportsStudio } from "@/routes/_authenticated/reports-studio";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
