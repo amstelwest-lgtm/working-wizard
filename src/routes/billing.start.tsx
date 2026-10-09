@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
-import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
 import {
   billingStartPath,
   consumePendingCheckout,
@@ -27,9 +27,16 @@ export const Route = createFileRoute("/billing/start")({
     const pending = parsePendingCheckout(search) ?? firmSignupCheckoutIntent();
     return { ...pending, hold: search.hold === "1" || search.hold === 1 || search.hold === true };
   },
-  loader: async () => {
-    const saPricing = await readSaPricingCopy();
-    return { saPricing };
+  loaderDeps: ({ search }) => ({ plan: search.plan, interval: search.interval }),
+  loader: async ({ deps }) => {
+    try {
+      const quote = await readFirmBillingQuote({
+        data: { plan: deps.plan, interval: deps.interval },
+      });
+      return { quote };
+    } catch {
+      return { quote: null as FirmBillingQuote | null };
+    }
   },
   component: BillingStartPage,
   head: () => ({
@@ -43,10 +50,10 @@ export const Route = createFileRoute("/billing/start")({
 function priceLabel(
   plan: FirmCheckoutBand,
   interval: FirmInterval,
-  saPricing: { labels: Partial<Record<string, { month: string; year: string }>> } | null,
-): string {
-  const local = saPricing?.labels?.[plan]?.[interval];
-  if (local) return local;
+  quote: FirmBillingQuote | null,
+): string | null {
+  if (!quote) return null;
+  if (quote.market === "za") return quote.priceLabel;
   const amount = firmUsdListPrice(plan, interval);
   if (!amount) return FIRM_BAND_CATALOG[plan].name;
   return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
@@ -61,12 +68,31 @@ function BillingStartPage() {
     promo: search.promo,
   };
   const hold = search.hold;
-  const { saPricing } = Route.useLoaderData();
+  const { quote: loadedQuote } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const startCheckout = useServerFn(createStripeCheckout);
+  const fetchQuote = useServerFn(readFirmBillingQuote);
+  const [quote, setQuote] = useState<FirmBillingQuote | null>(loadedQuote);
   const [error, setError] = useState("");
   const startedRef = useRef(false);
+
+  useEffect(() => {
+    if (!user || quote) return;
+    let cancelled = false;
+    void fetchQuote({ data: { plan: pending.plan, interval: pending.interval } })
+      .then((next) => {
+        if (!cancelled) setQuote(next);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("We couldn't read this firm's billing market. Refresh and try again.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, quote, pending.plan, pending.interval, fetchQuote]);
 
   useEffect(() => {
     stashPendingCheckout(pending);
@@ -83,13 +109,15 @@ function BillingStartPage() {
       });
       return;
     }
+    if (!quote) return;
     if (startedRef.current) return;
     startedRef.current = true;
+    const market = quote.market;
     void startCheckout({
       data: {
         plan: pending.plan,
         interval: pending.interval,
-        market: pending.market,
+        market,
         promo: pending.promo,
       },
     })
@@ -102,10 +130,11 @@ function BillingStartPage() {
         startedRef.current = false;
         setError(ex instanceof Error ? ex.message : "Could not start Stripe Checkout.");
       });
-  }, [loading, user, pending.plan, pending.interval, pending.market, pending.promo, navigate, startCheckout, hold]);
+  }, [loading, user, quote, pending.plan, pending.interval, pending.market, pending.promo, navigate, startCheckout, hold]);
 
   const planName = registerLabelForPlan(pending.plan);
-  const shownPrice = priceLabel(pending.plan, pending.interval, saPricing);
+  const shownPrice = priceLabel(pending.plan, pending.interval, user ? quote : null);
+  const priceBit = shownPrice ? ` (${shownPrice})` : "";
 
   if (error) {
     return (
@@ -154,8 +183,8 @@ function BillingStartPage() {
         </h1>
         <p className="mt-2 text-sm text-slate-400">
           {user
-            ? `Redirecting to Stripe for ${planName} (${shownPrice}). Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.`
-            : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${shownPrice}). Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
+            ? `Redirecting to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.`
+            : `Create a firm account or sign in, then we will send you to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
         </p>
         {user ? (
           <div className="mt-5">

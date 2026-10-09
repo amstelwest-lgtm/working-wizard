@@ -107,6 +107,11 @@ assert(
   "landing declares draftMarket before persist effect deps (avoids TDZ crash)",
 );
 assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
+assert(
+  !landing.includes('typeof window !== "undefined" ? readVisitorDraft()'),
+  "landing does not read the visitor draft during the first render",
+);
+assert(landing.includes("readVisitorMarketFromRequest"), "landing SSR market comes from the URL only");
 assert(landingCss.includes(".milon-market-dd-btn"), "landing CSS styles the US state picker");
 assert(landingCss.includes(".milon-market-dd-list"), "landing state picker uses a custom list, not a native select");
 const skyAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");

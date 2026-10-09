@@ -51,6 +51,7 @@ function isInAppSurface(file: string): boolean {
     file.startsWith("src/components/") ||
     file.startsWith("src/routes/_authenticated/") ||
     file === "src/routes/_authenticated.tsx" ||
+    file === "src/routes/_authenticated.gate.tsx" ||
     file.startsWith("src/hooks/") ||
     file.startsWith("src/lib/")
   );

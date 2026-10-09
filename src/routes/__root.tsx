@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -13,17 +13,42 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { reportClientError } from "@/lib/monitoring";
 import { StaleBundleBar } from "@/components/stale-bundle-bar";
 import { isPublicMarketingPath, PUBLIC_MARKETING_PATHS } from "@/lib/public-marketing";
+import { AppChromeReadyContext } from "@/contexts/app-chrome-ready";
 
 import appCss from "../styles.css?url";
 import { notFoundHead, organizationGraphJson } from "@/lib/seo";
 import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 
-const AppChrome = lazy(() =>
-  import("@/components/app-chrome").then((mod) => ({ default: mod.AppChrome })),
-);
 const PublicChrome = lazy(() =>
   import("@/components/app-chrome").then((mod) => ({ default: mod.PublicChrome })),
 );
+
+/**
+ * Signed-in chrome is a separate chunk. Rendering the lazy component during
+ * hydration suspends into fallback null and drops the shell the server painted
+ * (React #418, args HTML). SSR and the first client render skip it; the effect
+ * mounts the same tree after hydrate.
+ */
+function DeferredAppChrome({ children }: { children: ReactNode }) {
+  const [Chrome, setChrome] = useState<ComponentType<{ children: ReactNode }> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void import("@/components/app-chrome").then((mod) => {
+      if (!cancelled) setChrome(() => mod.AppChrome);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!Chrome) {
+    return <AppChromeReadyContext.Provider value={false}>{children}</AppChromeReadyContext.Provider>;
+  }
+  return (
+    <AppChromeReadyContext.Provider value={true}>
+      <Chrome>{children}</Chrome>
+    </AppChromeReadyContext.Provider>
+  );
+}
 
 function NotFoundComponent() {
   useEffect(() => {
@@ -317,11 +342,9 @@ function RootComponent() {
             <DeferredPublicChrome />
           </>
         ) : (
-          <Suspense fallback={null}>
-            <AppChrome>
-              <Outlet />
-            </AppChrome>
-          </Suspense>
+          <DeferredAppChrome>
+            <Outlet />
+          </DeferredAppChrome>
         )}
         <StaleBundleBar />
       </AuthProvider>

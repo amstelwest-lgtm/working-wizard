@@ -302,7 +302,7 @@ assert(
   "dashboard still uses the stay helper",
 );
 
-const layoutSrc = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
+const layoutSrc = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 assert(
   layoutSrc.includes("shouldStayOnAccountantPortal"),
   "practice routes under /_authenticated bounce business-client sessions",

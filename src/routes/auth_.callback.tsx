@@ -48,6 +48,7 @@ import {
   peekPendingCheckout,
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
+import { checkoutIntentForUser } from "@/lib/billing-market";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { readInsightSeen } from "@/lib/funnel-timing";
 import { isSmartLandingNext, SMART_LANDING_PATH } from "@/lib/smart-landing";
@@ -332,7 +333,14 @@ function AuthCallbackPage() {
           readVisitorMarket()?.country === "ZA" ? "za" : "us",
         );
       }
-      if (pendingCheckout) stashPendingCheckout(pendingCheckout);
+      if (pendingCheckout) {
+        pendingCheckout = await checkoutIntentForUser(
+          user.id,
+          pendingCheckout,
+          pendingCheckout.market,
+        );
+        stashPendingCheckout(pendingCheckout);
+      }
       // The welcome link asked for the product, not Checkout.
       if (isSmartLandingNext(next)) {
         if (!cancelled) void navigate({ to: SMART_LANDING_PATH, replace: true });

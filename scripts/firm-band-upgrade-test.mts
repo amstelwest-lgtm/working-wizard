@@ -947,6 +947,8 @@ const saPicker = renderToStaticMarkup(
   }),
 );
 assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows the rand price");
+assert(saPicker.includes("R0/mo"), "an SA picker shows Starter as R0/mo");
+assert(!saPicker.includes("$0"), "an SA picker does not show a dollar Starter price");
 assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker has no discount note");
 assert(!saPicker.toLowerCase().includes("vat"), "an SA picker has no tax wording");
 
