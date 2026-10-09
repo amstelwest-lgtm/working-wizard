@@ -10,6 +10,32 @@ import { currentBuildId, versionJson } from "./src/lib/build-version";
 
 const buildId = currentBuildId();
 
+/**
+ * The homepage route manifest preloads every server function the sign-in
+ * form can call. Those hints share the connection with the hero fonts.
+ * Keep the landing chunk itself; fetch the rest when that module runs.
+ */
+function trimHomePreloads() {
+  return {
+    name: "milon-trim-home-preloads",
+    generateBundle(_options, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== "chunk" || !chunk.code.includes("tsrStartManifest")) continue;
+        chunk.code = chunk.code.replace(
+          /("\/": \{ filePath: "[^"]+", children: void 0, preloads: )(\[[^\]]*\])/,
+          (_match, prefix, json) => {
+            const kept = JSON.parse(json).filter((href) => {
+              const base = href.split("/").pop() ?? href;
+              return base.startsWith("index-") || base.startsWith("useServerFn-");
+            });
+            return prefix + JSON.stringify(kept);
+          },
+        );
+      }
+    },
+  };
+}
+
 /** Writes /version.json so an open tab can tell a deploy has shipped. */
 function emitVersionJson() {
   const body = versionJson(buildId);
@@ -36,7 +62,7 @@ const isVercel = process.env.DEPLOY_TARGET === "vercel";
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
 export default defineConfig({
-  plugins: [emitVersionJson()],
+  plugins: [emitVersionJson(), trimHomePreloads()],
   cloudflare: isVercel ? false : undefined,
   tanstackStart: {
     server: { entry: "server" },
