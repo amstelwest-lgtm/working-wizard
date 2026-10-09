@@ -1,23 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
-import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { LIST_PRICES, visitorMarketBootScript } from "@/lib/market";
 import { AI_IDENTIFIERS_LINE, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/terms")({
+  loader: () => readMarketingVisitor(),
   component: TermsPage,
-  head: () => ({
+  head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.terms),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
 
 function TermsPage() {
+  const { copyPack, geoZa } = Route.useLoaderData();
   return (
     <MarketingShell
+      copyPack={copyPack}
+      geoZa={geoZa}
       eyebrow="Terms of use"
       title={
         <>
@@ -51,21 +56,25 @@ function TermsPage() {
         next. It is not a ledger, not a tax filing system, and not a substitute for an accountant,
         attorney, or registered financial adviser. Keep the books you already have.
       </p>
+      {copyPack === "us" ? (
       <p className="mk-copy-us">
         It is not a CPA firm, not a fiduciary, and not tax, legal, or investment advice. It does not
         file returns with the IRS or a state department of revenue.
       </p>
+      ) : null}
       <p>
         Spark is free during early access and does not ask for a card. Accounting firms: see your
         first client&apos;s figures with no card, then add a card to start a 14-day free trial (up
         to 3 clients). After day 14 a paid USD client-count band bills through Stripe Checkout.
         Owner Spark stays free.
       </p>
+      {copyPack === "us" ? (
       <p className="mk-copy-us">
         US list prices: Solo {LIST_PRICES.us.firmSolo}/mo after a 14-day free trial · up to 3
         clients, Scale {LIST_PRICES.us.firmScale}/mo, billed through Stripe Checkout. Annual is
         about 20% off. Enterprise is a custom quote. {WATCHLIST_DEFINITION}
       </p>
+      ) : null}
 
       <h2>Your account</h2>
       <p>
@@ -119,20 +128,19 @@ function TermsPage() {
       <h2>
         <MarketCopy za="South African law" us="Governing law" />
       </h2>
-      <div className="mk-copy-za">
+      {copyPack === "za" ? <div className="mk-copy-za">
         <p>
           These terms are governed by the law of the Republic of South Africa. If a dispute cannot
           be resolved by talking to us, the courts of South Africa have jurisdiction.
         </p>
-      </div>
-      <div className="mk-copy-us">
+      </div> : <div className="mk-copy-us">
         <p>
           {LEGAL_ENTITY} is a South African company. These terms are governed by the law of the
           Republic of South Africa; the courts of South Africa have jurisdiction. US customers are
           in early access. A US-specific choice of law has not been adopted — that is a counsel
           decision, not a product toggle.
         </p>
-      </div>
+      </div>}
 
       <h2>Changes</h2>
       <p>

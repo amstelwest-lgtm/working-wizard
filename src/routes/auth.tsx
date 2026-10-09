@@ -77,6 +77,7 @@ import {
   type DraftMarket,
 } from "@/lib/market";
 
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 
 type AuthSearch = {
@@ -87,6 +88,7 @@ type AuthSearch = {
 };
 
 export const Route = createFileRoute("/auth")({
+  loader: () => readMarketingVisitor(),
   component: AuthPage,
   validateSearch: (search: Record<string, unknown>): AuthSearch => {
     const next =
@@ -110,6 +112,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const { geoZa } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { next, signup, plan, interval } = Route.useSearch();
@@ -146,17 +149,19 @@ function AuthPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
-    setDraftMarket(readVisitorDraft());
+    const stored = readVisitorDraft();
+    setDraftMarket(geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null });
     const pending = peekPendingCheckout();
     if (pending) setStoredBand({ plan: pending.plan, interval: pending.interval });
-  }, []);
+  }, [geoZa]);
   const selectedPlan = plan ?? storedBand?.plan ?? "solo";
   const selectedInterval = interval ?? storedBand?.interval ?? "month";
   const practiceHint = practiceLocationHint(draftMarket);
 
   const pendingForSignup = (country: "ZA" | "US" | null): PendingCheckout => {
     const existing = peekPendingCheckout();
-    const market = country === "ZA" ? "za" : country === "US" ? "us" : (existing?.market ?? "us");
+    const fallback = geoZa && existing?.market === "za" ? "za" : "us";
+    const market = country === "ZA" ? "za" : country === "US" ? "us" : fallback;
     return {
       plan: selectedPlan,
       interval: selectedInterval,

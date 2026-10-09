@@ -1,21 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
-import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { visitorMarketBootScript } from "@/lib/market";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-owners")({
+  loader: () => readMarketingVisitor(),
   component: ForOwnersPage,
-  head: () => ({
+  head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.forOwners),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
 
 function ForOwnersPage() {
+  const { copyPack, geoZa } = Route.useLoaderData();
   return (
     <MarketingShell
+      copyPack={copyPack}
+      geoZa={geoZa}
       eyebrow="For business owners"
       title={
         <>

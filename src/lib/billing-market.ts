@@ -50,7 +50,7 @@ export function billingIntentForResolvedMarket(
 
 /**
  * When this user already has a firm row, the stored country wins.
- * No row yet: keep the visitor / signup intent.
+ * No row yet: the visitor pack (server geo). A za URL does not stick.
  */
 export async function checkoutIntentForUser(
   userId: string,
@@ -60,6 +60,7 @@ export async function checkoutIntentForUser(
   const { fetchUserFirm } = await import("@/lib/firm-brand");
   const firm = await fetchUserFirm(userId);
   if (firm) return firmBillingResumeIntent(firm.market, pending);
-  if (pending) return pending;
-  return { plan: "solo", interval: "month", market: visitorMarket };
+  const market: StripePlanMarket = visitorMarket === "za" ? "za" : "us";
+  if (pending) return { ...pending, market };
+  return { plan: "solo", interval: "month", market };
 }

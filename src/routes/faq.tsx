@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
-import { readRequestGeoCountry } from "@/lib/geo-country.functions";
-import { isSaPricingCountry } from "@/lib/geo-country";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { publicFaqItems } from "@/lib/public-faq";
-import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market/marketing";
+import { visitorMarketBootScript } from "@/lib/market/marketing";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
   LEDGER_CONNECT_ANSWER,
@@ -13,10 +12,7 @@ import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/faq")({
-  loader: async () => {
-    const geoCountry = await readRequestGeoCountry();
-    return { showSaPricing: isSaPricingCountry(geoCountry) };
-  },
+  loader: () => readMarketingVisitor(),
   component: FaqPage,
   head: async ({ loaderData }) => {
     const showSaPricing = loaderData?.showSaPricing === true;
@@ -25,7 +21,7 @@ export const Route = createFileRoute("/faq")({
       ...pageHead(SEO_PAGES.faq),
       styles: [{ children: marketingCss }],
       scripts: [
-        { children: VISITOR_MARKET_BOOT_SCRIPT },
+        { children: visitorMarketBootScript(loaderData?.copyPack) },
         { type: "application/ld+json", children: faqPageJson(faqItems(showSaPricing)) },
       ],
     };
@@ -42,7 +38,7 @@ function Qa({ q, children }: { q: string; children: React.ReactNode }) {
 }
 
 function FaqPage() {
-  const { showSaPricing } = Route.useLoaderData();
+  const { showSaPricing, copyPack, geoZa } = Route.useLoaderData();
   const cost = publicFaqItems(showSaPricing).find((item) => item.question === "What does it cost?");
   const ai = publicFaqItems(showSaPricing).find((item) => item.question === "What does the AI see?");
   return (
@@ -67,6 +63,8 @@ function FaqPage() {
           than reading this page did.
         </>
       }
+      copyPack={copyPack}
+      geoZa={geoZa}
     >
       <h2>Money</h2>
 
@@ -160,16 +158,16 @@ function FaqPage() {
         </p>
       </Qa>
 
-      <div className="mk-copy-us">
+      {copyPack === "us" ? <div className="mk-copy-us">
         <Qa q="Is this a South African product with a dollar sign glued on?">
           <p>
             No. Choosing the United States switches currency, dates, sales tax (not VAT), and the
             advice pack. It is not a rand product with the symbol swapped. US industry medians are
             still being built, so we show days and percentages rather than pretending SA bands are
             Texas ones.
-          </p>
-        </Qa>
-      </div>
+        </p>
+      </Qa>
+      </div> : null}
 
       <h2>The cold email</h2>
 

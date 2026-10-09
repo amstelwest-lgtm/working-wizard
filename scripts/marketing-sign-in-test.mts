@@ -37,9 +37,9 @@ const header = shell.slice(
   shell.indexOf('<header className="mk-top">'),
   shell.indexOf("</header>"),
 );
-assert(header.includes("<MarketingSignIn />"), "marketing header renders Sign in");
+assert(header.includes("<MarketingSignIn"), "marketing header renders Sign in");
 assert(header.includes('className="mk-top-link" href="/faq"'), "Questions stays in the header");
-const signInAt = header.indexOf("<MarketingSignIn />");
+const signInAt = header.indexOf("<MarketingSignIn");
 const ctaAt = header.indexOf("mk-top-cta");
 assert(signInAt !== -1 && ctaAt !== -1 && signInAt < ctaAt, "Sign in sits before the header CTA");
 assert(shell.includes('className="mk-top-signin"'), "Sign in uses the marketing header class");

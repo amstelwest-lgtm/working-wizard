@@ -18,6 +18,7 @@ export {
   applyVisitorMarketToDocument,
   LIST_PRICES,
   visitorCopyPack,
+  visitorMarketBootScript,
   VISITOR_MARKET_BOOT_SCRIPT,
 } from "./marketing";
 export type { VisitorCopyPack } from "./marketing";

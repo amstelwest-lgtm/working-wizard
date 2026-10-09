@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
 import {
   billingStartPath,
@@ -29,13 +30,14 @@ export const Route = createFileRoute("/billing/start")({
   },
   loaderDeps: ({ search }) => ({ plan: search.plan, interval: search.interval }),
   loader: async ({ deps }) => {
+    const visitor = await readMarketingVisitor();
     try {
       const quote = await readFirmBillingQuote({
         data: { plan: deps.plan, interval: deps.interval },
       });
-      return { quote };
+      return { quote, copyPack: visitor.copyPack };
     } catch {
-      return { quote: null as FirmBillingQuote | null };
+      return { quote: null as FirmBillingQuote | null, copyPack: visitor.copyPack };
     }
   },
   component: BillingStartPage,
@@ -61,14 +63,8 @@ function priceLabel(
 
 function BillingStartPage() {
   const search = Route.useSearch();
-  const pending: PendingCheckout = {
-    plan: search.plan,
-    interval: search.interval,
-    market: search.market,
-    promo: search.promo,
-  };
   const hold = search.hold;
-  const { quote: loadedQuote } = Route.useLoaderData();
+  const { quote: loadedQuote, copyPack } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const startCheckout = useServerFn(createStripeCheckout);
@@ -76,6 +72,13 @@ function BillingStartPage() {
   const [quote, setQuote] = useState<FirmBillingQuote | null>(loadedQuote);
   const [error, setError] = useState("");
   const startedRef = useRef(false);
+  // Pre-auth follows the edge pack. Signed-in follows the firm quote. The URL market is not used.
+  const pending: PendingCheckout = {
+    plan: search.plan,
+    interval: search.interval,
+    market: user && quote ? quote.market : copyPack,
+    promo: search.promo,
+  };
 
   useEffect(() => {
     if (!user || quote) return;

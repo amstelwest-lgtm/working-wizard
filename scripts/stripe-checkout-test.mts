@@ -227,6 +227,9 @@ assert(
   "a SA firm keeps ZAR presentment",
 );
 assert(resolveFirmCheckoutMarket(null, "us") === "us", "no firm row and a US request stays USD");
+assert(resolveFirmCheckoutMarket(null, "za") === "us", "no firm row ignores a za request");
+assert(resolveFirmCheckoutMarket(null, "za", "ZA") === "za", "no firm row in ZA uses the edge");
+assert(resolveFirmCheckoutMarket(null, "us", "ZA") === "za", "no firm row in ZA does not follow a us URL");
 const usFirmZaBill = firmCheckoutCharge({
   firmMarket: { country: "US", regionCode: "CA" },
   requested: "za",

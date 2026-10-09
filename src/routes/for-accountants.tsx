@@ -3,11 +3,10 @@ import { useState } from "react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
-import { readRequestGeoCountry } from "@/lib/geo-country.functions";
-import { isSaPricingCountry } from "@/lib/geo-country";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
-import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
+import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
@@ -16,27 +15,25 @@ import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-accountants")({
   loader: async () => {
-    const geoCountry = await readRequestGeoCountry();
-    const showSaPricing = isSaPricingCountry(geoCountry);
-    const saPricing = showSaPricing ? await readSaPricingCopy() : null;
-    return { showSaPricing, saPricing };
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
   },
   component: ForAccountantsPage,
-  head: () => ({
+  head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.forAccountants),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
 
 function ForAccountantsPage() {
-  const { saPricing } = Route.useLoaderData();
+  const { saPricing, copyPack, geoZa } = Route.useLoaderData();
   const navigate = useNavigate();
   const [interval, setInterval] = useState<FirmInterval>("month");
 
   const startBand = (plan: FirmCheckoutBand, nextInterval: FirmInterval) => {
-    const market = visitorCopyPack(readVisitorDraft());
-    stashPendingCheckout({ plan, interval: nextInterval, market });
+    stashPendingCheckout({ plan, interval: nextInterval, market: copyPack });
     void navigate({
       to: "/auth",
       search: { signup: true, plan, interval: nextInterval },
@@ -72,6 +69,8 @@ function ForAccountantsPage() {
       ctaLabel="Set up your firm account ✦"
       ctaHref={FIRM_SIGNUP_HREF}
       footerLine={saPricing?.footerLine}
+      copyPack={copyPack}
+      geoZa={geoZa}
     >
       <h2>Works with QuickBooks Online and Xero</h2>
       <p>

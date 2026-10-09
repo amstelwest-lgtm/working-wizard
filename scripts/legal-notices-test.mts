@@ -111,7 +111,12 @@ assert(
   !landing.includes('typeof window !== "undefined" ? readVisitorDraft()'),
   "landing does not read the visitor draft during the first render",
 );
-assert(landing.includes("readVisitorMarketFromRequest"), "landing SSR market comes from the URL only");
+assert(landing.includes("readMarketingVisitor"), "landing SSR market comes from the server geo");
+assert(landing.includes("copyPack"), "landing hero copy uses the server pack");
+assert(
+  !landing.includes("copyPack: visitorCopyPack(draftMarket)"),
+  "landing hero copy does not follow the visitor draft",
+);
 assert(landingCss.includes(".milon-market-dd-btn"), "landing CSS styles the US state picker");
 assert(landingCss.includes(".milon-market-dd-list"), "landing state picker uses a custom list, not a native select");
 const skyAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");

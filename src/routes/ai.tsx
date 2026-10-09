@@ -1,23 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { LEGAL_EFFECTIVE } from "@/lib/legal";
-import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { visitorMarketBootScript } from "@/lib/market";
 import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/ai")({
+  loader: () => readMarketingVisitor(),
   component: AiNoticePage,
-  head: () => ({
+  head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.ai),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [{ children: visitorMarketBootScript(loaderData?.copyPack) }],
   }),
 });
 
 function AiNoticePage() {
+  const { copyPack, geoZa } = Route.useLoaderData();
   return (
     <MarketingShell
+      copyPack={copyPack}
+      geoZa={geoZa}
       heroTone="plain"
       eyebrow="AI notice"
       title="Use of an AI model"
@@ -86,7 +91,9 @@ function AiNoticePage() {
       <ul className="mk-list">
         <li>It is not a promise that every sentence the model writes is correct.</li>
         <li>It is not independent financial, tax, or legal advice.</li>
-        <li className="mk-copy-us">It is not a CPA opinion, a fiduciary duty, or an IRS filing.</li>
+        {copyPack === "us" ? (
+          <li className="mk-copy-us">It is not a CPA opinion, a fiduciary duty, or an IRS filing.</li>
+        ) : null}
         <li>It is not a way for other customers to see your books.</li>
       </ul>
 
