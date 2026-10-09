@@ -312,6 +312,67 @@ export function yearToDateTitle(basis: YearBasis | null): string {
   return basis === "calendar" ? "Calendar year to date" : "Financial year to date";
 }
 
+/**
+ * Period label the accountant Overview prints. Dated statements win
+ * (`1 Jan 2026 – 30 Sep 2026`). Otherwise the snapshot label.
+ */
+export function figuresPeriodLabelFrom(
+  financials: object | null | undefined,
+  snapshotPeriodLabel?: string | null,
+): string | null {
+  const meta = readStatementMeta(financials);
+  const dated = Boolean(meta.periodStart && meta.periodEnd);
+  const fromStatement = dated ? meta.periodLabel?.trim() ?? "" : "";
+  if (fromStatement) return fromStatement;
+  const snap = snapshotPeriodLabel?.trim() ?? "";
+  return snap || null;
+}
+
+function opensStoredYear(from: Date, fyStartMonth: number): boolean {
+  if (from.getUTCDate() !== 1) return false;
+  const month = from.getUTCMonth() + 1;
+  return month === 1 || month === fyStartMonth;
+}
+
+function isCompleteYear(from: Date, to: Date): boolean {
+  const nextOpen = new Date(Date.UTC(from.getUTCFullYear() + 1, from.getUTCMonth(), 1));
+  const fullYearEnd = new Date(nextOpen.getTime() - 24 * 60 * 60 * 1000);
+  return to.getTime() >= fullYearEnd.getTime();
+}
+
+/**
+ * End date to quote when the stored figures period is year-to-date
+ * (`30 Sep 2026` for 1 Jan–30 Sep). A finished 12-month year is not
+ * "to date". A month that does not open the year is not year-to-date.
+ * A range marked as the year companion, or one that opens 1 January or
+ * the financial year, is.
+ */
+export function storedYearToDateEnd(
+  fields: object | null | undefined,
+  fyStartMonth?: number | null,
+): string | null {
+  const meta = readStatementMeta(fields);
+  if (!meta.periodStart || !meta.periodEnd) return null;
+  const from = utcDate(meta.periodStart);
+  const to = utcDate(meta.periodEnd);
+  if (!from || !to || to < from) return null;
+  if (isCompleteYear(from, to)) return null;
+  const fy =
+    fyStartMonth != null && Number.isFinite(fyStartMonth)
+      ? Math.min(12, Math.max(1, Math.round(Number(fyStartMonth))))
+      : 1;
+  const raw = (fields ?? {}) as Record<string, unknown>;
+  const ytdStart = str(raw, "ytdPeriodStart");
+  const ytdEnd = str(raw, "ytdPeriodEnd");
+  const basis = str(raw, "ytdBasis");
+  const marked =
+    (basis === "financial" || basis === "calendar") &&
+    ytdStart === meta.periodStart &&
+    ytdEnd === meta.periodEnd;
+  if (!marked && !opensStoredYear(from, fy)) return null;
+  return formatIsoDateUTC(meta.periodEnd);
+}
+
 /** True when the blob came from a dated Xero or QuickBooks sync. */
 export function preferStatementPeriod(fields: object | null | undefined): boolean {
   return isDatedLedgerSource(readStatementMeta(fields).statementSource);

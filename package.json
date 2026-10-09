@@ -33,6 +33,7 @@
     "test:ask-ai-context": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-context-test.mts",
     "test:ask-ai-response": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-response-test.mts",
     "test:bot-signoff-path": "vite-node --config scripts/vite-test.config.ts scripts/bot-signoff-path-test.mts",
+    "test:bot-figures-context": "vite-node --config scripts/vite-test.config.ts scripts/bot-figures-context-test.mts",
     "test:identifier-redaction": "vite-node --config scripts/vite-test.config.ts scripts/identifier-redaction-test.mts",
     "test:accountant-ask-ai-tab": "vite-node --config scripts/vite-test.config.ts scripts/accountant-ask-ai-tab-test.mts",
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",

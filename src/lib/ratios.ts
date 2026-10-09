@@ -537,3 +537,13 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
     "OCF / EBITDA": ocfEbitda,
   };
 }
+
+/**
+ * Current assets ÷ current liabilities, the same figure the owner desk
+ * shows. Non-positive liabilities stay unset. Both inputs are stocks, so
+ * they are not annualised.
+ */
+export function currentRatioValue(currentAssets: number, currentLiabilities: number): number {
+  if (!(currentLiabilities > 0) || !Number.isFinite(currentAssets)) return Number.NaN;
+  return currentAssets / currentLiabilities;
+}

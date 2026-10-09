@@ -120,8 +120,8 @@ export function missingPrecardColumn(message: string): boolean {
 }
 
 export function precardBotRemainingLabel(remaining: number): string | null {
-  if (!Number.isFinite(remaining) || remaining <= 0) return null;
-  if (remaining === 1) return "1 Bot message left before trial";
+  if (!Number.isFinite(remaining) || remaining < 1) return null;
+  if (Math.floor(remaining) === 1) return "This is your last free Bot question.";
   return `${Math.floor(remaining)} Bot messages left before trial`;
 }
 

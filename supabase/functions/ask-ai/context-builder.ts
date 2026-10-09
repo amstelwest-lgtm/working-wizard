@@ -80,6 +80,7 @@ const PILLAR_RATIO_KEYS: Record<string, string[]> = {
     "assetTurnover",
     "roa",
     "roe",
+    "inventoryDays",
     // salesPerEmployee and gpToLabor excluded — they expose currency amounts
   ],
   risk: ["customerConcentration", "fixedCostRatio", "dol"],

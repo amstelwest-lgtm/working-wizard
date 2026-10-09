@@ -18,11 +18,17 @@ import {
 } from "../../../src/lib/health-score.ts";
 import {
   creditorDaysHealthyBand,
+  currentRatioValue,
   healthBandLabel,
   peerMedian,
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
+import {
+  figuresPeriodLabelFrom,
+  readStatementMeta,
+  storedYearToDateEnd,
+} from "../../../src/lib/statement-period.ts";
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
@@ -51,6 +57,21 @@ export type OverviewBrief = {
   runwayLabel: string | null;
   creditorDays: number | null;
   debtorDays: number | null;
+  /** Stored inventory balance. Null when the file has no inventory line. */
+  inventory: number | null;
+  /** `overviewRatios` Inventory Days. Null when Overview omits the ratio. */
+  inventoryDays: number | null;
+  workingCapitalDays: number | null;
+  /** Current assets ÷ current liabilities. Null when Overview cannot show it. */
+  currentRatio: number | null;
+  /** Finite Overview ratios, display names, same map the desk scores. */
+  ratioValues: Record<string, number>;
+  periodStart: string | null;
+  periodEnd: string | null;
+  /** Short source phrase, e.g. "uploaded statement". */
+  figuresSource: string | null;
+  /** Set when the stored period is year-to-date. "30 Sep 2026". */
+  yearToDateEnd: string | null;
   grossMargin: number | null;
   operatingMargin: number | null;
   netMargin: number | null;
@@ -183,6 +204,66 @@ function days(n: number): string {
   return `${Math.round(n)} days`;
 }
 
+function finiteOrNull(n: number | null | undefined): number | null {
+  return n != null && Number.isFinite(n) ? n : null;
+}
+
+function figuresSourcePhrase(source: string | null | undefined): string | null {
+  switch (source) {
+    case "xero":
+      return "Xero";
+    case "qbo":
+      return "QuickBooks";
+    case "sage":
+      return "Sage";
+    case "upload":
+    case "pdf_upload":
+      return "uploaded statement";
+    case "financial_statement":
+      return "imported statement";
+    case "bank_pack":
+      return "bank import";
+    case "manual":
+      return "figures entered by hand";
+    default:
+      return null;
+  }
+}
+
+/** Ratios the Overview sphere shows that are not given their own sentence above. */
+const OVERVIEW_RATIO_NAMES = [
+  "Working Capital Days",
+  "Fixed Cost Ratio",
+  "Asset Turnover",
+  "Return on Assets",
+  "Return on Equity",
+  "Equity Multiplier",
+  "Debt-to-Equity",
+  "Interest Burden",
+  "Tax Burden",
+  "Degree of Operating Leverage",
+  "Top-5 Customer Share",
+  "Gross Profit / Labor",
+  "Sales-per-Employee Ratio",
+  "OCF / EBITDA",
+] as const;
+
+function formatOverviewRatio(name: string, value: number, copyPack: OverviewCopyPack): string {
+  if (name.endsWith("Days")) return `${name}: ${days(value)}`;
+  if (
+    name.endsWith("Margin") ||
+    name === "Fixed Cost Ratio" ||
+    name === "Top-5 Customer Share" ||
+    name === "Return on Assets" ||
+    name === "Return on Equity"
+  ) {
+    return `${name}: ${pct(value)}`;
+  }
+  if (name === "Sales-per-Employee Ratio") return `${name}: ${money(value, copyPack)}`;
+  const digits = Math.abs(value) >= 100 ? 0 : 2;
+  return `${name}: ${value.toFixed(digits)}×`;
+}
+
 /**
  * Runway line the Bot may quote. Cash already on file is not a missing bank
  * balance — the only gap left is a cash-flow statement.
@@ -256,15 +337,18 @@ export function buildOverviewBrief(input: {
   const healthStatus = health == null ? null : scored.displayStatus;
   const weakest = scored.weakestPillar;
 
-  const periodFromFin =
-    typeof financials?.periodLabel === "string" && financials.periodLabel.trim()
-      ? financials.periodLabel.trim()
-      : null;
+  const statement = financials ? readStatementMeta(financials) : null;
   const liabilities = resolveTotalLiabilities(financials);
+  const currentAssets = asNumber(financials?.currentAssets);
+  const currentLiabilities = asNumber(financials?.currentLiabilities);
+  const currentRatio =
+    currentAssets == null || currentLiabilities == null
+      ? null
+      : finiteOrNull(currentRatioValue(currentAssets, currentLiabilities));
 
   return {
     clientName: input.clientName?.trim() || null,
-    periodLabel: input.periodLabel?.trim() || periodFromFin,
+    periodLabel: figuresPeriodLabelFrom(financials, input.periodLabel),
     figuresAsOf: input.figuresAsOf ?? null,
     copyPack,
     health,
@@ -286,6 +370,15 @@ export function buildOverviewBrief(input: {
           : null,
     creditorDays: Number.isFinite(ratios["Creditor Days"]) ? ratios["Creditor Days"] : null,
     debtorDays: Number.isFinite(ratios["Debtor Days"]) ? ratios["Debtor Days"] : null,
+    inventory: asNumber(financials?.inventory),
+    inventoryDays: finiteOrNull(ratios["Inventory Days"]),
+    workingCapitalDays: finiteOrNull(ratios["Working Capital Days"]),
+    currentRatio,
+    ratioValues: ratios,
+    periodStart: statement?.periodStart ?? null,
+    periodEnd: statement?.periodEnd ?? null,
+    figuresSource: figuresSourcePhrase(statement?.statementSource),
+    yearToDateEnd: storedYearToDateEnd(financials, fyStartMonth),
     grossMargin: Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null,
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
@@ -317,7 +410,11 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   }
   if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
   if (brief.revenue != null) {
-    lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}`);
+    const ytd = brief.yearToDateEnd ? ` (year to date to ${brief.yearToDateEnd})` : "";
+    lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}${ytd}`);
+  }
+  if (brief.inventory != null) {
+    lines.push(`Inventory: ${money(brief.inventory, brief.copyPack)} (stored balance)`);
   }
   if (brief.grossProfit != null) {
     lines.push(`Gross profit: ${money(brief.grossProfit, brief.copyPack)} (stored)`);
@@ -352,6 +449,27 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
       `Creditor days: ${days(brief.creditorDays)} (healthy band ${band.min}–${band.max} days)`,
     );
   }
+  if (brief.inventoryDays != null) {
+    const where = [
+      brief.periodLabel ? `period ${brief.periodLabel}` : null,
+      brief.figuresSource,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(", ");
+    lines.push(
+      where
+        ? `Inventory days: ${days(brief.inventoryDays)} (${where})`
+        : `Inventory days: ${days(brief.inventoryDays)}`,
+    );
+  }
+  if (brief.currentRatio != null) {
+    lines.push(formatOverviewRatio("Current Ratio", brief.currentRatio, brief.copyPack));
+  }
+  for (const name of OVERVIEW_RATIO_NAMES) {
+    const value = brief.ratioValues[name];
+    if (!Number.isFinite(value)) continue;
+    lines.push(formatOverviewRatio(name, value, brief.copyPack));
+  }
   for (const pillar of brief.pillars) {
     if (pillar.score == null) continue;
     lines.push(`${pillar.label}: ${pillar.score}/100`);
@@ -372,6 +490,12 @@ export function formatOverviewForPrompt(
     "OVERVIEW FIGURES — same source as the app Overview for this client. Quote these. Do not recompute a different health score. Do not invent replacements.",
   ];
   if (brief.clientName) lines.push(`- Client name: ${brief.clientName}`);
+  if (brief.periodLabel) {
+    const range =
+      brief.periodStart && brief.periodEnd ? ` (${brief.periodStart} to ${brief.periodEnd})` : "";
+    lines.push(`- Figures period: ${brief.periodLabel}${range}`);
+  }
+  if (brief.figuresSource) lines.push(`- Figures source: ${brief.figuresSource}`);
   if (facts.length === 0) lines.push("(no numeric overview yet)");
   else lines.push(...facts.map((line) => `- ${line}`));
   if (brief.brainHeadline) {
@@ -404,8 +528,18 @@ export function formatOverviewForPrompt(
       "Address the accountant about this client. Say \"this client\" or \"the owner\" for the business. Do not address the accountant as if they were the owner (\"You are…\").",
     );
   }
+  if (brief.inventory != null || brief.inventoryDays != null) {
+    lines.push(
+      "Inventory and inventory days listed above are the Overview figures for this period. Quote that inventory days number with its period and source. Do not say the inventory balance is not stored, and do not recalculate the days with a different formula.",
+    );
+  }
+  if (brief.yearToDateEnd) {
+    lines.push(
+      `The stored period is year to date. When asked for revenue YTD, answer with the revenue figure above and say "year to date to ${brief.yearToDateEnd}". Do not say that no year-to-date split is stored.`,
+    );
+  }
   lines.push(
-    "Every figure listed above is already on file. Never ask the user to supply health, cash, revenue, gross profit, operating profit, net profit, runway, margin, debtor days, creditor days, total assets, total liabilities, or total equity when that line is present.",
+    "Every figure listed above is already on file. Never ask the user to supply health, cash, revenue, gross profit, operating profit, net profit, runway, margin, debtor days, creditor days, inventory, inventory days, working capital days, current ratio, total assets, total liabilities, or total equity when that line is present.",
   );
   return lines.join("\n");
 }

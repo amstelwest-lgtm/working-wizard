@@ -94,6 +94,7 @@ import { FeatureFinder } from "@/components/feature-finder";
 import {
   annualiseFinancials,
   computeRatios,
+  currentRatioValue,
   healthBandLabel,
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_CHOSEN_KEY,
@@ -3355,7 +3356,7 @@ function Index() {
   const capexIntensity = safe(n.capex, n.revenue);
   const depreciation = Math.max(0, n.ebitda - n.ebit); // EBITDA − EBIT ≈ D&A
   const assetReinvestmentRatio = depreciation > 0 ? safe(n.capex, depreciation) : NaN;
-  const currentRatio = n.currentLiabilities > 0 ? safe(n.currentAssets, n.currentLiabilities) : NaN;
+  const currentRatio = currentRatioValue(n.currentAssets, n.currentLiabilities);
 
   // PPE movement
   const netPpe = n.ppeGross > 0 ? n.ppeGross - n.accumulatedDepreciation : NaN;
