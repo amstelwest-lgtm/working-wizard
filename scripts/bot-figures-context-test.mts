@@ -160,6 +160,10 @@ assert(
 );
 assert(figuresPeriodLabelFrom({}, "Q3 2026") === "Q3 2026", "snapshot label is the fallback");
 assert(
+  figuresPeriodLabelFrom({ periodEnd: "2026-09-30", periodMonths: "12" }, "Oct 2026") === "1 Oct 2025 – 30 Sep 2026",
+  "a missing start is derived from the end and the month count",
+);
+assert(
   figuresPeriodLabelFrom(ytdFinancials, "Q3 2026") === "1 Jan 2026 – 30 Sep 2026",
   "statement dates replace the snapshot label",
 );

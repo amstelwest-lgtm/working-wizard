@@ -313,17 +313,33 @@ export function yearToDateTitle(basis: YearBasis | null): string {
 }
 
 /**
- * Period label the accountant Overview prints. Dated statements win
- * (`1 Jan 2026 – 30 Sep 2026`). Otherwise the snapshot label.
+ * Period label the accountant Overview prints. A stored from/to wins.
+ * When the end is stored without a start, the start is the first of the
+ * month `periodMonths` earlier (`periodEnd` 2026-09-30 and 12 months is
+ * `1 Oct 2025 – 30 Sep 2026`). The snapshot label is used only when there
+ * is no period end.
  */
 export function figuresPeriodLabelFrom(
   financials: object | null | undefined,
   snapshotPeriodLabel?: string | null,
 ): string | null {
   const meta = readStatementMeta(financials);
-  const dated = Boolean(meta.periodStart && meta.periodEnd);
-  const fromStatement = dated ? meta.periodLabel?.trim() ?? "" : "";
-  if (fromStatement) return fromStatement;
+  if (meta.periodStart && meta.periodEnd) {
+    const fromStatement = meta.periodLabel?.trim() ?? "";
+    if (fromStatement) return fromStatement;
+  }
+  if (meta.periodEnd) {
+    const months = num((financials ?? {}) as Record<string, unknown>, "periodMonths");
+    const end = utcDate(meta.periodEnd);
+    if (end && months != null && months >= 1) {
+      const span = Math.max(1, Math.round(months));
+      const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (span - 1), 1));
+      const label = formatStatementPeriodLabel(isoDateUTC(start), meta.periodEnd.slice(0, 10));
+      if (label) return label;
+    }
+    const stamp = calendarMonthStamp(meta.periodEnd);
+    if (stamp) return stamp;
+  }
   const snap = snapshotPeriodLabel?.trim() ?? "";
   return snap || null;
 }

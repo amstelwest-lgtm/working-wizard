@@ -6,6 +6,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAgentTool } from "../milon-bot/execute.ts";
 import { attachCitedEvidence, groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
+  dataQualityComparesPeriods,
   executeAnalystGate,
   FINDING_KINDS,
   findingDuplicates,
@@ -216,6 +217,13 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   }
   if (severity !== "info" && severity !== "watch" && severity !== "act") {
     return { error: "Severity must be info, watch, or act." };
+  }
+  if (kind === "data_quality" && dataQualityComparesPeriods({ title, detail, figures: args.figures })) {
+    return {
+      recorded: false,
+      skipped: true,
+      reason: "Figures from different periods are not a data-quality conflict. Call finish.",
+    };
   }
   const grounded = groundFindingEvidence({
     pool: ctx.pool,

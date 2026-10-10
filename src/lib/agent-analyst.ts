@@ -6,6 +6,8 @@
 import {
   canonicalEvidenceKey,
   figuresClose,
+  periodEndKey,
+  periodEndsMentioned,
   retryAfterFailure,
   sanitizeAgentError,
   type StoredFigures,
@@ -428,16 +430,44 @@ export function dedupePeriodOf(input: { periodLabel: string | null; figures: unk
   return periods.length === 1 ? periods[0] : null;
 }
 
-function sameFindingPeriod(
-  a: { periodLabel: string | null; snapshotId: string | null },
-  b: { periodLabel: string | null; snapshotId: string | null },
+function labelPeriodKeys(label: string): string[] {
+  const end = periodEndKey(label);
+  return end ? [end] : [normalizeFindingText(label)];
+}
+
+/** Every period end a finding names, including each nested figures key. */
+export function findingPeriodKeys(input: { periodLabel: string | null; figures: unknown }): Set<string> {
+  const keys = new Set<string>();
+  const explicit = input.periodLabel?.trim() ?? "";
+  if (explicit) for (const key of labelPeriodKeys(explicit)) keys.add(key);
+  if (!input.figures || typeof input.figures !== "object" || Array.isArray(input.figures)) return keys;
+  for (const [key, value] of Object.entries(input.figures as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    for (const periodKey of labelPeriodKeys(key)) keys.add(periodKey);
+  }
+  return keys;
+}
+
+function sharesFindingPeriod(
+  a: { periodLabel: string | null; snapshotId: string | null; figures: unknown },
+  b: { periodLabel: string | null; snapshotId: string | null; figures: unknown },
 ): boolean {
-  const period =
-    a.periodLabel != null &&
-    b.periodLabel != null &&
-    normalizeFindingText(a.periodLabel) === normalizeFindingText(b.periodLabel);
-  const snapshot = a.snapshotId != null && b.snapshotId != null && a.snapshotId === b.snapshotId;
-  return period || snapshot;
+  const left = findingPeriodKeys(a);
+  const right = findingPeriodKeys(b);
+  for (const key of left) {
+    if (right.has(key)) return true;
+  }
+  return a.snapshotId != null && b.snapshotId != null && a.snapshotId === b.snapshotId;
+}
+
+/**
+ * A data-quality finding that compares two periods is the Sep-versus-Oct
+ * label, not a conflict inside one set of books.
+ */
+export function dataQualityComparesPeriods(input: { title: string; detail: string; figures: unknown }): boolean {
+  const nested = findingPeriodKeys({ periodLabel: null, figures: input.figures });
+  if (nested.size >= 2) return true;
+  return periodEndsMentioned(`${input.title}\n${input.detail}`).size >= 2;
 }
 
 /** Matched key/value pairs divided by the larger set. 3 of 5 is 0.6. */
@@ -463,9 +493,10 @@ export function figureKeyOverlap(a: Record<string, number>, b: Record<string, nu
 }
 
 /**
- * Same client and agent is the caller's filter. Match the same kind and the
- * same period or snapshot inside 7 days, ignoring the title, or a figure
- * key/value overlap of at least 60 percent.
+ * Same client and agent is the caller's filter. Kinds never match each other.
+ * The same kind matches when any period end is shared (`1 Jan 2026 – 30 Sep 2026`
+ * is Sep 2026) or the snapshot is the same, or when the figure overlap is at
+ * least 60 percent.
  */
 export function findingDuplicates<T extends {
   id: string;
@@ -495,15 +526,18 @@ export function findingDuplicates<T extends {
   let best: T | null = null;
   for (const row of input.recent) {
     if (row.seenAtMs < cutoff) continue;
+    if (normalizeFindingKind(row.kind) !== kind) continue;
     const rowPeriod = dedupePeriodOf({ periodLabel: row.periodLabel, figures: row.figures });
-    const sameKindPeriod =
-      normalizeFindingKind(row.kind) === kind &&
-      sameFindingPeriod(
-        { periodLabel: candidatePeriod, snapshotId: input.candidate.snapshotId },
-        { periodLabel: rowPeriod, snapshotId: row.snapshotId },
-      );
+    const samePeriod = sharesFindingPeriod(
+      {
+        periodLabel: input.candidate.periodLabel,
+        snapshotId: input.candidate.snapshotId,
+        figures: input.candidate.figures,
+      },
+      { periodLabel: row.periodLabel, snapshotId: row.snapshotId, figures: row.figures },
+    );
     const overlap = figureKeyOverlap(figures, comparableFindingFigures(row.figures, rowPeriod));
-    if (!sameKindPeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
+    if (!samePeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
     if (!best || row.seenAtMs >= best.seenAtMs) best = row;
   }
   return best;

@@ -13,6 +13,8 @@ import {
   figuresClose,
   groundFindingEvidence,
   isClientIdle,
+  periodEndKey,
+  periodEndsMentioned,
 } from "../src/lib/agent-bus.ts";
 import { priorActivityIso } from "../src/lib/agent-enqueue.ts";
 import {
@@ -24,6 +26,7 @@ import {
   analystRunSummary,
   analystToolAllowed,
   collectStoredReads,
+  dataQualityComparesPeriods,
   dedupePeriodOf,
   evidenceKeysNote,
   canonicalComparableKey,
@@ -703,7 +706,18 @@ const DAY = 24 * 60 * 60 * 1000;
     },
     recent: [wide],
   });
-  assert(byOverlap?.id === "wide", "a 60 percent key and value overlap matches across kinds");
+  assert(byOverlap == null, "a different kind is not a duplicate even when 60 percent of the figures match");
+  const sameKindOverlap = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "other",
+      figures: { a: 1, b: 2, c: 3, x: 9, y: 8 },
+      periodLabel: "Oct 2026",
+      snapshotId: "snap-oct",
+    },
+    recent: [wide],
+  });
+  assert(sameKindOverlap?.id === "wide", "a 60 percent overlap of the same kind still matches");
   const thin = findingDuplicates({
     nowMs: now,
     candidate: {
@@ -884,6 +898,101 @@ const DAY = 24 * 60 * 60 * 1000;
     nestedPillar?.id === "69471b80",
     "a nested Sep 2026 profit pillar matches the keeper even when period_label is null",
   );
+  assert(periodEndKey("1 Jan 2026 – 30 Sep 2026") === "2026-09", "a statement range ends in September 2026");
+  assert(periodEndKey("Sep 2026") === "2026-09", "a month stamp is that month");
+  assert(periodEndKey("1 Oct 2025 – 30 Sep 2026") === "2026-09", "a year spanning into September ends in September");
+  assert(
+    periodEndsMentioned("1 Oct 2025 – 30 Sep 2026 compared with Oct 2026").size === 2,
+    "a range plus another month is two period ends",
+  );
+  const longRange = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "weakest_pillar",
+      figures: { "pillar:profit": 58 },
+      periodLabel: "1 Jan 2026 – 30 Sep 2026",
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "69471b80",
+        kind: "weakest_pillar",
+        figures: { profit: 58 },
+        seenAtMs: now - day,
+        periodLabel: "Sep 2026",
+        snapshotId: "snap-sep",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(longRange?.id === "69471b80", "the long health range matches the September keeper");
+  const sharedEnd = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "weakest_pillar",
+      figures: { "Sep 2026": { "pillar:profit": 58 }, "Oct 2026": { "pillar:profit": 60 } },
+      periodLabel: null,
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "69471b80",
+        kind: "weakest_pillar",
+        figures: { profit: 58 },
+        seenAtMs: now - day,
+        periodLabel: "Sep 2026",
+        snapshotId: "snap-sep",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(sharedEnd?.id === "69471b80", "a multi-period finding matches on the shared September end");
+  const crossKind = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "weakest_pillar",
+      figures: { "pillar:profit": 50 },
+      periodLabel: "1 Oct 2025 – 30 Sep 2026",
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "9e99e9e8",
+        kind: "data_quality",
+        figures: { "pillar:profit": 50 },
+        seenAtMs: now - day,
+        periodLabel: "Sep 2026",
+        snapshotId: null,
+        severity: "watch",
+      },
+      {
+        id: "8556e68f",
+        kind: "weakest_pillar",
+        figures: { profit: 50 },
+        seenAtMs: now - 2 * day,
+        periodLabel: "Sep 2026",
+        snapshotId: "snap-sep",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(crossKind?.id === "8556e68f", "weakest pillar matches its keeper and not the data-quality row");
+  assert(
+    dataQualityComparesPeriods({
+      title: "Sep 2026 debtor days disagree with Oct 2026",
+      detail: "The labels do not match.",
+      figures: { debtor_days: 25 },
+    }),
+    "naming two periods is not a data-quality conflict",
+  );
+  assert(
+    !dataQualityComparesPeriods({
+      title: "Assets do not equal liabilities plus equity",
+      detail: "The September books do not balance.",
+      figures: { totalAssets: 10, equity: 4 },
+    }),
+    "one period can still be a data-quality finding",
+  );
 
   const legacySql = readFileSync(
     resolve("supabase/migrations/20261011040000_agent_findings_legacy_normalize.sql"),
@@ -916,6 +1025,19 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(nested.includes("cfaa8b3d-") && nested.includes("7c147e88-"), "the null recipients are named");
   assert(nested.includes("to_agent = 'financial_manager'"), "those messages are addressed to the financial manager");
   assert(nested.includes("to_agent IS NULL"), "a second run does not rewrite a recipient that is already set");
+
+  const periodCleanup = readFileSync(
+    resolve("supabase/migrations/20261011210000_agent_findings_period_label_cleanup.sql"),
+    "utf8",
+  );
+  assert(periodCleanup.includes("69471b80-7e6d-4ec8-b96c-a59b16fb9fce"), "the period cleanup names the September keeper");
+  assert(periodCleanup.includes("b456deb8-"), "the period cleanup names the long-range duplicate");
+  assert(periodCleanup.includes("8556e68f-"), "the period cleanup names the weakest-pillar keeper");
+  assert(periodCleanup.includes("9e99e9e8-") && periodCleanup.includes("10464c39-"), "the labelling artefacts are named");
+  assert(periodCleanup.includes("superseded_by IS NULL"), "a second run does not supersede a row twice");
+  assert(periodCleanup.includes("GREATEST(keeper.last_seen, dup.last_seen)"), "the true duplicate moves last_seen forward");
+  const periodCode = periodCleanup.replace(/--[^\n]*/g, "");
+  assert(!periodCode.includes("982d09f0"), "the genuine finding is not superseded");
 
   const recipients = readFileSync(
     resolve("supabase/migrations/20261011180000_agent_messages_analyst_recipient.sql"),
@@ -1014,6 +1136,16 @@ const DAY = 24 * 60 * 60 * 1000;
   }
   assert(citedNumbers("Debtor days are 25 as of 30 Sep 2026").map((n) => n.value).join(",") === "25", "a date beside a real figure leaves only that figure");
   assert(citedNumbers("Cash is 30").map((n) => n.value).join(",") === "30", "a bare 30 is still a cited number");
+  assert(
+    citedNumbers("Debtor days: 25 (peer median 40 days). Creditor days: 37 (healthy band 30–60 days).").map((n) => n.value).join(",") === "25,37",
+    "peer-median and healthy-band day numbers are not citations",
+  );
+  assert(citedNumbers("1 Oct 2025 – 30 Sep 2026").length === 0, "a derived period range contributes no cited numbers");
+  assert(citedNumbers("Revenue is R412k").map((n) => n.value).join(",") === "412000", "R412k is four hundred and twelve thousand");
+  assert(citedNumbers("Revenue is $0.4m").map((n) => n.value).join(",") === "400000", "$0.4m is four hundred thousand");
+  assert(citedNumbers("Revenue is 412,350").map((n) => n.value).join(",") === "412350", "a thousands separator is one number");
+  assert(citedFigureMatches(412, 0, 412600), "412 matches a stored 412,xxx revenue");
+  assert(!citedFigureMatches(69, 0, 69000), "a score of 69 does not match EBITDA in the thousands");
   const withId = attachCitedEvidence({
     title: "Gross margin is 0.5849",
     detail: "Snapshot e806dc36-8e43-4324-a28c-c5d5fa66a240 for Sep 2026.",
@@ -1066,6 +1198,64 @@ const DAY = 24 * 60 * 60 * 1000;
   });
   assert(bareThirty.ok === false, "a bare 30 that was not read is still refused");
   if (!bareThirty.ok) assert(bareThirty.error.includes("30"), "the error names 30");
+  const band = attachCitedEvidence({
+    title: "Debtor days are 25",
+    detail: "Peer median 40 days. Healthy band 30–60 days.",
+    pool: [
+      {
+        snapshotId: "snap-sep",
+        periodLabel: "Sep 2026",
+        figures: { "Debtor Days": 25 },
+      },
+    ],
+    evidence: { snapshot_id: "snap-sep", period_label: "Sep 2026", figures: { "Debtor Days": 25 } },
+  });
+  assert(band.ok === true, "40 and 30 inside day labels are not missing figures");
+  const revenue = attachCitedEvidence({
+    title: "Revenue is R412k",
+    detail: "About 412.",
+    pool: [
+      {
+        snapshotId: "snap-sep",
+        periodLabel: "Sep 2026",
+        figures: { revenue: 412600 },
+      },
+    ],
+    evidence: { snapshot_id: "snap-sep", period_label: "Sep 2026", figures: {} },
+  });
+  assert(revenue.ok === true, "412k and a bare 412 match the stored revenue");
+  if (revenue.ok) {
+    const figs = revenue.evidence.figures as Record<string, number>;
+    assert(figs.revenue === 412600, "the evidence keeps the stored revenue");
+  }
+  const refiled = attachCitedEvidence({
+    title: "Sep 2026 debtor days 25 and creditor days 37",
+    detail: "",
+    pool: [
+      {
+        snapshotId: "snap-sep",
+        periodLabel: "Sep 2026",
+        figures: { "Debtor Days": 25, "Creditor Days": 37 },
+      },
+      {
+        snapshotId: "snap-oct",
+        periodLabel: "Oct 2026",
+        figures: { debtor_days: 40, creditor_days: 50 },
+      },
+    ],
+    evidence: {
+      snapshot_id: "snap-oct",
+      period_label: "Oct 2026",
+      figures: { debtor_days: 25, creditor_days: 37 },
+    },
+  });
+  assert(refiled.ok === true, "September days cited under an October stamp are refiled");
+  if (refiled.ok) {
+    assert(refiled.evidence.period_label === "Sep 2026", "the evidence period is September, not October");
+    const figs = refiled.evidence.figures as Record<string, number>;
+    assert(figs["Debtor Days"] === 25 && figs["Creditor Days"] === 37, "the display keys are the stored September figures");
+    assert(refiled.evidence.snapshot_id === "snap-sep", "the September snapshot is kept");
+  }
   const percent = attachCitedEvidence({
     title: "Fixed costs are 46% of revenue",
     detail: "",
@@ -1189,10 +1379,23 @@ const DAY = 24 * 60 * 60 * 1000;
     !/period_label:\s*\(snap\?\.period_label/.test(healthBranch),
     "get_health does not stamp the latest snapshot period",
   );
-  const qaUsBooks = { ...qa, periodStart: "2026-01-01" };
   assert(
-    figuresPeriodLabelFrom(qaUsBooks, "Oct 2026") === "1 Jan 2026 – 30 Sep 2026",
-    "QA US live books are the September range, not the latest snapshot",
+    figuresPeriodLabelFrom(qa, "Oct 2026") === "1 Oct 2025 – 30 Sep 2026",
+    "QA US without a period start is twelve months ending 30 Sep 2026",
+  );
+  assert(
+    figuresPeriodLabelFrom({ periodEnd: "2026-09-30" }, "Oct 2026") === "Sep 2026",
+    "a period end without a month count still beats the snapshot label",
+  );
+  assert(figuresPeriodLabelFrom({}, "Oct 2026") === "Oct 2026", "the snapshot label is only the fallback when there is no period end");
+  assert(
+    ANALYST_SYSTEM.includes("September versus October is not an inconsistency"),
+    "the prompt tells the model that two periods are not a data-quality conflict",
+  );
+  const executeForSkip = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  assert(
+    executeForSkip.includes("Figures from different periods are not a data-quality conflict. Call finish."),
+    "a cross-period data-quality finding is skipped without a rejection",
   );
 }
 
