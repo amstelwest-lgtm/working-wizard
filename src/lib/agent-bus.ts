@@ -180,6 +180,7 @@ export function sanitizeAgentError(message: string): string {
     .replace(/sk-ant-[A-Za-z0-9_-]+/g, "[redacted]")
     .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
     .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, "[redacted]")
+    .replace(/claude/gi, "the model")
     .slice(0, 500);
 }
 

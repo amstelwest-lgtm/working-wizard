@@ -5,6 +5,7 @@
  * and only after this write says the figures are real.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { enqueueAgentEventSafe, priorActivityIso } from "@/lib/agent-enqueue";
 import { agedArProofLine } from "@/lib/collections";
 import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
 import { agedApProofLine } from "@/lib/payables";
@@ -48,6 +49,9 @@ export type SageSyncResult = {
 type ClientRow = {
   financials?: unknown;
   financial_year_start_month?: number | null;
+  financials_updated_at?: string | null;
+  last_login_at?: string | null;
+  created_at?: string | null;
 };
 
 function fyStartMonth(value: unknown): number | null {
@@ -73,11 +77,18 @@ async function markSync(
 async function readClient(clientId: string): Promise<ClientRow> {
   const { data, error } = await supabaseAdmin
     .from("clients")
-    .select("financials, financial_year_start_month")
+    .select("financials, financial_year_start_month, last_login_at, created_at")
     .eq("id", clientId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return (data ?? {}) as ClientRow;
+  const { data: stamp } = await supabaseAdmin
+    .from("clients")
+    .select("financials_updated_at")
+    .eq("id", clientId)
+    .maybeSingle();
+  const previousBooksAt =
+    (stamp as { financials_updated_at?: string | null } | null)?.financials_updated_at ?? null;
+  return { ...(data ?? {}), financials_updated_at: previousBooksAt };
 }
 
 async function findSnapshotId(
@@ -301,6 +312,17 @@ export async function executeSageSync(input: {
       sync_status: "idle",
       sync_error: null,
       last_synced_at: nowIso,
+    });
+
+    await enqueueAgentEventSafe(supabaseAdmin, {
+      clientId: input.clientId,
+      trigger: "sync",
+      activityAt: priorActivityIso({
+        createdAt: row.created_at ?? null,
+        lastLoginAt: row.last_login_at ?? null,
+        previousBooksAt: row.financials_updated_at ?? null,
+      }),
+      inputs: ledger.to,
     });
 
     return {

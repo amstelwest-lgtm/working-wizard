@@ -55,6 +55,10 @@ jobs:
         run: deno check --no-lock supabase/functions/brain-propose/index.ts
       - name: deno check brain-deliverable-draft
         run: deno check --no-lock supabase/functions/brain-deliverable-draft/index.ts
+      - name: deno check agent-analyst
+        run: deno check --no-lock supabase/functions/agent-analyst/index.ts
+      - name: deno check agent-dispatch
+        run: deno check --no-lock supabase/functions/agent-dispatch/index.ts
 
   # Blocking: every test:* script that runs without a database.
   tests:
