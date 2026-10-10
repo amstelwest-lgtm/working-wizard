@@ -105,7 +105,7 @@ async function handleAskAi(req: Request): Promise<Response> {
   if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
 
   // ── Parse body ────────────────────────────────────────────────────────────
-  let body: { clientId?: string; question?: string; audience?: string; turnId?: string };
+  let body: { clientId?: string; question?: string; audience?: string; turnId?: string; agent?: string };
   try {
     body = await req.json();
   } catch {
@@ -114,6 +114,10 @@ async function handleAskAi(req: Request): Promise<Response> {
 
   const { clientId, question: rawQuestion } = body;
   const audience = body.audience === "accountant" ? "accountant" : "owner";
+  const agent =
+    body.agent === "financial_manager" || body.agent === "analyst" || body.agent === "advisor"
+      ? body.agent
+      : null;
   if (!clientId || !rawQuestion?.trim()) {
     return respond({ error: "clientId and question are required" }, 400);
   }
@@ -217,7 +221,7 @@ async function handleAskAi(req: Request): Promise<Response> {
 
   // ── Build context (userClient — RLS enforced on tenant data reads) ────────
   const ctx = await buildContext(userClient, clientId, tier, question);
-  const sealed = sealAskAiPrompt(buildPrompt(question, ctx, tier, audience), {
+  const sealed = sealAskAiPrompt(buildPrompt(question, ctx, tier, audience, agent), {
     clientName: ctx.clientName ?? ctx.overview?.clientName ?? null,
   });
   const { system, user: userPrompt } = sealed;

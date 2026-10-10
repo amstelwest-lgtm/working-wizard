@@ -1,4 +1,12 @@
-import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter, useSearch } from "@tanstack/react-router";
+import {
+  Outlet,
+  RouterProvider,
+  createBrowserHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  useSearch,
+} from "@tanstack/react-router";
 import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -16,6 +24,7 @@ import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
+import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {
@@ -90,24 +99,24 @@ const clientRoute = createRoute({
         ? canonicalizeAccountantSearch({ tab: rawTab, section: rawSection, focus: rawFocus })
         : null;
     return {
-    tab: canonical?.tab,
-    section: canonical?.section,
-    focus: canonical?.focus,
-    aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
-    packView:
-      search.packView === "draft" ||
-      search.packView === "ready" ||
-      search.packView === "stale" ||
-      search.packView === "cycle"
-        ? search.packView
-        : undefined,
-    planView:
-      search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
-    drafterView: search.drafterView === "sent" ? "sent" : undefined,
-    view:
-      search.view === "table" || search.view === "13week" || search.view === "chart"
-        ? search.view
-        : undefined,
+      tab: canonical?.tab,
+      section: canonical?.section,
+      focus: canonical?.focus,
+      aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
+      packView:
+        search.packView === "draft" ||
+        search.packView === "ready" ||
+        search.packView === "stale" ||
+        search.packView === "cycle"
+          ? search.packView
+          : undefined,
+      planView:
+        search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
+      drafterView: search.drafterView === "sent" ? "sent" : undefined,
+      view:
+        search.view === "table" || search.view === "13week" || search.view === "chart"
+          ? search.view
+          : undefined,
     };
   },
   component: function ClientHarness() {
@@ -135,7 +144,8 @@ const teamDeskRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/milon-team-desk",
   validateSearch: (search: Record<string, unknown>) => ({
-    fixture: search.fixture === "empty" ? "empty" : search.fixture === "live" ? "live" : "populated",
+    fixture:
+      search.fixture === "empty" ? "empty" : search.fixture === "live" ? "live" : "populated",
   }),
   component: MilonTeamDeskPage,
 });
@@ -150,8 +160,28 @@ const inviteRoute = createRoute({
         : "landing",
   }),
   component: function InviteHarness() {
-    const search = useSearch({ strict: false }) as { view?: "landing" | "create" | "revoked" | "workspace" };
+    const search = useSearch({ strict: false }) as {
+      view?: "landing" | "create" | "revoked" | "workspace";
+    };
     return <StaffInvitePreview view={search.view ?? "landing"} />;
+  },
+});
+
+const ownerDoorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/owner-door",
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: (["rest", "work", "chat", "ask", "reel"].includes(String(search.view))
+      ? String(search.view)
+      : "rest") as OwnerPreviewView,
+  }),
+  component: function OwnerDoorHarness() {
+    const search = useSearch({ strict: false }) as { view?: OwnerPreviewView };
+    return (
+      <MarketProvider selection={{ country: "US", regionCode: "NY" }}>
+        <OwnerDoorPreview view={search.view ?? "rest"} />
+      </MarketProvider>
+    );
   },
 });
 
@@ -167,7 +197,14 @@ const importLowsRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, teamDeskRoute, inviteRoute, importLowsRoute]);
+const routeTree = rootRoute.addChildren([
+  clientRoute,
+  ownerRoute,
+  teamDeskRoute,
+  inviteRoute,
+  importLowsRoute,
+  ownerDoorRoute,
+]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),
