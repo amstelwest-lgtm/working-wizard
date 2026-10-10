@@ -264,7 +264,7 @@ const client = "11111111-1111-1111-1111-111111111111";
   assert(AGENT_RETRY_BACKOFF_SECONDS.join(",") === "60,300,900", "backoff table is 1, 5, and 15 minutes");
 }
 
-// Findings keep only figures that were actually read.
+// Every claimed figure must match some stored read. A partial claim is rejected.
 {
   const missing = groundFindingEvidence({ pool: [], claimedFigures: { revenue: 10 } });
   assert(missing.ok === false, "a finding with no stored read is rejected");
@@ -273,14 +273,23 @@ const client = "11111111-1111-1111-1111-111111111111";
     claimedFigures: { revenue: 999 },
   });
   assert(invented.ok === false, "a figure that was not stored is rejected");
-  const grounded = groundFindingEvidence({
+  const partial = groundFindingEvidence({
     pool: [{ snapshotId: "snap-1", periodLabel: "Sep 2026", figures: { revenue: 100, cash: 40 } }],
     claimedFigures: { revenue: 100, cash: 1 },
   });
-  assert(grounded.ok === true, "a matching figure is kept");
+  assert(partial.ok === false, "one unmatched figure rejects the finding");
+  if (!partial.ok) {
+    assert(partial.error.includes("Failed: cash=1"), "the error names the failing key");
+    assert(partial.error.includes("revenue=100"), "the error lists a stored value");
+  }
+  const grounded = groundFindingEvidence({
+    pool: [{ snapshotId: "snap-1", periodLabel: "Sep 2026", figures: { revenue: 100, cash: 40 } }],
+    claimedFigures: { revenue: 100, cash: 40 },
+  });
+  assert(grounded.ok === true, "a finding whose figures all match a read is kept");
   if (grounded.ok) {
     assert(grounded.evidence.figures.revenue === 100, "the stored revenue is the evidence");
-    assert(grounded.evidence.figures.cash == null, "the invented cash figure is stripped");
+    assert(grounded.evidence.figures.cash === 40, "the stored cash is the evidence");
     assert(grounded.evidence.snapshot_id === "snap-1", "the snapshot id stays on the evidence");
   }
   const secret = sanitizeAgentError("Claude error (401): sk-ant-abc123 Bearer eyJhbGciOi.eyJzdWIiOi.signature");

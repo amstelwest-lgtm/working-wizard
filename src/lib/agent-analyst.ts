@@ -116,9 +116,68 @@ export function collectStoredFigures(
   return { snapshotId: id, periodLabel: period, figures };
 }
 
-/** Sonnet 4.6 list rates used by the design: $3 / MTok in, $15 / MTok out. */
-export function analystRunCostUsd(inputTokens: number, outputTokens: number): number {
-  const cost = (Math.max(0, inputTokens) * 3 + Math.max(0, outputTokens) * 15) / 1_000_000;
+function pillarScores(raw: unknown): Record<string, number> {
+  if (!Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    if (typeof rec.id !== "string" || typeof rec.score !== "number" || !Number.isFinite(rec.score)) continue;
+    out[rec.id] = rec.score;
+  }
+  return out;
+}
+
+/**
+ * Flat statement figures, plus one row per health pillar set and per score-history
+ * period. A recorded finding is not a read: the caller skips record_finding.
+ */
+export function collectStoredReads(
+  payload: unknown,
+  snapshot: { snapshotId: string | null; periodLabel: string | null },
+): StoredFigures[] {
+  if (!payload || typeof payload !== "object") return [];
+  const row = payload as Record<string, unknown>;
+  const reads: StoredFigures[] = [];
+  const pillars = pillarScores(row.pillars);
+  const flat = collectStoredFigures(payload, snapshot);
+  if (flat) {
+    reads.push({ ...flat, figures: { ...pillars, ...flat.figures } });
+  } else if (Object.keys(pillars).length > 0) {
+    const period =
+      snapshot.periodLabel ?? (typeof row.period_label === "string" ? row.period_label : null);
+    const id = snapshot.snapshotId ?? (typeof row.snapshot_id === "string" ? row.snapshot_id : null);
+    reads.push({ snapshotId: id, periodLabel: period, figures: pillars });
+  }
+  if (Array.isArray(row.scores)) {
+    for (const item of row.scores) {
+      if (!item || typeof item !== "object") continue;
+      const rec = item as Record<string, unknown>;
+      const period = typeof rec.period_date === "string" ? rec.period_date : null;
+      if (!period || typeof rec.score !== "number" || !Number.isFinite(rec.score)) continue;
+      reads.push({
+        snapshotId: null,
+        periodLabel: period,
+        figures: { score: rec.score, [`score:${period}`]: rec.score },
+      });
+    }
+  }
+  return reads;
+}
+
+/** Sonnet 4.6 list rates: $3 / MTok in, $15 / MTok out. Cache write is 1.25×, cache read is 0.1×. */
+export function analystRunCostUsd(
+  inputTokens: number,
+  outputTokens: number,
+  cacheWriteTokens = 0,
+  cacheReadTokens = 0,
+): number {
+  const cost =
+    (Math.max(0, inputTokens) * 3 +
+      Math.max(0, cacheWriteTokens) * 3.75 +
+      Math.max(0, cacheReadTokens) * 0.3 +
+      Math.max(0, outputTokens) * 15) /
+    1_000_000;
   return Math.round(cost * 100_000) / 100_000;
 }
 

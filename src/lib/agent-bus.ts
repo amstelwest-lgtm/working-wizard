@@ -190,9 +190,45 @@ export type StoredFigures = {
   figures: Record<string, number>;
 };
 
+function round4(n: number): number {
+  return Math.round(n * 10_000) / 10_000;
+}
+
+/**
+ * A claimed number matches a stored one when both round to 4 decimal places,
+ * or when the claim is the stored number rounded to fewer places and the
+ * relative gap is at most 0.5% (43.8 against 43.79). Anything looser is rejected.
+ */
+export function figuresClose(claimed: number, stored: number): boolean {
+  if (!Number.isFinite(claimed) || !Number.isFinite(stored)) return false;
+  if (round4(claimed) === round4(stored)) return true;
+  if (stored === 0 || claimed === 0) return false;
+  const rel = Math.abs(claimed - stored) / Math.abs(stored);
+  if (rel > 0.005) return false;
+  const text = String(claimed);
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return false;
+  const frac = text.includes(".") ? text.split(".")[1] : "";
+  const decimals = frac.replace(/0+$/, "").length;
+  const factor = 10 ** decimals;
+  const rounded = Math.round(stored * factor) / factor;
+  return rounded === claimed;
+}
+
+function readLabel(row: StoredFigures): string {
+  return row.periodLabel || row.snapshotId || "read";
+}
+
+function formatRead(row: StoredFigures): string {
+  const bits = Object.entries(row.figures)
+    .slice(0, 16)
+    .map(([key, value]) => `${key}=${value}`);
+  return `${readLabel(row)}: ${bits.join(", ")}`;
+}
+
 /**
  * A finding may only carry figures that a tool read from stored books.
- * Numbers the model invented are dropped. No stored figures means no finding.
+ * Every claimed number must match some read in the run. The evidence row is
+ * the read with the most matches. A recorded finding is not itself a read.
  */
 export function groundFindingEvidence(input: {
   pool: StoredFigures[];
@@ -200,33 +236,67 @@ export function groundFindingEvidence(input: {
 }):
   | { ok: true; evidence: { snapshot_id: string | null; period_label: string | null; figures: Record<string, number> } }
   | { ok: false; error: string } {
-  const stored = [...input.pool].reverse().find((row) => Object.keys(row.figures).length > 0);
-  if (!stored) {
+  const reads = input.pool.filter((row) => Object.keys(row.figures).length > 0);
+  if (reads.length === 0) {
     return {
       ok: false,
       error: "No stored figures were read. A finding needs evidence from the books on file.",
     };
   }
-  const figures: Record<string, number> = {};
   const claimed = input.claimedFigures ?? null;
-  if (claimed && Object.keys(claimed).length > 0) {
-    for (const [key, value] of Object.entries(stored.figures)) {
-      if (claimed[key] === value) figures[key] = value;
-    }
-    if (Object.keys(figures).length === 0) {
-      return {
-        ok: false,
-        error: "The finding's figures do not match the books that were read.",
-      };
-    }
-  } else {
-    Object.assign(figures, stored.figures);
+  if (!claimed || Object.keys(claimed).length === 0) {
+    const latest = reads[reads.length - 1];
+    return {
+      ok: true,
+      evidence: {
+        snapshot_id: latest.snapshotId,
+        period_label: latest.periodLabel,
+        figures: { ...latest.figures },
+      },
+    };
   }
+
+  const matchesByRead = reads.map((row) => {
+    const matched: Record<string, number> = {};
+    for (const [key, value] of Object.entries(claimed)) {
+      const stored = row.figures[key];
+      if (typeof stored === "number" && figuresClose(value, stored)) matched[key] = stored;
+    }
+    return matched;
+  });
+  let winner = 0;
+  for (let i = 1; i < matchesByRead.length; i++) {
+    if (Object.keys(matchesByRead[i]).length >= Object.keys(matchesByRead[winner]).length) winner = i;
+  }
+
+  const figures: Record<string, number> = {};
+  const failed: string[] = [];
+  for (const [key, value] of Object.entries(claimed)) {
+    let stored: number | undefined = matchesByRead[winner][key];
+    if (stored == null) {
+      for (let i = matchesByRead.length - 1; i >= 0; i--) {
+        if (matchesByRead[i][key] != null) {
+          stored = matchesByRead[i][key];
+          break;
+        }
+      }
+    }
+    if (stored == null) failed.push(`${key}=${value}`);
+    else figures[key] = stored;
+  }
+  if (failed.length > 0) {
+    const available = reads.slice(0, 8).map(formatRead).join("; ");
+    return {
+      ok: false,
+      error: `The finding's figures do not match the books that were read. Failed: ${failed.join(", ")}. Available: ${available}.`,
+    };
+  }
+  const best = reads[winner];
   return {
     ok: true,
     evidence: {
-      snapshot_id: stored.snapshotId,
-      period_label: stored.periodLabel,
+      snapshot_id: best.snapshotId,
+      period_label: best.periodLabel,
       figures,
     },
   };

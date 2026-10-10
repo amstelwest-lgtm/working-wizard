@@ -5,7 +5,7 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { isClientIdle } from "../src/lib/agent-bus.ts";
+import { figuresClose, groundFindingEvidence, isClientIdle } from "../src/lib/agent-bus.ts";
 import { priorActivityIso } from "../src/lib/agent-enqueue.ts";
 import {
   ANALYST_MAX_ITERATIONS,
@@ -13,11 +13,16 @@ import {
   analystFailurePlan,
   analystRunCostUsd,
   analystToolAllowed,
+  collectStoredReads,
   executeAnalystGate,
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
 import { analystToolSchemas, ANALYST_SYSTEM } from "../supabase/functions/_shared/agent-prompts/analyst.ts";
 import { classifyResult, formatAgentPrompt, runAgentLoop } from "../supabase/functions/_shared/agent-core/loop.ts";
+import {
+  promptCachePrefixCostFactor,
+  shapeCachedModelRequest,
+} from "../supabase/functions/_shared/agent-core/prompt-cache.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -135,6 +140,174 @@ const DAY = 24 * 60 * 60 * 1000;
   });
   assert(prompts.length >= 2, "a rejection does not end the loop");
   assert(prompts[1].includes(rejection), "the next turn includes the rejection text");
+}
+
+// Claimed figures match every read in the run, with a tight rounding tolerance.
+{
+  assert(figuresClose(43.8, 43.79), "43.8 matches 43.79 rounded to one place");
+  assert(!figuresClose(43.8, 43.74), "43.8 does not match 43.74");
+  assert(figuresClose(100, 100.4), "an integer matches a stored value that rounds to it within 0.5%");
+  assert(!figuresClose(100, 100.6), "a 0.6% gap is outside the tolerance");
+  assert(figuresClose(1.23456, 1.234564), "values equal at 4 decimal places match");
+  assert(!figuresClose(0, 1), "zero matches only through the 4 decimal place check");
+  assert(figuresClose(0, 0), "zero matches zero");
+
+  const older = { snapshotId: "snap-aug", periodLabel: "Aug 2026", figures: { cash: 10, revenue: 80 } };
+  const newer = { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { debtor_days: 43.79, revenue: 100 } };
+  const across = groundFindingEvidence({
+    pool: [older, newer],
+    claimedFigures: { cash: 10, debtor_days: 43.8 },
+  });
+  assert(across.ok === true, "a claim can match an older read and a later read");
+  if (across.ok) {
+    assert(across.evidence.snapshot_id === "snap-sep", "the read with the latest tie holds the evidence period");
+    assert(across.evidence.figures.debtor_days === 43.79, "evidence keeps the stored number, not the rounded claim");
+    assert(across.evidence.figures.cash === 10, "a key missing from the winning read is taken from the read that has it");
+  }
+  const most = groundFindingEvidence({
+    pool: [older, newer],
+    claimedFigures: { debtor_days: 43.8, revenue: 100 },
+  });
+  assert(most.ok === true, "the read with the most key matches accepts the finding");
+  if (most.ok) assert(most.evidence.snapshot_id === "snap-sep", "that read is the evidence row");
+  const rejected = groundFindingEvidence({
+    pool: [older, newer],
+    claimedFigures: { cash: 1, debtor_days: 43.8 },
+  });
+  assert(rejected.ok === false, "a key that matches no read rejects the finding");
+  if (!rejected.ok) {
+    assert(rejected.error.startsWith("The finding's figures do not match the books that were read."), "the error keeps the books sentence");
+    assert(rejected.error.includes("Failed: cash=1"), "the error lists the failing key and value");
+    assert(rejected.error.includes("Aug 2026: cash=10"), "the error lists an older read");
+    assert(rejected.error.includes("Sep 2026: debtor_days=43.79"), "the error lists the later read");
+  }
+
+  const health = collectStoredReads(
+    {
+      overall: 48,
+      period_label: "Sep 2026",
+      snapshot_id: "snap-sep",
+      pillars: [
+        { id: "profit", label: "Profit", score: 70 },
+        { id: "assets", label: "Assets", score: 60 },
+        { id: "financing", label: "Financing", score: 50 },
+        { id: "cash", label: "Cash", score: 55 },
+      ],
+    },
+    { snapshotId: null, periodLabel: null },
+  );
+  assert(health.length === 1, "pillar scores join the health read for that period");
+  assert(health[0]?.periodLabel === "Sep 2026", "the health read keeps its period");
+  assert(health[0]?.figures.profit === 70 && health[0]?.figures.cash === 55, "pillar ids are figure keys");
+  assert(health[0]?.figures.overall === 48, "the overall score stays on the same read");
+
+  const history = collectStoredReads(
+    {
+      scores: [
+        { period_date: "2026-08-01", score: 40, is_estimated: false },
+        { period_date: "2026-09-01", score: 48, is_estimated: true },
+      ],
+    },
+    { snapshotId: null, periodLabel: null },
+  );
+  assert(history.length === 2, "each score-history period is its own read");
+  assert(history[0]?.periodLabel === "2026-08-01", "a score read is keyed by period");
+  assert(history[0]?.figures.score === 40, "the score value is stored");
+  assert(history[0]?.figures["score:2026-08-01"] === 40, "the period key disambiguates the score");
+  assert(history[1]?.figures["score:2026-09-01"] === 48, "the later period has its own key");
+
+  const fromHistory = groundFindingEvidence({
+    pool: history,
+    claimedFigures: { "score:2026-08-01": 40 },
+  });
+  assert(fromHistory.ok === true, "a score claim matches the period it names");
+  if (fromHistory.ok) assert(fromHistory.evidence.period_label === "2026-08-01", "the evidence period is the matching score row");
+}
+
+// A recorded finding is not pooled again, and its arguments land on the trace.
+{
+  const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  const runSrc = readFileSync(resolve("supabase/functions/agent-analyst/run.ts"), "utf8");
+  assert(!executeSrc.includes("ctx.pool.push"), "record_finding does not add its own evidence to the pool");
+  assert(runSrc.includes("collectStoredReads"), "score history and pillar scores enter the pool");
+  assert(runSrc.includes('name !== "record_finding"'), "the run skips pooling a recorded finding");
+  assert(runSrc.includes("cachePrompt: true"), "analyst runs cache the system prompt and the tools");
+  assert(runSrc.includes("cache_write_tokens"), "cache writes are stored on the run");
+  assert(runSrc.includes("cache_read_tokens"), "cache reads are stored on the run");
+
+  const traced = await runAgentLoop({
+    objective: "Review the books on file.",
+    audience: "accountant",
+    maxIterations: 4,
+    allowedTools: ["get_health", "record_finding"],
+    toolLabels: { get_health: "Health", record_finding: "Finding" },
+    reason: async (ctx) => {
+      if (ctx.iteration === 1) return { kind: "tool", name: "get_health", args: {}, why: "read health" };
+      if (ctx.iteration === 2) {
+        return {
+          kind: "tool",
+          name: "record_finding",
+          args: { kind: "cash", severity: "watch", title: "Cash on file is 40", figures: { cash: 40 } },
+          why: "record the cash figure",
+        };
+      }
+      return { kind: "stop", reason: "no_further_action", summary: "Review stored." };
+    },
+    execute: async (name) => (name === "get_health" ? { overall: 48, cash: 40 } : { recorded: true }),
+  });
+  assert(traced.trace[0]?.tool === "get_health" && !("args" in traced.trace[0]), "a read trace has no args key");
+  assert(traced.trace[1]?.tool === "record_finding", "the finding is on the trace");
+  const findingArgs = traced.trace[1]?.args as { figures?: { cash?: number } } | undefined;
+  assert(findingArgs?.figures?.cash === 40, "the trace records the record_finding arguments");
+}
+
+// Prompt caching is opt-in. Milonbot's request stays uncached.
+{
+  const tools = [
+    { name: "get_health", description: "Health", input_schema: { type: "object" } },
+    { name: "finish", description: "Stop", input_schema: { type: "object" } },
+  ];
+  const off = shapeCachedModelRequest({ system: "Review the books.", tools, cachePrompt: false });
+  assert(off.system === "Review the books.", "an uncached call keeps the system prompt as a string");
+  assert(off.tools === tools, "an uncached call keeps the tool array unchanged");
+  assert(off.betaHeader === null, "an uncached call adds no cache header");
+  assert(!JSON.stringify(off.tools).includes("cache_control"), "uncached tools have no cache_control");
+
+  const on = shapeCachedModelRequest({ system: "Review the books.", tools, cachePrompt: true });
+  assert(Array.isArray(on.system), "a cached call sends the system prompt as a content block");
+  const block = Array.isArray(on.system) ? on.system[0] : null;
+  assert(block?.cache_control.type === "ephemeral", "the system block is marked ephemeral");
+  assert(on.tools[0] && !("cache_control" in on.tools[0]), "only the last tool carries cache_control");
+  assert(
+    (on.tools[1] as { cache_control?: { type?: string } }).cache_control?.type === "ephemeral",
+    "the last tool is marked ephemeral",
+  );
+  assert(on.betaHeader === "prompt-caching-2024-07-31", "the cache beta header is set");
+  assert(on.tools !== tools, "caching does not mutate the caller's tool list");
+
+  const eight = promptCachePrefixCostFactor(ANALYST_MAX_ITERATIONS);
+  assert(Math.abs(eight - (1.25 + 0.1 * 7) / 8) < 1e-12, "eight turns write once at 1.25x then read at 0.1x");
+  assert(eight < 0.25, "the cached prefix costs under a quarter of paying the input rate every turn");
+  assert(analystRunCostUsd(1_000_000, 1_000_000) === 18, "uncached input and output still use $3 and $15");
+  assert(analystRunCostUsd(0, 0, 1_000_000, 0) === 3.75, "a million cache-write tokens cost $3.75");
+  assert(analystRunCostUsd(0, 0, 0, 1_000_000) === 0.3, "a million cache-read tokens cost $0.30");
+
+  const claudeSrc = readFileSync(resolve("supabase/functions/milon-bot/claude.ts"), "utf8");
+  const handlerSrc = readFileSync(resolve("supabase/functions/milon-bot/handler.ts"), "utf8");
+  const indexSrc = readFileSync(resolve("supabase/functions/milon-bot/index.ts"), "utf8");
+  assert(claudeSrc.includes("shapeCachedModelRequest"), "the model call shapes cache markers through the shared helper");
+  assert(claudeSrc.includes("opts?.cachePrompt === true"), "cache markers are added only when cachePrompt is set");
+  assert(claudeSrc.includes("shaped.betaHeader"), "the cache header is added only when the shaper asks for it");
+  assert(!handlerSrc.includes("cachePrompt"), "milon-bot chat does not opt into prompt caching");
+  assert(!indexSrc.includes("cachePrompt"), "the milon-bot entrypoint does not opt into prompt caching");
+  assert(
+    ANALYST_SYSTEM.includes("cash conversion cycle"),
+    "the prompt names cash conversion cycle as a figure that must come from a tool",
+  );
+  assert(
+    ANALYST_SYSTEM.includes("Do not add, subtract, or multiply tool results into a new figure for the title."),
+    "the prompt forbids derived arithmetic in titles",
+  );
 }
 
 // A sync passes the activity from before the write, so a 31-day-quiet client is idle.
