@@ -2,6 +2,7 @@
  * Milōn Analyst. Background review of recorded books.
  * User-facing text from this prompt must not name a model vendor.
  */
+import { FINDING_KINDS } from "../../../../src/lib/agent-analyst.ts";
 
 export const ANALYST_SYSTEM = `You are the Milōn Analyst for this one client.
 You review recorded books and publish findings. You do not coordinate the team, draft emails, or create tasks.
@@ -13,9 +14,12 @@ How to work:
 - Do not recompute a ratio, a health score, or a variance. Quote the tool result.
 - Speak only about recorded periods. Do not forecast. The 13-week view belongs to the Milōn Financial Manager.
 - record_finding publishes one observation. Its figures must be numbers a tool just returned, with the snapshot or period those numbers came from. Copy those keys and values. Do not invent keys.
+- Each read lists the exact evidence keys you may cite, in a line that starts "evidence keys you may cite:". Copy those keys. score_2026-10-05 is stored as score:2026-10-05. profit_pillar_score is stored as pillar:profit.
+- figures is a flat map from one snapshot, or an object keyed by period label whose values are number maps. Do not put numbers from two periods in one flat map.
 - Every number in the title or detail that is a stored figure must be in figures, with the period it came from. A drop from one score to the next has to carry both scores and both periods.
 - A title may quote a number only when a tool returned that number. Do not add, subtract, or multiply tool results into a new figure for the title. A cash conversion cycle belongs in a title only when a tool returned that number.
-- kind is a short label of at most 80 characters. title is at most 200 characters. detail is at most 2000 characters.
+- kind is exactly one of weakest_pillar, score_decline, score_improvement, working_capital_days, margin_compression, margin_improvement, liquidity, leverage, revenue_trend, cost_ratio, data_quality, other.
+- title is at most 200 characters. detail is at most 2000 characters.
 - severity is exactly one of info, watch, or act.
   - info: a stored fact worth keeping. No action is asked.
   - watch: the books on file are drifting and should be looked at again.
@@ -90,9 +94,9 @@ export function analystToolSchemas(): AnalystToolSchema[] {
         properties: {
           kind: {
             type: "string",
-            minLength: 1,
-            maxLength: 80,
-            description: "Short label for the observation. At most 80 characters.",
+            enum: [...FINDING_KINDS],
+            description:
+              "weakest_pillar, score_decline, score_improvement, working_capital_days, margin_compression, margin_improvement, liquidity, leverage, revenue_trend, cost_ratio, data_quality, or other.",
           },
           severity: {
             type: "string",
@@ -113,9 +117,14 @@ export function analystToolSchemas(): AnalystToolSchema[] {
           },
           figures: {
             type: "object",
-            additionalProperties: { type: "number" },
+            additionalProperties: {
+              anyOf: [
+                { type: "number" },
+                { type: "object", additionalProperties: { type: "number" } },
+              ],
+            },
             description:
-              "Flat numbers copied from a read tool, using that tool's keys. Keys that were not in the tool result are refused.",
+              "A flat map of numbers from one snapshot, or period labels whose values are number maps. Copy the evidence keys from the read. score_2026-10-05 is stored as score:2026-10-05. profit_pillar_score is stored as pillar:profit.",
           },
         },
         required: ["kind", "severity", "title"],

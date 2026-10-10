@@ -3,11 +3,43 @@
  * The edge function enforces the same list before it executes a tool.
  */
 
-import { retryAfterFailure, sanitizeAgentError, type StoredFigures } from "./agent-bus.ts";
+import { figuresClose, retryAfterFailure, sanitizeAgentError, type StoredFigures } from "./agent-bus.ts";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 
 export const FINDING_DEDUPE_DAYS = 7;
+
+/** Share of the larger figure set that must match, key and value, to count as the same finding. */
+export const FINDING_FIGURE_OVERLAP = 0.6;
+
+export const FINDING_KINDS = [
+  "weakest_pillar",
+  "score_decline",
+  "score_improvement",
+  "working_capital_days",
+  "margin_compression",
+  "margin_improvement",
+  "liquidity",
+  "leverage",
+  "revenue_trend",
+  "cost_ratio",
+  "data_quality",
+  "other",
+] as const;
+
+export type FindingKind = (typeof FINDING_KINDS)[number];
+
+export function findingKindAllowed(kind: string): kind is FindingKind {
+  return (FINDING_KINDS as readonly string[]).includes(kind);
+}
+
+const SEVERITY_RANK: Record<string, number> = { info: 1, watch: 2, act: 3 };
+
+/** The higher severity, when the new one outranks the one already stored. */
+export function higherFindingSeverity(current: string, incoming: string): string | null {
+  if ((SEVERITY_RANK[incoming] ?? 0) > (SEVERITY_RANK[current] ?? 0)) return incoming;
+  return null;
+}
 
 export const ANALYST_READ_TOOLS = [
   "get_health",
@@ -135,7 +167,7 @@ function pillarScores(raw: unknown): Record<string, number> {
     if (!item || typeof item !== "object") continue;
     const rec = item as Record<string, unknown>;
     if (typeof rec.id !== "string" || typeof rec.score !== "number" || !Number.isFinite(rec.score)) continue;
-    out[rec.id] = rec.score;
+    out[`pillar:${rec.id}`] = rec.score;
   }
   return out;
 }
@@ -236,39 +268,115 @@ export function normalizeFindingText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function figureSignature(figures: Record<string, number>): string {
-  return Object.keys(figures)
-    .sort()
-    .map((key) => `${key}=${figures[key]}`)
-    .join("|");
+/** Flat numbers, or one level of `{ period: { key: value } }`, for overlap checks. */
+export function flattenFindingFigures(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = value;
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    for (const [inner, n] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof n === "number" && Number.isFinite(n)) out[`${key}|${inner}`] = n;
+    }
+  }
+  return out;
 }
 
-/** Same client and agent is the caller's filter. Match kind+title, or the same figures, inside 7 days. */
+export function evidenceKeyList(reads: StoredFigures[]): string[] {
+  return [...new Set(reads.flatMap((row) => Object.keys(row.figures)))].sort();
+}
+
+export function evidenceKeysNote(reads: StoredFigures[]): string | null {
+  const keys = evidenceKeyList(reads);
+  if (keys.length === 0) return null;
+  return `evidence keys you may cite: ${keys.join(", ")}`;
+}
+
+function sameFindingPeriod(
+  a: { periodLabel: string | null; snapshotId: string | null },
+  b: { periodLabel: string | null; snapshotId: string | null },
+): boolean {
+  const period =
+    a.periodLabel != null &&
+    b.periodLabel != null &&
+    normalizeFindingText(a.periodLabel) === normalizeFindingText(b.periodLabel);
+  const snapshot = a.snapshotId != null && b.snapshotId != null && a.snapshotId === b.snapshotId;
+  return period || snapshot;
+}
+
+/** Matched key/value pairs divided by the larger set. 3 of 5 is 0.6. */
+export function figureKeyOverlap(a: Record<string, number>, b: Record<string, number>): number {
+  const left = Object.keys(a);
+  const right = Object.keys(b);
+  const denom = Math.max(left.length, right.length);
+  if (denom === 0) return 0;
+  const used = new Set<string>();
+  let matched = 0;
+  for (const key of left) {
+    const other = right.find(
+      (candidate) =>
+        !used.has(candidate) &&
+        candidate.toLowerCase() === key.toLowerCase() &&
+        figuresClose(a[key], b[candidate]),
+    );
+    if (!other) continue;
+    used.add(other);
+    matched += 1;
+  }
+  return matched / denom;
+}
+
+/**
+ * Same client and agent is the caller's filter. Match the same kind and the
+ * same period or snapshot inside 7 days, ignoring the title, or a figure
+ * key/value overlap of at least 60 percent.
+ */
 export function findingDuplicates<T extends {
   id: string;
   kind: string;
-  title: string;
-  figures: Record<string, number>;
+  figures: unknown;
   seenAtMs: number;
+  periodLabel: string | null;
+  snapshotId: string | null;
+  severity: string;
 }>(input: {
   nowMs: number;
-  candidate: { kind: string; title: string; figures: Record<string, number> };
+  candidate: {
+    kind: string;
+    figures: unknown;
+    periodLabel: string | null;
+    snapshotId: string | null;
+  };
   recent: T[];
 }): T | null {
   const cutoff = input.nowMs - FINDING_DEDUPE_DAYS * 24 * 60 * 60 * 1000;
   const kind = normalizeFindingText(input.candidate.kind);
-  const title = normalizeFindingText(input.candidate.title);
-  const figures = figureSignature(input.candidate.figures);
+  const figures = flattenFindingFigures(input.candidate.figures);
   let best: T | null = null;
   for (const row of input.recent) {
     if (row.seenAtMs < cutoff) continue;
-    const sameText =
-      normalizeFindingText(row.kind) === kind && normalizeFindingText(row.title) === title;
-    const sameFigures = figures.length > 0 && figureSignature(row.figures) === figures;
-    if (!sameText && !sameFigures) continue;
+    const sameKindPeriod =
+      normalizeFindingText(row.kind) === kind &&
+      sameFindingPeriod(
+        { periodLabel: input.candidate.periodLabel, snapshotId: input.candidate.snapshotId },
+        { periodLabel: row.periodLabel, snapshotId: row.snapshotId },
+      );
+    const overlap = figureKeyOverlap(figures, flattenFindingFigures(row.figures));
+    if (!sameKindPeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
     if (!best || row.seenAtMs >= best.seenAtMs) best = row;
   }
   return best;
+}
+
+/** A review that saved findings and then hit the turn cap is finished. */
+export function analystRunSummary(input: { stopReason: string; summary: string }): string {
+  if (input.stopReason === "cap_after_findings") {
+    return "The review recorded its findings and stopped at the turn limit.";
+  }
+  return input.summary;
 }
 
 /**

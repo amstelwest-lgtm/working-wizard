@@ -18,7 +18,10 @@ import {
   analystFailurePlan,
   analystRunCostUsd,
   analystRunOutcome,
+  analystRunSummary,
   collectStoredReads,
+  evidenceKeyList,
+  evidenceKeysNote,
 } from "../../../src/lib/agent-analyst.ts";
 import { executeAnalystTool } from "./execute.ts";
 
@@ -186,8 +189,15 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           pool,
         });
         if (name !== "record_finding") {
-          for (const stored of collectStoredReads(payload, { snapshotId: null, periodLabel: null })) {
-            pool.push(stored);
+          const reads = collectStoredReads(payload, { snapshotId: null, periodLabel: null });
+          for (const stored of reads) pool.push(stored);
+          const note = evidenceKeysNote(reads);
+          if (note && payload && typeof payload === "object" && !Array.isArray(payload)) {
+            return {
+              ...(payload as Record<string, unknown>),
+              evidence_keys: evidenceKeyList(reads),
+              evidence_keys_note: note,
+            };
           }
         }
         return payload;
@@ -205,7 +215,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       .update({
         status: outcome.status,
         stop_reason: outcome.stopReason,
-        summary: result.summary.slice(0, 2000),
+        summary: analystRunSummary({ stopReason: outcome.stopReason, summary: result.summary }).slice(0, 2000),
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cache_write_tokens: cacheWriteTokens,
