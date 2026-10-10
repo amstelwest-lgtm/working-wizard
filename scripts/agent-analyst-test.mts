@@ -5,18 +5,22 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { figuresClose, groundFindingEvidence, isClientIdle } from "../src/lib/agent-bus.ts";
+import { citedFiguresCovered, figuresClose, groundFindingEvidence, isClientIdle } from "../src/lib/agent-bus.ts";
 import { priorActivityIso } from "../src/lib/agent-enqueue.ts";
 import {
   ANALYST_MAX_ITERATIONS,
   ANALYST_TOOLS,
   analystFailurePlan,
   analystRunCostUsd,
+  analystRunOutcome,
   analystToolAllowed,
   collectStoredReads,
   executeAnalystGate,
+  findingDuplicates,
+  labelHealthScore,
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
+import { scorecardHealthFromFinancials } from "../src/lib/health-score.ts";
 import { analystToolSchemas, ANALYST_SYSTEM } from "../supabase/functions/_shared/agent-prompts/analyst.ts";
 import { classifyResult, formatAgentPrompt, runAgentLoop } from "../supabase/functions/_shared/agent-core/loop.ts";
 import {
@@ -94,7 +98,7 @@ const DAY = 24 * 60 * 60 * 1000;
   const schema = analystFailurePlan(1, "the model error (400): bad schema");
   assert(schema.action === "dead", "a 4xx schema error is not retried");
   assert(!schema.error.toLowerCase().includes("claude"), "stored errors do not name the model vendor");
-  assert(ANALYST_MAX_ITERATIONS === 8, "the analyst loop stops at 8 iterations");
+  assert(ANALYST_MAX_ITERATIONS === 10, "the analyst loop stops at 10 iterations");
   assert(analystRunCostUsd(1_000_000, 1_000_000) === 18, "cost uses the $3 and $15 rates");
 }
 
@@ -285,9 +289,13 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(on.betaHeader === "prompt-caching-2024-07-31", "the cache beta header is set");
   assert(on.tools !== tools, "caching does not mutate the caller's tool list");
 
-  const eight = promptCachePrefixCostFactor(ANALYST_MAX_ITERATIONS);
-  assert(Math.abs(eight - (1.25 + 0.1 * 7) / 8) < 1e-12, "eight turns write once at 1.25x then read at 0.1x");
-  assert(eight < 0.25, "the cached prefix costs under a quarter of paying the input rate every turn");
+  const turns = ANALYST_MAX_ITERATIONS;
+  const prefix = promptCachePrefixCostFactor(turns);
+  assert(
+    Math.abs(prefix - (1.25 + 0.1 * (turns - 1)) / turns) < 1e-12,
+    "the cached prefix writes once at 1.25x then reads at 0.1x",
+  );
+  assert(prefix < 0.25, "a 10-turn cached prefix costs under a quarter of paying the input rate every turn");
   assert(analystRunCostUsd(1_000_000, 1_000_000) === 18, "uncached input and output still use $3 and $15");
   assert(analystRunCostUsd(0, 0, 1_000_000, 0) === 3.75, "a million cache-write tokens cost $3.75");
   assert(analystRunCostUsd(0, 0, 0, 1_000_000) === 0.3, "a million cache-read tokens cost $0.30");
@@ -392,6 +400,217 @@ const DAY = 24 * 60 * 60 * 1000;
 
   const promptFiles = readdirSync(resolve("supabase/functions/_shared/agent-prompts"));
   assert(promptFiles.includes("analyst.ts"), "the analyst prompt file is in place");
+}
+
+// A capped review that already saved a finding succeeds. A cap with none stays partial.
+{
+  const capped = await runAgentLoop({
+    objective: "Review the books on file.",
+    audience: "accountant",
+    maxIterations: 2,
+    allowedTools: ["get_health", "record_finding"],
+    toolLabels: { get_health: "Health", record_finding: "Finding" },
+    reason: async (ctx) => {
+      if (ctx.iteration === 1) {
+        return {
+          kind: "tool",
+          name: "record_finding",
+          args: { kind: "health", severity: "info", title: "Stored health is 69", figures: { overall: 69 } },
+          why: "record",
+        };
+      }
+      return { kind: "tool", name: "get_health", args: {}, why: "one more read" };
+    },
+    execute: async (name) => (name === "record_finding" ? { recorded: true } : { overall: 69 }),
+  });
+  assert(capped.status === "safety_limit", "the shared loop still stops at its cap");
+  const done = analystRunOutcome({
+    stopReason: capped.status,
+    steps: capped.trace.map((step) => ({ tool: step.tool, status: step.status })),
+    maxIterations: 2,
+  });
+  assert(done.status === "succeeded" && done.stopReason === "cap_after_findings", "a cap after a finding is succeeded");
+  const empty = analystRunOutcome({
+    stopReason: "safety_limit",
+    steps: Array.from({ length: 10 }, () => ({ tool: "get_health", status: "ok" })),
+    maxIterations: 10,
+  });
+  assert(empty.status === "partial" && empty.stopReason === "safety_limit", "a cap with no finding stays partial");
+  const early = analystRunOutcome({
+    stopReason: "safety_limit",
+    steps: [{ tool: "record_finding", status: "ok" }],
+    maxIterations: 10,
+  });
+  assert(early.status === "partial", "a safety stop before the cap stays partial");
+  const runSrc = readFileSync(resolve("supabase/functions/agent-analyst/run.ts"), "utf8");
+  assert(runSrc.includes("analystRunOutcome"), "the analyst run uses the cap outcome");
+}
+
+// A repeated finding refreshes last_seen. Kind and title, or the same figures, inside 7 days.
+{
+  const now = Date.parse("2026-10-10T12:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  const recent = [
+    {
+      id: "old",
+      kind: "health",
+      title: "Stored health is 69",
+      figures: { overall: 69 },
+      seenAtMs: now - 8 * day,
+    },
+    {
+      id: "fresh",
+      kind: "Health",
+      title: "  stored   health is 69 ",
+      figures: { overall: 69 },
+      seenAtMs: now - day,
+    },
+  ];
+  const byTitle = findingDuplicates({
+    nowMs: now,
+    candidate: { kind: "health", title: "Stored health is 69", figures: { cash: 10 } },
+    recent,
+  });
+  assert(byTitle?.id === "fresh", "a normalized kind and title inside 7 days matches");
+  const byFigures = findingDuplicates({
+    nowMs: now,
+    candidate: { kind: "other", title: "Different title", figures: { overall: 69 } },
+    recent,
+  });
+  assert(byFigures?.id === "fresh", "the same figure keys and values match");
+  const stale = findingDuplicates({
+    nowMs: now,
+    candidate: { kind: "health", title: "Stored health is 69", figures: { overall: 69 } },
+    recent: [recent[0]],
+  });
+  assert(stale == null, "a finding last seen 8 days ago is not a duplicate");
+  const again = findingDuplicates({
+    nowMs: now,
+    candidate: { kind: "health", title: "Stored health is 69", figures: { overall: 69 } },
+    recent,
+  });
+  assert(again?.id === byTitle?.id, "matching the same row twice is idempotent");
+  const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  assert(executeSrc.includes("deduped: true"), "a duplicate is reported as already recorded");
+  assert(executeSrc.includes("last_seen"), "a duplicate updates last_seen");
+  assert(
+    executeSrc.indexOf("deduped: true") < executeSrc.indexOf('type: "finding"'),
+    "a duplicate does not send another finding message",
+  );
+  const migration = readFileSync(
+    resolve("supabase/migrations/20261011001000_agent_findings_last_seen.sql"),
+    "utf8",
+  );
+  assert(migration.includes("ADD COLUMN IF NOT EXISTS last_seen"), "last_seen is added in place");
+  assert(migration.includes("agent_findings_recent_idx"), "recent findings are indexed by client, agent, and last_seen");
+  assert(
+    !readFileSync(resolve("supabase/migrations/20261010160000_agent_foundation.sql"), "utf8").includes("last_seen"),
+    "the applied foundation migration is unchanged",
+  );
+}
+
+// A title that cites two stored scores has to carry both values and their periods.
+{
+  const pool = [
+    { snapshotId: null, periodLabel: "2026-10-05", figures: { score: 78, "score:2026-10-05": 78 } },
+    { snapshotId: null, periodLabel: "2026-10-06", figures: { score: 69, "score:2026-10-06": 69 } },
+  ];
+  const one = citedFiguresCovered({
+    title: "Health dropped from 78 to 69",
+    detail: "",
+    pool,
+    evidenceFigures: { score: 69 },
+    evidencePeriod: "2026-10-06",
+  });
+  assert(one.ok === false, "citing 78 without putting it in the figures is rejected");
+  if (!one.ok) assert(one.error.includes("78"), "the error names the missing figure");
+  const noPeriod = citedFiguresCovered({
+    title: "Health dropped from 78 to 69",
+    detail: "",
+    pool,
+    evidenceFigures: { prior: 78, current: 69 },
+    evidencePeriod: null,
+  });
+  assert(noPeriod.ok === false, "both scores without their periods are rejected");
+  if (!noPeriod.ok) assert(noPeriod.error.includes("2026-10-05"), "the error names a missing period");
+  const covered = citedFiguresCovered({
+    title: "Health dropped from 78 to 69",
+    detail: "",
+    pool,
+    evidenceFigures: { "score:2026-10-05": 78, "score:2026-10-06": 69 },
+    evidencePeriod: "2026-10-06",
+  });
+  assert(covered.ok === true, "figure keys that carry both periods are accepted");
+  const prose = citedFiguresCovered({
+    title: "Health dropped from 78 on 2026-10-05 to 69 on 2026-10-06",
+    detail: "",
+    pool,
+    evidenceFigures: { prior: 78, current: 69 },
+    evidencePeriod: null,
+  });
+  assert(prose.ok === true, "periods written in the title count");
+  assert(
+    ANALYST_SYSTEM.includes("both scores and both periods"),
+    "the prompt tells the model to carry both scores and both periods",
+  );
+}
+
+// The health tool returns the stored score. The live 67 is the current books with debt-to-equity.
+{
+  const labeled = labelHealthScore({
+    liveOverall: 67,
+    storedScore: 69,
+    storedAsOf: "2026-10-06",
+  });
+  assert(labeled.overall === 69 && labeled.overall_as_of === "2026-10-06", "overall is the stored score and its as-of");
+  assert(labeled.overall_basis === "stored", "the stored score is labeled stored");
+  assert(labeled.live_overall === 67, "the recalculation stays available");
+  assert(labeled.live_overall_label.includes("Not the stored score"), "the live score is labeled as a recalculation");
+  const qa = {
+    revenue: "700000",
+    cogs: "280000",
+    fixedCosts: "351000",
+    ebit: "60000",
+    ebitda: "69000",
+    ebt: "60000",
+    netIncome: "60000",
+    receivables: "48500",
+    payables: "28500",
+    inventory: "62000",
+    cash: "128450",
+    totalAssets: "306950",
+    equity: "150000",
+    totalLiabilities: "156950",
+    periodMonths: "12",
+    periodEnd: "2026-09-30",
+  };
+  const market = { country: "US" as const, copyPack: "us" as const };
+  const live = scorecardHealthFromFinancials({
+    financials: qa,
+    fyStartMonth: 1,
+    periodMonths: 12,
+    market,
+  });
+  const { totalLiabilities: _liabilities, ...withoutDebt } = qa;
+  const savedShape = scorecardHealthFromFinancials({
+    financials: withoutDebt,
+    fyStartMonth: 1,
+    periodMonths: 12,
+    market,
+  });
+  assert(live.overall === 67, `current books with debt-to-equity score 67, got ${live.overall}`);
+  assert(savedShape.overall === 69, `the same books without debt-to-equity score 69, got ${savedShape.overall}`);
+  assert(
+    live.pillars.find((pillar) => pillar.id === "financing")?.score === 83,
+    "debt-to-equity pulls the financing pillar to 83",
+  );
+  assert(
+    savedShape.pillars.find((pillar) => pillar.id === "financing")?.score === 91,
+    "without debt-to-equity the financing pillar is 91",
+  );
+  const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  assert(executeSrc.includes("labelHealthScore"), "the analyst health tool labels the stored score");
+  assert(executeSrc.includes("client_score_history"), "the analyst health tool reads the stored score");
 }
 
 console.log("agent analyst ok");

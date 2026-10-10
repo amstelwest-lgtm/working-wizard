@@ -301,3 +301,81 @@ export function groundFindingEvidence(input: {
     },
   };
 }
+
+function citedNumbers(text: string): number[] {
+  const withoutDates = text.replace(/\d{4}-\d{2}-\d{2}/g, " ");
+  const matches = withoutDates.match(/-?\d+(?:\.\d+)?/g) ?? [];
+  const out: number[] = [];
+  for (const raw of matches) {
+    if (/^\d{4}$/.test(raw)) {
+      const year = Number(raw);
+      if (year >= 1900 && year <= 2100) continue;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
+function periodCarried(
+  period: string,
+  title: string,
+  detail: string,
+  figures: Record<string, number>,
+  evidencePeriod: string | null,
+): boolean {
+  if (evidencePeriod === period) return true;
+  if (`${title}\n${detail}`.includes(period)) return true;
+  return Object.keys(figures).some((key) => key.includes(period));
+}
+
+/**
+ * A number in the title or detail that equals a stored figure has to be in
+ * the evidence, with the period of that figure. "Dropped from 78 to 69"
+ * needs both scores and both periods.
+ */
+export function citedFiguresCovered(input: {
+  title: string;
+  detail: string;
+  pool: StoredFigures[];
+  evidenceFigures: Record<string, number>;
+  evidencePeriod: string | null;
+}): { ok: true } | { ok: false; error: string } {
+  const text = `${input.title}\n${input.detail}`;
+  const cited = citedNumbers(text);
+  const missingValues: string[] = [];
+  const missingPeriods: string[] = [];
+  const seen = new Set<string>();
+  for (const n of cited) {
+    const token = String(n);
+    if (seen.has(token)) continue;
+    seen.add(token);
+    const reads = input.pool.filter((row) =>
+      Object.values(row.figures).some((value) => figuresClose(n, value)),
+    );
+    if (reads.length === 0) continue;
+    const inEvidence = Object.values(input.evidenceFigures).some((value) => figuresClose(n, value));
+    if (!inEvidence) {
+      missingValues.push(token);
+      continue;
+    }
+    const periods = [...new Set(reads.map((row) => row.periodLabel).filter((p): p is string => Boolean(p)))];
+    if (periods.length === 0) continue;
+    const carried = periods.some((period) =>
+      periodCarried(period, input.title, input.detail, input.evidenceFigures, input.evidencePeriod),
+    );
+    if (!carried) missingPeriods.push(`${token} (${periods.join(" or ")})`);
+  }
+  if (missingValues.length === 0 && missingPeriods.length === 0) return { ok: true };
+  const parts: string[] = [];
+  if (missingValues.length > 0) {
+    parts.push(
+      `The title or detail cites ${missingValues.join(", ")}, which is on the books, but the finding figures do not include it.`,
+    );
+  }
+  if (missingPeriods.length > 0) {
+    parts.push(`The finding cites a stored figure without its period: ${missingPeriods.join("; ")}.`);
+  }
+  parts.push("Include every cited figure and the period it came from.");
+  return { ok: false, error: parts.join(" ") };
+}
