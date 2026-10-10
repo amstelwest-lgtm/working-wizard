@@ -5,7 +5,13 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { citedFiguresCovered, figuresClose, groundFindingEvidence, isClientIdle } from "../src/lib/agent-bus.ts";
+import {
+  canonicalEvidenceKey,
+  citedFiguresCovered,
+  figuresClose,
+  groundFindingEvidence,
+  isClientIdle,
+} from "../src/lib/agent-bus.ts";
 import { priorActivityIso } from "../src/lib/agent-enqueue.ts";
 import {
   ANALYST_MAX_ITERATIONS,
@@ -13,10 +19,15 @@ import {
   analystFailurePlan,
   analystRunCostUsd,
   analystRunOutcome,
+  analystRunSummary,
   analystToolAllowed,
   collectStoredReads,
+  evidenceKeysNote,
   executeAnalystGate,
+  FINDING_KINDS,
+  figureKeyOverlap,
   findingDuplicates,
+  higherFindingSeverity,
   labelHealthScore,
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
@@ -109,13 +120,16 @@ const DAY = 24 * 60 * 60 * 1000;
   const props = (finding?.input_schema.properties ?? {}) as Record<string, Record<string, unknown>>;
   assert(JSON.stringify(props.severity?.enum) === JSON.stringify(["info", "watch", "act"]), "severity enum is info, watch, act");
   assert(typeof props.severity?.description === "string" && String(props.severity.description).includes("watch"), "severity describes when to use each value");
-  assert(props.kind?.maxLength === 80, "kind is capped at 80 characters");
+  assert(JSON.stringify(props.kind?.enum) === JSON.stringify([...FINDING_KINDS]), "kind is the fixed finding enum");
   assert(props.title?.maxLength === 200, "title is capped at 200 characters");
   assert(props.detail?.maxLength === 2000, "detail is capped at 2000 characters");
-  assert(
-    (props.figures?.additionalProperties as { type?: string } | undefined)?.type === "number",
-    "figure values are numbers",
-  );
+  const figureShapes = (props.figures?.additionalProperties as { anyOf?: Array<{ type?: string }> } | undefined)?.anyOf;
+  assert(figureShapes?.some((shape) => shape.type === "number"), "a flat figure value is a number");
+  assert(figureShapes?.some((shape) => shape.type === "object"), "a period map is allowed inside figures");
+  for (const kind of FINDING_KINDS) {
+    assert(ANALYST_SYSTEM.includes(kind), `the system prompt names kind ${kind}`);
+  }
+  assert(ANALYST_SYSTEM.includes("evidence keys you may cite:"), "the prompt points at the evidence-key line");
   for (const word of ["info", "watch", "act"]) {
     assert(ANALYST_SYSTEM.includes(word), `the system prompt names severity ${word}`);
   }
@@ -162,18 +176,34 @@ const DAY = 24 * 60 * 60 * 1000;
     pool: [older, newer],
     claimedFigures: { cash: 10, debtor_days: 43.8 },
   });
-  assert(across.ok === true, "a claim can match an older read and a later read");
-  if (across.ok) {
-    assert(across.evidence.snapshot_id === "snap-sep", "the read with the latest tie holds the evidence period");
-    assert(across.evidence.figures.debtor_days === 43.79, "evidence keeps the stored number, not the rounded claim");
-    assert(across.evidence.figures.cash === 10, "a key missing from the winning read is taken from the read that has it");
+  assert(across.ok === false, "a flat map that mixes two periods is rejected");
+  if (!across.ok) {
+    assert(across.error.includes("more than one period"), "the error says the figures span periods");
+    assert(across.error.includes("Aug 2026") && across.error.includes("Sep 2026"), "the error names both periods");
+    assert(!across.error.includes("snap-sep"), "the rejection does not stamp the later snapshot");
+  }
+  const structured = groundFindingEvidence({
+    pool: [older, newer],
+    claimedFigures: { "Aug 2026": { cash: 10 }, "Sep 2026": { debtor_days: 43.8 } },
+  });
+  assert(structured.ok === true, "the same numbers are accepted when each period has its own map");
+  if (structured.ok) {
+    assert(structured.evidence.snapshot_id === null, "mixed periods do not share one snapshot id");
+    assert(structured.evidence.period_label === null, "mixed periods do not share one period label");
+    const byPeriod = structured.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Aug 2026"]?.cash === 10, "August keeps the stored cash");
+    assert(byPeriod["Sep 2026"]?.debtor_days === 43.79, "September keeps the stored debtor days, not the rounded claim");
   }
   const most = groundFindingEvidence({
     pool: [older, newer],
     claimedFigures: { debtor_days: 43.8, revenue: 100 },
   });
-  assert(most.ok === true, "the read with the most key matches accepts the finding");
-  if (most.ok) assert(most.evidence.snapshot_id === "snap-sep", "that read is the evidence row");
+  assert(most.ok === true, "a flat map from one period is accepted");
+  if (most.ok) {
+    assert(most.evidence.snapshot_id === "snap-sep", "that period's snapshot is the evidence row");
+    const flat = most.evidence.figures as Record<string, number>;
+    assert(flat.debtor_days === 43.79, "evidence keeps the stored number");
+  }
   const rejected = groundFindingEvidence({
     pool: [older, newer],
     claimedFigures: { cash: 1, debtor_days: 43.8 },
@@ -202,7 +232,10 @@ const DAY = 24 * 60 * 60 * 1000;
   );
   assert(health.length === 1, "pillar scores join the health read for that period");
   assert(health[0]?.periodLabel === "Sep 2026", "the health read keeps its period");
-  assert(health[0]?.figures.profit === 70 && health[0]?.figures.cash === 55, "pillar ids are figure keys");
+  assert(health[0]?.figures["pillar:profit"] === 70 && health[0]?.figures["pillar:cash"] === 55, "pillar keys are pillar:<id>");
+  const keyNote = evidenceKeysNote(health);
+  assert(keyNote?.startsWith("evidence keys you may cite:"), "a read lists the keys the model may cite");
+  assert(keyNote?.includes("pillar:profit") && keyNote?.includes("overall"), "the list is the keys on that read");
   assert(health[0]?.figures.overall === 48, "the overall score stays on the same read");
 
   const history = collectStoredReads(
@@ -226,6 +259,33 @@ const DAY = 24 * 60 * 60 * 1000;
   });
   assert(fromHistory.ok === true, "a score claim matches the period it names");
   if (fromHistory.ok) assert(fromHistory.evidence.period_label === "2026-08-01", "the evidence period is the matching score row");
+
+  const mixedScores = groundFindingEvidence({
+    pool: history,
+    claimedFigures: { "score:2026-08-01": 40, "score:2026-09-01": 48 },
+  });
+  assert(mixedScores.ok === false, "two score periods in one flat map are rejected");
+  const nestedScores = groundFindingEvidence({
+    pool: history,
+    claimedFigures: { "2026-08-01": { score: 40 }, "2026-09-01": { score: 48 } },
+  });
+  assert(nestedScores.ok === true, "score periods filed under their labels are accepted");
+  if (nestedScores.ok) assert(nestedScores.evidence.snapshot_id === null, "score history does not borrow a snapshot id");
+
+  const aliasKeys = new Set(["score:2026-10-05", "pillar:profit", "Debtor Days"]);
+  assert(canonicalEvidenceKey("score_2026-10-05", aliasKeys) === "score:2026-10-05", "score_date aliases to score:date");
+  assert(canonicalEvidenceKey("profit_pillar_score", aliasKeys) === "pillar:profit", "profit_pillar_score aliases to pillar:profit");
+  assert(canonicalEvidenceKey("debtor_days", aliasKeys) === "Debtor Days", "a snake_case ratio aliases to the stored label");
+  const aliased = groundFindingEvidence({
+    pool: [{ snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { "score:2026-10-05": 78, "pillar:profit": 70 } }],
+    claimedFigures: { score_2026_10_05: 78, profit_pillar_score: 70 },
+  });
+  assert(aliased.ok === true, "aliased keys match the stored keys");
+  if (aliased.ok) {
+    const stored = aliased.evidence.figures as Record<string, number>;
+    assert(stored["score:2026-10-05"] === 78 && stored["pillar:profit"] === 70, "evidence stores the canonical keys");
+    assert(aliased.evidence.snapshot_id === "snap-oct", "one period keeps its snapshot");
+  }
 }
 
 // A recorded finding is not pooled again, and its arguments land on the trace.
@@ -430,6 +490,34 @@ const DAY = 24 * 60 * 60 * 1000;
     maxIterations: 2,
   });
   assert(done.status === "succeeded" && done.stopReason === "cap_after_findings", "a cap after a finding is succeeded");
+  const capSummary = analystRunSummary({
+    stopReason: done.stopReason,
+    summary: capped.summary,
+  });
+  assert(capSummary.includes("recorded its findings"), "a finished cap says the review recorded findings");
+  assert(!capSummary.includes("Stopped at the iteration limit"), "a succeeded cap does not keep the iteration-limit sentence");
+  const partialSummary = analystRunSummary({
+    stopReason: "safety_limit",
+    summary: "Stopped at the iteration limit before the objective was closed.",
+  });
+  assert(
+    partialSummary === "Stopped at the iteration limit before the objective was closed.",
+    "a real safety stop keeps the loop summary",
+  );
+  const dedupedClass = classifyResult("record_finding", { recorded: true, deduped: true, finding_id: "abc" });
+  assert(dedupedClass.status === "ok", "a deduped finding is an accepted step");
+  const dedupedCap = analystRunOutcome({
+    stopReason: "safety_limit",
+    steps: [
+      { tool: "record_finding", status: dedupedClass.status },
+      { tool: "get_health", status: "ok" },
+    ],
+    maxIterations: 2,
+  });
+  assert(
+    dedupedCap.status === "succeeded" && dedupedCap.stopReason === "cap_after_findings",
+    "a deduped finding counts toward the cap",
+  );
   const empty = analystRunOutcome({
     stopReason: "safety_limit",
     steps: Array.from({ length: 10 }, () => ({ tool: "get_health", status: "ok" })),
@@ -444,55 +532,127 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(early.status === "partial", "a safety stop before the cap stays partial");
   const runSrc = readFileSync(resolve("supabase/functions/agent-analyst/run.ts"), "utf8");
   assert(runSrc.includes("analystRunOutcome"), "the analyst run uses the cap outcome");
+  assert(runSrc.includes("analystRunSummary"), "the analyst run replaces the cap summary");
+  assert(runSrc.includes("evidence_keys_note"), "each read result lists the evidence keys");
+  const loopSrc = readFileSync(resolve("supabase/functions/_shared/agent-core/loop.ts"), "utf8");
+  assert(
+    loopSrc.includes("Stopped at the iteration limit before the objective was closed."),
+    "the shared loop summary is unchanged",
+  );
 }
 
-// A repeated finding refreshes last_seen. Kind and title, or the same figures, inside 7 days.
+// A repeated finding refreshes last_seen. Same kind and period, or 60% figure overlap, inside 7 days.
 {
   const now = Date.parse("2026-10-10T12:00:00Z");
   const day = 24 * 60 * 60 * 1000;
   const recent = [
     {
       id: "old",
-      kind: "health",
-      title: "Stored health is 69",
+      kind: "score_decline",
       figures: { overall: 69 },
       seenAtMs: now - 8 * day,
+      periodLabel: "2026-10-06",
+      snapshotId: null,
+      severity: "watch",
     },
     {
       id: "fresh",
-      kind: "Health",
-      title: "  stored   health is 69 ",
+      kind: "score_decline",
       figures: { overall: 69 },
       seenAtMs: now - day,
+      periodLabel: "2026-10-06",
+      snapshotId: null,
+      severity: "info",
     },
   ];
-  const byTitle = findingDuplicates({
+  const byKind = findingDuplicates({
     nowMs: now,
-    candidate: { kind: "health", title: "Stored health is 69", figures: { cash: 10 } },
+    candidate: {
+      kind: "score_decline",
+      figures: { cash: 10 },
+      periodLabel: "2026-10-06",
+      snapshotId: null,
+    },
     recent,
   });
-  assert(byTitle?.id === "fresh", "a normalized kind and title inside 7 days matches");
-  const byFigures = findingDuplicates({
+  assert(byKind?.id === "fresh", "the same kind and period inside 7 days matches even when the title and figures differ");
+  const wide = {
+    id: "wide",
+    kind: "other",
+    figures: { a: 1, b: 2, c: 3, d: 4, e: 5 },
+    seenAtMs: now - day,
+    periodLabel: "Sep 2026",
+    snapshotId: "snap-sep",
+    severity: "watch",
+  };
+  assert(
+    figureKeyOverlap({ a: 1, b: 2, c: 3, x: 9, y: 8 }, wide.figures) === 0.6,
+    "three shared keys out of five is 60 percent",
+  );
+  const byOverlap = findingDuplicates({
     nowMs: now,
-    candidate: { kind: "other", title: "Different title", figures: { overall: 69 } },
+    candidate: {
+      kind: "liquidity",
+      figures: { a: 1, b: 2, c: 3, x: 9, y: 8 },
+      periodLabel: "Oct 2026",
+      snapshotId: "snap-oct",
+    },
+    recent: [wide],
+  });
+  assert(byOverlap?.id === "wide", "a 60 percent key and value overlap matches across kinds");
+  const thin = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "liquidity",
+      figures: { a: 1, b: 2, z: 0, x: 9, y: 8 },
+      periodLabel: "Oct 2026",
+      snapshotId: "snap-oct",
+    },
+    recent: [wide],
+  });
+  assert(thin == null, "a 40 percent overlap is not a duplicate");
+  const otherKind = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "liquidity",
+      figures: { cash: 10 },
+      periodLabel: "2026-10-06",
+      snapshotId: null,
+    },
     recent,
   });
-  assert(byFigures?.id === "fresh", "the same figure keys and values match");
+  assert(otherKind == null, "a different kind on the same period is not a duplicate without figure overlap");
   const stale = findingDuplicates({
     nowMs: now,
-    candidate: { kind: "health", title: "Stored health is 69", figures: { overall: 69 } },
+    candidate: {
+      kind: "score_decline",
+      figures: { overall: 69 },
+      periodLabel: "2026-10-06",
+      snapshotId: null,
+    },
     recent: [recent[0]],
   });
   assert(stale == null, "a finding last seen 8 days ago is not a duplicate");
   const again = findingDuplicates({
     nowMs: now,
-    candidate: { kind: "health", title: "Stored health is 69", figures: { overall: 69 } },
+    candidate: {
+      kind: "score_decline",
+      figures: { overall: 69 },
+      periodLabel: "2026-10-06",
+      snapshotId: null,
+    },
     recent,
   });
-  assert(again?.id === byTitle?.id, "matching the same row twice is idempotent");
+  assert(again?.id === byKind?.id, "matching the same row twice is idempotent");
+  assert(higherFindingSeverity("info", "watch") === "watch", "watch replaces info");
+  assert(higherFindingSeverity("watch", "act") === "act", "act replaces watch");
+  assert(higherFindingSeverity("act", "info") === null, "a lower severity does not replace a higher one");
+  assert(higherFindingSeverity("watch", "watch") === null, "the same severity stays");
   const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
   assert(executeSrc.includes("deduped: true"), "a duplicate is reported as already recorded");
   assert(executeSrc.includes("last_seen"), "a duplicate updates last_seen");
+  assert(executeSrc.includes("higherFindingSeverity"), "a duplicate raises severity when the new one is higher");
+  assert(executeSrc.includes("findingKindAllowed"), "kind is checked against the enum");
   assert(
     executeSrc.indexOf("deduped: true") < executeSrc.indexOf('type: "finding"'),
     "a duplicate does not send another finding message",
@@ -507,6 +667,23 @@ const DAY = 24 * 60 * 60 * 1000;
     !readFileSync(resolve("supabase/migrations/20261010160000_agent_foundation.sql"), "utf8").includes("last_seen"),
     "the applied foundation migration is unchanged",
   );
+  const collapse = readFileSync(
+    resolve("supabase/migrations/20261011030000_agent_findings_collapse_duplicates.sql"),
+    "utf8",
+  );
+  for (const id of [
+    "69471b80-7e6d-4ec8-b96c-a59b16fb9fce",
+    "c0be29bb-8d51-47f9-a201-32a6ac1a2a2f",
+    "171506a0-f4c0-46c0-896e-d090dba9d6a1",
+    "e3f97ba0-a718-4bcb-b7b1-2346877fa6db",
+  ]) {
+    assert(collapse.includes(id), `the cleanup names ${id}`);
+  }
+  assert(collapse.includes("superseded_by IS NULL"), "a second run does not supersede a row twice");
+  assert(collapse.includes("GREATEST(keeper.last_seen, dup.last_seen)"), "the keeper last_seen moves forward");
+  assert(collapse.includes("2faf551f-a965-40b4-b250-10cf47705457"), "the signup working-capital finding is documented");
+  const collapseCode = collapse.replace(/--[^\n]*/g, "");
+  assert(!collapseCode.includes("2faf551f"), "the signup working-capital finding is not superseded");
 }
 
 // A title that cites two stored scores has to carry both values and their periods.

@@ -7,7 +7,10 @@ import { executeAgentTool } from "../milon-bot/execute.ts";
 import { citedFiguresCovered, groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
   executeAnalystGate,
+  FINDING_KINDS,
   findingDuplicates,
+  findingKindAllowed,
+  higherFindingSeverity,
   labelHealthScore,
   numericFigures,
   statementVariance,
@@ -193,15 +196,18 @@ function finiteScore(value: unknown): number | null {
 async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx): Promise<unknown> {
   const severity = typeof args.severity === "string" ? args.severity.trim() : "";
   const title = typeof args.title === "string" ? args.title.trim() : "";
-  const kind = typeof args.kind === "string" ? args.kind.trim().slice(0, 80) : "";
+  const kind = typeof args.kind === "string" ? args.kind.trim() : "";
   const detail = typeof args.detail === "string" ? args.detail.trim().slice(0, 2000) : "";
-  if (!kind || !title) return { error: "A finding needs a kind and a title." };
+  if (!title) return { error: "A finding needs a title." };
+  if (!findingKindAllowed(kind)) {
+    return { error: `kind must be one of: ${FINDING_KINDS.join(", ")}.` };
+  }
   if (severity !== "info" && severity !== "watch" && severity !== "act") {
     return { error: "Severity must be info, watch, or act." };
   }
   const grounded = groundFindingEvidence({
     pool: ctx.pool,
-    claimedFigures: numericFigures(args.figures),
+    claimedFigures: args.figures,
   });
   if (!grounded.ok) return { error: grounded.error, tool_blocked: true };
   const cited = citedFiguresCovered({
@@ -216,7 +222,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: recent, error: recentError } = await ctx.db
     .from("agent_findings")
-    .select("id, kind, title, evidence, last_seen, created_at, superseded_by")
+    .select("id, kind, title, severity, evidence, last_seen, created_at, superseded_by")
     .eq("client_id", ctx.clientId)
     .eq("agent", "analyst")
     .gte("last_seen", since)
@@ -226,23 +232,31 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   if (recentError) return { error: recentError.message };
   const duplicate = findingDuplicates({
     nowMs: Date.now(),
-    candidate: { kind, title, figures: grounded.evidence.figures },
+    candidate: {
+      kind,
+      figures: grounded.evidence.figures,
+      periodLabel: grounded.evidence.period_label,
+      snapshotId: grounded.evidence.snapshot_id,
+    },
     recent: ((recent ?? []) as Array<Record<string, unknown>>).map((row) => {
       const evidence = asRecord(row.evidence);
       return {
         id: String(row.id),
         kind: typeof row.kind === "string" ? row.kind : "",
-        title: typeof row.title === "string" ? row.title : "",
-        figures: numericFigures(evidence?.figures),
+        figures: evidence?.figures,
+        periodLabel: typeof evidence?.period_label === "string" ? evidence.period_label : null,
+        snapshotId: typeof evidence?.snapshot_id === "string" ? evidence.snapshot_id : null,
+        severity: typeof row.severity === "string" ? row.severity : "",
         seenAtMs: Date.parse(String(row.last_seen ?? row.created_at ?? "")),
       };
     }),
   });
   if (duplicate) {
     const seenAt = new Date().toISOString();
+    const raised = higherFindingSeverity(duplicate.severity, severity);
     const { error: touchError } = await ctx.db
       .from("agent_findings")
-      .update({ last_seen: seenAt })
+      .update(raised ? { last_seen: seenAt, severity: raised } : { last_seen: seenAt })
       .eq("id", duplicate.id);
     if (touchError) return { error: touchError.message };
     return { recorded: true, deduped: true, finding_id: duplicate.id, evidence: grounded.evidence };
