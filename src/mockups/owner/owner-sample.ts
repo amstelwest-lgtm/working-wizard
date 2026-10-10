@@ -41,14 +41,20 @@ export const HARBOUR = {
 
 /**
  * Owner price, locked. South Africa is rand. The United States is dollars.
- * Harbour Glass is in Cape Town, so the door renders the rand line only.
+ * Harbour Glass is in Cape Town, so the door renders rand only, and only on
+ * the Plan view when the accountant is not on Milōn. The free sentence is
+ * the invite seat's line, not a plan-line suffix.
  */
 export const OWNER_PLAN = {
   za: "R299/mo",
   us: "$39/mo",
   freeLine: "Free when your accountant joins Milōn",
-  planLine: "Owner plan · R299/mo · free when your accountant joins",
+  priceLine: "Owner plan · R299/mo",
 } as const;
+
+export function ownerPlanIncluded(firm: string): string {
+  return `Owner plan · included — ${firm} is on Milōn`;
+}
 
 /** Owner-only packs. Never the accountant's "Signed off" badge. */
 export const OWNER_PACK = {

@@ -23,6 +23,7 @@ import {
   OWNER_PRESENCES,
   OWNER_SIGNOFF_LINE,
   OWNER_UPLOADS,
+  ownerPlanIncluded,
   staffById,
   zar,
   type OwnerAction,
@@ -38,7 +39,7 @@ import {
 } from "./owner-team";
 import "./owner-door.css";
 
-export type OwnerScreen = "home" | "bot" | "actions" | "accountant" | "first";
+export type OwnerScreen = "home" | "bot" | "actions" | "accountant" | "first" | "plan";
 
 const NAV: readonly { screen: OwnerScreen; label: string }[] = [
   { screen: "home", label: "Team" },
@@ -205,6 +206,12 @@ export function OwnerDoor({
   const [ledger, setLedger] = useState<"quickbooks" | "xero" | null>(null);
   const [email, setEmail] = useState("");
   const [invited, setInvited] = useState(false);
+  // First visit mounts before an accountant is on Milōn. Later screens keep
+  // that choice when the owner opens Plan from the invite.
+  const [accountantJoined] = useState(screen !== "first");
+  const feed = accountantJoined
+    ? OWNER_FEED
+    : OWNER_FEED.filter((item) => item.id !== "signed" && item.id !== "pack-hand");
 
   function assign(actionId: string, staffId: StaffId) {
     setAssignees((current) => ({ ...current, [actionId]: staffId }));
@@ -225,29 +232,43 @@ export function OwnerDoor({
           <span className="owner-word">MILŌN</span>
           <span className="owner-biz">
             <b>{HARBOUR.name}</b>
-            {screen === "first" ? "" : ` · ${HARBOUR.place}`}
+            {screen === "first" ? null : <span className="owner-place"> · {HARBOUR.place}</span>}
           </span>
         </div>
-        {screen === "first" ? (
-          <p className="owner-quiet">First visit</p>
-        ) : (
-          <nav className="owner-nav" aria-label="Owner">
-            {NAV.map((item) => (
-              <button
-                key={item.screen}
-                type="button"
-                aria-current={
-                  screen === item.screen || (item.screen === "home" && screen === "bot")
-                    ? "page"
-                    : undefined
-                }
-                onClick={() => onNavigate(item.screen)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        )}
+        <div className="owner-top-end">
+          {screen === "first" ? (
+            <p className="owner-quiet">First visit</p>
+          ) : (
+            <nav className="owner-nav" aria-label="Owner">
+              {NAV.map((item) => (
+                <button
+                  key={item.screen}
+                  type="button"
+                  aria-current={
+                    screen === item.screen || (item.screen === "home" && screen === "bot")
+                      ? "page"
+                      : undefined
+                  }
+                  onClick={() => onNavigate(item.screen)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          )}
+          <button
+            type="button"
+            className="owner-settings"
+            aria-label="Plan"
+            aria-current={screen === "plan" ? "page" : undefined}
+            onClick={() => onNavigate("plan")}
+          >
+            <span className="owner-avatar owner-avatar-owner" aria-hidden="true">
+              HG
+            </span>
+            <span className="owner-settings-label">Plan</span>
+          </button>
+        </div>
       </header>
 
       <div className="owner-scroll">
@@ -262,7 +283,6 @@ export function OwnerDoor({
                 Books to {HARBOUR.asOfLabel} · {HARBOUR.books}
               </p>
             </div>
-            <p className="owner-plan">{OWNER_PLAN.planLine}</p>
 
             <div className="owner-presences">
               {OWNER_PRESENCES.map((card) => {
@@ -319,28 +339,44 @@ export function OwnerDoor({
                 </div>
               </section>
 
-              <button type="button" className="owner-seat" onClick={() => onNavigate("accountant")}>
-                <p className="owner-kicker">Your accountant</p>
-                <span className="owner-who">
-                  <span className="owner-avatar" aria-hidden="true">
-                    TK
-                  </span>
-                  <span>
-                    <strong>{HARBOUR_ACCOUNTANT.name}</strong>
+              {accountantJoined ? (
+                <button
+                  type="button"
+                  className="owner-seat"
+                  onClick={() => onNavigate("accountant")}
+                >
+                  <p className="owner-kicker">Your accountant</p>
+                  <span className="owner-who">
+                    <span className="owner-avatar" aria-hidden="true">
+                      TK
+                    </span>
                     <span>
-                      {HARBOUR_ACCOUNTANT.firm} · {HARBOUR_ACCOUNTANT.place}
+                      <strong>{HARBOUR_ACCOUNTANT.name}</strong>
+                      <span>
+                        {HARBOUR_ACCOUNTANT.firm} · {HARBOUR_ACCOUNTANT.place}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span className="owner-quiet">
-                  Signed the September pack on {HARBOUR_ACCOUNTANT.signedOn}.
-                </span>
-                <Badge />
-                <span className="owner-btn owner-btn-line">See what they signed</span>
-              </button>
+                  <span className="owner-quiet">
+                    Signed the September pack on {HARBOUR_ACCOUNTANT.signedOn}.
+                  </span>
+                  <Badge />
+                  <span className="owner-btn owner-btn-line">See what they signed</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="owner-seat owner-seat-invite"
+                  onClick={() => onNavigate("accountant")}
+                >
+                  <p className="owner-kicker">Your accountant</p>
+                  <span className="owner-invite-title">Invite your accountant</span>
+                  <span className="owner-free">{OWNER_PLAN.freeLine}</span>
+                </button>
+              )}
             </div>
 
-            <Feed items={OWNER_FEED} />
+            <Feed items={feed} />
           </div>
         ) : null}
 
@@ -364,10 +400,14 @@ export function OwnerDoor({
 
         {screen === "accountant" ? (
           <Accountant
+            joined={accountantJoined}
             uploads={uploads}
             onUpload={(id) => setUploads((current) => ({ ...current, [id]: true }))}
+            onInvite={() => onNavigate("first")}
           />
         ) : null}
+
+        {screen === "plan" ? <PlanView joined={accountantJoined} /> : null}
 
         {screen === "first" ? (
           <FirstRun
@@ -607,12 +647,37 @@ function Actions({
 }
 
 function Accountant({
+  joined,
   uploads,
   onUpload,
+  onInvite,
 }: {
+  joined: boolean;
   uploads: Record<string, boolean>;
   onUpload: (id: string) => void;
+  onInvite: () => void;
 }) {
+  if (!joined) {
+    return (
+      <div>
+        <div className="owner-head">
+          <div>
+            <h1 className="owner-title">Your accountant</h1>
+            <p className="owner-lede">Invite them. They are the ones who sign the packs.</p>
+          </div>
+        </div>
+        <section className="owner-block owner-invite" aria-label="Invite your accountant">
+          <h2>Invite your accountant</h2>
+          <p className="owner-free">{OWNER_PLAN.freeLine}</p>
+          <div className="owner-actions-row">
+            <button type="button" className="owner-btn owner-btn-gold" onClick={onInvite}>
+              Invite your accountant
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="owner-head">
@@ -772,7 +837,27 @@ function FirstRun({
         {invited ? (
           <p className="owner-staged">Invite noted. Nothing was sent from this mockup.</p>
         ) : null}
-        <p className="owner-plan">{OWNER_PLAN.planLine}</p>
+      </section>
+    </div>
+  );
+}
+
+function PlanView({ joined }: { joined: boolean }) {
+  const status = joined ? ownerPlanIncluded(HARBOUR_ACCOUNTANT.firm) : OWNER_PLAN.priceLine;
+  return (
+    <div className="owner-plan-view" data-accountant={joined ? "on" : "off"}>
+      <p className="owner-kicker">Settings</p>
+      <h1 className="owner-title">Plan</h1>
+      <p className="owner-lede">
+        {HARBOUR.name} · {HARBOUR.place}
+      </p>
+      <section className="owner-block" aria-label="Owner plan">
+        <p className="owner-plan-status">{status}</p>
+        <p className="owner-support">
+          {joined
+            ? `${HARBOUR_ACCOUNTANT.name} is your accountant at ${HARBOUR_ACCOUNTANT.firm}.`
+            : "South Africa. The price is in rand."}
+        </p>
       </section>
     </div>
   );

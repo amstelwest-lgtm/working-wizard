@@ -34,6 +34,7 @@ const banned = [
   "real-time",
   "bank feed",
   "$39",
+  "R299",
   "Ready for review",
 ];
 
@@ -65,11 +66,23 @@ async function shot(
   await page.evaluate(() => document.fonts.ready);
   if (prepare) await prepare(page);
   const text = await page.locator("body").innerText();
+  const free = text.includes("Free when your accountant joins");
+  if (path.includes("screen=first") !== free) {
+    throw new Error(
+      free
+        ? `${name} shows the free line outside the invite state`
+        : `${name} is missing the free line on the invite`,
+    );
+  }
   for (const word of banned) {
     if (text.toLowerCase().includes(word.toLowerCase()))
       throw new Error(`${name} shows banned copy: ${word}`);
   }
   if (leaked.length) throw new Error(`${name} called the network: ${leaked.join(", ")}`);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  );
+  if (overflow) throw new Error(`${name} scrolls sideways`);
   const file = `${outDir}/${name}.png`;
   await page.screenshot({ path: file });
   written.push(file);
@@ -123,7 +136,10 @@ const shots: { name: string; path: string; prepare?: (page: Page) => Promise<voi
       await page.getByText("Analyst checked September: margin down 3 points.").waitFor();
       await page.getByText("Signed off ✓").waitFor();
       await page.getByRole("button", { name: "Assign to Johan" }).waitFor();
-      await page.getByText("Owner plan · R299/mo · free when your accountant joins").waitFor();
+      await page.getByRole("button", { name: "Plan" }).waitFor();
+      await absent(page, "Owner plan");
+      await absent(page, "R299");
+      await absent(page, "Free when your accountant joins");
     },
   },
   {
@@ -168,11 +184,30 @@ const shots: { name: string; path: string; prepare?: (page: Page) => Promise<voi
       await page.getByRole("button", { name: /Xero/ }).waitFor();
       await page.getByRole("heading", { name: "Invite your accountant" }).waitFor();
       await page.getByText("Free when your accountant joins Milōn").waitFor();
-      await page.getByText("Owner plan · R299/mo · free when your accountant joins").waitFor();
+      await page.getByRole("button", { name: "Plan" }).waitFor();
+      await absent(page, "Owner plan");
+      await absent(page, "R299");
       await page.getByText("Not the bank.").waitFor();
     },
   },
+  {
+    name: "owner-06-plan",
+    path: "/owner-mockup?screen=plan",
+    prepare: async (page) => {
+      await page.getByRole("heading", { name: "Plan" }).waitFor();
+      await page.getByText("Settings").waitFor();
+      await page.getByText("Owner plan · included — Kloof & Partners is on Milōn").waitFor();
+      await absent(page, "Free when your accountant joins");
+      await absent(page, "R299");
+      await absent(page, "Signed off");
+    },
+  },
 ];
+
+async function absent(page: Page, phrase: string) {
+  const count = await page.getByText(phrase).count();
+  if (count !== 0) throw new Error(`unexpected copy on screen: ${phrase}`);
+}
 
 for (const item of shots) {
   await shot(`${item.name}-1280`, 1280, 800, item.path, async (page) => {
@@ -217,6 +252,21 @@ if (await email.isDisabled()) throw new Error("invite stayed disabled after Quic
 await email.fill("thandiwe@kloof.example");
 await page.getByRole("button", { name: "Send invite" }).click();
 await page.getByText("Invite noted. Nothing was sent from this mockup.").waitFor();
+await page.getByRole("button", { name: "Plan" }).click();
+await page.waitForFunction(() => location.search.includes("screen=plan"));
+await page.getByText("Owner plan · R299/mo", { exact: true }).waitFor();
+await absent(page, "Free when your accountant joins");
+await absent(page, "included");
+await page.getByRole("button", { name: "Team", exact: true }).click();
+await page.getByText("Invite your accountant").waitFor();
+await page.getByText("Free when your accountant joins Milōn").waitFor();
+await absent(page, "R299");
+await absent(page, "Owner plan");
+await page.getByRole("button", { name: "Accountant", exact: true }).click();
+await page.getByRole("heading", { name: "Invite your accountant" }).waitFor();
+await page.getByText("Free when your accountant joins Milōn").waitFor();
+await absent(page, "Signed off");
+await absent(page, "R299");
 await page.close();
 
 await browser.close();

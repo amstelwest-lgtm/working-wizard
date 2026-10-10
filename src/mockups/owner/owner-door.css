@@ -74,6 +74,41 @@
   font-weight: 650;
 }
 
+.owner-top-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.owner-settings {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 12px 3px 3px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  flex: none;
+}
+
+.owner-settings[aria-current="page"] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.owner-avatar-owner {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
 .owner-nav {
   display: flex;
   gap: 6px;
@@ -421,6 +456,44 @@
 
 .owner-seat:hover {
   border-color: var(--gold);
+}
+
+.owner-seat-invite {
+  gap: 6px;
+}
+
+.owner-invite-title {
+  margin: 0;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.05;
+}
+
+.owner-plan-view {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 40rem;
+}
+
+.owner-plan-view .owner-lede {
+  display: block;
+}
+
+.owner-plan-view .owner-block {
+  width: min(100%, 40rem);
+  margin-top: 8px;
+}
+
+.owner-plan-status {
+  margin: 0;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.25;
+  color: var(--ink);
 }
 
 .owner-who {
@@ -863,11 +936,37 @@ body:has(.owner-door) button[aria-label="Share Milōn"] {
 
 @media (max-width: 700px) {
   .owner-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     height: auto;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 6px;
     padding: 10px 14px 8px;
+  }
+
+  .owner-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .owner-place {
+    display: none;
+  }
+
+  .owner-top-end {
+    display: contents;
+  }
+
+  .owner-settings {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .owner-nav,
+  .owner-top .owner-quiet {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .owner-nav {
@@ -980,6 +1079,19 @@ body:has(.owner-door) button[aria-label="Share Milōn"] {
   .owner-seat .owner-quiet,
   .owner-seat .owner-btn {
     display: none;
+  }
+
+  .owner-seat.owner-seat-invite {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    height: auto;
+  }
+
+  .owner-seat.owner-seat-invite .owner-kicker,
+  .owner-seat.owner-seat-invite .owner-free,
+  .owner-seat.owner-seat-invite .owner-invite-title {
+    display: block;
   }
 
   .owner-seat .owner-who {

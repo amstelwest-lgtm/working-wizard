@@ -193,7 +193,8 @@ const ownerMockupRoute = createRoute({
       search.screen === "bot" ||
       search.screen === "actions" ||
       search.screen === "accountant" ||
-      search.screen === "first"
+      search.screen === "first" ||
+      search.screen === "plan"
         ? search.screen
         : "home",
     bot:
