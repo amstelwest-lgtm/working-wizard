@@ -28,7 +28,7 @@ export const CLASSIFICATION_LABELS: Record<PracticeClassification, string> = {
   partner: "Partner",
   manager: "Manager",
   staff: "Staff",
-  bookkeeper: "Bookkeeper",
+  bookkeeper: "Books staff",
   reviewer: "Reviewer",
   read_only: "Read only",
 };
@@ -48,7 +48,7 @@ export const FIRM_PERMISSION_HELP: Record<"admin" | "member", string> = {
 export const CLASSIFICATION_HELP =
   "Only partners can sign off client deliverables.";
 
-/** Seniority: Partner > Manager > Reviewer > Staff = Bookkeeper > Read only. */
+/** Seniority: Partner > Manager > Reviewer > Staff = books staff > Read only. */
 export const CLASS_RANK: Record<PracticeClassification, number> = {
   partner: 5,
   manager: 4,

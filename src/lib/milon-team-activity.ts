@@ -249,6 +249,25 @@ export function splitTodayBriefing(items: readonly TeamBriefingItem[]): {
   };
 }
 
+/**
+ * Chip text for a briefing source. Internal file names stay off the desk.
+ * A proposal uses the area it is about, or "Next move" when it has none.
+ */
+export function deskSourceLabel(
+  item: Pick<TeamBriefingItem, "id" | "title" | "detail" | "source">,
+): string {
+  const raw = item.source.label.trim();
+  if (!/client brain/i.test(raw)) return raw;
+  if (item.id.startsWith("proposal:") || /proposals/i.test(raw)) {
+    const text = `${item.title} ${item.detail ?? ""}`;
+    if (/\b(debt|loan|equity|gearing)\b/i.test(text)) return "Debt";
+    if (/\b(cash|runway|floor)\b/i.test(text)) return "Cash";
+    if (/\bdebtors?\b/i.test(text)) return "Debtors";
+    return "Next move";
+  }
+  return "Advisory";
+}
+
 /** A next step already stored against this ratio. Nothing is invented. */
 export function nextActionHint(
   item: TeamBriefingItem,
@@ -277,15 +296,23 @@ function payloadText(payload: unknown): string | null {
   return null;
 }
 
+export function handoffParts(
+  row: Pick<AgentMessageRow, "type" | "from_agent" | "to_agent" | "payload">,
+): { from: AgentKey; to: AgentKey; text: string } | null {
+  if (row.type !== "handoff" || !row.to_agent || row.to_agent === row.from_agent) return null;
+  const text = payloadText(row.payload);
+  if (!text) return null;
+  return { from: row.from_agent, to: row.to_agent, text };
+}
+
 /** "Analyst → Advisor: …" for a hand-off. Other message types stay off the desk. */
 export function handoffLine(
   row: Pick<AgentMessageRow, "type" | "from_agent" | "to_agent" | "payload">,
   shortName: (agent: AgentKey) => string,
 ): string | null {
-  if (row.type !== "handoff" || !row.to_agent || row.to_agent === row.from_agent) return null;
-  const text = payloadText(row.payload);
-  if (!text) return null;
-  return `${shortName(row.from_agent)} → ${shortName(row.to_agent)}: ${text}`;
+  const parts = handoffParts(row);
+  if (!parts) return null;
+  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${parts.text}`;
 }
 
 /** Owner review is never a sign-off. Only an accountant approval uses the check. */

@@ -30,7 +30,7 @@ const INITIAL: Record<AgentKey, string> = {
 const JOB_LINE: Record<AgentKey, string> = {
   financial_manager:
     "Data quality from QuickBooks and Xero, the 13-week cash and budget, action points, and accountant hand-offs.",
-  analyst: "Health score, ratios, and variances.",
+  analyst: "Health score, ratios, variances, and the diagnosis.",
   advisor: "Next moves and advisory deliverables.",
 };
 

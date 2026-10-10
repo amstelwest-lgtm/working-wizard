@@ -11,7 +11,7 @@ import type { MilonTeamFeedApi } from "../src/hooks/use-milon-team-feed";
 import type { AgentKey, MilonTeamFeed, TeamAgentStatus, TeamJob } from "../src/lib/milon-team-feed";
 import { AGENT_KEYS, emptyMilonTeamFeed } from "../src/lib/milon-team-feed";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
-import { agentAriaLabel, agentDisplayName, agentInitial, agentShortName, formatAsOf, teamAgentHeaderStatus } from "../src/lib/milon-team";
+import { agentAriaLabel, agentDisplayName, agentInitial, agentJobLine, agentShortName, formatAsOf, teamAgentHeaderStatus } from "../src/lib/milon-team";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 import {
   deskSignoffInvite,
@@ -84,6 +84,26 @@ assert(AGENT_KEYS.join(",") === "financial_manager,analyst,advisor", "keys come 
 assert(emptyMilonTeamFeed().agents.financial_manager.lastRunAt === null, "an empty feed has no invented last run");
 assert(agentShortName("financial_manager") === "Financial Manager", "short name is Financial Manager");
 assert(agentInitial("financial_manager") === "F", "avatar letter is F");
+assert(
+  agentJobLine("financial_manager") ===
+    "Data quality from QuickBooks and Xero, the 13-week cash and budget, action points, and accountant hand-offs.",
+  "financial manager job line",
+);
+assert(agentJobLine("analyst") === "Health score, ratios, variances, and the diagnosis.", "analyst job line");
+assert(agentJobLine("advisor") === "Next moves and advisory deliverables.", "advisor job line");
+
+const retiredRole = ["Book", "keeper"].join("");
+const retiredTitle = `Mil${"ō"}n ${retiredRole}`;
+const oldNameHits: string[] = [];
+for (const root of ["src", "scripts"]) {
+  walk(root, (file, text) => {
+    if (file === "scripts/milon-team-test.mts") return;
+    for (const word of [retiredTitle, retiredRole]) {
+      if (text.includes(word)) oldNameHits.push(`${file} contains ${word}`);
+    }
+  });
+}
+assert(oldNameHits.length === 0, oldNameHits.join("\n") || "the retired agent name is gone from src and the tests");
 assert(agentAriaLabel("financial_manager", "Books clean ✓") === `${NAMES[0]}. Books clean ✓`, "aria label uses the display name");
 
 const botSurfaces = [
@@ -389,7 +409,15 @@ const ratios = html(
 );
 assert(!ratios.includes("0.7795"), "a ratio row does not keep the raw decimal");
 assert(ratios.includes("Debt-to-Equity is 0.78×."), "debt-to-equity is a formatted multiple");
-assert(ratios.includes("Pay down the short-term loan before the next review."), "a stored next step is the hint");
+assert(
+  (ratios.match(/Pay down the short-term loan before the next review\./g) ?? []).length === 1,
+  "the next step is only on the advisor item",
+);
+const debtRatio = ratios.slice(ratios.indexOf('data-ratio="ratio:debtToEquity"'), ratios.indexOf('data-ratio="ratio:currentRatio"'));
+assert(!debtRatio.includes("Pay down"), "a ratio row does not repeat the advisor hint");
+assert(ratios.indexOf("data-ratio=") < ratios.indexOf("Pay down the short-term loan"), "findings come before the advisor move");
+assert(ratios.includes(">Debt<"), "a proposal chip names the area");
+assert(!ratios.includes("Client Brain"), "internal source names stay off the desk");
 assert(ratios.includes("Sep figures · checked 9 Oct"), "the period and the check date both show");
 assert((ratios.match(/data-ratio=/g) ?? []).length === 3, "today caps ratio rows at three");
 assert(ratios.includes(">Show all<"), "the rest of the ratios sit behind show all");
@@ -441,7 +469,13 @@ assert(
   "a failed run stays muted and says it will retry",
 );
 assert(liveDesk.includes("is-muted"), "the failed line is muted");
-assert(liveDesk.includes("Analyst → Advisor: Review the cash floor before the next meeting."), "a hand-off names both agents");
+assert(liveDesk.includes("milon-desk-handoff"), "a hand-off is not a finding row");
+assert(liveDesk.includes("Review the cash floor before the next meeting."), "a hand-off keeps the note");
+assert(liveDesk.includes("milon-desk-handoff-arrow"), "a hand-off shows an arrow");
+assert(liveDesk.indexOf('data-finding="f1"') < liveDesk.indexOf('data-handoff="h1"'), "findings come before hand-offs");
+const findingHtml = liveDesk.slice(liveDesk.indexOf('data-finding="f1"'), liveDesk.indexOf("</li>"));
+assert(findingHtml.includes("Sep figures · checked 8 Oct"), "the finding keeps the checked line");
+assert((findingHtml.match(/8 Oct/g) ?? []).length === 1, "a finding has one date line");
 assert(!liveDesk.includes("0.4200"), "a finding does not keep a raw decimal");
 assert(liveDesk.includes("42.0%"), "a margin finding is a percentage");
 assert(

@@ -17,14 +17,14 @@ import {
   checkedStamp,
   deskSignoffInvite,
   deskSignoffText,
+  deskSourceLabel,
   figuresCheckedLine,
   findingFigures,
   findingPeriod,
   findingSentence,
-  handoffLine,
+  handoffParts,
   headerFromRun,
   latestRunByAgent,
-  nextActionHint,
   ratioSentence,
   splitTodayBriefing,
   type AgentActivitySnapshot,
@@ -119,10 +119,17 @@ export function MilonTeamDesk({
   );
   const activity = feed.activity.filter((event) => matches(event.agent, filter));
   const latest = latestRunByAgent(live?.runs ?? []);
-  const findings = (live?.findings ?? []).filter((row) => matches(row.agent, filter) && row.created_at);
+  const findings = (live?.findings ?? [])
+    .filter((row) => matches(row.agent, filter) && row.created_at)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
   const handoffs = (live?.messages ?? [])
-    .map((row) => ({ id: row.id, agent: row.from_agent, text: handoffLine(row, agentShortName) }))
-    .filter((row): row is { id: string; agent: AgentKey; text: string } => Boolean(row.text) && matches(row.agent, filter));
+    .map((row) => {
+      const parts = handoffParts(row);
+      if (!parts || !matches(parts.from, filter)) return null;
+      return { id: row.id, at: row.created_at, ...parts };
+    })
+    .filter((row): row is { id: string; at: string; from: AgentKey; to: AgentKey; text: string } => Boolean(row))
+    .sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
   const signoffText = deskSignoffText(feed.signoffLine, feed.signoffOwner === true);
   const signoffInvite = deskSignoffInvite(feed.signoffOwner === true);
   const { lead, ratios } = splitTodayBriefing(briefing);
@@ -248,20 +255,45 @@ export function MilonTeamDesk({
                           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
                           <p className="milon-desk-figure">{sentence}</p>
                           <div className="milon-desk-meta">
-                            {checked ? <span className="milon-desk-why">{checked}</span> : null}
-                            {when ? <time dateTime={row.created_at}>{when}</time> : null}
+                            {checked ? (
+                              <span className="milon-desk-why">{checked}</span>
+                            ) : when ? (
+                              <time dateTime={row.created_at}>{when}</time>
+                            ) : null}
                           </div>
                         </div>
                       </li>
                     );
                   })}
-                  {handoffs.map((row) => (
-                    <li key={row.id} className="milon-desk-row" data-handoff={row.id}>
-                      <div className="milon-desk-job-copy">
-                        <p className="milon-desk-figure">{row.text}</p>
-                      </div>
-                    </li>
-                  ))}
+                  {visibleRatios.map((item) => {
+                    const checked = checkedLine(item);
+                    return (
+                      <li key={item.id} className="milon-desk-row" data-severity={item.severity} data-ratio={item.id}>
+                        <div className="milon-desk-job-copy">
+                          <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
+                          <p className="milon-desk-figure">{ratioSentence(item.title, item.detail)}</p>
+                          <div className="milon-desk-meta">
+                            <span className="milon-desk-source">{deskSourceLabel(item)}</span>
+                            {checked ? <span className="milon-desk-why">{checked}</span> : null}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {handoffs.map((row) => {
+                    const when = formatAgo(row.at, clock);
+                    return (
+                      <li key={row.id} className="milon-desk-handoff" data-handoff={row.id}>
+                        <span className="milon-desk-tag">{agentShortName(row.from)}</span>
+                        <span className="milon-desk-handoff-arrow" aria-hidden="true">
+                          →
+                        </span>
+                        <span className="milon-desk-tag">{agentShortName(row.to)}</span>
+                        <p className="milon-desk-handoff-text">{row.text}</p>
+                        {when ? <time dateTime={row.at}>{when}</time> : null}
+                      </li>
+                    );
+                  })}
                   {lead.map((item) => {
                     const checked = checkedLine(item);
                     return (
@@ -269,32 +301,9 @@ export function MilonTeamDesk({
                         <div className="milon-desk-job-copy">
                           <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
                           <p className="milon-desk-figure">{item.title}</p>
-                          {item.detail ? <p className="milon-desk-why">{item.detail}</p> : null}
-                          {checked ? (
-                            <div className="milon-desk-meta">
-                              <span className="milon-desk-source">{item.source.label}</span>
-                              <span className="milon-desk-why">{checked}</span>
-                            </div>
-                          ) : (
-                            <div className="milon-desk-meta">
-                              <span className="milon-desk-source">{item.source.label}</span>
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                  {visibleRatios.map((item) => {
-                    const hint = nextActionHint(item, feed.briefing);
-                    const checked = checkedLine(item);
-                    return (
-                      <li key={item.id} className="milon-desk-row" data-severity={item.severity} data-ratio={item.id}>
-                        <div className="milon-desk-job-copy">
-                          <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
-                          <p className="milon-desk-figure">{ratioSentence(item.title, item.detail)}</p>
-                          {hint ? <p className="milon-desk-hint">{hint}</p> : null}
+                          {item.detail ? <p className="milon-desk-hint">{item.detail}</p> : null}
                           <div className="milon-desk-meta">
-                            <span className="milon-desk-source">{item.source.label}</span>
+                            <span className="milon-desk-source">{deskSourceLabel(item)}</span>
                             {checked ? <span className="milon-desk-why">{checked}</span> : null}
                           </div>
                         </div>
