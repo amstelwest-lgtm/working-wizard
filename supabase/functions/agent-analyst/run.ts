@@ -17,6 +17,7 @@ import {
   ANALYST_TOOL_LABELS,
   analystFailurePlan,
   analystRunCostUsd,
+  analystRunOutcome,
   collectStoredReads,
 } from "../../../src/lib/agent-analyst.ts";
 import { executeAnalystTool } from "./execute.ts";
@@ -193,13 +194,17 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       },
     });
 
-    const partial =
-      result.status === "insufficient_information" || result.status === "safety_limit";
+    const outcome = analystRunOutcome({
+      stopReason: result.status,
+      steps: result.trace.map((step) => ({ tool: step.tool, status: step.status })),
+      maxIterations: ANALYST_MAX_ITERATIONS,
+    });
+    const partial = outcome.status === "partial";
     await db
       .from("agent_runs")
       .update({
-        status: partial ? "partial" : "succeeded",
-        stop_reason: result.status,
+        status: outcome.status,
+        stop_reason: outcome.stopReason,
         summary: result.summary.slice(0, 2000),
         input_tokens: inputTokens,
         output_tokens: outputTokens,

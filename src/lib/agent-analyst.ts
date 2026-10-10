@@ -5,7 +5,9 @@
 
 import { retryAfterFailure, sanitizeAgentError, type StoredFigures } from "./agent-bus.ts";
 
-export const ANALYST_MAX_ITERATIONS = 8;
+export const ANALYST_MAX_ITERATIONS = 10;
+
+export const FINDING_DEDUPE_DAYS = 7;
 
 export const ANALYST_READ_TOOLS = [
   "get_health",
@@ -103,7 +105,17 @@ export function collectStoredFigures(
     ...numericFigures(row.ratios),
     ...numericFigures(row.stored_ratios),
   };
-  for (const key of ["overall", "revenue", "cash", "debtor_days", "creditor_days", "gross_margin", "net_margin"]) {
+  for (const key of [
+    "overall",
+    "live_overall",
+    "stored_score",
+    "revenue",
+    "cash",
+    "debtor_days",
+    "creditor_days",
+    "gross_margin",
+    "net_margin",
+  ]) {
     const value = row[key];
     if (typeof value === "number" && Number.isFinite(value)) figures[key] = value;
   }
@@ -179,6 +191,104 @@ export function analystRunCostUsd(
       Math.max(0, outputTokens) * 15) /
     1_000_000;
   return Math.round(cost * 100_000) / 100_000;
+}
+
+/**
+ * The stored score wins when one is on file. live_overall stays labeled as a
+ * recalculation, so a finding cannot treat it as the saved score.
+ */
+export function labelHealthScore(input: {
+  liveOverall: number | null;
+  storedScore: number | null;
+  storedAsOf: string | null;
+}): {
+  overall: number | null;
+  overall_as_of: string | null;
+  overall_basis: "stored" | "live";
+  live_overall: number | null;
+  live_overall_label: string;
+  stored_score: number | null;
+  pillars_basis: "live";
+} {
+  if (input.storedScore != null) {
+    return {
+      overall: input.storedScore,
+      overall_as_of: input.storedAsOf,
+      overall_basis: "stored",
+      live_overall: input.liveOverall,
+      live_overall_label: "Recalculated from the current books. Not the stored score.",
+      stored_score: input.storedScore,
+      pillars_basis: "live",
+    };
+  }
+  return {
+    overall: input.liveOverall,
+    overall_as_of: null,
+    overall_basis: "live",
+    live_overall: input.liveOverall,
+    live_overall_label: "Recalculated from the current books. No stored score is on file.",
+    stored_score: null,
+    pillars_basis: "live",
+  };
+}
+
+export function normalizeFindingText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function figureSignature(figures: Record<string, number>): string {
+  return Object.keys(figures)
+    .sort()
+    .map((key) => `${key}=${figures[key]}`)
+    .join("|");
+}
+
+/** Same client and agent is the caller's filter. Match kind+title, or the same figures, inside 7 days. */
+export function findingDuplicates<T extends {
+  id: string;
+  kind: string;
+  title: string;
+  figures: Record<string, number>;
+  seenAtMs: number;
+}>(input: {
+  nowMs: number;
+  candidate: { kind: string; title: string; figures: Record<string, number> };
+  recent: T[];
+}): T | null {
+  const cutoff = input.nowMs - FINDING_DEDUPE_DAYS * 24 * 60 * 60 * 1000;
+  const kind = normalizeFindingText(input.candidate.kind);
+  const title = normalizeFindingText(input.candidate.title);
+  const figures = figureSignature(input.candidate.figures);
+  let best: T | null = null;
+  for (const row of input.recent) {
+    if (row.seenAtMs < cutoff) continue;
+    const sameText =
+      normalizeFindingText(row.kind) === kind && normalizeFindingText(row.title) === title;
+    const sameFigures = figures.length > 0 && figureSignature(row.figures) === figures;
+    if (!sameText && !sameFigures) continue;
+    if (!best || row.seenAtMs >= best.seenAtMs) best = row;
+  }
+  return best;
+}
+
+/**
+ * Hitting the iteration cap after a saved finding is a finished review.
+ * A cap with no finding, or any earlier safety stop, stays partial.
+ */
+export function analystRunOutcome(input: {
+  stopReason: string;
+  steps: Array<{ tool: string | null; status: string }>;
+  maxIterations: number;
+}): { status: "succeeded" | "partial"; stopReason: string } {
+  const accepted = input.steps.filter((step) => step.tool === "record_finding" && step.status === "ok").length;
+  const hitCap =
+    input.stopReason === "safety_limit" &&
+    input.steps.length >= input.maxIterations &&
+    accepted >= 1;
+  if (hitCap) return { status: "succeeded", stopReason: "cap_after_findings" };
+  const partial =
+    input.stopReason === "insufficient_information" || input.stopReason === "safety_limit";
+  return { status: partial ? "partial" : "succeeded", stopReason: input.stopReason };
 }
 
 export function analystFailureIsRetryable(message: string): boolean {

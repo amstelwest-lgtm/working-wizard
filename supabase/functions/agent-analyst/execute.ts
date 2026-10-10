@@ -4,9 +4,11 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAgentTool } from "../milon-bot/execute.ts";
-import { groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
+import { citedFiguresCovered, groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
   executeAnalystGate,
+  findingDuplicates,
+  labelHealthScore,
   numericFigures,
   statementVariance,
   type AnalystToolName,
@@ -57,14 +59,42 @@ export async function executeAnalystTool(
   if (!gate.allowed) return gate;
   const tool: AnalystToolName = gate.name;
 
-  if (tool === "get_health" || tool === "get_financial_snapshot" || tool === "get_statement_history") {
+  if (tool === "get_statement_history") return readTools(tool, ctx);
+
+  if (tool === "get_financial_snapshot") {
     const payload = await readTools(tool, ctx);
-    if (tool === "get_statement_history") return payload;
     const snaps = await latestSnapshots(ctx.db, ctx.clientId, 1);
     const snap = snaps.rows[0];
     const record = asRecord(payload) ?? {};
     return {
       ...record,
+      snapshot_id: snap ? String(snap.id) : null,
+      period_label: (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
+    };
+  }
+
+  if (tool === "get_health") {
+    const payload = await readTools(tool, ctx);
+    const snaps = await latestSnapshots(ctx.db, ctx.clientId, 1);
+    const snap = snaps.rows[0];
+    const record = asRecord(payload) ?? {};
+    const { data: stored, error: storedError } = await ctx.db
+      .from("client_score_history")
+      .select("period_date, score")
+      .eq("client_id", ctx.clientId)
+      .order("period_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (storedError) return { error: storedError.message };
+    const storedRow = asRecord(stored);
+    const labeled = labelHealthScore({
+      liveOverall: finiteScore(record.overall),
+      storedScore: finiteScore(storedRow?.score),
+      storedAsOf: typeof storedRow?.period_date === "string" ? storedRow.period_date : null,
+    });
+    return {
+      ...record,
+      ...labeled,
       snapshot_id: snap ? String(snap.id) : null,
       period_label: (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
     };
@@ -155,6 +185,11 @@ export async function executeAnalystTool(
   return recordFinding(args, ctx);
 }
 
+function finiteScore(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx): Promise<unknown> {
   const severity = typeof args.severity === "string" ? args.severity.trim() : "";
   const title = typeof args.title === "string" ? args.title.trim() : "";
@@ -169,6 +204,49 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     claimedFigures: numericFigures(args.figures),
   });
   if (!grounded.ok) return { error: grounded.error, tool_blocked: true };
+  const cited = citedFiguresCovered({
+    title,
+    detail,
+    pool: ctx.pool,
+    evidenceFigures: grounded.evidence.figures,
+    evidencePeriod: grounded.evidence.period_label,
+  });
+  if (!cited.ok) return { error: cited.error, tool_blocked: true };
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: recent, error: recentError } = await ctx.db
+    .from("agent_findings")
+    .select("id, kind, title, evidence, last_seen, created_at, superseded_by")
+    .eq("client_id", ctx.clientId)
+    .eq("agent", "analyst")
+    .gte("last_seen", since)
+    .is("superseded_by", null)
+    .order("last_seen", { ascending: false })
+    .limit(50);
+  if (recentError) return { error: recentError.message };
+  const duplicate = findingDuplicates({
+    nowMs: Date.now(),
+    candidate: { kind, title, figures: grounded.evidence.figures },
+    recent: ((recent ?? []) as Array<Record<string, unknown>>).map((row) => {
+      const evidence = asRecord(row.evidence);
+      return {
+        id: String(row.id),
+        kind: typeof row.kind === "string" ? row.kind : "",
+        title: typeof row.title === "string" ? row.title : "",
+        figures: numericFigures(evidence?.figures),
+        seenAtMs: Date.parse(String(row.last_seen ?? row.created_at ?? "")),
+      };
+    }),
+  });
+  if (duplicate) {
+    const seenAt = new Date().toISOString();
+    const { error: touchError } = await ctx.db
+      .from("agent_findings")
+      .update({ last_seen: seenAt })
+      .eq("id", duplicate.id);
+    if (touchError) return { error: touchError.message };
+    return { recorded: true, deduped: true, finding_id: duplicate.id, evidence: grounded.evidence };
+  }
 
   const { data, error } = await ctx.db
     .from("agent_findings")
@@ -181,6 +259,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       title: title.slice(0, 200),
       detail: detail || null,
       evidence: grounded.evidence,
+      last_seen: new Date().toISOString(),
     })
     .select("id")
     .maybeSingle();
