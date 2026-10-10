@@ -9,6 +9,8 @@ import { formatAsOf } from "@/lib/milon-team";
 import {
   AVATAR_MOTION_LABEL,
   AVATAR_MOTIONS,
+  HANDOFF_SENTENCE,
+  HandoffBeam,
   OwnerAvatar,
   type AvatarMotion,
   type AvatarVariant,
@@ -56,7 +58,8 @@ export type OwnerScreen =
   | "plan"
   | "settings"
   | "profile"
-  | "states";
+  | "states"
+  | "reel";
 
 export type OwnerTalk = "open" | "recording" | "transcript";
 
@@ -178,7 +181,6 @@ export function OwnerDoor({
               id={item.id}
               label={item.label}
               active={screen === item.screen || (item.screen === "home" && screen === "bot")}
-              primary={item.id === "home"}
               onSelect={() => onNavigate(item.screen)}
             />
           ))}
@@ -235,6 +237,7 @@ export function OwnerDoor({
           {screen === "settings" ? <Settings onPlan={() => onNavigate("plan")} /> : null}
           {screen === "profile" ? <Profile /> : null}
           {screen === "states" ? <AvatarStates variant={avatars} /> : null}
+          {screen === "reel" ? <AvatarReel variant={avatars} /> : null}
         </div>
       </div>
     </div>
@@ -275,6 +278,46 @@ function Home({
           <p className="owner-lede">Plain answers from the books. One thing for you.</p>
         </div>
       </div>
+      <div className="owner-stage">
+        <div className="owner-agents">
+          {OWNER_PRESENCES.map((card) => {
+            const team = OWNER_TEAM[card.bot];
+            const lookAt = avatars === "character" && card.bot === "analyst" ? "advisor" : null;
+            return (
+              <button
+                key={card.bot}
+                type="button"
+                className="owner-agent"
+                onClick={() => onOpen("bot", card.bot)}
+              >
+                <OwnerAvatar
+                  bot={card.bot}
+                  variant={avatars}
+                  size="lg"
+                  motion={presenceMotion(card.presence)}
+                  lookAt={lookAt}
+                />
+                <span className="owner-beam-slot" aria-hidden="true" />
+                <span className="owner-agent-copy">
+                  <span className="owner-name-full" data-full-label>
+                    {team.name}
+                  </span>
+                  <span className="owner-name-short" data-short-label>
+                    {team.short}
+                  </span>
+                  <span className="owner-voice">{card.sentence}</span>
+                  <span className="owner-motion-label">{OWNER_PRESENCE_LABEL[card.presence]}</span>
+                  <span className="owner-ask">
+                    <span className="owner-ask-full">Ask {team.voice}…</span>
+                    <span className="owner-ask-short">Ask {team.short}…</span>
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <HandoffBeam sentence={HANDOFF_SENTENCE} />
+      </div>
       <div className="owner-promises">
         {promises.map((item) => (
           <article key={item.id} className="answer-strip" data-promise={item.id}>
@@ -311,48 +354,6 @@ function Home({
       <p className="owner-honesty">
         {BOOKS_LINE} {FORWARD_LINE}
       </p>
-      <p className="owner-handoff">
-        Analyst → Advisor: September made less than August, so two moves are being drafted.
-      </p>
-      <div className="owner-agents">
-        {OWNER_PRESENCES.map((card) => {
-          const team = OWNER_TEAM[card.bot];
-          const lookAt = avatars === "character" && card.bot === "analyst" ? "advisor" : null;
-          return (
-            <button
-              key={card.bot}
-              type="button"
-              className="owner-agent"
-              onClick={() => onOpen("bot", card.bot)}
-            >
-              <OwnerAvatar
-                bot={card.bot}
-                variant={avatars}
-                motion={presenceMotion(card.presence)}
-                lookAt={lookAt}
-              />
-              <span className="owner-agent-copy">
-                <span className="owner-kicker">{team.kicker}</span>
-                <span className="owner-name-full" data-full-label>
-                  {team.name}
-                </span>
-                <span className="owner-name-short" data-short-label>
-                  {team.short}
-                </span>
-                <span className="owner-voice">{card.sentence}</span>
-                <span className="owner-ask">
-                  <span className="owner-ask-full">Ask {team.voice}…</span>
-                  <span className="owner-ask-short">Ask {team.short}…</span>
-                </span>
-              </span>
-              <span className="owner-state">
-                <i />
-                {OWNER_PRESENCE_LABEL[card.presence]}
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -401,7 +402,7 @@ function AgentChat({
   return (
     <div className="owner-chat" data-talk={talk}>
       <div className="owner-chat-head">
-        <OwnerAvatar bot={bot} variant={avatars} motion={motion} label={team.name} />
+        <OwnerAvatar bot={bot} variant={avatars} size="md" motion={motion} label={team.name} />
         <div>
           <h1 className="owner-title">{team.name}</h1>
           <p className="owner-lede">{team.role}</p>
@@ -788,6 +789,75 @@ function Profile() {
   );
 }
 
+const REEL_STEPS = [
+  { id: "idle", label: "Idle", ms: 1200 },
+  { id: "working", label: "Working…", ms: 1200 },
+  { id: "found", label: "Found something", ms: 1200 },
+  { id: "handoff", label: "Hand-off", ms: 1400 },
+  { id: "speaking", label: "Speaking", ms: 0 },
+] as const;
+
+function AvatarReel({ variant }: { variant: AvatarVariant }) {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const ms = REEL_STEPS[step]?.ms ?? 0;
+    if (!ms) return;
+    const id = window.setTimeout(
+      () => setStep((current) => Math.min(current + 1, REEL_STEPS.length - 1)),
+      ms,
+    );
+    return () => window.clearTimeout(id);
+  }, [step]);
+  const phase = REEL_STEPS[step].id;
+  function motionFor(bot: OwnerBotKey): AvatarMotion {
+    if (phase === "handoff") {
+      if (bot === "analyst") return "found";
+      if (bot === "advisor") return "working";
+      return "idle";
+    }
+    if (phase === "idle") return "idle";
+    if (phase === "working") return "working";
+    if (phase === "found") return "found";
+    return "speaking";
+  }
+  function look(bot: OwnerBotKey): OwnerBotKey | null {
+    if (phase !== "handoff") return null;
+    if (bot === "analyst") return "advisor";
+    if (bot === "advisor") return "analyst";
+    return "analyst";
+  }
+  return (
+    <div className="owner-pane owner-reel" data-reel={phase}>
+      <p className="owner-kicker">Live</p>
+      <h1 className="owner-title">{REEL_STEPS[step].label}</h1>
+      <p className="owner-lede">Idle, then working, then a find, then a hand-off, then speaking.</p>
+      <div className="owner-stage">
+        <div className="owner-agents">
+          {OWNER_TEAM_ORDER.map((bot) => (
+            <div key={bot} className="owner-agent">
+              <OwnerAvatar
+                bot={bot}
+                variant={variant}
+                size="lg"
+                motion={motionFor(bot)}
+                lookAt={look(bot)}
+                label={OWNER_TEAM[bot].name}
+              />
+              <span className="owner-beam-slot" aria-hidden="true" />
+              <span className="owner-agent-copy">
+                <span className="owner-name-full">{OWNER_TEAM[bot].name}</span>
+                <span className="owner-name-short">{OWNER_TEAM[bot].short}</span>
+                <span className="owner-motion-label">{REEL_STEPS[step].label}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        {phase === "handoff" ? <HandoffBeam sentence={HANDOFF_SENTENCE} /> : null}
+      </div>
+    </div>
+  );
+}
+
 function AvatarStates({ variant }: { variant: AvatarVariant }) {
   return (
     <div className="owner-pane owner-states" data-states={variant}>
@@ -804,29 +874,38 @@ function AvatarStates({ variant }: { variant: AvatarVariant }) {
               <OwnerAvatar
                 bot={bot}
                 variant={variant}
+                size="sm"
                 motion={motion}
                 label={OWNER_TEAM[bot].short}
               />
-              <span className="owner-name-short">{OWNER_TEAM[bot].short}</span>
+              <span className="owner-name-short">{AVATAR_MOTION_LABEL[motion]}</span>
             </div>
           ))}
         </div>
       ))}
-      <div className="owner-state-row" data-state-row="handoff">
+      <div className="owner-state-row is-handoff" data-state-row="handoff">
         <p className="owner-kicker">Hand-off</p>
         <div className="owner-state-cell">
           <OwnerAvatar
             bot="analyst"
             variant={variant}
+            size="sm"
             motion="found"
             lookAt="advisor"
             label="Analyst looks toward Advisor"
           />
           <span>Analyst</span>
         </div>
-        <p className="owner-handoff">Analyst looks toward Advisor.</p>
+        <HandoffBeam sentence={HANDOFF_SENTENCE} />
         <div className="owner-state-cell">
-          <OwnerAvatar bot="advisor" variant={variant} motion="working" label="Advisor" />
+          <OwnerAvatar
+            bot="advisor"
+            variant={variant}
+            size="sm"
+            motion="working"
+            lookAt="analyst"
+            label="Advisor"
+          />
           <span>Advisor</span>
         </div>
       </div>

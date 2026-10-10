@@ -27,7 +27,7 @@ export const OWNER_NOW = new Date("2026-10-10T08:00:00.000Z");
 const MARKET: MoneyMarket = ZA_MARKET;
 
 export function zar(n: number): string {
-  return formatMoney(n, MARKET);
+  return formatMoney(n, MARKET).replace(/ /g, "\u00a0");
 }
 
 export const HARBOUR = {
@@ -199,17 +199,17 @@ export const OWNER_PRESENCES: readonly OwnerPresenceCard[] = [
   {
     bot: "financial_manager",
     presence: "waiting",
-    sentence: "Waiting on you to assign the Atlantic Fit-out call.",
+    sentence: "Waiting on the Atlantic Fit-out call.",
   },
   {
     bot: "analyst",
     presence: "found",
-    sentence: "September made less gross profit than August.",
+    sentence: "September made less than August.",
   },
   {
     bot: "advisor",
     presence: "working",
-    sentence: "Two moves are ready for you to read.",
+    sentence: "Two moves are ready to read.",
   },
 ];
 
@@ -358,7 +358,7 @@ export const OWNER_ACTIONS: readonly OwnerAction[] = [
 
 export const DO_THIS_NOW = {
   title: "Assign the Atlantic Fit-out call",
-  sentence: `Ask Johan Pietersen to confirm they will pay ${zar(HARBOUR_BOOKS.atlantic)} by 16 November.`,
+  sentence: `Ask Johan to confirm Atlantic pays ${zar(HARBOUR_BOOKS.atlantic)} by 16 Nov.`,
   support: OWNER_ACTIONS[0].detail,
   actionId: "atlantic",
   staffId: "johan" as StaffId,
@@ -379,7 +379,7 @@ export const OWNER_PROMISES = [
   {
     id: "cash",
     heading: "Cash over the next 13 weeks",
-    sentence: `The week of 30 November closes at ${zar(HARBOUR_BOOKS.lowClosing)}. That is ${zar(HARBOUR_BOOKS.underFloor)} under your ${zar(HARBOUR_BOOKS.floor)} floor.`,
+    sentence: `Week of 30 Nov closes at ${zar(HARBOUR_BOOKS.lowClosing)}, ${zar(HARBOUR_BOOKS.underFloor)} under your ${zar(HARBOUR_BOOKS.floor)} floor.`,
     source: "From the books, 13-week forecast",
     step: "Ask Financial Manager",
     go: "bot",
@@ -389,7 +389,7 @@ export const OWNER_PROMISES = [
   {
     id: "owes",
     heading: "Who owes you",
-    sentence: `Customers owe ${zar(HARBOUR_BOOKS.debtors)}. ${zar(HARBOUR_BOOKS.overdue)} of that is overdue.`,
+    sentence: `Customers owe ${zar(HARBOUR_BOOKS.debtors)}. ${zar(HARBOUR_BOOKS.overdue)} is overdue.`,
     source: "From the books, to 30 Sep",
     step: "Assign the Atlantic Fit-out call",
     go: "actions",
@@ -399,7 +399,7 @@ export const OWNER_PROMISES = [
   {
     id: "profit",
     heading: "Am I making money",
-    sentence: `Yes. September's gross profit was ${zar(HARBOUR_BOOKS.grossProfit)}, and that is less than August.`,
+    sentence: `Yes. September gross profit was ${zar(HARBOUR_BOOKS.grossProfit)}, less than August.`,
     source: "From the books, September",
     step: "Ask Analyst",
     go: "bot",
@@ -419,7 +419,7 @@ export const OWNER_PROMISES = [
   {
     id: "signed",
     heading: "What your accountant signed",
-    sentence: `${HARBOUR_ACCOUNTANT.name} signed the September diagnosis and the 13-week forecast on ${HARBOUR_ACCOUNTANT.signedOn}.`,
+    sentence: `${HARBOUR_ACCOUNTANT.name} signed the September pack on ${HARBOUR_ACCOUNTANT.signedOn}.`,
     source: HARBOUR_ACCOUNTANT.firm,
     step: "See what they signed",
     go: "deliverables",

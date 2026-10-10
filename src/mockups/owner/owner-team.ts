@@ -11,7 +11,7 @@ export type OwnerBotKey = (typeof OWNER_TEAM_ORDER)[number];
 export type OwnerPresence = "working" | "found" | "waiting";
 
 export const OWNER_PRESENCE_LABEL: Record<OwnerPresence, string> = {
-  working: "Working",
+  working: "Working…",
   found: "Found something",
   waiting: "Waiting on you",
 };
