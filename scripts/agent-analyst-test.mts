@@ -16,6 +16,8 @@ import {
   executeAnalystGate,
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
+import { analystToolSchemas, ANALYST_SYSTEM } from "../supabase/functions/_shared/agent-prompts/analyst.ts";
+import { classifyResult, formatAgentPrompt, runAgentLoop } from "../supabase/functions/_shared/agent-core/loop.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -87,8 +89,52 @@ const DAY = 24 * 60 * 60 * 1000;
   const schema = analystFailurePlan(1, "the model error (400): bad schema");
   assert(schema.action === "dead", "a 4xx schema error is not retried");
   assert(!schema.error.toLowerCase().includes("claude"), "stored errors do not name the model vendor");
-  assert(ANALYST_MAX_ITERATIONS === 4, "the analyst loop stops at 4 iterations");
+  assert(ANALYST_MAX_ITERATIONS === 8, "the analyst loop stops at 8 iterations");
   assert(analystRunCostUsd(1_000_000, 1_000_000) === 18, "cost uses the $3 and $15 rates");
+}
+
+// record_finding.severity is the same enum execute.ts accepts, and a rejection
+// is written into the next prompt so the model can correct the call.
+{
+  const finding = analystToolSchemas().find((tool) => tool.name === "record_finding");
+  const props = (finding?.input_schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+  assert(JSON.stringify(props.severity?.enum) === JSON.stringify(["info", "watch", "act"]), "severity enum is info, watch, act");
+  assert(typeof props.severity?.description === "string" && String(props.severity.description).includes("watch"), "severity describes when to use each value");
+  assert(props.kind?.maxLength === 80, "kind is capped at 80 characters");
+  assert(props.title?.maxLength === 200, "title is capped at 200 characters");
+  assert(props.detail?.maxLength === 2000, "detail is capped at 2000 characters");
+  assert(
+    (props.figures?.additionalProperties as { type?: string } | undefined)?.type === "number",
+    "figure values are numbers",
+  );
+  for (const word of ["info", "watch", "act"]) {
+    assert(ANALYST_SYSTEM.includes(word), `the system prompt names severity ${word}`);
+  }
+  assert(ANALYST_SYSTEM.includes("No action is asked"), "info is a stored fact with no action");
+  assert(ANALYST_SYSTEM.includes("looked at again"), "watch means look again");
+  assert(ANALYST_SYSTEM.includes("need a decision soon"), "act means the figures need a decision");
+
+  const rejection = "Severity must be info, watch, or act.";
+  const classified = classifyResult("record_finding", { error: rejection, tool_blocked: true });
+  assert(classified.detail === rejection, "a rejected finding keeps its error text");
+  const prompts: string[] = [];
+  await runAgentLoop({
+    objective: "Review the books on file.",
+    audience: "accountant",
+    maxIterations: ANALYST_MAX_ITERATIONS,
+    allowedTools: ["record_finding"],
+    toolLabels: { record_finding: "Finding" },
+    reason: async (ctx) => {
+      prompts.push(formatAgentPrompt(ctx));
+      if (ctx.iteration === 1) {
+        return { kind: "tool", name: "record_finding", args: { severity: "high" }, why: "note a change" };
+      }
+      return { kind: "stop", reason: "no_further_action", summary: "Corrected after the error." };
+    },
+    execute: async () => ({ error: rejection, tool_blocked: true }),
+  });
+  assert(prompts.length >= 2, "a rejection does not end the loop");
+  assert(prompts[1].includes(rejection), "the next turn includes the rejection text");
 }
 
 // A sync passes the activity from before the write, so a 31-day-quiet client is idle.
@@ -164,6 +210,12 @@ const DAY = 24 * 60 * 60 * 1000;
   );
   assert(migration.includes("'upload', 'pdf_upload', 'financial_statement'"), "statement uploads enqueue");
   assert(migration.includes("agent-dispatch"), "the cron names the dispatcher");
+  const invoke = readFileSync(
+    resolve("supabase/migrations/20261010233000_agent_invoke_timeout.sql"),
+    "utf8",
+  );
+  assert(invoke.includes("timeout_milliseconds := 60000"), "agent_invoke waits 60 seconds");
+  assert(invoke.includes("CREATE OR REPLACE FUNCTION public.agent_invoke(p_function text, p_body jsonb)"), "agent_invoke keeps its signature");
 
   const promptFiles = readdirSync(resolve("supabase/functions/_shared/agent-prompts"));
   assert(promptFiles.includes("analyst.ts"), "the analyst prompt file is in place");

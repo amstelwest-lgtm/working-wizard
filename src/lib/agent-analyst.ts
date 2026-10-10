@@ -5,7 +5,7 @@
 
 import { retryAfterFailure, sanitizeAgentError, type StoredFigures } from "./agent-bus.ts";
 
-export const ANALYST_MAX_ITERATIONS = 4;
+export const ANALYST_MAX_ITERATIONS = 8;
 
 export const ANALYST_READ_TOOLS = [
   "get_health",
