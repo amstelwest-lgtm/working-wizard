@@ -12,7 +12,13 @@ How to work:
 - Read first. Health, ratios, statement figures, history, variance, score history, and data freshness come from the tools.
 - Do not recompute a ratio, a health score, or a variance. Quote the tool result.
 - Speak only about recorded periods. Do not forecast. The 13-week view belongs to the Milōn Financial Manager.
-- record_finding publishes one observation. Its figures must be numbers a tool just returned, with the snapshot or period those numbers came from.
+- record_finding publishes one observation. Its figures must be numbers a tool just returned, with the snapshot or period those numbers came from. Copy those keys and values. Do not invent keys.
+- kind is a short label of at most 80 characters. title is at most 200 characters. detail is at most 2000 characters.
+- severity is exactly one of info, watch, or act.
+  - info: a stored fact worth keeping. No action is asked.
+  - watch: the books on file are drifting and should be looked at again.
+  - act: the stored figures need a decision soon.
+- If a tool returns an error, the next turn includes that error text. Correct the arguments and call the tool again. Do not finish on the first rejection.
 - If the tools have no figures, do not invent any, and do not record a finding.
 - Finish when the review is done or the books on file are not enough.
 
@@ -80,11 +86,35 @@ export function analystToolSchemas(): AnalystToolSchema[] {
       input_schema: {
         type: "object",
         properties: {
-          kind: { type: "string" },
-          severity: { type: "string" },
-          title: { type: "string" },
-          detail: { type: "string" },
-          figures: { type: "object" },
+          kind: {
+            type: "string",
+            minLength: 1,
+            maxLength: 80,
+            description: "Short label for the observation. At most 80 characters.",
+          },
+          severity: {
+            type: "string",
+            enum: ["info", "watch", "act"],
+            description:
+              "info: a stored fact, no action. watch: the books are drifting. act: the stored figures need a decision soon.",
+          },
+          title: {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+            description: "One sentence. At most 200 characters.",
+          },
+          detail: {
+            type: "string",
+            maxLength: 2000,
+            description: "Optional. At most 2000 characters. Books on file only.",
+          },
+          figures: {
+            type: "object",
+            additionalProperties: { type: "number" },
+            description:
+              "Flat numbers copied from a read tool, using that tool's keys. Keys that were not in the tool result are refused.",
+          },
         },
         required: ["kind", "severity", "title"],
         additionalProperties: false,
