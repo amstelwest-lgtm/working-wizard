@@ -6,6 +6,13 @@ import { useEffect, useState } from "react";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { OwnerChat } from "@/components/owner-door/owner-chat";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import {
+  OwnerAccountant,
+  OwnerActions,
+  OwnerDeliverables,
+  OwnerFirst,
+  OwnerPlan,
+} from "@/components/owner-door/owner-pages";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS } from "@/lib/milon-team-feed";
@@ -35,7 +42,17 @@ const TILES = ownerAnswerTiles({
   market: USD,
 });
 
-export type OwnerPreviewView = "rest" | "work" | "chat" | "ask" | "reel";
+export type OwnerPreviewView =
+  | "rest"
+  | "work"
+  | "chat"
+  | "ask"
+  | "reel"
+  | "actions"
+  | "accountant"
+  | "deliverables"
+  | "plan"
+  | "first";
 
 export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
@@ -81,7 +98,13 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
 
   return (
     <OwnerShell
-      screen={view === "chat" ? "chat" : "home"}
+      screen={
+        view === "chat"
+          ? "chat"
+          : view === "actions" || view === "accountant" || view === "deliverables" || view === "plan"
+            ? view
+            : "home"
+      }
       businessName="Northline Studio"
       initials="NS"
       workspaces={[{ clientId: "preview", name: "Northline Studio" }]}
@@ -138,6 +161,32 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           onListen={() => undefined}
           onBack={() => undefined}
         />
+      ) : null}
+      {view === "actions" ? (
+        <OwnerActions
+          ready
+          rows={[{ id: "a1", title: "Approve the payroll run.", status: "not_started", due: "16 Oct 2026" }]}
+          onAsk={() => undefined}
+        />
+      ) : null}
+      {view === "accountant" ? (
+        <OwnerAccountant
+          joined={false}
+          firmName={null}
+          invite={<p className="owner-lede">Invite form</p>}
+          uploads={<p className="owner-lede">No files uploaded yet.</p>}
+          onConnect={() => undefined}
+        />
+      ) : null}
+      {view === "deliverables" ? (
+        <OwnerDeliverables
+          rows={[{ id: "s1", scope: "cash_forecast", name: "Alex Morgan", when: "2 Oct 2026" }]}
+          onInvite={() => undefined}
+        />
+      ) : null}
+      {view === "plan" ? <OwnerPlan visitor="us" accountantOnMilon={false} firmName={null} /> : null}
+      {view === "first" ? (
+        <OwnerFirst joined={false} onQuickBooks={() => undefined} onXero={() => undefined} onInvite={() => undefined} />
       ) : null}
       {view === "rest" || view === "work" || view === "ask" ? (
         <OwnerHome

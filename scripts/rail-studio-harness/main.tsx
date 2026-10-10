@@ -171,9 +171,22 @@ const ownerDoorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/owner-door",
   validateSearch: (search: Record<string, unknown>) => ({
-    view: (["rest", "work", "chat", "ask", "reel"].includes(String(search.view))
-      ? String(search.view)
-      : "rest") as OwnerPreviewView,
+    view: (
+      [
+        "rest",
+        "work",
+        "chat",
+        "ask",
+        "reel",
+        "actions",
+        "accountant",
+        "deliverables",
+        "plan",
+        "first",
+      ].includes(String(search.view))
+        ? String(search.view)
+        : "rest"
+    ) as OwnerPreviewView,
   }),
   component: function OwnerDoorHarness() {
     const search = useSearch({ strict: false }) as { view?: OwnerPreviewView };

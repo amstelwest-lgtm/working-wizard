@@ -3844,12 +3844,23 @@ function Index() {
                 market={boardMarket}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
                   row
-                    ? [{ signed_off_by_name: row.signed_off_by_name, signed_off_at: row.signed_off_at }]
+                    ? [
+                        {
+                          id: row.id,
+                          scope: row.scope,
+                          signed_off_by_name: row.signed_off_by_name,
+                          signed_off_at: row.signed_off_at,
+                          firm_name: row.firm_name,
+                        },
+                      ]
                     : [],
                 )}
+                firmId={clientMeta?.firm_id ?? null}
                 workspaces={ownerWorkspaces}
                 onSwitch={switchOwnerWorkspace}
                 onConnect={() => setShowFinData(true)}
+                onQuickBooks={() => setShowQboDialog(true)}
+                onXero={() => setShowXeroDialog(true)}
                 onProfile={() => openProfileDialog("retake")}
                 onSettings={() => {
                   openOwnerSettings();

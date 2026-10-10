@@ -13,6 +13,7 @@ import {
   type OwnerBooks,
 } from "../src/lib/owner-answers.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
+import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
@@ -225,5 +226,22 @@ assert(!door.includes("Dana"), "the door does not use a retired name");
 const prompt = readFileSync("supabase/functions/ask-ai/prompt.ts", "utf8");
 assert(prompt.includes("askAiAgentPersona"), "ask-ai keeps an agent persona");
 assert(!prompt.includes("Milōn Financial Manager"), "the persona does not hardcode a display name");
+
+assert(ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }) === "Owner plan · R299/mo", "SA visitors see the rand price");
+assert(!ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }).includes("$39"), "SA plan hides the dollar price");
+assert(ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }) === "Owner plan · $39/mo", "US visitors see the dollar price");
+assert(!ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }).includes("R299"), "US plan hides the rand price");
+assert(
+  ownerPlanLine({ visitor: "za", accountantOnMilon: true, firmName: "Northline" }) ===
+    "Owner plan · included — Northline is on Milōn",
+  "a linked accountant replaces the price",
+);
+assert(!ownerPlanLine({ visitor: null, accountantOnMilon: false, firmName: null }).match(/R299|\$39/), "no price before the visitor is known");
+assert(ownerPlanFreeLine() === "Free when your accountant is on Milōn.", "the free line has no price");
+const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
+assert(!homeSrc.includes("R299") && !homeSrc.includes("$39"), "home does not show a price");
+const pagesSrc = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
+assert(pagesSrc.includes("ownerPlanLine"), "the plan view is where the price lives");
+assert(pagesSrc.includes("ownerPlanFreeLine"), "the free line is on the invite surfaces");
 
 console.log("owner-door tests passed");
