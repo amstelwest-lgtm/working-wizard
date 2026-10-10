@@ -30,12 +30,13 @@ Do not prefix `VITE_`. Do not commit the values. Redeploy after saving.
 
 | Name | Value |
 | --- | --- |
-| `SAGE_SA_API_KEY` | API key issued by Sage South Africa for this app. Required for connect and for the password cipher when the dedicated key is unset. |
-| `SAGE_SA_PASSWORD_KEY` | Optional. When set, this is the only key for `password_enc`. When unset, the cipher uses `SAGE_SA_API_KEY`. |
+| `SAGE_SA_API_KEY` | API key issued by Sage South Africa for this app. Required for connect. Sandbox and live keys differ. |
+| `SAGE_SA_PASSWORD_KEY` | Required for connect. The only key used to write `password_enc` (e.g. `openssl rand -base64 32`). Independent of the API key, so a sandbox → live key swap keeps stored connections working. |
+| `SAGE_SA_BASE_URL` | Optional. API host. Unset means live `https://accounting.sageone.co.za/api/2.0.0`. Preview uses the sandbox `https://resellers.accounting.sageone.co.za/api/2.0.0`. Only https `*.sageone.co.za` URLs are accepted; anything else falls back to live. |
 
-`password_enc` is `enc:v1:` plus AES-256-GCM (12-byte iv, 16-byte tag, ciphertext, base64url). Connect writes it with `encryptSagePassword` in `src/lib/sage-password.ts`. Sync decrypts with the same module. The key is SHA-256 of `SAGE_SA_PASSWORD_KEY` if that is set, otherwise SHA-256 of `SAGE_SA_API_KEY`. Rotating the cipher key means each Sage company must be connected again.
+`password_enc` is `enc:v1:` plus AES-256-GCM (12-byte iv, 16-byte tag, ciphertext, base64url). Connect writes it with `encryptSagePassword` in `src/lib/sage-password.ts`. Sync decrypts with the same module. The key is SHA-256 of `SAGE_SA_PASSWORD_KEY`. Legacy rows written with SHA-256 of `SAGE_SA_API_KEY` (before the dedicated key) still decrypt, and sync re-encrypts them with `SAGE_SA_PASSWORD_KEY` after the next successful Sage call. Rotating `SAGE_SA_PASSWORD_KEY` itself means each Sage company must be connected again.
 
-If `SAGE_SA_API_KEY` is missing, the connect card says Sage is not switched on
+If `SAGE_SA_API_KEY` or `SAGE_SA_PASSWORD_KEY` is missing, the connect card says Sage is not switched on
 and does not call Sage.
 
 ## Database
@@ -56,8 +57,9 @@ table.
 2. When the key arrives, paste it into Vercel → working-wizard2 → Settings →
    Environment Variables as `SAGE_SA_API_KEY` (Production and Preview).
    Do not put it in git.
-3. Optional: set `SAGE_SA_PASSWORD_KEY` on the same project if the password
-   cipher should not be the API key. Leave it unset to use `SAGE_SA_API_KEY`.
+3. Set `SAGE_SA_PASSWORD_KEY` on the same project (a random 32-byte base64
+   value). For sandbox testing on Preview also set `SAGE_SA_BASE_URL` to the
+   reseller host.
 4. Apply the migration above on the Milon Supabase project.
 5. Redeploy working-wizard2.
 

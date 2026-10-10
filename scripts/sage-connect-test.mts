@@ -25,9 +25,18 @@ import {
 } from "../src/lib/sage";
 import {
   decryptSagePassword,
+  decryptSagePasswordDetailed,
   encryptSagePassword,
   SAGE_PASSWORD_PREFIX,
 } from "../src/lib/sage-password";
+
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import {
+  normalizeSageApiBase,
+  SAGE_SA_LIVE_API_BASE,
+  SAGE_SA_SANDBOX_API_BASE,
+  sageApiBase,
+} from "../src/lib/sage-config";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -39,11 +48,15 @@ function read(path: string) {
 
 process.env.SAGE_SA_API_KEY = "test-api-key";
 delete process.env.SAGE_SA_PASSWORD_KEY;
+delete process.env.SAGE_SA_BASE_URL;
 
-assert(sageCredentialsConfigured(), "API key marks Sage as configured");
+assert(!sageCredentialsConfigured(), "API key alone is not enough: the password key is required");
+process.env.SAGE_SA_PASSWORD_KEY = "dedicated-password-key";
+assert(sageCredentialsConfigured(), "API key + password key marks Sage as configured");
 delete process.env.SAGE_SA_API_KEY;
 assert(!sageCredentialsConfigured(), "missing API key is not configured");
 process.env.SAGE_SA_API_KEY = "test-api-key";
+delete process.env.SAGE_SA_PASSWORD_KEY;
 
 const auth = sageBasicAuthorization("owner@example.co.za", "p@ss:word");
 assert(auth.startsWith("Basic "), "Basic auth prefix");
@@ -119,24 +132,80 @@ assert(unconfigured.ok === false && unconfigured.reason === "not_configured", "b
 
 globalThis.fetch = originalFetch;
 
+// No dedicated key: new ciphertext is refused (the API key is decrypt-only).
+let refusedWithoutKey = false;
+try {
+  encryptSagePassword("s3cret");
+} catch (err) {
+  refusedWithoutKey = err instanceof Error && /SAGE_SA_PASSWORD_KEY is not set/.test(err.message);
+}
+assert(refusedWithoutKey, "encrypt refuses to use the API key when SAGE_SA_PASSWORD_KEY is unset");
+
+// Build a legacy (API-key) ciphertext the way the old module wrote it.
+const legacyCipher = (() => {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", createHash("sha256").update("test-api-key").digest(), iv);
+  const ct = Buffer.concat([c.update("s3cret", "utf8"), c.final()]);
+  return SAGE_PASSWORD_PREFIX + Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64url");
+})();
+const legacyOnly = decryptSagePasswordDetailed(legacyCipher);
+assert(legacyOnly.plain === "s3cret", "legacy row decrypts with the API key when no password key is set");
+assert(legacyOnly.keySource === "legacy_api_key", "legacy key source is reported");
+assert(!legacyOnly.needsReencrypt, "no re-encrypt without a dedicated key to move to");
+
+process.env.SAGE_SA_PASSWORD_KEY = "dedicated-password-key";
 const cipher = encryptSagePassword("s3cret");
 assert(cipher.startsWith(SAGE_PASSWORD_PREFIX), "password uses enc:v1");
 assert(SAGE_PASSWORD_PREFIX === "enc:v1:", "prefix matches the sync decrypt");
 assert(!cipher.includes("s3cret"), "ciphertext does not contain the password");
-assert(decryptSagePassword(cipher) === "s3cret", "ciphertext round-trips with the API key");
-process.env.SAGE_SA_PASSWORD_KEY = "dedicated-password-key";
-const dedicated = encryptSagePassword("s3cret");
-assert(decryptSagePassword(dedicated) === "s3cret", "dedicated key round-trips");
-assert(dedicated !== cipher, "dedicated key is not the API-key ciphertext");
-let rejectedOld = false;
+assert(cipher !== legacyCipher, "dedicated ciphertext differs from the legacy one");
+const freshDecrypt = decryptSagePasswordDetailed(cipher);
+assert(freshDecrypt.plain === "s3cret" && freshDecrypt.keySource === "password_key", "dedicated key round-trips");
+assert(!freshDecrypt.needsReencrypt, "dedicated ciphertext does not need re-encrypting");
+
+const migrating = decryptSagePasswordDetailed(legacyCipher);
+assert(migrating.plain === "s3cret", "legacy row still decrypts once the password key is set");
+assert(migrating.keySource === "legacy_api_key" && migrating.needsReencrypt, "legacy row is flagged for re-encrypt");
+const reencrypted = encryptSagePassword(migrating.plain);
+assert(decryptSagePasswordDetailed(reencrypted).keySource === "password_key", "re-encrypted row uses the password key");
+
+// Swapping the API key (sandbox -> live) keeps dedicated-key rows readable.
+process.env.SAGE_SA_API_KEY = "live-api-key";
+assert(decryptSagePassword(cipher) === "s3cret", "API key swap does not break password_key rows");
+let swappedLegacy = false;
+try {
+  decryptSagePassword(legacyCipher);
+} catch {
+  swappedLegacy = true;
+}
+assert(swappedLegacy, "a legacy row cannot decrypt after the API key changes (why the dedicated key exists)");
+process.env.SAGE_SA_API_KEY = "test-api-key";
+
+// Wrong dedicated key and no matching legacy key: refused, nothing leaked.
+process.env.SAGE_SA_PASSWORD_KEY = "some-other-key";
+let wrongKey = "";
 try {
   decryptSagePassword(cipher);
-} catch {
-  rejectedOld = true;
+} catch (err) {
+  wrongKey = err instanceof Error ? err.message : "";
 }
-assert(rejectedOld, "a dedicated key does not decrypt an API-key ciphertext");
-delete process.env.SAGE_SA_PASSWORD_KEY;
-assert(decryptSagePassword(cipher) === "s3cret", "clearing the dedicated key falls back to the API key");
+assert(/could not be decrypted/.test(wrongKey) && !wrongKey.includes("s3cret"), "wrong key is refused without leaking");
+process.env.SAGE_SA_PASSWORD_KEY = "dedicated-password-key";
+
+// Base URL: default live, sandbox via SAGE_SA_BASE_URL, unsafe values fall back to live.
+assert(sageApiBase() === SAGE_SA_LIVE_API_BASE, "unset base URL is the live host");
+process.env.SAGE_SA_BASE_URL = "https://resellers.accounting.sageone.co.za/api/2.0.0/";
+assert(sageApiBase() === SAGE_SA_SANDBOX_API_BASE, "sandbox base URL is honoured (trailing slash trimmed)");
+assert(
+  sageCompanyValidateUrl("42", "k").startsWith(`${SAGE_SA_SANDBOX_API_BASE}/Company/Get/42`),
+  "validate uses the configured sandbox host",
+);
+assert(normalizeSageApiBase("http://resellers.accounting.sageone.co.za/api/2.0.0") === SAGE_SA_LIVE_API_BASE, "http is refused");
+assert(normalizeSageApiBase("https://evil.example.com/api/2.0.0") === SAGE_SA_LIVE_API_BASE, "foreign host is refused");
+assert(normalizeSageApiBase("https://sageone.co.za.evil.com/api") === SAGE_SA_LIVE_API_BASE, "lookalike host is refused");
+assert(normalizeSageApiBase("not a url") === SAGE_SA_LIVE_API_BASE, "garbage falls back to live");
+assert(normalizeSageApiBase("   ") === SAGE_SA_LIVE_API_BASE, "blank falls back to live");
+delete process.env.SAGE_SA_BASE_URL;
 
 const row = sageConnectionInsert({
   clientId: "11111111-1111-1111-1111-111111111111",
@@ -242,6 +311,7 @@ assert(card.includes("Email"), "card asks for email");
 assert(card.includes("Password"), "card asks for password");
 assert(card.includes("Company ID"), "card asks for Company ID");
 assert(card.includes("SAGE_SA_API_KEY"), "missing key shows the not-configured state");
+assert(card.includes("SAGE_SA_PASSWORD_KEY"), "not-configured state names the password key too");
 assert(card.includes('id="sage-empty-sync"'), "empty sync has a visible state");
 assert(card.includes(': "Sync"'), "connected card has Sync");
 assert(card.includes("Disconnect"), "connected card has Disconnect");

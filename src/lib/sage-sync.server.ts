@@ -10,7 +10,7 @@ import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
 import { agedApProofLine } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { sageCompanyIdIsValid, sageSyncWriteDecision } from "@/lib/sage";
-import { decryptSagePassword } from "@/lib/sage-password";
+import { decryptSagePasswordDetailed, encryptSagePassword } from "@/lib/sage-password";
 import {
   fetchSageLedgerStatement,
   mapSageToFinancialInputs,
@@ -165,6 +165,24 @@ function fieldsFrom(ledger: SageLedgerStatement): Record<string, string> {
   return fields;
 }
 
+/** Re-encrypt a legacy password_enc with SAGE_SA_PASSWORD_KEY. Never logs the secret. */
+export async function reencryptSagePassword(clientId: string, password: string): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("sage_connections")
+      .update({ password_enc: encryptSagePassword(password) } as never)
+      .eq("client_id", clientId);
+    if (error) {
+      console.error("[sage sync] password re-encrypt skipped", error.code);
+      return false;
+    }
+    return true;
+  } catch {
+    console.error("[sage sync] password re-encrypt skipped");
+    return false;
+  }
+}
+
 export async function executeSageSync(input: {
   clientId: string;
   userId: string | null;
@@ -186,7 +204,9 @@ export async function executeSageSync(input: {
 
   try {
     if (!sageCredentialsConfigured()) {
-      throw new Error("SAGE_SA_API_KEY is not set. Overview figures were left unchanged.");
+      throw new Error(
+        "SAGE_SA_API_KEY or SAGE_SA_PASSWORD_KEY is not set. Overview figures were left unchanged.",
+      );
     }
     const username = String(conn.username ?? "").trim();
     const companyId = String(conn.company_id ?? "").trim();
@@ -195,13 +215,17 @@ export async function executeSageSync(input: {
       throw new Error("Sage company id is missing on the connection");
 
     const row = await readClient(input.clientId);
-    const password = decryptSagePassword(String(conn.password_enc ?? ""));
+    const decrypted = decryptSagePasswordDetailed(String(conn.password_enc ?? ""));
+    const password = decrypted.plain;
     const apiKey = process.env.SAGE_SA_API_KEY?.trim() ?? "";
     const ledger = await fetchSageLedgerStatement(
       { username, password, apiKey, companyId },
       new Date(),
       fyStartMonth(row.financial_year_start_month),
     );
+    // Sage accepted the login, so a legacy (API-key) ciphertext is re-written
+    // with SAGE_SA_PASSWORD_KEY. Best effort: a failure here never fails sync.
+    if (decrypted.needsReencrypt) await reencryptSagePassword(input.clientId, password);
     const fields = fieldsFrom(ledger);
     const prev =
       row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)

@@ -1,8 +1,9 @@
 # Sage Business Cloud Accounting (South Africa)
 
 Sage One — the South African product. Basic auth against
-`https://accounting.sageone.co.za/api/2.0.0`. Connect stores a username, an
-encrypted password, and a company id. Sync reads that row.
+`https://accounting.sageone.co.za/api/2.0.0` unless `SAGE_SA_BASE_URL` is an
+https `*.sageone.co.za` host (the reseller sandbox). Connect stores a username,
+an encrypted password, and a company id. Sync reads that row.
 
 Sync pulls month-to-date and year-to-date profit and loss, the balance sheet,
 bank-account balances, and aged customer and supplier summaries. It writes
@@ -17,13 +18,14 @@ error and the overview stays as it was.
 
 ## Env (Vercel, not git)
 
-| Name                   | Required             | Where                                                           |
-| ---------------------- | -------------------- | --------------------------------------------------------------- |
-| `SAGE_SA_API_KEY`      | Yes, for a live call | Vercel Production and Preview. Query `apikey`. Never `VITE_`.   |
-| `SAGE_SA_PASSWORD_KEY` | No                   | When set, password encryption uses this instead of the API key. |
+| Name                   | Required             | Where                                                                                                                                                          |
+| ---------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SAGE_SA_API_KEY`      | Yes, for a live call | Vercel Production and Preview. Query `apikey`. Never `VITE_`. Sandbox and live keys differ.                                                                    |
+| `SAGE_SA_PASSWORD_KEY` | Yes, for connect     | The only key that writes `password_enc`. Legacy rows encrypted with the API key still decrypt and are re-encrypted on the next good sync.                     |
+| `SAGE_SA_BASE_URL`     | No                   | API host. Unset is the live host above. Only https `*.sageone.co.za` is accepted; anything else falls back to live. Preview can point at the reseller sandbox. |
 
-Sync refuses to call Sage when `SAGE_SA_API_KEY` is missing. Nothing on the
-client is zeroed.
+Sync refuses to call Sage when `SAGE_SA_API_KEY` or `SAGE_SA_PASSWORD_KEY` is
+missing. Nothing on the client is zeroed.
 
 ## Connection row Eng2 owns
 

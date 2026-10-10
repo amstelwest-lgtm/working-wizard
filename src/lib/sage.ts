@@ -13,19 +13,16 @@
 
 import { emptyLedgerSyncError, ledgerSyncReportIsEmpty, ledgerSyncWouldWipe } from "@/lib/ledger-sync-financials";
 
-export const SAGE_SA_API_BASE = "https://accounting.sageone.co.za/api/2.0.0";
+import { SAGE_SA_LIVE_API_BASE, sageApiBase } from "@/lib/sage-config";
+
+/** Live host. The host actually called is sageApiBase() (SAGE_SA_BASE_URL). */
+export const SAGE_SA_API_BASE = SAGE_SA_LIVE_API_BASE;
 
 /** Shown when Sync runs before Eng1 maps a statement. Figures stay put. */
 export const SAGE_EMPTY_SYNC_MESSAGE =
   "Sage is connected, but no statement has been synced. Overview figures were left unchanged.";
 
-export function sageApiKey(): string {
-  return process.env.SAGE_SA_API_KEY?.trim() ?? "";
-}
-
-export function sageCredentialsConfigured(): boolean {
-  return sageApiKey().length > 0;
-}
+export { sageApiBase, sageApiKey, sageCredentialsConfigured } from "@/lib/sage-config";
 
 export function normalizeSageCompanyId(raw: string): string {
   return raw.trim();
@@ -53,7 +50,7 @@ export function sageBasicAuthorization(username: string, password: string): stri
  */
 export function sageCompanyValidateUrl(companyId: string, apiKey: string): string {
   const url = new URL(
-    `${SAGE_SA_API_BASE}/Company/Get/${encodeURIComponent(normalizeSageCompanyId(companyId))}`,
+    `${sageApiBase()}/Company/Get/${encodeURIComponent(normalizeSageCompanyId(companyId))}`,
   );
   url.searchParams.set("apikey", apiKey);
   url.searchParams.set("companyid", normalizeSageCompanyId(companyId));
