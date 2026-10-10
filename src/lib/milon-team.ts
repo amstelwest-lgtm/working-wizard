@@ -10,32 +10,32 @@ import {
 export const AGENT_ORDER: readonly AgentKey[] = AGENT_KEYS;
 
 const DISPLAY_NAME: Record<AgentKey, string> = {
-  bookkeeper: "Milōn Bookkeeper",
+  financial_manager: "Milōn Bookkeeper",
   analyst: "Milōn Analyst",
   advisor: "Milōn Advisor",
 };
 
 const SHORT_NAME: Record<AgentKey, string> = {
-  bookkeeper: "Bookkeeper",
+  financial_manager: "Bookkeeper",
   analyst: "Analyst",
   advisor: "Advisor",
 };
 
 const INITIAL: Record<AgentKey, string> = {
-  bookkeeper: "B",
+  financial_manager: "B",
   analyst: "A",
   advisor: "A",
 };
 
 const JOB_LINE: Record<AgentKey, string> = {
-  bookkeeper: "Close, clean books, reconciliation, and sign-off readiness.",
+  financial_manager: "Close, clean books, reconciliation, and sign-off readiness.",
   analyst: "Budget, 13-week forecast, variances, and the board report.",
   advisor: "Cash floor, debtors, covenants, tax dates, and next moves.",
 };
 
 /** 24px stroke icons. The desk is the only renderer. */
 const MARK_PATH: Record<AgentKey, string> = {
-  bookkeeper: "M6 3.5h12a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1zM8 8h8M8 12h8M8 16h5",
+  financial_manager: "M6 3.5h12a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1zM8 8h8M8 12h8M8 16h5",
   analyst: "M4 19h16M6 15.5l4.2-5 3.1 2.8L18 6",
   advisor: "M12 3.2l7.2 3.6v5.4c0 4.6-3.1 7.4-7.2 8.8-4.1-1.4-7.2-4.2-7.2-8.8V6.8L12 3.2z",
 };
@@ -174,7 +174,7 @@ export function teamAgentHeaderStatus(
     status.lastRunKind === "diagnosis" ||
     status.lastRunKind === "signoff";
 
-  if (agent === "bookkeeper" && status.lastRunAt && booksTouched) {
+  if (agent === "financial_manager" && status.lastRunAt && booksTouched) {
     return { label: "Books clean ✓", tone: "clear", lastRun };
   }
   if (agent === "analyst" && status.lastRunAt) {

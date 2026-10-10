@@ -68,13 +68,13 @@ assert(hits.length === 0, hits.join("\n") || "an in-app surface hardcodes a team
 const config = readFileSync("src/lib/milon-team.ts", "utf8");
 for (const name of NAMES) assert(config.includes(name), `config is missing ${name}`);
 assert(!config.includes(BOT_ROLE), "the config does not name the old bookkeeping role");
-assert(!config.includes("accountant"), "the agent key is bookkeeper");
+assert(!config.includes("accountant"), "the agent key is financial_manager");
 assert(!existsSync("src/components/milon-team/types.ts"), "the local type mirror is gone");
-assert(AGENT_KEYS.join(",") === "bookkeeper,analyst,advisor", "keys come from the feed");
-assert(emptyMilonTeamFeed().agents.bookkeeper.lastRunAt === null, "an empty feed has no invented last run");
-assert(agentShortName("bookkeeper") === "Bookkeeper", "short name is Bookkeeper");
-assert(agentInitial("bookkeeper") === "B", "avatar letter is B");
-assert(agentAriaLabel("bookkeeper", "Books clean ✓") === `${NAMES[0]}. Books clean ✓`, "aria label uses the display name");
+assert(AGENT_KEYS.join(",") === "financial_manager,analyst,advisor", "keys come from the feed");
+assert(emptyMilonTeamFeed().agents.financial_manager.lastRunAt === null, "an empty feed has no invented last run");
+assert(agentShortName("financial_manager") === "Bookkeeper", "short name is Bookkeeper");
+assert(agentInitial("financial_manager") === "B", "avatar letter is B");
+assert(agentAriaLabel("financial_manager", "Books clean ✓") === `${NAMES[0]}. Books clean ✓`, "aria label uses the display name");
 
 const botSurfaces = [
   "src/lib/milon-team.ts",
@@ -126,7 +126,7 @@ assert(formatAsOf("2025-03-01", NOW) === "1 Mar 2025", "a date in another year k
 assert(formatAsOf(null, NOW) === null, "a missing as-of date stays hidden");
 
 const idle: Record<AgentKey, TeamAgentStatus> = {
-  bookkeeper: { agent: "bookkeeper", lastRunAt: null, lastRunKind: null },
+  financial_manager: { agent: "financial_manager", lastRunAt: null, lastRunKind: null },
   analyst: { agent: "analyst", lastRunAt: null, lastRunKind: null },
   advisor: { agent: "advisor", lastRunAt: null, lastRunKind: null },
 };
@@ -158,17 +158,17 @@ assert(
 );
 assert(
   teamAgentHeaderStatus(
-    "bookkeeper",
-    { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
-    [{ id: "c", agent: "bookkeeper", title: "Close", severity: "info", source: { label: "Books", asOf: null } }],
+    "financial_manager",
+    { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
+    [{ id: "c", agent: "financial_manager", title: "Close", severity: "info", source: { label: "Books", asOf: null } }],
     NOW,
   ).label === "Books clean ✓",
   "a synced close with no watch is clean books",
 );
 assert(
   teamAgentHeaderStatus(
-    "bookkeeper",
-    { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "query" },
+    "financial_manager",
+    { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "query" },
     [],
     NOW,
   ).label === "Question logged",
@@ -230,7 +230,7 @@ function html(feed: MilonTeamFeedApi, initialFilter?: "all" | AgentKey) {
 const populated = html(
   api({
     agents: {
-      bookkeeper: { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
+      financial_manager: { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
       analyst: { agent: "analyst", lastRunAt: "2026-10-07T12:00:00.000Z", lastRunKind: "diagnosis" },
       advisor: { agent: "advisor", lastRunAt: "2026-10-08T09:00:00.000Z", lastRunKind: "diagnosis" },
     },
@@ -248,7 +248,7 @@ const populated = html(
         blockedReason: "precard_cap",
         title: "Note the debtors past terms",
       }),
-      job({ id: "quiet", agent: "bookkeeper", status: "proposed", canApprove: false, blockedReason: "no_data", title: "Waiting on a statement" }),
+      job({ id: "quiet", agent: "financial_manager", status: "proposed", canApprove: false, blockedReason: "no_data", title: "Waiting on a statement" }),
       job({ id: "spin", status: "drafting", title: "Writing the note" }),
       job({ id: "ready", status: "draft_ready", href: "#draft-ready", title: "Board note" }),
       job({ id: "wait", status: "awaiting_signoff", title: "Close pack" }),
@@ -260,8 +260,8 @@ const populated = html(
 );
 
 assert(populated.includes(agentDisplayName("advisor")), "the desk prints the Advisor name from the config");
-assert(populated.includes(agentDisplayName("bookkeeper")), "the team row prints the Bookkeeper name");
-assert(populated.includes(agentShortName("bookkeeper")), "tags use the Bookkeeper short name");
+assert(populated.includes(agentDisplayName("financial_manager")), "the team row prints the Bookkeeper name");
+assert(populated.includes(agentShortName("financial_manager")), "tags use the Bookkeeper short name");
 assert(populated.includes('data-agent-initial="B"'), "the Bookkeeper avatar letter is B");
 assert(!populated.includes(BOT_ROLE), "rendered desk copy does not say the old role");
 assert(populated.includes("as of 8 Oct"), "as-of dates use the short form");

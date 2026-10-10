@@ -1,5 +1,5 @@
 /**
- * Client-side feed for the three agents (bookkeeper, analyst, advisor).
+ * Client-side feed for the three agents (financial_manager, analyst, advisor).
  * Reads with the signed-in Supabase client (RLS). Approve calls the existing
  * draft path and does not send anything. Dismiss writes the existing
  * `proposed_next_steps.status` (`rejected`) or `deliverable_drafts.status` (`discarded`).

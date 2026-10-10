@@ -19,7 +19,7 @@ const POPULATED: MilonTeamFeed = {
   briefing: [
     {
       id: "close",
-      agent: "bookkeeper",
+      agent: "financial_manager",
       title: "September close matches the bank",
       detail: "The ledger and the bank statement agree.",
       severity: "info",
@@ -70,7 +70,7 @@ const POPULATED: MilonTeamFeed = {
   activity: [
     {
       id: "synced",
-      agent: "bookkeeper",
+      agent: "financial_manager",
       kind: "sync",
       text: "Bank feed synced for September.",
       at: "2026-10-08T10:00:00.000Z",
@@ -91,7 +91,7 @@ const POPULATED: MilonTeamFeed = {
     },
   ],
   agents: {
-    bookkeeper: { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
+    financial_manager: { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
     analyst: { agent: "analyst", lastRunAt: "2026-10-07T12:00:00.000Z", lastRunKind: "diagnosis" },
     advisor: { agent: "advisor", lastRunAt: "2026-10-08T09:00:00.000Z", lastRunKind: "diagnosis" },
   },

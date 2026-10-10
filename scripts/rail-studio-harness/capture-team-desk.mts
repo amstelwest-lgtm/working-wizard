@@ -7,8 +7,8 @@ import { mkdir } from "node:fs/promises";
 import { chromium, type Page } from "playwright";
 
 const teamConfig = readFileSync(new URL("../../src/lib/milon-team.ts", import.meta.url), "utf8");
-const bookkeeperName = teamConfig.match(/bookkeeper: "(Mil[^"]+)"/)?.[1];
-if (!bookkeeperName) throw new Error("bookkeeper display name missing from the team config");
+const bookkeeperName = teamConfig.match(/financial_manager: "(Mil[^"]+)"/)?.[1];
+if (!bookkeeperName) throw new Error("financial_manager display name missing from the team config");
 
 const base = "http://127.0.0.1:4179";
 const outDir = "/opt/cursor/artifacts/screenshots";
@@ -102,11 +102,11 @@ await shot("desk-desktop-1280", 1280, 1440, "/milon-team-desk?fixture=populated"
   });
 });
 
-await shot("desk-desktop-1280-bookkeeper", 1280, 1280, "/milon-team-desk?fixture=populated", async (page) => {
+await shot("desk-desktop-1280-financial_manager", 1280, 1280, "/milon-team-desk?fixture=populated", async (page) => {
   await page.locator("[data-agent-filter='all']").focus();
   await page.keyboard.press("ArrowRight");
   await page.waitForFunction(
-    () => document.querySelector("[data-agent-filter='bookkeeper']")?.getAttribute("aria-checked") === "true",
+    () => document.querySelector("[data-agent-filter='financial_manager']")?.getAttribute("aria-checked") === "true",
   );
   await page.getByText("Books clean ✓").waitFor();
   await page.getByText("September close matches the bank").waitFor();
