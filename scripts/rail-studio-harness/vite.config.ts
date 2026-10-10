@@ -24,6 +24,7 @@ export default defineConfig({
       { find: "node:crypto", replacement: resolve(root, "crypto-stub.ts") },
     ],
   },
+  publicDir: resolve(root, "../../public"),
   server: {
     host: "127.0.0.1",
     port: 4179,

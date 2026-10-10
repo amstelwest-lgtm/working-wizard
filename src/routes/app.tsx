@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate, ClientOnly } from "@tanstack/react-router";
 import { founderPortalLinks } from "@/styles/app-route-styles";
+import { OwnerDoor } from "@/components/owner-door/owner-door";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
@@ -3738,6 +3739,8 @@ function Index() {
     return <AppBootSpinner />;
   }
 
+  const showOwnerDoor = !searchTab && !sampleMode;
+
   return (
     <MarketProvider selection={workspaceMarket}>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
@@ -3769,7 +3772,7 @@ function Index() {
             />
           )}
           <SplashScreen />
-          {!actingClientId && (
+          {!actingClientId && !showOwnerDoor && (
             <TabErrorBoundary label="Walkthrough">
               {/* Empty board: a two-step nudge to the one action. The full board
                   tour only runs once a real score exists, so nothing it points at
@@ -3821,7 +3824,44 @@ function Index() {
             </div>
           )}
           <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
-            {/* App bar — compact single row */}
+            {showOwnerDoor ? (
+              <OwnerDoor
+                clientId={effectiveClientId}
+                businessName={
+                  actingClientName ??
+                  ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ??
+                  "Your business"
+                }
+                hasBooks={hasRealFinancials}
+                revenue={v.revenue}
+                priorRevenue={v.priorRevenue}
+                cogs={v.cogs}
+                receivables={v.receivables}
+                netIncome={v.netIncome}
+                periodEnd={v.periodEnd ?? null}
+                history={history}
+                cashflow={clientMeta?.cashflow ?? null}
+                market={boardMarket}
+                signoffs={Object.values(reviewSignoffs).flatMap((row) =>
+                  row
+                    ? [{ signed_off_by_name: row.signed_off_by_name, signed_off_at: row.signed_off_at }]
+                    : [],
+                )}
+                workspaces={ownerWorkspaces}
+                onSwitch={switchOwnerWorkspace}
+                onConnect={() => setShowFinData(true)}
+                onProfile={() => openProfileDialog("retake")}
+                onSettings={() => {
+                  openOwnerSettings();
+                  navigate({ to: "/settings" });
+                }}
+                onSignOut={() => {
+                  void signOut().then(() => {
+                    window.location.href = "/";
+                  });
+                }}
+              />
+            ) : (
             <header className="founder-app-bar relative mb-3 overflow-visible rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
               <div className="flex items-center justify-between gap-2">
@@ -4089,6 +4129,7 @@ function Index() {
                 </div>
               </div>
             </header>
+            )}
 
             {/* Business profile funnel — required on first run, retakeable thereafter */}
             <Dialog
@@ -4322,7 +4363,7 @@ function Index() {
               />
             )}
 
-            {sampleMode && (
+            {!showOwnerDoor && sampleMode && (
               <SampleBoardBanner
                 blurb={SAMPLE_BUSINESS_BLURB}
                 onUseMyFigures={() => {
@@ -4335,7 +4376,7 @@ function Index() {
 
             {/* Next Step (P0.4): first screen is action, not ratios. Hidden in
                 sample mode — the sample business has no advisory state. */}
-            {effectiveClientId && !sampleMode ? (
+            {!showOwnerDoor && effectiveClientId && !sampleMode ? (
               <div className="mb-3">
                 <NextStepCard
                   clientId={effectiveClientId}
@@ -4365,12 +4406,13 @@ function Index() {
               </div>
             ) : null}
 
-            {userRole === "client_owner" && !actingClientId && effectiveClientId ? (
+            {!showOwnerDoor && userRole === "client_owner" && !actingClientId && effectiveClientId ? (
               <div className="mb-3">
                 <InviteAccountantCard clientId={effectiveClientId} tone="board" />
               </div>
             ) : null}
 
+            {!showOwnerDoor ? (
             <Tabs
               id="owner-board-tabs"
               value={activeTab}
@@ -5444,6 +5486,7 @@ function Index() {
                 </div>
               </TabsContent>
             </Tabs>
+            ) : null}
           </div>
 
           {/* Contextual Notes overlay — fixed to viewport, tab-scoped, persisted per client */}

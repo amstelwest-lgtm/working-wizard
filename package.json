@@ -126,6 +126,7 @@
     "test:starter-trial-generation": "vite-node --config scripts/vite-test.config.ts scripts/starter-trial-generation-test.mts",
     "test:precard-cap": "vite-node --config scripts/vite-test.config.ts scripts/precard-cap-test.mts",
     "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
+    "test:owner-door": "vite-node --config scripts/vite-test.config.ts scripts/owner-door-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",
@@ -183,6 +184,8 @@
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@google/genai": "^2.15.0",
     "@hookform/resolvers": "^5.2.2",
     "@lovable.dev/email-js": "^0.0.4",

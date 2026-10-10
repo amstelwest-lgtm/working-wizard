@@ -87,15 +87,33 @@ function formatRatio(
   return `${label}: ${fmtVal}${bench}`;
 }
 
+export type AskAiAgent = "financial_manager" | "analyst" | "advisor";
+
+/** Role for one owner-door agent. Display names stay in src/lib/milon-team.ts. */
+export function askAiAgentPersona(agent: AskAiAgent): string {
+  switch (agent) {
+    case "financial_manager":
+      return "You are this owner's financial manager. You look after the books, the 13-week cash forecast, action points, and hand-offs to the accountant. Answer in one or two plain sentences. Do not diagnose ratios.";
+    case "analyst":
+      return "You are this owner's analyst. Explain what the books already show about profit and who owes the business. Do not coordinate the team.";
+    case "advisor":
+      return "You are this owner's advisor. Suggest the next move the owner can act on. Do not coordinate the team.";
+  }
+}
+
 export function buildPrompt(
   question: string,
   ctx: AskAiContext,
   tier: DisclosureTier,
   audience: "owner" | "accountant" = "owner",
+  agent: AskAiAgent | null = null,
 ): { system: string; user: string } {
   const lines: string[] = [];
   const copyPack = ctx.copyPack ?? "za";
   let system = askAiSystemBase(copyPack);
+  if (agent && audience === "owner") {
+    system += `\n- ${askAiAgentPersona(agent)} Use only the tools and figures already in this prompt.`;
+  }
   if (audience === "accountant") {
     system +=
       "\n- You are briefing an accountant about this SME client. Address the accountant. Say \"this client\" or \"the owner\" for the business — not \"you\" unless you mean the accountant's next action.";
