@@ -309,6 +309,14 @@ const client = "11111111-1111-1111-1111-111111111111";
   assert(sql.includes("interval '30 days'"), "idle window is 30 days");
   assert(sql.includes("interval '10 minutes'"), "debounce is 10 minutes");
   assert(sql.includes("interval '5 minutes'"), "lease ttl is 5 minutes");
+  assert(
+    sql.includes("WHERE public.agent_leases.expires_at < now()"),
+    "a live lease is not taken",
+  );
+  assert(
+    !sql.includes("OR public.agent_leases.run_id = EXCLUDED.run_id"),
+    "the same run does not re-enter a live lease",
+  );
   assert(sql.includes("agent_findings_evidence_chk"), "findings require evidence");
   assert(sql.includes("has_client_access"), "reads use has_client_access");
   assert(sql.includes("supabase_realtime"), "runs, messages, and findings join realtime");

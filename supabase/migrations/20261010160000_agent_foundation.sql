@@ -249,6 +249,8 @@ AS $$
 DECLARE
   v_ok boolean;
 BEGIN
+  -- A live row stays held until expires_at, including for this same run.
+  -- Heartbeat renews the holder. A second worker must not enter the loop.
   INSERT INTO public.agent_leases (agent, client_id, run_id, holder, expires_at)
   VALUES (p_agent, p_client_id, p_run_id, p_holder, now() + p_ttl)
   ON CONFLICT (agent, client_id) DO UPDATE
@@ -256,7 +258,6 @@ BEGIN
         holder = EXCLUDED.holder,
         expires_at = EXCLUDED.expires_at
     WHERE public.agent_leases.expires_at < now()
-       OR public.agent_leases.run_id = EXCLUDED.run_id
   RETURNING true INTO v_ok;
   RETURN COALESCE(v_ok, false);
 END $$;
