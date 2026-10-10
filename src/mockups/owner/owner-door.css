@@ -1,0 +1,1082 @@
+/* Owner door mockup. Tokens match the portal: gold #d4af37 on near-black.
+   Not loaded by any production route. */
+
+.owner-door {
+  --gold: var(--milon-gold, #d4af37);
+  --gold-deep: var(--milon-gold-deep, #ac8400);
+  --gold-bright: var(--milon-gold-bright, #fdee79);
+  --ink: var(--milon-ink, #f2ecdc);
+  --dim: var(--milon-ink-muted, #9b958a);
+  --faint: var(--milon-ink-faint, #6b665c);
+  --ok: var(--milon-ok, #5ccf8a);
+  --warn: var(--milon-warn, #e8b34b);
+  --card: rgba(16, 16, 24, 0.94);
+  --line: rgba(212, 175, 55, 0.22);
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  height: 100dvh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  font-family: "Noto Sans", "Inter", sans-serif;
+  background: transparent;
+}
+
+.owner-door * {
+  box-sizing: border-box;
+}
+
+.owner-door button,
+.owner-door input {
+  font-family: inherit;
+}
+
+.owner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 28px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.14);
+  background: color-mix(in srgb, #050507 78%, transparent);
+  backdrop-filter: blur(16px);
+  flex: none;
+}
+
+.owner-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.owner-word {
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  font-size: 14px;
+  background: linear-gradient(120deg, #ac8400, #d4af37 40%, #fdee79 60%, #d4af37 80%, #ac8400);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.owner-biz {
+  font-size: 13px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.owner-biz b {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.owner-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.owner-nav button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 650;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.owner-nav button[aria-current="page"] {
+  color: #1b1300;
+  background: var(--gold);
+}
+
+.owner-nav button:focus-visible,
+.owner-door button:focus-visible,
+.owner-door input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.owner-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 28px 20px;
+}
+
+.owner-home {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 701px) {
+  .owner-home {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+.owner-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+}
+
+.owner-title {
+  margin: 0;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-weight: 400;
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.owner-lede {
+  margin: 4px 0 0;
+  color: var(--dim);
+  font-size: 13.5px;
+}
+
+.owner-source {
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+  text-align: right;
+}
+
+.owner-presences {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  flex: none;
+}
+
+.owner-presence {
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.owner-presence.is-lead {
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 1px rgba(212, 175, 55, 0.28),
+    0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.owner-presence:hover {
+  border-color: rgba(212, 175, 55, 0.7);
+}
+
+.owner-orb {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--gold);
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+}
+
+.owner-orb svg {
+  width: 20px;
+  height: 20px;
+}
+
+.owner-pulse {
+  position: absolute;
+  inset: -5px;
+  border-radius: 18px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  animation: owner-pulse 2.4s ease-out infinite;
+}
+
+.owner-presence.is-working .owner-pulse {
+  border-color: rgba(92, 207, 138, 0.7);
+}
+
+.owner-presence.is-found .owner-pulse {
+  animation-duration: 3.2s;
+}
+
+.owner-presence.is-waiting .owner-pulse {
+  animation-duration: 1.8s;
+  border-color: rgba(232, 179, 75, 0.85);
+}
+
+@keyframes owner-pulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.85;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.owner-presence-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.owner-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.owner-name-full,
+.owner-name-short {
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.owner-name-short {
+  display: none;
+}
+
+.owner-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.owner-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(92, 207, 138, 0.16);
+  flex: none;
+}
+
+.owner-presence.is-found .owner-state i {
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18);
+}
+
+.owner-presence.is-waiting .owner-state i {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(232, 179, 75, 0.18);
+  animation: owner-dot 1.8s ease-in-out infinite;
+}
+
+@keyframes owner-dot {
+  50% {
+    transform: scale(0.7);
+    opacity: 0.65;
+  }
+}
+
+.owner-voice {
+  margin: 2px 0 0;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.owner-voice-list {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.owner-split {
+  display: grid;
+  grid-template-columns: 1.45fr 0.9fr;
+  gap: 10px;
+  flex: none;
+}
+
+.owner-panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.owner-panel.is-now {
+  border-color: rgba(212, 175, 55, 0.55);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+.owner-panel h2,
+.owner-block h2 {
+  margin: 2px 0 4px;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1.05;
+}
+
+.owner-panel p,
+.owner-block p {
+  margin: 0;
+}
+
+.owner-support {
+  margin-top: 4px !important;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.owner-chart {
+  display: block;
+  width: 100%;
+  height: 64px;
+  margin-top: 6px;
+}
+
+.owner-actions-row,
+.owner-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.owner-btn {
+  appearance: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.owner-btn-gold {
+  border: 0;
+  color: #1b1300;
+  background: linear-gradient(120deg, #ac8400, #d4af37 45%, #fdee79 70%, #d4af37);
+  box-shadow: 0 6px 18px rgba(212, 175, 55, 0.28);
+}
+
+.owner-btn-line {
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+}
+
+.owner-btn-quiet {
+  color: var(--dim);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.owner-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.owner-seat:hover {
+  border-color: var(--gold);
+}
+
+.owner-who {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.owner-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b1300;
+  background: var(--gold);
+  flex: none;
+}
+
+.owner-who strong {
+  display: block;
+  font-size: 14.5px;
+}
+
+.owner-who span,
+.owner-quiet {
+  color: var(--dim);
+  font-size: 12.5px;
+}
+
+.owner-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b1300;
+  background: var(--ok);
+}
+
+.owner-feed {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px 12px 8px;
+}
+
+.owner-feed-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.owner-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(92, 207, 138, 0.16);
+  animation: owner-dot 1.8s ease-in-out infinite;
+}
+
+.owner-feed ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.owner-feed li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 6px;
+  border-radius: 10px;
+}
+
+.owner-feed li.is-hand {
+  background: rgba(212, 175, 55, 0.06);
+}
+
+.owner-when {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.owner-feed p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.owner-arrow {
+  display: inline-block;
+  margin: 0 4px;
+  color: var(--gold);
+}
+
+.owner-back {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.owner-detail-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  margin-bottom: 10px;
+}
+
+.owner-detail-head .owner-voice {
+  font-size: 20px;
+}
+
+.owner-role {
+  margin: 2px 0 0;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.owner-findings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.owner-stat {
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+.owner-stat b {
+  display: block;
+  margin-top: 2px;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.owner-stat span {
+  display: block;
+  margin-top: 4px;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+
+.owner-block {
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  margin-bottom: 8px;
+}
+
+.owner-block .answer-strip {
+  margin: 0;
+}
+
+.owner-honesty {
+  margin-top: 8px !important;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.owner-weeks {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.owner-week {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.owner-week i {
+  display: block;
+  height: 46px;
+  border-radius: 7px 7px 3px 3px;
+  background: rgba(212, 175, 55, 0.28);
+  position: relative;
+}
+
+.owner-week.is-low i {
+  background: linear-gradient(180deg, #fdee79, #d4af37);
+}
+
+.owner-week em {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.owner-week.is-low em {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.owner-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 8px;
+}
+
+.owner-action.is-open {
+  border-color: rgba(212, 175, 55, 0.55);
+}
+
+.owner-action h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1.3;
+}
+
+.owner-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+
+.owner-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: var(--gold);
+  background: rgba(212, 175, 55, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.owner-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.owner-person {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: inherit;
+  padding: 6px 10px;
+}
+
+.owner-person.is-on,
+.owner-person.is-suggested {
+  border-color: var(--gold);
+}
+
+.owner-person.is-on {
+  background: rgba(212, 175, 55, 0.16);
+}
+
+.owner-person b {
+  display: block;
+  font-size: 13px;
+}
+
+.owner-person span {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.owner-deliverable {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.owner-deliverable:last-child {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.owner-deliverable-title {
+  margin: 4px 0 2px;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.owner-upload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.owner-upload h3 {
+  margin: 0 0 2px;
+  font-size: 14.5px;
+}
+
+.owner-staged {
+  margin: 4px 0 0;
+  color: var(--ok);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.owner-connect {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.owner-ledger {
+  appearance: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  min-height: 120px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+.owner-ledger[aria-pressed="true"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+}
+
+.owner-ledger strong {
+  display: block;
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: 32px;
+  font-weight: 400;
+}
+
+.owner-ledger span {
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.owner-invite {
+  margin-top: 8px;
+}
+
+.owner-invite label {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.owner-invite input {
+  width: min(420px, 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  background: #101018;
+  color: var(--ink);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.owner-invite input:disabled {
+  opacity: 0.55;
+}
+
+.owner-free {
+  margin: 6px 0 0 !important;
+  max-width: 28ch;
+  font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--gold);
+}
+
+.owner-plan {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.owner-step {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+body:has(.owner-door) button[aria-label="Share Milōn"] {
+  display: none !important;
+}
+
+@media (max-width: 700px) {
+  .owner-top {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 14px 8px;
+  }
+
+  .owner-nav {
+    justify-content: space-between;
+  }
+
+  .owner-nav button {
+    flex: 1;
+    padding: 6px 4px;
+  }
+
+  .owner-scroll {
+    padding: 12px 14px 16px;
+  }
+
+  .owner-title {
+    font-size: 30px;
+  }
+
+  .owner-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .owner-source {
+    text-align: left;
+  }
+
+  .owner-lede {
+    display: none;
+  }
+
+  .owner-split,
+  .owner-connect {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-findings {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .owner-stat:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .owner-stat b {
+    font-size: 24px;
+  }
+
+  .owner-presences {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .owner-home {
+    min-height: 0;
+  }
+
+  .owner-feed {
+    flex: none;
+    overflow: visible;
+  }
+
+  .owner-name-full {
+    display: none;
+  }
+
+  .owner-name-short {
+    display: block;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .owner-presence {
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .owner-orb {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+  }
+
+  .owner-orb svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .owner-presence .owner-kicker {
+    display: none;
+  }
+
+  .owner-kicker {
+    letter-spacing: 0.08em;
+    font-size: 9px;
+  }
+
+  .owner-seat {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .owner-seat .owner-kicker,
+  .owner-seat .owner-quiet,
+  .owner-seat .owner-btn {
+    display: none;
+  }
+
+  .owner-seat .owner-who {
+    grid-column: 1 / 3;
+  }
+
+  .owner-support {
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+
+  .owner-presence .owner-voice {
+    display: none;
+  }
+
+  .owner-voice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .owner-voice-list li {
+    font-family: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .owner-voice-list b {
+    font-family: "Noto Sans", "Inter", sans-serif;
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--gold);
+    margin-right: 6px;
+  }
+
+  .owner-chart {
+    display: none;
+  }
+
+  .owner-panel,
+  .owner-seat,
+  .owner-block {
+    padding: 10px 12px;
+  }
+
+  .owner-panel h2,
+  .owner-block h2 {
+    font-size: 22px;
+  }
+
+  .owner-weeks {
+    gap: 3px;
+  }
+
+  .owner-week em {
+    font-size: 8px;
+  }
+
+  .owner-feed li {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .owner-deliverable-title {
+    font-size: 18px;
+  }
+
+  .owner-deliverable .owner-support {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .owner-deliverable .owner-signed-line {
+    display: none;
+  }
+
+  .owner-deliverable {
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+  }
+
+  .owner-upload {
+    align-items: center;
+    padding: 8px 0;
+  }
+
+  .owner-upload .owner-btn {
+    flex: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-pulse,
+  .owner-live,
+  .owner-presence.is-waiting .owner-state i {
+    animation: none;
+  }
+}

@@ -1,4 +1,13 @@
-import { Outlet, RouterProvider, createBrowserHistory, createRootRoute, createRoute, createRouter, useSearch } from "@tanstack/react-router";
+import {
+  Outlet,
+  RouterProvider,
+  createBrowserHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  useRouterState,
+  useSearch,
+} from "@tanstack/react-router";
 import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,6 +24,7 @@ import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
+import { OwnerMockupPage } from "./owner-mockup-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
@@ -66,7 +76,23 @@ for (const href of sheetHrefs) {
 }
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: function HarnessRoot() {
+    const pathname = useRouterState({ select: (state) => state.location.pathname });
+    // The owner mockup is static. The signed-in providers loop in this
+    // harness (notes refresh) and are not part of the mock.
+    if (pathname === "/owner-mockup") return <Outlet />;
+    return (
+      <AuthProvider>
+        <AccountantProfileProvider>
+          <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
+            <Outlet />
+            <ShareButton />
+            <Toaster />
+          </NotesProvider>
+        </AccountantProfileProvider>
+      </AuthProvider>
+    );
+  },
 });
 const clientRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -80,24 +106,24 @@ const clientRoute = createRoute({
         ? canonicalizeAccountantSearch({ tab: rawTab, section: rawSection, focus: rawFocus })
         : null;
     return {
-    tab: canonical?.tab,
-    section: canonical?.section,
-    focus: canonical?.focus,
-    aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
-    packView:
-      search.packView === "draft" ||
-      search.packView === "ready" ||
-      search.packView === "stale" ||
-      search.packView === "cycle"
-        ? search.packView
-        : undefined,
-    planView:
-      search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
-    drafterView: search.drafterView === "sent" ? "sent" : undefined,
-    view:
-      search.view === "table" || search.view === "13week" || search.view === "chart"
-        ? search.view
-        : undefined,
+      tab: canonical?.tab,
+      section: canonical?.section,
+      focus: canonical?.focus,
+      aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
+      packView:
+        search.packView === "draft" ||
+        search.packView === "ready" ||
+        search.packView === "stale" ||
+        search.packView === "cycle"
+          ? search.packView
+          : undefined,
+      planView:
+        search.planView === "empty" || search.planView === "signed" ? search.planView : undefined,
+      drafterView: search.drafterView === "sent" ? "sent" : undefined,
+      view:
+        search.view === "table" || search.view === "13week" || search.view === "chart"
+          ? search.view
+          : undefined,
     };
   },
   component: function ClientHarness() {
@@ -140,7 +166,9 @@ const inviteRoute = createRoute({
         : "landing",
   }),
   component: function InviteHarness() {
-    const search = useSearch({ strict: false }) as { view?: "landing" | "create" | "revoked" | "workspace" };
+    const search = useSearch({ strict: false }) as {
+      view?: "landing" | "create" | "revoked" | "workspace";
+    };
     return <StaffInvitePreview view={search.view ?? "landing"} />;
   },
 });
@@ -157,7 +185,33 @@ const importLowsRoute = createRoute({
   },
 });
 
-const routeTree = rootRoute.addChildren([clientRoute, ownerRoute, teamDeskRoute, inviteRoute, importLowsRoute]);
+const ownerMockupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/owner-mockup",
+  validateSearch: (search: Record<string, unknown>) => ({
+    screen:
+      search.screen === "bot" ||
+      search.screen === "actions" ||
+      search.screen === "accountant" ||
+      search.screen === "first"
+        ? search.screen
+        : "home",
+    bot:
+      search.bot === "financial_manager" || search.bot === "advisor" || search.bot === "analyst"
+        ? search.bot
+        : "analyst",
+  }),
+  component: OwnerMockupPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  clientRoute,
+  ownerRoute,
+  teamDeskRoute,
+  inviteRoute,
+  importLowsRoute,
+  ownerMockupRoute,
+]);
 const router = createRouter({
   routeTree,
   history: createBrowserHistory(),
@@ -171,14 +225,6 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AuthProvider>
-      <AccountantProfileProvider>
-        <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
-          <RouterProvider router={router} />
-          <ShareButton />
-          <Toaster />
-        </NotesProvider>
-      </AccountantProfileProvider>
-    </AuthProvider>
+    <RouterProvider router={router} />
   </StrictMode>,
 );
