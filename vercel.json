@@ -40,6 +40,10 @@
     {
       "source": "/version.json",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
     }
   ],
   "rewrites": [{ "source": "/(.*)", "destination": "/api/server" }],
