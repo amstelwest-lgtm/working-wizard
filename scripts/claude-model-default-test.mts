@@ -71,8 +71,29 @@ assert(sonnet55.temperature == null, "Sonnet 5.5 does not send temperature");
 assert(!("top_p" in sonnet55) && !("top_k" in sonnet55), "Sonnet 5.5 does not send top_p or top_k");
 assert(sonnet55.tool_choice?.type === "auto", "forced tool choice becomes auto on Sonnet 5.5");
 assert(
+  sonnet55.tool_choice != null && !("disable_parallel_tool_use" in sonnet55.tool_choice),
+  "parallel tool use stays enabled unless the caller turns it off",
+);
+assert(
   !JSON.stringify(sonnet55).includes("budget_tokens"),
   "Sonnet 5.5 does not send a thinking budget",
+);
+
+const parallelOff = claudeRequestFields({
+  model: CLAUDE_SONNET_55,
+  toolChoice: { type: "any", disable_parallel_tool_use: true },
+});
+assert(
+  parallelOff.tool_choice?.type === "auto" && parallelOff.tool_choice.disable_parallel_tool_use === true,
+  "a caller-set disable_parallel_tool_use is kept on Sonnet 5.5",
+);
+const parallelExplicit = claudeRequestFields({
+  model: "claude-sonnet-4-6",
+  toolChoice: { type: "auto", disable_parallel_tool_use: false },
+});
+assert(
+  parallelExplicit.tool_choice?.disable_parallel_tool_use === false,
+  "an explicit false disable_parallel_tool_use is preserved",
 );
 
 const sonnet46 = claudeRequestFields({

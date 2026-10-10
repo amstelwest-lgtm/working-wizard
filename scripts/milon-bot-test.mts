@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { extractionAccessGranted } from "../src/lib/extract-access.ts";
 import {
   BOT_RATE_LIMIT,
   BOT_SYSTEM,
@@ -95,6 +96,89 @@ assert(claudeSrc.includes("tool_use"), "tool-use loop");
 assert(claudeSrc.includes("ANTHROPIC_API_KEY"), "same Anthropic secret as ask-ai");
 assert(askAiSrc.includes("export async function callClaude"), "ask-ai wrapper unchanged");
 assert(extractSrc.includes("api.anthropic.com"), "extract pipeline still calls Anthropic directly");
+assert(extractSrc.includes('error: "Unauthorised"'), "extract-financials rejects anonymous callers");
+assert(extractSrc.includes("has_client_access"), "extract-financials checks client access");
+assert(extractSrc.includes("is_firm_member"), "extract-financials checks firm access");
+assert(extractSrc.includes("service_role"), "extract-financials allows a service-role caller");
+assert(extractSrc.includes("extractionAccessGranted"), "extract-financials uses the shared access decision");
+assert(
+  extractSrc.indexOf("rejectUnauthorisedExtract") < extractSrc.indexOf("api.anthropic.com"),
+  "extract-financials checks the caller before it spends tokens",
+);
+assert(
+  extractionAccessGranted({
+    serviceRole: true,
+    userId: null,
+    clientId: null,
+    firmId: null,
+    clientAccess: false,
+    firmAccess: false,
+  }),
+  "a service-role caller may extract",
+);
+assert(
+  !extractionAccessGranted({
+    serviceRole: false,
+    userId: null,
+    clientId: "c",
+    firmId: null,
+    clientAccess: true,
+    firmAccess: false,
+  }),
+  "a missing user is refused",
+);
+assert(
+  !extractionAccessGranted({
+    serviceRole: false,
+    userId: "user",
+    clientId: null,
+    firmId: null,
+    clientAccess: false,
+    firmAccess: false,
+  }),
+  "a user with no client or firm is refused",
+);
+assert(
+  extractionAccessGranted({
+    serviceRole: false,
+    userId: "user",
+    clientId: "client",
+    firmId: null,
+    clientAccess: true,
+    firmAccess: false,
+  }),
+  "a user with client access may extract",
+);
+assert(
+  !extractionAccessGranted({
+    serviceRole: false,
+    userId: "user",
+    clientId: "client",
+    firmId: null,
+    clientAccess: false,
+    firmAccess: false,
+  }),
+  "a user without client access is refused",
+);
+assert(
+  extractionAccessGranted({
+    serviceRole: false,
+    userId: "user",
+    clientId: null,
+    firmId: "firm",
+    clientAccess: false,
+    firmAccess: true,
+  }),
+  "a firm member may extract for that firm",
+);
+const uploadSrc =
+  readFileSync(resolve("src/lib/extract-financials.functions.ts"), "utf8") +
+  readFileSync(resolve("src/lib/extractFinancials.server.ts"), "utf8");
+assert(uploadSrc.includes("requireSupabaseAuth"), "the app upload path still requires the user session");
+assert(
+  !uploadSrc.includes("functions/v1/extract-financials"),
+  "the app upload path does not call the public extract edge function",
+);
 
 assert(BOT_RATE_LIMIT === 30, "rate limit matches ask-ai");
 assert(BOT_TOOLS.includes("get_invite_status"), "invite tool");

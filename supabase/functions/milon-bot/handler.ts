@@ -6,8 +6,8 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   AGENT_SYSTEM,
   agentClaudeTools,
+  agentTurnMessages,
   decisionFromClaude,
-  formatAgentPrompt,
   isAgentToolName,
   runAgentLoop,
   type AgentAudience,
@@ -56,7 +56,11 @@ export async function runMilonbotObjective(input: {
     reason: async (ctx) => {
       const round = await callClaudeRound(
         system,
-        [{ role: "user", content: applyRedaction(formatAgentPrompt(ctx), session) }],
+        agentTurnMessages(ctx).map((message) =>
+          typeof message.content === "string"
+            ? { ...message, content: applyRedaction(message.content, session) }
+            : message,
+        ),
         tools,
         { toolChoice: { type: "any" }, maxTokens: 700 },
       );

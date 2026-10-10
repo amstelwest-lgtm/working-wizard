@@ -1,10 +1,12 @@
 // Extracts a structured financials JSON from an uploaded financial statement
 // (CSV text, Excel-as-CSV text, or PDF as base64) using Claude Sonnet 5.5.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 import {
   CONTRA_ASSET_EXTRACTION_RULE,
   reconcileFlatFinancials,
 } from "../../../src/lib/contra-assets.ts";
+import { extractionAccessGranted } from "../../../src/lib/extract-access.ts";
 import { statementModelParts } from "../../../src/lib/statement-text-layer.ts";
 import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
@@ -65,6 +67,122 @@ ${CONTRA_ASSET_EXTRACTION_RULE}
 
 Use the most recent period if multiple are shown. Negative numbers stay negative. Return strictly: {"revenue": 1234, "cogs": 567, ...}`;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function unauthorised(): Response {
+  return new Response(JSON.stringify({ error: "Unauthorised" }), {
+    status: 401,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function bearerRole(authHeader: string): string | null {
+  try {
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const pad = (s: string) => s + "=".repeat((4 - (s.length % 4)) % 4);
+    const payload = JSON.parse(atob(pad(parts[1].replace(/-/g, "+").replace(/_/g, "/"))));
+    return typeof payload?.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
+function bodyId(body: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = body[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+/** 401 when the caller is not a service role and not a user with client or firm access. */
+async function rejectUnauthorisedExtract(req: Request, body: Record<string, unknown>): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return unauthorised();
+  const serviceRole = bearerRole(authHeader) === "service_role";
+  if (serviceRole) {
+    return extractionAccessGranted({
+      serviceRole: true,
+      userId: null,
+      clientId: null,
+      firmId: null,
+      clientAccess: false,
+      firmAccess: false,
+    })
+      ? null
+      : unauthorised();
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !anonKey || !serviceKey) return unauthorised();
+
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const {
+    data: { user },
+    error: authErr,
+  } = await userClient.auth.getUser();
+  if (authErr || !user) return unauthorised();
+
+  const clientId = bodyId(body, "clientId", "client_id");
+  const firmId = bodyId(body, "firmId", "firm_id");
+  if ((clientId && !UUID.test(clientId)) || (firmId && !UUID.test(firmId))) return unauthorised();
+
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  let clientAccess = false;
+  let firmAccess = false;
+  if (clientId) {
+    const { data, error } = await admin.rpc("has_client_access", {
+      _user_id: user.id,
+      _client_id: clientId,
+    });
+    if (error) {
+      console.error("has_client_access error:", error.message);
+      return new Response(JSON.stringify({ error: "Access check failed" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    clientAccess = data === true;
+  }
+  if (firmId) {
+    const { data, error } = await admin.rpc("is_firm_member", {
+      _user_id: user.id,
+      _firm_id: firmId,
+    });
+    if (error) {
+      console.error("is_firm_member error:", error.message);
+      return new Response(JSON.stringify({ error: "Access check failed" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    firmAccess = data === true;
+  }
+  if (
+    !extractionAccessGranted({
+      serviceRole: false,
+      userId: user.id,
+      clientId,
+      firmId,
+      clientAccess,
+      firmAccess,
+    })
+  ) {
+    return unauthorised();
+  }
+  return null;
+}
+
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -96,8 +214,26 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST")
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
 
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!bearer) return unauthorised();
+
+  let body: Record<string, unknown>;
   try {
-    const { mimeType, base64, text, fileName } = await req.json();
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const denied = await rejectUnauthorisedExtract(req, body);
+  if (denied) return denied;
+
+  try {
+    const mimeType = typeof body.mimeType === "string" ? body.mimeType : "";
+    const base64 = typeof body.base64 === "string" ? body.base64 : "";
+    const text = typeof body.text === "string" ? body.text : "";
+    const fileName = typeof body.fileName === "string" ? body.fileName : "";
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
       return new Response(

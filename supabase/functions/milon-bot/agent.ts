@@ -14,6 +14,7 @@ export {
   AGENT_TOOL_LABELS,
   AGENT_TOOLS,
   agentClaudeTools,
+  agentTurnMessages,
   classifyResult,
   decisionFromClaude,
   formatAgentPrompt,

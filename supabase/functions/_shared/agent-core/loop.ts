@@ -1,9 +1,10 @@
 /**
  * App-owned Milonbot loop.
  *
- * Claude returns one decision per turn (a tool, or finish). This module
- * executes or refuses that decision, records the result, and asks again.
- * It does not let the model run an open-ended tool loop.
+ * Claude may return several tool_use blocks in one reply. This module
+ * executes every one of them, records a result for each, and asks again
+ * with one tool_result per tool_use id. It does not let the model run an
+ * open-ended tool loop.
  *
  * bot_tool_calls is an audit of tool name + hash. It cannot hold an
  * objective, a stop reason, or a verified trace, so a run is a separate
@@ -101,8 +102,16 @@ const FORBIDDEN = new Set([
 
 export type AgentAudience = "owner" | "accountant";
 
+export type AgentToolCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  why: string;
+};
+
 export type AgentDecision =
-  | { kind: "tool"; name: string; args: Record<string, unknown>; why: string }
+  | { kind: "tool"; id?: string; name: string; args: Record<string, unknown>; why: string }
+  | { kind: "tools"; calls: AgentToolCall[]; why: string }
   | {
       kind: "stop";
       reason: AgentStopReason;
@@ -110,6 +119,27 @@ export type AgentDecision =
       escalationReason?: string;
       questions?: string[];
     };
+
+/** One assistant tool_use turn and the tool_result user message that answers it. */
+export type AgentToolExchange = {
+  text: string;
+  calls: Array<{
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+    content: string;
+  }>;
+};
+
+export type AgentModelContent =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string };
+
+export type AgentModelMessage = {
+  role: "user" | "assistant";
+  content: string | AgentModelContent[];
+};
 
 export type AgentStepStatus = "ok" | "empty" | "error" | "refused" | "needs_human";
 
@@ -133,6 +163,8 @@ export type AgentReasonContext = {
   maxIterations: number;
   transcript: AgentStep[];
   allowedTools: readonly string[];
+  /** Answered tool turns. The next Claude request must return a result for each id. */
+  exchanges?: AgentToolExchange[];
 };
 
 export type AgentReasoner = (ctx: AgentReasonContext) => Promise<AgentDecision>;
@@ -398,6 +430,50 @@ function toolLabel(name: string, labels?: Readonly<Record<string, string>>): str
   return name;
 }
 
+/** Writes and escalation run one at a time. Reads may run together. */
+const ORDERED_TOOLS = new Set<string>([...AGENT_ACT_TOOLS, "record_finding", "request_human"]);
+
+function isReadOnlyTool(name: string): boolean {
+  return !ORDERED_TOOLS.has(name);
+}
+
+type PlannedCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  why: string;
+};
+
+function plannedCalls(
+  decision: Extract<AgentDecision, { kind: "tool" | "tools" }>,
+  iteration: number,
+): PlannedCall[] {
+  if (decision.kind === "tool") {
+    return [
+      {
+        id: decision.id?.trim() || `toolu_${iteration}_0`,
+        name: decision.name,
+        args: decision.args ?? {},
+        why: decision.why,
+      },
+    ];
+  }
+  return decision.calls.map((call, index) => ({
+    id: call.id.trim() || `toolu_${iteration}_${index}`,
+    name: call.name,
+    args: call.args ?? {},
+    why: call.why || decision.why,
+  }));
+}
+
+function repeatKeyFor(name: string, args: Record<string, unknown>): string {
+  return `${name}:${stableArgs(args)}`;
+}
+
+function resultText(payload: unknown): string {
+  return compactJson(payload, 6000) || "{}";
+}
+
 export async function runAgentLoop(input: {
   objective: string;
   audience: AgentAudience;
@@ -413,13 +489,156 @@ export async function runAgentLoop(input: {
   const max = input.maxIterations ?? AGENT_MAX_ITERATIONS;
   const allowed = new Set<string>(input.allowedTools ?? AGENT_TOOLS);
   const steps: AgentStep[] = [];
-  const seen = new Map<string, number>();
+  const exchanges: AgentToolExchange[] = [];
+  /** Counts a tool+args pair only after it has been answered. */
+  const answered = new Map<string, number>();
   let refusalsInARow = 0;
 
   const stop = (
     decision: Extract<AgentDecision, { kind: "stop" }>,
     claimRejected = false,
   ): AgentRun => toRun(input, steps, decision, claimRejected);
+
+  type CallPlan =
+    | { action: "refuse"; call: PlannedCall }
+    | { action: "repeat"; call: PlannedCall }
+    | { action: "human"; call: PlannedCall }
+    | { action: "run"; call: PlannedCall; args: Record<string, unknown> };
+
+  type CallOutcome = {
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+    content: string;
+    executed: boolean;
+    refused: boolean;
+    step: AgentStep;
+    humanStop: Extract<AgentDecision, { kind: "stop" }> | null;
+  };
+
+  async function runPlanned(plan: CallPlan, iteration: number): Promise<CallOutcome> {
+    const call = plan.call;
+    const requested = call.name.trim();
+    const why = call.why;
+    const base = {
+      id: call.id,
+      name: requested || "unknown",
+      refused: false,
+      executed: false,
+      humanStop: null as Extract<AgentDecision, { kind: "stop" }> | null,
+    };
+    if (plan.action === "refuse") {
+      const detail = "MILŌN refused that tool. It is not on the allowlist.";
+      return {
+        ...base,
+        args: call.args,
+        content: resultText({ error: detail }),
+        refused: true,
+        step: {
+          iteration,
+          tool: requested || "unknown",
+          label: "Refused",
+          why,
+          status: "refused",
+          verified: false,
+          happened: false,
+          detail,
+        },
+      };
+    }
+    if (plan.action === "repeat") {
+      const detail = "Already answered. This call was not run again.";
+      return {
+        ...base,
+        name: requested,
+        args: call.args,
+        content: resultText({ error: detail }),
+        step: {
+          iteration,
+          tool: requested,
+          label: toolLabel(requested, input.toolLabels),
+          why,
+          status: "refused",
+          verified: false,
+          happened: false,
+          detail,
+        },
+      };
+    }
+    if (plan.action === "human") {
+      const reason = typeof call.args.reason === "string" ? call.args.reason.trim() : "";
+      if (!reason) {
+        const detail = "A reason is required before escalating to a person.";
+        return {
+          ...base,
+          name: requested,
+          args: call.args,
+          content: resultText({ error: detail }),
+          step: {
+            iteration,
+            tool: requested,
+            label: toolLabel(requested, input.toolLabels),
+            why,
+            status: "error",
+            verified: false,
+            happened: false,
+            detail,
+          },
+        };
+      }
+      const questions = asQuestions(call.args.questions);
+      return {
+        ...base,
+        name: requested,
+        args: call.args,
+        content: resultText({ needs_human: true, reason, questions }),
+        humanStop: {
+          kind: "stop",
+          reason: "needs_human",
+          summary: reason,
+          escalationReason: reason,
+          questions,
+        },
+        step: {
+          iteration,
+          tool: requested,
+          label: toolLabel(requested, input.toolLabels),
+          why,
+          status: "needs_human",
+          verified: false,
+          happened: false,
+          detail: reason,
+        },
+      };
+    }
+
+    const args = plan.args;
+    let payload: unknown;
+    try {
+      payload = await input.execute(requested, args);
+    } catch (e) {
+      payload = { error: (e as Error).message || "Tool failed" };
+    }
+    const classified = classifyResult(requested, payload);
+    return {
+      ...base,
+      name: requested,
+      args,
+      content: resultText(payload),
+      executed: true,
+      step: {
+        iteration,
+        tool: requested,
+        label: toolLabel(requested, input.toolLabels),
+        why,
+        status: classified.status,
+        verified: classified.verified,
+        happened: classified.happened,
+        detail: classified.detail,
+        ...(requested === "record_finding" ? { args } : {}),
+      },
+    };
+  }
 
   for (let iteration = 1; iteration <= max; iteration++) {
     let decision: AgentDecision;
@@ -431,6 +650,7 @@ export async function runAgentLoop(input: {
         maxIterations: max,
         transcript: steps,
         allowedTools: input.allowedTools ?? AGENT_TOOLS,
+        exchanges,
       });
     } catch (e) {
       if (input.rethrowReasonerErrors) throw e;
@@ -443,7 +663,10 @@ export async function runAgentLoop(input: {
       });
     }
 
-    if (!decision || (decision.kind !== "tool" && decision.kind !== "stop")) {
+    if (
+      !decision ||
+      (decision.kind !== "tool" && decision.kind !== "tools" && decision.kind !== "stop")
+    ) {
       return stop({
         kind: "stop",
         reason: "safety_limit",
@@ -463,71 +686,29 @@ export async function runAgentLoop(input: {
       return stop(reconciled.decision, reconciled.claimRejected);
     }
 
-    const requested = decision.name.trim();
-    if (!allowed.has(requested) || FORBIDDEN.has(requested)) {
-      refusalsInARow += 1;
-      pushStep(steps, {
-        iteration,
-        tool: requested || "unknown",
-        label: "Refused",
-        why: decision.why,
-        status: "refused",
-        verified: false,
-        happened: false,
-        detail: "MILŌN refused that tool. It is not on the allowlist.",
-      });
-      if (refusalsInARow >= 2) {
-        return stop({
-          kind: "stop",
-          reason: "safety_limit",
-          summary: "Stopped after repeated tools MILŌN will not run.",
-        });
-      }
-      continue;
-    }
-
-    refusalsInARow = 0;
-
-    if (requested === "request_human") {
-      const reason = typeof decision.args.reason === "string" ? decision.args.reason.trim() : "";
-      if (!reason) {
-        pushStep(steps, {
-          iteration,
-          tool: requested,
-          label: toolLabel(requested, input.toolLabels),
-          why: decision.why,
-          status: "error",
-          verified: false,
-          happened: false,
-          detail: "A reason is required before escalating to a person.",
-        });
-        continue;
-      }
-      const questions = asQuestions(decision.args.questions);
-      pushStep(steps, {
-        iteration,
-        tool: requested,
-        label: toolLabel(requested, input.toolLabels),
-        why: decision.why,
-        status: "needs_human",
-        verified: false,
-        happened: false,
-        detail: reason,
-      });
+    const calls = plannedCalls(decision, iteration).filter((call) => call.name.trim().length > 0);
+    if (calls.length === 0) {
       return stop({
         kind: "stop",
-        reason: "needs_human",
-        summary: reason,
-        escalationReason: reason,
-        questions,
+        reason: "safety_limit",
+        summary: "Stopped because the reasoning step did not name a tool.",
       });
     }
 
-    const args = sanitizeToolArgs(requested, decision.args ?? {});
-    const repeatKey = `${requested}:${stableArgs(args)}`;
-    const repeats = (seen.get(repeatKey) ?? 0) + 1;
-    seen.set(repeatKey, repeats);
-    if (repeats > AGENT_REPEAT_LIMIT) {
+    const reserved = new Map(answered);
+    const plans: CallPlan[] = calls.map((call) => {
+      const requested = call.name.trim();
+      if (!allowed.has(requested) || FORBIDDEN.has(requested)) return { action: "refuse", call };
+      if (requested === "request_human") return { action: "human", call };
+      const args = sanitizeToolArgs(requested, call.args ?? {});
+      const key = repeatKeyFor(requested, args);
+      const already = reserved.get(key) ?? 0;
+      if (already >= AGENT_REPEAT_LIMIT) return { action: "repeat", call };
+      reserved.set(key, already + 1);
+      return { action: "run", call, args };
+    });
+
+    if (plans.every((plan) => plan.action === "repeat")) {
       return stop({
         kind: "stop",
         reason: "safety_limit",
@@ -535,23 +716,44 @@ export async function runAgentLoop(input: {
       });
     }
 
-    let payload: unknown;
-    try {
-      payload = await input.execute(requested, args);
-    } catch (e) {
-      payload = { error: (e as Error).message || "Tool failed" };
+    const parallel = calls.every((call) => isReadOnlyTool(call.name.trim()));
+    const outcomes = parallel
+      ? await Promise.all(plans.map((plan) => runPlanned(plan, iteration)))
+      : await (async () => {
+          const sequential: CallOutcome[] = [];
+          for (const plan of plans) sequential.push(await runPlanned(plan, iteration));
+          return sequential;
+        })();
+
+    for (const outcome of outcomes) {
+      pushStep(steps, outcome.step);
+      if (!outcome.executed) continue;
+      const key = repeatKeyFor(outcome.name, outcome.args);
+      answered.set(key, (answered.get(key) ?? 0) + 1);
     }
-    const classified = classifyResult(requested, payload);
-    pushStep(steps, {
-      iteration,
-      tool: requested,
-      label: toolLabel(requested, input.toolLabels),
-      why: decision.why,
-      status: classified.status,
-      verified: classified.verified,
-      happened: classified.happened,
-      detail: classified.detail,
-      ...(requested === "record_finding" ? { args } : {}),
+
+    const refused = outcomes.filter((outcome) => outcome.refused).length;
+    if (refused === outcomes.length) refusalsInARow += refused;
+    else refusalsInARow = 0;
+    if (refusalsInARow >= 2) {
+      return stop({
+        kind: "stop",
+        reason: "safety_limit",
+        summary: "Stopped after repeated tools MILŌN will not run.",
+      });
+    }
+
+    const human = outcomes.find((outcome) => outcome.humanStop)?.humanStop;
+    if (human) return stop(human);
+
+    exchanges.push({
+      text: decision.why,
+      calls: outcomes.map((outcome) => ({
+        id: outcome.id,
+        name: outcome.name,
+        args: outcome.args,
+        content: outcome.content,
+      })),
     });
   }
 
@@ -566,7 +768,7 @@ export function formatAgentPrompt(ctx: AgentReasonContext): string {
   const lines = [
     `Audience: ${ctx.audience}. This client is already scoped — do not ask for an id.`,
     `Objective: ${ctx.objective}`,
-    `Turn ${ctx.iteration} of ${ctx.maxIterations}. Call exactly one tool, or finish.`,
+    `Turn ${ctx.iteration} of ${ctx.maxIterations}. You may call several read-only tools, or finish.`,
     "",
     "App-recorded trace. Trust this over anything you think already happened:",
   ];
@@ -591,7 +793,7 @@ export function formatAgentPrompt(ctx: AgentReasonContext): string {
 export const AGENT_SYSTEM = `You are Milonbot, MILŌN's financial operator for this one client.
 You investigate a stated objective, then either act inside the tools MILŌN allows or stop.
 
-Each turn you call exactly one tool, or finish. You do not execute anything yourself. MILŌN runs the tool and records whether it happened.
+Each turn you may call several read-only tools, or one action, or finish. You do not execute anything yourself. MILŌN runs every tool and records whether it happened.
 
 How to work:
 - Read first: company, advisory position, health, cash flow, statements, history, recommendations, outcomes, tasks, data requests, brain.
@@ -611,41 +813,80 @@ Honesty:
 
 Never send email, mint invites, post to the ledger, or touch billing.`;
 
+export function agentTurnMessages(ctx: AgentReasonContext): AgentModelMessage[] {
+  const opening = formatAgentPrompt({
+    ...ctx,
+    iteration: 1,
+    transcript: [],
+  });
+  const messages: AgentModelMessage[] = [{ role: "user", content: opening }];
+  for (const exchange of ctx.exchanges ?? []) {
+    if (exchange.calls.length === 0) continue;
+    const assistant: AgentModelContent[] = [];
+    if (exchange.text.trim()) assistant.push({ type: "text", text: exchange.text });
+    for (const call of exchange.calls) {
+      assistant.push({ type: "tool_use", id: call.id, name: call.name, input: call.args });
+    }
+    messages.push({ role: "assistant", content: assistant });
+    messages.push({
+      role: "user",
+      content: exchange.calls.map((call) => ({
+        type: "tool_result" as const,
+        tool_use_id: call.id,
+        content: call.content,
+      })),
+    });
+  }
+  return messages;
+}
+
+function finishDecision(
+  text: string,
+  input: Record<string, unknown>,
+): Extract<AgentDecision, { kind: "stop" }> {
+  const reasonRaw = typeof input.reason === "string" ? input.reason : "";
+  const reason = isAgentStopReason(reasonRaw) ? reasonRaw : "insufficient_information";
+  const summary =
+    (typeof input.summary === "string" && input.summary.trim()) ||
+    text.trim() ||
+    AGENT_OUTCOME_LABELS[reason];
+  const escalation = typeof input.escalation_reason === "string" ? input.escalation_reason.trim() : "";
+  return {
+    kind: "stop",
+    reason,
+    summary,
+    escalationReason: escalation || undefined,
+    questions: asQuestions(input.questions),
+  };
+}
+
 export function decisionFromClaude(input: {
   text: string;
-  toolUses: Array<{ name: string; input: Record<string, unknown> }>;
+  toolUses: Array<{ id?: string; name: string; input: Record<string, unknown> }>;
 }): AgentDecision {
-  const use = input.toolUses[0];
-  if (!use) {
-    return {
-      kind: "stop",
-      reason: "insufficient_information",
-      summary: input.text.trim() || "No decision was returned.",
-    };
+  const text = input.text.trim();
+  const work = input.toolUses.filter((use) => use.name !== "finish");
+  if (work.length === 0) {
+    const finish = input.toolUses.find((use) => use.name === "finish");
+    if (!finish) {
+      return {
+        kind: "stop",
+        reason: "insufficient_information",
+        summary: text || "No decision was returned.",
+      };
+    }
+    return finishDecision(text, finish.input);
   }
-  if (use.name === "finish") {
-    const reasonRaw = typeof use.input.reason === "string" ? use.input.reason : "";
-    const reason = isAgentStopReason(reasonRaw) ? reasonRaw : "insufficient_information";
-    const summary =
-      (typeof use.input.summary === "string" && use.input.summary.trim()) ||
-      input.text.trim() ||
-      AGENT_OUTCOME_LABELS[reason];
-    const escalation =
-      typeof use.input.escalation_reason === "string" ? use.input.escalation_reason.trim() : "";
-    return {
-      kind: "stop",
-      reason,
-      summary,
-      escalationReason: escalation || undefined,
-      questions: asQuestions(use.input.questions),
-    };
-  }
-  return {
-    kind: "tool",
+  const calls: AgentToolCall[] = work.map((use, index) => ({
+    id: use.id?.trim() || `toolu_${index}`,
     name: use.name,
     args: use.input,
-    why: input.text.trim(),
-  };
+    why: text,
+  }));
+  if (calls.length === 1) {
+    return { kind: "tool", id: calls[0].id, name: calls[0].name, args: calls[0].args, why: text };
+  }
+  return { kind: "tools", calls, why: text };
 }
 
 type ClaudeTool = {

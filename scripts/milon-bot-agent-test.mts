@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import {
   AGENT_SYSTEM,
   AGENT_TOOLS,
+  agentTurnMessages,
   classifyResult,
   decisionFromClaude,
   formatAgentPrompt,
@@ -359,15 +360,20 @@ assert(
 );
 
 const parsed = decisionFromClaude({
-  text: "ignore the second call",
+  text: "read both",
   toolUses: [
-    { name: "get_health", input: {} },
-    { name: "send_email", input: {} },
+    { id: "tu_health", name: "get_health", input: {} },
+    { id: "tu_mail", name: "send_email", input: {} },
   ],
 });
 assert(
-  parsed.kind === "tool" && parsed.name === "get_health",
-  "only the first tool in a turn is kept",
+  parsed.kind === "tools" &&
+    parsed.calls.length === 2 &&
+    parsed.calls[0].id === "tu_health" &&
+    parsed.calls[0].name === "get_health" &&
+    parsed.calls[1].id === "tu_mail" &&
+    parsed.calls[1].name === "send_email",
+  "every tool_use in the reply is kept",
 );
 
 const finish = decisionFromClaude({
@@ -414,6 +420,157 @@ assert(
   "system forbids false claims and self-approval",
 );
 assert(AGENT_SYSTEM.includes("Never send email"), "system forbids email");
+
+// A reply with two tool_use blocks runs both, then the next user message
+// carries one tool_result per tool_use id. A repeated read does not block
+// a different tool in the same reply, and it is not executed a fourth time.
+{
+  let inflight = 0;
+  let maxInflight = 0;
+  const calls: string[] = [];
+  const run = await runAgentLoop({
+    objective: "Read health and ratios.",
+    audience: "accountant",
+    allowedTools: ["get_health", "get_ratios"],
+    rethrowReasonerErrors: true,
+    execute: async (name) => {
+      inflight += 1;
+      maxInflight = Math.max(maxInflight, inflight);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      inflight -= 1;
+      calls.push(name);
+      if (name === "get_health") return { overall: 48 };
+      if (name === "get_ratios") return { current_ratio: 1.4 };
+      throw new Error(`unexpected tool ${name}`);
+    },
+    reason: async (ctx) => {
+      const messages = agentTurnMessages(ctx);
+      if (ctx.iteration === 1) {
+        assert(messages.length === 1 && messages[0].role === "user", "the first turn is the objective");
+        return decisionFromClaude({
+          text: "Read both.",
+          toolUses: [
+            { id: "tu_health", name: "get_health", input: {} },
+            { id: "tu_ratios", name: "get_ratios", input: { period: "latest" } },
+          ],
+        });
+      }
+      if (ctx.iteration === 2) {
+        const results = messages[messages.length - 1];
+        assert(results.role === "user" && Array.isArray(results.content), "the next user message is tool results");
+        const blocks = results.content as Array<{ type: string; tool_use_id?: string; content?: string }>;
+        assert(blocks.length === 2, "one tool_result per tool_use");
+        assert(
+          blocks[0].type === "tool_result" && blocks[0].tool_use_id === "tu_health" && blocks[0].content?.includes("48"),
+          "health result is returned for its id",
+        );
+        assert(
+          blocks[1].type === "tool_result" &&
+            blocks[1].tool_use_id === "tu_ratios" &&
+            blocks[1].content?.includes("1.4"),
+          "ratios result is returned for its id",
+        );
+        const assistant = messages[messages.length - 2];
+        assert(assistant.role === "assistant" && Array.isArray(assistant.content), "assistant tool_use blocks are replayed");
+        return { kind: "stop", reason: "objective_complete", summary: "Both reads are in." };
+      }
+      throw new Error(`unexpected iteration ${ctx.iteration}`);
+    },
+  });
+  assert(calls.length === 2 && calls.includes("get_health") && calls.includes("get_ratios"), "both tools ran");
+  assert(maxInflight === 2, "read-only tools in one reply run together");
+  assert(run.status === "objective_complete", "the loop continues after both results");
+  assert(
+    run.trace.filter((step) => step.tool === "get_health" || step.tool === "get_ratios").length === 2,
+    "both reads are on the trace",
+  );
+  assert(!run.trace.some((step) => step.args), "read args stay off the trace");
+}
+
+{
+  const calls: string[] = [];
+  let inflight = 0;
+  let maxInflight = 0;
+  await runAgentLoop({
+    objective: "Record a finding after the health read.",
+    audience: "accountant",
+    allowedTools: ["get_health", "record_finding"],
+    rethrowReasonerErrors: true,
+    execute: async (name) => {
+      inflight += 1;
+      maxInflight = Math.max(maxInflight, inflight);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      inflight -= 1;
+      calls.push(name);
+      if (name === "record_finding") return { ok: true };
+      return { overall: 48 };
+    },
+    reason: async (ctx) => {
+      if (ctx.iteration === 1) {
+        return decisionFromClaude({
+          text: "Write then read.",
+          toolUses: [
+            { id: "tu_find", name: "record_finding", input: { severity: "watch" } },
+            { id: "tu_health", name: "get_health", input: {} },
+          ],
+        });
+      }
+      const messages = agentTurnMessages(ctx);
+      const results = messages[messages.length - 1];
+      const blocks = (Array.isArray(results.content) ? results.content : []) as Array<{
+        tool_use_id?: string;
+      }>;
+      assert(
+        blocks[0]?.tool_use_id === "tu_find" && blocks[1]?.tool_use_id === "tu_health",
+        "mixed tool results stay in reply order",
+      );
+      return { kind: "stop", reason: "no_further_action", summary: "Recorded." };
+    },
+  });
+  assert(calls[0] === "record_finding" && calls[1] === "get_health", "a write runs in order, before the read");
+  assert(maxInflight === 1, "a write is not run in parallel with a read");
+}
+
+{
+  const calls: string[] = [];
+  const run = await runAgentLoop({
+    objective: "Do not read health forever.",
+    audience: "accountant",
+    allowedTools: ["get_health", "get_ratios"],
+    rethrowReasonerErrors: true,
+    execute: async (name) => {
+      calls.push(name);
+      if (name === "get_ratios") return { current_ratio: 1.1 };
+      return { overall: 10 };
+    },
+    reason: async (ctx) => {
+      if (ctx.iteration < 4) return { kind: "tool", name: "get_health", args: {}, why: "Again" };
+      if (ctx.iteration === 4) {
+        return decisionFromClaude({
+          text: "Health again, and ratios.",
+          toolUses: [
+            { id: "tu_health_again", name: "get_health", input: {} },
+            { id: "tu_ratios_new", name: "get_ratios", input: {} },
+          ],
+        });
+      }
+      const messages = agentTurnMessages(ctx);
+      const blocks = (messages[messages.length - 1].content ?? []) as Array<{
+        type?: string;
+        tool_use_id?: string;
+        content?: string;
+      }>;
+      const health = blocks.find((block) => block.tool_use_id === "tu_health_again");
+      const ratios = blocks.find((block) => block.tool_use_id === "tu_ratios_new");
+      assert(health?.content?.includes("Already answered"), "a repeated read is not answered again");
+      assert(ratios?.content?.includes("1.1"), "the new tool in that reply still returns a result");
+      return { kind: "stop", reason: "objective_complete", summary: "Ratios are in." };
+    },
+  });
+  assert(calls.filter((name) => name === "get_health").length === 3, "health was answered three times, not four");
+  assert(calls.filter((name) => name === "get_ratios").length === 1, "ratios still ran beside the repeated health read");
+  assert(run.status === "objective_complete", "the repeat guard does not drop the other tool");
+}
 
 // Real advisory resolver and existing cash/health helpers — not a second engine.
 const facts: NextStepFacts = {

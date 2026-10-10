@@ -15,7 +15,22 @@ export const CLAUDE_SONNET_55 = "claude-sonnet-5-5";
 /** Sonnet 5.5 will not cache a prefix shorter than this. Shorter prompts still run. */
 export const SONNET_55_MIN_CACHE_TOKENS = 512;
 
-export type ClaudeToolChoice = { type: "auto" | "any" } | { type: "tool"; name: string };
+export type ClaudeToolChoice =
+  | { type: "auto" | "any"; disable_parallel_tool_use?: boolean }
+  | { type: "tool"; name: string; disable_parallel_tool_use?: boolean };
+
+/** Keep a caller's parallel-tool flag. Omit the key when they did not set it. */
+function toolChoiceForRequest(choice: ClaudeToolChoice, forceAuto: boolean): ClaudeToolChoice {
+  const disable = choice.disable_parallel_tool_use;
+  const type = forceAuto ? "auto" : choice.type;
+  if (type === "tool") {
+    const named = choice.type === "tool" ? choice.name : "";
+    return disable == null
+      ? { type: "tool", name: named }
+      : { type: "tool", name: named, disable_parallel_tool_use: disable };
+  }
+  return disable == null ? { type } : { type, disable_parallel_tool_use: disable };
+}
 
 export function claudeRequestFields(input: {
   model: string;
@@ -31,13 +46,11 @@ export function claudeRequestFields(input: {
       thinking: { type: "between_tools" };
       tool_choice?: ClaudeToolChoice;
     } = { thinking: { type: "between_tools" } };
-    if (input.toolChoice) {
-      fields.tool_choice = input.toolChoice.type === "auto" ? input.toolChoice : { type: "auto" };
-    }
+    if (input.toolChoice) fields.tool_choice = toolChoiceForRequest(input.toolChoice, true);
     return fields;
   }
   const legacy: { temperature?: number; tool_choice?: ClaudeToolChoice } = {};
   if (input.temperature != null) legacy.temperature = input.temperature;
-  if (input.toolChoice) legacy.tool_choice = input.toolChoice;
+  if (input.toolChoice) legacy.tool_choice = toolChoiceForRequest(input.toolChoice, false);
   return legacy;
 }
