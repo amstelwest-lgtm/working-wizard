@@ -6,7 +6,6 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAgentTool } from "../milon-bot/execute.ts";
 import { groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
-  collectStoredFigures,
   executeAnalystGate,
   numericFigures,
   statementVariance,
@@ -170,11 +169,6 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     claimedFigures: numericFigures(args.figures),
   });
   if (!grounded.ok) return { error: grounded.error, tool_blocked: true };
-  const noted = collectStoredFigures(
-    { figures: grounded.evidence.figures, snapshot_id: grounded.evidence.snapshot_id, period_label: grounded.evidence.period_label },
-    { snapshotId: grounded.evidence.snapshot_id, periodLabel: grounded.evidence.period_label },
-  );
-  if (noted) ctx.pool.push(noted);
 
   const { data, error } = await ctx.db
     .from("agent_findings")

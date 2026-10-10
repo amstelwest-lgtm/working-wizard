@@ -1,7 +1,10 @@
 /**
  * Claude Messages + tool_use loop for milon-bot only.
  * Does not change ask-ai/anthropic.ts or extract pipelines.
+ * Prompt caching is opt-in (cachePrompt). Milonbot leaves it off, so its
+ * request body and headers stay the same.
  */
+import { shapeCachedModelRequest } from "../_shared/agent-core/prompt-cache.ts";
 
 const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
 const API_URL = "https://api.anthropic.com/v1/messages";
@@ -28,6 +31,8 @@ export type ClaudeRound = {
   stopReason: string;
   inputTokens: number;
   outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
   latencyMs: number;
 };
 
@@ -39,6 +44,8 @@ export async function callClaudeRound(
     maxTokens?: number;
     temperature?: number;
     toolChoice?: { type: "auto" | "any" } | { type: "tool"; name: string };
+    /** Agent runs set this. Milonbot omits it, so its request is unchanged. */
+    cachePrompt?: boolean;
   },
 ): Promise<ClaudeRound> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -48,6 +55,11 @@ export async function callClaudeRound(
     );
   }
 
+  const shaped = shapeCachedModelRequest({
+    system,
+    tools,
+    cachePrompt: opts?.cachePrompt === true,
+  });
   const t0 = Date.now();
   const res = await fetch(API_URL, {
     method: "POST",
@@ -55,12 +67,13 @@ export async function callClaudeRound(
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
       "Content-Type": "application/json",
+      ...(shaped.betaHeader ? { "anthropic-beta": shaped.betaHeader } : {}),
     },
     body: JSON.stringify({
       model: MODEL,
-      system,
+      system: shaped.system,
       messages,
-      tools,
+      tools: shaped.tools,
       ...(opts?.toolChoice ? { tool_choice: opts.toolChoice } : {}),
       temperature: opts?.temperature ?? 0.2,
       max_tokens: opts?.maxTokens ?? 1024,
@@ -98,6 +111,8 @@ export async function callClaudeRound(
     stopReason: String(json?.stop_reason ?? ""),
     inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
+    cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     latencyMs: Date.now() - t0,
   };
 }

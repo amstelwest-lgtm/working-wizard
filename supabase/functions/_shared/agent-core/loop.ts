@@ -122,6 +122,8 @@ export type AgentStep = {
   verified: boolean | null;
   happened: boolean;
   detail: string;
+  /** Set only for record_finding, so other traces keep the same keys. */
+  args?: Record<string, unknown>;
 };
 
 export type AgentReasonContext = {
@@ -148,6 +150,8 @@ export type AgentTraceStep = {
   verified: boolean | null;
   happened: boolean;
   detail: string;
+  /** Set only for record_finding. */
+  args?: Record<string, unknown>;
 };
 
 export type AgentRun = {
@@ -354,15 +358,19 @@ function toRun(
   decision: Extract<AgentDecision, { kind: "stop" }>,
   claimRejected: boolean,
 ): AgentRun {
-  const trace: AgentTraceStep[] = steps.map((s) => ({
-    iteration: s.iteration,
-    label: s.label,
-    tool: s.tool,
-    status: s.status,
-    verified: s.verified,
-    happened: s.happened,
-    detail: s.detail,
-  }));
+  const trace: AgentTraceStep[] = steps.map((s) => {
+    const row: AgentTraceStep = {
+      iteration: s.iteration,
+      label: s.label,
+      tool: s.tool,
+      status: s.status,
+      verified: s.verified,
+      happened: s.happened,
+      detail: s.detail,
+    };
+    if (s.tool === "record_finding" && s.args) row.args = s.args;
+    return row;
+  });
   return {
     objective: input.objective,
     audience: input.audience,
@@ -543,6 +551,7 @@ export async function runAgentLoop(input: {
       verified: classified.verified,
       happened: classified.happened,
       detail: classified.detail,
+      ...(requested === "record_finding" ? { args } : {}),
     });
   }
 

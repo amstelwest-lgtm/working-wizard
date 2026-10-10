@@ -17,7 +17,7 @@ import {
   ANALYST_TOOL_LABELS,
   analystFailurePlan,
   analystRunCostUsd,
-  collectStoredFigures,
+  collectStoredReads,
 } from "../../../src/lib/agent-analyst.ts";
 import { executeAnalystTool } from "./execute.ts";
 
@@ -145,6 +145,8 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
   const pool: StoredFigures[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheWriteTokens = 0;
+  let cacheReadTokens = 0;
 
   try {
     const result = await runAgentLoop({
@@ -165,10 +167,12 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           ANALYST_SYSTEM,
           [{ role: "user", content: formatAgentPrompt(ctx) }],
           analystToolSchemas(),
-          { toolChoice: { type: "any" }, maxTokens: 700 },
+          { toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },
         );
         inputTokens += round.inputTokens;
         outputTokens += round.outputTokens;
+        cacheWriteTokens += round.cacheCreationTokens;
+        cacheReadTokens += round.cacheReadTokens;
         return decisionFromClaude({ text: round.text, toolUses: round.toolUses });
       },
       execute: async (name, args) => {
@@ -180,8 +184,11 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           db,
           pool,
         });
-        const stored = collectStoredFigures(payload, { snapshotId: null, periodLabel: null });
-        if (stored) pool.push(stored);
+        if (name !== "record_finding") {
+          for (const stored of collectStoredReads(payload, { snapshotId: null, periodLabel: null })) {
+            pool.push(stored);
+          }
+        }
         return payload;
       },
     });
@@ -196,7 +203,9 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
         summary: result.summary.slice(0, 2000),
         input_tokens: inputTokens,
         output_tokens: outputTokens,
-        cost_usd: analystRunCostUsd(inputTokens, outputTokens),
+        cache_write_tokens: cacheWriteTokens,
+        cache_read_tokens: cacheReadTokens,
+        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens),
         latency_ms: Date.now() - started,
         trace: result.trace,
         finished_at: new Date().toISOString(),
