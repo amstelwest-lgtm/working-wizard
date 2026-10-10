@@ -5,6 +5,7 @@
       "namespace": "android_app",
       "package_name": "com.milonfinance.app",
       "sha256_cert_fingerprints": [
+        "53:72:E4:DA:D7:C3:B3:04:82:C1:93:2B:AE:AA:2A:B0:BC:56:46:4E:6D:6E:C4:84:86:49:F0:13:62:61:53:9E",
         "REPLACE_WITH_PLAY_APP_SIGNING_SHA256"
       ]
     }

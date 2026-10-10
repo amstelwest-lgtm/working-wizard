@@ -1,6 +1,6 @@
 # Before this shell can ship
 
-The repo does not contain a keystore, a Play account, or the Digital Asset Links fingerprint. These stay with you.
+The repo does not contain a keystore or a Play account. The upload-key fingerprint is already in `well-known/assetlinks.json`. The Play app signing fingerprint is still a placeholder.
 
 1. **Play Console account.** One-time USD 25 registration. Create it in the name you want on the store. A personal account and an organisation account follow different review rules (see closed testing below).
 
@@ -10,7 +10,7 @@ The repo does not contain a keystore, a Play account, or the Digital Asset Links
 
 4. **Play App Signing and the upload key.** Enroll in Play App Signing when the first AAB is uploaded. Generate the upload keystore on a machine you control (`mobile/README.md`). Copy `android/keystore.properties.example` to `android/keystore.properties`. Both the keystore and that properties file are gitignored. Keep a backup of the upload key. You cannot download it from Play later. The app signing key stays with Google.
 
-5. **Asset Links fingerprint.** Play Console → App integrity → App signing key certificate → SHA-256. Paste it over `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` in `mobile/well-known/assetlinks.json`. Publish that JSON at `https://www.milonfinance.com/.well-known/assetlinks.json` and at `https://milonfinance.com/.well-known/assetlinks.json` with `Content-Type: application/json`. This PR does not change the website. Until the file is live, App Links will not verify, and Google, Stripe, and ledger OAuth returns will stay in the Custom Tab instead of coming back into the app. Use the app signing certificate, not the upload certificate, once Play App Signing is on.
+5. **Asset Links fingerprints.** `mobile/well-known/assetlinks.json` already lists the upload-key SHA-256 `53:72:E4:DA:D7:C3:B3:04:82:C1:93:2B:AE:AA:2A:B0:BC:56:46:4E:6D:6E:C4:84:86:49:F0:13:62:61:53:9E`. That value is public. It matches a release build signed with the upload key before Play re-signs it. The second entry is still `REPLACE_WITH_PLAY_APP_SIGNING_SHA256`. Replace that placeholder with Play Console → App integrity → App signing key certificate → SHA-256. Keep both fingerprints in the array. Publish that JSON at `https://www.milonfinance.com/.well-known/assetlinks.json` and at `https://milonfinance.com/.well-known/assetlinks.json` with `Content-Type: application/json`. This PR does not change the website. Until the file is live, App Links will not verify, and Google, Stripe, and ledger OAuth returns will stay in the Custom Tab. A sideloaded upload-key build verifies against the first fingerprint. A Play-installed build verifies against the app signing fingerprint. If you publish before Play App Signing has issued that certificate, omit the placeholder line so a non-fingerprint string does not fail the whole statement.
 
 6. **Supabase redirect allow-list.** Authentication → URL Configuration. The shell’s origin is `https://www.milonfinance.com`, and Google sign-in redirects there (`/auth/callback`, plus any invite or checkout query the site already adds). Add:
    - `https://www.milonfinance.com/auth/callback`

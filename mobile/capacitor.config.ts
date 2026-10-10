@@ -3,6 +3,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 /**
  * Remote-URL shell. The Play build loads the live site, so web deploys show
  * up without an app update. www/ is the offline and error page only.
+ * Android shows it on a main-frame failure and when a remote load does not
+ * commit within 20 seconds.
  *
  * allowNavigation is milonfinance.com hosts. Stripe, Google, YouTube, and
  * ledger OAuth hosts are intentionally absent — the Android shell opens those

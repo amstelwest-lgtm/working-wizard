@@ -13,7 +13,9 @@ Package id: `com.milonfinance.app`. Display name: Milōn.
 - Back: `@capacitor/app`. WebView history goes back. At the root the app minimises instead of finishing.
 - Custom Tabs (`@capacitor/browser`): Stripe Checkout (`checkout.stripe.com`), YouTube, QuickBooks / Intuit, Xero, and Sage OAuth hosts, plus Google sign-in.
 - App Links: `https://www.milonfinance.com` and `https://milonfinance.com`, `autoVerify`. `appUrlOpen` loads the returned URL in the WebView and the Custom Tab controller is finished.
-- Session: WebView cookies and `localStorage` are the Capacitor defaults. Nothing in this project calls `CookieManager.removeAllCookies` or `WebStorage.deleteAllData`. `onPause` only flushes cookies to disk.
+- Session: WebView cookies and `localStorage` are the Capacitor defaults. Nothing in this project calls `CookieManager.removeAllCookies` or `WebStorage.deleteAllData`. `onPause` only flushes cookies to disk. A renderer crash does not clear them either.
+- Renderer crash: `MilonWebViewClient` overrides `onRenderProcessGone`. The dead WebView is removed and destroyed, and the activity is recreated on the last Milōn page (home, if that page was an OAuth or checkout return). A second renderer crash within 30 seconds opens the bundled offline page. Returning true is what stops Android from killing the process.
+- Failed or slow load: a main-frame network or HTTP error opens `www/index.html` (`server.errorPath`). If a remote navigation has not committed within 20 seconds, the same page opens. Retry on that page loads `https://www.milonfinance.com` again.
 
 ## Build
 
@@ -66,7 +68,7 @@ keytool -genkeypair -v \
   -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-Enroll in **Play App Signing**. The upload key stays with you. Google holds the app signing key. The SHA-256 that goes in `assetlinks.json` is the **app signing** certificate, not the upload key, once Play App Signing is on.
+Enroll in **Play App Signing**. The upload key stays with you. Google holds the app signing key. `assetlinks.json` needs both SHA-256 fingerprints: the upload key (already filled in) and the Play app signing certificate (still the `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` placeholder).
 
 ## App Links
 
@@ -79,7 +81,7 @@ Serve the same JSON at both:
 - `https://www.milonfinance.com/.well-known/assetlinks.json`
 - `https://milonfinance.com/.well-known/assetlinks.json`
 
-`Content-Type: application/json`. No redirects that drop the file. Replace `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` with the fingerprint from Play Console → App integrity → App signing key certificate → SHA-256. Colons, uppercase hex, the way Play shows it.
+`Content-Type: application/json`. No redirects that drop the file. The file already contains the upload-key SHA-256 `53:72:E4:DA:D7:C3:B3:04:82:C1:93:2B:AE:AA:2A:B0:BC:56:46:4E:6D:6E:C4:84:86:49:F0:13:62:61:53:9E`. Replace `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` with the fingerprint from Play Console → App integrity → App signing key certificate → SHA-256. Colons, uppercase hex, the way Play shows it. Leave both entries in the array.
 
 Until that file is live, Android will not verify the link. The Custom Tab will keep the return URL and the WebView will not see the OAuth code. Check after the file is deployed:
 

@@ -7,6 +7,7 @@ import android.webkit.CookieManager;
 import android.webkit.WebView;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.lifecycle.Lifecycle;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import com.getcapacitor.BridgeActivity;
@@ -25,12 +26,16 @@ import org.json.JSONObject;
 public class MainActivity extends BridgeActivity {
 
     private String shellScript;
+    private boolean recoverWhenResumed;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MilonShellPlugin.class);
         super.onCreate(savedInstanceState);
         if (bridge == null || bridge.getWebView() == null) return;
+
+        MilonWebViewClient client = new MilonWebViewClient(bridge, this);
+        bridge.setWebViewClient(client);
 
         applySystemBars();
         acceptCookies(bridge.getWebView());
@@ -46,6 +51,45 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         );
+
+        WebView webView = bridge.getWebView();
+        if (MilonWebViewClient.consumeOfflineLanding()) {
+            String errorUrl = bridge.getErrorUrl();
+            webView.stopLoading();
+            if (errorUrl != null) webView.loadUrl(errorUrl);
+            else client.armIfStillLoading(webView);
+        } else {
+            String reload = MilonWebViewClient.consumeReloadUrl();
+            if (reload != null) {
+                webView.stopLoading();
+                webView.loadUrl(reload);
+            } else {
+                client.armIfStillLoading(webView);
+            }
+        }
+    }
+
+    /**
+     * Posted from {@link MilonWebViewClient#onRenderProcessGone} after the
+     * dead WebView has been detached and destroyed. Recreate so Capacitor
+     * builds a fresh WebView. If that happens while we are backgrounded,
+     * wait until resume.
+     */
+    void onRendererGone() {
+        if (isFinishing() || isDestroyed()) return;
+        if (!getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) {
+            recoverWhenResumed = true;
+            return;
+        }
+        recreate();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!recoverWhenResumed || isFinishing() || isDestroyed()) return;
+        recoverWhenResumed = false;
+        recreate();
     }
 
     @Override
