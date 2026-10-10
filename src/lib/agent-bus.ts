@@ -573,6 +573,81 @@ const PERIOD_LABEL =
 
 const MONTH = `(?:${PERIOD_LABEL})`;
 const ORDINAL_DAY = "\\d{1,2}(?:st|nd|rd|th)?";
+const MONTH_INDEX: Record<string, number> = {
+  january: 0,
+  jan: 0,
+  february: 1,
+  feb: 1,
+  march: 2,
+  mar: 2,
+  april: 3,
+  apr: 3,
+  may: 4,
+  june: 5,
+  jun: 5,
+  july: 6,
+  jul: 6,
+  august: 7,
+  aug: 7,
+  september: 8,
+  sept: 8,
+  sep: 8,
+  october: 9,
+  oct: 9,
+  november: 10,
+  nov: 10,
+  december: 11,
+  dec: 11,
+};
+
+/**
+ * Year-month of the period's end. `1 Jan 2026 – 30 Sep 2026`, `Sep 2026`,
+ * and `2026-09-30` are all `2026-09`.
+ */
+export function periodEndKey(label: string): string | null {
+  const text = label.trim().replace(/\s+/g, " ");
+  if (!text) return null;
+  const iso = text.match(/^(\d{4})-(\d{2})(?:-\d{2})?(?:[tT ].*)?$/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  const parts = text.split(/\s+(?:[\u2010-\u2015-]|\bto\b)\s+/i);
+  const side = parts[parts.length - 1] ?? text;
+  const monthFirst = side.match(
+    new RegExp(`\\b(${MONTH})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`, "i"),
+  );
+  const dayFirst = side.match(
+    new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH})\\.?\\s+(\\d{4})\\b`, "i"),
+  );
+  const monthYear = side.match(new RegExp(`\\b(${MONTH})\\.?\\s+(\\d{4})\\b`, "i"));
+  const hit = monthFirst || dayFirst || monthYear;
+  if (!hit) return null;
+  const month = MONTH_INDEX[hit[1].toLowerCase().replace(/\.$/, "")];
+  if (month == null) return null;
+  return `${hit[2]}-${String(month + 1).padStart(2, "0")}`;
+}
+
+/** Distinct period ends named in prose. One date range counts as its end month. */
+export function periodEndsMentioned(text: string): Set<string> {
+  const ends = new Set<string>();
+  const range = new RegExp(
+    `\\b${ORDINAL_DAY}\\s+${MONTH}\\.?\\s+\\d{4}\\s*[\\u2010-\\u2015-]\\s*${ORDINAL_DAY}\\s+${MONTH}\\.?\\s+\\d{4}\\b`,
+    "gi",
+  );
+  const withoutRanges = text.replace(range, (match) => {
+    const end = periodEndKey(match);
+    if (end) ends.add(end);
+    return " ";
+  });
+  const stamp = new RegExp(`\\b${MONTH}\\.?\\s+\\d{4}\\b`, "gi");
+  for (const match of withoutRanges.match(stamp) ?? []) {
+    const end = periodEndKey(match);
+    if (end) ends.add(end);
+  }
+  for (const match of withoutRanges.match(/\b(\d{4})-(\d{2})-\d{2}\b/g) ?? []) {
+    const end = periodEndKey(match);
+    if (end) ends.add(end);
+  }
+  return ends;
+}
 
 /**
  * Drop ids, dates, period labels, and years so their digits are not cited figures.
@@ -591,6 +666,12 @@ export function stripCitationNoise(text: string): string {
   return text
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, " ")
     .replace(/\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{8,}\b/gi, " ")
+    .replace(/\((?:[^)]*\b(?:median|band|floor)[^)]*)\)/gi, " ")
+    .replace(
+      /\b(?:peer\s+median|healthy\s+band|watch\s+floor)\s+(?:of\s+)?\d+(?:\.\d+)?(?:\s*[\u2010-\u2015-]\s*\d+(?:\.\d+)?)?(?:\s+days?)?\b/gi,
+      " ",
+    )
+    .replace(/\b\d+(?:\.\d+)?\s*-\s*days?\b/gi, " ")
     .replace(
       /\b\d{4}-\d{2}-\d{2}(?:[tT ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/g,
       " ",
@@ -611,16 +692,30 @@ export function stripCitationNoise(text: string): string {
     .replace(/\b(?:19|20)\d{2}\b/g, " ");
 }
 
-export type CitedNumber = { raw: string; value: number; decimals: number };
+export type CitedNumber = { raw: string; value: number; decimals: number; scale: number };
 
+const CITED_NUMBER =
+  /(?:[R$£€]\s*)?-?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:\s*[kmb]\b)?|(?:[R$£€]\s*)?-?\d+(?:\.\d+)?(?:\s*[kmb]\b)?/gi;
+
+function scaleOfSuffix(suffix: string): number {
+  if (suffix === "k") return 1_000;
+  if (suffix === "m") return 1_000_000;
+  if (suffix === "b") return 1_000_000_000;
+  return 1;
+}
+
+/** `412k`, `R412k`, and `$0.4m` become the stored-figure scale. `412,000` stays one number. */
 export function citedNumbers(text: string): CitedNumber[] {
-  const matches = stripCitationNoise(text).match(/-?\d+(?:\.\d+)?/g) ?? [];
+  const matches = stripCitationNoise(text).match(CITED_NUMBER) ?? [];
   const out: CitedNumber[] = [];
   for (const raw of matches) {
-    const value = Number(raw);
-    if (!Number.isFinite(value)) continue;
-    const frac = raw.includes(".") ? (raw.split(".")[1] ?? "") : "";
-    out.push({ raw, value, decimals: frac.length });
+    const suffix = raw.trim().match(/[kmb]\s*$/i)?.[0]?.toLowerCase() ?? "";
+    const scale = scaleOfSuffix(suffix);
+    const numeric = raw.replace(/[R$£€\s]/gi, "").replace(/[kmb]$/i, "").replace(/,/g, "");
+    const mantissa = Number(numeric);
+    if (!Number.isFinite(mantissa)) continue;
+    const frac = numeric.includes(".") ? (numeric.split(".")[1] ?? "") : "";
+    out.push({ raw, value: mantissa * scale, decimals: frac.length, scale });
   }
   return out;
 }
@@ -641,9 +736,23 @@ function sameCitedNumber(claimed: number, stored: number): boolean {
  * truncated to the cited precision, including the percent form (×100).
  * An integer also matches within ±0.5.
  */
-export function citedFigureMatches(claimed: number, decimals: number, stored: number): boolean {
+export function citedFigureMatches(claimed: number, decimals: number, stored: number, scale = 1): boolean {
   if (!Number.isFinite(claimed) || !Number.isFinite(stored)) return false;
-  return matchesAtPrecision(claimed, decimals, stored) || matchesAtPrecision(claimed, decimals, stored * 100);
+  if (scale !== 1 && scale > 0) {
+    const mantissa = claimed / scale;
+    if (matchesAtPrecision(mantissa, decimals, stored / scale)) return true;
+    return decimals === 0 && Math.trunc(Math.abs(stored) / scale) === Math.abs(mantissa);
+  }
+  if (matchesAtPrecision(claimed, decimals, stored)) return true;
+  if (matchesAtPrecision(claimed, decimals, stored * 100)) return true;
+  // A bare 412 is the thousands (or millions) form of a stored revenue. Scores and day counts stay below 100.
+  if (decimals === 0 && Math.abs(claimed) >= 100) {
+    if (matchesAtPrecision(claimed, 0, stored / 1_000)) return true;
+    if (matchesAtPrecision(claimed, 0, stored / 1_000_000)) return true;
+    if (Math.trunc(Math.abs(stored) / 1_000) === Math.abs(claimed)) return true;
+    if (Math.trunc(Math.abs(stored) / 1_000_000) === Math.abs(claimed)) return true;
+  }
+  return false;
 }
 
 function matchesAtPrecision(claimed: number, decimals: number, stored: number): boolean {
@@ -670,9 +779,9 @@ function bucketId(periodLabel: string | null, snapshotId: string | null): string
   return "none";
 }
 
-function matchingFigureKeys(row: StoredFigures, cited: number, decimals: number): Array<[string, number]> {
+function matchingFigureKeys(row: StoredFigures, cited: CitedNumber): Array<[string, number]> {
   const matches = Object.entries(row.figures).filter(
-    ([, value]) => typeof value === "number" && citedFigureMatches(cited, decimals, value),
+    ([, value]) => typeof value === "number" && citedFigureMatches(cited.value, cited.decimals, value, cited.scale),
   );
   if (row.periodLabel) {
     const specific = matches.filter(([key]) => key.includes(row.periodLabel as string));
@@ -681,38 +790,92 @@ function matchingFigureKeys(row: StoredFigures, cited: number, decimals: number)
   return matches;
 }
 
-function seedBuckets(evidence: FindingEvidence): Map<string, EvidenceBucket> {
-  const buckets = new Map<string, EvidenceBucket>();
-  const entries = Object.entries(evidence.figures);
+function periodBucketKey(label: string | null): string | null {
+  if (!label) return null;
+  return periodEndKey(label) ?? normalizeLabel(label);
+}
+
+function namedPeriodKeys(text: string, reads: StoredFigures[]): Set<string> {
+  const mentioned = periodEndsMentioned(text);
+  const named = new Set<string>();
+  const hay = text.toLowerCase();
+  for (const row of reads) {
+    const key = periodBucketKey(row.periodLabel);
+    if (!key) continue;
+    if (mentioned.has(key)) named.add(key);
+    if (row.periodLabel && hay.includes(row.periodLabel.toLowerCase())) named.add(key);
+  }
+  return named;
+}
+
+function restrictToNamed<T extends { periodLabel: string | null }>(hits: T[], named: Set<string>): T[] {
+  if (named.size === 0) return hits;
+  const narrowed = hits.filter((hit) => {
+    const key = periodBucketKey(hit.periodLabel);
+    return key != null && named.has(key);
+  });
+  return narrowed.length > 0 ? narrowed : hits;
+}
+
+function putFigure(
+  buckets: Map<string, EvidenceBucket>,
+  hit: { periodLabel: string | null; snapshotId: string | null; key: string; value: number },
+) {
+  const id = bucketId(hit.periodLabel, hit.snapshotId);
+  const bucket = buckets.get(id) ?? {
+    periodLabel: hit.periodLabel,
+    snapshotId: hit.snapshotId,
+    figures: {},
+  };
+  if (!bucket.snapshotId && hit.snapshotId) bucket.snapshotId = hit.snapshotId;
+  if (!bucket.periodLabel && hit.periodLabel) bucket.periodLabel = hit.periodLabel;
+  bucket.figures[hit.key] = hit.value;
+  buckets.set(id, bucket);
+}
+
+/** File each claimed figure on the read that holds it, under that read's period and canonical key. */
+function fileClaimedFigures(
+  buckets: Map<string, EvidenceBucket>,
+  reads: StoredFigures[],
+  figures: EvidenceFigures,
+  named: Set<string>,
+  poolKeys: ReadonlySet<string>,
+) {
+  const entries = Object.entries(figures);
   const nested = entries.some(([, value]) => value != null && typeof value === "object");
+  const pairs: Array<[string, number]> = [];
   if (!nested) {
-    const figures: Record<string, number> = {};
     for (const [key, value] of entries) {
-      if (typeof value === "number" && Number.isFinite(value)) figures[key] = value;
+      if (typeof value === "number" && Number.isFinite(value)) pairs.push([key, value]);
     }
-    const id = bucketId(evidence.period_label, evidence.snapshot_id);
-    buckets.set(id, {
-      periodLabel: evidence.period_label,
-      snapshotId: evidence.snapshot_id,
-      figures,
-    });
-    return buckets;
-  }
-  for (const [period, value] of entries) {
-    if (!value || typeof value !== "object") continue;
-    const figures: Record<string, number> = {};
-    for (const [key, n] of Object.entries(value)) {
-      if (typeof n === "number" && Number.isFinite(n)) figures[key] = n;
+  } else {
+    for (const [, value] of entries) {
+      if (!value || typeof value !== "object") continue;
+      for (const [key, n] of Object.entries(value)) {
+        if (typeof n === "number" && Number.isFinite(n)) pairs.push([key, n]);
+      }
     }
-    const id = bucketId(period, null);
-    const existing = buckets.get(id);
-    buckets.set(id, {
-      periodLabel: period,
-      snapshotId: existing?.snapshotId ?? (entries.length === 1 ? evidence.snapshot_id : null),
-      figures: { ...(existing?.figures ?? {}), ...figures },
-    });
   }
-  return buckets;
+  for (const [key, value] of pairs) {
+    const canon = canonicalEvidenceKey(key, poolKeys);
+    const hits = restrictToNamed(
+      reads.filter((row) => {
+        const stored = row.figures[canon];
+        return typeof stored === "number" && figuresClose(value, stored);
+      }),
+      named,
+    );
+    for (const row of hits) {
+      const stored = row.figures[canon];
+      if (typeof stored !== "number") continue;
+      putFigure(buckets, {
+        periodLabel: row.periodLabel,
+        snapshotId: row.snapshotId,
+        key: canon,
+        value: stored,
+      });
+    }
+  }
 }
 
 function evidenceFromBuckets(buckets: Map<string, EvidenceBucket>): FindingEvidence {
@@ -745,39 +908,36 @@ export function attachCitedEvidence(input: {
   pool: StoredFigures[];
   evidence: FindingEvidence;
 }): { ok: true; evidence: FindingEvidence; warning?: string } | { ok: false; error: string } {
-  const cited = citedNumbers(`${input.title}\n${input.detail}`);
+  const prose = `${input.title}\n${input.detail}`;
+  const cited = citedNumbers(prose);
   const seen = new Set<string>();
   const missing: string[] = [];
   const harmless: string[] = [];
-  const buckets = seedBuckets(input.evidence);
+  const reads = normalizeStoredReads(input.pool.filter((row) => Object.keys(row.figures).length > 0));
+  const poolKeys = poolKeySet(reads);
+  const named = namedPeriodKeys(prose, reads);
+  const buckets = new Map<string, EvidenceBucket>();
+  fileClaimedFigures(buckets, reads, input.evidence.figures, named, poolKeys);
   for (const n of cited) {
     if (seen.has(n.raw)) continue;
     seen.add(n.raw);
-    const hits = input.pool.flatMap((row) =>
-      matchingFigureKeys(row, n.value, n.decimals).map(([key, value]) => ({
-        periodLabel: row.periodLabel,
-        snapshotId: row.snapshotId,
-        key,
-        value,
-      })),
+    const hits = restrictToNamed(
+      reads.flatMap((row) =>
+        matchingFigureKeys(row, n).map(([key, value]) => ({
+          periodLabel: row.periodLabel,
+          snapshotId: row.snapshotId,
+          key: canonicalEvidenceKey(key, poolKeys),
+          value,
+        })),
+      ),
+      named,
     );
     if (hits.length === 0) {
-      if (isHarmlessCitedNumber(n.value)) harmless.push(n.raw);
+      if (n.scale === 1 && isHarmlessCitedNumber(n.value)) harmless.push(n.raw);
       else missing.push(n.raw);
       continue;
     }
-    for (const hit of hits) {
-      const id = bucketId(hit.periodLabel, hit.snapshotId);
-      const bucket = buckets.get(id) ?? {
-        periodLabel: hit.periodLabel,
-        snapshotId: hit.snapshotId,
-        figures: {},
-      };
-      if (!bucket.snapshotId && hit.snapshotId) bucket.snapshotId = hit.snapshotId;
-      if (!bucket.periodLabel && hit.periodLabel) bucket.periodLabel = hit.periodLabel;
-      bucket.figures[hit.key] = hit.value;
-      buckets.set(id, bucket);
-    }
+    for (const hit of hits) putFigure(buckets, hit);
   }
   if (missing.length > 0) {
     return {
