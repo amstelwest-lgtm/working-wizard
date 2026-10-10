@@ -8,6 +8,7 @@ import {
   agentClaudeTools,
   decisionFromClaude,
   formatAgentPrompt,
+  isAgentToolName,
   runAgentLoop,
   type AgentAudience,
   type AgentRun,
@@ -64,8 +65,13 @@ export async function runMilonbotObjective(input: {
       latencyMs += round.latencyMs;
       return decisionFromClaude({ text: round.text, toolUses: round.toolUses });
     },
-    execute: async (name, args) =>
-      redactStructured(
+    execute: async (name, args) => {
+      // The loop already refuses anything outside AGENT_TOOLS. This guard
+      // keeps the executor typed and does not change a successful run.
+      if (!isAgentToolName(name)) {
+        return { error: "MILŌN refused that tool. It is not on the allowlist." };
+      }
+      return redactStructured(
         await executeAgentTool(name, args, {
           clientId: input.clientId,
           userId: input.userId,
@@ -75,7 +81,8 @@ export async function runMilonbotObjective(input: {
           adminClient: input.adminClient,
         }),
         session,
-      ),
+      );
+    },
   });
 
   run.objective = input.objective;

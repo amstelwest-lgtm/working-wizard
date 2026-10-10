@@ -5,6 +5,8 @@
  */
 import { useState } from "react";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
+import { ZA_MARKET } from "@/lib/market/resolve";
+import type { AgentActivitySnapshot } from "@/lib/milon-team-activity";
 import {
   emptyMilonTeamFeed,
   type ApproveResult,
@@ -13,13 +15,14 @@ import {
 } from "@/lib/milon-team-feed";
 
 export const DESK_NOW = new Date("2026-10-08T12:00:00.000Z");
+export const LIVE_NOW = new Date("2026-10-09T12:00:00.000Z");
 
 const POPULATED: MilonTeamFeed = {
   ...emptyMilonTeamFeed(),
   briefing: [
     {
       id: "close",
-      agent: "bookkeeper",
+      agent: "financial_manager",
       title: "September close matches the bank",
       detail: "The ledger and the bank statement agree.",
       severity: "info",
@@ -70,7 +73,7 @@ const POPULATED: MilonTeamFeed = {
   activity: [
     {
       id: "synced",
-      agent: "bookkeeper",
+      agent: "financial_manager",
       kind: "sync",
       text: "Bank feed synced for September.",
       at: "2026-10-08T10:00:00.000Z",
@@ -91,7 +94,7 @@ const POPULATED: MilonTeamFeed = {
     },
   ],
   agents: {
-    bookkeeper: { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
+    financial_manager: { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
     analyst: { agent: "analyst", lastRunAt: "2026-10-07T12:00:00.000Z", lastRunKind: "diagnosis" },
     advisor: { agent: "advisor", lastRunAt: "2026-10-08T09:00:00.000Z", lastRunKind: "diagnosis" },
   },
@@ -103,8 +106,132 @@ const POPULATED: MilonTeamFeed = {
 
 const EMPTY: MilonTeamFeed = emptyMilonTeamFeed();
 
+const LIVE: MilonTeamFeed = {
+  ...emptyMilonTeamFeed(),
+  briefing: [
+    {
+      id: "ratio:debtToEquity",
+      agent: "analyst",
+      title: "Debt-to-Equity",
+      detail: "Debt-to-Equity 0.7795",
+      severity: "act",
+      source: { label: "Ratios", asOf: "2026-09-30" },
+    },
+    {
+      id: "ratio:currentRatio",
+      agent: "analyst",
+      title: "Current Ratio",
+      detail: "Current Ratio 1.15",
+      severity: "watch",
+      source: { label: "Ratios", asOf: "2026-09-30" },
+    },
+    {
+      id: "ratio:assetTurnover",
+      agent: "analyst",
+      title: "Asset Turnover",
+      detail: "Asset Turnover 0.84",
+      severity: "watch",
+      source: { label: "Ratios", asOf: "2026-09-30" },
+    },
+    {
+      id: "ratio:equityMultiplier",
+      agent: "analyst",
+      title: "Equity Multiplier",
+      detail: "Equity Multiplier 2.4",
+      severity: "watch",
+      source: { label: "Ratios", asOf: "2026-09-30" },
+    },
+    {
+      id: "ratio:grossMargin",
+      agent: "analyst",
+      title: "Gross Margin",
+      detail: "Gross Margin 42.0%",
+      severity: "watch",
+      source: { label: "Ratios", asOf: "2026-09-30" },
+    },
+    {
+      id: "proposal:loan",
+      agent: "advisor",
+      title: "Bring Debt-to-Equity back under the line",
+      detail: "Pay down the short-term loan before the next review.",
+      severity: "act",
+      source: { label: "Client Brain proposals", asOf: null },
+    },
+  ],
+  agents: {
+    financial_manager: { agent: "financial_manager", lastRunAt: null, lastRunKind: null },
+    analyst: { agent: "analyst", lastRunAt: "2026-10-09T08:00:00.000Z", lastRunKind: "diagnosis" },
+    advisor: { agent: "advisor", lastRunAt: null, lastRunKind: null },
+  },
+};
+
+export const EMPTY_ACTIVITY: AgentActivitySnapshot = {
+  runs: [],
+  findings: [],
+  messages: [],
+  market: ZA_MARKET,
+};
+
+export const LIVE_ACTIVITY: AgentActivitySnapshot = {
+  market: ZA_MARKET,
+  runs: [
+    {
+      id: "run-fm",
+      agent: "financial_manager",
+      client_id: "harbour-glass",
+      status: "succeeded",
+      queued_at: "2026-10-09T11:55:00.000Z",
+      started_at: "2026-10-09T11:55:00.000Z",
+      finished_at: "2026-10-09T11:55:00.000Z",
+    },
+    {
+      id: "run-analyst",
+      agent: "analyst",
+      client_id: "harbour-glass",
+      status: "running",
+      queued_at: "2026-10-09T11:58:00.000Z",
+      started_at: "2026-10-09T11:58:00.000Z",
+      finished_at: null,
+    },
+    {
+      id: "run-advisor",
+      agent: "advisor",
+      client_id: "harbour-glass",
+      status: "failed",
+      queued_at: "2026-10-09T11:00:00.000Z",
+      started_at: "2026-10-09T11:00:00.000Z",
+      finished_at: "2026-10-09T11:02:00.000Z",
+    },
+  ],
+  findings: [
+    {
+      id: "finding-margin",
+      agent: "analyst",
+      client_id: "harbour-glass",
+      title: "Gross margin is 0.4200",
+      detail: null,
+      evidence: { period_label: "Sep 2026", figures: { gross_margin: 0.42 } },
+      as_of: "2026-09-30",
+      created_at: "2026-10-09T11:40:00.000Z",
+    },
+  ],
+  messages: [
+    {
+      id: "handoff-1",
+      client_id: "harbour-glass",
+      from_agent: "analyst",
+      to_agent: "advisor",
+      type: "handoff",
+      payload: { text: "Review the cash floor before the next meeting." },
+      created_at: "2026-10-09T11:50:00.000Z",
+    },
+  ],
+};
+
 function feedFor(clientId: string): MilonTeamFeed {
-  return clientId === "empty" ? EMPTY : POPULATED;
+  if (clientId === "empty") return EMPTY;
+  if (clientId === "live") return LIVE;
+  return POPULATED;
 }
 
 export function useMilonTeamFeedStub(clientId: string): MilonTeamFeedApi {

@@ -10,7 +10,7 @@ export const HERO_BADGE = "For accounting firms and the businesses they advise";
 export const HERO_H1_LEAD = "Your AI finance team.";
 export const HERO_H1_GOLD = "You sign off.";
 export const HERO_LEDE =
-  "Plug in QuickBooks Online or Xero. Milōn Bookkeeper, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
+  "Plug in QuickBooks Online or Xero. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 export const HERO_CTA_NOTE = `${FIRM_CARD_TIMING} Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
@@ -28,7 +28,7 @@ export const HERO_SIGNOFF_POINT = "You review and sign off every advisory pack."
 
 export const HERO_POINTS = [
   "Connect a client's QuickBooks Online or Xero file, or upload a P&L and balance sheet.",
-  "Milōn Bookkeeper, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
+  "Milōn Financial Manager, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
   HERO_SIGNOFF_POINT,
 ] as const;
 
@@ -64,35 +64,35 @@ export const BRIDGE_DRAFT_BODY =
 /** Three distinct agents on /for-accountants. Same <strong> + body pattern as the old single bullet. */
 export const FIRM_TEAM_BULLETS = [
   {
-    title: "Milōn Bookkeeper, your AI bookkeeper for QBO and Xero.",
-    body: "Checks each client's books are up to date every month and flags what's missing, so your firm can stamp them clean.",
+    title: "Milōn Financial Manager, data quality for QBO and Xero.",
+    body: "Checks the books, the 13-week cash and the budget, and prepares action points and the hand-off to your firm.",
   },
   {
-    title: "Milōn Analyst, your AI financial analyst.",
-    body: "Budget vs actual, a 13-week cash flow forecast and plain-word variance explanations, plus a first-draft board report.",
+    title: "Milōn Analyst, health score and ratios.",
+    body: "Calculates the health score and the ratios, and explains variances in plain words.",
   },
   {
-    title: "Milōn Advisor, the AI CFO legwork.",
-    body: "Watches the cash floor and debtors between reports and drafts next moves and the advisory. You correct, sign off and send. The judgement stays yours.",
+    title: "Milōn Advisor, next moves and the advisory.",
+    body: "Drafts the next moves and the advisory deliverables. You correct, sign off and send. The judgement stays yours.",
   },
 ] as const;
 
 /** Role strip in #problem. Reuses .bridge-facts / .bridge-fact; no new CSS. */
 export const FINANCE_TEAM = [
   {
-    name: "Milōn Bookkeeper",
-    body: "Your AI bookkeeper for QuickBooks and Xero. Checks each client's books are up to date for month-end and flags what's missing.",
-    bold: "Your firm stamps them clean.",
+    name: "Milōn Financial Manager",
+    body: "Data quality from QuickBooks and Xero, the 13-week cash and budget, and action points.",
+    bold: "Hands the pack to your accountant.",
   },
   {
     name: "Milōn Analyst",
-    body: "Budget vs actual and a 13-week cash forecast, with variances explained in plain words.",
-    bold: "Drafts the board report.",
+    body: "Health score, ratios, and variances from the figures on file.",
+    bold: "Says what moved.",
   },
   {
     name: "Milōn Advisor",
-    body: "Does the AI CFO legwork: watches the cash floor and debtors between reports.",
-    bold: "Drafts next moves and advisory for your sign-off.",
+    body: "Next moves and the advisory deliverables.",
+    bold: "You review and sign off.",
   },
 ] as const;
 

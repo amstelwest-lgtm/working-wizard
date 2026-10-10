@@ -66,7 +66,17 @@ for (const href of sheetHrefs) {
 }
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <AuthProvider>
+      <AccountantProfileProvider>
+        <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
+          <Outlet />
+          <ShareButton />
+          <Toaster />
+        </NotesProvider>
+      </AccountantProfileProvider>
+    </AuthProvider>
+  ),
 });
 const clientRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -125,7 +135,7 @@ const teamDeskRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/milon-team-desk",
   validateSearch: (search: Record<string, unknown>) => ({
-    fixture: search.fixture === "empty" ? "empty" : "populated",
+    fixture: search.fixture === "empty" ? "empty" : search.fixture === "live" ? "live" : "populated",
   }),
   component: MilonTeamDeskPage,
 });
@@ -171,14 +181,6 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AuthProvider>
-      <AccountantProfileProvider>
-        <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
-          <RouterProvider router={router} />
-          <ShareButton />
-          <Toaster />
-        </NotesProvider>
-      </AccountantProfileProvider>
-    </AuthProvider>
+    <RouterProvider router={router} />
   </StrictMode>,
 );

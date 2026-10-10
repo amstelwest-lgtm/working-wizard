@@ -18,6 +18,7 @@ import {
   type BoardFigures,
   type LedgerSyncFigures,
 } from "@/lib/ledger-link-copy";
+import { enqueueAgentEventSafe, priorActivityIso } from "@/lib/agent-enqueue";
 import {
   applyLedgerSyncFinancials,
   emptyLedgerSyncError,
@@ -511,9 +512,17 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
       const { data: existing } = await supabaseAdmin
         .from("clients")
-        .select("financials, cashflow")
+        .select("financials, cashflow, last_login_at, created_at")
         .eq("id", data.clientId)
         .maybeSingle();
+      const { data: booksStamp } = await supabaseAdmin
+        .from("clients")
+        .select("financials_updated_at")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      const previousBooksAt =
+        (booksStamp as { financials_updated_at?: string | null } | null)?.financials_updated_at ??
+        null;
       const prev =
         existing?.financials &&
         typeof existing.financials === "object" &&
@@ -695,6 +704,17 @@ export const triggerQboSync = createServerFn({ method: "POST" })
           last_synced_at: nowIso,
         })
         .eq("client_id", data.clientId);
+
+      await enqueueAgentEventSafe(supabaseAdmin, {
+        clientId: data.clientId,
+        trigger: "sync",
+        activityAt: priorActivityIso({
+          createdAt: existing?.created_at ?? null,
+          lastLoginAt: existing?.last_login_at ?? null,
+          previousBooksAt,
+        }),
+        inputs: ledger.to,
+      });
 
       return {
         mappedInputs,

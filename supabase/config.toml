@@ -41,3 +41,11 @@ verify_jwt = true
 # In-app Milōn bot — JWT; worker bee on the current client brain. Same Anthropic secret as ask-ai.
 [functions.milon-bot]
 verify_jwt = true
+
+# Background analyst. Service-role JWT. Does not serve the in-app chat.
+[functions.agent-analyst]
+verify_jwt = true
+
+# Cron dispatcher. Service-role JWT. The schedule is inserted inactive.
+[functions.agent-dispatch]
+verify_jwt = true
