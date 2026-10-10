@@ -571,14 +571,41 @@ export function groundFindingEvidence(input: {
 const PERIOD_LABEL =
   "january|february|march|april|may|june|july|august|september|october|november|december|sept|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec";
 
-/** Drop ids, dates, period labels, and years so their digits are not cited figures. */
+const MONTH = `(?:${PERIOD_LABEL})`;
+const ORDINAL_DAY = "\\d{1,2}(?:st|nd|rd|th)?";
+
+/**
+ * Drop ids, dates, period labels, and years so their digits are not cited figures.
+ * Longer date forms go first. "30 Sep 2026", "Sep 30", and "1 Jan 2026 – 30 Sep 2026"
+ * must not leave the day of the month behind as a citation.
+ */
 export function stripCitationNoise(text: string): string {
+  const dayRange = new RegExp(
+    `\\b${ORDINAL_DAY}\\s*[\\u2010-\\u2015-]\\s*${ORDINAL_DAY}\\s+${MONTH}\\.?(?:,?\\s+\\d{4})?\\b`,
+    "gi",
+  );
+  const monthDayYear = new RegExp(`\\b${MONTH}\\.?\\s+${ORDINAL_DAY},?\\s+\\d{4}\\b`, "gi");
+  const dayMonthYear = new RegExp(`\\b${ORDINAL_DAY}(?:\\s+of)?\\s+${MONTH}\\.?,?\\s+\\d{4}\\b`, "gi");
+  const monthDay = new RegExp(`\\b${MONTH}\\.?\\s+${ORDINAL_DAY}\\b`, "gi");
+  const dayMonth = new RegExp(`\\b${ORDINAL_DAY}(?:\\s+of)?\\s+${MONTH}\\.?\\b`, "gi");
   return text
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, " ")
     .replace(/\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{8,}\b/gi, " ")
-    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
+    .replace(
+      /\b\d{4}-\d{2}-\d{2}(?:[tT ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/g,
+      " ",
+    )
+    .replace(/\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b/g, " ")
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, " ")
+    .replace(/\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/g, " ")
+    .replace(new RegExp(`\\b${ORDINAL_DAY}-${MONTH}-\\d{4}\\b`, "gi"), " ")
+    .replace(dayRange, " ")
+    .replace(monthDayYear, " ")
+    .replace(dayMonthYear, " ")
+    .replace(monthDay, " ")
+    .replace(dayMonth, " ")
+    .replace(new RegExp(`\\b${MONTH}\\.?\\s+\\d{4}\\b`, "gi"), " ")
     .replace(/\b\d{4}-\d{2}\b/g, " ")
-    .replace(new RegExp(`\\b(?:${PERIOD_LABEL})\\.?\\s+\\d{4}\\b`, "gi"), " ")
     .replace(/\bq[1-4]\s+\d{4}\b/gi, " ")
     .replace(/\bfy\s*\d{4}\b/gi, " ")
     .replace(/\b(?:19|20)\d{2}\b/g, " ");

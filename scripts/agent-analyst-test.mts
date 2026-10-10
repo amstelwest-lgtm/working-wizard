@@ -38,6 +38,7 @@ import {
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
 import { scorecardHealthFromFinancials } from "../src/lib/health-score.ts";
+import { figuresPeriodLabelFrom } from "../src/lib/statement-period.ts";
 import { analystToolSchemas, ANALYST_SYSTEM } from "../supabase/functions/_shared/agent-prompts/analyst.ts";
 import { classifyResult, formatAgentPrompt, runAgentLoop } from "../supabase/functions/_shared/agent-core/loop.ts";
 import {
@@ -281,6 +282,51 @@ const DAY = 24 * 60 * 60 * 1000;
   });
   assert(nestedScores.ok === true, "score periods filed under their labels are accepted");
   if (nestedScores.ok) assert(nestedScores.evidence.snapshot_id === null, "score history does not borrow a snapshot id");
+
+  const statementHistory = collectStoredReads(
+    {
+      empty: false,
+      periods: [
+        {
+          period_label: "Sep 2026",
+          period_date: "2026-09-30",
+          ratios: { "Debtor Days": 25, "Creditor Days": 37 },
+        },
+        {
+          period_label: "Oct 2026",
+          period_date: "2026-10-31",
+          ratios: { "Debtor Days": 40, "Creditor Days": 50 },
+        },
+      ],
+    },
+    { snapshotId: null, periodLabel: null },
+  );
+  assert(statementHistory.length === 2, "each statement-history period is its own read");
+  assert(statementHistory[0]?.periodLabel === "Sep 2026", "September history keeps its own period label");
+  assert(
+    statementHistory[0]?.figures["Debtor Days"] === 25 && statementHistory[0]?.figures["Creditor Days"] === 37,
+    "September history keeps debtor days 25 and creditor days 37",
+  );
+  const sepHistory = groundFindingEvidence({
+    pool: statementHistory,
+    claimedFigures: { "Sep 2026": { debtor_days: 25, creditor_days: 37 } },
+  });
+  assert(sepHistory.ok === true, "September debtor and creditor days are citable under Sep 2026");
+  if (sepHistory.ok) {
+    assert(sepHistory.evidence.period_label === "Sep 2026", "the evidence period is Sep 2026");
+    const byPeriod = sepHistory.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Sep 2026"]?.["Debtor Days"] === 25, "evidence keeps September debtor days");
+    assert(byPeriod["Sep 2026"]?.["Creditor Days"] === 37, "evidence keeps September creditor days");
+  }
+  const missingPeriod = groundFindingEvidence({
+    pool: statementHistory,
+    claimedFigures: { "Nov 2026": { debtor_days: 25 } },
+  });
+  assert(missingPeriod.ok === false, "a period the history did not return is still rejected");
+  if (!missingPeriod.ok) {
+    assert(missingPeriod.error.includes("No stored read is labeled Nov 2026"), "the error names the missing period");
+    assert(missingPeriod.error.includes("Sep 2026"), "the error lists September as available");
+  }
 
   const aliasKeys = new Set(["score:2026-10-05", "pillar:profit", "Debtor Days"]);
   assert(canonicalEvidenceKey("score_2026-10-05", aliasKeys) === "score:2026-10-05", "score_date aliases to score:date");
@@ -870,6 +916,20 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(nested.includes("cfaa8b3d-") && nested.includes("7c147e88-"), "the null recipients are named");
   assert(nested.includes("to_agent = 'financial_manager'"), "those messages are addressed to the financial manager");
   assert(nested.includes("to_agent IS NULL"), "a second run does not rewrite a recipient that is already set");
+
+  const recipients = readFileSync(
+    resolve("supabase/migrations/20261011180000_agent_messages_analyst_recipient.sql"),
+    "utf8",
+  );
+  assert(recipients.includes("to_agent = 'financial_manager'"), "older analyst findings are addressed to the financial manager");
+  assert(recipients.includes("from_agent = 'analyst'"), "only analyst messages are backfilled");
+  assert(recipients.includes("type = 'finding'"), "only finding messages are backfilled");
+  assert(recipients.includes("to_agent IS NULL"), "a second run does not rewrite a recipient that is already set");
+  const recipientCode = recipients.replace(/--[^\n]*/g, "");
+  assert(
+    !recipientCode.includes("cfaa8b3d") && !recipientCode.includes("7c147e88"),
+    "the remaining null recipients are not limited to the two already named",
+  );
   const executeSrcForDetail = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
   assert(executeSrcForDetail.includes("A finding needs a detail."), "an empty detail is refused");
   assert(executeSrcForDetail.includes('to_agent: "financial_manager"'), "a new finding is addressed to the financial manager");
@@ -936,6 +996,24 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(citedFigureMatches(46, 0, 0.4587378668612735), "46 matches the percent form of 0.4587");
   assert(!citedFigureMatches(33, 0, 0.4587378668612735), "33 does not match that ratio");
   assert(citedNumbers("e806dc36-8e43-4324-a28c-c5d5fa66a240 Sep 2026").length === 0, "a snapshot id and a period label contribute no cited numbers");
+  for (const date of [
+    "2026-09-30",
+    "2026-09-30T00:00:00Z",
+    "2026-09-30T00:00:00.000Z",
+    "30 Sep 2026",
+    "30th September 2026",
+    "Sep 30, 2026",
+    "September 30, 2026",
+    "Sep 30",
+    "30 Sep",
+    "1 Jan 2026 – 30 Sep 2026",
+    "09/30/2026",
+    "30/09/2026",
+  ]) {
+    assert(citedNumbers(date).length === 0, `${date} contributes no cited numbers`);
+  }
+  assert(citedNumbers("Debtor days are 25 as of 30 Sep 2026").map((n) => n.value).join(",") === "25", "a date beside a real figure leaves only that figure");
+  assert(citedNumbers("Cash is 30").map((n) => n.value).join(",") === "30", "a bare 30 is still a cited number");
   const withId = attachCitedEvidence({
     title: "Gross margin is 0.5849",
     detail: "Snapshot e806dc36-8e43-4324-a28c-c5d5fa66a240 for Sep 2026.",
@@ -953,6 +1031,41 @@ const DAY = 24 * 60 * 60 * 1000;
     },
   });
   assert(withId.ok === true, "digits inside a snapshot id are not a missing figure");
+  const datedTitle = attachCitedEvidence({
+    title: "Debtor days are 25 as of 30 Sep 2026",
+    detail: "Period 1 Jan 2026 – 30 Sep 2026 (2026-09-30).",
+    pool: [
+      {
+        snapshotId: "e806dc36-8e43-4324-a28c-c5d5fa66a240",
+        periodLabel: "Sep 2026",
+        figures: { "Debtor Days": 25 },
+      },
+    ],
+    evidence: {
+      snapshot_id: "e806dc36-8e43-4324-a28c-c5d5fa66a240",
+      period_label: "Sep 2026",
+      figures: { "Debtor Days": 25 },
+    },
+  });
+  assert(datedTitle.ok === true, "the day of the month inside a date is not a missing figure");
+  const bareThirty = attachCitedEvidence({
+    title: "Cash is 30",
+    detail: "",
+    pool: [
+      {
+        snapshotId: "e806dc36-8e43-4324-a28c-c5d5fa66a240",
+        periodLabel: "Sep 2026",
+        figures: { "Debtor Days": 25 },
+      },
+    ],
+    evidence: {
+      snapshot_id: "e806dc36-8e43-4324-a28c-c5d5fa66a240",
+      period_label: "Sep 2026",
+      figures: { "Debtor Days": 25 },
+    },
+  });
+  assert(bareThirty.ok === false, "a bare 30 that was not read is still refused");
+  if (!bareThirty.ok) assert(bareThirty.error.includes("30"), "the error names 30");
   const percent = attachCitedEvidence({
     title: "Fixed costs are 46% of revenue",
     detail: "",
@@ -1066,6 +1179,21 @@ const DAY = 24 * 60 * 60 * 1000;
   const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
   assert(executeSrc.includes("labelHealthScore"), "the analyst health tool labels the stored score");
   assert(executeSrc.includes("client_score_history"), "the analyst health tool reads the stored score");
+  const healthBranch = executeSrc.slice(
+    executeSrc.indexOf('if (tool === "get_health")'),
+    executeSrc.indexOf('if (tool === "get_ratios")'),
+  );
+  assert(healthBranch.includes("figuresPeriodLabelFrom"), "get_health labels the live-books period");
+  assert(healthBranch.includes('from("clients")'), "get_health reads the live books");
+  assert(
+    !/period_label:\s*\(snap\?\.period_label/.test(healthBranch),
+    "get_health does not stamp the latest snapshot period",
+  );
+  const qaUsBooks = { ...qa, periodStart: "2026-01-01" };
+  assert(
+    figuresPeriodLabelFrom(qaUsBooks, "Oct 2026") === "1 Jan 2026 – 30 Sep 2026",
+    "QA US live books are the September range, not the latest snapshot",
+  );
 }
 
 console.log("agent analyst ok");
