@@ -337,4 +337,29 @@ const client = "11111111-1111-1111-1111-111111111111";
   );
 }
 
+// The applied foundation function left an OUT name unqualified in ON CONFLICT.
+{
+  const fix = readFileSync(
+    resolve("supabase/migrations/20261010220000_begin_agent_run_variable_conflict.sql"),
+    "utf8",
+  );
+  const start = fix.indexOf("CREATE OR REPLACE FUNCTION public.begin_agent_run");
+  assert(start >= 0, "the follow-up migration replaces begin_agent_run");
+  const body = fix.slice(start);
+  const directive = body.indexOf("#variable_conflict use_column");
+  const declared = body.indexOf("DECLARE");
+  assert(
+    directive >= 0 && declared >= 0 && directive < declared,
+    "begin_agent_run contains #variable_conflict use_column before its declarations",
+  );
+  assert(
+    body.includes("RETURNS TABLE (run_id uuid, status text, idempotency_key text, is_new boolean)"),
+    "begin_agent_run keeps the same output columns",
+  );
+  assert(
+    body.includes("SECURITY DEFINER") && body.includes("SET search_path = public, extensions"),
+    "begin_agent_run keeps its security settings",
+  );
+}
+
 console.log("agent foundation ok");
