@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Milōn</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0a0a0a;
+        --gold: #d4af37;
+        --ink: #f4efe4;
+        --dim: #b7ad9a;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+      body {
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 32px 24px;
+      }
+      main {
+        width: min(420px, 100%);
+        text-align: center;
+      }
+      img {
+        width: 88px;
+        height: 88px;
+        display: block;
+        margin: 0 auto 20px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-weight: 500;
+        font-size: 32px;
+        letter-spacing: 0.04em;
+        color: var(--gold);
+      }
+      p {
+        margin: 0 0 24px;
+        font-family: system-ui, sans-serif;
+        font-size: 16px;
+        line-height: 1.45;
+        color: var(--dim);
+      }
+      button {
+        appearance: none;
+        border: 1px solid var(--gold);
+        background: transparent;
+        color: var(--gold);
+        font-family: system-ui, sans-serif;
+        font-size: 15px;
+        letter-spacing: 0.04em;
+        padding: 12px 22px;
+        border-radius: 999px;
+      }
+      button:active { background: rgba(212, 175, 55, 0.12); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="mark.png" alt="" width="88" height="88" />
+      <h1>Milōn</h1>
+      <p id="message">You are offline. Milōn will open again when this device can reach milonfinance.com.</p>
+      <button type="button" id="retry">Try again</button>
+    </main>
+    <script>
+      document.getElementById("retry").addEventListener("click", function () {
+        window.location.replace("https://www.milonfinance.com");
+      });
+    </script>
+  </body>
+</html>

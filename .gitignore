@@ -40,6 +40,12 @@ public/version.json
 # Stripe Projects CLI vault (credentials; never commit)
 .projects/
 
+# Android signing and Firebase. Never commit these.
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+
 # Accidentally committed large temp files
 ziQy6NpE
 ziXdDCjj
