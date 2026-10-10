@@ -4,9 +4,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
+import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDate } from "@/lib/market/format";
+import { visitorCopyPack } from "@/lib/market/marketing";
+import { readVisitorDraft } from "@/lib/market/storage";
 import type { ResolvedMarket } from "@/lib/market/types";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { askOwnerAgent } from "@/lib/owner-ask";
@@ -21,10 +24,24 @@ import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { OwnerChat, type OwnerChatTurn } from "./owner-chat";
 import { OwnerHome } from "./owner-home";
+import {
+  OwnerAccountant,
+  OwnerActions,
+  OwnerDeliverables,
+  OwnerFirst,
+  OwnerPlan,
+  type OwnerActionRow,
+} from "./owner-pages";
 import { holdFor } from "./owner-sections";
 import { OwnerHold, OwnerShell, type OwnerScreen } from "./owner-shell";
 
-type Signoff = { signed_off_by_name: string; signed_off_at: string };
+type Signoff = {
+  id?: string;
+  scope?: string;
+  signed_off_by_name: string;
+  signed_off_at: string;
+  firm_name?: string | null;
+};
 
 type SpeechRec = {
   lang: string;
@@ -66,9 +83,12 @@ export function OwnerDoor({
   cashflow,
   market,
   signoffs,
+  firmId,
   workspaces,
   onSwitch,
   onConnect,
+  onQuickBooks,
+  onXero,
   onProfile,
   onSettings,
   onSignOut,
@@ -86,9 +106,12 @@ export function OwnerDoor({
   cashflow: SavedCashflowLike | null;
   market: ResolvedMarket;
   signoffs: Signoff[];
+  firmId: string | null;
   workspaces: { clientId: string; name: string }[];
   onSwitch: (clientId: string) => void;
   onConnect: () => void;
+  onQuickBooks: () => void;
+  onXero: () => void;
   onProfile: () => void;
   onSettings: () => void;
   onSignOut: () => void;
@@ -104,8 +127,15 @@ export function OwnerDoor({
   const [listening, setListening] = useState(false);
   const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
   const [openAction, setOpenAction] = useState<string | null>(null);
+  const [actionRows, setActionRows] = useState<OwnerActionRow[]>([]);
   const [actionsReady, setActionsReady] = useState(false);
+  const [firmName, setFirmName] = useState<string | null>(null);
+  const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
   const recRef = useRef<SpeechRec | null>(null);
+
+  useEffect(() => {
+    setVisitor(visitorCopyPack(readVisitorDraft()));
+  }, []);
 
   useEffect(() => {
     setLedger(null);
@@ -121,11 +151,11 @@ export function OwnerDoor({
       supabase.from("xero_connections").select("id").eq("client_id", clientId).limit(1),
       supabase
         .from("action_items")
-        .select("title, status")
+        .select("id, title, status, due_date")
         .eq("client_id", clientId)
         .neq("status", "done")
         .order("seq", { ascending: true })
-        .limit(1),
+        .limit(20),
     ]).then(([qbo, xero, actions]) => {
       if (cancelled) return;
       if (!qbo.error && (qbo.data?.length ?? 0) > 0) setLedger("QuickBooks");
@@ -133,17 +163,47 @@ export function OwnerDoor({
       else setLedger(null);
       if (actions.error) {
         setOpenAction(null);
+        setActionRows([]);
         setActionsReady(true);
         return;
       }
-      const title = actions.data?.[0]?.title?.trim() ?? "";
-      setOpenAction(title || null);
+      const rows = (actions.data ?? []).flatMap((row) => {
+        const title = row.title?.trim() ?? "";
+        if (!title || !row.id) return [];
+        return [
+          {
+            id: row.id,
+            title,
+            status: row.status,
+            due: row.due_date ? formatDate(row.due_date, market) : null,
+          },
+        ];
+      });
+      setActionRows(rows);
+      setOpenAction(rows[0]?.title ?? null);
       setActionsReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, market]);
+
+  useEffect(() => {
+    setFirmName(null);
+    if (!firmId) return;
+    let cancelled = false;
+    void supabase
+      .from("firms")
+      .select("name")
+      .eq("id", firmId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setFirmName(data?.name?.trim() || null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [firmId]);
 
   const books = useMemo<OwnerBooks>(() => {
     const prior = resolvePriorSnapshot(history, new Date(), {
@@ -201,7 +261,7 @@ export function OwnerDoor({
       !hasBooks &&
       (tile.id === "cash" || tile.id === "owes" || tile.id === "profit")
     ) {
-      onConnect();
+      setScreen("first");
       return;
     }
     if (tile.id === "signed" && tile.empty) {
@@ -337,17 +397,49 @@ export function OwnerDoor({
           onBack={() => setScreen("home")}
         />
       ) : null}
-      {screen === "accountant" ? (
-        <section className="owner-hold">
-          <h1 className="owner-title">Accountant</h1>
-          <p className="owner-lede">{tiles.find((tile) => tile.id === "signed")?.sentence}</p>
-          {clientId ? <InviteAccountantCard clientId={clientId} tone="settings" /> : null}
-          <button type="button" className="owner-ask" onClick={onConnect}>
-            Connect your books
-          </button>
-        </section>
+      {screen === "actions" ? (
+        <OwnerActions
+          rows={actionRows}
+          ready={actionsReady}
+          onAsk={() => openChat("financial_manager")}
+        />
       ) : null}
-      {hold && screen !== "home" && screen !== "chat" && screen !== "accountant" ? (
+      {screen === "accountant" ? (
+        <OwnerAccountant
+          joined={Boolean(firmId)}
+          firmName={firmName}
+          invite={
+            clientId && !firmId ? (
+              <InviteAccountantCard clientId={clientId} tone="settings" />
+            ) : null
+          }
+          uploads={clientId ? <OwnerUploadsPanel clientId={clientId} /> : null}
+          onConnect={onConnect}
+        />
+      ) : null}
+      {screen === "deliverables" ? (
+        <OwnerDeliverables
+          rows={signoffs.map((row, index) => ({
+            id: row.id ?? `${row.scope ?? "sign"}-${index}`,
+            scope: row.scope ?? "advisory",
+            name: row.signed_off_by_name,
+            when: formatDate(row.signed_off_at, market),
+          }))}
+          onInvite={() => setScreen("accountant")}
+        />
+      ) : null}
+      {screen === "plan" ? (
+        <OwnerPlan visitor={visitor} accountantOnMilon={Boolean(firmId)} firmName={firmName} />
+      ) : null}
+      {screen === "first" ? (
+        <OwnerFirst
+          joined={Boolean(firmId)}
+          onQuickBooks={onQuickBooks}
+          onXero={onXero}
+          onInvite={() => setScreen("accountant")}
+        />
+      ) : null}
+      {hold && screen === "settings" ? (
         <OwnerHold title={hold.title} sentence={hold.sentence} action={hold.action} />
       ) : null}
     </OwnerShell>

@@ -14,6 +14,11 @@ const shots: { name: string; view: string }[] = [
   { name: "owner-door-home-work", view: "work" },
   { name: "owner-door-chat", view: "chat" },
   { name: "owner-door-ask", view: "ask" },
+  { name: "owner-door-actions", view: "actions" },
+  { name: "owner-door-accountant", view: "accountant" },
+  { name: "owner-door-deliverables", view: "deliverables" },
+  { name: "owner-door-plan", view: "plan" },
+  { name: "owner-door-first", view: "first" },
 ];
 
 const widths = [

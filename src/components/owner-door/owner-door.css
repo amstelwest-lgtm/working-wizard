@@ -294,10 +294,37 @@
   max-width: 40rem;
 }
 
-.owner-door .owner-hold .owner-ask {
+.owner-door .owner-hold .owner-ask,
+.owner-door .owner-ask-inline {
   width: auto;
   min-width: 220px;
   margin-top: 16px;
+}
+
+.owner-door .owner-sub {
+  margin: 8px 0 0;
+  font-family: var(--owner-serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.owner-door .owner-free,
+.owner-door .owner-plan {
+  margin: 8px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.owner-door .owner-first-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.owner-door .owner-first-actions .owner-ask {
+  width: auto;
+  min-width: 220px;
 }
 
 .owner-door .owner-chat-head {
