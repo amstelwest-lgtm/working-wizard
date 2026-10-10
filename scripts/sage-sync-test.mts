@@ -34,7 +34,8 @@ function assert(cond: boolean, msg: string) {
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8");
 
 process.env.SAGE_SA_API_KEY = "test-key-not-a-secret";
-delete process.env.SAGE_SA_PASSWORD_KEY;
+process.env.SAGE_SA_PASSWORD_KEY = "test-password-key-not-a-secret";
+delete process.env.SAGE_SA_BASE_URL;
 
 const pnl = [
   {
@@ -304,6 +305,25 @@ const url = sageRequestUrl("ProfitAndLoss/Get", {
   companyId: "42",
 });
 assert(url.startsWith(`${SAGE_SA_API_BASE}/ProfitAndLoss/Get`), "SA API base");
+assert(
+  SAGE_SA_API_BASE === "https://accounting.sageone.co.za/api/2.0.0",
+  "default is the live host",
+);
+process.env.SAGE_SA_BASE_URL = "https://resellers.accounting.sageone.co.za/api/2.0.0";
+assert(
+  sageRequestUrl("ProfitAndLoss/Get", { apiKey: "k", companyId: "42" }).startsWith(
+    "https://resellers.accounting.sageone.co.za/api/2.0.0/ProfitAndLoss/Get",
+  ),
+  "sync honours SAGE_SA_BASE_URL (sandbox)",
+);
+delete process.env.SAGE_SA_BASE_URL;
+const syncServer = read("src/lib/sage-sync.server.ts");
+assert(syncServer.includes("needsReencrypt"), "sync re-encrypts legacy password rows");
+assert(
+  syncServer.indexOf("fetchSageLedgerStatement(") <
+    syncServer.indexOf("reencryptSagePassword(input.clientId"),
+  "re-encrypt only after Sage accepted the login",
+);
 assert(url.includes("apikey=test-key-not-a-secret"), "apikey query");
 assert(url.includes("CompanyId=42"), "company id query");
 assert(!url.includes("oauth.accounting.sage.com"), "not the UK OAuth host");

@@ -79,7 +79,7 @@ export const Route = createFileRoute("/api/sage/sync")({
           const message = err instanceof Error ? err.message : "Sync failed";
           const status = /not connected|Client not found/i.test(message)
             ? 404
-            : /SAGE_SA_API_KEY is not set/i.test(message)
+            : /SAGE_SA_(API|PASSWORD)_KEY (or SAGE_SA_PASSWORD_KEY )?is not set/i.test(message)
               ? 503
               : /left unchanged|rejected the login/i.test(message)
                 ? 409

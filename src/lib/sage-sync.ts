@@ -2,8 +2,9 @@
  * Sage Business Cloud Accounting (South Africa) statement pull.
  * Basic auth + apikey query. No OAuth.
  *
- * https://accounting.sageone.co.za/api/2.0.0
+ * Host: sageApiBase() — SAGE_SA_BASE_URL, default https://accounting.sageone.co.za/api/2.0.0
  */
+import { SAGE_SA_LIVE_API_BASE, sageApiBase } from "@/lib/sage-config";
 import {
   finalizeCollections,
   skippedCollections,
@@ -25,7 +26,8 @@ import {
 } from "@/lib/statement-period";
 import { periodMonthsBetween } from "@/lib/xero";
 
-export const SAGE_SA_API_BASE = "https://accounting.sageone.co.za/api/2.0.0";
+/** Live host. The host actually called is sageApiBase() (SAGE_SA_BASE_URL). */
+export const SAGE_SA_API_BASE = SAGE_SA_LIVE_API_BASE;
 export const SAGE_STATEMENT_SOURCE = "sage" as const;
 
 const CATEGORY = 1;
@@ -107,9 +109,7 @@ type SageNode = {
 
 type FlatNode = { node: SageNode; parent: SageNode | null };
 
-export function sageCredentialsConfigured(): boolean {
-  return Boolean(process.env.SAGE_SA_API_KEY?.trim());
-}
+export { sageApiBase, sageCredentialsConfigured } from "@/lib/sage-config";
 
 export function redactSageSecrets(text: string, secrets: string[] = []): string {
   let out = text.replace(/apikey=[^&\s]+/gi, "apikey=[redacted]");
@@ -128,7 +128,7 @@ export function sageRequestUrl(
   auth: Pick<SageAuth, "apiKey" | "companyId">,
   query: Record<string, string> = {},
 ): string {
-  const url = new URL(`${SAGE_SA_API_BASE}/${path.replace(/^\//, "")}`);
+  const url = new URL(`${sageApiBase()}/${path.replace(/^\//, "")}`);
   url.searchParams.set("apikey", auth.apiKey);
   url.searchParams.set("CompanyId", auth.companyId);
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);

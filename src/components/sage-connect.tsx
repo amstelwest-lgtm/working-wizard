@@ -160,8 +160,8 @@ export function SageConnectCard({
           fills in the same way.
         </p>
         <p className="ledger-connect__meta">
-          Admins: set <code className="ledger-connect__code">SAGE_SA_API_KEY</code> to enable
-          live connect.
+          Admins: set <code className="ledger-connect__code">SAGE_SA_API_KEY</code> and{" "}
+          <code className="ledger-connect__code">SAGE_SA_PASSWORD_KEY</code> to enable live connect.
         </p>
       </div>
     );
