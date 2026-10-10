@@ -2,7 +2,7 @@
  * Financial statement extraction server functions.
  *
  * extractFinancials        — legacy CSV/Excel/text path (pattern + AI text)
- * extractPDFsWithAI        — AI-powered PDF path via Claude Sonnet 4.6 (document)
+ * extractPDFsWithAI        — AI-powered PDF path via Claude Sonnet 5.5 (document)
  *                            Accepts up to 3 PDFs, merges, normalises, returns full schema
  */
 import { createServerFn } from "@tanstack/react-start";
@@ -24,7 +24,11 @@ import type {
   CashFlowStatement,
 } from "@/lib/extraction-types";
 import { assessFlatExtraction, assessMergedExtraction, assertUsable } from "@/lib/upload-quality";
-import { blankDisallowedSections, mergeStatementFields, parseStatementText } from "@/lib/statement-parse";
+import {
+  blankDisallowedSections,
+  mergeStatementFields,
+  parseStatementText,
+} from "@/lib/statement-parse";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import {
   financialExtractionPrompt,

@@ -27,10 +27,13 @@ assert(AGENT_TOOLS.join(",") === sharedTools.join(","), "milon-bot tool list is 
 
 const claudeSrc = readFileSync(resolve("supabase/functions/milon-bot/claude.ts"), "utf8");
 const sharedClaude = readFileSync(resolve("supabase/functions/_shared/agent-core/claude.ts"), "utf8");
+const modelSrc = readFileSync(resolve("supabase/functions/_shared/claude-model.ts"), "utf8");
 assert(
-  claudeSrc.includes('const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6"'),
-  "model default stays claude-sonnet-4-6",
+  modelSrc.includes('Deno.env.get("CLAUDE_MODEL") || CLAUDE_SONNET_55'),
+  "edge model id comes from CLAUDE_MODEL or the Sonnet 5.5 constant",
 );
+assert(claudeSrc.includes("claude-model.ts"), "milon-bot uses the shared edge model id");
+assert(!claudeSrc.includes("claude-sonnet-4-6"), "milon-bot does not default to Sonnet 4.6");
 assert(claudeSrc.includes("https://api.anthropic.com/v1/messages"), "messages endpoint is unchanged");
 assert(claudeSrc.includes("tool_use"), "tool-use parsing is unchanged");
 assert(

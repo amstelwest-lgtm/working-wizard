@@ -1,10 +1,11 @@
 /**
  * Thin wrapper around the Anthropic Messages API.
  * Uses ANTHROPIC_API_KEY from Supabase secrets.
- * Model overridable via CLAUDE_MODEL env; defaults to Claude Sonnet 4.6.
+ * Model overridable via CLAUDE_MODEL env; defaults to Claude Sonnet 5.5.
  */
+import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
+import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 
-const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
 const API_URL = "https://api.anthropic.com/v1/messages";
 
 export interface ClaudeResponse {
@@ -35,11 +36,14 @@ export async function callClaude(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: CLAUDE_MODEL,
       system,
       messages: [{ role: "user", content: user }],
-      temperature: opts?.temperature ?? 0.3,
       max_tokens: opts?.maxTokens ?? 512,
+      ...claudeRequestFields({
+        model: CLAUDE_MODEL,
+        temperature: opts?.temperature ?? 0.3,
+      }),
     }),
   });
 

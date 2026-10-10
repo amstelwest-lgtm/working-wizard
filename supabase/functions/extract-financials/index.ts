@@ -1,11 +1,13 @@
 // Extracts a structured financials JSON from an uploaded financial statement
-// (CSV text, Excel-as-CSV text, or PDF as base64) using Claude Sonnet 4.6.
+// (CSV text, Excel-as-CSV text, or PDF as base64) using Claude Sonnet 5.5.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 import {
   CONTRA_ASSET_EXTRACTION_RULE,
   reconcileFlatFinancials,
 } from "../../../src/lib/contra-assets.ts";
 import { statementModelParts } from "../../../src/lib/statement-text-layer.ts";
+import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
+import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 import { buildTextExtractionPayload } from "./prompt.ts";
 
 const corsHeaders = {
@@ -34,8 +36,6 @@ const FIELDS = [
   "employees",
   "founderHours",
 ];
-
-const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
 
 const SYSTEM = `You are a financial-statement parser. Extract the following figures from the supplied document and return ONLY valid JSON, no prose, no markdown.
 
@@ -165,9 +165,10 @@ Deno.serve(async (req: Request) => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: CLAUDE_MODEL,
         max_tokens: 4096,
         messages: [{ role: "user", content }],
+        ...claudeRequestFields({ model: CLAUDE_MODEL }),
       }),
     });
 
@@ -222,7 +223,7 @@ Deno.serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         financials: out,
-        debug: { textChars: debugTextChars, textLayer: usedTextLayer, model: MODEL },
+        debug: { textChars: debugTextChars, textLayer: usedTextLayer, model: CLAUDE_MODEL },
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

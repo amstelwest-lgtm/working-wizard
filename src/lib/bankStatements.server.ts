@@ -1,7 +1,7 @@
 /**
  * bankStatements.server.ts
  * TanStack Start server function — sends one or more bank statements (PDF/CSV)
- * to Anthropic Claude (claude-sonnet-4-6) and returns a drafted basic income
+ * to Anthropic Claude (claude-sonnet-5-5) and returns a drafted basic income
  * statement built from the transaction activity. Server-side only; the API key
  * never reaches the browser.
  *

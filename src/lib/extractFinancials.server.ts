@@ -1,6 +1,6 @@
 /**
  * extractFinancials.server.ts
- * TanStack Start server function — sends a PDF to Claude Sonnet 4.6 and returns
+ * TanStack Start server function — sends a PDF to Claude Sonnet 5.5 and returns
  * structured financial data. Server-side only; the API key never reaches the browser.
  */
 

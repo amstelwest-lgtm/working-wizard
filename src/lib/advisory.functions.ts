@@ -25,6 +25,7 @@ import { gatePrecardGeneration, recordPrecardGeneration } from "@/lib/precard-ca
  */
 
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import { claudeRequestFields } from "@/lib/claude-request";
 import { buildAdvisoryModelPayload } from "@/lib/advisory-draft-prompt";
 import { rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { parseOperatingProfile } from "@/lib/client-profile";
@@ -255,6 +256,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
         system: sealed.system,
         messages: [{ role: "user", content: sealed.user }],
         max_tokens: 2048,
+        ...claudeRequestFields({ model: CLAUDE_MODEL }),
       }),
     });
 

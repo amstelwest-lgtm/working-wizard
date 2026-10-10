@@ -222,7 +222,7 @@ async function handleAskAi(req: Request): Promise<Response> {
   });
   const { system, user: userPrompt } = sealed;
 
-  // ── Call Claude Sonnet 4.6 ────────────────────────────────────────────────
+  // ── Call Claude Sonnet 5.5 ────────────────────────────────────────────────
   let claudeResult;
   try {
     claudeResult = await callClaude(system, userPrompt);

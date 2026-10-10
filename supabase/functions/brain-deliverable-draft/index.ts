@@ -19,6 +19,8 @@ import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { partyNamesInBrain } from "../brain-propose/prompt.ts";
 import { buildDeliverableDraftPayload } from "./prompt.ts";
 import { quotedStatementFigures, ratioPromptLines, STATEMENT_FIGURE_RULES } from "../../../src/lib/statement-margin.ts";
+import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
+import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 
 // --- logic (sync with src/lib/client-brain-deliverable.ts) ---
 
@@ -154,7 +156,6 @@ function filterNewDeliverableDraft(
 
 // --- Claude API ---
 
-const CLAUDE_MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
 async function callClaude(
@@ -181,8 +182,11 @@ async function callClaude(
       model: CLAUDE_MODEL,
       system,
       messages: [{ role: "user", content: user }],
-      temperature: opts?.temperature ?? 0.3,
       max_tokens: opts?.maxTokens ?? 512,
+      ...claudeRequestFields({
+        model: CLAUDE_MODEL,
+        temperature: opts?.temperature ?? 0.3,
+      }),
     }),
   });
 
