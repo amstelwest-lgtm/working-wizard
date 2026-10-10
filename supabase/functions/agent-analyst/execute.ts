@@ -201,6 +201,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const kind = typeof args.kind === "string" ? args.kind.trim() : "";
   const detail = typeof args.detail === "string" ? args.detail.trim().slice(0, 2000) : "";
   if (!title) return { error: "A finding needs a title." };
+  if (!detail) return { error: "A finding needs a detail." };
   if (!findingKindAllowed(kind)) {
     return { error: `kind must be one of: ${FINDING_KINDS.join(", ")}.` };
   }
@@ -309,7 +310,10 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     client_id: ctx.clientId,
     firm_id: ctx.firmId,
     from_agent: "analyst",
-    to_agent: null,
+    // The route trigger still copies a finding onto the financial-manager queue
+    // when this is null, but the row itself then has no recipient. Earlier
+    // findings were addressed to the financial manager.
+    to_agent: "financial_manager",
     type: "finding",
     payload: {
       finding_id: data.id,

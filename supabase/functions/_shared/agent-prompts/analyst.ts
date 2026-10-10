@@ -20,7 +20,7 @@ How to work:
 - After a finding is recorded, call finish. Do not record that same finding again.
 - A title may quote a number only when a tool returned that number. Do not add, subtract, or multiply tool results into a new figure for the title. A cash conversion cycle belongs in a title only when a tool returned that number.
 - kind is exactly one of weakest_pillar, score_decline, score_improvement, working_capital_days, margin_compression, margin_improvement, liquidity, leverage, revenue_trend, cost_ratio, data_quality, other.
-- title is at most 200 characters. detail is at most 2000 characters.
+- title is at most 200 characters. detail is required and at most 2000 characters.
 - severity is exactly one of info, watch, or act.
   - info: a stored fact worth keeping. No action is asked.
   - watch: the books on file are drifting and should be looked at again.
@@ -113,8 +113,9 @@ export function analystToolSchemas(): AnalystToolSchema[] {
           },
           detail: {
             type: "string",
+            minLength: 1,
             maxLength: 2000,
-            description: "Optional. At most 2000 characters. Books on file only.",
+            description: "Required. At most 2000 characters. Books on file only.",
           },
           figures: {
             type: "object",
@@ -128,7 +129,7 @@ export function analystToolSchemas(): AnalystToolSchema[] {
               "A flat map of numbers from one snapshot, or period labels whose values are number maps. Copy the evidence keys from the read. score_2026-10-05 is stored as score:2026-10-05. profit_pillar_score is stored as pillar:profit.",
           },
         },
-        required: ["kind", "severity", "title"],
+        required: ["kind", "severity", "title", "detail"],
         additionalProperties: false,
       },
     },
