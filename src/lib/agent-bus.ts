@@ -231,11 +231,22 @@ function looseKey(value: string): string {
   return value.toLowerCase().replace(/[\s_]+/g, "");
 }
 
-/** Map a cited key onto the key a read actually returned. */
+/**
+ * Map a cited key onto the key a read actually returned.
+ * When the pool has both `debtor_days` and `Debtor Days`, the display label wins
+ * so the mixed-period check sees one key.
+ */
 export function canonicalEvidenceKey(key: string, poolKeys: ReadonlySet<string>): string {
-  if (poolKeys.has(key)) return key;
-  const exact = [...poolKeys].find((candidate) => candidate.toLowerCase() === key.toLowerCase());
-  if (exact) return exact;
+  const collapsed = looseKey(key);
+  const looseMatches = [...poolKeys].filter((candidate) => looseKey(candidate) === collapsed);
+  if (looseMatches.length > 0) {
+    const display = looseMatches.find((candidate) => candidate.includes(" ") || /[A-Z]/.test(candidate));
+    if (display) return display;
+    if (poolKeys.has(key)) return key;
+    const exact = looseMatches.find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    if (exact) return exact;
+    return looseMatches[0];
+  }
 
   const score = key.match(/^score[_:](\d{4})[-_](\d{2})[-_](\d{2})$/i);
   if (score) return `score:${score[1]}-${score[2]}-${score[3]}`;
@@ -251,9 +262,6 @@ export function canonicalEvidenceKey(key: string, poolKeys: ReadonlySet<string>)
   const bare = key.toLowerCase();
   if (PILLAR_IDS.has(bare) && poolKeys.has(`pillar:${bare}`)) return `pillar:${bare}`;
 
-  const collapsed = looseKey(key);
-  const loose = [...poolKeys].find((candidate) => looseKey(candidate) === collapsed);
-  if (loose) return loose;
   return key;
 }
 
@@ -271,6 +279,30 @@ function poolKeySet(reads: StoredFigures[]): Set<string> {
     for (const key of Object.keys(row.figures)) keys.add(key);
   }
   return keys;
+}
+
+/** One key per alias, display label first, before a period is chosen. */
+function normalizeFigureMap(
+  figures: Record<string, number>,
+  poolKeys: ReadonlySet<string>,
+): Record<string, number> {
+  const entries = Object.entries(figures).sort(([a], [b]) => {
+    const aPreferred = a === canonicalEvidenceKey(a, poolKeys) ? 0 : 1;
+    const bPreferred = b === canonicalEvidenceKey(b, poolKeys) ? 0 : 1;
+    return aPreferred - bPreferred;
+  });
+  const out: Record<string, number> = {};
+  for (const [key, value] of entries) {
+    const canon = canonicalEvidenceKey(key, poolKeys);
+    if (canon in out && !figuresClose(out[canon], value)) continue;
+    out[canon] = value;
+  }
+  return out;
+}
+
+function normalizeStoredReads(reads: StoredFigures[]): StoredFigures[] {
+  const poolKeys = poolKeySet(reads);
+  return reads.map((row) => ({ ...row, figures: normalizeFigureMap(row.figures, poolKeys) }));
 }
 
 function normalizeLabel(value: string): string {
@@ -442,7 +474,7 @@ export function groundFindingEvidence(input: {
   pool: StoredFigures[];
   claimedFigures?: unknown;
 }): { ok: true; evidence: FindingEvidence } | { ok: false; error: string } {
-  const reads = input.pool.filter((row) => Object.keys(row.figures).length > 0);
+  const reads = normalizeStoredReads(input.pool.filter((row) => Object.keys(row.figures).length > 0));
   if (reads.length === 0) {
     return {
       ok: false,

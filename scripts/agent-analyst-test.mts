@@ -24,6 +24,7 @@ import {
   analystRunSummary,
   analystToolAllowed,
   collectStoredReads,
+  dedupePeriodOf,
   evidenceKeysNote,
   canonicalComparableKey,
   executeAnalystGate,
@@ -128,7 +129,10 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(typeof props.severity?.description === "string" && String(props.severity.description).includes("watch"), "severity describes when to use each value");
   assert(JSON.stringify(props.kind?.enum) === JSON.stringify([...FINDING_KINDS]), "kind is the fixed finding enum");
   assert(props.title?.maxLength === 200, "title is capped at 200 characters");
+  assert(props.detail?.minLength === 1, "detail cannot be empty");
   assert(props.detail?.maxLength === 2000, "detail is capped at 2000 characters");
+  const required = finding?.input_schema.required as string[] | undefined;
+  assert(required?.includes("detail"), "detail is required on record_finding");
   const figureShapes = (props.figures?.additionalProperties as { anyOf?: Array<{ type?: string }> } | undefined)?.anyOf;
   assert(figureShapes?.some((shape) => shape.type === "number"), "a flat figure value is a number");
   assert(figureShapes?.some((shape) => shape.type === "object"), "a period map is allowed inside figures");
@@ -282,6 +286,40 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(canonicalEvidenceKey("score_2026-10-05", aliasKeys) === "score:2026-10-05", "score_date aliases to score:date");
   assert(canonicalEvidenceKey("profit_pillar_score", aliasKeys) === "pillar:profit", "profit_pillar_score aliases to pillar:profit");
   assert(canonicalEvidenceKey("debtor_days", aliasKeys) === "Debtor Days", "a snake_case ratio aliases to the stored label");
+  const bothSpellings = new Set(["debtor_days", "Debtor Days", "creditor_days", "Creditor Days"]);
+  assert(
+    canonicalEvidenceKey("debtor_days", bothSpellings) === "Debtor Days",
+    "the display label wins when the pool has both spellings",
+  );
+  const sepDays = {
+    snapshotId: "snap-sep",
+    periodLabel: "Sep 2026",
+    figures: { "Debtor Days": 25, "Creditor Days": 37 },
+  };
+  const octDays = {
+    snapshotId: "snap-oct",
+    periodLabel: "Oct 2026",
+    figures: { debtor_days: 25, creditor_days: 37 },
+  };
+  const aliasedMix = groundFindingEvidence({
+    pool: [sepDays, octDays],
+    claimedFigures: { debtor_days: 25, creditor_days: 37 },
+  });
+  assert(aliasedMix.ok === false, "alias keys do not hide a second period that holds the same figures");
+  if (!aliasedMix.ok) {
+    assert(aliasedMix.error.includes("more than one period"), "the alias mix asks for one map per period");
+    assert(!aliasedMix.error.includes("snap-oct"), "the alias mix does not stamp the October snapshot");
+  }
+  const sepOnly = groundFindingEvidence({
+    pool: [sepDays, { ...octDays, figures: { debtor_days: 40, creditor_days: 50 } }],
+    claimedFigures: { debtor_days: 25, creditor_days: 37 },
+  });
+  assert(sepOnly.ok === true, "September's display keys match a snake_case claim");
+  if (sepOnly.ok) {
+    assert(sepOnly.evidence.snapshot_id === "snap-sep", "the matching period is September, not the later snapshot");
+    const stored = sepOnly.evidence.figures as Record<string, number>;
+    assert(stored["Debtor Days"] === 25 && stored["Creditor Days"] === 37, "evidence keeps the display keys");
+  }
   const aliased = groundFindingEvidence({
     pool: [{ snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { "score:2026-10-05": 78, "pillar:profit": 70 } }],
     claimedFigures: { score_2026_10_05: 78, profit_pillar_score: 70 },
@@ -762,6 +800,45 @@ const DAY = 24 * 60 * 60 * 1000;
   });
   assert(legacyDays?.id === "legacy-days", "flat Debtor Days on a period match the nested working-capital finding");
 
+  assert(
+    dedupePeriodOf({
+      periodLabel: null,
+      figures: { "Sep 2026": { "pillar:profit": 58 }, "2026-10-08": { "score:2026-10-08": 71 } },
+    }) === "Sep 2026",
+    "a nested statement period is kept and a score-history date is not",
+  );
+  assert(
+    dedupePeriodOf({
+      periodLabel: null,
+      figures: { "Sep 2026": { "pillar:profit": 58 }, "Oct 2026": { "pillar:profit": 60 } },
+    }) === null,
+    "two statement periods are not collapsed to one",
+  );
+  const nestedPillar = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "weakest_pillar",
+      figures: { "Sep 2026": { "pillar:profit": 58 }, "2026-10-08": { "score:2026-10-08": 71 } },
+      periodLabel: null,
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "69471b80",
+        kind: "weakest_pillar",
+        figures: { profit: 58 },
+        seenAtMs: now - day,
+        periodLabel: "Sep 2026",
+        snapshotId: "snap-sep",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(
+    nestedPillar?.id === "69471b80",
+    "a nested Sep 2026 profit pillar matches the keeper even when period_label is null",
+  );
+
   const legacySql = readFileSync(
     resolve("supabase/migrations/20261011040000_agent_findings_legacy_normalize.sql"),
     "utf8",
@@ -781,6 +858,22 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(legacySql.includes("2faf551f-a965-40b4-b250-10cf47705457"), "the signup working-capital finding is documented again");
   const legacyCode = legacySql.replace(/--[^\n]*/g, "");
   assert(!legacyCode.includes("2faf551f"), "the signup working-capital finding is not superseded by the legacy cleanup");
+
+  const nested = readFileSync(
+    resolve("supabase/migrations/20261011150000_agent_findings_nested_period_dedupe.sql"),
+    "utf8",
+  );
+  assert(nested.includes("69471b80-7e6d-4ec8-b96c-a59b16fb9fce"), "the nested cleanup names the keeper");
+  assert(nested.includes("42d2fad5-"), "the nested cleanup names the Signup duplicate");
+  assert(nested.includes("superseded_by IS NULL"), "a second run does not supersede the nested row twice");
+  assert(nested.includes("GREATEST(keeper.last_seen, dup.last_seen)"), "the nested keeper last_seen moves forward");
+  assert(nested.includes("cfaa8b3d-") && nested.includes("7c147e88-"), "the null recipients are named");
+  assert(nested.includes("to_agent = 'financial_manager'"), "those messages are addressed to the financial manager");
+  assert(nested.includes("to_agent IS NULL"), "a second run does not rewrite a recipient that is already set");
+  const executeSrcForDetail = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  assert(executeSrcForDetail.includes("A finding needs a detail."), "an empty detail is refused");
+  assert(executeSrcForDetail.includes('to_agent: "financial_manager"'), "a new finding is addressed to the financial manager");
+  assert(!executeSrcForDetail.includes("to_agent: null"), "a new finding does not leave the recipient empty");
 }
 
 // A stored number in the title is attached from the read. A number no read returned is refused.
