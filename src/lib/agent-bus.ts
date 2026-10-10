@@ -546,26 +546,75 @@ export function groundFindingEvidence(input: {
     const covered = groupCovers(rows, parsed.figures);
     if (covered) covering.push({ rows, figures: covered });
   }
-  if (covering.length !== 1) {
-    const labels = [...new Set(reads.map(readLabel))].join(", ");
+  if (covering.length === 1) {
+    const winner = covering[0];
     return {
-      ok: false,
-      error: `These figures come from more than one period (${labels}). File them as { period_label: { key: value } } so one snapshot is not stamped on every period.`,
+      ok: true,
+      evidence: applyEvidenceHint(
+        {
+          snapshot_id: snapshotOf(winner.rows),
+          period_label: winner.rows.find((row) => row.periodLabel)?.periodLabel ?? null,
+          figures: winner.figures,
+        },
+        parsed.hint,
+        reads,
+      ),
     };
   }
-  const winner = covering[0];
+  const nested = nestUnambiguousFlat(groups, parsed.figures);
+  if (nested) {
+    return { ok: true, evidence: applyEvidenceHint(nested, parsed.hint, reads) };
+  }
+  const labels = [...new Set(reads.map(readLabel))].join(", ");
   return {
-    ok: true,
-    evidence: applyEvidenceHint(
-      {
-        snapshot_id: snapshotOf(winner.rows),
-        period_label: winner.rows.find((row) => row.periodLabel)?.periodLabel ?? null,
-        figures: winner.figures,
-      },
-      parsed.hint,
-      reads,
-    ),
+    ok: false,
+    error: `These figures come from more than one period (${labels}). File them as { period_label: { key: value } } so one snapshot is not stamped on every period.`,
   };
+}
+
+function groupLabel(rows: StoredFigures[]): string {
+  return rows.find((row) => row.periodLabel)?.periodLabel ?? rows.find((row) => row.snapshotId)?.snapshotId ?? "period";
+}
+
+/**
+ * A flat map whose every figure lives in exactly one period is filed under
+ * those periods. Score history (`score:2026-10-05` beside `score:2026-10-06`)
+ * is that case. A figure that fits more than one period stays a rejection.
+ */
+function nestUnambiguousFlat(
+  groups: Map<string, StoredFigures[]>,
+  figures: Record<string, number>,
+): FindingEvidence | null {
+  const nested: Record<string, Record<string, number>> = {};
+  const rowsByLabel = new Map<string, StoredFigures[]>();
+  for (const [key, value] of Object.entries(figures)) {
+    const homes: Array<{ label: string; rows: StoredFigures[]; stored: number }> = [];
+    for (const rows of groups.values()) {
+      let stored: number | undefined;
+      for (const row of rows) {
+        const candidate = row.figures[key];
+        if (typeof candidate === "number" && figuresClose(value, candidate)) stored = candidate;
+      }
+      if (stored == null) continue;
+      homes.push({ label: groupLabel(rows), rows, stored });
+    }
+    if (homes.length !== 1) return null;
+    const home = homes[0];
+    const bucket = nested[home.label] ?? {};
+    bucket[key] = home.stored;
+    nested[home.label] = bucket;
+    rowsByLabel.set(home.label, home.rows);
+  }
+  const labels = Object.keys(nested);
+  if (labels.length === 0) return null;
+  if (labels.length === 1) {
+    return {
+      snapshot_id: snapshotOf(rowsByLabel.get(labels[0]) ?? []),
+      period_label: labels[0],
+      figures: nested[labels[0]],
+    };
+  }
+  return { snapshot_id: null, period_label: null, figures: nested };
 }
 
 const PERIOD_LABEL =
@@ -672,6 +721,8 @@ export function stripCitationNoise(text: string): string {
       " ",
     )
     .replace(/\b\d+(?:\.\d+)?\s*-\s*days?\b/gi, " ")
+    .replace(/\bscore[_: ]\d{4}-\d{2}-\d{2}\b/gi, " ")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:[\u2010-\u2015\-]|to)\s*\d+(?:\.\d+)?\s+days?\b/gi, " ")
     .replace(
       /\b\d{4}-\d{2}-\d{2}(?:[tT ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/g,
       " ",
@@ -706,7 +757,9 @@ function scaleOfSuffix(suffix: string): number {
 
 /** `412k`, `R412k`, and `$0.4m` become the stored-figure scale. `412,000` stays one number. */
 export function citedNumbers(text: string): CitedNumber[] {
-  const matches = stripCitationNoise(text).match(CITED_NUMBER) ?? [];
+  // A hyphen between numbers is a range, not a minus. "30-60" must not become -60.
+  const cleaned = stripCitationNoise(text).replace(/(\d)\s*[\u2010-\u2015\-]\s*(?=\d)/g, "$1 ");
+  const matches = cleaned.match(CITED_NUMBER) ?? [];
   const out: CitedNumber[] = [];
   for (const raw of matches) {
     const suffix = raw.trim().match(/[kmb]\s*$/i)?.[0]?.toLowerCase() ?? "";

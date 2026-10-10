@@ -70,6 +70,7 @@ function parseRun(row: Record<string, unknown>): AgentRunRow | null {
 
 function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
   if (row.superseded_by) return null;
+  if (typeof row.dismissed_reason === "string" && row.dismissed_reason.trim()) return null;
   if (!isAgent(row.agent) || typeof row.id !== "string" || typeof row.title !== "string") return null;
   return {
     id: row.id,
@@ -116,7 +117,7 @@ export function useAgentActivity(clientId: string): AgentActivity {
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),
         table("agent_findings")
-          .select("id, agent, client_id, title, detail, evidence, as_of, created_at, superseded_by")
+          .select("id, agent, client_id, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason")
           .eq("client_id", id)
           .order("created_at", { ascending: false })
           .limit(ROW_LIMIT),
