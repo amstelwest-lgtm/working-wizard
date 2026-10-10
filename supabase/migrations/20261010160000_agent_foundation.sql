@@ -9,7 +9,7 @@
 --   UPDATE public.agent_settings
 --      SET value = 'true'::jsonb, updated_at = now()
 --    WHERE key = 'enabled';
---   UPDATE cron.job SET active = true WHERE jobname = 'agent-dispatch';
+--   SELECT cron.alter_job(job_id := (SELECT jobid FROM cron.job WHERE jobname = 'agent-dispatch'), active := true);
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS pgmq;
@@ -858,19 +858,21 @@ END $$;
 
 -- Schedule the dispatcher every minute, then turn the job off.
 -- Re-running unschedules the previous job and leaves the new one inactive.
+-- The migration role cannot write cron.job rows; cron.alter_job is the granted path.
+-- A failure here aborts the migration.
 DO $$
+DECLARE
+  v_id bigint;
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'agent-dispatch') THEN
       PERFORM cron.unschedule('agent-dispatch');
     END IF;
-    PERFORM cron.schedule(
+    v_id := cron.schedule(
       'agent-dispatch',
       '* * * * *',
       $cron$SELECT public.agent_dispatch_tick()$cron$
     );
-    UPDATE cron.job SET active = false WHERE jobname = 'agent-dispatch';
+    PERFORM cron.alter_job(job_id := v_id, active := false);
   END IF;
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'agent-dispatch schedule skipped: %', SQLERRM;
 END $$;

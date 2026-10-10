@@ -322,11 +322,17 @@ const client = "11111111-1111-1111-1111-111111111111";
   assert(sql.includes("supabase_realtime"), "runs, messages, and findings join realtime");
   assert(sql.includes("agent_runs") && sql.includes("agent_messages") && sql.includes("agent_findings"), "realtime tables");
   assert(sql.includes("VALUES ('enabled', 'false'::jsonb)"), "dispatch flag starts false");
-  assert(sql.includes("SET active = false WHERE jobname = 'agent-dispatch'"), "cron job is created inactive");
+  assert(sql.includes("cron.alter_job"), "the schedule is disabled with cron.alter_job");
+  assert(sql.includes("active := false"), "cron job is created inactive");
+  assert(!sql.includes("UPDATE cron.job"), "the migration does not update cron.job");
+  assert(!sql.includes("DELETE FROM cron.job"), "the migration does not delete from cron.job");
   assert(sql.includes("p_agent::text || E'\\n' || p_client_id::text || E'\\n' || p_trigger || E'\\n'"), "SQL key material matches the TypeScript material");
   assert(!sql.includes("sk-") && !sql.includes("service_role_key' ||"), "the migration does not embed a secret");
   assert(
-    sql.includes("UPDATE public.agent_settings") && sql.includes("UPDATE cron.job SET active = true"),
+    sql.includes("UPDATE public.agent_settings") &&
+      sql.includes(
+        "SELECT cron.alter_job(job_id := (SELECT jobid FROM cron.job WHERE jobname = 'agent-dispatch'), active := true)",
+      ),
     "the flip SQL is documented in the migration",
   );
 }
