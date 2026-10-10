@@ -179,9 +179,16 @@ function pillarScores(raw: unknown): Record<string, number> {
   return out;
 }
 
+function periodText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 /**
- * Flat statement figures, plus one row per health pillar set and per score-history
- * period. A recorded finding is not a read: the caller skips record_finding.
+ * Flat statement figures, plus one row per health pillar set, per statement-history
+ * period, and per score-history period. A recorded finding is not a read: the
+ * caller skips record_finding.
  */
 export function collectStoredReads(
   payload: unknown,
@@ -199,6 +206,21 @@ export function collectStoredReads(
       snapshot.periodLabel ?? (typeof row.period_label === "string" ? row.period_label : null);
     const id = snapshot.snapshotId ?? (typeof row.snapshot_id === "string" ? row.snapshot_id : null);
     reads.push({ snapshotId: id, periodLabel: period, figures: pillars });
+  }
+  if (Array.isArray(row.periods)) {
+    for (const item of row.periods) {
+      if (!item || typeof item !== "object") continue;
+      const rec = item as Record<string, unknown>;
+      const period = periodText(rec.period_label) ?? periodText(rec.period_date);
+      if (!period) continue;
+      const figures = { ...numericFigures(rec.ratios), ...numericFigures(rec.figures) };
+      if (Object.keys(figures).length === 0) continue;
+      reads.push({
+        snapshotId: typeof rec.snapshot_id === "string" ? rec.snapshot_id : null,
+        periodLabel: period,
+        figures,
+      });
+    }
   }
   if (Array.isArray(row.scores)) {
     for (const item of row.scores) {

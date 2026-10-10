@@ -17,6 +17,7 @@ import {
   statementVariance,
   type AnalystToolName,
 } from "../../../src/lib/agent-analyst.ts";
+import { figuresPeriodLabelFrom } from "../../../src/lib/statement-period.ts";
 
 export type AnalystExecCtx = {
   clientId: string;
@@ -83,25 +84,33 @@ export async function executeAnalystTool(
     const snaps = await latestSnapshots(ctx.db, ctx.clientId, 1);
     const snap = snaps.rows[0];
     const record = asRecord(payload) ?? {};
-    const { data: stored, error: storedError } = await ctx.db
-      .from("client_score_history")
-      .select("period_date, score")
-      .eq("client_id", ctx.clientId)
-      .order("period_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (storedError) return { error: storedError.message };
-    const storedRow = asRecord(stored);
+    const [storedRes, booksRes] = await Promise.all([
+      ctx.db
+        .from("client_score_history")
+        .select("period_date, score")
+        .eq("client_id", ctx.clientId)
+        .order("period_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      ctx.db.from("clients").select("financials").eq("id", ctx.clientId).maybeSingle(),
+    ]);
+    if (storedRes.error) return { error: storedRes.error.message };
+    if (booksRes.error) return { error: booksRes.error.message };
+    const storedRow = asRecord(storedRes.data);
     const labeled = labelHealthScore({
       liveOverall: finiteScore(record.overall),
       storedScore: finiteScore(storedRow?.score),
       storedAsOf: typeof storedRow?.period_date === "string" ? storedRow.period_date : null,
     });
+    const snapshotLabel =
+      (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null;
+    // Live books win. QA US is the September statement range, not the latest snapshot.
+    const periodLabel = figuresPeriodLabelFrom(asRecord(booksRes.data?.financials), snapshotLabel);
     return {
       ...record,
       ...labeled,
       snapshot_id: snap ? String(snap.id) : null,
-      period_label: (snap?.period_label as string | null) ?? (record.period_label as string | null) ?? null,
+      period_label: periodLabel,
     };
   }
 
