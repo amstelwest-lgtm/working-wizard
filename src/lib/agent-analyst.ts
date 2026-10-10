@@ -10,6 +10,7 @@ import {
   sanitizeAgentError,
   type StoredFigures,
 } from "./agent-bus.ts";
+import { CLAUDE_SONNET_55 } from "./claude-request";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 
@@ -215,18 +216,47 @@ export function collectStoredReads(
   return reads;
 }
 
-/** Sonnet 4.6 list rates: $3 / MTok in, $15 / MTok out. Cache write is 1.25×, cache read is 0.1×. */
+/**
+ * List rates in USD per million tokens. Sonnet 4.6 stays so a CLAUDE_MODEL
+ * override still prices agent_runs. Cache writes are the 5-minute tier.
+ */
+export const CLAUDE_MODEL_RATES_USD_PER_MTOK = {
+  "claude-sonnet-4-6": {
+    input: 3,
+    output: 15,
+    cacheWrite5m: 3.75,
+    cacheRead: 0.3,
+  },
+  "claude-sonnet-5-5": {
+    input: 2,
+    output: 10,
+    cacheWrite5m: 2.5,
+    cacheRead: 0.1,
+  },
+} as const;
+
+type PricedClaudeModel = keyof typeof CLAUDE_MODEL_RATES_USD_PER_MTOK;
+
+function ratesForModel(model: string): (typeof CLAUDE_MODEL_RATES_USD_PER_MTOK)[PricedClaudeModel] {
+  if (Object.prototype.hasOwnProperty.call(CLAUDE_MODEL_RATES_USD_PER_MTOK, model)) {
+    return CLAUDE_MODEL_RATES_USD_PER_MTOK[model as PricedClaudeModel];
+  }
+  return CLAUDE_MODEL_RATES_USD_PER_MTOK[CLAUDE_SONNET_55];
+}
+
 export function analystRunCostUsd(
   inputTokens: number,
   outputTokens: number,
   cacheWriteTokens = 0,
   cacheReadTokens = 0,
+  model = CLAUDE_SONNET_55,
 ): number {
+  const rates = ratesForModel(model);
   const cost =
-    (Math.max(0, inputTokens) * 3 +
-      Math.max(0, cacheWriteTokens) * 3.75 +
-      Math.max(0, cacheReadTokens) * 0.3 +
-      Math.max(0, outputTokens) * 15) /
+    (Math.max(0, inputTokens) * rates.input +
+      Math.max(0, cacheWriteTokens) * rates.cacheWrite5m +
+      Math.max(0, cacheReadTokens) * rates.cacheRead +
+      Math.max(0, outputTokens) * rates.output) /
     1_000_000;
   return Math.round(cost * 100_000) / 100_000;
 }

@@ -1,0 +1,43 @@
+/**
+ * Pure Claude request rules shared by the Node server and the Deno edge
+ * functions. No env reads: each runtime picks CLAUDE_MODEL itself.
+ *
+ * Sonnet 5.5 rejects manual thinking budgets, non-default temperature /
+ * top_p / top_k, and tool_choice "any" or "tool". Omitting `thinking` turns
+ * adaptive thinking on, and those tokens count against max_tokens. These
+ * calls were sized for a reply with thinking off, so 5.5 sends between_tools
+ * (no up-front thinking). A CLAUDE_MODEL override to any other id, including
+ * Sonnet 4.6, keeps temperature and forced tool choice.
+ */
+
+export const CLAUDE_SONNET_55 = "claude-sonnet-5-5";
+
+/** Sonnet 5.5 will not cache a prefix shorter than this. Shorter prompts still run. */
+export const SONNET_55_MIN_CACHE_TOKENS = 512;
+
+export type ClaudeToolChoice = { type: "auto" | "any" } | { type: "tool"; name: string };
+
+export function claudeRequestFields(input: {
+  model: string;
+  temperature?: number;
+  toolChoice?: ClaudeToolChoice;
+}): {
+  thinking?: { type: "between_tools" };
+  temperature?: number;
+  tool_choice?: ClaudeToolChoice;
+} {
+  if (input.model === CLAUDE_SONNET_55) {
+    const fields: {
+      thinking: { type: "between_tools" };
+      tool_choice?: ClaudeToolChoice;
+    } = { thinking: { type: "between_tools" } };
+    if (input.toolChoice) {
+      fields.tool_choice = input.toolChoice.type === "auto" ? input.toolChoice : { type: "auto" };
+    }
+    return fields;
+  }
+  const legacy: { temperature?: number; tool_choice?: ClaudeToolChoice } = {};
+  if (input.temperature != null) legacy.temperature = input.temperature;
+  if (input.toolChoice) legacy.tool_choice = input.toolChoice;
+  return legacy;
+}

@@ -4,7 +4,7 @@ description: Where LLM calls actually go in this project and what is dead code
 ---
 
 All live AI calls go **directly to Anthropic** (`https://api.anthropic.com/v1/messages`)
-with `ANTHROPIC_API_KEY`. Model is `CLAUDE_MODEL` (default `claude-sonnet-4-6`).
+with `ANTHROPIC_API_KEY`. Model is `CLAUDE_MODEL` (default `claude-sonnet-5-5`).
 
 - Numbers Q&A: Supabase Edge Function `supabase/functions/ask-ai/` (`anthropic.ts`),
   tiered disclosure + sanitiser + cache + rate limit. Client: `src/lib/ask-ai.js`.
@@ -13,6 +13,7 @@ with `ANTHROPIC_API_KEY`. Model is `CLAUDE_MODEL` (default `claude-sonnet-4-6`).
   `*.functions.ts` that import it (extraction, briefing, brain propose/deliverable).
 
 **Dead / misleading paths — do not extend them:**
+
 - `src/lib/ai.functions.ts` `askYourNumbers` is deprecated (superseded by `ask-ai`).
 - The Lovable AI gateway (`ai.gateway.lovable.dev`, `LOVABLE_API_KEY`) is no longer
   called by anything live.

@@ -1,9 +1,10 @@
 /**
  * Shared Anthropic Messages helpers for server-side Claude calls.
- * Model defaults to Claude Sonnet 4.6 via CLAUDE_MODEL.
+ * Model defaults to Claude Sonnet 5.5 via CLAUDE_MODEL.
  */
 
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import { claudeRequestFields } from "@/lib/claude-request";
 
 export type ClaudeContentPart =
   | { type: "text"; text: string }
@@ -13,7 +14,10 @@ export type ClaudeContentPart =
     };
 
 export function extractJsonText(raw: string): string {
-  return raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  return raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
 }
 
 export async function callClaudeMessages(opts: {
@@ -23,16 +27,11 @@ export async function callClaudeMessages(opts: {
 }): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY is not configured. Please add it in your project secrets.",
-    );
+    throw new Error("ANTHROPIC_API_KEY is not configured. Please add it in your project secrets.");
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    opts.timeoutMs ?? 90_000,
-  );
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 90_000);
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -47,6 +46,7 @@ export async function callClaudeMessages(opts: {
         model: CLAUDE_MODEL,
         max_tokens: opts.maxTokens ?? 8192,
         messages: [{ role: "user", content: opts.content }],
+        ...claudeRequestFields({ model: CLAUDE_MODEL }),
       }),
     });
 

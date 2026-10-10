@@ -10,6 +10,7 @@ import {
 } from "../_shared/agent-core/loop.ts";
 import { callClaudeRound } from "../_shared/agent-core/claude.ts";
 import { ANALYST_SYSTEM, analystToolSchemas } from "../_shared/agent-prompts/analyst.ts";
+import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 import { sanitizeAgentError, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
   ANALYST_MAX_ITERATIONS,
@@ -222,7 +223,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
         output_tokens: outputTokens,
         cache_write_tokens: cacheWriteTokens,
         cache_read_tokens: cacheReadTokens,
-        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens),
+        cost_usd: analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL),
         latency_ms: Date.now() - started,
         trace: result.trace,
         finished_at: new Date().toISOString(),

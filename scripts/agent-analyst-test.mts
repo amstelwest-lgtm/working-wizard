@@ -116,7 +116,7 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(schema.action === "dead", "a 4xx schema error is not retried");
   assert(!schema.error.toLowerCase().includes("claude"), "stored errors do not name the model vendor");
   assert(ANALYST_MAX_ITERATIONS === 10, "the analyst loop stops at 10 iterations");
-  assert(analystRunCostUsd(1_000_000, 1_000_000) === 18, "cost uses the $3 and $15 rates");
+  assert(analystRunCostUsd(1_000_000, 1_000_000) === 12, "cost uses the Sonnet 5.5 $2 and $10 rates");
 }
 
 // record_finding.severity is the same enum execute.ts accepts, and a rejection
@@ -358,13 +358,26 @@ const DAY = 24 * 60 * 60 * 1000;
   const turns = ANALYST_MAX_ITERATIONS;
   const prefix = promptCachePrefixCostFactor(turns);
   assert(
-    Math.abs(prefix - (1.25 + 0.1 * (turns - 1)) / turns) < 1e-12,
-    "the cached prefix writes once at 1.25x then reads at 0.1x",
+    Math.abs(prefix - (1.25 + 0.05 * (turns - 1)) / turns) < 1e-12,
+    "the cached prefix writes once at 1.25x then reads at 0.05x",
   );
   assert(prefix < 0.25, "a 10-turn cached prefix costs under a quarter of paying the input rate every turn");
-  assert(analystRunCostUsd(1_000_000, 1_000_000) === 18, "uncached input and output still use $3 and $15");
-  assert(analystRunCostUsd(0, 0, 1_000_000, 0) === 3.75, "a million cache-write tokens cost $3.75");
-  assert(analystRunCostUsd(0, 0, 0, 1_000_000) === 0.3, "a million cache-read tokens cost $0.30");
+  assert(ANALYST_SYSTEM.length / 4 >= 512, "the analyst system prompt clears the 512-token Sonnet 5.5 cache minimum");
+  assert(analystRunCostUsd(1_000_000, 1_000_000) === 12, "uncached input and output use Sonnet 5.5 $2 and $10");
+  assert(analystRunCostUsd(0, 0, 1_000_000, 0) === 2.5, "a million 5-minute cache-write tokens cost $2.50");
+  assert(analystRunCostUsd(0, 0, 0, 1_000_000) === 0.1, "a million cache-read tokens cost $0.10");
+  assert(
+    analystRunCostUsd(1_000_000, 1_000_000, 0, 0, "claude-sonnet-4-6") === 18,
+    "Sonnet 4.6 input and output stay $3 and $15",
+  );
+  assert(
+    analystRunCostUsd(0, 0, 1_000_000, 0, "claude-sonnet-4-6") === 3.75,
+    "Sonnet 4.6 cache writes stay $3.75",
+  );
+  assert(
+    analystRunCostUsd(0, 0, 0, 1_000_000, "claude-sonnet-4-6") === 0.3,
+    "Sonnet 4.6 cache reads stay $0.30",
+  );
 
   const claudeSrc = readFileSync(resolve("supabase/functions/milon-bot/claude.ts"), "utf8");
   const handlerSrc = readFileSync(resolve("supabase/functions/milon-bot/handler.ts"), "utf8");

@@ -5,8 +5,9 @@
  * request body and headers stay the same.
  */
 import { shapeCachedModelRequest } from "../_shared/agent-core/prompt-cache.ts";
+import { claudeRequestFields } from "../../../src/lib/claude-request.ts";
+import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 
-const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
 const API_URL = "https://api.anthropic.com/v1/messages";
 
 export type ClaudeContent =
@@ -70,13 +71,16 @@ export async function callClaudeRound(
       ...(shaped.betaHeader ? { "anthropic-beta": shaped.betaHeader } : {}),
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: CLAUDE_MODEL,
       system: shaped.system,
       messages,
       tools: shaped.tools,
-      ...(opts?.toolChoice ? { tool_choice: opts.toolChoice } : {}),
-      temperature: opts?.temperature ?? 0.2,
       max_tokens: opts?.maxTokens ?? 1024,
+      ...claudeRequestFields({
+        model: CLAUDE_MODEL,
+        temperature: opts?.temperature ?? 0.2,
+        toolChoice: opts?.toolChoice,
+      }),
     }),
   });
 

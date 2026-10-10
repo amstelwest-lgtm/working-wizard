@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import { claudeRequestFields } from "@/lib/claude-request";
 import { redactIdentifiers } from "@/lib/redact-identifiers";
 import {
   formatDate,
@@ -610,7 +611,7 @@ function parseAiPayload(
   return null;
 }
 
-/** Primary provider: Claude Sonnet 4.6 via Anthropic Messages API. */
+/** Primary provider: Claude Sonnet 5.5 via Anthropic Messages API. */
 async function callClaude(apiKey: string, prompt: string): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -623,6 +624,7 @@ async function callClaude(apiKey: string, prompt: string): Promise<string> {
       model: CLAUDE_MODEL,
       max_tokens: 1200,
       messages: [{ role: "user", content: prompt }],
+      ...claudeRequestFields({ model: CLAUDE_MODEL }),
     }),
   });
   if (res.status === 429) throw new Error("Rate limit hit — try again in a moment.");
