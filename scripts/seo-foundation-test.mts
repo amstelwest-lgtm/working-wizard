@@ -345,9 +345,9 @@ assert(!firms.includes("Drafted advisory reports."), "firm page drops the drafte
 assert(
   FIRM_TEAM_BULLETS.map((bullet) => bullet.title).join("|") ===
     [
-      "Milōn Bookkeeper, your AI bookkeeper for QBO and Xero.",
-      "Milōn Analyst, your AI financial analyst.",
-      "Milōn Advisor, the AI CFO legwork.",
+      "Milōn Financial Manager, data quality for QBO and Xero.",
+      "Milōn Analyst, health score and ratios.",
+      "Milōn Advisor, next moves and the advisory.",
     ].join("|"),
   "firm page names three distinct agents",
 );
@@ -364,8 +364,8 @@ assert(
   "firm page title names the AI finance team on QBO and Xero",
 );
 assert(
-  SEO_PAGES.home.title === "AI Bookkeeper & AI CFO for QuickBooks and Xero | MILŌN",
-  "home title names the bookkeeper and AI CFO",
+  SEO_PAGES.home.title === "Financial Manager & AI CFO for QBO and Xero | MILŌN",
+  "home title names the financial manager and AI CFO",
 );
 assert(SEO_PAGES.home.title.length <= 60, "home title stays within 60 characters");
 assert(SEO_PAGES.forAccountants.title.length <= 60, "firm title stays within 60 characters");
@@ -382,8 +382,8 @@ assert(!landing.includes("triple-A") && !landing.includes("Triple-A"), "landing 
 assert(!landing.includes("Milōn Accountant"), "landing drops Milōn Accountant");
 assert(
   FINANCE_TEAM.map((role) => role.name).join("|") ===
-    "Milōn Bookkeeper|Milōn Analyst|Milōn Advisor",
-  "home role strip names bookkeeper, analyst, and advisor",
+    "Milōn Financial Manager|Milōn Analyst|Milōn Advisor",
+  "home role strip names financial manager, analyst, and advisor",
 );
 assert(
   HOMEPAGE_FAQ_ITEMS[4].answer.includes("work in Milōn Bot"),

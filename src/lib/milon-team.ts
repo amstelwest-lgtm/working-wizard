@@ -10,27 +10,28 @@ import {
 export const AGENT_ORDER: readonly AgentKey[] = AGENT_KEYS;
 
 const DISPLAY_NAME: Record<AgentKey, string> = {
-  financial_manager: "Milōn Bookkeeper",
+  financial_manager: "Milōn Financial Manager",
   analyst: "Milōn Analyst",
   advisor: "Milōn Advisor",
 };
 
 const SHORT_NAME: Record<AgentKey, string> = {
-  financial_manager: "Bookkeeper",
+  financial_manager: "Financial Manager",
   analyst: "Analyst",
   advisor: "Advisor",
 };
 
 const INITIAL: Record<AgentKey, string> = {
-  financial_manager: "B",
+  financial_manager: "F",
   analyst: "A",
   advisor: "A",
 };
 
 const JOB_LINE: Record<AgentKey, string> = {
-  financial_manager: "Close, clean books, reconciliation, and sign-off readiness.",
-  analyst: "Budget, 13-week forecast, variances, and the board report.",
-  advisor: "Cash floor, debtors, covenants, tax dates, and next moves.",
+  financial_manager:
+    "Data quality from QuickBooks and Xero, the 13-week cash and budget, action points, and accountant hand-offs.",
+  analyst: "Health score, ratios, and variances.",
+  advisor: "Next moves and advisory deliverables.",
 };
 
 /** 24px stroke icons. The desk is the only renderer. */
@@ -46,6 +47,10 @@ export interface AgentHeaderStatus {
   label: string;
   tone: AgentStatusTone;
   lastRun: string | null;
+  /** Live run in progress. The status dot pulses. */
+  pulse?: boolean;
+  /** A failed run. The line stays quiet. */
+  muted?: boolean;
 }
 
 export function agentDisplayName(agent: AgentKey): string {
@@ -183,5 +188,5 @@ export function teamAgentHeaderStatus(
   if (status.lastRunAt) {
     return { label: kindLabel(status.lastRunKind), tone: "clear", lastRun };
   }
-  return { label: "On the desk", tone: "clear", lastRun: null };
+  return { label: "Not run yet", tone: "idle", lastRun: null };
 }

@@ -31,6 +31,11 @@ export type MilonTeamFeedApi = MilonTeamFeed & {
   approveJob(id: string): Promise<ApproveResult>;
   dismissJob(id: string, reason?: string): Promise<{ ok: boolean; message?: string }>;
   refresh(): void;
+  /**
+   * True when this pack was approved by the owner. The desk then says
+   * "Reviewed by you" and invites a firm sign-off. It never says signed off.
+   */
+  signoffOwner?: boolean;
 };
 
 type QueryError = { code?: string; message?: string } | null;
@@ -47,6 +52,7 @@ function draftHref(clientId: string): string {
 
 export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
   const [feed, setFeed] = useState<MilonTeamFeed>(() => ({ ...emptyMilonTeamFeed(), loading: true }));
+  const [signoffOwner, setSignoffOwner] = useState(false);
   const [tick, setTick] = useState(0);
   const loadedFor = useRef("");
 
@@ -59,6 +65,7 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
     if (!id) {
       loadedFor.current = "";
       setFeed(emptyMilonTeamFeed());
+      setSignoffOwner(false);
       return;
     }
     let cancelled = false;
@@ -90,6 +97,9 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
             .eq("client_id", id)
             .order("created_at", { ascending: false })
             .limit(40),
+          // Offered rows come from this table (status proposed, approved, or
+          // edited) and from deliverable_drafts (draft or ready). brain-propose
+          // is what inserts status=proposed. No such row means Offered stays empty.
           supabase
             .from("deliverable_drafts")
             .select("id, kind, body, status, created_at, updated_at")
@@ -256,9 +266,16 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
         error: signoffError || errors[0] || null,
       });
 
-      if (!cancelled) setFeed(next);
+      if (!cancelled) {
+        setSignoffOwner(
+          signoff?.reviewedByKind === "owner" &&
+            (signoff.status === "signed" || signoff.status === "signed_stale"),
+        );
+        setFeed(next);
+      }
     })().catch((err: unknown) => {
       if (cancelled) return;
+      setSignoffOwner(false);
       setFeed({
         ...emptyMilonTeamFeed(),
         error: err instanceof Error ? err.message : "Could not load the team feed",
@@ -381,5 +398,5 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
     [clientId, refresh],
   );
 
-  return { ...feed, approveJob, dismissJob, refresh };
+  return { ...feed, signoffOwner, approveJob, dismissJob, refresh };
 }

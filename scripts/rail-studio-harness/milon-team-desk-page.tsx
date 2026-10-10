@@ -8,7 +8,7 @@ import { useSearch } from "@tanstack/react-router";
 import { CLIENT_RAIL, ClientRailButton } from "@/components/client-studio-chrome";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
 import "../../public/ask-ai.css";
-import { DESK_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
+import { DESK_NOW, EMPTY_ACTIVITY, LIVE_ACTIVITY, LIVE_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 
 function Frame({
   clientName,
@@ -42,6 +42,14 @@ function Frame({
           {onFile ? <span className="aud">On file</span> : <span className="crumb-empty">No data yet</span>}
         </div>
         <div className="client-workspace">
+          <button
+            id="wizard-notes-pin"
+            type="button"
+            aria-label="Pin a note on this page"
+            style={{ position: "fixed", right: 16, bottom: 24, zIndex: 80, width: 40, height: 40 }}
+          >
+            pin
+          </button>
           <nav className="deliverable-rail" aria-label="Client workspace">
             {CLIENT_RAIL.map((item) => (
               <ClientRailButton
@@ -64,7 +72,8 @@ function Frame({
 export function MilonTeamDeskPage() {
   const search = useSearch({ strict: false }) as { fixture?: string };
   const empty = search.fixture === "empty";
-  const feed = useMilonTeamFeedStub(empty ? "empty" : "harbour-glass");
+  const live = search.fixture === "live";
+  const feed = useMilonTeamFeedStub(empty ? "empty" : live ? "live" : "harbour-glass");
   useEffect(() => {
     const el = document.getElementById("ask-ai-accountant");
     if (!el) return;
@@ -92,7 +101,11 @@ export function MilonTeamDeskPage() {
     <Frame clientName={empty ? "North Shed" : "Harbour Glass"} onFile={!empty}>
       <div className="tabpane on" id="pane-ask">
         <div className="milon-desk-host">
-          <MilonTeamDesk feed={feed} now={DESK_NOW} />
+          <MilonTeamDesk
+            feed={feed}
+            now={live ? LIVE_NOW : DESK_NOW}
+            live={empty ? EMPTY_ACTIVITY : live ? LIVE_ACTIVITY : null}
+          />
           <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
         </div>
       </div>
