@@ -11,14 +11,24 @@ import type { MilonTeamFeedApi } from "../src/hooks/use-milon-team-feed";
 import type { AgentKey, MilonTeamFeed, TeamAgentStatus, TeamJob } from "../src/lib/milon-team-feed";
 import { AGENT_KEYS, emptyMilonTeamFeed } from "../src/lib/milon-team-feed";
 import { PRECARD_CAP_MESSAGE } from "../src/lib/precard-cap";
-import { agentAriaLabel, agentDisplayName, agentInitial, agentShortName, formatAsOf, teamAgentHeaderStatus } from "../src/lib/milon-team";
+import { agentAriaLabel, agentDisplayName, agentInitial, agentJobLine, agentShortName, formatAsOf, teamAgentHeaderStatus } from "../src/lib/milon-team";
+import { ZA_MARKET } from "../src/lib/market/resolve";
+import {
+  deskSignoffInvite,
+  deskSignoffText,
+  figuresCheckedLine,
+  findingSentence,
+  handoffLine,
+  headerFromRun,
+  type AgentActivitySnapshot,
+} from "../src/lib/milon-team-activity";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
 const NOW = new Date("2026-10-08T12:00:00.000Z");
-const NAMES = (["Bookkeeper", "Analyst", "Advisor"] as const).map((role) => `Mil${"ō"}n ${role}`);
+const NAMES = (["Financial Manager", "Analyst", "Advisor"] as const).map((role) => `Mil${"ō"}n ${role}`);
 const BOT_ROLE = ["Acc", "ountant"].join("");
 
 function walk(dir: string, visit: (file: string, text: string) => void) {
@@ -68,13 +78,33 @@ assert(hits.length === 0, hits.join("\n") || "an in-app surface hardcodes a team
 const config = readFileSync("src/lib/milon-team.ts", "utf8");
 for (const name of NAMES) assert(config.includes(name), `config is missing ${name}`);
 assert(!config.includes(BOT_ROLE), "the config does not name the old bookkeeping role");
-assert(!config.includes("accountant"), "the agent key is bookkeeper");
+assert(!/\bbookkeeper\b/i.test(config), "the agent key is financial_manager");
 assert(!existsSync("src/components/milon-team/types.ts"), "the local type mirror is gone");
-assert(AGENT_KEYS.join(",") === "bookkeeper,analyst,advisor", "keys come from the feed");
-assert(emptyMilonTeamFeed().agents.bookkeeper.lastRunAt === null, "an empty feed has no invented last run");
-assert(agentShortName("bookkeeper") === "Bookkeeper", "short name is Bookkeeper");
-assert(agentInitial("bookkeeper") === "B", "avatar letter is B");
-assert(agentAriaLabel("bookkeeper", "Books clean ✓") === `${NAMES[0]}. Books clean ✓`, "aria label uses the display name");
+assert(AGENT_KEYS.join(",") === "financial_manager,analyst,advisor", "keys come from the feed");
+assert(emptyMilonTeamFeed().agents.financial_manager.lastRunAt === null, "an empty feed has no invented last run");
+assert(agentShortName("financial_manager") === "Financial Manager", "short name is Financial Manager");
+assert(agentInitial("financial_manager") === "F", "avatar letter is F");
+assert(
+  agentJobLine("financial_manager") ===
+    "Data quality from QuickBooks and Xero, the 13-week cash and budget, action points, and accountant hand-offs.",
+  "financial manager job line",
+);
+assert(agentJobLine("analyst") === "Health score, ratios, variances, and the diagnosis.", "analyst job line");
+assert(agentJobLine("advisor") === "Next moves and advisory deliverables.", "advisor job line");
+
+const retiredRole = ["Book", "keeper"].join("");
+const retiredTitle = `Mil${"ō"}n ${retiredRole}`;
+const oldNameHits: string[] = [];
+for (const root of ["src", "scripts"]) {
+  walk(root, (file, text) => {
+    if (file === "scripts/milon-team-test.mts") return;
+    for (const word of [retiredTitle, retiredRole]) {
+      if (text.includes(word)) oldNameHits.push(`${file} contains ${word}`);
+    }
+  });
+}
+assert(oldNameHits.length === 0, oldNameHits.join("\n") || "the retired agent name is gone from src and the tests");
+assert(agentAriaLabel("financial_manager", "Books clean ✓") === `${NAMES[0]}. Books clean ✓`, "aria label uses the display name");
 
 const botSurfaces = [
   "src/lib/milon-team.ts",
@@ -126,7 +156,7 @@ assert(formatAsOf("2025-03-01", NOW) === "1 Mar 2025", "a date in another year k
 assert(formatAsOf(null, NOW) === null, "a missing as-of date stays hidden");
 
 const idle: Record<AgentKey, TeamAgentStatus> = {
-  bookkeeper: { agent: "bookkeeper", lastRunAt: null, lastRunKind: null },
+  financial_manager: { agent: "financial_manager", lastRunAt: null, lastRunKind: null },
   analyst: { agent: "analyst", lastRunAt: null, lastRunKind: null },
   advisor: { agent: "advisor", lastRunAt: null, lastRunKind: null },
 };
@@ -158,17 +188,17 @@ assert(
 );
 assert(
   teamAgentHeaderStatus(
-    "bookkeeper",
-    { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
-    [{ id: "c", agent: "bookkeeper", title: "Close", severity: "info", source: { label: "Books", asOf: null } }],
+    "financial_manager",
+    { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
+    [{ id: "c", agent: "financial_manager", title: "Close", severity: "info", source: { label: "Books", asOf: null } }],
     NOW,
   ).label === "Books clean ✓",
   "a synced close with no watch is clean books",
 );
 assert(
   teamAgentHeaderStatus(
-    "bookkeeper",
-    { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "query" },
+    "financial_manager",
+    { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "query" },
     [],
     NOW,
   ).label === "Question logged",
@@ -223,14 +253,14 @@ function job(partial: Partial<TeamJob> & Pick<TeamJob, "id" | "status">): TeamJo
   };
 }
 
-function html(feed: MilonTeamFeedApi, initialFilter?: "all" | AgentKey) {
-  return renderToStaticMarkup(createElement(MilonTeamDesk, { feed, now: NOW, initialFilter }));
+function html(feed: MilonTeamFeedApi, initialFilter?: "all" | AgentKey, live?: AgentActivitySnapshot | null) {
+  return renderToStaticMarkup(createElement(MilonTeamDesk, { feed, now: NOW, initialFilter, live }));
 }
 
 const populated = html(
   api({
     agents: {
-      bookkeeper: { agent: "bookkeeper", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
+      financial_manager: { agent: "financial_manager", lastRunAt: "2026-10-08T10:00:00.000Z", lastRunKind: "sync" },
       analyst: { agent: "analyst", lastRunAt: "2026-10-07T12:00:00.000Z", lastRunKind: "diagnosis" },
       advisor: { agent: "advisor", lastRunAt: "2026-10-08T09:00:00.000Z", lastRunKind: "diagnosis" },
     },
@@ -248,7 +278,7 @@ const populated = html(
         blockedReason: "precard_cap",
         title: "Note the debtors past terms",
       }),
-      job({ id: "quiet", agent: "bookkeeper", status: "proposed", canApprove: false, blockedReason: "no_data", title: "Waiting on a statement" }),
+      job({ id: "quiet", agent: "financial_manager", status: "proposed", canApprove: false, blockedReason: "no_data", title: "Waiting on a statement" }),
       job({ id: "spin", status: "drafting", title: "Writing the note" }),
       job({ id: "ready", status: "draft_ready", href: "#draft-ready", title: "Board note" }),
       job({ id: "wait", status: "awaiting_signoff", title: "Close pack" }),
@@ -260,12 +290,13 @@ const populated = html(
 );
 
 assert(populated.includes(agentDisplayName("advisor")), "the desk prints the Advisor name from the config");
-assert(populated.includes(agentDisplayName("bookkeeper")), "the team row prints the Bookkeeper name");
-assert(populated.includes(agentShortName("bookkeeper")), "tags use the Bookkeeper short name");
-assert(populated.includes('data-agent-initial="B"'), "the Bookkeeper avatar letter is B");
+assert(populated.includes(agentDisplayName("financial_manager")), "the team row prints the Financial Manager name");
+assert(populated.includes(agentShortName("financial_manager")), "tags use the Financial Manager short name");
+assert(populated.includes('data-agent-initial="F"'), "the Financial Manager avatar letter is F");
 assert(!populated.includes(BOT_ROLE), "rendered desk copy does not say the old role");
-assert(populated.includes("as of 8 Oct"), "as-of dates use the short form");
+assert(populated.includes("Oct figures · checked 8 Oct"), "a period shows the day it was checked");
 assert(!populated.includes("as of 2026-10-08"), "as-of dates do not keep the ISO form");
+assert(!populated.includes("0.7795"), "today does not print a raw ratio decimal");
 assert(populated.includes("milon-desk-agent-short"), "narrow screens can show the short team name");
 assert(!populated.includes("milon-desk-task"), "the desk has no composer of its own");
 assert(!populated.includes("Held as a task"), "the desk does not hold a local task");
@@ -335,5 +366,153 @@ const broken = html(api({ error: "The desk could not load." }));
 assert(broken.includes("The desk could not load."), "an error shows the feed message");
 assert(broken.includes(">Retry<"), "an error can refresh");
 assert(!broken.includes(">Today<"), "an error hides the sections");
+
+const ownerPack = html(
+  api({
+    signoffOwner: true,
+    signoffLine: "Signed off by Ada · 1 Jul 2026",
+    jobs: [job({ id: "wait", status: "awaiting_signoff", title: "Close pack" })],
+  }),
+);
+assert(ownerPack.includes("Reviewed by you"), "an owner review says reviewed by you");
+assert(ownerPack.includes("Invite your accountant to sign off"), "an owner review invites a firm sign-off");
+assert(!ownerPack.includes("Signed off"), "an owner review never says signed off");
+
+const accountantPack = html(api({ signoffLine: "Signed off by Ada · 1 Jul 2026" }));
+assert(accountantPack.includes("Signed off ✓"), "an accountant sign-off shows the check");
+assert(!accountantPack.includes("Signed off by Ada"), "the desk does not keep the long signer line");
+assert(deskSignoffText("Signed off by Ada", false) === "Signed off ✓", "helper keeps the check for a firm sign-off");
+assert(deskSignoffInvite(true) === "Invite your accountant to sign off", "the invite is the owner line");
+
+const ratios = html(
+  api({
+    agents: {
+      ...idle,
+      analyst: { agent: "analyst", lastRunAt: "2026-10-09T08:00:00.000Z", lastRunKind: "diagnosis" },
+    },
+    briefing: [
+      { id: "ratio:debtToEquity", agent: "analyst", title: "Debt-to-Equity", detail: "Debt-to-Equity 0.7795", severity: "act", source: { label: "Ratios", asOf: "2026-09-30" } },
+      { id: "ratio:currentRatio", agent: "analyst", title: "Current Ratio", detail: "Current Ratio 1.2", severity: "watch", source: { label: "Ratios", asOf: "2026-09-30" } },
+      { id: "ratio:assetTurnover", agent: "analyst", title: "Asset Turnover", detail: "Asset Turnover 0.9", severity: "watch", source: { label: "Ratios", asOf: "2026-09-30" } },
+      { id: "ratio:equityMultiplier", agent: "analyst", title: "Equity Multiplier", detail: "Equity Multiplier 2.4", severity: "watch", source: { label: "Ratios", asOf: "2026-09-30" } },
+      { id: "ratio:grossMargin", agent: "analyst", title: "Gross Margin", detail: "Gross Margin 42.0%", severity: "info", source: { label: "Ratios", asOf: "2026-09-30" } },
+      {
+        id: "proposal:loan",
+        agent: "advisor",
+        title: "Bring Debt-to-Equity back under the line",
+        detail: "Pay down the short-term loan before the next review.",
+        severity: "act",
+        source: { label: "Client Brain proposals", asOf: null },
+      },
+    ],
+  }),
+);
+assert(!ratios.includes("0.7795"), "a ratio row does not keep the raw decimal");
+assert(ratios.includes("Debt-to-Equity is 0.78×."), "debt-to-equity is a formatted multiple");
+assert(
+  (ratios.match(/Pay down the short-term loan before the next review\./g) ?? []).length === 1,
+  "the next step is only on the advisor item",
+);
+const debtRatio = ratios.slice(ratios.indexOf('data-ratio="ratio:debtToEquity"'), ratios.indexOf('data-ratio="ratio:currentRatio"'));
+assert(!debtRatio.includes("Pay down"), "a ratio row does not repeat the advisor hint");
+assert(ratios.indexOf("data-ratio=") < ratios.indexOf("Pay down the short-term loan"), "findings come before the advisor move");
+assert(ratios.includes(">Debt<"), "a proposal chip names the area");
+assert(!ratios.includes("Client Brain"), "internal source names stay off the desk");
+assert(ratios.includes("Sep figures · checked 9 Oct"), "the period and the check date both show");
+assert((ratios.match(/data-ratio=/g) ?? []).length === 3, "today caps ratio rows at three");
+assert(ratios.includes(">Show all<"), "the rest of the ratios sit behind show all");
+
+const quietAgent = html(
+  api({
+    briefing: [{ id: "note", agent: "advisor", title: "A note", severity: "info", source: { label: "Books", asOf: null } }],
+  }),
+);
+assert(quietAgent.includes("Not run yet"), "an agent with no last-run time says not run yet");
+
+const LIVE_NOW_RUN = "2026-10-08T11:55:00.000Z";
+const liveDesk = html(api({}), "all", {
+  runs: [
+    { id: "r-fm", agent: "financial_manager", client_id: "c", status: "succeeded", queued_at: LIVE_NOW_RUN, started_at: LIVE_NOW_RUN, finished_at: LIVE_NOW_RUN },
+    { id: "r-an", agent: "analyst", client_id: "c", status: "running", queued_at: "2026-10-08T11:58:00.000Z", started_at: "2026-10-08T11:58:00.000Z", finished_at: null },
+    { id: "r-ad", agent: "advisor", client_id: "c", status: "failed", queued_at: "2026-10-08T11:00:00.000Z", started_at: "2026-10-08T11:00:00.000Z", finished_at: "2026-10-08T11:01:00.000Z" },
+  ],
+  findings: [
+    {
+      id: "f1",
+      agent: "analyst",
+      client_id: "c",
+      title: "Gross margin is 0.4200",
+      detail: null,
+      evidence: { period_label: "Sep 2026", figures: { gross_margin: 0.42 } },
+      as_of: "2026-09-30",
+      created_at: "2026-10-08T11:40:00.000Z",
+    },
+  ],
+  messages: [
+    {
+      id: "h1",
+      client_id: "c",
+      from_agent: "analyst",
+      to_agent: "advisor",
+      type: "handoff",
+      payload: { text: "Review the cash floor before the next meeting." },
+      created_at: "2026-10-08T11:50:00.000Z",
+    },
+  ],
+  market: ZA_MARKET,
+});
+assert(liveDesk.includes("Working…"), "a running agent says it is working");
+assert(liveDesk.includes("is-live"), "a running agent pulses");
+assert(liveDesk.includes("Last run 5m ago"), "a finished run says how long ago");
+assert(
+  liveDesk.includes("Couldn&#x27;t finish — will retry"),
+  "a failed run stays muted and says it will retry",
+);
+assert(liveDesk.includes("is-muted"), "the failed line is muted");
+assert(liveDesk.includes("milon-desk-handoff"), "a hand-off is not a finding row");
+assert(liveDesk.includes("Review the cash floor before the next meeting."), "a hand-off keeps the note");
+assert(liveDesk.includes("milon-desk-handoff-arrow"), "a hand-off shows an arrow");
+assert(liveDesk.indexOf('data-finding="f1"') < liveDesk.indexOf('data-handoff="h1"'), "findings come before hand-offs");
+const findingHtml = liveDesk.slice(liveDesk.indexOf('data-finding="f1"'), liveDesk.indexOf("</li>"));
+assert(findingHtml.includes("Sep figures · checked 8 Oct"), "the finding keeps the checked line");
+assert((findingHtml.match(/8 Oct/g) ?? []).length === 1, "a finding has one date line");
+assert(!liveDesk.includes("0.4200"), "a finding does not keep a raw decimal");
+assert(liveDesk.includes("42.0%"), "a margin finding is a percentage");
+assert(
+  headerFromRun(
+    { id: "r", agent: "analyst", client_id: "c", status: "running", queued_at: LIVE_NOW_RUN, started_at: null, finished_at: null },
+    NOW,
+  )?.label === "Working…",
+  "running maps to working",
+);
+assert(
+  findingSentence({ title: "Debt-to-equity is 0.7795", figures: { debt_to_equity: 0.7795 }, market: ZA_MARKET }) !==
+    "Debt-to-equity is 0.7795.",
+  "finding copy drops the raw decimal",
+);
+assert(!findingSentence({ title: "Debt-to-equity is 0.7795", market: ZA_MARKET }).includes("0.7795"), "0.7795 is never shown");
+assert(
+  figuresCheckedLine("Sep 2026", "2026-10-09T08:00:00.000Z", NOW) === "Sep figures · checked 9 Oct",
+  "checked line is the period and the run date",
+);
+assert(
+  handoffLine(
+    { type: "finding", from_agent: "analyst", to_agent: null, payload: { title: "Health" } },
+    agentShortName,
+  ) === null,
+  "a finding message is not a hand-off",
+);
+
+const activityHook = readFileSync("src/hooks/use-agent-activity.ts", "utf8");
+assert(activityHook.includes('table: "agent_runs"'), "realtime listens to agent runs");
+assert(activityHook.includes('table: "agent_findings"'), "realtime listens to findings");
+assert(activityHook.includes("client_id=eq."), "realtime is filtered by client");
+assert(activityHook.includes("removeChannel"), "the channel is removed on cleanup");
+assert(activityHook.includes(".limit(ROW_LIMIT)"), "the select is capped");
+assert(activityHook.includes("agentActivityUnavailable"), "a missing table stays quiet");
+const paneSrc = readFileSync("src/components/milon-team/milon-team-pane.tsx", "utf8");
+assert(paneSrc.includes("useAgentActivity(clientId)"), "the desk subscribes for the open client");
+const deskCss = readFileSync("src/components/milon-team/milon-team-desk.css", "utf8");
+assert(deskCss.includes("body:has(#pane-ask.on) #wizard-notes-pin"), "the notes pencil hides on the Bot tab");
 
 console.log("milon-team-test: all assertions passed");

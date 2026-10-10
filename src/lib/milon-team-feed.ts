@@ -1,7 +1,7 @@
 /**
- * Team feed — typed view-model for three agents: bookkeeper, analyst, advisor.
+ * Team feed — typed view-model for three agents: financial_manager, analyst, advisor.
  *
- * bookkeeper closes and cleans the books: syncs, uploads, reconciliation,
+ * financial_manager closes and cleans the books: syncs, uploads, reconciliation,
  * data requests, queries, and sign-off state.
  * analyst owns the budget, the 13-week forecast, variances, and the board report.
  * advisor owns the cash floor, debtors and collections, covenants, tax dates, and next moves.
@@ -37,9 +37,9 @@ import {
 } from "./precard-cap";
 import { periodMonthsOf, scoreTier } from "./ratios";
 
-export type AgentKey = "bookkeeper" | "analyst" | "advisor";
+export type AgentKey = "financial_manager" | "analyst" | "advisor";
 
-export const AGENT_KEYS = ["bookkeeper", "analyst", "advisor"] as const;
+export const AGENT_KEYS = ["financial_manager", "analyst", "advisor"] as const;
 
 export type AgentMapKind = "deliverable" | "proposal" | "event";
 
@@ -390,30 +390,30 @@ function matches(key: string, tokens: readonly string[]): boolean {
 /**
  * One map from a deliverable type, a proposal type, or an event type onto an agent.
  * Unknown deliverables and proposals stay on advisor. Unknown events stay on
- * bookkeeper (books traffic) only when they are not a move.
+ * financial_manager (books traffic) only when they are not a move.
  */
 export function agentFor(kind: AgentMapKind, type: string | null | undefined): AgentKey {
   const key = norm(type);
   if (!key) {
-    if (kind === "event") return "bookkeeper";
+    if (kind === "event") return "financial_manager";
     return "advisor";
   }
   if (kind === "deliverable") {
     if (matches(key, ADVISOR_DELIVERABLES)) return "advisor";
-    if (matches(key, BOOKKEEPER_DELIVERABLES)) return "bookkeeper";
+    if (matches(key, BOOKKEEPER_DELIVERABLES)) return "financial_manager";
     if (matches(key, ANALYST_DELIVERABLES)) return "analyst";
     return "advisor";
   }
   if (kind === "proposal") {
-    if (matches(key, BOOKKEEPER_PROPOSALS)) return "bookkeeper";
+    if (matches(key, BOOKKEEPER_PROPOSALS)) return "financial_manager";
     if (matches(key, ANALYST_PROPOSALS)) return "analyst";
     if (matches(key, ADVISOR_PROPOSALS)) return "advisor";
     return "advisor";
   }
   if (matches(key, ANALYST_EVENTS)) return "analyst";
   if (matches(key, ADVISOR_EVENTS)) return "advisor";
-  if (matches(key, BOOKKEEPER_EVENTS)) return "bookkeeper";
-  return "bookkeeper";
+  if (matches(key, BOOKKEEPER_EVENTS)) return "financial_manager";
+  return "financial_manager";
 }
 
 function finiteNum(value: unknown): number | null {
@@ -638,7 +638,7 @@ export function buildTeamJobs(input: {
     if (!title) continue;
     const agent = agentFor("proposal", step.type);
     const blockedReason = blockedReasonFor(status, input.precard, input.hasData);
-    const section = agent === "bookkeeper" ? "books" : agent === "analyst" ? "budget" : "moves";
+    const section = agent === "financial_manager" ? "books" : agent === "analyst" ? "budget" : "moves";
     jobs.push({
       id: step.id,
       agent,
@@ -855,7 +855,7 @@ export function buildTeamActivity(records: TeamActivityRecords): TeamActivityEve
 
 export function emptyAgentStatuses(): Record<AgentKey, TeamAgentStatus> {
   return {
-    bookkeeper: { agent: "bookkeeper", lastRunAt: null, lastRunKind: null },
+    financial_manager: { agent: "financial_manager", lastRunAt: null, lastRunKind: null },
     analyst: { agent: "analyst", lastRunAt: null, lastRunKind: null },
     advisor: { agent: "advisor", lastRunAt: null, lastRunKind: null },
   };

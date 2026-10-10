@@ -12,8 +12,25 @@ import {
   formatAsOf,
   teamAgentHeaderStatus,
 } from "@/lib/milon-team";
+import {
+  TODAY_RATIO_CAP,
+  checkedStamp,
+  deskSignoffInvite,
+  deskSignoffText,
+  deskSourceLabel,
+  figuresCheckedLine,
+  findingFigures,
+  findingPeriod,
+  findingSentence,
+  handoffParts,
+  headerFromRun,
+  latestRunByAgent,
+  ratioSentence,
+  splitTodayBriefing,
+  type AgentActivitySnapshot,
+} from "@/lib/milon-team-activity";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
-import type { AgentKey, TeamJob } from "@/lib/milon-team-feed";
+import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import "./milon-team-desk.css";
 
 type FilterKey = "all" | AgentKey;
@@ -38,13 +55,17 @@ export function MilonTeamDesk({
   feed,
   now,
   initialFilter = "all",
+  live = null,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
   initialFilter?: FilterKey;
+  /** Latest agent_runs, findings, and hand-offs. Null keeps the feed fallback. */
+  live?: AgentActivitySnapshot | null;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
+  const [ratiosOpen, setRatiosOpen] = useState(false);
   const [blocked, setBlocked] = useState<Record<string, "precard_cap">>({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [opened, setOpened] = useState<Record<string, string>>({});
@@ -97,7 +118,30 @@ export function MilonTeamDesk({
     (job) => job.status !== "dismissed" && !dropped[job.id] && matches(job.agent, filter),
   );
   const activity = feed.activity.filter((event) => matches(event.agent, filter));
-  const emptyFeed = briefing.length === 0 && jobs.length === 0 && activity.length === 0 && !feed.signoffLine;
+  const latest = latestRunByAgent(live?.runs ?? []);
+  const findings = (live?.findings ?? [])
+    .filter((row) => matches(row.agent, filter) && row.created_at)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  const handoffs = (live?.messages ?? [])
+    .map((row) => {
+      const parts = handoffParts(row);
+      if (!parts || !matches(parts.from, filter)) return null;
+      return { id: row.id, at: row.created_at, ...parts };
+    })
+    .filter((row): row is { id: string; at: string; from: AgentKey; to: AgentKey; text: string } => Boolean(row))
+    .sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  const signoffText = deskSignoffText(feed.signoffLine, feed.signoffOwner === true);
+  const signoffInvite = deskSignoffInvite(feed.signoffOwner === true);
+  const { lead, ratios } = splitTodayBriefing(briefing);
+  const visibleRatios = ratiosOpen ? ratios : ratios.slice(0, TODAY_RATIO_CAP);
+  const todayCount = findings.length + handoffs.length + lead.length + ratios.length;
+  const emptyFeed =
+    todayCount === 0 && jobs.length === 0 && activity.length === 0 && !signoffText;
+
+  function checkedLine(item: TeamBriefingItem): string | null {
+    const stamp = checkedStamp(latest[item.agent], feed.agents[item.agent]?.lastRunAt ?? null);
+    return figuresCheckedLine(item.source.asOf, stamp ?? item.source.asOf, clock);
+  }
   const waiting = feed.loading && !feed.error && emptyFeed;
   const quietError = Boolean(feed.error) && emptyFeed;
 
@@ -139,7 +183,17 @@ export function MilonTeamDesk({
               </div>
               <div className="milon-desk-agents">
                 {AGENT_ORDER.map((agent) => {
-                  const header = teamAgentHeaderStatus(agent, feed.agents[agent], feed.briefing, clock);
+                  const run = latest[agent];
+                  const fromRun = run ? headerFromRun(run, clock) : null;
+                  const header = fromRun ?? teamAgentHeaderStatus(agent, feed.agents[agent], feed.briefing, clock);
+                  const ranText =
+                    header.lastRun ??
+                    (header.label.startsWith("Last run") ||
+                    header.label === "Not run yet" ||
+                    header.pulse ||
+                    header.muted
+                      ? null
+                      : "Not run yet");
                   const selected = filter === agent;
                   const name = agentDisplayName(agent);
                   return (
@@ -161,8 +215,10 @@ export function MilonTeamDesk({
                         <strong className="milon-desk-agent-name">{name}</strong>
                         <span className="milon-desk-agent-short">{agentShortName(agent)}</span>
                         <span className="milon-desk-visually-hidden">{agentJobLine(agent)}</span>
-                        {header.lastRun ? <span className="milon-desk-ran">{header.lastRun}</span> : null}
-                        <span className={`milon-desk-status is-${header.tone}`}>
+                        {ranText ? <span className="milon-desk-ran">{ranText}</span> : null}
+                        <span
+                          className={`milon-desk-status is-${header.tone}${header.pulse ? " is-live" : ""}${header.muted ? " is-muted" : ""}`}
+                        >
                           <i />
                           <span>{header.label}</span>
                         </span>
@@ -173,32 +229,98 @@ export function MilonTeamDesk({
               </div>
             </div>
 
-            {feed.signoffLine ? (
+            {signoffText ? (
               <section className="milon-desk-signoff" aria-label="Sign-off">
-                <p>{feed.signoffLine}</p>
+                <p>{signoffText}</p>
+                {signoffInvite ? <p className="milon-desk-invite">{signoffInvite}</p> : null}
               </section>
             ) : null}
 
-            {briefing.length > 0 ? (
+            {todayCount > 0 ? (
               <section className="milon-desk-card" aria-label="Today">
                 <p className="milon-desk-kicker">Today</p>
                 <ul className="milon-desk-briefing">
-                  {briefing.map((item) => (
-                    <li key={item.id} className="milon-desk-row" data-severity={item.severity}>
-                      <div className="milon-desk-job-copy">
-                        <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
-                        <p className="milon-desk-figure">{item.title}</p>
-                        {item.detail ? <p className="milon-desk-why">{item.detail}</p> : null}
-                        <div className="milon-desk-meta">
-                          <span className="milon-desk-source">{item.source.label}</span>
-                          {item.source.asOf ? (
-                            <span className="milon-desk-why">as of {formatAsOf(item.source.asOf, clock)}</span>
-                          ) : null}
+                  {findings.map((row) => {
+                    const sentence = findingSentence({
+                      title: row.title,
+                      detail: row.detail,
+                      figures: findingFigures(row.evidence),
+                      market: live?.market,
+                    });
+                    const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock);
+                    const when = formatAsOf(row.created_at, clock);
+                    return (
+                      <li key={row.id} className="milon-desk-row" data-finding={row.id}>
+                        <div className="milon-desk-job-copy">
+                          <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
+                          <p className="milon-desk-figure">{sentence}</p>
+                          <div className="milon-desk-meta">
+                            {checked ? (
+                              <span className="milon-desk-why">{checked}</span>
+                            ) : when ? (
+                              <time dateTime={row.created_at}>{when}</time>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
+                  {visibleRatios.map((item) => {
+                    const checked = checkedLine(item);
+                    return (
+                      <li key={item.id} className="milon-desk-row" data-severity={item.severity} data-ratio={item.id}>
+                        <div className="milon-desk-job-copy">
+                          <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
+                          <p className="milon-desk-figure">{ratioSentence(item.title, item.detail)}</p>
+                          <div className="milon-desk-meta">
+                            <span className="milon-desk-source">{deskSourceLabel(item)}</span>
+                            {checked ? <span className="milon-desk-why">{checked}</span> : null}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {handoffs.map((row) => {
+                    const when = formatAgo(row.at, clock);
+                    return (
+                      <li key={row.id} className="milon-desk-handoff" data-handoff={row.id}>
+                        <span className="milon-desk-tag">{agentShortName(row.from)}</span>
+                        <span className="milon-desk-handoff-arrow" aria-hidden="true">
+                          →
+                        </span>
+                        <span className="milon-desk-tag">{agentShortName(row.to)}</span>
+                        <p className="milon-desk-handoff-text">{row.text}</p>
+                        {when ? <time dateTime={row.at}>{when}</time> : null}
+                      </li>
+                    );
+                  })}
+                  {lead.map((item) => {
+                    const checked = checkedLine(item);
+                    return (
+                      <li key={item.id} className="milon-desk-row" data-severity={item.severity}>
+                        <div className="milon-desk-job-copy">
+                          <span className="milon-desk-tag">{agentShortName(item.agent)}</span>
+                          <p className="milon-desk-figure">{item.title}</p>
+                          {item.detail ? <p className="milon-desk-hint">{item.detail}</p> : null}
+                          <div className="milon-desk-meta">
+                            <span className="milon-desk-source">{deskSourceLabel(item)}</span>
+                            {checked ? <span className="milon-desk-why">{checked}</span> : null}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
+                {ratios.length > TODAY_RATIO_CAP ? (
+                  <button
+                    type="button"
+                    className="milon-desk-more"
+                    aria-expanded={ratiosOpen}
+                    onClick={() => setRatiosOpen((open) => !open)}
+                  >
+                    {ratiosOpen ? "Show less" : "Show all"}
+                  </button>
+                ) : null}
               </section>
             ) : null}
 
@@ -250,8 +372,11 @@ export function MilonTeamDesk({
                             ) : null}
                           </p>
                         ) : null}
-                        {(job.status === "awaiting_signoff" || job.status === "signed_off") && feed.signoffLine ? (
-                          <p className="milon-desk-confirm">{feed.signoffLine}</p>
+                        {(job.status === "awaiting_signoff" || job.status === "signed_off") && signoffText ? (
+                          <p className="milon-desk-confirm">
+                            {signoffText}
+                            {signoffInvite ? ` ${signoffInvite}` : ""}
+                          </p>
                         ) : null}
                         {job.status === "failed" ? (
                           <div className="milon-desk-actions">

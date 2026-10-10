@@ -273,6 +273,33 @@
   box-shadow: none;
 }
 
+.milon-desk-status.is-live i {
+  animation: milon-desk-pulse 1.6s ease-in-out infinite;
+}
+
+.milon-desk-status.is-muted {
+  color: var(--desk-dim);
+  opacity: 0.72;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .milon-desk-status.is-live i {
+    animation: none;
+  }
+}
+
+@keyframes milon-desk-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
 .milon-desk-tag,
 .milon-desk-source {
   display: inline-flex;
@@ -305,9 +332,10 @@
 
 .milon-desk-signoff {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
   background: var(--desk-card);
   border: 1px solid var(--desk-gold);
   border-radius: 16px;
@@ -320,6 +348,11 @@
   color: var(--desk-gold);
   font-size: 15px;
   letter-spacing: 0.01em;
+}
+
+.milon-desk-invite {
+  color: var(--desk-dim);
+  font-size: 13px;
 }
 
 .milon-desk-row,
@@ -362,6 +395,44 @@
   margin: 0;
   font-size: 14px;
   font-weight: 650;
+}
+
+.milon-desk-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 2px 4px;
+  color: var(--desk-dim);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.35;
+}
+
+.milon-desk-handoff-arrow {
+  color: var(--desk-dim);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.milon-desk-handoff-text {
+  margin: 0;
+  flex: 1 1 180px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 450;
+  color: var(--desk-dim);
+}
+
+.milon-desk-handoff time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--desk-dim);
+}
+
+.milon-desk-handoff .milon-desk-tag {
+  font-size: 10px;
+  padding: 1px 7px;
 }
 
 .milon-desk-meta {
@@ -444,6 +515,26 @@
   min-width: 0;
   font-size: 14.5px;
   line-height: 1.45;
+}
+
+.milon-desk-hint {
+  margin: 0;
+  color: var(--desk-dim);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.milon-desk-more {
+  appearance: none;
+  margin-top: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--desk-gold);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0;
 }
 
 .milon-desk-why,
@@ -564,15 +655,23 @@ html[data-theme="light"] .milon-desk {
   }
 
   .milon-desk-agent .milon-desk-mark,
-  .milon-desk-agent .milon-desk-ran,
-  .milon-desk-agent .milon-desk-status span,
   .milon-desk-agent-name {
     display: none;
   }
 
   .milon-desk-agent-short {
     display: block;
-    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .milon-desk-agent .milon-desk-ran,
+  .milon-desk-agent .milon-desk-status span {
+    display: block;
+    font-size: 10px;
+    line-height: 1.2;
+    white-space: normal;
   }
 
   .milon-desk-agent .milon-desk-status {
@@ -673,4 +772,9 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
   body:has(#pane-ask.on) button[aria-label="Share Milōn"] {
     display: none !important;
   }
+}
+
+/* The notes pencil sits over the composer's Clear on the Bot tab. */
+body:has(#pane-ask.on) #wizard-notes-pin {
+  display: none !important;
 }

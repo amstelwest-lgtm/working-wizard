@@ -13,10 +13,12 @@ export function createServerFn() {
   return builder();
 }
 
+const harnessServerFn = async () => {
+  throw new Error("harness-local");
+};
+
 export function useServerFn() {
-  return async () => {
-    throw new Error("harness-local");
-  };
+  return harnessServerFn;
 }
 
 export function createMiddleware() {

@@ -42,12 +42,12 @@ assert(accessTokenFromNext("/access/abc123") === "abc123", "parses access next p
 assert(accessApproveUrl("tok").endsWith("/access/tok"), "approve url points at /access/:token");
 
 assert(canPractice("staff", "sign_off") === false, "1. Staff cannot sign off");
-assert(canPractice("bookkeeper", "sign_off") === false, "Staff=Bookkeeper: no sign-off");
+assert(canPractice("bookkeeper", "sign_off") === false, "Staff=books staff: no sign-off");
 assert(canPractice("manager", "sign_off") === false, "2. Manager cannot sign off");
 assert(canPractice("reviewer", "sign_off") === false, "Reviewer cannot sign off");
 assert(canPractice("partner", "sign_off") === true, "Partner can sign off");
 assert(canPractice("staff", "edit") === true, "Staff can edit");
-assert(canPractice("bookkeeper", "edit") === true, "Bookkeeper can edit");
+assert(canPractice("bookkeeper", "edit") === true, "books staff can edit");
 assert(canPractice("reviewer", "edit") === false, "Reviewer cannot edit");
 assert(canPractice("read_only", "edit") === false, "Read only cannot edit");
 assert(canPractice("staff", "submit") === true, "Staff can submit");
@@ -56,7 +56,7 @@ assert(canPractice("staff", "review") === false, "Staff cannot review");
 
 assert(classAtMost("staff", "manager") === "staff", "4. Team Staff cannot escalate to Manager");
 assert(classAtMost("manager", "read_only") === "read_only", "per-client can go lower");
-assert(classAtMost("staff", "bookkeeper") === "bookkeeper", "Staff=Bookkeeper same rank keeps wanted");
+assert(classAtMost("staff", "bookkeeper") === "bookkeeper", "Staff=books staff same rank keeps wanted");
 assert(effectiveClassification("manager", "partner") === "manager", "effective is the lower of the two");
 assert(effectiveClassification("partner", "staff") === "staff", "partner ceiling still clamps to staff");
 assert(classesAtOrBelow("reviewer").includes("manager") === false, "Manager is above Reviewer");

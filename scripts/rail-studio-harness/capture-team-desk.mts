@@ -7,13 +7,13 @@ import { mkdir } from "node:fs/promises";
 import { chromium, type Page } from "playwright";
 
 const teamConfig = readFileSync(new URL("../../src/lib/milon-team.ts", import.meta.url), "utf8");
-const bookkeeperName = teamConfig.match(/bookkeeper: "(Mil[^"]+)"/)?.[1];
-if (!bookkeeperName) throw new Error("bookkeeper display name missing from the team config");
+const bookkeeperName = teamConfig.match(/financial_manager: "(Mil[^"]+)"/)?.[1];
+if (!bookkeeperName) throw new Error("financial_manager display name missing from the team config");
 
 const base = "http://127.0.0.1:4179";
 const outDir = "/opt/cursor/artifacts/screenshots";
-const oldRole = ["Acc", "ountant"].join("");
-const banned = ["Dana", "payroll", "Claude", "white-label", oldRole];
+const oldTitle = `Mil${"ō"}n ${["Acc", "ountant"].join("")}`;
+const banned = ["Dana", "payroll", "Claude", "white-label", oldTitle];
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const written: string[] = [];
@@ -102,23 +102,23 @@ await shot("desk-desktop-1280", 1280, 1440, "/milon-team-desk?fixture=populated"
   });
 });
 
-await shot("desk-desktop-1280-bookkeeper", 1280, 1280, "/milon-team-desk?fixture=populated", async (page) => {
+await shot("desk-desktop-1280-financial_manager", 1280, 1280, "/milon-team-desk?fixture=populated", async (page) => {
   await page.locator("[data-agent-filter='all']").focus();
   await page.keyboard.press("ArrowRight");
   await page.waitForFunction(
-    () => document.querySelector("[data-agent-filter='bookkeeper']")?.getAttribute("aria-checked") === "true",
+    () => document.querySelector("[data-agent-filter='financial_manager']")?.getAttribute("aria-checked") === "true",
   );
   await page.getByText("Books clean ✓").waitFor();
   await page.getByText("September close matches the bank").waitFor();
   await page.getByText("Bank feed synced for September.").waitFor();
   if ((await page.getByText("Cash floor is close").count()) !== 0) {
-    throw new Error("Advisor briefing still visible with Bookkeeper selected");
+    throw new Error("Advisor briefing still visible with Financial Manager selected");
   }
   if ((await page.getByText("Draft the board note").count()) !== 0) {
-    throw new Error("Analyst job still visible with Bookkeeper selected");
+    throw new Error("Analyst job still visible with Financial Manager selected");
   }
   if ((await page.getByText("13-week forecast refreshed").count()) !== 0) {
-    throw new Error("Analyst activity still visible with Bookkeeper selected");
+    throw new Error("Analyst activity still visible with Financial Manager selected");
   }
   await page.locator(".milon-desk-scroll").evaluate((el) => {
     el.scrollTop = 0;
@@ -197,6 +197,84 @@ await shot("desk-chat-390", 390, 844, "/milon-team-desk?fixture=populated", asyn
   const shareBox = await page.locator('button[aria-label="Share Milōn"]').boundingBox();
   if (!askBox) throw new Error("Ask button is missing after the reply");
   if (shareBox) throw new Error("share FAB covers the answered chat");
+});
+
+async function assertClearIsClear(page: Page) {
+  const clear = page.locator("#ask-ai-accountant .ask-ai-cancel");
+  await clear.waitFor({ timeout: 8000 });
+  const pin = page.locator("#wizard-notes-pin");
+  const hidden = await pin.evaluate((el) => getComputedStyle(el).display === "none");
+  if (!hidden) throw new Error("the notes pencil is still on the Bot tab");
+  const clearBox = await clear.boundingBox();
+  const pinBox = await pin.boundingBox();
+  if (!clearBox) throw new Error("Clear is missing from the composer");
+  if (pinBox) throw new Error("the notes pencil still covers Clear");
+}
+
+await shot("desk-live-1280", 1280, 1440, "/milon-team-desk?fixture=live", async (page) => {
+  await page.getByText("Working…").waitFor();
+  await page.getByText("Last run 5m ago").waitFor();
+  await page.getByText("Couldn't finish — will retry").waitFor();
+  const handoff = page.locator(".milon-desk-handoff");
+  await handoff.getByText("Review the cash floor before the next meeting.").waitFor();
+  await handoff.getByText("Analyst").waitFor();
+  await handoff.getByText("Advisor").waitFor();
+  await handoff.locator("time").waitFor();
+  await page.getByText("Sep figures · checked 9 Oct").first().waitFor();
+  await page.getByText("Debt-to-Equity is 0.78×.").waitFor();
+  await page.getByText("Debt", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Show all" }).waitFor();
+  const text = await page.locator(".milon-desk").innerText();
+  if (text.includes("0.7795") || text.includes("0.4200")) throw new Error("a raw decimal is on the desk");
+  if (/client brain/i.test(text)) throw new Error("an internal source name is on the desk");
+  const payDown = text.match(/Pay down the short-term loan before the next review\./g) ?? [];
+  if (payDown.length !== 1) throw new Error(`the next step appears ${payDown.length} times`);
+  const findingText = await page.locator("[data-finding]").innerText();
+  const findingDates = findingText.match(/9 Oct/g) ?? [];
+  if (findingDates.length !== 1) throw new Error(`the finding shows ${findingDates.length} dates`);
+  const following = 4;
+  const findingAt = await page.locator("[data-finding]").evaluate((el) => el.compareDocumentPosition(document.querySelector("[data-ratio]")!));
+  if ((findingAt & following) === 0) throw new Error("findings are not before the ratio rows");
+  const handoffAt = await page.locator("[data-ratio]").last().evaluate((el) => el.compareDocumentPosition(document.querySelector("[data-handoff]")!));
+  if ((handoffAt & following) === 0) throw new Error("hand-offs are not after the findings");
+  await assertClearIsClear(page);
+  await page.locator(".milon-desk-scroll").evaluate((el) => {
+    el.scrollTop = 0;
+  });
+});
+
+await shot("desk-live-390", 390, 900, "/milon-team-desk?fixture=live", async (page) => {
+  await page.getByText("Working…").waitFor();
+  await page.getByText("Financial Manager", { exact: true }).waitFor();
+  await page.getByText("Couldn't finish — will retry").waitFor();
+  await assertClearIsClear(page);
+  const fit = await page.locator(".milon-desk-agents").evaluate((el) => {
+    const chips = [...el.querySelectorAll<HTMLElement>(".milon-desk-agent")];
+    return chips.map((chip) => {
+      const name = chip.querySelector<HTMLElement>(".milon-desk-agent-short");
+      return {
+        text: name?.textContent ?? "",
+        nameFits: !!name && name.scrollWidth <= name.clientWidth + 1,
+      };
+    });
+  });
+  if (fit.length !== 3) throw new Error(`expected three team chips, saw ${fit.length}`);
+  for (const chip of fit) {
+    if (!chip.nameFits) throw new Error(`team chip is cut off (${chip.text})`);
+  }
+  await page.locator(".milon-desk-scroll").evaluate((el) => {
+    el.scrollTop = 0;
+  });
+});
+
+await shot("desk-live-empty-1280", 1280, 900, "/milon-team-desk?fixture=empty", async (page) => {
+  await page.getByText("No data yet").waitFor();
+  await page.getByText("Not run yet").first().waitFor();
+  const text = await page.locator(".milon-desk").innerText();
+  for (const heading of ["Today", "Offered", "Activity"]) {
+    if (text.includes(heading)) throw new Error(`empty client still shows ${heading}`);
+  }
+  if (text.includes("Working…")) throw new Error("empty client shows a live run");
 });
 
 await shot("desk-empty-1280", 1280, 900, "/milon-team-desk?fixture=empty", async (page) => {
