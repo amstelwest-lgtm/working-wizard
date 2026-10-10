@@ -147,6 +147,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
     .maybeSingle();
   const firmId = (client?.firm_id as string | null) ?? null;
   const pool: StoredFigures[] = [];
+  const recordedKeys = new Set<string>();
   let inputTokens = 0;
   let outputTokens = 0;
   let cacheWriteTokens = 0;
@@ -187,6 +188,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           firmId,
           db,
           pool,
+          recordedKeys,
         });
         if (name !== "record_finding") {
           const reads = collectStoredReads(payload, { snapshotId: null, periodLabel: null });

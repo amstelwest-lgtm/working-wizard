@@ -8,6 +8,8 @@ import { resolve } from "node:path";
 import {
   attachCitedEvidence,
   canonicalEvidenceKey,
+  citedFigureMatches,
+  citedNumbers,
   figuresClose,
   groundFindingEvidence,
   isClientIdle,
@@ -28,6 +30,7 @@ import {
   FINDING_KINDS,
   figureKeyOverlap,
   findingDuplicates,
+  findingRecordKey,
   higherFindingSeverity,
   normalizeFindingKind,
   labelHealthScore,
@@ -813,6 +816,91 @@ const DAY = 24 * 60 * 60 * 1000;
     "the prompt tells the model to carry both scores and both periods",
   );
   assert(ANALYST_SYSTEM.includes("Do not put snapshot_id or period_label inside figures."), "the prompt keeps snapshot ids out of figures");
+  assert(
+    ANALYST_SYSTEM.includes("Do not put snapshot ids or other ids in the title or detail."),
+    "the prompt keeps ids out of the title and detail",
+  );
+  assert(ANALYST_SYSTEM.includes("call finish"), "the prompt says to finish after a finding is recorded");
+
+  assert(
+    citedFigureMatches(0.5849, 4, 0.5849514537921812),
+    "0.5849 matches a stored margin truncated to four places",
+  );
+  assert(citedFigureMatches(46, 0, 0.4587378668612735), "46 matches the percent form of 0.4587");
+  assert(!citedFigureMatches(33, 0, 0.4587378668612735), "33 does not match that ratio");
+  assert(citedNumbers("e806dc36-8e43-4324-a28c-c5d5fa66a240 Sep 2026").length === 0, "a snapshot id and a period label contribute no cited numbers");
+  const withId = attachCitedEvidence({
+    title: "Gross margin is 0.5849",
+    detail: "Snapshot e806dc36-8e43-4324-a28c-c5d5fa66a240 for Sep 2026.",
+    pool: [
+      {
+        snapshotId: "e806dc36-8e43-4324-a28c-c5d5fa66a240",
+        periodLabel: "Sep 2026",
+        figures: { gross_margin: 0.5849514537921812 },
+      },
+    ],
+    evidence: {
+      snapshot_id: "e806dc36-8e43-4324-a28c-c5d5fa66a240",
+      period_label: "Sep 2026",
+      figures: { gross_margin: 0.5849514537921812 },
+    },
+  });
+  assert(withId.ok === true, "digits inside a snapshot id are not a missing figure");
+  const percent = attachCitedEvidence({
+    title: "Fixed costs are 46% of revenue",
+    detail: "",
+    pool: [
+      {
+        snapshotId: "snap-sep",
+        periodLabel: "Sep 2026",
+        figures: { "Fixed Cost Ratio": 0.4587378668612735 },
+      },
+    ],
+    evidence: { snapshot_id: "snap-sep", period_label: "Sep 2026", figures: {} },
+  });
+  assert(percent.ok === true, "a rounded percent is attached from the ratio");
+  if (percent.ok) {
+    const figs = percent.evidence.figures as Record<string, number>;
+    assert(figs["Fixed Cost Ratio"] === 0.4587378668612735, "the evidence keeps the stored ratio");
+  }
+  const small = attachCitedEvidence({
+    title: "One of 4 pillars",
+    detail: "100 is just a round label",
+    pool,
+    evidence: { snapshot_id: null, period_label: "2026-10-06", figures: { "score:2026-10-06": 69 } },
+  });
+  assert(small.ok === true, "a count of 4 and a bare 100 do not reject the finding");
+  if (small.ok) assert(small.warning?.includes("4") && small.warning?.includes("100"), "those leftovers are a warning");
+  const gap = attachCitedEvidence({
+    title: "A 13 point gap",
+    detail: "",
+    pool,
+    evidence: { snapshot_id: null, period_label: "2026-10-06", figures: { "score:2026-10-06": 69 } },
+  });
+  assert(gap.ok === false, "13 is a substantive number that was not read");
+
+  const sameKey = findingRecordKey({
+    kind: "weakest_pillar",
+    periodLabel: "Oct 2026",
+    snapshotId: "B6E99169-94AC-4FDB-9DF5-056C7CB33209",
+  });
+  assert(
+    sameKey ===
+      findingRecordKey({
+        kind: "weakest_pillar",
+        periodLabel: "oct 2026",
+        snapshotId: "b6e99169-94ac-4fdb-9df5-056c7cb33209",
+      }),
+    "the same kind and period are one recorded key",
+  );
+  const runSrc = readFileSync(resolve("supabase/functions/agent-analyst/run.ts"), "utf8");
+  const repeatSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  assert(runSrc.includes("recordedKeys"), "a run remembers findings it already recorded");
+  assert(repeatSrc.includes("Already recorded, call finish."), "an in-run repeat tells the model to finish");
+  assert(
+    repeatSrc.indexOf("Already recorded, call finish.") < repeatSrc.indexOf('type: "finding"'),
+    "an in-run repeat does not send another finding message",
+  );
 }
 
 // The health tool returns the stored score. The live 67 is the current books with debt-to-equity.

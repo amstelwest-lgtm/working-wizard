@@ -321,6 +321,19 @@ export function comparableFindingFigures(raw: unknown, periodLabel: string | nul
   return out;
 }
 
+/** One recorded observation in this run: kind plus the period or snapshot it cites. */
+export function findingRecordKey(input: {
+  kind: string;
+  periodLabel: string | null;
+  snapshotId: string | null;
+}): string {
+  return [
+    normalizeFindingKind(input.kind),
+    normalizeFindingText(input.periodLabel ?? ""),
+    (input.snapshotId ?? "").toLowerCase(),
+  ].join("\t");
+}
+
 /** Free-text kinds from before the enum, plus the enum values themselves. */
 export function normalizeFindingKind(kind: string): string {
   const text = normalizeFindingText(kind);

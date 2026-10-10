@@ -536,19 +536,67 @@ export function groundFindingEvidence(input: {
   };
 }
 
-function citedNumbers(text: string): number[] {
-  const withoutDates = text.replace(/\d{4}-\d{2}-\d{2}/g, " ");
-  const matches = withoutDates.match(/-?\d+(?:\.\d+)?/g) ?? [];
-  const out: number[] = [];
+const PERIOD_LABEL =
+  "january|february|march|april|may|june|july|august|september|october|november|december|sept|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec";
+
+/** Drop ids, dates, period labels, and years so their digits are not cited figures. */
+export function stripCitationNoise(text: string): string {
+  return text
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, " ")
+    .replace(/\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{8,}\b/gi, " ")
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
+    .replace(/\b\d{4}-\d{2}\b/g, " ")
+    .replace(new RegExp(`\\b(?:${PERIOD_LABEL})\\.?\\s+\\d{4}\\b`, "gi"), " ")
+    .replace(/\bq[1-4]\s+\d{4}\b/gi, " ")
+    .replace(/\bfy\s*\d{4}\b/gi, " ")
+    .replace(/\b(?:19|20)\d{2}\b/g, " ");
+}
+
+export type CitedNumber = { raw: string; value: number; decimals: number };
+
+export function citedNumbers(text: string): CitedNumber[] {
+  const matches = stripCitationNoise(text).match(/-?\d+(?:\.\d+)?/g) ?? [];
+  const out: CitedNumber[] = [];
   for (const raw of matches) {
-    if (/^\d{4}$/.test(raw)) {
-      const year = Number(raw);
-      if (year >= 1900 && year <= 2100) continue;
-    }
-    const n = Number(raw);
-    if (Number.isFinite(n)) out.push(n);
+    const value = Number(raw);
+    if (!Number.isFinite(value)) continue;
+    const frac = raw.includes(".") ? (raw.split(".")[1] ?? "") : "";
+    out.push({ raw, value, decimals: frac.length });
   }
   return out;
+}
+
+function atPrecision(n: number, decimals: number, mode: "round" | "trunc"): number {
+  const factor = 10 ** decimals;
+  const scaled = n * factor;
+  const whole = mode === "round" ? Math.round(scaled) : Math.trunc(scaled);
+  return whole / factor;
+}
+
+function sameCitedNumber(claimed: number, stored: number): boolean {
+  return Math.abs(claimed - stored) <= 1e-9 * Math.max(1, Math.abs(claimed), Math.abs(stored));
+}
+
+/**
+ * A cited number matches a stored figure when it is that figure rounded or
+ * truncated to the cited precision, including the percent form (×100).
+ * An integer also matches within ±0.5.
+ */
+export function citedFigureMatches(claimed: number, decimals: number, stored: number): boolean {
+  if (!Number.isFinite(claimed) || !Number.isFinite(stored)) return false;
+  return matchesAtPrecision(claimed, decimals, stored) || matchesAtPrecision(claimed, decimals, stored * 100);
+}
+
+function matchesAtPrecision(claimed: number, decimals: number, stored: number): boolean {
+  if (figuresClose(claimed, stored)) return true;
+  if (sameCitedNumber(claimed, atPrecision(stored, decimals, "round"))) return true;
+  if (sameCitedNumber(claimed, atPrecision(stored, decimals, "trunc"))) return true;
+  return decimals === 0 && Math.abs(claimed - stored) <= 0.5;
+}
+
+/** Small counts and 100 are ordinal or percent noise, not a missing book figure. */
+export function isHarmlessCitedNumber(value: number): boolean {
+  return Math.abs(value) <= 12 || Math.abs(value) === 100;
 }
 
 type EvidenceBucket = {
@@ -563,9 +611,9 @@ function bucketId(periodLabel: string | null, snapshotId: string | null): string
   return "none";
 }
 
-function matchingFigureKeys(row: StoredFigures, cited: number): Array<[string, number]> {
+function matchingFigureKeys(row: StoredFigures, cited: number, decimals: number): Array<[string, number]> {
   const matches = Object.entries(row.figures).filter(
-    ([, value]) => typeof value === "number" && figuresClose(cited, value),
+    ([, value]) => typeof value === "number" && citedFigureMatches(cited, decimals, value),
   );
   if (row.periodLabel) {
     const specific = matches.filter(([key]) => key.includes(row.periodLabel as string));
@@ -628,24 +676,26 @@ function evidenceFromBuckets(buckets: Map<string, EvidenceBucket>): FindingEvide
 
 /**
  * A stored number in the title or detail is copied onto the evidence with the
- * key and period from the read. A cited number that no read returned is refused.
+ * key and period from the read. Ids, dates, and years are ignored. A small or
+ * ordinal leftover is a warning. Only a substantive number missing from every
+ * read is refused.
  */
 export function attachCitedEvidence(input: {
   title: string;
   detail: string;
   pool: StoredFigures[];
   evidence: FindingEvidence;
-}): { ok: true; evidence: FindingEvidence } | { ok: false; error: string } {
+}): { ok: true; evidence: FindingEvidence; warning?: string } | { ok: false; error: string } {
   const cited = citedNumbers(`${input.title}\n${input.detail}`);
   const seen = new Set<string>();
   const missing: string[] = [];
+  const harmless: string[] = [];
   const buckets = seedBuckets(input.evidence);
   for (const n of cited) {
-    const token = String(n);
-    if (seen.has(token)) continue;
-    seen.add(token);
+    if (seen.has(n.raw)) continue;
+    seen.add(n.raw);
     const hits = input.pool.flatMap((row) =>
-      matchingFigureKeys(row, n).map(([key, value]) => ({
+      matchingFigureKeys(row, n.value, n.decimals).map(([key, value]) => ({
         periodLabel: row.periodLabel,
         snapshotId: row.snapshotId,
         key,
@@ -653,7 +703,8 @@ export function attachCitedEvidence(input: {
       })),
     );
     if (hits.length === 0) {
-      missing.push(token);
+      if (isHarmlessCitedNumber(n.value)) harmless.push(n.raw);
+      else missing.push(n.raw);
       continue;
     }
     for (const hit of hits) {
@@ -676,6 +727,11 @@ export function attachCitedEvidence(input: {
     };
   }
   const next = evidenceFromBuckets(buckets);
-  if (Object.keys(next.figures).length === 0) return { ok: true, evidence: input.evidence };
-  return { ok: true, evidence: next };
+  const evidence = Object.keys(next.figures).length === 0 ? input.evidence : next;
+  if (harmless.length === 0) return { ok: true, evidence };
+  return {
+    ok: true,
+    evidence,
+    warning: `Ignored small numbers not on the books: ${harmless.join(", ")}.`,
+  };
 }

@@ -10,6 +10,7 @@ import {
   FINDING_KINDS,
   findingDuplicates,
   findingKindAllowed,
+  findingRecordKey,
   higherFindingSeverity,
   labelHealthScore,
   numericFigures,
@@ -24,6 +25,7 @@ export type AnalystExecCtx = {
   firmId: string | null;
   db: SupabaseClient;
   pool: StoredFigures[];
+  recordedKeys: Set<string>;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -218,6 +220,22 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   });
   if (!cited.ok) return { error: cited.error, tool_blocked: true };
   const evidence = cited.evidence;
+  const warning = cited.warning;
+  const recordKeys = [
+    findingRecordKey({
+      kind,
+      periodLabel: grounded.evidence.period_label,
+      snapshotId: grounded.evidence.snapshot_id,
+    }),
+    findingRecordKey({
+      kind,
+      periodLabel: evidence.period_label,
+      snapshotId: evidence.snapshot_id,
+    }),
+  ];
+  if (recordKeys.some((key) => ctx.recordedKeys.has(key))) {
+    return { error: "Already recorded, call finish.", tool_blocked: true };
+  }
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: recent, error: recentError } = await ctx.db
@@ -259,7 +277,14 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       .update(raised ? { last_seen: seenAt, severity: raised } : { last_seen: seenAt })
       .eq("id", duplicate.id);
     if (touchError) return { error: touchError.message };
-    return { recorded: true, deduped: true, finding_id: duplicate.id, evidence };
+    for (const key of recordKeys) ctx.recordedKeys.add(key);
+    return {
+      recorded: true,
+      deduped: true,
+      finding_id: duplicate.id,
+      evidence,
+      ...(warning ? { warning } : {}),
+    };
   }
 
   const { data, error } = await ctx.db
@@ -278,6 +303,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     .select("id")
     .maybeSingle();
   if (error || !data?.id) return { error: error?.message || "The finding was not saved." };
+  for (const key of recordKeys) ctx.recordedKeys.add(key);
 
   const { error: messageError } = await ctx.db.from("agent_messages").insert({
     client_id: ctx.clientId,
@@ -302,5 +328,6 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     recorded: true,
     finding_id: data.id,
     evidence,
+    ...(warning ? { warning } : {}),
   };
 }
