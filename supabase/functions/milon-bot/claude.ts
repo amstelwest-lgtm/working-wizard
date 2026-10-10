@@ -68,7 +68,6 @@ export async function callClaudeRound(
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
       "Content-Type": "application/json",
-      ...(shaped.betaHeader ? { "anthropic-beta": shaped.betaHeader } : {}),
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,

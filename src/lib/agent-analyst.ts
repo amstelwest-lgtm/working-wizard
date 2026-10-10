@@ -10,7 +10,7 @@ import {
   sanitizeAgentError,
   type StoredFigures,
 } from "./agent-bus.ts";
-import { CLAUDE_SONNET_55 } from "./claude-request";
+import { CLAUDE_SONNET_55 } from "./claude-request.ts";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 

@@ -18,10 +18,9 @@ export function shapeCachedModelRequest<T extends Record<string, unknown>>(input
 }): {
   system: string | CachedSystemBlock[];
   tools: T[];
-  betaHeader: string | null;
 } {
   if (!input.cachePrompt) {
-    return { system: input.system, tools: input.tools, betaHeader: null };
+    return { system: input.system, tools: input.tools };
   }
   const tools = input.tools.map((tool, index) =>
     index === input.tools.length - 1
@@ -37,7 +36,6 @@ export function shapeCachedModelRequest<T extends Record<string, unknown>>(input
       },
     ],
     tools,
-    betaHeader: "prompt-caching-2024-07-31",
   };
 }
 

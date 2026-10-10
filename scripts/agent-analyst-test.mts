@@ -340,7 +340,7 @@ const DAY = 24 * 60 * 60 * 1000;
   const off = shapeCachedModelRequest({ system: "Review the books.", tools, cachePrompt: false });
   assert(off.system === "Review the books.", "an uncached call keeps the system prompt as a string");
   assert(off.tools === tools, "an uncached call keeps the tool array unchanged");
-  assert(off.betaHeader === null, "an uncached call adds no cache header");
+  assert(!("betaHeader" in off), "an uncached call adds no cache header");
   assert(!JSON.stringify(off.tools).includes("cache_control"), "uncached tools have no cache_control");
 
   const on = shapeCachedModelRequest({ system: "Review the books.", tools, cachePrompt: true });
@@ -352,7 +352,7 @@ const DAY = 24 * 60 * 60 * 1000;
     (on.tools[1] as { cache_control?: { type?: string } }).cache_control?.type === "ephemeral",
     "the last tool is marked ephemeral",
   );
-  assert(on.betaHeader === "prompt-caching-2024-07-31", "the cache beta header is set");
+  assert(!("betaHeader" in on), "caching does not send the legacy prompt-caching beta header");
   assert(on.tools !== tools, "caching does not mutate the caller's tool list");
 
   const turns = ANALYST_MAX_ITERATIONS;
@@ -384,7 +384,8 @@ const DAY = 24 * 60 * 60 * 1000;
   const indexSrc = readFileSync(resolve("supabase/functions/milon-bot/index.ts"), "utf8");
   assert(claudeSrc.includes("shapeCachedModelRequest"), "the model call shapes cache markers through the shared helper");
   assert(claudeSrc.includes("opts?.cachePrompt === true"), "cache markers are added only when cachePrompt is set");
-  assert(claudeSrc.includes("shaped.betaHeader"), "the cache header is added only when the shaper asks for it");
+  assert(!claudeSrc.includes("prompt-caching-2024-07-31"), "the model call does not send the legacy cache beta header");
+  assert(!claudeSrc.includes("anthropic-beta"), "the model call does not set an anthropic-beta header");
   assert(!handlerSrc.includes("cachePrompt"), "milon-bot chat does not opt into prompt caching");
   assert(!indexSrc.includes("cachePrompt"), "the milon-bot entrypoint does not opt into prompt caching");
   assert(
