@@ -24,7 +24,7 @@ export const OWNER_TEAM = {
     voice: "Financial Manager",
     initial: "F",
     kicker: "Runs the team",
-    role: "Data quality from the books, the 13-week cash forecast and budget, action points, and the accountant.",
+    role: "Looks after the books, the 13-week cash forecast, and your accountant.",
     mark: "M8 7.5a1.6 1.6 0 1 0 .01 0M16 7.5a1.6 1.6 0 1 0 .01 0M12 16.2a1.6 1.6 0 1 0 .01 0M9.2 8.8 11 14.2M14.8 8.8 13 14.2",
   },
   analyst: {
@@ -34,7 +34,7 @@ export const OWNER_TEAM = {
     voice: "Analyst",
     initial: "A",
     kicker: "Diagnosis",
-    role: "Health score, ratios, and variances. What the books already show.",
+    role: "What the books already show about profit and who owes you.",
     mark: "M4 19h16M6 15.5l4.2-5 3.1 2.8L18 6",
   },
   advisor: {
@@ -44,7 +44,7 @@ export const OWNER_TEAM = {
     voice: "Advisor",
     initial: "V",
     kicker: "Next moves",
-    role: "Next moves, and the advisory deliverables those moves become.",
+    role: "The next moves, written so you can act on them.",
     mark: "M5 12h12M13 7l5 5-5 5",
   },
 } as const;

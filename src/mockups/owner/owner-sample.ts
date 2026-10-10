@@ -204,12 +204,12 @@ export const OWNER_PRESENCES: readonly OwnerPresenceCard[] = [
   {
     bot: "analyst",
     presence: "found",
-    sentence: `September margin is ${HARBOUR_BOOKS.septemberMargin}%, down ${HARBOUR_BOOKS.marginPoints} points on August.`,
+    sentence: "September made less gross profit than August.",
   },
   {
     bot: "advisor",
     presence: "working",
-    sentence: "Drafting two moves from the margin dip.",
+    sentence: "Two moves are ready for you to read.",
   },
 ];
 
@@ -364,6 +364,70 @@ export const DO_THIS_NOW = {
   staffId: "johan" as StaffId,
 } as const;
 
+export const OWNER_CHAT = {
+  bot: "financial_manager" as const,
+  question: "Will we make payroll in November?",
+  answer: `Not from the cash on the books. The week of 30 November closes at ${zar(HARBOUR_BOOKS.lowClosing)}, ${zar(HARBOUR_BOOKS.underFloor)} under your ${zar(HARBOUR_BOOKS.floor)} floor.`,
+  source: "From the books, 13-week forecast",
+  step: "Assign the Atlantic Fit-out call",
+} as const;
+
+/** What the mic drops into the composer. Nothing is sent until the owner says so. */
+export const OWNER_TRANSCRIPT = OWNER_CHAT.question;
+
+export const OWNER_PROMISES = [
+  {
+    id: "cash",
+    heading: "Cash over the next 13 weeks",
+    sentence: `The week of 30 November closes at ${zar(HARBOUR_BOOKS.lowClosing)}. That is ${zar(HARBOUR_BOOKS.underFloor)} under your ${zar(HARBOUR_BOOKS.floor)} floor.`,
+    source: "From the books, 13-week forecast",
+    step: "Ask Financial Manager",
+    go: "bot",
+    bot: "financial_manager",
+    signed: false,
+  },
+  {
+    id: "owes",
+    heading: "Who owes you",
+    sentence: `Customers owe ${zar(HARBOUR_BOOKS.debtors)}. ${zar(HARBOUR_BOOKS.overdue)} of that is overdue.`,
+    source: "From the books, to 30 Sep",
+    step: "Assign the Atlantic Fit-out call",
+    go: "actions",
+    bot: null,
+    signed: false,
+  },
+  {
+    id: "profit",
+    heading: "Am I making money",
+    sentence: `Yes. September's gross profit was ${zar(HARBOUR_BOOKS.grossProfit)}, and that is less than August.`,
+    source: "From the books, September",
+    step: "Ask Analyst",
+    go: "bot",
+    bot: "analyst",
+    signed: false,
+  },
+  {
+    id: "answer",
+    heading: "What needs your answer",
+    sentence: DO_THIS_NOW.sentence,
+    source: "Raised by Advisor",
+    step: "Assign to Johan",
+    go: "actions",
+    bot: null,
+    signed: false,
+  },
+  {
+    id: "signed",
+    heading: "What your accountant signed",
+    sentence: `${HARBOUR_ACCOUNTANT.name} signed the September diagnosis and the 13-week forecast on ${HARBOUR_ACCOUNTANT.signedOn}.`,
+    source: HARBOUR_ACCOUNTANT.firm,
+    step: "See what they signed",
+    go: "deliverables",
+    bot: null,
+    signed: true,
+  },
+] as const;
+
 export interface OwnerDeliverable {
   id: string;
   title: string;
@@ -385,7 +449,7 @@ export const OWNER_DELIVERABLES: readonly OwnerDeliverable[] = [
   {
     id: "diagnosis",
     title: "September diagnosis",
-    sentence: `Health is ${HARBOUR_BOOKS.health}, ${HARBOUR_BOOKS.healthBand}. Gross margin is ${HARBOUR_BOOKS.septemberMargin}%, ${HARBOUR_BOOKS.marginPoints} points under August, on the books to ${HARBOUR.asOfLabel}.`,
+    sentence: `September's gross profit was ${zar(HARBOUR_BOOKS.grossProfit)}. You made money, and you made less than August.`,
     by: "analyst",
     signed: true,
     chip: `Books · ${HARBOUR.asOfLabel}`,

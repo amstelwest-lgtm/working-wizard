@@ -1,0 +1,241 @@
+/* Agent presences. No images, no animation libraries. */
+
+.owner-avatar {
+  --avatar: #d4af37;
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--avatar);
+}
+
+.owner-avatar.is-financial_manager {
+  --avatar: #d4af37;
+}
+
+.owner-avatar.is-analyst {
+  --avatar: #9ec9c2;
+}
+
+.owner-avatar.is-advisor {
+  --avatar: #f0d56a;
+}
+
+.owner-orb-svg,
+.owner-face-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.owner-orb-ring,
+.owner-orb-scan,
+.owner-orb-beam,
+.owner-orb-ticks,
+.owner-face-shell,
+.owner-face-scan,
+.owner-face-ticks {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.owner-orb-core,
+.eye,
+.owner-avatar-dot {
+  fill: currentColor;
+  stroke: none;
+}
+
+.owner-orb-wave {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  opacity: 0;
+}
+
+.owner-avatar-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  opacity: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--avatar) 28%, transparent);
+}
+
+.owner-avatar.is-idle {
+  animation: owner-breathe 4.8s ease-in-out infinite;
+}
+
+.owner-avatar.is-working .owner-orb-ticks,
+.owner-avatar.is-working .owner-face-ticks {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: owner-spin 2.8s linear infinite;
+}
+
+.owner-avatar.is-working .owner-orb-scan,
+.owner-avatar.is-working .owner-face-scan {
+  animation: owner-scan 1.6s ease-in-out infinite;
+}
+
+.owner-avatar.is-working.is-advisor .owner-orb-beam {
+  animation: owner-beam 1.4s ease-in-out infinite;
+}
+
+.owner-avatar.is-found .owner-avatar-dot {
+  opacity: 1;
+  animation: owner-dot 1.6s ease-in-out infinite;
+}
+
+.owner-avatar.is-found .owner-orb-ring,
+.owner-avatar.is-found .owner-face-shell {
+  animation: owner-pulse-ring 1.6s ease-out infinite;
+}
+
+.owner-avatar.is-speaking .owner-orb-wave,
+.owner-avatar.is-listening .owner-orb-wave {
+  opacity: 0.9;
+  stroke-dasharray: 3 7;
+  animation: owner-wave-ring 0.9s linear infinite;
+}
+
+.owner-avatar.is-speaking .eyes,
+.owner-avatar.is-listening .eyes {
+  animation: owner-speak-eyes 0.7s ease-in-out infinite;
+}
+
+.owner-avatar .eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: owner-blink 5.2s infinite;
+}
+
+.owner-avatar.is-analyst .eye {
+  animation-delay: 0.6s;
+}
+
+.owner-avatar.is-advisor .eye {
+  animation-delay: 1.3s;
+}
+
+.owner-avatar[data-look="advisor"] .eyes {
+  transform: translateX(3.5px);
+}
+
+.owner-avatar[data-look="financial_manager"] .eyes {
+  transform: translateX(-3.5px);
+}
+
+.owner-avatar[data-look="analyst"] .eyes {
+  transform: translateX(-2px);
+}
+
+@keyframes owner-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+@keyframes owner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes owner-scan {
+  0%,
+  100% {
+    transform: translateY(-4px);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(4px);
+    opacity: 1;
+  }
+}
+
+@keyframes owner-beam {
+  0%,
+  100% {
+    transform: translateX(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateX(3px);
+    opacity: 1;
+  }
+}
+
+@keyframes owner-pulse-ring {
+  0% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes owner-dot {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+@keyframes owner-wave-ring {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+@keyframes owner-blink {
+  0%,
+  88%,
+  100% {
+    transform: scaleY(1);
+  }
+  93% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes owner-speak-eyes {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(0.6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-avatar,
+  .owner-avatar *,
+  .owner-wave i {
+    animation: none !important;
+  }
+
+  .owner-avatar.is-found .owner-avatar-dot,
+  .owner-avatar.is-speaking .owner-orb-wave,
+  .owner-avatar.is-listening .owner-orb-wave {
+    opacity: 1;
+  }
+}

@@ -1188,7 +1188,454 @@ body:has(.owner-door) button[aria-label="Share Milōn"] {
 @media (prefers-reduced-motion: reduce) {
   .owner-pulse,
   .owner-live,
-  .owner-presence.is-waiting .owner-state i {
+  .owner-presence.is-waiting .owner-state i,
+  .owner-wave i {
     animation: none;
+  }
+}
+
+/* v2 shell: accountant client rail + owner answers */
+
+.owner-door.accountant-portal {
+  background: transparent;
+  min-height: 0;
+}
+
+.owner-door.accountant-portal .topbar {
+  margin: 0;
+  flex: none;
+  height: 56px;
+  z-index: 40;
+  width: auto;
+}
+
+.owner-door .owner-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.owner-door .owner-word {
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  font-size: 13px;
+}
+
+.owner-door .client-workspace {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+  gap: 14px;
+}
+
+.owner-door .deliverable-rail {
+  align-self: start;
+  max-height: 100%;
+}
+
+.owner-door .deliverable-main {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.owner-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.owner-account {
+  position: relative;
+  flex: none;
+}
+
+.owner-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 196px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line, rgba(212, 175, 55, 0.22));
+  background: #101018;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.owner-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink, #f2ecdc);
+  padding: 8px 10px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.owner-menu-item svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+}
+
+.owner-menu-item:hover {
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.owner-door .answer-strip {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0 0 4px;
+  padding: 6px 10px;
+  row-gap: 2px;
+  border: 1px solid var(--line, rgba(212, 175, 55, 0.22));
+  border-radius: 16px;
+  background: rgba(16, 16, 24, 0.94);
+}
+
+.owner-door .answer-strip__actions {
+  grid-column: 2;
+  grid-row: 1;
+  width: auto;
+}
+
+.owner-door .answer-strip__heading {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+
+.owner-door .answer-strip__sentence {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.owner-promises .owner-free {
+  font-size: 22px;
+}
+
+.owner-handoff {
+  margin: 4px 0 8px;
+  color: var(--dim, #9b958a);
+  font-size: 13px;
+}
+
+.owner-agents {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.owner-agent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+  color: inherit;
+  background: rgba(16, 16, 24, 0.94);
+  border: 1px solid var(--line, rgba(212, 175, 55, 0.22));
+  border-radius: 16px;
+  padding: 8px;
+  min-width: 0;
+}
+
+.owner-agents .owner-avatar {
+  width: 44px;
+  height: 44px;
+}
+
+.owner-agent-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.owner-ask {
+  margin-top: 4px;
+  color: var(--gold, #d4af37);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.owner-ask-short {
+  display: none;
+}
+
+.owner-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.owner-chat-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex: none;
+}
+
+.owner-chat-head .owner-title {
+  font-size: 28px;
+}
+
+.owner-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.owner-msg {
+  max-width: 68ch;
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.owner-msg p {
+  margin: 0 0 8px;
+}
+
+.owner-msg.is-you {
+  align-self: flex-end;
+  background: rgba(212, 175, 55, 0.12);
+}
+
+.owner-msg.is-agent {
+  align-self: flex-start;
+  background: rgba(16, 16, 24, 0.94);
+  border: 1px solid var(--line, rgba(212, 175, 55, 0.22));
+}
+
+.owner-composer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  background: #101018;
+}
+
+.owner-composer textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.owner-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.owner-mic {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: transparent;
+  color: var(--gold, #d4af37);
+  display: grid;
+  place-items: center;
+}
+
+.owner-mic svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+
+.owner-wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 36px;
+}
+
+.owner-wave i {
+  display: block;
+  width: 3px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--gold, #d4af37);
+  animation: owner-bar 0.9s ease-in-out infinite;
+}
+
+.owner-transcript-note {
+  margin: 0;
+  color: var(--gold, #d4af37);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.owner-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.owner-states {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.owner-state-row {
+  display: grid;
+  grid-template-columns: 128px repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--line, rgba(212, 175, 55, 0.18));
+}
+
+.owner-state-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+@keyframes owner-bar {
+  0%,
+  100% {
+    height: 6px;
+  }
+  50% {
+    height: 28px;
+  }
+}
+
+@media (max-width: 860px) {
+  .owner-door .client-workspace {
+    grid-template-rows: auto minmax(0, 1fr);
+    padding: 8px 10px 12px;
+  }
+}
+
+@media (max-width: 700px) {
+  .owner-door.accountant-portal .topbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    height: auto;
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .owner-door .answer-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .owner-door .answer-strip__heading {
+    font-size: 17px;
+  }
+
+  .owner-door .answer-strip__actions {
+    grid-column: 1;
+    grid-row: 3;
+    width: auto;
+    justify-content: flex-start;
+  }
+
+  .owner-door .answer-strip__sentence,
+  .owner-promises .owner-free {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .owner-door .answer-strip .owner-btn {
+    max-width: none;
+    padding: 6px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .owner-agents {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .owner-agent {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 8px;
+  }
+
+  .owner-door .owner-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .owner-ask-full {
+    display: none;
+  }
+
+  .owner-ask-short {
+    display: inline;
+  }
+
+  .owner-agent .owner-voice {
+    display: none;
+  }
+
+  .owner-state-row {
+    grid-template-columns: 72px repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .owner-state-cell span,
+  .owner-state-row > span {
+    display: none;
+  }
+
+  .owner-chat-head .owner-title {
+    font-size: 22px;
+  }
+
+  .owner-chat-head .owner-lede {
+    display: none;
   }
 }

@@ -193,14 +193,20 @@ const ownerMockupRoute = createRoute({
       search.screen === "bot" ||
       search.screen === "actions" ||
       search.screen === "accountant" ||
+      search.screen === "deliverables" ||
       search.screen === "first" ||
-      search.screen === "plan"
+      search.screen === "plan" ||
+      search.screen === "settings" ||
+      search.screen === "profile" ||
+      search.screen === "states"
         ? search.screen
         : "home",
     bot:
       search.bot === "financial_manager" || search.bot === "advisor" || search.bot === "analyst"
         ? search.bot
-        : "analyst",
+        : "financial_manager",
+    avatars: search.avatars === "character" ? "character" : "orb",
+    talk: search.talk === "recording" || search.talk === "transcript" ? search.talk : "open",
   }),
   component: OwnerMockupPage,
 });

@@ -1,7 +1,11 @@
 import type { KeyboardEvent } from "react";
 import { DELIVERABLE_SECTIONS, OVERVIEW_SECTIONS } from "@/lib/client-route-search";
 
-export const CLIENT_RAIL: { id: "ask" | "overview" | "deliverables"; label: string; landing: string }[] = [
+export const CLIENT_RAIL: {
+  id: "ask" | "overview" | "deliverables";
+  label: string;
+  landing: string;
+}[] = [
   { id: "ask", label: "Milōn Bot", landing: "ask" },
   { id: "overview", label: "Overview", landing: "overview" },
   { id: "deliverables", label: "Deliverables", landing: "reports" },
@@ -19,7 +23,10 @@ export const OVERVIEW_SECTION_TABS: { id: (typeof OVERVIEW_SECTIONS)[number]; la
   { id: "books", label: "Books" },
 ];
 
-export const DELIVERABLE_SECTION_TABS: { id: (typeof DELIVERABLE_SECTIONS)[number]; label: string }[] = [
+export const DELIVERABLE_SECTION_TABS: {
+  id: (typeof DELIVERABLE_SECTIONS)[number];
+  label: string;
+}[] = [
   { id: "reports", label: "Reports" },
   { id: "pack", label: "Advisory pack" },
   { id: "plan", label: "Action plan" },
@@ -28,13 +35,16 @@ export const DELIVERABLE_SECTION_TABS: { id: (typeof DELIVERABLE_SECTIONS)[numbe
 
 export function railGroup(tab: string): "ask" | "overview" | "deliverables" {
   if (tab === "ask") return "ask";
-  if (tab === "reports" || tab === "plan" || tab === "advisory" || tab === "drafter") return "deliverables";
+  if (tab === "reports" || tab === "plan" || tab === "advisory" || tab === "drafter")
+    return "deliverables";
   return "overview";
 }
 
 export function selectedSectionId(tab: string, section: string | undefined): string | null {
   if (railGroup(tab) === "deliverables") {
-    return DELIVERABLE_SECTION_TABS.some((row) => row.id === section) ? (section ?? "reports") : "reports";
+    return DELIVERABLE_SECTION_TABS.some((row) => row.id === section)
+      ? (section ?? "reports")
+      : "reports";
   }
   return OVERVIEW_SECTION_TABS.some((row) => row.id === section) ? (section ?? null) : null;
 }
@@ -46,7 +56,7 @@ export function ClientRailButton({
   primary,
   onSelect,
 }: {
-  id: "ask" | "overview" | "deliverables";
+  id: string;
   label: string;
   active: boolean;
   primary?: boolean;
