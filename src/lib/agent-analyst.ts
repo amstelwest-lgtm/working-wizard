@@ -3,7 +3,13 @@
  * The edge function enforces the same list before it executes a tool.
  */
 
-import { figuresClose, retryAfterFailure, sanitizeAgentError, type StoredFigures } from "./agent-bus.ts";
+import {
+  canonicalEvidenceKey,
+  figuresClose,
+  retryAfterFailure,
+  sanitizeAgentError,
+  type StoredFigures,
+} from "./agent-bus.ts";
 
 export const ANALYST_MAX_ITERATIONS = 10;
 
@@ -285,6 +291,49 @@ export function flattenFindingFigures(raw: unknown): Record<string, number> {
   return out;
 }
 
+/** Map a stored or legacy figure key onto the key new findings use. */
+export function canonicalComparableKey(key: string, value: number, periodLabel: string | null): string {
+  const pipe = key.indexOf("|");
+  const period = pipe >= 0 ? key.slice(0, pipe) : periodLabel;
+  const bare = pipe >= 0 ? key.slice(pipe + 1) : key;
+  const lowered = bare.toLowerCase();
+  if (
+    (lowered === "profit" || lowered === "assets" || lowered === "financing" || lowered === "cash") &&
+    value >= 0 &&
+    value <= 100
+  ) {
+    return `pillar:${lowered}`;
+  }
+  if (lowered === "score" && period && /^\d{4}-\d{2}-\d{2}$/.test(period)) return `score:${period}`;
+  return canonicalEvidenceKey(bare, new Set());
+}
+
+/**
+ * Figure keys for dedupe. Legacy `profit` matches `pillar:profit`. A flat
+ * `Debtor Days` matches the same key nested under its period label.
+ */
+export function comparableFindingFigures(raw: unknown, periodLabel: string | null): Record<string, number> {
+  const flat = flattenFindingFigures(raw);
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(flat)) {
+    out[canonicalComparableKey(key, value, periodLabel)] = value;
+  }
+  return out;
+}
+
+/** Free-text kinds from before the enum, plus the enum values themselves. */
+export function normalizeFindingKind(kind: string): string {
+  const text = normalizeFindingText(kind);
+  if ((FINDING_KINDS as readonly string[]).includes(text)) return text;
+  if (text.includes("weakest") && text.includes("pillar")) return "weakest_pillar";
+  if (text.startsWith("health score decline") || text.includes("score decline")) return "score_decline";
+  if (text.includes("score improvement")) return "score_improvement";
+  if (text.includes("debtor") && text.includes("creditor")) return "working_capital_days";
+  if (text.includes("margin") && text.includes("compress")) return "margin_compression";
+  if (text.includes("margin") && text.includes("improv")) return "margin_improvement";
+  return text;
+}
+
 export function evidenceKeyList(reads: StoredFigures[]): string[] {
   return [...new Set(reads.flatMap((row) => Object.keys(row.figures)))].sort();
 }
@@ -353,18 +402,18 @@ export function findingDuplicates<T extends {
   recent: T[];
 }): T | null {
   const cutoff = input.nowMs - FINDING_DEDUPE_DAYS * 24 * 60 * 60 * 1000;
-  const kind = normalizeFindingText(input.candidate.kind);
-  const figures = flattenFindingFigures(input.candidate.figures);
+  const kind = normalizeFindingKind(input.candidate.kind);
+  const figures = comparableFindingFigures(input.candidate.figures, input.candidate.periodLabel);
   let best: T | null = null;
   for (const row of input.recent) {
     if (row.seenAtMs < cutoff) continue;
     const sameKindPeriod =
-      normalizeFindingText(row.kind) === kind &&
+      normalizeFindingKind(row.kind) === kind &&
       sameFindingPeriod(
         { periodLabel: input.candidate.periodLabel, snapshotId: input.candidate.snapshotId },
         { periodLabel: row.periodLabel, snapshotId: row.snapshotId },
       );
-    const overlap = figureKeyOverlap(figures, flattenFindingFigures(row.figures));
+    const overlap = figureKeyOverlap(figures, comparableFindingFigures(row.figures, row.periodLabel));
     if (!sameKindPeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
     if (!best || row.seenAtMs >= best.seenAtMs) best = row;
   }

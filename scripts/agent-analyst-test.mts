@@ -6,8 +6,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  attachCitedEvidence,
   canonicalEvidenceKey,
-  citedFiguresCovered,
   figuresClose,
   groundFindingEvidence,
   isClientIdle,
@@ -23,11 +23,13 @@ import {
   analystToolAllowed,
   collectStoredReads,
   evidenceKeysNote,
+  canonicalComparableKey,
   executeAnalystGate,
   FINDING_KINDS,
   figureKeyOverlap,
   findingDuplicates,
   higherFindingSeverity,
+  normalizeFindingKind,
   labelHealthScore,
   statementVariance,
 } from "../src/lib/agent-analyst.ts";
@@ -83,6 +85,7 @@ const DAY = 24 * 60 * 60 * 1000;
   );
   assert(executeSrc.includes("executeAnalystGate"), "execute refuses a tool before it runs");
   assert(executeSrc.includes("groundFindingEvidence"), "findings are grounded in stored figures");
+  assert(executeSrc.includes("attachCitedEvidence"), "a cited stored number is attached instead of rejected");
 }
 
 // Variance is the difference of stored totals, and only for keys present on both.
@@ -684,52 +687,132 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(collapse.includes("2faf551f-a965-40b4-b250-10cf47705457"), "the signup working-capital finding is documented");
   const collapseCode = collapse.replace(/--[^\n]*/g, "");
   assert(!collapseCode.includes("2faf551f"), "the signup working-capital finding is not superseded");
+
+  assert(
+    normalizeFindingKind("Profit Drivers – weakest health pillar") === "weakest_pillar",
+    "a free-text weakest-pillar kind matches the enum",
+  );
+  assert(
+    normalizeFindingKind("Creditor Days vs Debtor Days") === "working_capital_days",
+    "a free-text debtor and creditor kind matches working capital",
+  );
+  assert(canonicalComparableKey("profit", 58, "Sep 2026") === "pillar:profit", "a legacy profit score matches pillar:profit");
+  assert(
+    canonicalComparableKey("Oct 2026|Debtor Days", 43.8, null) === "Debtor Days",
+    "a per-period debtor days key matches the flat label",
+  );
+  assert(canonicalComparableKey("cash", 128450, "Sep 2026") === "cash", "a cash balance is not relabelled as a pillar");
+  const legacyPillar = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "weakest_pillar",
+      figures: { "pillar:profit": 58, overall: 75 },
+      periodLabel: "Sep 2026",
+      snapshotId: "snap-sep",
+    },
+    recent: [
+      {
+        id: "legacy-pillar",
+        kind: "Profit Drivers – weakest health pillar",
+        figures: { profit: 58, overall: 75, net_margin: 0.09 },
+        seenAtMs: now - day,
+        periodLabel: "Sep 2026",
+        snapshotId: "snap-sep",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(legacyPillar?.id === "legacy-pillar", "a new weakest_pillar finding matches the legacy profit row for that period");
+  const legacyDays = findingDuplicates({
+    nowMs: now,
+    candidate: {
+      kind: "working_capital_days",
+      figures: { "Oct 2026": { "Debtor Days": 43.8, "Creditor Days": 73 } },
+      periodLabel: "Oct 2026",
+      snapshotId: "snap-oct",
+    },
+    recent: [
+      {
+        id: "legacy-days",
+        kind: "Creditor Days vs Debtor Days",
+        figures: { "Debtor Days": 43.8, "Creditor Days": 73, "Gross Margin": 0.6, "Operating Margin": 0.16 },
+        seenAtMs: now - day,
+        periodLabel: "Oct 2026",
+        snapshotId: "snap-oct",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(legacyDays?.id === "legacy-days", "flat Debtor Days on a period match the nested working-capital finding");
+
+  const legacySql = readFileSync(
+    resolve("supabase/migrations/20261011040000_agent_findings_legacy_normalize.sql"),
+    "utf8",
+  );
+  for (const id of [
+    "69471b80-7e6d-4ec8-b96c-a59b16fb9fce",
+    "c5dce3e6-1230-455f-b211-6ae400886f76",
+    "cd3cfbb4-d97f-46ba-962c-8573d8184656",
+    "032eaf02-ea42-4f2b-bd70-872543b1e759",
+  ]) {
+    assert(legacySql.includes(id), `the legacy cleanup names ${id}`);
+  }
+  assert(legacySql.includes("pillar:"), "legacy pillar ids are stored as pillar: keys");
+  assert(legacySql.includes("jsonb_build_object"), "flat figures are nested under the period label");
+  assert(legacySql.includes("superseded_by IS NULL"), "the legacy cleanup does not supersede a row twice");
+  assert(legacySql.includes("GREATEST(keeper.last_seen, dup.last_seen)"), "the legacy keeper last_seen moves forward");
+  assert(legacySql.includes("2faf551f-a965-40b4-b250-10cf47705457"), "the signup working-capital finding is documented again");
+  const legacyCode = legacySql.replace(/--[^\n]*/g, "");
+  assert(!legacyCode.includes("2faf551f"), "the signup working-capital finding is not superseded by the legacy cleanup");
 }
 
-// A title that cites two stored scores has to carry both values and their periods.
+// A stored number in the title is attached from the read. A number no read returned is refused.
 {
   const pool = [
     { snapshotId: null, periodLabel: "2026-10-05", figures: { score: 78, "score:2026-10-05": 78 } },
     { snapshotId: null, periodLabel: "2026-10-06", figures: { score: 69, "score:2026-10-06": 69 } },
   ];
-  const one = citedFiguresCovered({
+  const one = attachCitedEvidence({
     title: "Health dropped from 78 to 69",
     detail: "",
     pool,
-    evidenceFigures: { score: 69 },
-    evidencePeriod: "2026-10-06",
+    evidence: { snapshot_id: null, period_label: "2026-10-06", figures: { score: 69 } },
   });
-  assert(one.ok === false, "citing 78 without putting it in the figures is rejected");
-  if (!one.ok) assert(one.error.includes("78"), "the error names the missing figure");
-  const noPeriod = citedFiguresCovered({
-    title: "Health dropped from 78 to 69",
+  assert(one.ok === true, "a cited score that was read is attached instead of rejected");
+  if (one.ok) {
+    const byPeriod = one.evidence.figures as Record<string, Record<string, number>>;
+    assert(one.evidence.snapshot_id === null, "two score periods do not share one snapshot");
+    assert(byPeriod["2026-10-05"]?.["score:2026-10-05"] === 78, "78 is attached with its period key");
+    assert(byPeriod["2026-10-06"]?.["score:2026-10-06"] === 69, "69 is attached with its period key");
+  }
+  const invented = attachCitedEvidence({
+    title: "The cash conversion cycle is 33 days",
     detail: "",
     pool,
-    evidenceFigures: { prior: 78, current: 69 },
-    evidencePeriod: null,
+    evidence: { snapshot_id: null, period_label: "2026-10-06", figures: { "score:2026-10-06": 69 } },
   });
-  assert(noPeriod.ok === false, "both scores without their periods are rejected");
-  if (!noPeriod.ok) assert(noPeriod.error.includes("2026-10-05"), "the error names a missing period");
-  const covered = citedFiguresCovered({
-    title: "Health dropped from 78 to 69",
-    detail: "",
-    pool,
-    evidenceFigures: { "score:2026-10-05": 78, "score:2026-10-06": 69 },
-    evidencePeriod: "2026-10-06",
+  assert(invented.ok === false, "a cited number that no read returned is refused");
+  if (!invented.ok) {
+    assert(invented.error.includes("33"), "the error names the number that was not read");
+    assert(!invented.error.includes("figures do not include it"), "a stored number is not rejected for being left out of figures");
+  }
+  const stamped = groundFindingEvidence({
+    pool: [{ snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { "Debtor Days": 43.79 } }],
+    claimedFigures: { "Debtor Days": 43.8, snapshot_id: "snap-oct", period_label: "Oct 2026" },
   });
-  assert(covered.ok === true, "figure keys that carry both periods are accepted");
-  const prose = citedFiguresCovered({
-    title: "Health dropped from 78 on 2026-10-05 to 69 on 2026-10-06",
-    detail: "",
-    pool,
-    evidenceFigures: { prior: 78, current: 69 },
-    evidencePeriod: null,
-  });
-  assert(prose.ok === true, "periods written in the title count");
+  assert(stamped.ok === true, "snapshot_id inside figures does not reject the finding");
+  if (stamped.ok) {
+    const flat = stamped.evidence.figures as Record<string, number>;
+    assert(flat["Debtor Days"] === 43.79, "the stored debtor days stay");
+    assert(flat.snapshot_id == null && flat.period_label == null, "snapshot_id and period_label are not figure keys");
+    assert(stamped.evidence.snapshot_id === "snap-oct", "the snapshot id moves to the evidence row");
+    assert(stamped.evidence.period_label === "Oct 2026", "the period label stays on the evidence row");
+  }
   assert(
     ANALYST_SYSTEM.includes("both scores and both periods"),
     "the prompt tells the model to carry both scores and both periods",
   );
+  assert(ANALYST_SYSTEM.includes("Do not put snapshot_id or period_label inside figures."), "the prompt keeps snapshot ids out of figures");
 }
 
 // The health tool returns the stored score. The live 67 is the current books with debt-to-equity.
