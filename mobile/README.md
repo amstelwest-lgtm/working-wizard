@@ -68,20 +68,20 @@ keytool -genkeypair -v \
   -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-Enroll in **Play App Signing**. The upload key stays with you. Google holds the app signing key. `assetlinks.json` needs both SHA-256 fingerprints: the upload key (already filled in) and the Play app signing certificate (still the `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` placeholder).
+Enroll in **Play App Signing**. The upload key stays with you. Google holds the app signing key. `assetlinks.json` currently has the upload-key SHA-256 only, matching the site file. After Play issues the app signing certificate, add that SHA-256 as a second fingerprint in both files.
 
 ## App Links
 
 OAuth and Stripe return to the website (`/auth/callback`, `/billing/success`, `/api/qbo/callback`, `/api/xero/callback`, and so on). The shell claims `https://www.milonfinance.com` and the apex host so those URLs open the app instead of staying in the Custom Tab.
 
-`autoVerify` does nothing until the site serves Digital Asset Links. This PR does not add a web route. The file to publish is `mobile/well-known/assetlinks.json`.
+`autoVerify` does nothing until the site serves Digital Asset Links. The site file is `public/.well-known/assetlinks.json`. This copy matches it: one statement, upload-key SHA-256 `53:72:E4:DA:D7:C3:B3:04:82:C1:93:2B:AE:AA:2A:B0:BC:56:46:4E:6D:6E:C4:84:86:49:F0:13:62:61:53:9E`.
 
-Serve the same JSON at both:
+Serve that JSON at both:
 
 - `https://www.milonfinance.com/.well-known/assetlinks.json`
 - `https://milonfinance.com/.well-known/assetlinks.json`
 
-`Content-Type: application/json`. No redirects that drop the file. The file already contains the upload-key SHA-256 `53:72:E4:DA:D7:C3:B3:04:82:C1:93:2B:AE:AA:2A:B0:BC:56:46:4E:6D:6E:C4:84:86:49:F0:13:62:61:53:9E`. Replace `REPLACE_WITH_PLAY_APP_SIGNING_SHA256` with the fingerprint from Play Console → App integrity → App signing key certificate → SHA-256. Colons, uppercase hex, the way Play shows it. Leave both entries in the array.
+`Content-Type: application/json`. No redirects that drop the file. The apex host currently redirects to www before the deployment runs, so check that the apex returns `200` for this path after that domain redirect is lifted. When Play App Signing is on, add the app signing certificate SHA-256 beside the upload key in both files.
 
 Until that file is live, Android will not verify the link. The Custom Tab will keep the return URL and the WebView will not see the OAuth code. Check after the file is deployed:
 
@@ -107,7 +107,7 @@ No Google Cloud redirect URI change. Google's authorized redirect is still the S
 - `https://www.milonfinance.com/auth/callback`
 - `https://www.milonfinance.com/**`
 
-Keep the apex entries that are already there. No custom scheme. App Links will not complete sign-in until `assetlinks.json` is served with the Play signing fingerprint.
+Keep the apex entries that are already there. No custom scheme. App Links will not complete sign-in until `assetlinks.json` is served with a fingerprint that matches the certificate on the installed build (the upload key for a sideload, the Play app signing certificate for a Play install).
 
 ## Push
 
