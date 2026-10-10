@@ -4,7 +4,7 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAgentTool } from "../milon-bot/execute.ts";
-import { citedFiguresCovered, groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
+import { attachCitedEvidence, groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
   executeAnalystGate,
   FINDING_KINDS,
@@ -210,14 +210,14 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     claimedFigures: args.figures,
   });
   if (!grounded.ok) return { error: grounded.error, tool_blocked: true };
-  const cited = citedFiguresCovered({
+  const cited = attachCitedEvidence({
     title,
     detail,
     pool: ctx.pool,
-    evidenceFigures: grounded.evidence.figures,
-    evidencePeriod: grounded.evidence.period_label,
+    evidence: grounded.evidence,
   });
   if (!cited.ok) return { error: cited.error, tool_blocked: true };
+  const evidence = cited.evidence;
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data: recent, error: recentError } = await ctx.db
@@ -234,9 +234,9 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     nowMs: Date.now(),
     candidate: {
       kind,
-      figures: grounded.evidence.figures,
-      periodLabel: grounded.evidence.period_label,
-      snapshotId: grounded.evidence.snapshot_id,
+      figures: evidence.figures,
+      periodLabel: evidence.period_label,
+      snapshotId: evidence.snapshot_id,
     },
     recent: ((recent ?? []) as Array<Record<string, unknown>>).map((row) => {
       const evidence = asRecord(row.evidence);
@@ -259,7 +259,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       .update(raised ? { last_seen: seenAt, severity: raised } : { last_seen: seenAt })
       .eq("id", duplicate.id);
     if (touchError) return { error: touchError.message };
-    return { recorded: true, deduped: true, finding_id: duplicate.id, evidence: grounded.evidence };
+    return { recorded: true, deduped: true, finding_id: duplicate.id, evidence };
   }
 
   const { data, error } = await ctx.db
@@ -272,7 +272,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       severity,
       title: title.slice(0, 200),
       detail: detail || null,
-      evidence: grounded.evidence,
+      evidence,
       last_seen: new Date().toISOString(),
     })
     .select("id")
@@ -301,6 +301,6 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   return {
     recorded: true,
     finding_id: data.id,
-    evidence: grounded.evidence,
+    evidence,
   };
 }

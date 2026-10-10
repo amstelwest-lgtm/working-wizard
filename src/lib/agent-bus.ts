@@ -277,11 +277,32 @@ function normalizeLabel(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+type MetaHint = { snapshotId: string | null; periodLabel: string | null };
+
 type ParsedClaim =
-  | { shape: "empty" }
-  | { shape: "flat"; figures: Record<string, number> }
-  | { shape: "nested"; periods: Record<string, Record<string, number>> }
+  | { shape: "empty"; hint: MetaHint }
+  | { shape: "flat"; figures: Record<string, number>; hint: MetaHint }
+  | { shape: "nested"; periods: Record<string, Record<string, number>>; hint: MetaHint }
   | { shape: "invalid"; error: string };
+
+function emptyHint(): MetaHint {
+  return { snapshotId: null, periodLabel: null };
+}
+
+function isEvidenceMetaKey(key: string): boolean {
+  const norm = key.toLowerCase().replace(/[\s_-]/g, "");
+  return norm === "snapshotid" || norm === "periodlabel";
+}
+
+function takeMeta(key: string, value: unknown, hint: MetaHint): boolean {
+  if (!isEvidenceMetaKey(key)) return false;
+  const norm = key.toLowerCase().replace(/[\s_-]/g, "");
+  if (typeof value === "string" && value.trim()) {
+    if (norm === "snapshotid") hint.snapshotId = value.trim();
+    if (norm === "periodlabel") hint.periodLabel = value.trim();
+  }
+  return true;
+}
 
 function takeNumber(
   into: Record<string, number>,
@@ -298,13 +319,14 @@ function takeNumber(
 }
 
 function parseClaimedFigures(raw: unknown, poolKeys: ReadonlySet<string>): ParsedClaim {
-  if (raw == null) return { shape: "empty" };
+  if (raw == null) return { shape: "empty", hint: emptyHint() };
   if (typeof raw !== "object" || Array.isArray(raw)) {
     return { shape: "invalid", error: "figures must be an object of numbers, or period labels holding numbers." };
   }
-  const entries = Object.entries(raw as Record<string, unknown>);
-  if (entries.length === 0) return { shape: "empty" };
-  const hasNested = entries.some(([, value]) => value != null && typeof value === "object");
+  const hint = emptyHint();
+  const entries = Object.entries(raw as Record<string, unknown>).filter(([key, value]) => !takeMeta(key, value, hint));
+  if (entries.length === 0) return { shape: "empty", hint };
+  const hasNested = entries.some(([, value]) => value != null && typeof value === "object" && !Array.isArray(value));
   const hasFlat = entries.some(([, value]) => typeof value === "number");
   if (hasNested && hasFlat) {
     return {
@@ -315,33 +337,36 @@ function parseClaimedFigures(raw: unknown, poolKeys: ReadonlySet<string>): Parse
   if (hasNested) {
     const periods: Record<string, Record<string, number>> = {};
     for (const [period, value] of entries) {
+      if (takeMeta(period, value, hint)) continue;
       if (!value || typeof value !== "object" || Array.isArray(value)) {
         return { shape: "invalid", error: `The period ${period} must hold a map of numbers.` };
       }
       const inner: Record<string, number> = {};
       for (const [key, n] of Object.entries(value as Record<string, unknown>)) {
+        if (takeMeta(key, n, hint)) continue;
         if (typeof n !== "number" || !Number.isFinite(n)) {
           return { shape: "invalid", error: `The figure ${period}.${key} must be a number.` };
         }
         const clash = takeNumber(inner, key, n, poolKeys);
         if (clash) return { shape: "invalid", error: clash };
       }
-      if (Object.keys(inner).length === 0) {
-        return { shape: "invalid", error: `The period ${period} has no numbers.` };
-      }
+      if (Object.keys(inner).length === 0) continue;
       periods[period] = inner;
     }
-    return { shape: "nested", periods };
+    if (Object.keys(periods).length === 0) return { shape: "empty", hint };
+    return { shape: "nested", periods, hint };
   }
   const figures: Record<string, number> = {};
   for (const [key, n] of entries) {
+    if (takeMeta(key, n, hint)) continue;
     if (typeof n !== "number" || !Number.isFinite(n)) {
       return { shape: "invalid", error: `The figure ${key} must be a number.` };
     }
     const clash = takeNumber(figures, key, n, poolKeys);
     if (clash) return { shape: "invalid", error: clash };
   }
-  return { shape: "flat", figures };
+  if (Object.keys(figures).length === 0) return { shape: "empty", hint };
+  return { shape: "flat", figures, hint };
 }
 
 function booksMismatch(failed: string[], reads: StoredFigures[]): string {
@@ -393,6 +418,21 @@ function snapshotOf(rows: StoredFigures[]): string | null {
   return ids.length === 1 ? ids[0] : null;
 }
 
+function applyEvidenceHint(evidence: FindingEvidence, hint: MetaHint, reads: StoredFigures[]): FindingEvidence {
+  let snapshotId = evidence.snapshot_id;
+  let periodLabel = evidence.period_label;
+  if (!snapshotId && hint.snapshotId && reads.some((row) => row.snapshotId === hint.snapshotId)) {
+    snapshotId = hint.snapshotId;
+  }
+  if (!periodLabel && hint.periodLabel) {
+    const match = reads.find(
+      (row) => row.periodLabel != null && normalizeLabel(row.periodLabel) === normalizeLabel(hint.periodLabel as string),
+    );
+    if (match?.periodLabel) periodLabel = match.periodLabel;
+  }
+  return { ...evidence, snapshot_id: snapshotId, period_label: periodLabel };
+}
+
 /**
  * A finding may only carry figures that a tool read from stored books.
  * A flat map must belong to one snapshot and period. Numbers from more than
@@ -415,11 +455,15 @@ export function groundFindingEvidence(input: {
     const latest = reads[reads.length - 1];
     return {
       ok: true,
-      evidence: {
-        snapshot_id: latest.snapshotId,
-        period_label: latest.periodLabel,
-        figures: { ...latest.figures },
-      },
+      evidence: applyEvidenceHint(
+        {
+          snapshot_id: latest.snapshotId,
+          period_label: latest.periodLabel,
+          figures: { ...latest.figures },
+        },
+        parsed.hint,
+        reads,
+      ),
     };
   }
 
@@ -443,11 +487,15 @@ export function groundFindingEvidence(input: {
     const onePeriod = periods.length === 1 ? periods[0] : null;
     return {
       ok: true,
-      evidence: {
-        snapshot_id: onePeriod ? snapshotOf(readsForPeriod(reads, onePeriod)) : null,
-        period_label: onePeriod,
-        figures,
-      },
+      evidence: applyEvidenceHint(
+        {
+          snapshot_id: onePeriod ? snapshotOf(readsForPeriod(reads, onePeriod)) : null,
+          period_label: onePeriod,
+          figures,
+        },
+        parsed.hint,
+        reads,
+      ),
     };
   }
 
@@ -476,11 +524,15 @@ export function groundFindingEvidence(input: {
   const winner = covering[0];
   return {
     ok: true,
-    evidence: {
-      snapshot_id: snapshotOf(winner.rows),
-      period_label: winner.rows.find((row) => row.periodLabel)?.periodLabel ?? null,
-      figures: winner.figures,
-    },
+    evidence: applyEvidenceHint(
+      {
+        snapshot_id: snapshotOf(winner.rows),
+        period_label: winner.rows.find((row) => row.periodLabel)?.periodLabel ?? null,
+        figures: winner.figures,
+      },
+      parsed.hint,
+      reads,
+    ),
   };
 }
 
@@ -499,84 +551,131 @@ function citedNumbers(text: string): number[] {
   return out;
 }
 
-function periodCarried(
-  period: string,
-  title: string,
-  detail: string,
-  figureKeys: string[],
-  evidencePeriod: string | null,
-): boolean {
-  if (evidencePeriod === period) return true;
-  if (`${title}\n${detail}`.includes(period)) return true;
-  return figureKeys.some((key) => key.includes(period));
+type EvidenceBucket = {
+  periodLabel: string | null;
+  snapshotId: string | null;
+  figures: Record<string, number>;
+};
+
+function bucketId(periodLabel: string | null, snapshotId: string | null): string {
+  if (periodLabel) return `p:${normalizeLabel(periodLabel)}`;
+  if (snapshotId) return `s:${snapshotId}`;
+  return "none";
 }
 
-function evidenceFacts(figures: EvidenceFigures): { keys: string[]; numbers: number[] } {
-  const keys: string[] = [];
-  const numbers: number[] = [];
-  for (const [key, value] of Object.entries(figures)) {
-    keys.push(key);
-    if (typeof value === "number") {
-      if (Number.isFinite(value)) numbers.push(value);
-      continue;
-    }
-    for (const [inner, n] of Object.entries(value)) {
-      keys.push(inner);
-      keys.push(`${key}:${inner}`);
-      if (typeof n === "number" && Number.isFinite(n)) numbers.push(n);
-    }
+function matchingFigureKeys(row: StoredFigures, cited: number): Array<[string, number]> {
+  const matches = Object.entries(row.figures).filter(
+    ([, value]) => typeof value === "number" && figuresClose(cited, value),
+  );
+  if (row.periodLabel) {
+    const specific = matches.filter(([key]) => key.includes(row.periodLabel as string));
+    if (specific.length > 0) return specific;
   }
-  return { keys, numbers };
+  return matches;
+}
+
+function seedBuckets(evidence: FindingEvidence): Map<string, EvidenceBucket> {
+  const buckets = new Map<string, EvidenceBucket>();
+  const entries = Object.entries(evidence.figures);
+  const nested = entries.some(([, value]) => value != null && typeof value === "object");
+  if (!nested) {
+    const figures: Record<string, number> = {};
+    for (const [key, value] of entries) {
+      if (typeof value === "number" && Number.isFinite(value)) figures[key] = value;
+    }
+    const id = bucketId(evidence.period_label, evidence.snapshot_id);
+    buckets.set(id, {
+      periodLabel: evidence.period_label,
+      snapshotId: evidence.snapshot_id,
+      figures,
+    });
+    return buckets;
+  }
+  for (const [period, value] of entries) {
+    if (!value || typeof value !== "object") continue;
+    const figures: Record<string, number> = {};
+    for (const [key, n] of Object.entries(value)) {
+      if (typeof n === "number" && Number.isFinite(n)) figures[key] = n;
+    }
+    const id = bucketId(period, null);
+    const existing = buckets.get(id);
+    buckets.set(id, {
+      periodLabel: period,
+      snapshotId: existing?.snapshotId ?? (entries.length === 1 ? evidence.snapshot_id : null),
+      figures: { ...(existing?.figures ?? {}), ...figures },
+    });
+  }
+  return buckets;
+}
+
+function evidenceFromBuckets(buckets: Map<string, EvidenceBucket>): FindingEvidence {
+  const rows = [...buckets.values()].filter((bucket) => Object.keys(bucket.figures).length > 0);
+  if (rows.length === 1) {
+    const only = rows[0];
+    return {
+      snapshot_id: only.snapshotId,
+      period_label: only.periodLabel,
+      figures: only.figures,
+    };
+  }
+  const figures: Record<string, Record<string, number>> = {};
+  for (const bucket of rows) {
+    const label = bucket.periodLabel || bucket.snapshotId || "period";
+    figures[label] = { ...(figures[label] ?? {}), ...bucket.figures };
+  }
+  return { snapshot_id: null, period_label: null, figures };
 }
 
 /**
- * A number in the title or detail that equals a stored figure has to be in
- * the evidence, with the period of that figure. "Dropped from 78 to 69"
- * needs both scores and both periods.
+ * A stored number in the title or detail is copied onto the evidence with the
+ * key and period from the read. A cited number that no read returned is refused.
  */
-export function citedFiguresCovered(input: {
+export function attachCitedEvidence(input: {
   title: string;
   detail: string;
   pool: StoredFigures[];
-  evidenceFigures: EvidenceFigures;
-  evidencePeriod: string | null;
-}): { ok: true } | { ok: false; error: string } {
-  const text = `${input.title}\n${input.detail}`;
-  const cited = citedNumbers(text);
-  const evidence = evidenceFacts(input.evidenceFigures);
-  const missingValues: string[] = [];
-  const missingPeriods: string[] = [];
+  evidence: FindingEvidence;
+}): { ok: true; evidence: FindingEvidence } | { ok: false; error: string } {
+  const cited = citedNumbers(`${input.title}\n${input.detail}`);
   const seen = new Set<string>();
+  const missing: string[] = [];
+  const buckets = seedBuckets(input.evidence);
   for (const n of cited) {
     const token = String(n);
     if (seen.has(token)) continue;
     seen.add(token);
-    const reads = input.pool.filter((row) =>
-      Object.values(row.figures).some((value) => figuresClose(n, value)),
+    const hits = input.pool.flatMap((row) =>
+      matchingFigureKeys(row, n).map(([key, value]) => ({
+        periodLabel: row.periodLabel,
+        snapshotId: row.snapshotId,
+        key,
+        value,
+      })),
     );
-    if (reads.length === 0) continue;
-    const inEvidence = evidence.numbers.some((value) => figuresClose(n, value));
-    if (!inEvidence) {
-      missingValues.push(token);
+    if (hits.length === 0) {
+      missing.push(token);
       continue;
     }
-    const periods = [...new Set(reads.map((row) => row.periodLabel).filter((p): p is string => Boolean(p)))];
-    if (periods.length === 0) continue;
-    const carried = periods.some((period) =>
-      periodCarried(period, input.title, input.detail, evidence.keys, input.evidencePeriod),
-    );
-    if (!carried) missingPeriods.push(`${token} (${periods.join(" or ")})`);
+    for (const hit of hits) {
+      const id = bucketId(hit.periodLabel, hit.snapshotId);
+      const bucket = buckets.get(id) ?? {
+        periodLabel: hit.periodLabel,
+        snapshotId: hit.snapshotId,
+        figures: {},
+      };
+      if (!bucket.snapshotId && hit.snapshotId) bucket.snapshotId = hit.snapshotId;
+      if (!bucket.periodLabel && hit.periodLabel) bucket.periodLabel = hit.periodLabel;
+      bucket.figures[hit.key] = hit.value;
+      buckets.set(id, bucket);
+    }
   }
-  if (missingValues.length === 0 && missingPeriods.length === 0) return { ok: true };
-  const parts: string[] = [];
-  if (missingValues.length > 0) {
-    parts.push(
-      `The title or detail cites ${missingValues.join(", ")}, which is on the books, but the finding figures do not include it.`,
-    );
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      error: `The title or detail cites ${missing.join(", ")}, which is not in the books that were read.`,
+    };
   }
-  if (missingPeriods.length > 0) {
-    parts.push(`The finding cites a stored figure without its period: ${missingPeriods.join("; ")}.`);
-  }
-  parts.push("Include every cited figure and the period it came from.");
-  return { ok: false, error: parts.join(" ") };
+  const next = evidenceFromBuckets(buckets);
+  if (Object.keys(next.figures).length === 0) return { ok: true, evidence: input.evidence };
+  return { ok: true, evidence: next };
 }
