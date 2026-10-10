@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Milōn</string>
+    <string name="title_activity_main">Milōn</string>
+    <string name="package_name">com.milonfinance.app</string>
+    <string name="custom_url_scheme">com.milonfinance.app</string>
+</resources>

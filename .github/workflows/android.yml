@@ -1,0 +1,81 @@
+name: Android shell
+
+# Separate from the web CI job. mobile/ has its own package.json and is not
+# part of the root pnpm install. This job only builds a debug APK.
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android.yml"
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug-apk:
+    name: Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install shell dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Sync Capacitor Android project
+        working-directory: mobile
+        run: npx cap sync android
+
+      - name: Android SDK platform 36
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$SDK" ] && [ -d /usr/local/lib/android/sdk ]; then
+            SDK=/usr/local/lib/android/sdk
+          fi
+          if [ -z "$SDK" ]; then
+            SDK="$HOME/android-sdk"
+          fi
+          mkdir -p "$SDK"
+          SM="$(find "$SDK" -type f -name sdkmanager 2>/dev/null | head -1 || true)"
+          if [ -z "$SM" ]; then
+            mkdir -p "$SDK/cmdline-tools"
+            curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+            rm -rf "$SDK/cmdline-tools/latest" "$SDK/cmdline-tools/cmdline-tools"
+            unzip -q /tmp/cmdtools.zip -d "$SDK/cmdline-tools"
+            mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
+            SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | "$SM" --sdk_root="$SDK" --licenses >/dev/null || true
+          "$SM" --sdk_root="$SDK" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+      - name: Assemble debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: milon-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
