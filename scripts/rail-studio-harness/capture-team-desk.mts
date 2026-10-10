@@ -229,7 +229,7 @@ await shot("desk-live-1280", 1280, 1440, "/milon-team-desk?fixture=live", async 
 
 await shot("desk-live-390", 390, 900, "/milon-team-desk?fixture=live", async (page) => {
   await page.getByText("Working…").waitFor();
-  await page.getByText("Financial Manager").waitFor();
+  await page.getByText("Financial Manager", { exact: true }).waitFor();
   await page.getByText("Couldn't finish — will retry").waitFor();
   await assertClearIsClear(page);
   const fit = await page.locator(".milon-desk-agents").evaluate((el) => {

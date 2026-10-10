@@ -436,7 +436,10 @@ const liveDesk = html(api({}), "all", {
 assert(liveDesk.includes("Working…"), "a running agent says it is working");
 assert(liveDesk.includes("is-live"), "a running agent pulses");
 assert(liveDesk.includes("Last run 5m ago"), "a finished run says how long ago");
-assert(liveDesk.includes("Couldn't finish — will retry"), "a failed run stays muted and says it will retry");
+assert(
+  liveDesk.includes("Couldn&#x27;t finish — will retry"),
+  "a failed run stays muted and says it will retry",
+);
 assert(liveDesk.includes("is-muted"), "the failed line is muted");
 assert(liveDesk.includes("Analyst → Advisor: Review the cash floor before the next meeting."), "a hand-off names both agents");
 assert(!liveDesk.includes("0.4200"), "a finding does not keep a raw decimal");
