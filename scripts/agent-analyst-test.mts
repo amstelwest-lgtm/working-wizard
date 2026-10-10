@@ -190,11 +190,27 @@ const DAY = 24 * 60 * 60 * 1000;
     pool: [older, newer],
     claimedFigures: { cash: 10, debtor_days: 43.8 },
   });
-  assert(across.ok === false, "a flat map that mixes two periods is rejected");
-  if (!across.ok) {
-    assert(across.error.includes("more than one period"), "the error says the figures span periods");
-    assert(across.error.includes("Aug 2026") && across.error.includes("Sep 2026"), "the error names both periods");
-    assert(!across.error.includes("snap-sep"), "the rejection does not stamp the later snapshot");
+  assert(across.ok === true, "a flat map whose figures each belong to one period is filed under those periods");
+  if (across.ok) {
+    assert(across.evidence.snapshot_id === null, "two periods do not share one snapshot");
+    assert(across.evidence.period_label === null, "two periods do not share one label");
+    const byPeriod = across.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Aug 2026"]?.cash === 10, "August keeps the stored cash");
+    assert(byPeriod["Sep 2026"]?.debtor_days === 43.79, "September keeps the stored debtor days");
+  }
+  const ambiguous = groundFindingEvidence({
+    pool: [
+      { snapshotId: "snap-aug", periodLabel: "Aug 2026", figures: { cash: 10 } },
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { cash: 10 } },
+      { snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { debtor_days: 43.79 } },
+    ],
+    claimedFigures: { cash: 10, debtor_days: 43.8 },
+  });
+  assert(ambiguous.ok === false, "a figure that fits two periods is still rejected when no one period holds the map");
+  if (!ambiguous.ok) {
+    assert(ambiguous.error.includes("more than one period"), "the error says the figures span periods");
+    assert(ambiguous.error.includes("Aug 2026") && ambiguous.error.includes("Sep 2026"), "the error names both cash periods");
+    assert(!ambiguous.error.includes("snap-oct"), "the rejection does not stamp a snapshot");
   }
   const structured = groundFindingEvidence({
     pool: [older, newer],
@@ -278,7 +294,13 @@ const DAY = 24 * 60 * 60 * 1000;
     pool: history,
     claimedFigures: { "score:2026-08-01": 40, "score:2026-09-01": 48 },
   });
-  assert(mixedScores.ok === false, "two score periods in one flat map are rejected");
+  assert(mixedScores.ok === true, "a flat score series is filed under each score date");
+  if (mixedScores.ok) {
+    assert(mixedScores.evidence.period_label === null, "two score dates do not share one period label");
+    const byPeriod = mixedScores.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["2026-08-01"]?.["score:2026-08-01"] === 40, "August's score stays on its date");
+    assert(byPeriod["2026-09-01"]?.["score:2026-09-01"] === 48, "September's score stays on its date");
+  }
   const nestedScores = groundFindingEvidence({
     pool: history,
     claimedFigures: { "2026-08-01": { score: 40 }, "2026-09-01": { score: 48 } },
@@ -1039,6 +1061,20 @@ const DAY = 24 * 60 * 60 * 1000;
   const periodCode = periodCleanup.replace(/--[^\n]*/g, "");
   assert(!periodCode.includes("982d09f0"), "the genuine finding is not superseded");
 
+  const dismissed = readFileSync(
+    resolve("supabase/migrations/20261011230000_agent_findings_dismissed_reason.sql"),
+    "utf8",
+  );
+  assert(dismissed.includes("ADD COLUMN IF NOT EXISTS dismissed_reason text"), "findings can carry a dismissal reason");
+  assert(dismissed.includes("9e99e9e8-") && dismissed.includes("10464c39-"), "the labelling artefacts are dismissed");
+  assert(dismissed.includes("8556e68f-"), "the unrelated weakest-pillar pointer is the one being cleared");
+  assert(dismissed.includes("dismissed_reason = 'period label artefact'"), "the reason is the period label artefact");
+  assert(dismissed.includes("superseded_by = NULL"), "dismissal clears the superseded pointer");
+  assert(dismissed.includes("finding.dismissed_reason IS NULL"), "a second run does not dismiss a row twice");
+  const dismissedCode = dismissed.replace(/--[^\n]*/g, "");
+  assert(!dismissedCode.includes("982d09f0"), "the genuine finding is not dismissed");
+  assert(!/\bDELETE\b/i.test(dismissedCode), "nothing is deleted");
+
   const recipients = readFileSync(
     resolve("supabase/migrations/20261011180000_agent_messages_analyst_recipient.sql"),
     "utf8",
@@ -1056,6 +1092,13 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(executeSrcForDetail.includes("A finding needs a detail."), "an empty detail is refused");
   assert(executeSrcForDetail.includes('to_agent: "financial_manager"'), "a new finding is addressed to the financial manager");
   assert(!executeSrcForDetail.includes("to_agent: null"), "a new finding does not leave the recipient empty");
+  assert(executeSrcForDetail.includes('.is("dismissed_reason", null)'), "dedupe skips a dismissed finding");
+  const activityHook = readFileSync(resolve("src/hooks/use-agent-activity.ts"), "utf8");
+  assert(activityHook.includes("dismissed_reason"), "the desk select reads the dismissal reason");
+  assert(
+    activityHook.includes('typeof row.dismissed_reason === "string"'),
+    "a dismissed finding is left off the desk",
+  );
 }
 
 // A stored number in the title is attached from the read. A number no read returned is refused.
@@ -1136,6 +1179,118 @@ const DAY = 24 * 60 * 60 * 1000;
   }
   assert(citedNumbers("Debtor days are 25 as of 30 Sep 2026").map((n) => n.value).join(",") === "25", "a date beside a real figure leaves only that figure");
   assert(citedNumbers("Cash is 30").map((n) => n.value).join(",") === "30", "a bare 30 is still a cited number");
+  for (const date of ["1 Jan 2026-30 Sep 2026", "Sep 30-Oct 6", "score:2026-10-05", "score_2026-10-06", "score 2026-10-05"]) {
+    assert(citedNumbers(date).length === 0, `${date} contributes no cited numbers`);
+  }
+  const hyphenBand = citedNumbers("band 30-60");
+  assert(hyphenBand.length > 0 && hyphenBand.every((n) => n.value > 0 && !n.raw.includes("-")), "a hyphen between numbers is not a minus");
+  assert(citedNumbers("the 30-60 day healthy band").length === 0, "a day-count range is not a citation");
+  assert(citedNumbers("30 to 60 days").length === 0, "a day-count range joined by to is not a citation");
+
+  // Exact title and detail from the QA US rejections on runs 28de95a8 and c75864d0.
+  const qaUsPool = [
+    {
+      snapshotId: null,
+      periodLabel: "Oct 2026",
+      figures: { "Gross Margin": 0.6, "Debtor Days": 43.8, "Creditor Days": 73 },
+    },
+    {
+      snapshotId: null,
+      periodLabel: "Sep 2026",
+      figures: {
+        "Gross Margin": 0.6,
+        "Net Margin": 0.08571428571428572,
+        "Debtor Days": 25,
+        "Creditor Days": 37,
+        "Working Capital Days": 69,
+      },
+    },
+    {
+      snapshotId: null,
+      periodLabel: "2026-10-05",
+      figures: { score: 78, "score:2026-10-05": 78 },
+    },
+    {
+      snapshotId: null,
+      periodLabel: "2026-10-06",
+      figures: { score: 69, "score:2026-10-06": 69 },
+    },
+    {
+      snapshotId: "snap-books",
+      periodLabel: "1 Oct 2025 – 30 Sep 2026",
+      figures: {
+        overall: 69,
+        revenue: 700000,
+        "pillar:profit": 50,
+        "pillar:assets": 70,
+        "pillar:financing": 83,
+        "pillar:cash": 65,
+      },
+    },
+  ];
+  const c758DaysTitle = "Debtor days stored at 25 for Sep 2026 and 43.8 for Oct 2026; creditor days stored at 37 and 73.";
+  const c758DaysDetail =
+    "Stored ratios show debtor days of 25 and creditor days of 37 for Sep 2026, against 43.8 and 73 for Oct 2026. Debtor days in Oct 2026 sit above the 40-day peer median quoted in the health overview, and creditor days sit above the 30-60 day healthy band quoted there. Sep 2026 working capital days are stored at 69. The Oct 2026 record carries only four ratios and no statement totals, so confirm that period is complete before relying on it. Books on file, not bank-verified.";
+  const run28DaysTitle = "Debtor days rose from 25 in Sep 2026 to 43.8 in Oct 2026, and creditor days from 37 to 73.";
+  const run28DaysDetail =
+    "Statement history shows Sep 2026 debtor days of 25 and creditor days of 37, with working capital days of 69. Oct 2026 shows debtor days of 43.8 and creditor days of 73. Gross margin is 0.6 in both periods. The health read also lists a peer median of 40 days for debtor days and a healthy creditor band of 30 to 60 days. The two periods carry different debtor and creditor figures, so the accountant should confirm both periods were prepared on the same basis. Figures are from the books on file, not a bank balance.";
+  const scoreTitle = "Stored health score fell from 78 on 2026-10-05 to 69 on 2026-10-06.";
+  const c758ScoreDetail =
+    "Score history on file shows 78 for 2026-10-05 and 69 for 2026-10-06, both non-estimated. The weakest stored pillar is Profit Drivers at 50. These are books on file (ledger or upload), not bank-verified balances.";
+  const run28ScoreDetail =
+    "Score history on file shows 78 for 2026-10-05 and 69 for 2026-10-06, both non-estimated. The overall health label is Watch. The health read also shows a live recalculated overall of 67 against the stored 69. The recalculated figure is not the stored score. These are books on file, not bank-verified cash.";
+  function citedValues(text: string): number[] {
+    return citedNumbers(text).map((n) => n.value);
+  }
+  const c758Cited = citedValues(`${c758DaysTitle}\n${c758DaysDetail}`);
+  assert(!c758Cited.some((n) => n < 0), "c75864d0 does not cite a negative from the 30-60 day band");
+  assert(!c758Cited.includes(30) && !c758Cited.includes(60) && !c758Cited.includes(40), "c75864d0 does not cite 30, 60, or the 40-day median");
+  assert(c758Cited.includes(25) && c758Cited.includes(43.8) && c758Cited.includes(37) && c758Cited.includes(73) && c758Cited.includes(69), "c75864d0 still cites the stored days");
+  const run28Cited = citedValues(`${run28DaysTitle}\n${run28DaysDetail}`);
+  assert(!run28Cited.some((n) => n < 0), "28de95a8 does not cite a negative from the day band");
+  assert(!run28Cited.includes(40) && !run28Cited.includes(30) && !run28Cited.includes(60), "28de95a8 does not cite the peer median or the 30 to 60 day band");
+  assert(
+    run28Cited.includes(25) && run28Cited.includes(43.8) && run28Cited.includes(37) && run28Cited.includes(73) && run28Cited.includes(69) && run28Cited.includes(0.6),
+    "28de95a8 still cites the stored days and the gross margin",
+  );
+  const run28ScoreCited = new Set(citedValues(`${scoreTitle}\n${run28ScoreDetail}`));
+  assert(run28ScoreCited.has(78) && run28ScoreCited.has(69) && run28ScoreCited.has(67), "28de95a8 score prose keeps 78, 69, and the live 67");
+  assert(!run28ScoreCited.has(2026) && !run28ScoreCited.has(10) && !run28ScoreCited.has(5) && !run28ScoreCited.has(6), "28de95a8 score dates are not citations");
+  const c758ScoreCited = new Set(citedValues(`${scoreTitle}\n${c758ScoreDetail}`));
+  assert(c758ScoreCited.has(78) && c758ScoreCited.has(69) && c758ScoreCited.has(50), "c75864d0 score prose keeps 78, 69, and the profit pillar");
+  assert(!c758ScoreCited.has(2026), "c75864d0 score dates are not citations");
+  const c758Days = attachCitedEvidence({
+    title: c758DaysTitle,
+    detail: c758DaysDetail,
+    pool: qaUsPool,
+    evidence: { snapshot_id: null, period_label: null, figures: {} },
+  });
+  assert(c758Days.ok === true, "c75864d0 debtor days are accepted once the day band is stripped");
+  const run28Days = attachCitedEvidence({
+    title: run28DaysTitle,
+    detail: run28DaysDetail,
+    pool: qaUsPool,
+    evidence: { snapshot_id: null, period_label: null, figures: {} },
+  });
+  assert(run28Days.ok === true, "28de95a8 debtor days are accepted once the median and the day band are stripped");
+  const scoreSeries = groundFindingEvidence({
+    pool: qaUsPool,
+    claimedFigures: { "score:2026-10-05": 78, "score:2026-10-06": 69 },
+  });
+  assert(scoreSeries.ok === true, "a score series beside statement periods is filed under the score dates");
+  if (scoreSeries.ok) {
+    const byPeriod = scoreSeries.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["2026-10-05"]?.["score:2026-10-05"] === 78, "5 Oct keeps its score");
+    assert(byPeriod["2026-10-06"]?.["score:2026-10-06"] === 69, "6 Oct keeps its score");
+    assert(scoreSeries.evidence.period_label === null, "the two score dates are not one period");
+  }
+  const c758Score = attachCitedEvidence({
+    title: scoreTitle,
+    detail: c758ScoreDetail,
+    pool: qaUsPool,
+    evidence: { snapshot_id: null, period_label: null, figures: { "score:2026-10-05": 78, "score:2026-10-06": 69 } },
+  });
+  assert(c758Score.ok === true, "c75864d0 score decline cites only numbers the books returned");
   assert(
     citedNumbers("Debtor days: 25 (peer median 40 days). Creditor days: 37 (healthy band 30–60 days).").map((n) => n.value).join(",") === "25,37",
     "peer-median and healthy-band day numbers are not citations",

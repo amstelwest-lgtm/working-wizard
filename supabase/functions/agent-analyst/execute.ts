@@ -263,6 +263,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     .eq("agent", "analyst")
     .gte("last_seen", since)
     .is("superseded_by", null)
+    .is("dismissed_reason", null)
     .order("last_seen", { ascending: false })
     .limit(50);
   if (recentError) return { error: recentError.message };
