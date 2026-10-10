@@ -4,8 +4,8 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  agentTurnMessages,
   decisionFromClaude,
-  formatAgentPrompt,
   runAgentLoop,
 } from "../_shared/agent-core/loop.ts";
 import { callClaudeRound } from "../_shared/agent-core/claude.ts";
@@ -171,7 +171,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
         });
         const round = await callClaudeRound(
           ANALYST_SYSTEM,
-          [{ role: "user", content: formatAgentPrompt(ctx) }],
+          agentTurnMessages(ctx),
           analystToolSchemas(),
           { toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },
         );
