@@ -101,6 +101,7 @@
     "test:milon-bot-agent": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-agent-test.mts",
     "test:milon-bot-parity": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-parity-test.mts",
     "test:agent-foundation": "vite-node --config scripts/vite-test.config.ts scripts/agent-foundation-test.mts",
+    "test:agent-analyst": "vite-node --config scripts/vite-test.config.ts scripts/agent-analyst-test.mts",
     "test:milon-team-feed": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-feed-test.mts",
     "test:workflow-coach": "vite-node --config scripts/vite-test.config.ts scripts/workflow-coach-test.mts",
     "test:feature-finder": "vite-node --config scripts/vite-test.config.ts scripts/feature-finder-test.mts",
