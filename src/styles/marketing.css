@@ -12,21 +12,24 @@
 
 .mk {
   /* Light is the default surface for collateral — it prints and forwards well. */
-  --bg: #fbfaf7;
+  --bg: #ffffff;
   --bg-2: #ffffff;
-  --ink: #14161c;
-  --ink-soft: #363b45;
-  --ink-dim: #565d6b;
+  --ink: #102a43;
+  --ink-soft: #243b53;
+  --ink-dim: #3d5270;
   --gold-deep: #8a6300;
   --gold: #a8801a;
   --gold-bright: #d4af37;
   --gold-ink: #8a6300;
-  --risk: #9b2c2c;
-  --line: rgba(20, 22, 28, 0.12);
-  --line-soft: rgba(20, 22, 28, 0.07);
+  --cobalt: #0b5fff;
+  --royal: #2563eb;
+  --pale: #dbeafe;
+  --risk: #c43d4b;
+  --line: #dbeafe;
+  --line-soft: #e8f1fe;
   --card: #ffffff;
-  --card-shadow: 0 1px 2px rgba(16, 20, 28, 0.05), 0 12px 28px -18px rgba(16, 20, 28, 0.35);
-  --halo: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(168, 128, 26, 0.12), transparent 70%);
+  --card-shadow: 0 1px 2px rgba(16, 42, 67, 0.05), 0 12px 28px -18px rgba(16, 42, 67, 0.18);
+  --halo: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(11, 95, 255, 0.08), transparent 70%);
 
   min-height: 100vh;
   background: var(--bg);
@@ -46,21 +49,24 @@
 }
 
 html.dark .mk {
-  --bg: #08080c;
-  --bg-2: #0d0d14;
-  --ink: #f4f1e9;
-  --ink-soft: #d9d4c8;
-  --ink-dim: #a8a396;
+  --bg: #0b1b2b;
+  --bg-2: #102a43;
+  --ink: #f4f7fb;
+  --ink-soft: #d5e2ef;
+  --ink-dim: #c5d4e4;
   --gold-deep: #ac8400;
-  --gold: #d9b64a;
-  --gold-bright: #fdee79;
-  --gold-ink: #fdee79;
+  --gold: #d4af37;
+  --gold-bright: #d4af37;
+  --gold-ink: #d4af37;
+  --cobalt: #0b5fff;
+  --royal: #2563eb;
+  --pale: #163654;
   --risk: #e25c5c;
-  --line: rgba(212, 175, 55, 0.2);
-  --line-soft: rgba(255, 255, 255, 0.08);
-  --card: rgba(255, 255, 255, 0.035);
+  --line: #1e3a5f;
+  --line-soft: #17304e;
+  --card: #102a43;
   --card-shadow: none;
-  --halo: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(212, 175, 55, 0.13), transparent 70%);
+  --halo: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.12), transparent 70%);
 }
 
 .mk *,
@@ -1012,4 +1018,72 @@ html .mk .firm-bands-table .firm-bands-name strong {
   }
   .mk .firm-band-card.is-trial .btn { min-height: 52px; }
   .mk .firm-band-card-note { margin: 8px 0 0; font-size: 13px; text-align: center; }
+}
+
+/* Collateral rebrand. Gold stays on the wordmark, the header trial pill, and Start buttons. */
+html .mk .mk-eyebrow,
+html .mk .mk-gold,
+html .mk .mk-list li::before,
+html .mk .mk-wrap p a,
+html .mk .mk-qa a,
+html .mk .mk-note a,
+html .mk .mk-list a,
+html .mk .firm-band-card.is-trial .firm-band-card-price {
+  color: var(--cobalt) !important;
+  -webkit-text-fill-color: var(--cobalt);
+  background: none;
+}
+html.dark .mk .mk-eyebrow,
+html.dark .mk .mk-gold,
+html.dark .mk .mk-wrap p a,
+html.dark .mk .mk-qa a,
+html.dark .mk .mk-note a,
+html.dark .mk .mk-list a {
+  color: #dbeafe !important;
+  -webkit-text-fill-color: #dbeafe;
+}
+html .mk .mk-steps li::before {
+  background: var(--pale);
+  color: var(--cobalt);
+}
+html .mk .mk-note,
+html .mk .mk-cta,
+html .mk .firm-trial-bar,
+html .mk .firm-bands-sa-note,
+html .mk .firm-bands-trial {
+  border-color: var(--pale);
+  background: var(--bg);
+}
+html .mk .mk-note { border-left-color: var(--cobalt); }
+.mk .mk-top-signin:focus-visible,
+.mk .firm-bands-toggle button:focus-visible { outline-color: var(--royal); }
+.mk .mk-btn-ghost:hover,
+.mk .firm-bands-table .btn-ghost:hover {
+  border-color: var(--cobalt);
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
+}
+.mk .firm-bands-toggle button.on {
+  background-color: var(--pale);
+  color: var(--cobalt);
+  -webkit-text-fill-color: var(--cobalt);
+}
+.mk .firm-bands-table th,
+.mk .firm-bands-table tbody tr.is-trial td,
+.mk .firm-bands-table tbody tr:hover td {
+  background-color: #f4f8ff;
+}
+html.dark .mk .firm-bands-table th,
+html.dark .mk .firm-bands-table tbody tr.is-trial td,
+html.dark .mk .firm-bands-table tbody tr:hover td {
+  background-color: #163654;
+}
+.mk .milon-signin-box .field input:focus {
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 3px rgba(11, 95, 255, 0.16);
+}
+.mk .milon-signin-box .btn-gold {
+  background: var(--cobalt);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
 }

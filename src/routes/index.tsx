@@ -1474,9 +1474,9 @@ function LandingPage() {
             maxWidth: 420,
             borderRadius: 28,
             padding: "44px 36px",
-            background: "rgba(13,13,20,.96)",
-            border: "1px solid rgba(212,175,55,.2)",
-            boxShadow: "0 30px 80px rgba(0,0,0,.6)",
+            background: "var(--card)",
+            border: "1px solid var(--pale)",
+            boxShadow: "0 16px 40px rgba(16,42,67,.08)",
             textAlign: "center",
           }}
         >
@@ -1485,7 +1485,7 @@ function LandingPage() {
               width: 52,
               height: 52,
               borderRadius: "50%",
-              background: "rgba(212,175,55,.1)",
+              background: "var(--pale)",
               display: "grid",
               placeItems: "center",
               margin: "0 auto 22px",
@@ -1496,7 +1496,7 @@ function LandingPage() {
               height="22"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#d4af37"
+              stroke="#0b5fff"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -1511,17 +1511,17 @@ function LandingPage() {
               fontWeight: 700,
               letterSpacing: "0.2em",
               textTransform: "uppercase",
-              color: "var(--gold-ink)",
+              color: "var(--cobalt)",
               margin: "0 0 8px",
             }}
           >
             One step left
           </p>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#f2ecdc", margin: "0 0 10px" }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", margin: "0 0 10px" }}>
             Confirm your email
           </h2>
-          <p style={{ fontSize: 14, color: "#9b958a", lineHeight: 1.6 }}>
-            We sent a link to <span style={{ color: "var(--gold-ink)" }}>{regEmail}</span>. Open it and your
+          <p style={{ fontSize: 14, color: "var(--ink-dim)", lineHeight: 1.6 }}>
+            We sent a link to <span style={{ color: "var(--cobalt)" }}>{regEmail}</span>. Open it and your
             board opens straight away — a 2-minute business profile, then your figures.
           </p>
           <p style={{ fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.6, marginTop: 10 }}>
@@ -1529,7 +1529,7 @@ function LandingPage() {
           </p>
           <button
             type="button"
-            className="btn btn-gold"
+            className="btn btn-cobalt"
             onClick={() => {
               setRegDone(false);
               setSiEmail(regEmail);
@@ -1554,7 +1554,7 @@ function LandingPage() {
               disabled={resendBusy || resendCooldown > 0}
               onClick={handleResendConfirmation}
               style={{
-                color: resendCooldown > 0 ? "var(--ink-dim)" : "var(--gold-ink)",
+                color: resendCooldown > 0 ? "var(--ink-dim)" : "var(--cobalt)",
                 background: "none",
                 border: "none",
                 cursor: resendCooldown > 0 ? "default" : "pointer",
@@ -1573,7 +1573,7 @@ function LandingPage() {
               type="button"
               onClick={() => setRegDone(false)}
               style={{
-                color: "#9b958a",
+                color: "var(--ink-dim)",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -1734,7 +1734,7 @@ function LandingPage() {
               </button>
             </div>
             <p style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}>
-              Platform console. Username is <b style={{ color: "var(--gold-ink)" }}>lighthouse</b>.
+              Platform console. Username is <b style={{ color: "var(--cobalt)" }}>lighthouse</b>.
             </p>
             <form onSubmit={handleOpsUnlock}>
               <label
@@ -2009,18 +2009,18 @@ function LandingPage() {
                   <svg width="150" height="150" viewBox="0 0 150 150">
                     <defs>
                       <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0" stopColor="#fdee79" />
-                        <stop offset=".6" stopColor="#d4af37" />
-                        <stop offset="1" stopColor="#ac8400" />
+                        <stop offset="0" stopColor="#38bdf8" />
+                        <stop offset=".6" stopColor="#0b5fff" />
+                        <stop offset="1" stopColor="#2563eb" />
                       </linearGradient>
                       <linearGradient id="cashGrad" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0" stopColor="#ac8400" />
-                        <stop offset=".5" stopColor="#d4af37" />
-                        <stop offset="1" stopColor="#fdee79" />
+                        <stop offset="0" stopColor="#2563eb" />
+                        <stop offset=".5" stopColor="#0b5fff" />
+                        <stop offset="1" stopColor="#38bdf8" />
                       </linearGradient>
                       <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stopColor="rgba(212,175,55,.28)" />
-                        <stop offset="1" stopColor="rgba(212,175,55,0)" />
+                        <stop offset="0" stopColor="rgba(11,95,255,.22)" />
+                        <stop offset="1" stopColor="rgba(11,95,255,0)" />
                       </linearGradient>
                     </defs>
                     <circle className="track" cx="75" cy="75" r="64" fill="none" strokeWidth="9" />
