@@ -192,8 +192,8 @@ function distribute(line: LineItem): number[] {
 }
 
 // ── Brand palette (matches profitability waterfall / accountant reports) ─────
-const GOLD = "#d4a550";
-const GOLD_DARK = "#b8860b";
+const GOLD = "#0B5FFF";
+const GOLD_DARK = "#2563EB";
 const RED = "#e05c5c";
 
 function CashNegativeDot({
@@ -1385,7 +1385,7 @@ export function CashForecastPanel({
               fontSize: 12,
               color: "#f1f5f9",
             }}
-            labelStyle={{ color: "#d4a550", fontWeight: 700 }}
+            labelStyle={{ color: "#0B5FFF", fontWeight: 700 }}
             formatter={(v: number, _name, item) => {
               const weekIndex = (item?.payload as { weekIndex?: number } | undefined)?.weekIndex;
               return [fmtR(v), weekIndex === 0 ? "Opening" : "Closing"];

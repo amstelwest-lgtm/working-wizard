@@ -1127,13 +1127,13 @@ html.dark .owner-status.is-attention {
 }
 
 .owner-presence.is-financial_manager {
-  --accent: var(--gold);
+  --accent: var(--cobalt);
 }
 .owner-presence.is-analyst {
-  --accent: var(--gold-bright);
+  --accent: var(--royal);
 }
 .owner-presence.is-advisor {
-  --accent: var(--gold-deep);
+  --accent: var(--ice);
 }
 
 .owner-presence-svg {
@@ -1172,7 +1172,7 @@ html.dark .owner-status.is-attention {
 }
 
 .owner-presence .visor {
-  fill: color-mix(in srgb, var(--gold) 28%, transparent);
+  fill: color-mix(in srgb, var(--cobalt) 28%, transparent);
 }
 
 .owner-presence.is-advisor .mark {
@@ -1225,7 +1225,7 @@ html.dark .owner-status.is-attention {
 
 .owner-presence .work-arc {
   fill: none;
-  stroke: var(--gold-bright);
+  stroke: var(--ice);
   stroke-width: 2.4;
   stroke-dasharray: 46 170;
   stroke-linecap: round;
@@ -1247,14 +1247,14 @@ html.dark .owner-status.is-attention {
 
 .owner-presence .found-ring {
   fill: none;
-  stroke: var(--gold);
+  stroke: var(--cobalt);
   stroke-width: 1.6;
   transform-box: fill-box;
   transform-origin: center;
 }
 
 .owner-presence .found-dot {
-  fill: var(--gold);
+  fill: var(--royal);
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -1274,7 +1274,7 @@ html.dark .owner-status.is-attention {
 
 .owner-presence .speak-bars,
 .owner-presence .listen-bars {
-  stroke: var(--gold-bright);
+  stroke: var(--ice);
   stroke-width: 1.6;
   stroke-linecap: round;
 }
@@ -1287,7 +1287,7 @@ html.dark .owner-status.is-attention {
 
 .owner-presence .mic {
   fill: none;
-  stroke: var(--gold-bright);
+  stroke: var(--ice);
   stroke-width: 1.5;
 }
 
