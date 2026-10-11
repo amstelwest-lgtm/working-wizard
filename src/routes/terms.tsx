@@ -47,7 +47,7 @@ function TermsPage() {
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}
-        <MarketCopy za="South Africa" us="US early access · RSA company" />
+        <MarketCopy za="South Africa" us="US early access" />
       </p>
 
       <h2>The service</h2>
@@ -135,10 +135,10 @@ function TermsPage() {
         </p>
       </div> : <div className="mk-copy-us">
         <p>
-          {LEGAL_ENTITY} is a South African company. These terms are governed by the law of the
-          Republic of South Africa; the courts of South Africa have jurisdiction. US customers are
-          in early access. A US-specific choice of law has not been adopted — that is a counsel
-          decision, not a product toggle.
+          {LEGAL_ENTITY} runs this workspace. These terms are governed by the law of the Republic
+          of South Africa; the courts of South Africa have jurisdiction. US customers are in early
+          access. A US-specific choice of law has not been adopted — that is a counsel decision, not
+          a product toggle.
         </p>
       </div>}
 
