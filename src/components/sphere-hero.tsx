@@ -452,7 +452,7 @@ export function SphereHero({
                   {p.label}
                 </span>
                 <QueryBadge count={q} />
-                <span className={`font-bold tabular-nums ${TIER_TEXT[t]} ${compact ? "text-[15px]" : "text-base"}`}>
+                <span className={`owner-pillar-score font-bold tabular-nums ${TIER_TEXT[t]} ${compact ? "text-[15px]" : "text-base"}`}>
                   {fmtScore(p.health)}
                 </span>
                 {delta != null && (
