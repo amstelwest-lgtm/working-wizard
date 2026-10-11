@@ -115,6 +115,14 @@ assert(signIn.includes('htmlFor="si-password"'), "sign-in password has a label")
 assert(!index.includes("#6f6a60"), "landing drops the low-contrast dim hex");
 assert(css.includes("#c9c3b6"), "dark section ledes over the sky are lighter");
 assert(css.includes("rgba(5,5,7,.55)"), "narrow hero copy has a scrim");
+assert(css.includes(".trust{\n  background:#f5f9ff;"), "trust strip is pale, not a black band");
+assert(!css.includes("rgba(5,5,7,.72)"), "trust strip no longer uses the near-black scrim");
+assert(css.includes(".hero-points li::before"), "hero list still draws its checks");
+assert(
+  css.includes("border-left:2px solid var(--cobalt);\n  border-bottom:2px solid var(--cobalt);"),
+  "hero list checks are cobalt",
+);
+assert(css.includes(".pill-row.warn .bar i{\n  background:var(--warn);") || css.includes(".pill-row.warn .bar i{\n  background:var(--warn);\n}"), "cash status bar uses Attention");
 
 assert(lh.budgets.mobilePerformanceMin === 0.8, "LH mobile performance budget is 80");
 assert(lh.budgets.accessibilityMin === 1, "LH accessibility budget is 100");

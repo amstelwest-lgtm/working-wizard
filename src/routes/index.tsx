@@ -1678,13 +1678,13 @@ function LandingPage() {
         data-milon-landing=""
         style={{
           minHeight: "100vh",
-          background: "#07090f",
+          background: "var(--bg)",
           display: "grid",
           placeItems: "center",
         }}
       >
         <div
-          className="h-6 w-6 animate-spin rounded-full border-2 border-[#c9962b]/30 border-t-[#c9962b]"
+          className="h-6 w-6 animate-spin rounded-full border-2 border-[#0b5fff]/30 border-t-[#0b5fff]"
           aria-label="Opening your workspace"
         />
       </div>
