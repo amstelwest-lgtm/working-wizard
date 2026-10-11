@@ -16,6 +16,7 @@ import {
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
 import {
+  draftFindingKindLabel,
   draftFindingLabel,
   DRAFT_NEEDS_ACCOUNTANT,
   DRAFT_NEEDS_OWNER,
@@ -537,6 +538,30 @@ assert(
   "an accountant hand-off draft needs the accountant",
 );
 assert(draftFindingLabel({ kind: "next_move_draft", evidence: { figures: { cash: 1 } } }) === null, "a published finding is not a draft");
+const nestedEvidence = {
+  draft: true,
+  requires_human_approval: true,
+  snapshot_id: null,
+  period_label: null,
+  figures: { "Oct 2026": { "Gross Margin": 0.6, "Debtor Days": 43.8 } },
+};
+assert(
+  draftFindingLabel({ kind: "data_request_draft", evidence: nestedEvidence }) === DRAFT_NEEDS_OWNER,
+  "a data request with nested figures and no recipient needs the owner",
+);
+assert(
+  draftFindingKindLabel({ kind: "data_request_draft", evidence: nestedEvidence }) === "Data request",
+  "a data request keeps its kind label",
+);
+assert(
+  draftFindingLabel({ kind: null, evidence: { ...nestedEvidence, kind: "accountant_handoff_draft" } }) ===
+    DRAFT_NEEDS_ACCOUNTANT,
+  "an evidence kind still reaches the accountant",
+);
+assert(
+  draftFindingKindLabel({ kind: "advisory_deliverable_draft", evidence: nestedEvidence }) === "Advisory",
+  "an advisory draft keeps its kind label",
+);
 assert(plan.includes('data-owner-drafts="readonly"'), "draft findings on Next moves are read-only");
 const draftBlock = plan.slice(plan.indexOf('data-owner-drafts="readonly"'), plan.indexOf("data-owner-suggestions"));
 assert(!/Approve|Dismiss/.test(draftBlock), "draft findings have no approve or dismiss control");

@@ -144,14 +144,34 @@ function evidenceRecord(evidence: unknown): Record<string, unknown> {
   return evidence as Record<string, unknown>;
 }
 
-export function findingFigures(evidence: unknown): Record<string, number> {
+function finiteNumber(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Flat numbers, plus one level of period maps. A null period label still has figures. */
+export function findingFigureEntries(evidence: unknown): { key: string; value: number }[] {
   const figures = evidenceRecord(evidence).figures;
-  if (!figures || typeof figures !== "object" || Array.isArray(figures)) return {};
-  const out: Record<string, number> = {};
+  if (!figures || typeof figures !== "object" || Array.isArray(figures)) return [];
+  const out: { key: string; value: number }[] = [];
   for (const [key, value] of Object.entries(figures as Record<string, unknown>)) {
-    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-    if (Number.isFinite(n)) out[key] = n;
+    const flat = finiteNumber(value);
+    if (flat != null) {
+      out.push({ key, value: flat });
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    for (const [innerKey, inner] of Object.entries(value as Record<string, unknown>)) {
+      const n = finiteNumber(inner);
+      if (n != null) out.push({ key: innerKey, value: n });
+    }
   }
+  return out;
+}
+
+export function findingFigures(evidence: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const entry of findingFigureEntries(evidence)) out[entry.key] = entry.value;
   return out;
 }
 
@@ -183,16 +203,40 @@ function formatFigure(key: string, value: number, market: MoneyMarket): string {
 function replaceExactNumber(text: string, raw: string, formatted: string): string {
   if (!raw || raw === formatted) return text;
   const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`(?<![\\d.])${escaped}(?![\\d.])`, "g"), formatted);
+  return text.replace(new RegExp(`(?<![\\d.])${escaped}(?!\\d)(?!\\.\\d)`, "g"), formatted);
 }
 
-function scrubRawDecimals(text: string, figures: Record<string, number>, market: MoneyMarket): string {
+function figureEntries(
+  figures: Record<string, number> | readonly { key: string; value: number }[] | null | undefined,
+): { key: string; value: number }[] {
+  if (!figures) return [];
+  if (Array.isArray(figures)) return figures.filter((entry) => Number.isFinite(entry.value));
+  return Object.entries(figures).map(([key, value]) => ({ key, value }));
+}
+
+/** A bare 1 must not become 1.00 inside "(1)". Decimals, money, days, and percents still replace. */
+function worthReplacing(raw: string, formatted: string, value: number): boolean {
+  if (!raw || raw === formatted) return false;
+  if (raw.includes(".")) return true;
+  if (Math.abs(value) >= 100) return true;
+  return /%|days|R\s?\d|\$/.test(formatted);
+}
+
+function scrubRawDecimals(
+  text: string,
+  figures: Record<string, number> | readonly { key: string; value: number }[] | null | undefined,
+  market: MoneyMarket,
+): string {
   let next = text;
-  for (const [key, value] of Object.entries(figures)) {
+  const replacements: { raw: string; formatted: string }[] = [];
+  for (const { key, value } of figureEntries(figures)) {
     const formatted = formatFigure(key, value, market);
-    const raws = [...new Set([String(value), value.toFixed(4), value.toFixed(2)])].sort((a, b) => b.length - a.length);
-    for (const raw of raws) next = replaceExactNumber(next, raw, formatted);
+    for (const raw of [String(value), value.toFixed(4), value.toFixed(2)]) {
+      if (worthReplacing(raw, formatted, value)) replacements.push({ raw, formatted });
+    }
   }
+  replacements.sort((a, b) => b.raw.length - a.raw.length);
+  for (const { raw, formatted } of replacements) next = replaceExactNumber(next, raw, formatted);
   return next.replace(/-?\d+\.\d{3,}/g, (raw, offset: number) => {
     const window = next.slice(Math.max(0, offset - 28), offset + raw.length + 16).toLowerCase();
     const n = Number(raw);
@@ -211,7 +255,7 @@ function scrubRawDecimals(text: string, figures: Record<string, number>, market:
 export function findingSentence(input: {
   title: string;
   detail?: string | null;
-  figures?: Record<string, number> | null;
+  figures?: Record<string, number> | readonly { key: string; value: number }[] | null;
   market?: MoneyMarket;
 }): string {
   const market = input.market ?? ZA_MARKET;
