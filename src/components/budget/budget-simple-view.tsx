@@ -19,6 +19,8 @@ import {
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
+import { BudgetYearStrip } from "@/components/budget/budget-year-strip";
+import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
@@ -107,6 +109,8 @@ export function BudgetSimpleView({
   onLensChange,
   actualMonths,
   readOnly = false,
+  priorYear = null,
+  priorYearLabel = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -124,6 +128,9 @@ export function BudgetSimpleView({
   onLensChange?: (next: BudgetLens) => void;
   actualMonths?: readonly BudgetActualMonth[];
   readOnly?: boolean;
+  /** Prior-period books. The owner strip stays empty when this is missing. */
+  priorYear?: BudgetYearMoney | null;
+  priorYearLabel?: string | null;
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -245,10 +252,27 @@ export function BudgetSimpleView({
         actualMonths={actualMonths}
       />
       {readOnly ? null : <>{drawer}</>}
+      {readOnly ? (
+        <BudgetYearStrip
+          thisYear={{
+            revenue: fyTotals.revenue,
+            cogs: fyTotals.cogs,
+            grossProfit: fyTotals.grossProfit,
+            netProfit: results.reduce((sum, row) => sum + row.ebit, 0),
+            expenses: fyTotals.overheads,
+          }}
+          lastYear={priorYear}
+          lastYearLabel={priorYearLabel}
+          market={market}
+        />
+      ) : null}
+      {readOnly ? null : (
       <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
         {plainBudgetWindowHeading(tpl.label, doc, market)}
       </p>
+      )}
 
+      <OwnerHowBuilt readOnly={readOnly}>
       {/* Month engine — volume × price, then margin and overheads */}
       <section
         id="wizard-budget-month-engine"
@@ -433,7 +457,9 @@ export function BudgetSimpleView({
           </CascadeRow>
         </div>
       </section>
+      </OwnerHowBuilt>
 
+      {readOnly ? null : (
       <CollapsibleGoldCard
         icon={BarChart3}
         title="Year detail"
@@ -503,7 +529,9 @@ export function BudgetSimpleView({
         </div>
       </section>
       </CollapsibleGoldCard>
+      )}
 
+      {readOnly ? null : (
       <section
         id="wizard-budget-cash-timing"
         className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50"
@@ -616,7 +644,26 @@ export function BudgetSimpleView({
           </div>
         </div>
       </section>
+      )}
     </div>
+  );
+}
+
+function OwnerHowBuilt({ readOnly, children }: { readOnly: boolean; children: ReactNode }) {
+  if (!readOnly) return children;
+  return (
+    <section data-budget-how="short" className="space-y-2">
+      <h3 className="text-base font-semibold text-[#1b1608] dark:text-slate-100">How the budget is built</h3>
+      <p className="max-w-xl text-sm leading-relaxed text-[#6b6354] dark:text-slate-300">
+        Your accountant built this from last year's actuals plus the growth you agreed.
+      </p>
+      <details>
+        <summary className="w-fit cursor-pointer text-sm font-semibold text-[#8a6508] dark:text-[#e1b85e]">
+          More
+        </summary>
+        <div className="mt-3">{children}</div>
+      </details>
+    </section>
   );
 }
 

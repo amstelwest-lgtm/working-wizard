@@ -238,6 +238,14 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
             hideReadOnlyStamp
             readOnly
             onInvite={() => undefined}
+            priorYear={{
+              revenue: 980000,
+              cogs: 390000,
+              grossProfit: 590000,
+              netProfit: 120000,
+              expenses: 470000,
+            }}
+            priorYearLabel="2025"
           />
         </section>
       ) : null}

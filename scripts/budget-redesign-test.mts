@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { currentBudgetMonth, fyMonths } from "../src/lib/budget.months";
+import { budgetYearCompare, yearMoneyFromFinancials } from "../src/lib/budget-year-compare";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -26,6 +27,11 @@ assert(
 const simple = read("src/components/budget/budget-simple-view.tsx");
 const workspace = read("src/components/budget/budget-workspace.tsx");
 assert(simple.includes("BudgetVerdictStrip"), "simplified opens with the verdict");
+assert(simple.includes("How the budget is built"), "the owner budget names how it is built");
+assert(simple.includes("data-budget-how=\"short\""), "the long build sits behind More");
+assert(simple.includes('title="Year detail"'), "the accountant year detail stays in the file");
+assert(simple.includes("BudgetYearStrip"), "the owner budget compares this year with last year");
+assert(read("src/lib/budget-year-compare.ts").includes("No prior year on file."), "a missing prior year is said plainly");
 assert(workspace.includes("BudgetVerdictStrip"), "complex opens with the verdict");
 assert(simple.includes("currentBudgetMonth") && workspace.includes("currentBudgetMonth"), "both views share the month");
 assert(!simple.includes('title="Cash timing"'), "the collapsed cash timing card is gone");
@@ -35,6 +41,27 @@ assert(read("src/components/budget/budget-variance-panel.tsx").includes("current
 assert(
   read("src/components/budget/budget-advanced.tsx").includes('variant="outline"'),
   "seed and push are not a second gold primary",
+);
+
+const compared = budgetYearCompare(
+  { revenue: 120, cogs: 40, grossProfit: 80, netProfit: 30, expenses: 50 },
+  { revenue: 100, cogs: 50, grossProfit: 50, netProfit: 20, expenses: 30 },
+);
+const revenue = compared.rows.find((row) => row.key === "revenue");
+assert(compared.empty === false, "a prior year is a comparison");
+assert(revenue?.change === 20, "revenue change is this year minus last year");
+assert(revenue?.changePct === 20, "revenue change percent uses last year");
+assert(revenue?.direction === "up", "a higher revenue points up");
+assert(
+  budgetYearCompare(
+    { revenue: 120, cogs: 40, grossProfit: 80, netProfit: 30, expenses: null },
+    null,
+  ).summary === "No prior year on file.",
+  "no prior year stays empty",
+);
+assert(
+  yearMoneyFromFinancials({ revenue: "100", cogs: "40", netIncome: "10" })?.grossProfit === 60,
+  "gross profit is revenue minus cost of sales",
 );
 
 console.log("budget-redesign ok");

@@ -45,6 +45,7 @@ import { useMarket } from "@/contexts/market";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { budgetSaveErrorMessage } from "@/lib/reach-error";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
+import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 
 export function BudgetPanel({
   clientId,
@@ -72,6 +73,8 @@ export function BudgetPanel({
   actualMonths,
   readOnly = false,
   onInvite,
+  priorYear = null,
+  priorYearLabel = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -110,6 +113,8 @@ export function BudgetPanel({
   readOnly?: boolean;
   /** Invite control shown when a read-only budget is not configured. */
   onInvite?: () => void;
+  priorYear?: BudgetYearMoney | null;
+  priorYearLabel?: string | null;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -639,6 +644,8 @@ export function BudgetPanel({
         lens={lens}
         onLensChange={onLensChange}
         actualMonths={actualMonths}
+        priorYear={priorYear}
+        priorYearLabel={priorYearLabel}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>

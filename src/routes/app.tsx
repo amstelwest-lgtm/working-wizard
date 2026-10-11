@@ -110,6 +110,7 @@ import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
+import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
 import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -3966,6 +3967,12 @@ function Index() {
                           hideReadOnlyStamp
                           readOnly
                           onInvite={() => go("accountant")}
+                          priorYear={
+                            ownerPrior?.financials
+                              ? yearMoneyFromFinancials(ownerPrior.financials as Record<string, unknown>)
+                              : null
+                          }
+                          priorYearLabel={ownerPrior?.period_label ?? null}
                           businessTypeId={businessTypeId}
                           operatingProfile={operatingProfile}
                           fyStartMonthDefault={
