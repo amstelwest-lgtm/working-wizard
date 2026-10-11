@@ -8,8 +8,10 @@ import { avatarRhythm } from "../src/components/owner-door/owner-rhythm.ts";
 import { agentShortName } from "../src/lib/milon-team.ts";
 import { emptyAgentActivity, isVisibleAgentFinding, type AgentActivitySnapshot } from "../src/lib/milon-team-activity.ts";
 import {
+  guardOwnerLine,
   ownerAmount,
   ownerAnswerTiles,
+  ownerCardStatuses,
   ownerHomeLines,
   ownerTileLabel,
   type OwnerBooks,
@@ -118,18 +120,18 @@ const homeLines = ownerHomeLines(filled, "Collect the two largest invoices");
 assert(homeLines.financial_manager.length === 2, "the financial manager has cash and the open answer");
 assert(
   homeLines.financial_manager[0] !== cash?.sentence &&
-    /^Above the \$[\d,]+ floor\. Low \$[\d,]+\.$/.test(homeLines.financial_manager[0] ?? ""),
-  `cash on home is a short line (${homeLines.financial_manager[0]})`,
+    /^Cash stays above your \$[\d,]+ minimum\. The low point is \$[\d,]+\.$/.test(homeLines.financial_manager[0] ?? ""),
+  `cash on home is a sentence (${homeLines.financial_manager[0]})`,
 );
 assert(homeLines.financial_manager[1] === "Approve the payroll run.", "the waiting answer stays under the financial manager");
 assert(
-  /^Profit \$[\d,]+, up on last period\.$/.test(homeLines.analyst[0] ?? ""),
-  `profit on home is a short line (${homeLines.analyst[0]})`,
+  /^Profit is \$[\d,]+, up on last period\.$/.test(homeLines.analyst[0] ?? ""),
+  `profit on home is a sentence (${homeLines.analyst[0]})`,
 );
 assert(homeLines.analyst[1]?.startsWith("Customers owe"), "debtors stay under the analyst");
-assert(homeLines.advisor[0] === "Collect the two largest invoices", "the advisor carries the top next move");
+assert(homeLines.advisor[0] === "Collect the two largest invoices.", "the advisor carries the top next move");
 for (const line of [...homeLines.financial_manager, ...homeLines.analyst, ...homeLines.advisor]) {
-  assert(line.length <= 48, `a home line stays within two rows at desktop (${line})`);
+  assert(/^[A-Z]/.test(line) && /[.!?]$/.test(line), `a home line is a full sentence (${line})`);
 }
 const underBooks = ownerAnswerTiles(
   books({
@@ -143,8 +145,64 @@ const underBooks = ownerAnswerTiles(
 );
 const underHome = ownerHomeLines(underBooks, null);
 assert(
-  /^Low \$[\d,]+\. \$[\d,]+ under \$[\d,]+\.$/.test(underHome.financial_manager[0] ?? ""),
-  `a dip under the floor stays short (${underHome.financial_manager[0]})`,
+  /^Cash is \$[\d,]+ below your \$[\d,]+ minimum\.$/.test(underHome.financial_manager[0] ?? ""),
+  `a dip under the floor is a sentence (${underHome.financial_manager[0]})`,
+);
+assert(
+  ownerCardStatuses(
+    books({
+      hasBooks: true,
+      ledger: "QuickBooks",
+      cashflow: {
+        openingBalance: "20000",
+        expenses: [{ amount: "4000", frequency: "recurring-weekly", startWeek: 1 }],
+      },
+    }),
+  ).financial_manager?.tone === "critical",
+  "cash under the floor is Critical",
+);
+assert(
+  ownerCardStatuses(
+    books({
+      hasBooks: true,
+      revenue: 72000,
+      priorRevenue: 90000,
+      cogs: 20000,
+      priorCogs: 20000,
+    }),
+  ).analyst?.tone === "attention",
+  "a profit decline is Attention",
+);
+assert(
+  ownerCardStatuses(books({ hasBooks: true, overdueReceivables: 1500 })).analyst?.word === "Attention",
+  "overdue debtors are Attention",
+);
+assert(
+  ownerCardStatuses(
+    books({
+      hasBooks: true,
+      revenue: 120000,
+      priorRevenue: 100000,
+      cogs: 48000,
+      priorCogs: 40000,
+      overdueReceivables: 0,
+    }),
+  ).analyst === null,
+  "profit up with nothing overdue has no chip",
+);
+assert(guardOwnerLine("get emails out to 10 clients") === "Get emails out to 10 clients.", "a fragment becomes a sentence");
+assert(
+  ownerCardStatuses(
+    books({
+      hasBooks: true,
+      cashflow: {
+        openingBalance: "80000",
+        revenue: [{ amount: "5000", frequency: "recurring-weekly", startWeek: 1 }],
+        expenses: [{ amount: "1000", frequency: "recurring-weekly", startWeek: 1 }],
+      },
+    }),
+  ).financial_manager === null,
+  "cash above the floor is not a problem",
 );
 assert(
   /13-week line is/.test(underBooks.find((tile) => tile.id === "cash")?.sentence ?? ""),
@@ -294,7 +352,8 @@ assert(css.includes("prefers-reduced-motion"), "reduced motion has a still pose"
 assert(css.includes("tabular-nums"), "amounts use tabular numerals");
 assert(css.includes("min-height: 44px"), "ask buttons meet the tap target");
 assert(!/#[0-9a-fA-F]{3,8}\b/.test(css), "owner door colours come from theme tokens");
-assert(css.includes("var(--gold-grad)"), "ask and accents use the metallic gold gradient");
+assert(!css.includes("var(--gold-grad)"), "owner buttons no longer use the gold gradient");
+assert(css.includes("var(--cobalt)"), "owner actions use cobalt");
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
 assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
@@ -310,7 +369,8 @@ assert(css.includes(".owner-door .owner-btn-secondary:disabled"), "a secondary b
 assert(css.includes(".owner-door .owner-btn-tertiary:hover"), "a tertiary button has a hover state");
 assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
-assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
+assert(home.includes('className="owner-ask"'), "home ask is the outlined button");
+assert(home.includes("owner-status"), "a problem card shows a status chip");
 assert(home.includes('className="owner-money"'), "home amounts are bold");
 assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "home reads the bot lines");
 assert(ownerMoney(-1200, ZA_MARKET) === "−R 1 200", "a rand loss uses one unicode minus");
@@ -329,7 +389,8 @@ assert(
   "ask pills sit on the bottom line of equal cards",
 );
 assert(css.includes("min-height: 2.7em"), "home text keeps a two-line slot");
-assert(css.includes("-webkit-line-clamp: 2"), "a single home line stays within two rows");
+assert(!css.includes("-webkit-line-clamp"), "home lines are not truncated");
+assert(css.includes("text-overflow: unset"), "home lines do not ellipsis");
 assert(!home.includes("owner-promises"), "home does not render the answer tiles");
 assert(!home.includes("owner-health-hero"), "home does not render the health orb");
 assert(!home.includes("What your accountant signed"), "sign-off is not a home tile");
@@ -420,21 +481,18 @@ for (const [theme, block] of [
     assert(ratio >= 4.5, `${theme} gold button text on ${name} ${stop} is ${ratio.toFixed(2)}`);
   }
 }
-assert(css.includes("background-image: var(--gold-grad)"), "owner gold reuses the metallic gradient");
-assert(
-  css.includes("linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.5), transparent)"),
-  "owner gold reuses the landing sheen",
-);
-assert(css.includes(".owner-door .btn.gold:hover::after"), "owner gold keeps the hover sheen");
+assert(css.includes("background-color: var(--cobalt)"), "owner primary buttons are cobalt");
+assert(css.includes("background-color: var(--royal)"), "owner primary buttons turn royal on hover");
+assert(css.includes("border: 1px solid var(--cobalt)"), "home ask buttons are outlined cobalt");
 const avatar = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8");
 assert(!avatar.includes('d="M32 28l8 6 8-6"'), "the advisor brow is not a frown");
-assert(avatar.includes('className="smile"'), "the advisor face has a smile");
-assert(avatar.includes('d="M30 44q10 10 20 0"'), "the advisor smile is a wide curve");
+assert(!avatar.includes('className="smile"'), "the advisor face is not a smile");
+assert(avatar.includes('className="mark"'), "the advisor face uses a neutral mark");
 assert(
   avatar.indexOf('className="visor"') < avatar.indexOf('agent === "advisor"'),
   "the visor stays on the financial manager",
 );
-assert(css.includes(".owner-presence.is-advisor .smile"), "the advisor smile is drawn in gold");
+assert(css.includes(".owner-presence.is-advisor .mark"), "the advisor mark is drawn with the other faces");
 assert(css.includes('button[aria-label="Share Milōn"]'), "the owner door hides the phone share button");
 const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");
