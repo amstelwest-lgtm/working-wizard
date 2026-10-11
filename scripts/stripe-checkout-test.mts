@@ -50,6 +50,10 @@ import {
 } from "../src/lib/stripe-checkout.core";
 import { resolveOwnerCheckoutMarket } from "../src/lib/billing-market";
 import {
+  enforceZaCheckoutBillingCountry,
+  syncFirmSubscriptionBand,
+} from "../src/lib/stripe-billing-sync.server";
+import {
   applyOwnerStripeEvent,
   emptyOwnerStripeSnapshot,
   firmLinkCoversOwner,
@@ -419,6 +423,21 @@ assert(
 );
 assert(checkoutDocs.includes("Milon, Inc."), "docs say Milon, Inc.");
 assert(checkoutDocs.includes("FOUNDING"), "docs mention FOUNDING");
+assert(!checkoutDocs.includes("Owner Spark stays free"), "docs no longer say the owner plan is free Spark");
+assert(checkoutDocs.includes("$39/mo"), "docs price the owner plan at $39");
+assert(checkoutDocs.includes("R299/mo"), "docs price the owner plan at R299");
+assert(
+  checkoutDocs.includes("milon_za_owner_monthly"),
+  "docs name the ZA owner lookup key",
+);
+assert(
+  checkoutDocs.includes("billing country is ZA"),
+  "docs limit ZAR owner checkout to a ZA billing country",
+);
+assert(
+  checkoutDocs.includes("covered_by_firm") || checkoutDocs.includes("free when"),
+  "docs say the owner plan is free when the firm is on Milōn",
+);
 
 const bandDocs = readFileSync(resolve("docs/STRIPE_FIRM_BANDS.md"), "utf8");
 assert(bandDocs.includes("milon_starter_monthly"), "band docs list starter lookup_key");
@@ -582,9 +601,14 @@ assert(ownerLookupKey("us", "year") === "milon_owner_annual", "USD owner annual 
 assert(ownerLookupKey("za", "year") === "milon_za_owner_annual", "ZA owner annual lookup");
 assert(bandIdFromLookupKey("milon_owner_monthly") === null, "owner monthly key is not a firm band");
 assert(bandIdFromLookupKey("milon_za_owner_monthly") === null, "ZA owner key is not a firm band");
+assert(bandIdFromLookupKey("milon_za_owner_annual") === null, "ZA owner annual key is not a firm band");
 assert(
   parseZaLookupKey("milon_za_owner_monthly") === null,
   "firm ZA parser does not claim the owner price",
+);
+assert(
+  parseZaLookupKey("milon_za_owner_annual") === null,
+  "firm ZA parser does not claim the owner annual price",
 );
 assert(isOwnerLookupKey("milon_solo_monthly") === false, "a firm lookup is not an owner price");
 
@@ -1022,11 +1046,135 @@ assert(
         id: "sub_firm",
         status: "active",
         metadata: { milon_plan: "solo", milon_lookup_key: "milon_solo_monthly" },
+        items: {
+          data: [
+            {
+              price: {
+                id: "price_solo",
+                lookup_key: "milon_solo_monthly",
+                product: { metadata: { band: "solo" } },
+              },
+            },
+          ],
+        },
       },
     },
   }).owner,
   "a firm subscription is not an owner event",
 );
+const liveZaOwner = ownerBillingEventSignal({
+  type: "customer.subscription.updated",
+  data: {
+    object: {
+      id: "sub_za_owner",
+      status: "active",
+      items: {
+        data: [
+          {
+            price: {
+              id: "price_1UPTfiGXDN6PFbnzfAJ9I36b",
+              lookup_key: "milon_za_owner_monthly",
+              product: { id: "prod_VQKKjT1uyUzG2b", metadata: { plan: "owner" } },
+            },
+          },
+        ],
+      },
+    },
+  },
+});
+assert(liveZaOwner.owner, "the live ZA owner price is an owner event");
+assert(
+  liveZaOwner.lookupKey === "milon_za_owner_monthly",
+  "the owner event keeps the ZA owner lookup key",
+);
+const productPlanOnly = ownerBillingEventSignal({
+  type: "customer.subscription.updated",
+  data: {
+    object: {
+      id: "sub_product_owner",
+      status: "active",
+      items: {
+        data: [
+          {
+            price: {
+              id: "price_1UPTfgGXDN6PFbnzzPyRVBi4",
+              product: { id: "prod_VQKKjT1uyUzG2b", metadata: { plan: "owner" } },
+            },
+          },
+        ],
+      },
+    },
+  },
+});
+assert(
+  productPlanOnly.owner,
+  "product metadata plan=owner is an owner event without a lookup key",
+);
+
+let firmCatalogTouched = false;
+const ownerZaLeftAlone = await enforceZaCheckoutBillingCountry(
+  {
+    mode: "subscription",
+    subscription: "sub_za_owner",
+    metadata: { milon_lookup_key: "milon_za_owner_monthly" },
+    customer_details: { address: { country: "US" } },
+  },
+  {
+    subscriptions: {
+      retrieve: async () => {
+        firmCatalogTouched = true;
+        throw new Error("owner price must not be retrieved as a firm band");
+      },
+      update: async () => {
+        firmCatalogTouched = true;
+        throw new Error("owner price must not be moved onto a firm price");
+      },
+      cancel: async () => {
+        throw new Error("unused");
+      },
+    },
+    prices: {
+      list: async () => {
+        firmCatalogTouched = true;
+        throw new Error("owner price must not be resolved as a firm band");
+      },
+    },
+  },
+);
+assert(ownerZaLeftAlone === false && !firmCatalogTouched, "ZA owner checkout is not a firm band fallback");
+
+let firmUpdated = false;
+const skipped = await syncFirmSubscriptionBand("sub_owner", {
+  subscriptions: {
+    retrieve: async () => ({
+      id: "sub_owner",
+      status: "active",
+      metadata: {},
+      items: {
+        data: [
+          {
+            id: "si_owner",
+            price: {
+              id: "price_1UPTfiGXDN6PFbnzfAJ9I36b",
+              lookup_key: "milon_za_owner_monthly",
+              product: { metadata: { plan: "owner" } },
+            },
+          },
+        ],
+      },
+    }),
+    update: async () => {
+      firmUpdated = true;
+      throw new Error("firm sync must not update an owner subscription");
+    },
+    cancel: async () => {
+      firmUpdated = true;
+      throw new Error("firm sync must not cancel from an owner subscription");
+    },
+  },
+  prices: { list: async () => ({ data: [] }) },
+});
+assert(skipped.band === null && !firmUpdated, "firm band sync skips the owner product");
 const firmLeak = applyOwnerStripeEvent(snapshot, {
   type: "customer.subscription.updated",
   plan: "solo",

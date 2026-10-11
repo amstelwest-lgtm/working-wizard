@@ -439,6 +439,19 @@ assert(
 function mockStripe(opts: {
   customerId?: string;
   statuses?: string[];
+  subscriptions?: Array<{
+    id: string;
+    status: string;
+    metadata?: { milon_plan?: string | null; milon_lookup_key?: string | null } | null;
+    items?: {
+      data: Array<{
+        price: {
+          lookup_key?: string;
+          product?: { metadata?: { plan?: string; band?: string } };
+        };
+      }>;
+    };
+  }>;
 }): StripeCustomerSubscriptionReader {
   return {
     customers: {
@@ -448,7 +461,11 @@ function mockStripe(opts: {
     },
     subscriptions: {
       list: async ({ status }) => ({
-        data: (opts.statuses ?? []).includes(status) ? [{ id: "sub_1", status }] : [],
+        data: opts.subscriptions
+          ? opts.subscriptions.filter((sub) => sub.status === status)
+          : (opts.statuses ?? []).includes(status)
+            ? [{ id: "sub_1", status }]
+            : [],
       }),
     },
   };
@@ -485,6 +502,75 @@ assert(
     "cus_1",
   )) === false,
   "incomplete subscription → not entitled",
+);
+
+function ownerPriceSub(lookup: string) {
+  return {
+    id: "sub_owner",
+    status: "active",
+    items: {
+      data: [
+        {
+          price: {
+            lookup_key: lookup,
+            product: { metadata: { plan: "owner" } },
+          },
+        },
+      ],
+    },
+  };
+}
+
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [ownerPriceSub("milon_za_owner_monthly")],
+    }),
+    "cus_owner",
+  )) === false,
+  "the ZA owner price does not entitle the firm product",
+);
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [ownerPriceSub("milon_owner_monthly")],
+    }),
+    "cus_owner",
+  )) === false,
+  "the USD owner price does not entitle the firm product",
+);
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [
+        {
+          id: "sub_plan",
+          status: "active",
+          items: {
+            data: [{ price: { product: { metadata: { plan: "owner" } } } }],
+          },
+        },
+      ],
+    }),
+    "cus_owner",
+  )) === false,
+  "product metadata plan=owner does not entitle the firm product",
+);
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [
+        ownerPriceSub("milon_owner_monthly"),
+        {
+          id: "sub_solo",
+          status: "active",
+          items: { data: [{ price: { lookup_key: "milon_solo_monthly" } }] },
+        },
+      ],
+    }),
+    "cus_both",
+  )) === true,
+  "a firm band still entitles when the customer also has the owner price",
 );
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");

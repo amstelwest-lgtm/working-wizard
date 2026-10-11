@@ -15,6 +15,7 @@ import {
   FIRM_SETUP_PROMOTION_CODE_ID,
   normalizeVoucherCode,
 } from "@/lib/firm-voucher";
+import { isZaOwnerLookup, OWNER_LOOKUP_KEYS, isOwnerLookupKey } from "@/lib/owner-price";
 import {
   assertFoundingMonthlyOnly,
   FIRM_BAND_CATALOG,
@@ -467,11 +468,7 @@ export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionC
 
 export { isFoundingCode, assertFoundingMonthlyOnly };
 
-/** Owner plan lookup keys. Prices are created in Stripe by CoS, not here. */
-export const OWNER_LOOKUP_KEYS = {
-  us: { month: "milon_owner_monthly", year: "milon_owner_annual" },
-  za: { month: "milon_za_owner_monthly", year: "milon_za_owner_annual" },
-} as const;
+export { isOwnerLookupKey, isZaOwnerLookup, OWNER_LOOKUP_KEYS } from "@/lib/owner-price";
 
 export const OWNER_MONTHLY_USD_CENTS = 3_900;
 /** Rand monthly amount in cents. The letters of the currency code stay out of this file. */
@@ -485,21 +482,6 @@ export function ownerAnnualCents(monthlyCents: number): number {
 export function ownerLookupKey(market: StripePlanMarket, interval: FirmInterval): string {
   const keys = market === "za" ? OWNER_LOOKUP_KEYS.za : OWNER_LOOKUP_KEYS.us;
   return interval === "year" ? keys.year : keys.month;
-}
-
-export function isOwnerLookupKey(lookupKey: string | null | undefined): boolean {
-  const key = lookupKey?.trim() ?? "";
-  return (
-    key === OWNER_LOOKUP_KEYS.us.month ||
-    key === OWNER_LOOKUP_KEYS.us.year ||
-    key === OWNER_LOOKUP_KEYS.za.month ||
-    key === OWNER_LOOKUP_KEYS.za.year
-  );
-}
-
-export function isZaOwnerLookup(lookupKey: string | null | undefined): boolean {
-  const key = lookupKey?.trim() ?? "";
-  return key === OWNER_LOOKUP_KEYS.za.month || key === OWNER_LOOKUP_KEYS.za.year;
 }
 
 export function ownerMarketFromLookup(

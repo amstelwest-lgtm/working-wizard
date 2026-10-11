@@ -4,6 +4,7 @@
  * Checkout results, and webhook state.
  */
 
+import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import {
   assertNoManagedPaymentsOverride,
   findOwnerCatalogPrice,
@@ -439,16 +440,21 @@ function isoFromUnix(value: unknown): string | null {
 function priceOf(record: Record<string, unknown> | null): {
   lookupKey: string | null;
   priceId: string | null;
+  productPlan: string | null;
 } {
   const items = asRecord(record?.items);
   const data = Array.isArray(items?.data) ? items.data : [];
   const first = asRecord(data[0]);
   const price = first?.price;
-  if (typeof price === "string" && price.trim()) return { lookupKey: null, priceId: price.trim() };
+  if (typeof price === "string" && price.trim()) {
+    return { lookupKey: null, priceId: price.trim(), productPlan: null };
+  }
   const priceRecord = asRecord(price);
+  const product = asRecord(priceRecord?.product);
   return {
     lookupKey: stringField(priceRecord, "lookup_key"),
     priceId: stringField(priceRecord, "id"),
+    productPlan: metadataOf(product).plan ?? null,
   };
 }
 
@@ -477,7 +483,8 @@ export function ownerBillingEventSignal(event: {
   const price = priceOf(record);
   const lookupKey = metadata.milon_lookup_key?.trim() || price.lookupKey || null;
   const plan = metadata.milon_plan?.trim() || "";
-  const owner = plan === "owner" || isOwnerLookupKey(lookupKey);
+  const owner =
+    plan === "owner" || isOwnerCatalogPrice({ lookupKey, productPlan: price.productPlan });
   const marketField = metadata.milon_market?.trim() ?? "";
   const intervalField = metadata.milon_interval?.trim() ?? "";
   const market: StripePlanMarket | null =

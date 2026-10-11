@@ -18,6 +18,7 @@ import {
   zarCentsFromPrice,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
+import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import {
   isOwnerLookupKey,
   readFirmSetupUpgrade,
@@ -198,7 +199,7 @@ async function retrieveFirmSubscription(
 ): Promise<RetrievedSubscription> {
   try {
     return await stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["items.data.price", "customer"],
+      expand: ["items.data.price.product", "customer"],
     });
   } catch (err) {
     console.warn("[stripe] subscription expand failed", err instanceof Error ? err.message : err);
@@ -221,7 +222,14 @@ export async function syncFirmSubscriptionBand(
   const sub = await retrieveFirmSubscription(stripe, subscriptionId);
   const price = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
   const metadata = { ...(sub.metadata ?? {}) };
-  if (metadata.milon_plan === "owner" || isOwnerLookupKey(price.lookupKey)) {
+  const ownerPrice = price.lookupKey
+    ? isOwnerCatalogPrice({ lookupKey: price.lookupKey, productPlan: price.productPlan })
+    : metadata.milon_plan === "owner" ||
+      isOwnerCatalogPrice({
+        lookupKey: metadata.milon_lookup_key,
+        productPlan: price.productPlan,
+      });
+  if (ownerPrice) {
     const { syncOwnerBillingEvent } = await import("@/lib/owner-billing.server");
     await syncOwnerBillingEvent({
       type: "customer.subscription.updated",
@@ -243,11 +251,13 @@ export async function syncFirmSubscriptionBand(
   const billedBand = billedBandFromPrice({
     lookupKey: price.lookupKey,
     productBand: price.productBand,
+    productPlan: price.productPlan,
   });
   const downgradeBlocked = downgradeDropsBelowUsage(billedBand, clientCount);
   const patch = metadataPatchForPrice({
     lookupKey: price.lookupKey,
     productBand: price.productBand,
+    productPlan: price.productPlan,
     metadata,
     clientCount,
   });
@@ -565,6 +575,7 @@ export async function enforceZaCheckoutBillingCountry(
   stripe: StripeLike = getStripe() as unknown as StripeLike,
 ): Promise<boolean> {
   if (session.mode && session.mode !== "subscription") return false;
+  if (isOwnerLookupKey(session.metadata?.milon_lookup_key)) return false;
   const parsed = parseZaLookupKey(session.metadata?.milon_lookup_key);
   if (!parsed) return false;
   if (zarBillingCountryOk(session.customer_details?.address?.country)) return false;
@@ -607,7 +618,7 @@ export async function syncCheckoutSessionSubscription(
 ): Promise<{ band: string | null; cancelledReplaced: boolean } | null> {
   if (session.mode && session.mode !== "subscription") return null;
   const lookupKey = session.metadata?.milon_lookup_key ?? "";
-  if (session.metadata?.milon_plan === "owner" || isOwnerLookupKey(lookupKey)) {
+  if (session.metadata?.milon_plan === "owner" || isOwnerCatalogPrice({ lookupKey })) {
     const { syncOwnerCheckoutSession } = await import("@/lib/owner-billing.server");
     await syncOwnerCheckoutSession(session);
     return { band: "owner", cancelledReplaced: false };

@@ -270,6 +270,16 @@ async function loadPracticeGrants(
   return out;
 }
 
+function productPlanOf(price: Stripe.Price | string | null | undefined): string | null {
+  if (!price || typeof price === "string") return null;
+  const product = price.product;
+  if (!product || typeof product === "string" || ("deleted" in product && product.deleted)) {
+    return null;
+  }
+  const plan = product.metadata?.plan;
+  return typeof plan === "string" && plan.trim() ? plan.trim() : null;
+}
+
 function subscriptionLookup(sub: {
   metadata?: Stripe.Metadata | null;
   items?: Stripe.Subscription["items"];
@@ -279,6 +289,8 @@ function subscriptionLookup(sub: {
     sub.metadata?.milon_lookup_key ||
     (price && typeof price !== "string" ? price.lookup_key : null) ||
     null;
+  const catalogPlan = productPlanOf(price);
+  if (catalogPlan?.toLowerCase() === "owner") return { lookupKey, plan: "owner" };
   return { lookupKey, plan: sub.metadata?.milon_plan ?? null };
 }
 

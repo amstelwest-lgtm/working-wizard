@@ -15,6 +15,7 @@
  */
 
 import { isPreInsightWorkspacePath, routePathname } from "@/lib/funnel-timing";
+import { isOwnerCatalogPrice } from "@/lib/owner-price";
 
 export const ENTITLING_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
 export type EntitlingSubscriptionStatus = (typeof ENTITLING_SUBSCRIPTION_STATUSES)[number];
@@ -43,7 +44,28 @@ export type StripeCustomerSubscriptionReader = {
       customer: string;
       status: string;
       limit: number;
-    }) => Promise<{ data: Array<{ id: string; status?: string }> }>;
+      expand?: string[];
+    }) => Promise<{
+      data: Array<{
+        id: string;
+        status?: string;
+        metadata?: { milon_plan?: string | null; milon_lookup_key?: string | null } | null;
+        items?: {
+          data?: Array<{
+            price?:
+              | string
+              | {
+                  lookup_key?: string | null;
+                  product?:
+                    | string
+                    | { metadata?: { plan?: string | null; band?: string | null } | null }
+                    | null;
+                }
+              | null;
+          }>;
+        } | null;
+      }>;
+    }>;
   };
 };
 
@@ -124,6 +146,39 @@ export function isFirstClientFiguresPath(input: {
   return first.length > 0 && id === first;
 }
 
+function subscriptionIsOwnerPlan(sub: {
+  metadata?: { milon_plan?: string | null; milon_lookup_key?: string | null } | null;
+  items?: {
+    data?: Array<{
+      price?:
+        | string
+        | {
+            lookup_key?: string | null;
+            product?:
+              | string
+              | { metadata?: { plan?: string | null } | null }
+              | null;
+          }
+        | null;
+    }>;
+  } | null;
+}): boolean {
+  const metaPlan = sub.metadata?.milon_plan ?? "";
+  if (metaPlan.trim().toLowerCase() === "owner") return true;
+  const price = sub.items?.data?.[0]?.price;
+  let lookupKey = sub.metadata?.milon_lookup_key ?? null;
+  let productPlan: string | null = null;
+  if (price && typeof price === "object") {
+    lookupKey = lookupKey || price.lookup_key || null;
+    const product = price.product;
+    if (product && typeof product === "object") {
+      const plan = product.metadata?.plan;
+      productPlan = typeof plan === "string" ? plan : null;
+    }
+  }
+  return isOwnerCatalogPrice({ lookupKey, productPlan });
+}
+
 export async function customerHasEntitlingSubscription(
   stripe: StripeCustomerSubscriptionReader,
   customerId: string,
@@ -132,9 +187,10 @@ export async function customerHasEntitlingSubscription(
     const listed = await stripe.subscriptions.list({
       customer: customerId,
       status,
-      limit: 1,
+      limit: 20,
+      expand: ["data.items.data.price"],
     });
-    if (listed.data.length > 0) return true;
+    if (listed.data.some((sub) => !subscriptionIsOwnerPlan(sub))) return true;
   }
   return false;
 }
