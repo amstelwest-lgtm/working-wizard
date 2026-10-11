@@ -18,6 +18,9 @@ importers:
       '@fontsource/cormorant-garamond':
         specifier: ^5.3.0
         version: 5.3.0
+      '@fontsource/geist-sans':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/noto-sans':
         specifier: ^5.3.0
         version: 5.3.0
@@ -1152,6 +1155,9 @@ packages:
 
   '@fontsource/cormorant-garamond@5.3.0':
     resolution: {integrity: sha512-weuGsCirGVWBWqpt6YUp0yLThTe4G8YO45noq8wxeJCRvEpq5lFrxNMFSTxcyOyV5k5otzJ8guDzYegdYlcLMQ==}
+
+  '@fontsource/geist-sans@5.3.0':
+    resolution: {integrity: sha512-AmG7cE1AvE4NHROPaOl1sN+a02cB5xy6pA/ZV76HXqWTCsJTV2SCBc9DTFHfJqnVOODm7HhXIYtUIb75NP5QXQ==}
 
   '@fontsource/noto-sans@5.3.0':
     resolution: {integrity: sha512-fBCog2PY7DiVVTEEqtI/Qdinx/knobHYfoGpjFXdfBX5RoJaBp1Prw2G75p0OIsdlMZg3cLo0c+YbIUYOxnQJw==}
@@ -6543,6 +6549,8 @@ snapshots:
   '@floating-ui/utils@0.2.11': {}
 
   '@fontsource/cormorant-garamond@5.3.0': {}
+
+  '@fontsource/geist-sans@5.3.0': {}
 
   '@fontsource/noto-sans@5.3.0': {}
 

@@ -4,10 +4,10 @@
   font-family: "Owner Sans Fallback";
   src: local("Arial");
   font-display: swap;
-  size-adjust: 100.06%;
-  ascent-override: 101.83%;
-  descent-override: 27.16%;
-  line-gap-override: 0%;
+  size-adjust: 117.4%;
+  ascent-override: 78.36%;
+  descent-override: 18.74%;
+  line-gap-override: 8.52%;
 }
 
 @font-face {
@@ -22,7 +22,7 @@
 
 .owner-door {
   --owner-serif: "Cormorant Garamond", "Owner Serif Fallback", Georgia, "Times New Roman", serif;
-  --owner-sans: "Noto Sans", "Owner Sans Fallback", sans-serif;
+  --owner-sans: "Geist Sans", "Owner Sans Fallback", sans-serif;
   --owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg));
   --owner-stage: var(--bg-3);
   --owner-mark: var(--ink);
@@ -74,6 +74,10 @@
   font-feature-settings: "tnum" 1, "lnum" 1;
   -webkit-font-smoothing: antialiased;
   color: var(--ink);
+}
+
+.owner-door.accountant-portal {
+  font-family: var(--owner-sans);
 }
 
 .owner-door.accountant-portal .topbar {
@@ -622,7 +626,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 999px;
-  font-family: var(--owner-sans, "Noto Sans", sans-serif);
+  font-family: var(--owner-sans, "Geist Sans", sans-serif);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.2;

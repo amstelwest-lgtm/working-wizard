@@ -357,7 +357,7 @@ assert(css.includes("var(--cobalt)"), "owner actions use cobalt");
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
 assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
-assert(css.includes('--owner-sans: "Noto Sans"'), "the owner shell uses the accountant sans");
+assert(css.includes('--owner-sans: "Geist Sans"'), "the owner shell uses Geist Sans");
 assert(css.includes("lining-nums"), "tables and amounts use lining figures");
 assert(css.includes("--type-h1-size"), "the owner type scale is tokenised");
 assert(css.includes("--owner-space-1: 8px"), "spacing follows an 8px grid");

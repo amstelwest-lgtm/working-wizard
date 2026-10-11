@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import "@fontsource/noto-sans/latin-400.css";
-import "@fontsource/noto-sans/latin-500.css";
-import "@fontsource/noto-sans/latin-600.css";
-import "@fontsource/noto-sans/latin-700.css";
+import "@fontsource/geist-sans/latin-400.css";
+import "@fontsource/geist-sans/latin-500.css";
+import "@fontsource/geist-sans/latin-600.css";
+import "@fontsource/geist-sans/latin-700.css";
 import "@fontsource/cormorant-garamond/latin-500.css";
 import "@fontsource/cormorant-garamond/latin-600.css";
 import "./owner-door.css";
