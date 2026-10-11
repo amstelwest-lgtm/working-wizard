@@ -1,6 +1,5 @@
-import { FIRM_CARD_TIMING, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
-import { LIST_PRICES } from "@/lib/market/marketing";
-import { HOMEPAGE_FAQ_ITEMS } from "@/lib/marketing-faq";
+import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
+import { HOMEPAGE_FAQ_ITEMS, HOMEPAGE_OWNER_COST_US } from "@/lib/marketing-faq";
 import type { FaqItem } from "@/lib/seo";
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
@@ -10,16 +9,25 @@ export const HERO_BADGE = "For accounting firms and the businesses they advise";
 export const HERO_H1_LEAD = "Your AI finance team.";
 export const HERO_H1_GOLD = "You sign off.";
 export const HERO_LEDE =
-  "Plug in QuickBooks Online or Xero. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
+  "Plug in QuickBooks, Xero or Sage. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
+export const MILON_BOT_LINE = "Milōn Bot is where you talk to your three agents.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
-export const HERO_CTA_NOTE = `${FIRM_CARD_TIMING} Plans from ${LIST_PRICES.us.firmSolo}/mo after day 14.`;
+/** Hero note and the pricing section. Nowhere else. */
+export const FIRM_TRIAL_EXPLORE =
+  "Free to explore your first client — no card. Trial covers up to 3 clients for 14 days.";
+export const HERO_CTA_NOTE = FIRM_TRIAL_EXPLORE;
 export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
 export const HERO_OWNER_PREFIX = "Business owner?";
-export const HERO_OWNER_LINK = "Business owner? Get your own AI finance team →";
+export const HERO_OWNER_LINK = "Business owner? $39/mo, or free when your accountant is on Milōn →";
 export const OWNER_SIGNUP_LINK = "Get your own AI finance team →";
+/** /for-owners and /about. USD. The rand twin lives in the SA pricing server chunk. */
+export const OWNER_PLAN_EARLY_US =
+  "The owner plan is $39 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.";
+export const OWNER_REGISTER_NOTE_US =
+  "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
 
 /**
  * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can
@@ -29,12 +37,12 @@ export const OWNER_SIGNUP_LINK = "Get your own AI finance team →";
 export const HERO_SIGNOFF_POINT = "You review and sign off every advisory pack.";
 
 export const HERO_POINTS = [
-  "Connect a client's QuickBooks Online or Xero file, or upload a P&L and balance sheet.",
+  "Connect a client's QuickBooks Online, Xero or Sage file, or upload a P&L and balance sheet.",
   "Milōn Financial Manager, Milōn Analyst and Milōn Advisor build the health score, 13-week cash forecast and action plan.",
   HERO_SIGNOFF_POINT,
 ] as const;
 
-export const TRUST_BOOKS = "The books stay in QuickBooks Online or Xero";
+export const TRUST_BOOKS = "The books stay in QuickBooks Online, Xero or Sage";
 /**
  * VERIFY-3 fallback. ask-ai sanitises the question text, but brain-propose,
  * brain-deliverable-draft, advisory drafts, client briefings, and statement
@@ -63,10 +71,17 @@ export const BRIDGE_DRAFT_LABEL = "Your AI finance team drafts";
 export const BRIDGE_DRAFT_BODY =
   "It prepares the first version of the analysis and the advisory deliverables.";
 
+/**
+ * One sentence under the firm-page team heading. Does not claim sign-off
+ * blocks every figure from the owner: unsigned packs can still be seen.
+ */
+export const FIRM_NOT_A_BOOKKEEPER =
+  "Not an AI bookkeeper or AI accountant that replaces your firm: the books stay in QuickBooks Online, Xero or Sage, and you review and sign off every advisory pack.";
+
 /** Three distinct agents on /for-accountants. Same <strong> + body pattern as the old single bullet. */
 export const FIRM_TEAM_BULLETS = [
   {
-    title: "Milōn Financial Manager, data quality for QBO and Xero.",
+    title: "Milōn Financial Manager, data quality for QuickBooks, Xero and Sage.",
     body: "Checks the books, the 13-week cash and the budget, and prepares action points and the hand-off to your firm.",
   },
   {
@@ -83,7 +98,7 @@ export const FIRM_TEAM_BULLETS = [
 export const FINANCE_TEAM = [
   {
     name: "Milōn Financial Manager",
-    body: "Data quality from QuickBooks and Xero, the 13-week cash and budget, and action points.",
+    body: "Data quality from QuickBooks, Xero or Sage, the 13-week cash and budget, and action points.",
     bold: "Hands the pack to your accountant.",
   },
   {
@@ -108,7 +123,10 @@ export const ACCOUNTANT_TEASER = {
   title: "The accountant's view",
   meta: "0:30",
   videoId: "J4vJki7HcIs",
-  accessibleName: "Play video: The accountant's view, 30 seconds",
+  accessibleName:
+    "Milōn for accountants: 30-second walkthrough of the AI finance team drafting a client advisory pack",
+  imageAlt:
+    "Milōn for accountants: 30-second walkthrough of the AI finance team drafting a client advisory pack",
 } as const;
 
 export const OWNER_TEASER = {
@@ -116,7 +134,10 @@ export const OWNER_TEASER = {
   title: "The owner's view",
   meta: "0:30",
   videoId: "k3aRM4toTvU",
-  accessibleName: "Play video: The owner's view, 30 seconds",
+  accessibleName:
+    "Milōn for owners: 30-second walkthrough of the health score, 13-week cash forecast and next moves",
+  imageAlt:
+    "Milōn for owners: 30-second walkthrough of the health score, 13-week cash forecast and next moves",
 } as const;
 
 export const OWNER_TEASER_LINK = OWNER_SIGNUP_LINK;
@@ -134,13 +155,14 @@ export const PRICING_INTRO =
  * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
  * Stripe bills that price when the trial ends and a card is on file.
  */
-export const PRICING_TRIAL_AFTER = `${FIRM_CARD_TIMING} After day 14 the paid band bills.`;
+export const PRICING_TRIAL_AFTER = FIRM_TRIAL_EXPLORE;
 export const PRICING_WATCHLIST_NOTE =
-  "Watchlist clients are free and don't count toward your band until you open a full workspace for them.";
+  "Watchlist clients are free: clients you monitor but haven't opened a full workspace for.";
 export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
+export const OWNER_OFFER_LABEL = "For business owners";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
-export const SOLO_CARD_NOTE = FIRM_CARD_TIMING;
+export const SOLO_CARD_NOTE = "";
 
 /** Same label as /for-accountants. Do not fork a second trial string. */
 export const NAV_TRIAL_LABEL = FIRM_TRIAL_CTA_LABEL;
@@ -236,24 +258,15 @@ export const FAQ_MORE_LINK = "all questions";
 /** Must match the homepage cost question in `HOMEPAGE_FAQ_ITEMS`. */
 export const HOMEPAGE_COST_QUESTION = "What does it cost?";
 
-const OWNER_COST_US =
-  "Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.";
-
 /**
- * `zaOwnerCost` comes from the server pricing chunk. The rand sentence is not
- * a literal here, so a US client bundle does not contain it.
+ * Visible homepage FAQ. Pass the server rand sentence only for a ZA visitor.
+ * JSON-LD must call this with `false` so the graph stays USD on every geo.
  */
-export function withSaPricingLines(answer: string, zaOwnerCost: string | null): string {
-  if (!zaOwnerCost) return answer;
-  return answer.replace(OWNER_COST_US, zaOwnerCost);
-}
-
-/** Visible homepage FAQ and its FAQPage JSON-LD. US unless a server line is passed. */
 export function homepageFaqItems(showSaPricing: boolean, zaOwnerCost?: string | null): FaqItem[] {
-  const line = showSaPricing ? (zaOwnerCost ?? null) : null;
+  const replacement = showSaPricing && zaOwnerCost ? zaOwnerCost : null;
   return HOMEPAGE_FAQ_ITEMS.map((item) =>
-    item.question === HOMEPAGE_COST_QUESTION
-      ? { ...item, answer: withSaPricingLines(item.answer, line) }
+    item.question === HOMEPAGE_COST_QUESTION && replacement
+      ? { ...item, answer: item.answer.replace(HOMEPAGE_OWNER_COST_US, replacement) }
       : item,
   );
 }

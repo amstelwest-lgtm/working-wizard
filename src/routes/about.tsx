@@ -1,12 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { MILON_BOT_LINE, OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/about")({
-  loader: () => readMarketingVisitor(),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
+  },
   component: AboutPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.about),
@@ -16,13 +22,13 @@ export const Route = createFileRoute("/about")({
 });
 
 function AboutPage() {
-  const { copyPack, geoZa } = Route.useLoaderData();
+  const { copyPack, geoZa, saPricing } = Route.useLoaderData();
   return (
     <MarketingShell
       copyPack={copyPack}
       geoZa={geoZa}
       eyebrow="About"
-      title={<>Why MILŌN exists</>}
+      title={<>Why Milōn exists</>}
       lead={
         <>
           Financial information should not be useful only to people with specialist financial
@@ -30,12 +36,7 @@ function AboutPage() {
         </>
       }
       ctaTitle={<>See it on your own figures</>}
-      ctaBody={
-        <>
-          Spark is free during early access and needs no card. Upload what you have and read your
-          score before you decide whether any of this is worth your time.
-        </>
-      }
+      ctaBody={<>{saPricing?.ownerEarly ?? OWNER_PLAN_EARLY_US}</>}
     >
       <p>
         Most businesses already have financial data. The harder problem is having the technical
@@ -49,13 +50,13 @@ function AboutPage() {
         businesses.
       </p>
       <p>
-        MILŌN is built to make that level of financial understanding more accessible to small
+        Milōn is built to make that level of financial understanding more accessible to small
         businesses, family-owned businesses, and the people who run them.
       </p>
 
       <h2>Built around financial health</h2>
       <p>
-        MILŌN assesses a business across four pillars:{" "}
+        Milōn assesses a business across four pillars:{" "}
         <strong>profit, assets, financing, and cash</strong>.
       </p>
       <p>
@@ -70,13 +71,13 @@ function AboutPage() {
         simply telling you that something is wrong.
       </p>
       <p>
-        MILŌN also produces a 13-week cash forecast, giving a business a forward-looking view of its
+        Milōn also produces a 13-week cash forecast, giving a business a forward-looking view of its
         cash position alongside its historical financial information.
       </p>
 
       <h2>Built for owners and accountants</h2>
       <p>
-        MILŌN is a dual product: one workspace for business owners and the accounting firms they
+        Milōn is a dual product: one workspace for business owners and the accounting firms they
         already work with.
       </p>
       <p>
@@ -85,10 +86,11 @@ function AboutPage() {
         actions with their clients.
       </p>
       <p>
-        QuickBooks Online and Xero, plug-and-play. Milōn Bot reads the numbers, diagnoses the
-        business, and drafts the advisory deliverables. The accountant reviews and signs off.
+        QuickBooks Online and Xero, plug-and-play. Sage connects the same way. Milōn Financial
+        Manager, Milōn Analyst and Milōn Advisor work in Milōn Bot. {MILON_BOT_LINE} The accountant
+        reviews and signs off.
       </p>
-      <p>MILŌN does not provide licensed financial advice.</p>
+      <p>Milōn does not provide licensed financial advice.</p>
       <p>
         The product can currently ingest a P&amp;L and balance sheet as a PDF, Excel file, or CSV,
         as well as a bank statement.

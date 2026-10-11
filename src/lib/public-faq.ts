@@ -1,13 +1,25 @@
-import { FIRM_CARD_TIMING } from "./firm-signup-copy";
 import { LIST_PRICES } from "./market/marketing";
 import type { FaqItem } from "./seo";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
   AI_IDENTIFIERS_LINE,
   AI_MODEL_DISCLOSURE,
+  FAQ_NOT_A_BOOKKEEPER_ANSWER,
+  FAQ_NOT_A_BOOKKEEPER_QUESTION,
+  FAQ_OWNER_PLAN_US,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
   WATCHLIST_DEFINITION,
+} from "./marketing-faq";
+
+/** Lead sentence of the cost answer. USD. The ZA page swaps this from the server chunk. */
+export const FAQ_OWNER_COST_US =
+  "Business owners: $39 a month, or free when your accountant is on Milōn.";
+
+export {
+  FAQ_NOT_A_BOOKKEEPER_ANSWER,
+  FAQ_NOT_A_BOOKKEEPER_QUESTION,
+  FAQ_OWNER_PLAN_US,
 } from "./marketing-faq";
 
 /**
@@ -17,12 +29,11 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms: ${FIRM_CARD_TIMING} Then they pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
+      answer: `${FAQ_OWNER_COST_US} Accounting firms pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
-      question: "What does a business owner pay?",
-      answer:
-        "Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.",
+      question: "What does the owner plan cost?",
+      answer: FAQ_OWNER_PLAN_US,
     },
     {
       question: "What happens if I stop using it?",
@@ -52,6 +63,10 @@ export function publicFaqUsItems(): FaqItem[] {
       question: "Do you track how I use the product?",
       answer:
         "We keep product-event keys — things like “report sent” or “task completed” — so we can tell whether the product is actually working. We do not store financial amounts, ID numbers, or employee emails in that log. Magic-link clicks are stored as a hash of the link, not a name. Those raw events are kept for 24 months; the weekly totals stay.",
+    },
+    {
+      question: FAQ_NOT_A_BOOKKEEPER_QUESTION,
+      answer: FAQ_NOT_A_BOOKKEEPER_ANSWER,
     },
     {
       question: "My accountant already does this.",

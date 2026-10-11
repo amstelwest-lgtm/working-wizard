@@ -3,12 +3,17 @@ import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { LIST_PRICES, visitorMarketBootScript } from "@/lib/market";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { AI_IDENTIFIERS_LINE, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/terms")({
-  loader: () => readMarketingVisitor(),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
+  },
   component: TermsPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.terms),
@@ -18,7 +23,7 @@ export const Route = createFileRoute("/terms")({
 });
 
 function TermsPage() {
-  const { copyPack, geoZa } = Route.useLoaderData();
+  const { copyPack, geoZa, saPricing } = Route.useLoaderData();
   return (
     <MarketingShell
       copyPack={copyPack}
@@ -26,13 +31,13 @@ function TermsPage() {
       eyebrow="Terms of use"
       title={
         <>
-          Early access, <span className="mk-gold">plain rules</span>, and what this product is not.
+          Plain <span className="mk-gold">rules</span>, and what this product is not.
         </>
       }
       lead={
         <>
           These terms cover the Milōn workspace run by {LEGAL_ENTITY}. They are a first public
-          version, written for early access. Effective {LEGAL_EFFECTIVE}.
+          version. Effective {LEGAL_EFFECTIVE}.
         </>
       }
       ctaTitle={<>Privacy and the AI notice sit next to this</>}
@@ -47,7 +52,7 @@ function TermsPage() {
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}
-        <MarketCopy za="South Africa" us="US early access" />
+        <MarketCopy za="South Africa" us="United States" />
       </p>
 
       <h2>The service</h2>
@@ -63,10 +68,8 @@ function TermsPage() {
       </p>
       ) : null}
       <p>
-        Business owners: <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
-        Milōn. Billing opens soon. Accounting firms: see your first client&apos;s figures with no
-        card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 a paid
-        USD client-count band bills through Stripe Checkout.
+        Business owners pay {saPricing?.ownerMonthly ?? "$39/mo"}, or nothing when their accountant
+        is on Milōn. Accounting firms are billed through Stripe after a 14-day trial.
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">
@@ -113,7 +116,7 @@ function TermsPage() {
 
       <h2>Availability</h2>
       <p>
-        Early access means the product is still being finished. We work to keep it up; we do not
+        The product is still being finished. We work to keep it up; we do not
         promise it will never break. If we have to withdraw a feature, we will say so in the product
         rather than quietly deleting it under you.
       </p>
@@ -134,7 +137,7 @@ function TermsPage() {
 
       <h2>Changes</h2>
       <p>
-        We may update these terms as the product leaves early access. The effective date on this
+        We may update these terms as the product changes. The effective date on this
         page is the date that applies. Material changes will be obvious on this page, not hidden in
         a changelog.
       </p>

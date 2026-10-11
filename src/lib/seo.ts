@@ -1,3 +1,4 @@
+import { COMPANY_POSTAL_ADDRESS, LEGAL_ENTITY } from "./legal";
 import { LIST_PRICES } from "./market/marketing";
 
 /**
@@ -12,84 +13,108 @@ export type SeoPage = {
   title: string;
   description: string;
   ogTitle?: string;
+  /** Social description. Falls back to `description` when omitted. */
+  ogDescription?: string;
+  /** Path under the site origin, e.g. `/og/og-home-v11.png`. */
+  image?: string;
   imageAlt: string;
   /** Default true. App, auth, and tokenized URLs must be false. */
   index?: boolean;
 };
 
 const USD_LIST_PRICE = LIST_PRICES.us.firmSolo.replace(/[^0-9.]/g, "") || "99";
+const HOME_OG = "/og/og-home-v11.png";
+const HOME_OG_ALT =
+  "Milōn: Your AI finance team. You sign off. Milōn Financial Manager, Milōn Analyst, Milōn Advisor.";
 
 export const SEO_PAGES = {
   home: {
     path: "/",
-    title: "Financial Manager & AI CFO for QBO and Xero | MILŌN",
+    title: "AI Finance Team & AI CFO for QuickBooks, Xero & Sage | MILŌN",
     description:
-      "Milōn Financial Manager, Analyst and Advisor in Milōn Bot for QuickBooks Online and Xero. You sign off. 14-day free trial · up to 3 clients.",
-    imageAlt:
-      "Milōn Financial Manager, Milōn Analyst and Milōn Advisor draft client advisory from QuickBooks Online and Xero for accountant sign-off",
+      "Milōn gives accounting firms an AI finance team: health score, 13-week cash forecast and advisory drafts from QuickBooks, Xero or Sage. You sign off.",
+    ogTitle: "Your AI finance team. You sign off. | MILŌN",
+    ogDescription:
+      "Milōn Financial Manager, Analyst and Advisor work in Milōn Bot from QuickBooks, Xero or Sage. Your accountant signs off. 14-day free trial · up to 3 clients.",
+    image: HOME_OG,
+    imageAlt: HOME_OG_ALT,
   },
   forAccountants: {
     path: "/for-accountants",
-    title: "AI Finance Team for Accountants on QBO & Xero | MILŌN",
+    title: "AI Finance Team for Firms on QuickBooks, Xero & Sage | MILŌN",
     description:
-      "Not an AI accountant that replaces you: a financial manager, analyst and advisor drafting from QBO or Xero. Your firm signs off.",
+      "Not an AI accountant or bookkeeper that replaces your firm. Three agents draft from QuickBooks, Xero or Sage. Your firm signs off.",
+    ogTitle: "An AI finance team for accounting firms | MILŌN",
+    ogDescription:
+      "Milōn Financial Manager, Analyst and Advisor draft the cash forecast and advisory pack from QuickBooks, Xero or Sage. Your firm signs off. 14-day free trial · up to 3 clients.",
+    image: "/og/og-accountants-v11.png",
     imageAlt:
-      "MILŌN for accounting firms: an AI finance team for every client, signed off by your firm",
+      "Milōn: An AI finance team for accounting firms. Milōn Financial Manager, Milōn Analyst, Milōn Advisor.",
   },
   forOwners: {
     path: "/for-owners",
-    title: "Know Your Numbers: Financial Clarity for Owners | MILŌN",
+    title: "AI CFO for Small Business on QuickBooks, Xero & Sage | MILŌN",
     description:
-      "Health score, 13-week cash forecast, and next moves from QuickBooks Online, Xero, or an upload — reviewed by your accountant.",
-    imageAlt: "MILŌN for business owners — health score, cash forecast, and next moves",
+      "An AI finance team for your business: health score, 13-week cash and next moves from QuickBooks, Xero or Sage. $39 a month, or free with your accountant.",
+    ogTitle: "An AI finance team for small business owners | MILŌN",
+    ogDescription:
+      "Milōn Financial Manager, Analyst and Advisor read QuickBooks, Xero or Sage and tell you what to do next. Free when your accountant is on Milōn.",
+    image: "/og/og-owners-v11.png",
+    imageAlt:
+      "Milōn: An AI finance team for small business owners. Milōn Financial Manager, Milōn Analyst, Milōn Advisor.",
   },
   faq: {
     path: "/faq",
-    title: "MILŌN FAQ — Pricing, Data, and How Advisory Works",
+    title: "Milōn FAQ: AI Finance Team, Pricing, Data & Sign-off",
     description:
-      "Answers on pricing, data, and connecting QuickBooks Online or Xero. AI prepares the analysis; a qualified accountant reviews and signs off.",
-    imageAlt: "Frequently asked questions about the MILŌN finance platform",
+      "Straight answers on Milōn pricing, data and sign-off. Three AI agents draft from QuickBooks, Xero or Sage. An accountant signs off.",
+    image: HOME_OG,
+    imageAlt: HOME_OG_ALT,
   },
   about: {
     path: "/about",
-    title: "About MILŌN — Financial health for owners and their accountants",
+    title: "About Milōn: An AI Finance Team Accountants Sign Off",
     description:
-      "MILŌN turns a P&L and balance sheet into a health score, a cash forecast, and accountant-reviewed next steps.",
-    imageAlt: "About MILŌN — financial health for owners and their accountants",
+      "Why Milōn exists: three AI agents give small businesses a finance function, and a qualified accountant signs off. Works with QuickBooks, Xero and Sage.",
+    image: HOME_OG,
+    imageAlt: HOME_OG_ALT,
   },
   privacy: {
     path: "/privacy",
-    title: "Privacy — How MILŌN Handles Financial Data",
+    title: "Privacy — How Milōn Handles Financial Data",
     description:
-      "How MILŌN stores, encrypts, and processes financial data — and why your clients' numbers are never used to train AI models.",
-    imageAlt: "MILŌN privacy notice",
+      "How Milōn stores, encrypts, and processes financial data, and why your clients' numbers are never used to train AI models.",
+    image: HOME_OG,
+    imageAlt: HOME_OG_ALT,
   },
   terms: {
     path: "/terms",
     title: "Terms of Use | MILŌN",
     description:
-      "Terms for using MILŌN: your figures stay yours, AI is a work-preparation tool, and a qualified accountant reviews and signs off. Not a substitute for licensed advice.",
-    imageAlt: "MILŌN terms of use",
+      "Terms for using Milōn: your figures stay yours, AI prepares the work, and a qualified accountant signs off. Not a substitute for licensed advice.",
+    image: HOME_OG,
+    imageAlt: HOME_OG_ALT,
   },
   ai: {
     path: "/ai",
-    title: "AI Data Handling | MILŌN",
+    title: "How Milōn's AI Agents Handle Financial Data | MILŌN",
     description:
-      "How MILŌN uses AI on financial data. Identifiers (company names, tax IDs, account numbers) are stripped before model calls; amounts stay. Client numbers are never used to train third-party models.",
-    imageAlt: "MILŌN AI notice",
+      "How Milōn's AI agents use financial data: identifiers stripped before model calls, amounts kept, never used to train third-party models. People sign off.",
+    image: HOME_OG,
+    imageAlt: HOME_OG_ALT,
   },
   auth: {
     path: "/auth",
     title: "Sign in | MILŌN",
-    description: "Sign in to MILŌN.",
-    imageAlt: "MILŌN sign in",
+    description: "Sign in to Milōn.",
+    imageAlt: "Milōn sign in",
     index: false,
   },
   app: {
     path: "/app",
-    title: "MILŌN",
-    description: "MILŌN workspace.",
-    imageAlt: "MILŌN workspace",
+    title: "Milōn",
+    description: "Milōn workspace.",
+    imageAlt: "Milōn workspace",
     index: false,
   },
 } as const satisfies Record<string, SeoPage>;
@@ -123,7 +148,8 @@ export function pageHead(page: SeoPage) {
   const path = page.path;
   const url = canonicalUrl(path);
   const og = page.ogTitle ?? page.title;
-  const image = `${SITE_ORIGIN}/og.png`;
+  const socialDescription = page.ogDescription ?? page.description;
+  const image = `${SITE_ORIGIN}${page.image ?? "/og.png"}`;
   const index = page.index !== false;
   const robots = index
     ? "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
@@ -138,7 +164,7 @@ export function pageHead(page: SeoPage) {
       { property: "og:site_name", content: "MILŌN" },
       { property: "og:locale", content: "en_US" },
       { property: "og:title", content: og },
-      { property: "og:description", content: page.description },
+      { property: "og:description", content: socialDescription },
       { property: "og:url", content: url },
       { property: "og:image", content: image },
       { property: "og:image:width", content: "1200" },
@@ -146,8 +172,9 @@ export function pageHead(page: SeoPage) {
       { property: "og:image:alt", content: page.imageAlt },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: og },
-      { name: "twitter:description", content: page.description },
+      { name: "twitter:description", content: socialDescription },
       { name: "twitter:image", content: image },
+      { name: "twitter:image:alt", content: page.imageAlt },
     ],
     links: [
       { rel: "canonical", href: url },
@@ -160,7 +187,7 @@ export function pageHead(page: SeoPage) {
 /** Unmatched URLs (including /blog and /pricing, which are not pages). No homepage title, description, or og:url. */
 export const NOT_FOUND_TITLE = "Page not found | MILŌN";
 export const NOT_FOUND_DESCRIPTION =
-  "This address is not a page on MILŌN. It may be mistyped, or the page may have been moved.";
+  "This address is not a page on Milōn. It may be mistyped, or the page may have been moved.";
 
 export function notFoundHead() {
   return {
@@ -183,8 +210,9 @@ export function organizationGraphJson(): string {
       {
         "@type": "Organization",
         "@id": `${SITE_ORIGIN}/#organization`,
-        name: "MILŌN",
-        alternateName: "MILON Finance",
+        name: LEGAL_ENTITY,
+        legalName: LEGAL_ENTITY,
+        alternateName: ["Milōn", "MILŌN", "MILON Finance"],
         url: SITE_ORIGIN,
         logo: {
           "@type": "ImageObject",
@@ -193,57 +221,76 @@ export function organizationGraphJson(): string {
           height: 512,
         },
         description:
-          "MILŌN is an AI-automated finance function and advisory platform for accounting firms and the businesses they serve. It generates financial health scoring, cash flow forecasting, budget variance analysis, and actionable advisory plans that a qualified accountant reviews and signs off.",
+          "Milōn gives accounting firms and the businesses they advise an AI finance team: Milōn Financial Manager, Milōn Analyst and Milōn Advisor work from QuickBooks, Xero or Sage, and a qualified accountant reviews and signs off.",
+        address: {
+          "@type": "PostalAddress",
+          streetAddress: COMPANY_POSTAL_ADDRESS.streetAddress,
+          addressLocality: COMPANY_POSTAL_ADDRESS.addressLocality,
+          addressRegion: COMPANY_POSTAL_ADDRESS.addressRegion,
+          postalCode: COMPANY_POSTAL_ADDRESS.postalCode,
+          addressCountry: COMPANY_POSTAL_ADDRESS.addressCountry,
+        },
         // Omit sameAs until the LinkedIn company page and X profile are live.
         // Pointing crawlers at 404 / unverified URLs is worse than omitting the field.
         areaServed: [{ "@type": "Country", name: "United States" }],
         knowsAbout: [
-          "Client Advisory Services",
-          "Cash flow forecasting",
-          "Financial planning and analysis",
+          "AI finance team",
+          "AI CFO",
+          "Client advisory services",
+          "13-week cash flow forecasting",
+          "Budget vs actual variance analysis",
           "Financial ratio analysis",
-          "Budget variance analysis",
-          "Artificial intelligence in accounting",
           "Small business financial management",
           "QuickBooks Online",
           "Xero",
+          "Sage",
         ],
       },
       {
         "@type": "SoftwareApplication",
         "@id": `${SITE_ORIGIN}/#software`,
-        name: "MILŌN",
+        name: "Milōn",
+        alternateName: "Milōn Bot",
         applicationCategory: "BusinessApplication",
-        applicationSubCategory: "Financial Analysis and Advisory Software",
-        operatingSystem: "Web browser",
+        applicationSubCategory: "AI finance team for accounting firms and small businesses",
+        operatingSystem: "Web",
         url: SITE_ORIGIN,
+        image: `${SITE_ORIGIN}/og/og-home-v11.png`,
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         description:
-          "AI-automated finance function for accounting firms and small businesses. Connect QuickBooks Online or Xero, or upload statements. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, and assignable action plans.",
+          "Your AI finance team. You sign off. Three AI agents work in Milōn Bot from QuickBooks, Xero, Sage or uploaded statements: Milōn Financial Manager (data quality, 13-week cash and budget, action points, accountant hand-off), Milōn Analyst (health score, ratios, variances, diagnosis) and Milōn Advisor (next moves and advisory deliverables). A qualified accountant reviews and signs off.",
         featureList: [
-          "Connect QuickBooks Online or Xero, or upload PDF, Excel, or CSV statements",
-          "Business financial health score across profit, assets, financing and cash",
-          "19 financial ratios with workings shown and repair playbooks",
-          "13-week rolling cash flow forecast",
-          "Budget vs actual variance reporting with AI commentary",
-          "AI extraction of financial statements from PDF, Excel, or CSV",
-          "Client-ready PDF advisory packs for review and sign-off",
+          "Milōn Financial Manager: data quality from QuickBooks, Xero or Sage, 13-week cash forecast and budget, action points and accountant hand-off",
+          "Milōn Analyst: financial health score, 19 financial ratios with workings, budget vs actual variances and diagnosis",
+          "Milōn Advisor: next moves and client-ready advisory deliverables for accountant sign-off",
+          "Connect QuickBooks Online, Xero or Sage, or upload PDF, Excel, CSV or a bank statement",
+          "Every sign-off logged with the accountant's name and time",
           "Assignable action plans with email-based task completion",
-          "Ask AI over your own financial data",
         ],
-        offers: {
-          "@type": "Offer",
-          priceCurrency: "USD",
-          price: USD_LIST_PRICE,
-          url: `${SITE_ORIGIN}/for-accountants`,
-          availability: "https://schema.org/InStock",
-        },
+        offers: [
+          {
+            "@type": "Offer",
+            name: "Firm plan: Solo (up to 15 active clients)",
+            priceCurrency: "USD",
+            price: USD_LIST_PRICE,
+            url: `${SITE_ORIGIN}/for-accountants`,
+            availability: "https://schema.org/InStock",
+          },
+          {
+            "@type": "Offer",
+            name: "Owner plan",
+            priceCurrency: "USD",
+            price: "39",
+            url: `${SITE_ORIGIN}/for-owners`,
+            availability: "https://schema.org/InStock",
+          },
+        ],
       },
       {
         "@type": "WebSite",
         "@id": `${SITE_ORIGIN}/#website`,
         url: SITE_ORIGIN,
-        name: "MILŌN",
+        name: "Milōn",
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         inLanguage: "en-US",
       },
@@ -256,6 +303,7 @@ Allow: /
 Allow: /favicon.ico
 Allow: /icons/
 Allow: /og.png
+Allow: /og/
 
 User-agent: GPTBot
 Allow: /
@@ -284,24 +332,22 @@ Disallow: /*?*invite=
 Sitemap: ${SITE_ORIGIN}/sitemap.xml
 `;
 
-export const LLMS_TXT = `# MILŌN
+export const LLMS_TXT = `# Milōn
 
-> MILŌN is an AI-automated finance function and advisory platform for
-> accounting firms and the small and midsize businesses they serve. It
-> generates financial health scoring, 13-week cash flow forecasting,
-> budget vs actual variance analysis, and assignable action plans —
-> which a qualified accountant reviews and signs off before they reach
-> the client.
+> Your AI finance team. You sign off. Milōn gives accounting firms and the
+> small businesses they advise three AI agents that work in Milōn Bot from
+> QuickBooks, Xero, Sage or uploaded statements. A qualified accountant
+> reviews and signs off every advisory pack.
 
-## What MILŌN does
-- Connects to QuickBooks Online or Xero, or reads an uploaded PDF, Excel, CSV, or bank statement
-- Scores business financial health across four pillars: profit, assets, financing, cash
-- Calculates and explains 19 financial ratios with workings shown and repair playbooks
-- Builds rolling 13-week direct cash flow forecasts
-- Produces budget vs actual variance reporting with written commentary
-- Extracts financial data from PDF, Excel, CSV, or a bank statement
-- Generates client-ready advisory packs for accounting firms to review and sign off
-- Converts recommendations into assigned tasks completable from email
+## The AI finance team
+- Milōn Financial Manager: checks data quality from QuickBooks Online, Xero or Sage, runs the 13-week cash forecast and budget, sets action points and hands the pack to the accountant
+- Milōn Analyst: financial health score across four pillars (profit, assets, financing, cash), 19 ratios with workings, budget vs actual variances and diagnosis
+- Milōn Advisor: next moves and client-ready advisory deliverables for accountant sign-off
+- Milōn is not a ledger and does not file returns or make payments
+
+## Pricing (USD)
+- Accounting firms: flat bands by active client count, Solo $99/mo to Scale $999/mo; 14-day free trial · up to 3 clients
+- Business owners: $39/mo, free when their accountant is on Milōn
 
 ## Who it is for
 - Accounting firms, CPA firms and bookkeeping firms launching or scaling client advisory services
@@ -314,6 +360,7 @@ export const LLMS_TXT = `# MILŌN
 - About: ${SITE_ORIGIN}/about
 - FAQ: ${SITE_ORIGIN}/faq
 - Privacy: ${SITE_ORIGIN}/privacy
+- AI notice: ${SITE_ORIGIN}/ai
 
 ## Markets
 Primary: United States. Also serving South Africa.

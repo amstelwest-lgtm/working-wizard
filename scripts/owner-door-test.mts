@@ -361,6 +361,16 @@ assert(css.includes("min-height: 44px"), "ask buttons meet the tap target");
 assert(!/#[0-9a-fA-F]{3,8}\b/.test(css), "owner door colours come from theme tokens");
 assert(!css.includes("var(--gold-grad)"), "owner buttons no longer use the gold gradient");
 assert(css.includes("var(--cobalt)"), "owner actions use cobalt");
+assert(
+  /\.owner-turn\.is-owner\s*\{[^}]*background:\s*var\(--pale\)/.test(css),
+  "owner messages use the pale blue token",
+);
+assert(
+  !/\.owner-turn\.is-owner\s*\{[^}]*--gold/.test(css),
+  "owner messages do not use a gold fill",
+);
+assert(css.includes("list-style: decimal outside"), "numbered replies keep their numbers");
+assert(css.includes("list-style: disc outside"), "reply bullets stay visible");
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
 assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");

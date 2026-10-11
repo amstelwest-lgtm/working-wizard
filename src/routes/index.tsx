@@ -15,7 +15,6 @@ import { LandingSignInButton } from "@/components/landing/landing-sign-in-button
 import {
   DUAL_MARKET_BUILT,
   DUAL_MARKET_TAGLINE,
-  FIRM_CARD_TIMING,
   MARKETING_COPYRIGHT_ENTITY,
 } from "@/lib/firm-signup-copy";
 import { persistPortalTheme, resolvePortalTheme, THEME_BOOT_SCRIPT } from "@/lib/portal-theme";
@@ -62,8 +61,6 @@ import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import {
   ACCOUNTANT_TEASER,
-  BRIDGE_DRAFT_BODY,
-  BRIDGE_DRAFT_LABEL,
   DASH_ARIA_LABEL,
   HERO_BADGE,
   HERO_CONTACT_EMAIL,
@@ -73,8 +70,10 @@ import {
   HERO_H1_GOLD,
   HERO_H1_LEAD,
   HERO_LEDE,
+  MILON_BOT_LINE,
   HERO_OWNER_LINK,
   HERO_POINTS,
+  OWNER_REGISTER_NOTE_US,
   HERO_WALKTHROUGH_LABEL,
   FAQ_MORE_LEAD,
   FAQ_MORE_LINK,
@@ -83,7 +82,7 @@ import {
   NAV_TRIAL_ARIA,
   NAV_TRIAL_LABEL,
   OWNER_TEASER,
-  OWNER_TEASER_LINK,
+  OWNER_OFFER_LABEL,
   PRICING_H2_USD,
   PRICING_INTRO,
   PRICING_OWNER_BAR_US,
@@ -156,8 +155,6 @@ export const Route = createFileRoute("/")({
   },
   component: LandingPage,
   head: ({ loaderData }) => {
-    const showSaPricing = loaderData?.showSaPricing === true;
-    const zaOwnerCost = showSaPricing ? (loaderData?.saPricing?.ownerCost ?? null) : null;
     const copyPack = loaderData?.copyPack === "za" ? "za" : "us";
     const homeHead = pageHead(SEO_PAGES.home);
     return {
@@ -198,7 +195,7 @@ export const Route = createFileRoute("/")({
         { children: visitorMarketBootScript(copyPack) },
         {
           type: "application/ld+json",
-          children: faqPageJson(homepageFaqItems(showSaPricing, zaOwnerCost)),
+          children: faqPageJson(homepageFaqItems(false)),
         },
       ],
     };
@@ -262,7 +259,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 
 function LandingPage() {
   const { showSaPricing, saPricing, urlDraft, copyPack, geoZa } = Route.useLoaderData();
-  const homeFaq = homepageFaqItems(showSaPricing, saPricing?.ownerCost ?? null);
+  const homeFaq = homepageFaqItems(showSaPricing, saPricing?.ownerHomepageCost ?? null);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -350,6 +347,11 @@ function LandingPage() {
   const [signinOpen, setSigninOpen] = useState(false);
   const [registerReady, setRegisterReady] = useState(false);
   const [marqueePaused, setMarqueePaused] = useState(false);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setMarqueePaused(true);
+    }
+  }, []);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [trialBarOn, setTrialBarOn] = useState(false);
   const [siEmail, setSiEmail] = useState("");
@@ -1910,7 +1912,7 @@ function LandingPage() {
           </button>
           <div className="links">
             <a href="#method" onClick={() => setMobileNavOpen(false)}>
-              The MILŌN Method
+              The Milōn Method
             </a>
             <a href="#how" onClick={() => setMobileNavOpen(false)}>
               How it works
@@ -1964,9 +1966,11 @@ function LandingPage() {
               {HERO_H1_LEAD} <span className="gold-text">{HERO_H1_GOLD}</span>
             </h1>
             <p className="hero-lede">{HERO_LEDE}</p>
+            <p className="hero-bot">{MILON_BOT_LINE}</p>
             <ul className="integrations-chips" id="integrations" aria-label="Works with">
               <li>QuickBooks Online</li>
               <li>Xero</li>
+              <li>Sage</li>
             </ul>
             <div className="hero-cta">
               <a
@@ -2004,7 +2008,7 @@ function LandingPage() {
                   goToOwnerSpark();
                 }}
               >
-                {HERO_OWNER_LINK}
+                {saPricing?.ownerHeroLink ?? HERO_OWNER_LINK}
               </a>
             </p>
           </div>
@@ -2209,6 +2213,7 @@ function LandingPage() {
                 videoId={ACCOUNTANT_TEASER.videoId}
                 title={ACCOUNTANT_TEASER.title}
                 accessibleName={ACCOUNTANT_TEASER.accessibleName}
+                imageAlt={ACCOUNTANT_TEASER.imageAlt}
               />
               <a
                 className="watch-cta"
@@ -2229,6 +2234,7 @@ function LandingPage() {
                 videoId={OWNER_TEASER.videoId}
                 title={OWNER_TEASER.title}
                 accessibleName={OWNER_TEASER.accessibleName}
+                imageAlt={OWNER_TEASER.imageAlt}
               />
               <a
                 className="watch-cta"
@@ -2238,9 +2244,79 @@ function LandingPage() {
                   goToOwnerSpark();
                 }}
               >
-                {OWNER_TEASER_LINK}
+                {saPricing?.ownerHeroLink ?? HERO_OWNER_LINK}
               </a>
             </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="persona">
+        <div className="wrap">
+          <div className="section-head center">
+            <span className="eyebrow">Start here</span>
+            <h2>Who are you in this story?</h2>
+            <p className="sub">
+              Milōn is built for accounting firms first, and for the business owners they serve.
+              Choose yours — the same workspace connects both.
+            </p>
+          </div>
+          <div className="persona-grid stagger">
+            <button
+              type="button"
+              className="persona-card"
+              onClick={() => (window as any).__mq_start?.("accountant")}
+            >
+              <div className="icon">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                </svg>
+              </div>
+              <h3>Accountant / Advisory Firm</h3>
+              <p>
+                Your clients already depend on you for their financial information. Milōn gives your
+                firm an AI-powered finance function you can run across those clients — you review
+                and sign off every advisory pack.
+              </p>
+              <div className="go">
+                See Milōn for my clients <i>→</i>
+              </div>
+            </button>
+            <button
+              type="button"
+              className="persona-card"
+              onClick={() => (window as any).__mq_start?.("owner")}
+            >
+              <div className="icon">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+              </div>
+              <h3>Business Owner</h3>
+              <p>
+                You shouldn&apos;t need to be a CFO to understand the financial state of your
+                business. See your health, cash, problems, recommendations, and progress in one
+                workspace.
+              </p>
+              <div className="go">
+                Take the 90-second diagnostic <i>→</i>
+              </div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="quiz">
+        <div className="wrap">
+          <div className="quiz-shell">
+            <div className="quiz-progress">
+              <i id="qbar" />
+            </div>
+            <div id="qsteps" />
+            <div className="quiz-reward" id="qreward" />
           </div>
         </div>
       </section>
@@ -2264,9 +2340,9 @@ function LandingPage() {
             </div>
             <div className="step-card">
               <span className="n">02</span>
-              <h3>MILŌN understands the business</h3>
+              <h3>Milōn understands the business</h3>
               <p>
-                MILŌN analyzes 19 carefully selected financial ratios across four pillars of
+                Milōn analyzes 19 carefully selected financial ratios across four pillars of
                 financial health. DuPont analysis helps break profitability down to identify where
                 the underlying problem sits.
               </p>
@@ -2355,10 +2431,10 @@ function LandingPage() {
       <section id="method">
         <div className="wrap">
           <div className="section-head center">
-            <span className="eyebrow">The MILŌN Method</span>
+            <span className="eyebrow">The Milōn Method</span>
             <h2>Four pillars. One financial picture.</h2>
             <p className="sub">
-              MILŌN looks at the four forces that determine the financial health of a business.
+              Milōn looks at the four forces that determine the financial health of a business.
             </p>
           </div>
           <div className="pillar-grid stagger" id="pillarGrid">
@@ -2484,11 +2560,10 @@ function LandingPage() {
         </div>
       </div>
 
-      {/* ══════════════════════════ THE REAL GAP + HOW IT WORKS ══════════════════════════ */}
-      <section id="problem" style={{ paddingTop: 80, paddingBottom: 40 }}>
+      <section id="bridge" style={{ paddingTop: 80, paddingBottom: 80 }}>
         <div className="wrap">
           <div className="section-head">
-            <span className="eyebrow">The real gap</span>
+            <span className="eyebrow">The finance function</span>
             <h2>
               Small businesses have the numbers.
               <br />
@@ -2501,9 +2576,14 @@ function LandingPage() {
             forecast cash, and turn analysis into action.
           </p>
           <p className="sub" style={{ marginTop: 18 }}>
-            MILŌN gives accountants a way to install that capability for their clients: an AI
+            Milōn gives accountants a way to install that capability for their clients: an AI
             finance team that does the heavy analytical work, while the accountant stays in control
-            of the advice.
+            of the advice. {MILON_BOT_LINE}
+          </p>
+          <p className="sub" style={{ marginTop: 18 }}>
+            One shared workspace: AI prepares the analysis, and the accountant reviews and signs
+            off. The size of the business should not decide the quality of the financial
+            information available to it.
           </p>
           <div className="bridge-facts stagger" aria-label="Your AI finance team">
             {FINANCE_TEAM.map((r) => (
@@ -2517,169 +2597,6 @@ function LandingPage() {
           </div>
         </div>
       </section>
-
-      <div className="divider">
-        <div className="wrap">
-          <i />
-        </div>
-      </div>
-
-      {/* ══════════════════════════ ONE SHARED WORKSPACE ══════════════════════════ */}
-      <section id="bridge" style={{ paddingTop: 80, paddingBottom: 80 }}>
-        <div className="wrap">
-          <div className="section-head center">
-            <span className="eyebrow">One shared workspace</span>
-            <h2>
-              Your accountant&apos;s expertise. AI&apos;s analysis.{" "}
-              <span className="gold-text serif">Your business.</span>
-            </h2>
-            <p className="sub">MILŌN brings both sides of the financial workflow together.</p>
-            <p className="pipeline">
-              AI prepares. Accountant reviews and signs off. Owner understands and acts.
-            </p>
-            <p className="sub">
-              The result is a finance function that can follow the business — not just report on it.
-            </p>
-          </div>
-
-          <div className="bridge-grid stagger">
-            <div className="bridge-side">
-              <div className="who">For accounting firms</div>
-              <h3>Turn accounting data into an AI-powered finance function.</h3>
-              <p>
-                Your clients already depend on you for their financial information. MILŌN gives your
-                firm a structured way to turn that information into ongoing financial analysis,
-                recommendations, and action.
-              </p>
-              <ul>
-                <li>
-                  <b>{BRIDGE_DRAFT_LABEL}</b> — {BRIDGE_DRAFT_BODY}
-                </li>
-                <li>
-                  <b>Accountant-controlled</b> — You review, edit and sign off every advisory
-                  pack.
-                </li>
-                <li>
-                  <b>One workflow</b> — Analysis, recommendations, deliverables, actions and
-                  progress live in one workspace.
-                </li>
-                <li>
-                  <b>QuickBooks Online and Xero</b> — Connect either ledger, or start from an
-                  upload. The books stay where they are.
-                </li>
-                <li>
-                  <b>Built to scale</b> — Give more clients access to a finance function without
-                  manually building every analysis from scratch.
-                </li>
-              </ul>
-            </div>
-
-            <div className="bridge-link" aria-hidden="true">
-              <span className="rail" />
-              <span className="node">
-                <span>MILŌN</span>
-              </span>
-              <span className="rail" />
-              <span className="cap">One shared workspace</span>
-            </div>
-
-            <div className="bridge-side">
-              <div className="who">For business owners</div>
-              <h3>Finally understand what your numbers are telling you.</h3>
-              <p>
-                You shouldn&apos;t need to be a CFO to understand the financial state of your
-                business.
-              </p>
-              <p>
-                MILŌN gives you a clear view of your financial health, where the problems are, what
-                they mean, where cash is heading, and what needs to happen next.
-              </p>
-              <p>
-                Your accountant remains involved. You get the information in plain English, the
-                recommendations they have reviewed, and a place to track what actually gets done.
-              </p>
-              <ul>
-                <li>
-                  <b>Clear</b> — One health score backed by the numbers behind it.
-                </li>
-                <li>
-                  <b>Forward-looking</b> — See your 13-week cash forecast.
-                </li>
-                <li>
-                  <b>Actionable</b> — Know what needs attention and what to do next.
-                </li>
-                <li>
-                  <b>Trackable</b> — Follow actions and see whether the business is improving.
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="bridge-facts stagger">
-            <div className="bridge-fact">
-              <div className="was">Health → cash</div>
-              <div className="now">
-                One score, then where cash is heading.{" "}
-                <b>Problems become visible before they become a surprise.</b>
-              </div>
-            </div>
-            <div className="bridge-fact">
-              <div className="was">Problems → recommendations</div>
-              <div className="now">
-                AI prepares the analysis.{" "}
-                <b>The accountant reviews and signs off every advisory pack.</b>
-              </div>
-            </div>
-            <div className="bridge-fact">
-              <div className="was">Actions → progress</div>
-              <div className="now">
-                Recommendations become assigned work. <b>The owner can see what is getting done.</b>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div className="divider">
-        <div className="wrap">
-          <i />
-        </div>
-      </div>
-
-      {/* ══════════════════════════ THE BIGGER IDEA ══════════════════════════ */}
-      <section id="idea" style={{ paddingTop: 80, paddingBottom: 80 }}>
-        <div className="wrap">
-          <div className="section-head center">
-            <span className="eyebrow">The bigger idea</span>
-            <h2>
-              Give small businesses the financial intelligence
-              <br />
-              of a <span className="gold-text serif">much larger company.</span>
-            </h2>
-            <p className="sub">
-              For years, sophisticated financial analysis and dedicated finance teams were largely
-              available to businesses that could afford them.
-            </p>
-            <p className="sub">
-              MILŌN is built around a different idea: the size of your business should not determine
-              the quality of financial information available to you.
-            </p>
-            <p className="sub">
-              An accountant can deploy MILŌN as the finance function behind the business, while the
-              owner gets the clarity, visibility, and information to make better decisions.
-            </p>
-            <p className="idea-close">
-              One platform. One financial picture. A finance function in your pocket.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <div className="divider">
-        <div className="wrap">
-          <i />
-        </div>
-      </div>
 
       {/* ══════════════════════════ PRICING ══════════════════════════ */}
       <section id="pricing">
@@ -2699,6 +2616,7 @@ function LandingPage() {
           />
 
           <div className="owner-spark-path">
+            <p className="owner-offer-label">{OWNER_OFFER_LABEL}</p>
             <p>
               <RegionCopy
                 pack={copyMarket.copyPack}
@@ -2716,78 +2634,6 @@ function LandingPage() {
             >
               {PRICING_OWNER_CTA}
             </a>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════ PERSONA ══════════════════════════ */}
-      <section id="persona">
-        <div className="wrap">
-          <div className="section-head center">
-            <span className="eyebrow">Start here</span>
-            <h2>Who are you in this story?</h2>
-            <p className="sub">
-              MILŌN is built for accounting firms first, and for the business owners they serve.
-              Choose yours — the same workspace connects both.
-            </p>
-          </div>
-          <div className="persona-grid stagger">
-            <button
-              type="button"
-              className="persona-card"
-              onClick={() => (window as any).__mq_start?.("accountant")}
-            >
-              <div className="icon">
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                </svg>
-              </div>
-              <h3>Accountant / Advisory Firm</h3>
-              <p>
-                Your clients already depend on you for their financial information. MILŌN gives your
-                firm an AI-powered finance function you can run across those clients — you review
-                and sign off every advisory pack.
-              </p>
-              <div className="go">
-                See MILŌN for my clients <i>→</i>
-              </div>
-            </button>
-            <button
-              type="button"
-              className="persona-card"
-              onClick={() => (window as any).__mq_start?.("owner")}
-            >
-              <div className="icon">
-                <svg viewBox="0 0 24 24">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-              </div>
-              <h3>Business Owner</h3>
-              <p>
-                You shouldn&apos;t need to be a CFO to understand the financial state of your
-                business. See your health, cash, problems, recommendations, and progress in one
-                workspace.
-              </p>
-              <div className="go">
-                Take the 90-second diagnostic <i>→</i>
-              </div>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════ QUIZ ══════════════════════════ */}
-      <section id="quiz">
-        <div className="wrap">
-          <div className="quiz-shell">
-            <div className="quiz-progress">
-              <i id="qbar" />
-            </div>
-            <div id="qsteps" />
-            <div className="quiz-reward" id="qreward" />
           </div>
         </div>
       </section>
@@ -2831,8 +2677,7 @@ function LandingPage() {
               <span className="gold-text">AI prepares; you sign off.</span>
             </h2>
             <p className="sub">
-              {FIRM_CARD_TIMING} After day 14 the paid band bills automatically. Business owners can
-              open an account below. Billing opens soon.
+              {saPricing?.ownerRegisterNote ?? OWNER_REGISTER_NOTE_US}
             </p>
           </div>
 
@@ -2922,8 +2767,7 @@ function LandingPage() {
             </button>
           </nav>
           <div className="copy">
-            <span>{FIRM_CARD_TIMING}</span>
-            <span>Works with QuickBooks Online and Xero.</span>
+            <span>Works with QuickBooks Online and Xero, and Sage.</span>
             <span>
               © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
             </span>

@@ -93,7 +93,8 @@ import {
   SectionTabList,
   selectedSectionId,
 } from "@/components/client-studio-chrome";
-import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
+import { SettingsMenu } from "@/components/settings-menu";
+import { RailSettingsButton } from "@/components/settings-nav-button";
 
 const CLIENT_ID = "harness-client";
 /** Same freshness line the Books pane already shows. */
@@ -173,10 +174,13 @@ export function RailStudio() {
           </span>
           <FeatureFinder audience="accountant" clientId={clientId} />
           <span className="spacer" />
-          <SettingsNavButton
+          <SettingsMenu
             className="tb-btn settings-gear"
-            onClick={() => {
+            onSettings={() => {
               void navigate({ to: "/settings" });
+            }}
+            onPlan={() => {
+              void navigate({ to: "/settings", hash: "firm-billing" });
             }}
           />
         </div>

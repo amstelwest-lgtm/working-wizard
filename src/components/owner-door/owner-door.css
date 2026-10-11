@@ -1007,30 +1007,164 @@ html.dark .owner-status.is-attention {
   display: flex;
   min-height: 180px;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--owner-space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .owner-door .owner-turn {
-  max-width: 62ch;
+  max-width: min(70ch, 100%);
   padding: 10px 14px;
   border-radius: 14px;
-  line-height: 1.45;
+  line-height: var(--type-body-leading);
+  font-size: var(--type-body-size);
 }
 
 .owner-door .owner-turn.is-owner {
   align-self: flex-end;
-  background: color-mix(in srgb, var(--gold) 16%, var(--bg));
+  background: var(--pale);
   color: var(--ink);
 }
 
 .owner-door .owner-turn.is-agent {
   align-self: flex-start;
-  border: 1px solid var(--owner-edge);
-  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--pale);
+  background: var(--bg);
   color: var(--ink);
+}
+
+.owner-door .owner-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 70ch;
+}
+
+.owner-door .owner-reply-headline {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ink);
+  font-size: var(--type-h3-size);
+  font-weight: var(--type-h3-weight);
+  line-height: var(--type-h3-leading);
+}
+
+.owner-door .owner-reply-copy {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ink);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-leading);
+}
+
+.owner-door .owner-reply-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+  border: 1px solid var(--pale);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.owner-door .owner-reply-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.owner-door .owner-reply-stat-label {
+  color: var(--ink-dim);
+  font-size: var(--type-caption-size);
+  font-weight: var(--type-caption-weight);
+  line-height: var(--type-caption-leading);
+}
+
+.owner-door .owner-reply-stat-value {
+  color: var(--ink);
+  font-size: var(--type-numeric-size);
+  font-weight: var(--type-numeric-weight);
+  line-height: var(--type-numeric-leading);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.owner-door .owner-reply-kicker {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  line-height: var(--type-label-leading);
+}
+
+.owner-door ul.owner-reply-list,
+.owner-door ol.owner-reply-list,
+.owner-door ol.owner-reply-actions {
+  margin: 0;
+  padding-left: 1.75rem;
+  max-width: 70ch;
+  color: var(--ink);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
+}
+
+.owner-door ul.owner-reply-list {
+  list-style: disc outside;
+}
+
+.owner-door ol.owner-reply-list,
+.owner-door ol.owner-reply-actions {
+  list-style: decimal outside;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.owner-door ul.owner-reply-list > li::marker,
+.owner-door ol.owner-reply-list > li::marker,
+.owner-door ol.owner-reply-actions > li::marker {
+  color: var(--cobalt);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.owner-door .owner-reply-list li + li,
+.owner-door .owner-reply-actions li + li {
+  margin-top: 6px;
+}
+
+.owner-door .owner-reply strong {
+  font-weight: 700;
+}
+
+.owner-door .owner-listen {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--pale);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--cobalt);
+  font: inherit;
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  line-height: var(--type-label-leading);
+  cursor: pointer;
+}
+
+.owner-door .owner-listen[aria-pressed="true"] {
+  background: var(--pale);
+  color: var(--cobalt);
+}
+
+.owner-door .owner-listen:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 3px;
 }
 
 .owner-door .owner-error {
@@ -2111,4 +2245,37 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
 .owner-door [data-owner-page="tasks"] [data-view-toggle] button[aria-selected="true"] {
   background: var(--cobalt);
   color: var(--on-cobalt);
+}
+
+.owner-door .owner-invite-nudge {
+  display: grid;
+  gap: var(--owner-space-1);
+  margin: 16px 0 0;
+  padding: 16px;
+  border: 1px solid var(--owner-edge);
+  border-radius: 16px;
+  background: var(--bg-2);
+}
+.owner-door .owner-invite-nudge-title {
+  margin: 0;
+  font-weight: 700;
+}
+.owner-door .owner-invite-nudge-copy p {
+  margin: 4px 0 0;
+}
+.owner-door .owner-invite-nudge-copybtn,
+.owner-door .owner-invite-nudge-dismiss {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--owner-edge);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.owner-door .owner-invite-nudge-copybtn:focus-visible,
+.owner-door .owner-invite-nudge-dismiss:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
 }

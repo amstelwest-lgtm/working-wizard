@@ -30,8 +30,10 @@ assert(privacy.includes("{LEGAL_ENTITY}"), "privacy names the company");
 assert(privacy.includes("{LEGAL_EFFECTIVE}"), "privacy has an effective date");
 assert(privacy.includes("{LEGAL_INFORMATION_OFFICER}"), "privacy names the Privacy contact");
 assert(privacy.includes("{LEGAL_ADDRESS_LINES"), "privacy shows the registered address");
-assert(LEGAL_ENTITY === "Milon Inc", "legal entity is Milon Inc");
-assert(LEGAL_INFORMATION_OFFICER === "Theo", "Privacy contact is Theo");
+assert(LEGAL_ENTITY === "Milon, Inc.", "legal entity is Milon, Inc.");
+assert(LEGAL_INFORMATION_OFFICER === "the Milōn privacy team", "Privacy contact is the team inbox role");
+assert(!privacy.includes("Write to him"), "privacy does not address a named person");
+assert(privacy.includes("LEGAL_PRIVACY_EMAIL"), "privacy writes to the team inbox");
 assert(!privacy.includes("Information Officer"), "privacy names a Privacy contact, not an Information Officer");
 assert(privacy.includes("Privacy contact"), "privacy uses the Privacy contact title");
 assert(
@@ -40,7 +42,12 @@ assert(
   ),
   "POPIA rights are framed for people in South Africa",
 );
-assert(LEGAL_ADDRESS === "[US ADDRESS]", "address is the visible US placeholder");
+assert(
+  LEGAL_ADDRESS ===
+    "800 N King Street, Suite 304, PMB 3836, Wilmington, DE 19801, United States",
+  "address is the Wilmington head office",
+);
+assert(!LEGAL_ADDRESS.includes("[US ADDRESS]"), "address placeholder is gone");
 assert(!LEGAL_ENTITY.includes("Pty"), "legal entity is not an SA proprietary company");
 assert(!LEGAL_ENTITY.includes("MILŌN"), "product name is not the registered company");
 assert(!privacy.includes("Eish2oh"), "privacy does not name Eish2oh");
@@ -107,8 +114,8 @@ assert(landing.includes('href="/terms"'), "landing footer links to terms");
 assert(landing.includes('href="/ai"'), "landing footer links to AI notice");
 assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ as Privacy");
 assert(
-  readFileSync(resolve("src/lib/firm-signup-copy.ts"), "utf8").includes("Milon Inc [US ADDRESS]"),
-  "copyright entity is the US placeholder, brackets included",
+  readFileSync(resolve("src/lib/firm-signup-copy.ts"), "utf8").includes("MARKETING_COPYRIGHT_ENTITY = `${LEGAL_ENTITY} ${COMPANY_ADDRESS}`"),
+  "copyright entity uses the shared legal name and address",
 );
 assert(landing.includes("MARKETING_COPYRIGHT_ENTITY"), "landing copyright uses the shared entity");
 assert(!landing.includes("Trading as MILŌN"), "landing footer no longer names the SA trading line");

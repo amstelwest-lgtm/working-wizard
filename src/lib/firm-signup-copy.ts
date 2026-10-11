@@ -1,3 +1,4 @@
+import { COMPANY_ADDRESS, LEGAL_ENTITY } from "@/lib/legal";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 
 /**
@@ -65,10 +66,10 @@ export const BUSINESS_LOCATION_PROMPT = "Where is this business?";
 export const DUAL_MARKET_TAGLINE =
   "for accounting firms and small businesses in the United States.";
 
-/** Footer copyright entity. The brackets are a literal placeholder. */
-export const MARKETING_COPYRIGHT_ENTITY = "Milon Inc [US ADDRESS]";
+/** Footer copyright line: legal name plus the registered address. */
+export const MARKETING_COPYRIGHT_ENTITY = `${LEGAL_ENTITY} ${COMPANY_ADDRESS}`;
 
 export const DUAL_MARKET_FOOTER =
-  "MILŌN — the AI finance function for accounting firms and the businesses they serve in the United States.";
+  "Milōn — the AI finance function for accounting firms and the businesses they serve in the United States.";
 
 export const DUAL_MARKET_BUILT = "Built for the United States";

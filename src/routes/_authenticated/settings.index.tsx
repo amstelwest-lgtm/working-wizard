@@ -235,7 +235,19 @@ function SettingsPage() {
     showStarterTrialEndedCopy(plan.phase, plan.starterTrial?.expired);
 
   return (
-    <SettingsShell>
+    <SettingsShell
+      onSettings={() => {
+        void navigate({ to: "/settings" });
+      }}
+      onPlan={() => {
+        if (isPractice) {
+          document.getElementById("firm-billing")?.scrollIntoView({ block: "start" });
+          return;
+        }
+        setPortalIntent("owner");
+        void navigate({ to: "/app", search: { screen: "plan" } });
+      }}
+    >
       <BackLink
         onClick={() => {
           if (backTo === "/app") setPortalIntent("owner");
@@ -353,6 +365,7 @@ function SettingsPage() {
 
       {isPractice && (
         <SectionCard
+          id="firm-billing"
           className="settings-plan-card mb-6"
           eyebrow={
             <span className="inline-flex items-center gap-2">

@@ -1271,37 +1271,46 @@ html[data-landing="1"] .firm-bands-watchlist{
   margin:14px 0 0;font-size:14px;line-height:1.5;color:var(--ink-dim);-webkit-text-fill-color:var(--ink-dim);
 }
 html[data-landing="1"] .firm-band-cards{display:none;list-style:none;margin:0;padding:0}
+html[data-landing="1"] .firm-bands-featured{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;list-style:none;margin:0;padding:0;
+}
+html[data-landing="1"] .firm-bands:has(.firm-bands-more[open]) .firm-bands-featured{display:none}
+html[data-landing="1"] .firm-band-card{
+  border:1px solid var(--line);border-radius:16px;padding:16px;background:var(--bg-2);
+}
+html[data-landing="1"] .firm-band-card.is-trial{border-color:rgba(212,175,55,.45)}
+html[data-landing="1"] .firm-band-card-top{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+}
+html[data-landing="1"] .firm-band-card-name{margin:0;font-weight:700;font-size:16px}
+html[data-landing="1"] .firm-band-card.is-trial .firm-band-card-name{font-size:20px}
+html[data-landing="1"] .firm-band-card-limit{margin:4px 0 0;font-size:14px;color:var(--ink-dim)}
+html[data-landing="1"] .firm-band-card-price{
+  margin:0;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+html[data-landing="1"] .firm-band-card.is-trial .firm-band-card-price{
+  font-size:28px;color:var(--gold-ink);-webkit-text-fill-color:var(--gold-ink);
+}
+html[data-landing="1"] .firm-band-card .btn{width:100%;justify-content:center;margin-top:12px;min-height:44px}
+html[data-landing="1"] .firm-band-card.is-trial .btn{min-height:52px}
+html[data-landing="1"] .firm-band-card-note{
+  margin:8px 0 0;font-size:13px;line-height:1.4;color:var(--ink-dim);text-align:center;
+}
 html[data-landing="1"] .firm-bands-toggle button{min-height:44px;height:auto}
+html[data-landing="1"] .owner-offer-label{
+  margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);
+}
 @media (min-width:768px){
-  html[data-landing="1"] .firm-bands-table-wrap{overflow:visible}
-  html[data-landing="1"] .firm-bands-table{min-width:0}
+  html[data-landing="1"] .firm-bands-table-wrap{overflow-x:auto}
+  html[data-landing="1"] .firm-bands-table{min-width:620px}
   html[data-landing="1"] .firm-bands-table thead th{position:sticky;top:72px;z-index:3}
   html[data-landing="1"] .firm-bands-table .btn{min-height:44px;height:auto}
 }
 @media (max-width:767px){
   html[data-landing="1"] #pricing{overflow-x:clip}
-  html[data-landing="1"] .firm-bands-table-wrap{display:none}
-  html[data-landing="1"] .firm-band-cards{display:grid;gap:10px}
-  html[data-landing="1"] .firm-band-card{
-    border:1px solid var(--line);border-radius:16px;padding:16px;background:var(--bg-2);
-  }
-  html[data-landing="1"] .firm-band-card.is-trial{border-color:rgba(212,175,55,.45)}
-  html[data-landing="1"] .firm-band-card-top{
-    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
-  }
-  html[data-landing="1"] .firm-band-card-name{margin:0;font-weight:700;font-size:16px}
-  html[data-landing="1"] .firm-band-card.is-trial .firm-band-card-name{font-size:20px}
-  html[data-landing="1"] .firm-band-card-limit{margin:4px 0 0;font-size:14px;color:var(--ink-dim)}
-  html[data-landing="1"] .firm-band-card-price{
-    margin:0;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;
-  }
-  html[data-landing="1"] .firm-band-card.is-trial .firm-band-card-price{
-    font-size:28px;color:var(--gold-ink);-webkit-text-fill-color:var(--gold-ink);
-  }
-  html[data-landing="1"] .firm-band-card .btn{width:100%;justify-content:center;margin-top:12px;min-height:44px}
-  html[data-landing="1"] .firm-band-card.is-trial .btn{min-height:52px}
-  html[data-landing="1"] .firm-band-card-note{
-    margin:8px 0 0;font-size:13px;line-height:1.4;color:var(--ink-dim);text-align:center;
+  html[data-landing="1"] .firm-bands-featured{grid-template-columns:1fr}
+  html[data-landing="1"] .firm-bands-more .firm-bands-table-wrap{
+    display:block;overflow-x:auto;max-width:100%;
   }
 }
 html[data-landing="1"] .proof-grid{display:grid;gap:24px;margin-top:28px}
@@ -1414,6 +1423,10 @@ html[data-landing="1"] .marquee-head{
   margin-bottom:18px;
 }
 html[data-landing="1"] .marquee-band .cap{margin-bottom:0}
+html[data-landing="1"] .marquee-toggle:focus-visible{
+  outline:2px solid var(--gold-bright);
+  outline-offset:2px;
+}
 html[data-landing="1"] .marquee-toggle{
   min-height:44px;
   padding:0 14px;

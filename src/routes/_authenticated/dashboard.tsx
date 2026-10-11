@@ -71,7 +71,7 @@ import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryLabel } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SettingsNavButton } from "@/components/settings-nav-button";
+import { SettingsMenu } from "@/components/settings-menu";
 import { FeatureFinder } from "@/components/feature-finder";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
@@ -1733,12 +1733,17 @@ function Dashboard() {
           <FirmSwitcher />
           <FeatureFinder audience="accountant" clientId={null} />
           <span className="spacer" />
-          <SettingsNavButton
+          <SettingsMenu
             className="tb-btn settings-gear"
-            onClick={() => {
+            onSettings={() => {
               setMobileNavOpen(false);
               openPracticeSettings();
-              navigate({ to: "/settings" });
+              void navigate({ to: "/settings" });
+            }}
+            onPlan={() => {
+              setMobileNavOpen(false);
+              openPracticeSettings();
+              void navigate({ to: "/settings", hash: "firm-billing" });
             }}
           />
           <span className="profile-chip topbar-profile" title={greetingSource || user?.email || ""}>

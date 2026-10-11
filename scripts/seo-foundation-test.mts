@@ -121,7 +121,7 @@ assert(ROBOTS_TXT.includes("Disallow: /auth/"), "robots hide auth");
 assert(ROBOTS_TXT.includes("Sitemap: https://www.milonfinance.com/sitemap.xml"), "robots points at the www sitemap");
 assert(!ROBOTS_TXT.includes("https://milonfinance.com"), "robots does not advertise the apex host");
 
-assert(LLMS_TXT.includes("AI-automated finance function"), "llms.txt positioning");
+assert(LLMS_TXT.includes("Your AI finance team. You sign off."), "llms.txt positioning");
 assert(LLMS_TXT.includes("QuickBooks Online"), "llms.txt names QuickBooks Online");
 assert(LLMS_TXT.includes("Xero"), "llms.txt names Xero");
 assert(LLMS_TXT.includes("/for-accountants"), "llms.txt keeps existing firm URL");
@@ -131,14 +131,12 @@ assert(!LLMS_TXT.includes("photographed"), "llms.txt does not claim photo ingest
 assert(!LLMS_TXT.includes("Canada"), "llms.txt does not claim Canada");
 assert(!/white-label/i.test(LLMS_TXT), "llms.txt has no white-label");
 assert(
-  LLMS_TXT.includes(
-    "Generates client-ready advisory packs for accounting firms to review and sign off",
-  ),
+  LLMS_TXT.includes("client-ready advisory deliverables"),
   "llms.txt describes client-ready advisory packs",
 );
 assert(!/white-label/i.test(graph), "schema graph has no white-label");
 assert(
-  graph.includes("Client-ready PDF advisory packs for review and sign-off"),
+  graph.includes("client-ready advisory deliverables"),
   "schema feature list names client-ready advisory packs",
 );
 assert(!graph.includes("Canada"), "org schema does not claim Canada");
@@ -174,8 +172,18 @@ assert(root.includes('href: "/manifest.json"'), "manifest is /manifest.json");
 assert(root.includes('content: "#0A0A0A"'), "theme-color matches the new mark");
 
 assert(
-  home.meta.some((m) => "property" in m && m.property === "og:image" && m.content === `${SITE_ORIGIN}/og.png`),
-  "og:image is the 1200x630 card",
+  home.meta.some(
+    (m) => "property" in m && m.property === "og:image" && m.content === `${SITE_ORIGIN}/og/og-home-v11.png`,
+  ),
+  "og:image is the versioned 1200x630 card",
+);
+assert(
+  home.meta.some((m) => "property" in m && m.property === "og:image:width" && m.content === "1200"),
+  "og:image width is 1200",
+);
+assert(
+  home.meta.some((m) => "property" in m && m.property === "og:image:height" && m.content === "630"),
+  "og:image height is 630",
 );
 assertPublicHost(graph, "organization schema");
 assert(graph.includes("https://www.milonfinance.com/#organization"), "org @id is www");
@@ -247,7 +255,7 @@ assert(
   `${HERO_H1_LEAD} ${HERO_H1_GOLD}` === "Your AI finance team. You sign off.",
   "home H1 is the finance-team sign-off line",
 );
-assert(HERO_LEDE.startsWith("Plug in QuickBooks Online or Xero."), "hero lede keeps the ledger plug-in");
+assert(HERO_LEDE.startsWith("Plug in QuickBooks, Xero or Sage."), "hero lede keeps the ledger plug-in");
 assert(landing.includes("{HERO_LEDE}"), "hero lede comes from landing copy");
 assert(HERO_LEDE.includes("diagnose the business"), "hero lede lists diagnosis as a deliverable");
 assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
@@ -313,10 +321,7 @@ assert(!landing.includes("Live sync"), "landing does not claim live ledger sync"
 assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
-assert(
-  landing.includes("faqPageJson(homepageFaqItems(showSaPricing, zaOwnerCost))"),
-  "landing emits homepage FAQ schema",
-);
+assert(landing.includes("faqPageJson(homepageFaqItems(false))"), "landing FAQ schema stays on the US answers");
 assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ is six questions after the VERIFY-6 fallback");
 assert(
   HOMEPAGE_FAQ_ITEMS[2].answer.includes("you do not need QuickBooks or Xero"),
@@ -348,7 +353,7 @@ assert(!firms.includes("Drafted advisory reports."), "firm page drops the drafte
 assert(
   FIRM_TEAM_BULLETS.map((bullet) => bullet.title).join("|") ===
     [
-      "Milōn Financial Manager, data quality for QBO and Xero.",
+      "Milōn Financial Manager, data quality for QuickBooks, Xero and Sage.",
       "Milōn Analyst, health score and ratios.",
       "Milōn Advisor, next moves and the advisory.",
     ].join("|"),
@@ -357,18 +362,18 @@ assert(
 assert(firms.includes("A risk radar."), "firm page keeps the risk radar");
 assert(firms.includes("A recurring reason to talk."), "firm page keeps the recurring reason to talk");
 assert(
-  firms.includes("14-day free trial (up to 3 clients)."),
-  "firm page keeps the trial line",
+  readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("FIRM_TRIAL_SENTENCE"),
+  "firm pricing keeps the compact trial label",
 );
 assert(firms.includes("readSaPricingCopy"), "firm page loads rand copy from the server");
 assert(!firms.includes("separate rand catalog"), "firm page drops the unpublished-catalog line");
 assert(
-  SEO_PAGES.forAccountants.title === "AI Finance Team for Accountants on QBO & Xero | MILŌN",
-  "firm page title names the AI finance team on QBO and Xero",
+  SEO_PAGES.forAccountants.title === "AI Finance Team for Firms on QuickBooks, Xero & Sage | MILŌN",
+  "firm page title names QuickBooks, Xero and Sage",
 );
 assert(
-  SEO_PAGES.home.title === "Financial Manager & AI CFO for QBO and Xero | MILŌN",
-  "home title names the financial manager and AI CFO",
+  SEO_PAGES.home.title === "AI Finance Team & AI CFO for QuickBooks, Xero & Sage | MILŌN",
+  "home title names the AI finance team and AI CFO",
 );
 assert(SEO_PAGES.home.title.length <= 60, "home title stays within 60 characters");
 assert(SEO_PAGES.forAccountants.title.length <= 60, "firm title stays within 60 characters");
@@ -378,9 +383,11 @@ assert(
   "firm description stays within 155 characters",
 );
 assert(
-  SEO_PAGES.home.description.endsWith("14-day free trial · up to 3 clients."),
-  "home description keeps the trial line",
+  SEO_PAGES.home.description.endsWith("You sign off."),
+  "home description is one sign-off sentence",
 );
+assert(!SEO_PAGES.home.description.includes("QBO"), "home description does not abbreviate QuickBooks");
+assert(!SEO_PAGES.home.title.includes("QBO"), "home title does not abbreviate QuickBooks");
 assert(!landing.includes("triple-A") && !landing.includes("Triple-A"), "landing drops the triple-A line");
 assert(!landing.includes("Milōn Accountant"), "landing drops Milōn Accountant");
 assert(
@@ -406,10 +413,11 @@ assert(owners.includes("Xero"), "owners page names Xero");
 assert(!owners.includes("certified"), "owners page does not claim certification");
 
 for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwners, SEO_PAGES.faq]) {
-  const ledgerName = page.path === "/for-accountants" ? "QBO" : "QuickBooks Online";
-  assert(page.description.includes(ledgerName), `${page.path} meta names ${ledgerName}`);
+  assert(page.description.includes("QuickBooks"), `${page.path} meta names QuickBooks`);
+  assert(!page.title.includes("QBO") && !page.description.includes("QBO"), `${page.path} meta does not abbreviate QuickBooks`);
   assert(page.description.includes("Xero"), `${page.path} meta names Xero`);
-  assert(page.description.length <= 170, `${page.path} meta description stays snippet-length`);
+  assert(page.description.includes("Sage"), `${page.path} meta names Sage`);
+  assert(page.description.length <= 155, `${page.path} meta description stays within 155 characters`);
   assert(!page.description.includes("certified"), `${page.path} meta does not claim certification`);
 }
 
@@ -417,6 +425,7 @@ const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8"
 const preferredAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");
 const preferredHref = "https://www.google.com/preferences/source?q=milonfinance.com";
 assert(shell.includes("Works with QuickBooks Online and Xero."), "collateral footer names both ledgers");
+assert(shell.includes("Sage connects the same way."), "collateral footer names Sage");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
 assert(preferredAssets.includes(preferredHref), "preferred source is a plain Google preferences deeplink");
 assert(
@@ -468,17 +477,17 @@ assert(
 );
 
 assert(
-  SEO_PAGES.about.title === "About MILŌN — Financial health for owners and their accountants",
+  SEO_PAGES.about.title === "About Milōn: An AI Finance Team Accountants Sign Off",
   "about title is product-forward",
 );
 assert(
   SEO_PAGES.about.description ===
-    "MILŌN turns a P&L and balance sheet into a health score, a cash forecast, and accountant-reviewed next steps.",
+    "Why Milōn exists: three AI agents give small businesses a finance function, and a qualified accountant signs off. Works with QuickBooks, Xero and Sage.",
   "about description is product-forward",
 );
 assert(
-  SEO_PAGES.about.imageAlt === "About MILŌN — financial health for owners and their accountants",
-  "about image alt has no founder story",
+  SEO_PAGES.about.imageAlt.includes("Milōn Financial Manager"),
+  "about image alt names the finance team",
 );
 assert(SEO_PAGES.about.description.length <= 170, "about meta description stays snippet-length");
 const aboutSeo = `${SEO_PAGES.about.title}\n${SEO_PAGES.about.description}\n${SEO_PAGES.about.imageAlt}`;
@@ -509,10 +518,11 @@ assert(
   "about states the ledger wedge once",
 );
 assert(
-  aboutText.includes(
-    "Milōn Bot reads the numbers, diagnoses the business, and drafts the advisory deliverables.",
-  ),
-  "about keeps the Milōn Bot diagnosis line",
+  about.includes("MILON_BOT_LINE") &&
+    readFileSync(resolve("src/lib/landing-copy.ts"), "utf8").includes(
+      "Milōn Bot is where you talk to your three agents.",
+    ),
+  "about introduces Milōn Bot as the place you talk to the three agents",
 );
 assert(aboutText.includes("The accountant reviews and signs off."), "about keeps accountant sign-off");
 assert(about.includes("19 financial ratios"), "about keeps the ratio claim");

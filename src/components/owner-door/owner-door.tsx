@@ -17,6 +17,14 @@ import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { latestRunByAgent } from "@/lib/milon-team-activity";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
+  browserThreadStore,
+  emptyOwnerThreads,
+  historyFromThread,
+  readOwnerThreads,
+  writeOwnerThread,
+  type OwnerAgentThread,
+} from "@/lib/owner-chat-thread";
+import {
   ownerAnswerTiles,
   ownerCardStatuses,
   ownerHomeLines,
@@ -27,7 +35,7 @@ import { ownerPresence, type OwnerTalk } from "@/lib/owner-presence";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
-import { OwnerChat, type OwnerChatTurn } from "./owner-chat";
+import { OwnerChat } from "./owner-chat";
 import {
   advisoryDeliverableTitles,
   ownerDraftTitles,
@@ -100,6 +108,7 @@ export function OwnerDoor({
   onAccount,
   settingsOpen = false,
   openAccountant = false,
+  openPlan = false,
   focusSigned = false,
   onSignOut,
   topMove = null,
@@ -133,6 +142,8 @@ export function OwnerDoor({
   settingsOpen?: boolean;
   /** Deep link: /app?screen=accountant, including old deliverables URLs. */
   openAccountant?: boolean;
+  /** Deep link: /app?screen=plan from Plan & billing. */
+  openPlan?: boolean;
   /** Scroll the signed-deliverables section into view. */
   focusSigned?: boolean;
   onSignOut: () => void;
@@ -147,16 +158,25 @@ export function OwnerDoor({
   const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
-    openedBot ? "chat" : settingsOpen ? "settings" : openAccountant ? "accountant" : "home",
+    openedBot
+      ? "chat"
+      : settingsOpen
+        ? "settings"
+        : openPlan
+          ? "plan"
+          : openAccountant
+            ? "accountant"
+            : "home",
   );
   const beforeSettings = useRef<OwnerScreen>("home");
   const leavingSettings = useRef(false);
   const [agent, setAgent] = useState<AgentKey>(openedBot ?? "financial_manager");
   const [talk, setTalk] = useState<OwnerTalk>(null);
-  const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<OwnerChatTurn[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [threads, setThreads] = useState<Record<AgentKey, OwnerAgentThread>>(() =>
+    clientId ? readOwnerThreads(browserThreadStore(), clientId) : emptyOwnerThreads(),
+  );
+  const [busyAgent, setBusyAgent] = useState<AgentKey | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<AgentKey, string>>>({});
   const [listening, setListening] = useState(false);
   const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
@@ -171,13 +191,28 @@ export function OwnerDoor({
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
   const recRef = useRef<SpeechRec | null>(null);
+  const listenGen = useRef(0);
+  const threadsRef = useRef(threads);
   const screenRef = useRef(screen);
   const agentRef = useRef(agent);
   const pushedRef = useRef(false);
   const botHydrated = useRef(false);
+  const loadedClient = useRef(clientId);
   const signedFocused = useRef(false);
   screenRef.current = screen;
   agentRef.current = agent;
+  threadsRef.current = threads;
+
+  useEffect(() => {
+    if (loadedClient.current === clientId) return;
+    loadedClient.current = clientId;
+    listenGen.current += 1;
+    recRef.current?.stop();
+    recRef.current = null;
+    setListening(false);
+    setThreads(clientId ? readOwnerThreads(browserThreadStore(), clientId) : emptyOwnerThreads());
+    setErrors({});
+  }, [clientId]);
 
   useEffect(() => {
     if (settingsOpen) {
@@ -187,12 +222,16 @@ export function OwnerDoor({
       });
       return;
     }
+    if (openPlan) {
+      setScreen("plan");
+      return;
+    }
     if (leavingSettings.current) {
       leavingSettings.current = false;
       return;
     }
     setScreen((current) => (current === "settings" ? beforeSettings.current : current));
-  }, [settingsOpen]);
+  }, [settingsOpen, openPlan]);
 
   useEffect(() => {
     if (signedFocused.current || !focusSigned || screen !== "accountant") return;
@@ -416,8 +455,7 @@ export function OwnerDoor({
     if (next) {
       if (screenRef.current === "chat" && agentRef.current === next) return;
       void runBotTransition(() => {
-        setAgent(next);
-        setError(null);
+        focusAgent(next);
         setScreen("chat");
       });
       return;
@@ -429,8 +467,7 @@ export function OwnerDoor({
   function openChat(next: AgentKey) {
     pushedRef.current = true;
     void runBotTransition(() => {
-      setAgent(next);
-      setError(null);
+      focusAgent(next);
       setScreen("chat");
       onBotChange?.(next, "push");
     });
@@ -483,75 +520,112 @@ export function OwnerDoor({
     if (next === "deliverables") focusSignedDeliverables();
   }
 
-  async function send(text: string) {
-    const question = text.trim();
-    if (!question || busy) return;
-    if (!clientId) {
-      setError("Your business is still linking.");
-      return;
-    }
-    setDraft("");
-    setError(null);
-    setMessages((current) => [...current, { role: "owner", text: question }]);
-    setBusy(true);
-    setTalk({ agent, mode: "working" });
-    const result = await askOwnerAgent({ clientId, agent, question });
-    setBusy(false);
-    if (!result.ok) {
-      setTalk(null);
-      setError(result.error);
-      return;
-    }
-    setMessages((current) => [...current, { role: "agent", text: result.answer }]);
-    speak(result.answer);
+  function updateThread(
+    which: AgentKey,
+    forClient: string,
+    recipe: (thread: OwnerAgentThread) => OwnerAgentThread,
+  ) {
+    const base =
+      loadedClient.current === forClient
+        ? threadsRef.current[which]
+        : readOwnerThreads(browserThreadStore(), forClient)[which];
+    const nextThread = recipe(base);
+    writeOwnerThread(browserThreadStore(), forClient, which, nextThread);
+    if (loadedClient.current !== forClient) return;
+    const updated = { ...threadsRef.current, [which]: nextThread };
+    threadsRef.current = updated;
+    setThreads(updated);
   }
 
-  function speak(answer: string) {
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-    if (!synth) {
-      setTalk(null);
+  function stopRecording() {
+    listenGen.current += 1;
+    recRef.current?.stop();
+    recRef.current = null;
+    setListening(false);
+    setTalk((current) => (current?.mode === "listening" ? null : current));
+  }
+
+  function focusAgent(next: AgentKey) {
+    if (agentRef.current !== next) stopRecording();
+    setAgent(next);
+  }
+
+  function setAgentError(which: AgentKey, message: string | null) {
+    setErrors((current) => ({ ...current, [which]: message ?? undefined }));
+  }
+
+  async function send(text: string) {
+    const question = text.trim();
+    const asked = agentRef.current;
+    if (!question || busyAgent === asked) return;
+    if (!clientId) {
+      setAgentError(asked, "Your business is still linking.");
       return;
     }
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(answer);
-    utterance.onstart = () => setTalk({ agent, mode: "speaking" });
-    utterance.onend = () => setTalk(null);
-    utterance.onerror = () => setTalk(null);
-    setTalk({ agent, mode: "speaking" });
-    synth.speak(utterance);
+    const askedClient = clientId;
+    const prior = threadsRef.current[asked].messages;
+    setAgentError(asked, null);
+    updateThread(asked, askedClient, (thread) => ({
+      messages: [...thread.messages, { role: "owner", text: question }],
+      draft: "",
+    }));
+    setBusyAgent(asked);
+    setTalk({ agent: asked, mode: "working" });
+    const result = await askOwnerAgent({
+      clientId: askedClient,
+      agent: asked,
+      question,
+      history: historyFromThread(prior),
+    });
+    setBusyAgent((current) => (current === asked ? null : current));
+    if (!result.ok) {
+      setTalk((current) => (current?.agent === asked && current.mode === "working" ? null : current));
+      setAgentError(asked, result.error);
+      return;
+    }
+    updateThread(asked, askedClient, (thread) => ({
+      ...thread,
+      messages: [...thread.messages, { role: "agent", text: result.answer }],
+    }));
+    setTalk((current) => (current?.agent === asked && current.mode === "working" ? null : current));
   }
 
   function listen() {
+    const heardFor = agentRef.current;
     if (listening) {
-      recRef.current?.stop();
-      setListening(false);
-      setTalk(null);
+      stopRecording();
       return;
     }
     const rec = speechRecognition();
     if (!rec) {
-      setError("Voice is not available in this browser.");
+      setAgentError(heardFor, "Voice is not available in this browser.");
       return;
     }
+    const gen = ++listenGen.current;
     rec.lang = market.locale || "en";
     rec.interimResults = false;
     rec.onresult = (event) => {
+      if (gen !== listenGen.current) return;
+      if (agentRef.current !== heardFor) return;
       const said = event.results[0]?.[0]?.transcript?.trim() ?? "";
-      if (said) setDraft(said);
+      if (!said || !clientId) return;
+      updateThread(heardFor, clientId, (thread) => ({ ...thread, draft: said }));
     };
     rec.onerror = () => {
+      if (gen !== listenGen.current) return;
       setListening(false);
-      setTalk(null);
-      setError("Voice did not catch that.");
+      setTalk((current) => (current?.mode === "listening" ? null : current));
+      setAgentError(heardFor, "Voice did not catch that.");
     };
     rec.onend = () => {
+      if (gen !== listenGen.current) return;
       setListening(false);
       setTalk((current) => (current?.mode === "listening" ? null : current));
     };
     recRef.current = rec;
-    setError(null);
+    setAgentError(heardFor, null);
     setListening(true);
-    setTalk({ agent, mode: "listening" });
+    setTalk({ agent: heardFor, mode: "listening" });
     rec.start();
   }
 
@@ -584,6 +658,7 @@ export function OwnerDoor({
           needs={needs}
           onMoves={() => go("moves")}
           onDeliverables={() => go("deliverables")}
+          inviteClientId={clientId}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}
@@ -597,14 +672,28 @@ export function OwnerDoor({
           variant="character"
           motion={active.motion}
           sentence={active.sentence}
-          messages={messages}
-          draft={draft}
-          listening={listening}
-          busy={busy}
-          error={error}
-          onDraft={setDraft}
-          onSend={() => void send(draft)}
+          messages={threads[agent].messages}
+          draft={threads[agent].draft}
+          listening={listening && talk?.agent === agent}
+          busy={busyAgent === agent}
+          error={errors[agent] ?? null}
+          onDraft={(value) => {
+            const which = agentRef.current;
+            const nextThread = { ...threadsRef.current[which], draft: value };
+            const updated = { ...threadsRef.current, [which]: nextThread };
+            threadsRef.current = updated;
+            setThreads(updated);
+            if (clientId) writeOwnerThread(browserThreadStore(), clientId, which, nextThread);
+          }}
+          onSend={() => void send(threadsRef.current[agent].draft)}
           onListen={listen}
+          onSpeech={(speaking) => {
+            setTalk((current) => {
+              if (speaking) return { agent, mode: "speaking" };
+              if (current?.mode === "speaking") return null;
+              return current;
+            });
+          }}
           onBack={closeChat}
         />
       ) : null}
