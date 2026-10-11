@@ -10,6 +10,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
+import { ownerMinus } from "@/lib/owner-money";
 import {
   budgetChartDomain,
   budgetMonthViews,
@@ -54,6 +55,7 @@ export function BudgetChartTable({
   onLensChange,
   actualMonths,
   readOnly = false,
+  signed = false,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -63,9 +65,14 @@ export function BudgetChartTable({
   actualMonths?: readonly BudgetActualMonth[];
   /** Owner view hides a $0 draft instead of drawing an empty axis. */
   readOnly?: boolean;
+  /** Owner door uses one unicode minus. The accountant table keeps its formatter. */
+  signed?: boolean;
 }) {
   const { market } = useMarketFormat();
-  const money = (n: number) => fmtBudgetMoney(n, market);
+  const money = (n: number) => {
+    const text = fmtBudgetMoney(n, market);
+    return signed ? ownerMinus(text) : text;
+  };
   const listActuals = useServerFn(listBudgetMonthActuals);
   const [loaded, setLoaded] = useState<BudgetActualMonth[]>(actualMonths ? [...actualMonths] : []);
   const [localLens, setLocalLens] = useState<BudgetLens>(lens ?? "chart");
@@ -152,7 +159,7 @@ export function BudgetChartTable({
       </div>
 
       {shown === "chart" ? (
-        <BudgetMonthChart views={views} locale={market.locale} market={market} money={money} />
+        <BudgetMonthChart views={views} locale={market.locale} market={market} money={money} signed={signed} />
       ) : (
         <BudgetMonthTable doc={doc} views={views} money={money} locale={market.locale} />
       )}
@@ -165,13 +172,18 @@ function BudgetMonthChart({
   locale,
   market,
   money,
+  signed = false,
 }: {
   views: BudgetMonthView[];
   locale: string;
   market: Parameters<typeof formatMoneyChartTick>[1];
   money: (n: number) => string;
+  signed?: boolean;
 }) {
-  const tick = (n: number) => formatMoneyChartTick(n, market);
+  const tick = (n: number) => {
+    const text = formatMoneyChartTick(n, market);
+    return signed ? ownerMinus(text) : text;
+  };
   const data = views.map((row) => ({
     month: row.month,
     label: shortMonth(row.month, locale),

@@ -47,6 +47,7 @@ export function OwnerDraftCard({
   onOpen,
   onInvite,
   onRefresh,
+  primary = true,
 }: {
   row: AgentFindingRow;
   layout: "moves" | "desk";
@@ -56,6 +57,8 @@ export function OwnerDraftCard({
   onOpen?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   onRefresh?: () => void;
+  /** The first decision on a view keeps the gold button. Later ones are outlined. */
+  primary?: boolean;
 }) {
   const label = draftFindingLabel(row);
   const kindLabel = draftFindingKindLabel(row);
@@ -205,7 +208,7 @@ export function OwnerDraftCard({
     <div className={layout === "desk" ? "milon-desk-actions milon-desk-draft-actions" : "owner-draft-actions"} data-draft-actions="owner">
       {editing ? (
         <>
-          <button type="button" className={layout === "desk" ? "milon-desk-btn primary" : "btn gold owner-draft-approve"} onClick={() => void confirm()}>
+          <button type="button" className={layout === "desk" ? "milon-desk-btn primary" : primary ? "btn gold owner-draft-approve" : "owner-btn-secondary owner-draft-approve"} onClick={() => void confirm()}>
             Confirm
           </button>
           <button
@@ -223,7 +226,7 @@ export function OwnerDraftCard({
         </>
       ) : (
         <>
-          <button type="button" className={layout === "desk" ? "milon-desk-btn primary" : "btn gold owner-draft-approve"} onClick={() => setEditing(true)}>
+          <button type="button" className={layout === "desk" ? "milon-desk-btn primary" : primary ? "btn gold owner-draft-approve" : "owner-btn-secondary owner-draft-approve"} onClick={() => setEditing(true)}>
             Approve
           </button>
           <button type="button" className={layout === "desk" ? "milon-desk-btn ghost" : "owner-draft-dismiss"} onClick={() => void dismiss()}>

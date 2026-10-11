@@ -262,10 +262,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 .owner-door .owner-health-hero {
-  border: 1px solid var(--owner-edge);
-  border-radius: 18px;
-  padding: 8px 4px 12px;
+  border: var(--owner-line);
+  border-radius: var(--owner-radius);
+  padding: var(--owner-pad);
   background: var(--card);
+  box-shadow: var(--owner-shadow);
 }
 
 .owner-door .health-orb:hover,
@@ -384,6 +385,68 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door .tabular-nums {
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.owner-door table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.owner-door table th,
+.owner-door table td {
+  vertical-align: baseline;
+  padding: var(--owner-space-1) var(--owner-space-2);
+}
+
+.owner-door table th:not(:first-child),
+.owner-door table td:not(:first-child) {
+  text-align: right;
+}
+
+.owner-door [data-owner-page] .text-\[10px\],
+.owner-door [data-owner-page] .text-\[11px\],
+.owner-door [data-owner-page] .text-\[12px\] {
+  font-size: 14px;
+}
+
+.owner-door .deliverable-rail .tab {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.owner-door [data-owner-page="health"] .max-w-xl,
+.owner-door [data-owner-page="health"] .max-w-md,
+.owner-door [data-owner-page="accountant"] .max-w-xl,
+.owner-door [data-owner-page="deliverables"] .max-w-xl,
+.owner-door [data-owner-page="plan"] .max-w-xl {
+  width: 100%;
+  max-width: 100%;
+}
+
+.owner-door [data-owner-page="health"] .rounded-xl,
+.owner-door [data-owner-page="cash"] .rounded-xl,
+.owner-door [data-owner-page="budget"] .rounded-xl,
+.owner-door [data-owner-page="profit"] .rounded-xl,
+.owner-door [data-owner-page="moves"] .rounded-xl,
+.owner-door [data-owner-page="moves"] .rounded-lg {
+  border-radius: var(--owner-radius);
+}
+
+.owner-door [data-owner-page="cash"] button,
+.owner-door [data-owner-page="budget"] button,
+.owner-door [data-owner-page="profit"] button,
+.owner-door [data-owner-page="moves"] button,
+.owner-door [data-owner-page="health"] .sphere-drill-back {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.owner-door [data-owner-page="moves"] .border-dashed > button {
+  height: 44px;
+  background: transparent;
+  color: var(--ink);
+  border: var(--owner-line);
+  box-shadow: none;
 }
 
 .owner-door .owner-money {
@@ -629,17 +692,17 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door .owner-promises {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--owner-space-2);
 }
 
 .owner-door .owner-tile {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 18px;
   align-items: center;
-  padding: 14px 16px;
-  border: 1px solid var(--owner-edge);
-  border-radius: 16px;
+  gap: var(--owner-space-2);
+  padding: var(--owner-pad);
+  border: var(--owner-line);
+  border-radius: var(--owner-radius);
   background: var(--card);
 }
 
@@ -696,9 +759,10 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 
 .owner-door .owner-hold .owner-ask,
 .owner-door .owner-ask-inline {
-  width: auto;
+  align-self: flex-start;
+  width: fit-content;
   min-width: 220px;
-  margin-top: 16px;
+  margin-top: var(--owner-space-2);
 }
 
 .owner-door .owner-sub {
@@ -862,9 +926,9 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 .owner-door .owner-icon-btn.is-on {
-  background: var(--gold-grad);
-  background-size: 200% auto;
-  border-color: transparent;
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  border-color: var(--gold);
+  color: var(--ink);
 }
 
 .owner-door .owner-composer .owner-ask {
@@ -1354,6 +1418,10 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 @media (max-width: 760px) {
+  .owner-door:not([data-screen="chat"]) {
+    padding-inline: var(--owner-space-2);
+  }
+
   .owner-door .owner-pane[data-owner-home="true"] {
     gap: var(--owner-space-2);
     max-width: none;

@@ -20,6 +20,7 @@ import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { profitStepBand } from "@/lib/health-score";
 import { estimatedTaxNote } from "@/lib/estimated-tax-note";
+import { ownerOutflow } from "@/lib/owner-money";
 
 export type { WaterfallFallback };
 
@@ -209,6 +210,7 @@ export function ProfitabilityWaterfall({
   periodNote = null,
   hideLead = false,
   hideCardExport = false,
+  negative = "paren",
   onExportReady,
 }: {
   fallback?: WaterfallFallback;
@@ -227,6 +229,8 @@ export function ProfitabilityWaterfall({
   } | null;
   /** Shown when a Xero link exists but the stored total has no dates yet. */
   periodNote?: string | null;
+  /** Owner door uses a unicode minus. The accountant waterfall keeps parentheses. */
+  negative?: "paren" | "minus";
   /** Dated ledger that owns these period figures. The chip lives on the answer strip. */
   statementSource?: string | null;
   /** The answer strip already shows the heading and the sentence. */
@@ -525,7 +529,9 @@ export function ProfitabilityWaterfall({
                         >
                           <span className={isDec || negNet ? "" : "text-[#0f172a] dark:text-[#f8fafc]"}>
                             {isDec
-                              ? `(${fmtCompact(Math.abs(s.delta))})`
+                              ? negative === "minus"
+                                ? ownerOutflow(fmtCompact(Math.abs(s.delta)))
+                                : `(${fmtCompact(Math.abs(s.delta))})`
                               : fmtCompact(s.runningEnd)}
                           </span>
                         </div>

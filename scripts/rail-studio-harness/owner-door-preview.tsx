@@ -360,7 +360,12 @@ export function OwnerDoorPreview({
       {view === "profit" ? (
         <section className="owner-pane" data-owner-page="profit">
           <h1 className="owner-title">Profit</h1>
-          <ProfitabilityWaterfall clientId="harness-client" clientName="Northline Studio" periodLabel="September 2026" />
+          <ProfitabilityWaterfall
+            clientId="harness-client"
+            clientName="Northline Studio"
+            periodLabel="September 2026"
+            negative="minus"
+          />
         </section>
       ) : null}
       {view === "moves" || view === "tasks" || view === "actions" ? (

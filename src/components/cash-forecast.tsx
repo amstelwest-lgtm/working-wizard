@@ -516,7 +516,10 @@ export function CashForecastPanel({
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
-  const { money: fmtR, moneyCompact: fmtCompact, date, market } = useMarketFormat();
+  const { money: fullMoney, moneyCompact: compactMoney, date, market } = useMarketFormat();
+  const sign = (text: string) => (simplified ? text.replace(/^-/, "−") : text);
+  const fmtR = (n: number, opts?: Parameters<typeof fullMoney>[1]) => sign(fullMoney(n, opts));
+  const fmtCompact = (n: number) => sign(compactMoney(n));
   const cur = currencySymbol(market);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
@@ -1370,7 +1373,7 @@ export function CashForecastPanel({
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => formatMoneyChartTick(v, market)}
+            tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
             width={68}
             tick={{ fill: "#94a3b8", fontSize: 10 }}
           />
@@ -2181,6 +2184,7 @@ export function CashForecastPanel({
               openingNote={openingAsOf ? openingLabel : null}
               symbol={cur}
               format={fmtR}
+              signStyle={simplified ? "minus" : "paren"}
               openingChip={openingChipKey}
               flowChip={flowChipKey}
               readOnly={readOnly}

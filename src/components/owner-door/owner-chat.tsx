@@ -93,7 +93,7 @@ export function OwnerChat({
       >
         <button
           type="button"
-          className={`owner-icon-btn btn${listening ? " gold is-on" : ""}`}
+          className={`owner-icon-btn btn${listening ? " is-on" : ""}`}
           aria-pressed={listening}
           aria-label={listening ? "Stop listening" : "Speak"}
           onClick={onListen}
