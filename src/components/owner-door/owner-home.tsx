@@ -4,6 +4,7 @@ import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-te
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
+import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 
 const MONEY_TOKEN =
@@ -52,6 +53,48 @@ function StatusIcon() {
   );
 }
 
+export function OwnerNeedsStrip({
+  needs,
+  onMoves,
+  onDeliverables,
+}: {
+  needs: OwnerNeedsView;
+  onMoves: () => void;
+  onDeliverables: () => void;
+}) {
+  return (
+    <section className="owner-needs" aria-label="What needs you">
+      <h2>What needs you</h2>
+      <div className="owner-needs-grid">
+        <button type="button" className="owner-needs-item" onClick={onMoves}>
+          <b>{needs.actionsHeading}</b>
+          {needs.actionLines.map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+        </button>
+        <button type="button" className="owner-needs-item" onClick={onMoves}>
+          <b>{needs.draftsHeading}</b>
+          {needs.draftLines.map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+        </button>
+        <button type="button" className="owner-needs-item" onClick={onDeliverables}>
+          <b>{needs.deliverablesHeading}</b>
+          {needs.deliverableLines.map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+        </button>
+        <div className="owner-needs-item owner-needs-sync">
+          <b>{needs.syncHeading}</b>
+          {needs.syncLines.map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function OwnerHome({
   variant,
   presence,
@@ -60,6 +103,9 @@ export function OwnerHome({
   onOpen,
   onAsk,
   runState,
+  needs,
+  onMoves,
+  onDeliverables,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -69,6 +115,9 @@ export function OwnerHome({
   runState?: Partial<Record<AgentKey, OwnerRunPhase | null>>;
   onOpen: (agent: AgentKey) => void;
   onAsk: (agent: AgentKey) => void;
+  needs?: OwnerNeedsView;
+  onMoves?: () => void;
+  onDeliverables?: () => void;
 }) {
   const handoff = presence.handoff;
   const [bots, setBots] = useState<OwnerBotLayout>(() =>
@@ -144,6 +193,9 @@ export function OwnerHome({
           />
         ) : null}
       </div>
+      {needs && onMoves && onDeliverables ? (
+        <OwnerNeedsStrip needs={needs} onMoves={onMoves} onDeliverables={onDeliverables} />
+      ) : null}
     </div>
   );
 }

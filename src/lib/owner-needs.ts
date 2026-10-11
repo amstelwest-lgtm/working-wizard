@@ -1,0 +1,170 @@
+/**
+ * Compact "What needs you" copy for the owner home.
+ * Counts come from the caller. Empty stays empty. Nothing here is invented.
+ */
+import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
+
+export type OwnerActionRow = { title: string; email: string | null };
+
+export type BooksLink =
+  | { state: "unknown" }
+  | { state: "absent" }
+  | { state: "linked"; at: string | null };
+
+export type OwnerNeedsView = {
+  actionsHeading: string;
+  actionLines: string[];
+  draftsHeading: string;
+  draftLines: string[];
+  deliverablesHeading: string;
+  deliverableLines: string[];
+  syncHeading: string;
+  syncLines: string[];
+};
+
+function countPhrase(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export function ownerAssignedTitles(actions: readonly OwnerActionRow[], ownerEmail: string | null): string[] {
+  const email = ownerEmail?.trim().toLowerCase() ?? "";
+  if (!email) return [];
+  return actions.flatMap((row) => {
+    const title = row.title.trim();
+    if (!title) return [];
+    if ((row.email ?? "").trim().toLowerCase() !== email) return [];
+    return [title];
+  });
+}
+
+export function ownerDraftTitles(findings: readonly AgentFindingRow[]): string[] {
+  return findings.flatMap((row) => {
+    if (row.status === "approved") return [];
+    if (!isVisibleAgentFinding(row)) return [];
+    if (draftFindingLabel(row) !== DRAFT_NEEDS_OWNER) return [];
+    const title = row.title.trim();
+    return title ? [title] : [];
+  });
+}
+
+export function advisoryDeliverableTitles(findings: readonly AgentFindingRow[]): string[] {
+  return findings.flatMap((row) => {
+    if (row.status === "approved") return [];
+    if (!isVisibleAgentFinding(row)) return [];
+    if (draftFindingKindLabel(row) !== "Advisory") return [];
+    if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
+    const title = row.title.trim();
+    return title ? [title] : [];
+  });
+}
+
+export function booksSyncCopy(input: {
+  quickBooks: BooksLink;
+  xero: BooksLink;
+  when: (iso: string) => string;
+}): { heading: string; lines: string[] } {
+  const linked = (
+    [
+      ["QuickBooks", input.quickBooks],
+      ["Xero", input.xero],
+    ] as const
+  ).filter((entry): entry is ["QuickBooks" | "Xero", { state: "linked"; at: string | null }] => {
+    return entry[1].state === "linked";
+  });
+  if (linked.length === 0) {
+    const unknown = input.quickBooks.state === "unknown" || input.xero.state === "unknown";
+    return unknown
+      ? { heading: "Books", lines: ["Sync time isn't available yet."] }
+      : { heading: "Books", lines: ["Books are not connected yet."] };
+  }
+  const ranked = [...linked].sort((a, b) => {
+    const left = a[1].at ? Date.parse(a[1].at) : 0;
+    const right = b[1].at ? Date.parse(b[1].at) : 0;
+    return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+  });
+  const [source, link] = ranked[0];
+  if (!link.at || Number.isNaN(Date.parse(link.at))) {
+    return { heading: source, lines: ["Connected. No sync time yet."] };
+  }
+  return { heading: source, lines: [`Last synced ${input.when(link.at)}.`] };
+}
+
+export function ownerNeedsView(input: {
+  ownerEmail: string | null;
+  actionsReady: boolean;
+  actionsUnavailable: boolean;
+  actions: readonly OwnerActionRow[];
+  draftsReady: boolean;
+  draftsUnavailable: boolean;
+  draftTitles: readonly string[];
+  deliverablesReady: boolean;
+  deliverablesUnavailable: boolean;
+  deliverableCount: number;
+  advisoryTitles: readonly string[];
+  quickBooks: BooksLink;
+  xero: BooksLink;
+  when: (iso: string) => string;
+}): OwnerNeedsView {
+  const assigned = ownerAssignedTitles(input.actions, input.ownerEmail);
+  const actionsHeading = !input.actionsReady
+    ? "Open actions"
+    : input.actionsUnavailable
+      ? "Open actions"
+      : assigned.length
+        ? countPhrase(assigned.length, "open action", "open actions")
+        : "Open actions";
+  const actionLines = !input.actionsReady
+    ? ["Checking open actions."]
+    : input.actionsUnavailable
+      ? ["Open actions aren't available yet."]
+      : assigned.length
+        ? assigned.slice(0, 2)
+        : ["No open actions assigned to you."];
+
+  const draftsHeading = !input.draftsReady
+    ? "Drafts"
+    : input.draftsUnavailable
+      ? "Drafts"
+      : input.draftTitles.length
+        ? countPhrase(input.draftTitles.length, "draft needs your OK", "drafts need your OK")
+        : "Drafts";
+  const draftLines = !input.draftsReady
+    ? ["Checking drafts."]
+    : input.draftsUnavailable
+      ? ["Drafts aren't available yet."]
+      : input.draftTitles.length
+        ? input.draftTitles.slice(0, 1)
+        : ["No drafts need your OK."];
+
+  const deliverableTotal =
+    input.deliverableCount + (input.deliverablesUnavailable ? 0 : input.advisoryTitles.length);
+  const deliverablesHeading = !input.deliverablesReady
+    ? "Deliverables"
+    : input.deliverablesUnavailable
+      ? "Deliverables"
+      : deliverableTotal
+        ? countPhrase(deliverableTotal, "deliverable awaiting review", "deliverables awaiting review")
+        : "Deliverables";
+  const deliverableLines = !input.deliverablesReady
+    ? ["Checking deliverables."]
+    : input.deliverablesUnavailable
+      ? ["Deliverables aren't available yet."]
+      : deliverableTotal
+        ? input.advisoryTitles.slice(0, 1).length
+          ? input.advisoryTitles.slice(0, 1)
+          : ["Waiting on your accountant."]
+        : ["No deliverables awaiting review."];
+
+  const sync = booksSyncCopy(input);
+  return {
+    actionsHeading,
+    actionLines,
+    draftsHeading,
+    draftLines,
+    deliverablesHeading,
+    deliverableLines,
+    syncHeading: sync.heading,
+    syncLines: sync.lines,
+  };
+}
