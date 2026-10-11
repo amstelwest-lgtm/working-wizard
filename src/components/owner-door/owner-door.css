@@ -1831,3 +1831,110 @@ html[data-bot-fade="plain"] .owner-door .owner-pane {
   font-weight: 700;
   color: var(--ink);
 }
+
+.owner-door .owner-settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--pale);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cobalt);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.owner-door .owner-settings-link svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.owner-door .owner-settings-link[aria-current="page"] {
+  background: var(--pale);
+  color: var(--cobalt);
+}
+
+html.dark .owner-door .owner-settings-link,
+html.dark .owner-door .owner-settings-link[aria-current="page"] {
+  color: var(--ink);
+}
+
+.owner-door .rail-settings {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--owner-edge);
+}
+
+@media (min-width: 861px) {
+  .owner-door.accountant-portal .deliverable-rail {
+    max-height: calc(100dvh - 66px);
+    overflow: auto;
+  }
+}
+
+.owner-door .rail-settings .tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.owner-door .rail-settings svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.owner-door .owner-settings-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--pale);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.owner-door .owner-settings-block h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.owner-door .owner-settings-theme {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 767px) {
+  .owner-door .owner-settings-link {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .owner-door .owner-settings-link .gear-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .owner-door .rail-settings {
+    display: none;
+  }
+}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { agentShortName } from "@/lib/milon-team";
 import { ownerPlanFreeLine, ownerPlanLine, type OwnerVisitor } from "@/lib/owner-plan";
 
@@ -174,6 +175,69 @@ export function OwnerPlan({
       <h1 className="owner-title">Plan</h1>
       <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
       <p className="owner-lede">The price is on this page only.</p>
+    </section>
+  );
+}
+
+export function OwnerSettings({
+  visitor,
+  accountantOnMilon,
+  firmName,
+  onProfile,
+  onQuickBooks,
+  onXero,
+  onBack,
+  onAccount,
+}: {
+  visitor: OwnerVisitor | null;
+  accountantOnMilon: boolean;
+  firmName: string | null;
+  onProfile: () => void;
+  onQuickBooks: () => void;
+  onXero: () => void;
+  onBack: () => void;
+  onAccount?: () => void;
+}) {
+  return (
+    <section className="owner-pane" data-owner-page="settings">
+      <button type="button" className="owner-back" onClick={onBack}>
+        Back
+      </button>
+      <h1 className="owner-title">Settings</h1>
+      <p className="owner-lede">Plan, appearance, profile, and book connections.</p>
+      <section className="owner-settings-block">
+        <h2>Plan</h2>
+        <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
+      </section>
+      <section className="owner-settings-block">
+        <h2>Theme</h2>
+        <div className="owner-settings-theme">
+          <ThemeToggle />
+          <span>Light or dark</span>
+        </div>
+      </section>
+      <section className="owner-settings-block">
+        <h2>Profile</h2>
+        <button type="button" className="owner-btn-secondary" onClick={onProfile}>
+          Business profile
+        </button>
+      </section>
+      <section className="owner-settings-block">
+        <h2>Connections</h2>
+        <div className="owner-first-actions">
+          <button type="button" className="btn gold owner-ask" onClick={onQuickBooks}>
+            Connect QuickBooks
+          </button>
+          <button type="button" className="owner-btn-secondary owner-ask" onClick={onXero}>
+            Connect Xero
+          </button>
+        </div>
+      </section>
+      {onAccount ? (
+        <button type="button" className="owner-btn-tertiary" onClick={onAccount}>
+          Account and legal
+        </button>
+      ) : null}
     </section>
   );
 }

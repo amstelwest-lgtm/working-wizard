@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { SettingsNavButton } from "@/components/settings-nav-button";
+import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "@fontsource/noto-sans/latin-400.css";
 import "@fontsource/noto-sans/latin-500.css";
@@ -93,6 +93,11 @@ export function OwnerShell({
         <span className="spacer" />
         <div className="owner-tools">
           <ThemeToggle />
+          <SettingsNavButton
+            className="owner-settings-link"
+            aria-current={screen === "settings" ? "page" : undefined}
+            onClick={onSettings}
+          />
           <div className="owner-account">
           <button
             type="button"
@@ -164,6 +169,7 @@ export function OwnerShell({
               </button>
             );
           })}
+          <RailSettingsButton active={screen === "settings"} onClick={onSettings} />
         </nav>
         <div className="deliverable-main">{children}</div>
       </div>

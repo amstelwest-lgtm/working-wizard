@@ -17,6 +17,7 @@ import {
   OwnerDeliverables,
   OwnerFirst,
   OwnerPlan,
+  OwnerSettings,
 } from "@/components/owner-door/owner-pages";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
@@ -116,7 +117,8 @@ export type OwnerPreviewView =
   | "tasks"
   | "profit"
   | "moves"
-  | "faces";
+  | "faces"
+  | "settings";
 
 const YTD_PRIOR = {
   revenue: 390000,
@@ -282,7 +284,8 @@ export function OwnerDoorPreview({
                 view === "health" ||
                 view === "cash" ||
                 view === "budget" ||
-                view === "profit"
+                view === "profit" ||
+                view === "settings"
               ? view
               : "home"
       }
@@ -447,6 +450,17 @@ export function OwnerDoorPreview({
         />
       ) : null}
       {view === "plan" ? <OwnerPlan visitor="us" accountantOnMilon={false} firmName={null} /> : null}
+      {view === "settings" ? (
+        <OwnerSettings
+          visitor="us"
+          accountantOnMilon={false}
+          firmName={null}
+          onProfile={() => undefined}
+          onQuickBooks={() => undefined}
+          onXero={() => undefined}
+          onBack={() => undefined}
+        />
+      ) : null}
       {view === "first" ? (
         <OwnerFirst joined={false} onQuickBooks={() => undefined} onXero={() => undefined} onInvite={() => undefined} />
       ) : null}

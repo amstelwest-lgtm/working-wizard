@@ -98,7 +98,7 @@ import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SettingsNavButton } from "@/components/settings-nav-button";
+import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { FeatureFinder } from "@/components/feature-finder";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -2781,6 +2781,14 @@ function ClientView() {
               <FirmSwitcher />
               <FeatureFinder audience="accountant" clientId={clientId} />
               <span className="spacer" />
+              <SettingsNavButton
+                className="tb-btn settings-gear"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  openPracticeSettings();
+                  navigate({ to: "/settings" });
+                }}
+              />
               <button
                 type="button"
                 className="topbar-menu-btn"
@@ -2798,14 +2806,6 @@ function ClientView() {
               </button>
               <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
                 <ThemeToggle />
-                <SettingsNavButton
-                  className="tb-btn"
-                  onClick={() => {
-                    setMobileNavOpen(false);
-                    openPracticeSettings();
-                    navigate({ to: "/settings" });
-                  }}
-                />
                 <button type="button" className={headerShortcutClass()} onClick={openReportsStudio}>
                   <svg viewBox="0 0 24 24">
                     <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -2848,6 +2848,13 @@ function ClientView() {
                     }}
                   />
                 ))}
+                <RailSettingsButton
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    openPracticeSettings();
+                    navigate({ to: "/settings" });
+                  }}
+                />
               </nav>
               <div className="deliverable-main">
                 {railGroup(activeTab) !== "ask" ? (

@@ -34,9 +34,9 @@ import {
   OwnerDeliverables,
   OwnerFirst,
   OwnerPlan,
+  OwnerSettings,
 } from "./owner-pages";
-import { holdFor } from "./owner-sections";
-import { OwnerHold, OwnerShell, type OwnerScreen } from "./owner-shell";
+import { OwnerShell, type OwnerScreen } from "./owner-shell";
 
 type Signoff = {
   id?: string;
@@ -94,6 +94,9 @@ export function OwnerDoor({
   onXero,
   onProfile,
   onSettings,
+  onLeaveSettings,
+  onAccount,
+  settingsOpen = false,
   onSignOut,
   topMove = null,
   boards,
@@ -121,6 +124,9 @@ export function OwnerDoor({
   onXero: () => void;
   onProfile: () => void;
   onSettings: () => void;
+  onLeaveSettings?: () => void;
+  onAccount?: () => void;
+  settingsOpen?: boolean;
   onSignOut: () => void;
   /** Top ranked next move. Empty stays an honest line under the advisor. */
   topMove?: string | null;
@@ -132,7 +138,11 @@ export function OwnerDoor({
 }) {
   const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
-  const [screen, setScreen] = useState<OwnerScreen>(openedBot ? "chat" : "home");
+  const [screen, setScreen] = useState<OwnerScreen>(
+    openedBot ? "chat" : settingsOpen ? "settings" : "home",
+  );
+  const beforeSettings = useRef<OwnerScreen>("home");
+  const leavingSettings = useRef(false);
   const [agent, setAgent] = useState<AgentKey>(openedBot ?? "financial_manager");
   const [talk, setTalk] = useState<OwnerTalk>(null);
   const [draft, setDraft] = useState("");
@@ -152,6 +162,21 @@ export function OwnerDoor({
   const botHydrated = useRef(false);
   screenRef.current = screen;
   agentRef.current = agent;
+
+  useEffect(() => {
+    if (settingsOpen) {
+      setScreen((current) => {
+        if (current !== "settings") beforeSettings.current = current;
+        return "settings";
+      });
+      return;
+    }
+    if (leavingSettings.current) {
+      leavingSettings.current = false;
+      return;
+    }
+    setScreen((current) => (current === "settings" ? beforeSettings.current : current));
+  }, [settingsOpen]);
 
   useEffect(() => {
     setVisitor(visitorCopyPack(readVisitorDraft()));
@@ -317,8 +342,18 @@ export function OwnerDoor({
     });
   }
 
+  function leaveSettings() {
+    leavingSettings.current = true;
+    setScreen(beforeSettings.current);
+    onLeaveSettings?.();
+  }
+
   function go(next: OwnerScreen) {
     if (next === "chat") return;
+    if (screenRef.current === "settings" && next !== "settings") {
+      leavingSettings.current = true;
+      onLeaveSettings?.();
+    }
     if (screenRef.current === "chat") {
       if (next === "home") {
         closeChat();
@@ -407,11 +442,6 @@ export function OwnerDoor({
 
   const railScreen = screen === "tasks" || screen === "actions" ? "moves" : screen;
   const restored = boards?.(setScreen);
-  const hold = holdFor(screen, tiles, {
-    onConnect,
-    onInvite: () => setScreen("accountant"),
-    onHome: () => setScreen("home"),
-  });
 
   return (
     <OwnerShell
@@ -510,8 +540,17 @@ export function OwnerDoor({
           onInvite={() => setScreen("accountant")}
         />
       ) : null}
-      {hold && railScreen === "settings" ? (
-        <OwnerHold title={hold.title} sentence={hold.sentence} action={hold.action} />
+      {railScreen === "settings" ? (
+        <OwnerSettings
+          visitor={visitor}
+          accountantOnMilon={Boolean(firmId)}
+          firmName={firmName}
+          onProfile={onProfile}
+          onQuickBooks={onQuickBooks}
+          onXero={onXero}
+          onBack={leaveSettings}
+          onAccount={onAccount}
+        />
       ) : null}
     </OwnerShell>
   );

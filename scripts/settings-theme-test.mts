@@ -29,6 +29,8 @@ assert(portal.includes("border-radius:50%"), "mobile menu keeps the circle");
 const shell = read("src/components/settings-shell.tsx");
 assert(shell.includes("accountant-portal"), "settings sit on portal chrome");
 assert(shell.includes('id="atmos"'), "settings have the gold atmos");
+assert(shell.includes("settings-gear"), "settings keeps a top-right control");
+assert(shell.includes("RailSettingsButton"), "settings pins a sidebar item");
 
 for (const page of [
   "src/routes/_authenticated/settings.index.tsx",
@@ -46,6 +48,7 @@ const index = read("src/routes/_authenticated/settings.index.tsx");
 assert(index.includes('href="/privacy"'), "settings still links to privacy");
 assert(index.includes("AI_MODEL_DISCLOSURE"), "settings shows the approved AI disclosure");
 assert(index.includes("settings-row"), "nav rows use the new row language");
+assert(index.includes(">Theme<"), "settings page names the theme control");
 
 const team = read("src/routes/_authenticated/settings.team.tsx");
 assert(team.includes("Team & access"), "team page title");
