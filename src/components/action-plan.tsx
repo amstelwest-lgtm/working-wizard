@@ -22,6 +22,8 @@ import { toast } from "sonner";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName } from "@/lib/milon-team";
+import { handoffAssigneeName } from "@/lib/owner-handoff";
+import { requestOwnerHandoff } from "@/lib/owner-handoff-client";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -237,9 +239,7 @@ export function driverHealthLabel(health: number) {
  */
 /** Newest action_updates note that records a bot handoff. Person assigns use a different note. */
 export function handoffAssignee(note: string | null | undefined): string | null {
-  if (!note?.startsWith("Handed to ")) return null;
-  const name = note.slice("Handed to ".length).trim();
-  return name || null;
+  return handoffAssigneeName(note);
 }
 
 export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown> {
@@ -1398,16 +1398,19 @@ export default function ActionPlanPanel({
                 }}
                 onHandOff={
                   ownerView
-                    ? (agent) =>
-                        patchItem(
-                          it.id,
-                          {
-                            owner_id: null,
-                            owner_name: agentDisplayName(agent),
-                            owner_email: null,
-                          },
-                          { note: `Handed to ${agentDisplayName(agent)}` },
-                        )
+                    ? (agent) => {
+                        void requestOwnerHandoff({
+                          clientId,
+                          actionItemId: it.id,
+                          agent,
+                        }).then((result) => {
+                          if (!result.ok) {
+                            toast.error(result.error);
+                            return;
+                          }
+                          void refresh();
+                        });
+                      }
                     : undefined
                 }
               />
@@ -1904,10 +1907,7 @@ function ItemRow({
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
   onManageTeam?: () => void;
-  /**
-   * Owner rail only. Writes an action_updates note and shows the bot as assignee.
-   * It does not enqueue agent_runs. Authenticated clients cannot insert those.
-   */
+  /** Owner rail only. Asks owner-handoff. The browser does not insert agent_runs. */
   onHandOff?: (agent: AgentKey) => void;
 }) {
   const { date } = useMarketFormat();

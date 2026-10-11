@@ -5,15 +5,12 @@ import {
   type TeamAgentStatus,
   type TeamBriefingItem,
 } from "@/lib/milon-team-feed";
+import { AGENT_DISPLAY_NAME } from "./milon-team-names";
 
-/** Display order follows Eng1's key list. Names for those keys live only here. */
+/** Display order follows Eng1's key list. The display strings live in milon-team-names.ts. */
 export const AGENT_ORDER: readonly AgentKey[] = AGENT_KEYS;
 
-const DISPLAY_NAME: Record<AgentKey, string> = {
-  financial_manager: "Milōn Financial Manager",
-  analyst: "Milōn Analyst",
-  advisor: "Milōn Advisor",
-};
+const DISPLAY_NAME: Record<AgentKey, string> = AGENT_DISPLAY_NAME;
 
 const SHORT_NAME: Record<AgentKey, string> = {
   financial_manager: "Financial Manager",

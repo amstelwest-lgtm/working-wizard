@@ -56,7 +56,7 @@ function isPublicMarketing(file: string): boolean {
 }
 
 function isInAppSurface(file: string): boolean {
-  if (file === "src/lib/milon-team.ts" || isPublicMarketing(file)) return false;
+  if (file === "src/lib/milon-team.ts" || file === "src/lib/milon-team-names.ts" || isPublicMarketing(file)) return false;
   return (
     file.startsWith("src/components/") ||
     file.startsWith("src/routes/_authenticated/") ||
@@ -76,7 +76,12 @@ walk("src", (file, text) => {
 });
 assert(hits.length === 0, hits.join("\n") || "an in-app surface hardcodes a team display name");
 const config = readFileSync("src/lib/milon-team.ts", "utf8");
-for (const name of NAMES) assert(config.includes(name), `config is missing ${name}`);
+const names = readFileSync("src/lib/milon-team-names.ts", "utf8");
+assert(config.includes("AGENT_DISPLAY_NAME"), "the app API reads the shared display names");
+for (const name of NAMES) assert(names.includes(name), `names file is missing ${name}`);
+for (const name of NAMES) assert(agentDisplayName(
+  name.endsWith("Financial Manager") ? "financial_manager" : name.endsWith("Analyst") ? "analyst" : "advisor",
+) === name, `agentDisplayName returns ${name}`);
 assert(!config.includes(BOT_ROLE), "the config does not name the old bookkeeping role");
 assert(!/\bbookkeeper\b/i.test(config), "the agent key is financial_manager");
 assert(!existsSync("src/components/milon-team/types.ts"), "the local type mirror is gone");
