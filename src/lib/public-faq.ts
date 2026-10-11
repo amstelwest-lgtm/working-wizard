@@ -4,6 +4,9 @@ import {
   ACCOUNTING_SOFTWARE_ANSWER,
   AI_IDENTIFIERS_LINE,
   AI_MODEL_DISCLOSURE,
+  FAQ_NOT_A_BOOKKEEPER_ANSWER,
+  FAQ_NOT_A_BOOKKEEPER_QUESTION,
+  FAQ_OWNER_PLAN_US,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
   WATCHLIST_DEFINITION,
@@ -13,14 +16,11 @@ import {
 export const FAQ_OWNER_COST_US =
   "Business owners: $39 a month, or free when your accountant is on Milōn.";
 
-/** Visible US answer and FAQPage JSON-LD. The ZA page shows the server rand sentence instead. */
-export const FAQ_OWNER_PLAN_US =
-  "$39 a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.";
-
-export const FAQ_NOT_A_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
-
-export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
-  "No. Milōn is an AI finance team that works alongside your accountant. The books stay in QuickBooks Online, Xero or Sage. Milōn Financial Manager checks the data quality, the 13-week cash and the budget, Milōn Analyst explains the health score, ratios and variances, and Milōn Advisor drafts the next moves. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and signs off every advisory pack.";
+export {
+  FAQ_NOT_A_BOOKKEEPER_ANSWER,
+  FAQ_NOT_A_BOOKKEEPER_QUESTION,
+  FAQ_OWNER_PLAN_US,
+} from "./marketing-faq";
 
 /**
  * US answers for FAQPage JSON-LD. Must match the visible US copy on /faq.
