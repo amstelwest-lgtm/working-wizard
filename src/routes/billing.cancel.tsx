@@ -11,8 +11,12 @@ import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { readVisitorDraft } from "@/lib/market/storage";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { ownerPlanPublicLine } from "@/lib/owner-plan";
+import { ownerCheckoutReturnCopy } from "@/lib/owner-subscribe";
 
 export const Route = createFileRoute("/billing/cancel")({
+  validateSearch: (search: Record<string, unknown>): { plan?: "owner" } => ({
+    plan: search.plan === "owner" ? "owner" : undefined,
+  }),
   component: BillingCancelPage,
   head: () => ({
     meta: [
@@ -23,6 +27,7 @@ export const Route = createFileRoute("/billing/cancel")({
 });
 
 function BillingCancelPage() {
+  const { plan } = Route.useSearch();
   const profile = useOptionalAccountantProfile();
   const [pending, setPending] = useState<PendingCheckout>(() => firmSignupCheckoutIntent());
   const [ownerLine, setOwnerLine] = useState(ownerPlanPublicLine("us"));
@@ -40,6 +45,24 @@ function BillingCancelPage() {
         : stored ?? firmSignupCheckoutIntent(),
     );
   }, [profile?.brandLoading, profile?.hasFirm, profile?.firmMarket]);
+
+  if (plan === "owner") {
+    return (
+      <div className="grid min-h-screen place-items-center bg-white px-4 text-[#102a43]">
+        <div className="w-full max-w-md">
+          <h1 className="text-xl font-semibold">Checkout cancelled</h1>
+          <p className="mt-2 text-base">{ownerCheckoutReturnCopy("cancel")}</p>
+          <Link
+            to="/app"
+            search={{ screen: "plan", checkout: "cancel" }}
+            className="mt-5 inline-flex h-10 items-center rounded-full bg-[#0b5fff] px-4 text-sm font-semibold text-white"
+          >
+            Back to your plan
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">

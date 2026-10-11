@@ -603,7 +603,7 @@ export function ownerCheckoutSessionParams(
     payment_method_collection: "always",
     line_items: [{ price: input.priceId, quantity: 1 }],
     success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/billing/cancel`,
+    cancel_url: `${origin}/billing/cancel?plan=owner`,
     client_reference_id: input.userId,
     metadata: meta,
     subscription_data: { metadata: meta },
