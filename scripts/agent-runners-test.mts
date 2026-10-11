@@ -94,7 +94,7 @@ const pool = [
     kind: "action_point_draft",
     allowedKinds: FM_DRAFT_KINDS,
     severity: "watch",
-    title: "Margins on the September books",
+    title: "The September margin is on file.",
     detail: "Gross margin on file is 0.58. The saved cashflow lowest week is 1.",
     claimedFigures: { "Gross Margin": 0.58, lowest_week: 1 },
     pool: [

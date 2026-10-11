@@ -3,6 +3,7 @@
  * Signed off is accountant-only. User-facing text must not name a model vendor.
  */
 import { ADVISOR_DRAFT_KINDS, ADVISOR_PEERS } from "../../../../src/lib/agent-advisor.ts";
+import { AGENT_COPY_GUIDE } from "../../../../src/lib/agent-bus.ts";
 import {
   finishToolSchema,
   readToolSchema,
@@ -30,6 +31,7 @@ How to work:
 - to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys are financial_manager and analyst. Omit to_agent and the draft goes to the Financial Manager.
 - send_agent_message is how you reply to the Financial Manager or the Analyst. You cannot message yourself.
 - title is at most 200 characters. detail is required and at most 600 characters. Write detail immediately after title, before figures.
+- ${AGENT_COPY_GUIDE}
 - severity is exactly one of info, watch, or act.
   - info: a stored fact worth keeping. No action is asked.
   - watch: the books on file are drifting and should be looked at again.

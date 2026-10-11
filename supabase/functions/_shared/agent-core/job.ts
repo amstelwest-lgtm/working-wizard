@@ -8,7 +8,15 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { agentTurnMessages, decisionFromClaude, runAgentLoop } from "./loop.ts";
 import { callClaudeRound } from "./claude.ts";
 import { CLAUDE_MODEL } from "../claude-model.ts";
-import { attachCitedEvidence, sanitizeAgentError, type FindingEvidence, type StoredFigures } from "../../../../src/lib/agent-bus.ts";
+import {
+  agentCopyStatus,
+  attachCitedEvidence,
+  evidenceMetrics,
+  moneyMarketFromClient,
+  sanitizeAgentError,
+  type FindingEvidence,
+  type StoredFigures,
+} from "../../../../src/lib/agent-bus.ts";
 import {
   analystFailurePlan,
   analystRunCostUsd,
@@ -73,6 +81,7 @@ export type QueueJobConfig = {
     db: SupabaseClient;
     pool: StoredFigures[];
     recordedKeys: Set<string>;
+    market?: unknown;
   }) => Promise<unknown>;
 };
 
@@ -135,7 +144,7 @@ async function rememberRun(
 async function recordHandoffFinish(
   db: SupabaseClient,
   config: QueueJobConfig,
-  input: { runId: string; clientId: string; summary: string; pool: StoredFigures[] },
+  input: { runId: string; clientId: string; summary: string; pool: StoredFigures[]; market?: unknown },
 ) {
   const { data: run, error } = await db
     .from("agent_runs")
@@ -146,21 +155,23 @@ async function recordHandoffFinish(
   const actionItemId = run.action_item_id as string;
   const displayName = agentDisplayNameFromKey(config.agent);
   if (!displayName) return;
+  const market = moneyMarketFromClient(input.market);
+  const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
   const { error: noteError } = await db.from("action_updates").insert({
     action_item_id: actionItemId,
     client_id: input.clientId,
     actor_type: "system",
     actor_label: displayName,
-    note: handoffResultNote(displayName, input.summary),
+    note: handoffResultNote(displayName, input.summary, market, stored?.figures),
   });
   if (noteError) console.warn("handoff note", noteError.message);
 
-  const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
   const finding = handoffFinding({
     summary: input.summary,
     figures: stored?.figures ?? null,
     periodLabel: stored?.periodLabel ?? null,
     snapshotId: stored?.snapshotId ?? null,
+    market,
   });
   if (!finding) return;
   const cited = attachCitedEvidence({
@@ -179,6 +190,7 @@ async function recordHandoffFinish(
     return;
   }
   if ((count ?? 0) > 0) return;
+  const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
   const { error: findingError } = await db.from("agent_findings").insert({
     agent: config.agent,
     client_id: input.clientId,
@@ -187,7 +199,11 @@ async function recordHandoffFinish(
     severity: "info",
     title: finding.title,
     detail: finding.detail,
-    evidence: withDraftFlags(cited.evidence),
+    evidence: withDraftFlags({
+      ...cited.evidence,
+      metrics,
+      status: agentCopyStatus("info", metrics),
+    }),
     last_seen: new Date().toISOString(),
   });
   if (findingError) console.warn("handoff finding", findingError.message);
@@ -256,7 +272,7 @@ export async function runQueueJob(
     p_run_id: existing.run_id,
   });
 
-  const { data: client } = await db.from("clients").select("firm_id").eq("id", job.clientId).maybeSingle();
+  const { data: client } = await db.from("clients").select("firm_id, market").eq("id", job.clientId).maybeSingle();
   const firmId = (client?.firm_id as string | null) ?? null;
   const { data: memory } = await db
     .from("agent_memory")
@@ -344,6 +360,7 @@ export async function runQueueJob(
           db,
           pool,
           recordedKeys,
+          market: client?.market,
         });
         if (!writes.has(name)) {
           const reads = collectStoredReads(payload, { snapshotId: null, periodLabel: null });
@@ -401,6 +418,7 @@ export async function runQueueJob(
       clientId: job.clientId,
       summary: result.summary,
       pool,
+      market: client?.market,
     });
     await archive(db, config.queue, job.msgId);
     return { status: partial ? "partial" : "succeeded", runId: existing.run_id };
