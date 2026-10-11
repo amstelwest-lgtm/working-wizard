@@ -3217,7 +3217,17 @@ function ClientView() {
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
                   <div className="milon-desk-host">
-                    <MilonTeamPane clientId={clientId} />
+                    <MilonTeamPane
+                      clientId={clientId}
+                      onOpenApproved={(target) => {
+                        if (target.screen === "accountant") {
+                          setActiveTab("overview");
+                          requestRevealDataRequests();
+                          return;
+                        }
+                        setActiveTab("plan");
+                      }}
+                    />
                     <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
                   </div>
                 </div>

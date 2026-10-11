@@ -6,13 +6,14 @@
  * the desk falls back to the existing feed. agent_settings is not readable
  * here; enabled=false simply leaves these tables empty.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
 import {
   agentActivityUnavailable,
   emptyAgentActivity,
+  isVisibleAgentFinding,
   type AgentActivitySnapshot,
   type AgentFindingRow,
   type AgentMessageRow,
@@ -35,6 +36,7 @@ type ListQuery = {
 export type AgentActivity = AgentActivitySnapshot & {
   loading: boolean;
   error: string | null;
+  refresh: () => void;
 };
 
 function table(name: string): ListQuery {
@@ -71,6 +73,12 @@ function parseRun(row: Record<string, unknown>): AgentRunRow | null {
 function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
   if (row.superseded_by) return null;
   if (typeof row.dismissed_reason === "string" && row.dismissed_reason.trim()) return null;
+  const finding = {
+    superseded_by: row.superseded_by,
+    status: textOrNull(row.status),
+    dismissed_reason: textOrNull(row.dismissed_reason),
+  };
+  if (!isVisibleAgentFinding(finding)) return null;
   if (!isAgent(row.agent) || typeof row.id !== "string" || typeof row.title !== "string") return null;
   return {
     id: row.id,
@@ -82,6 +90,11 @@ function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
     evidence: row.evidence ?? {},
     as_of: textOrNull(row.as_of),
     created_at: typeof row.created_at === "string" ? row.created_at : "",
+    status: finding.status,
+    approved_by: textOrNull(row.approved_by),
+    approved_at: textOrNull(row.approved_at),
+    approved_table: textOrNull(row.approved_table),
+    approved_row_id: textOrNull(row.approved_row_id),
   };
 }
 
@@ -99,7 +112,13 @@ function parseMessage(row: Record<string, unknown>): AgentMessageRow | null {
 }
 
 export function useAgentActivity(clientId: string): AgentActivity {
-  const [state, setState] = useState<AgentActivity>({ ...emptyAgentActivity(), loading: true, error: null });
+  const [reload, setReload] = useState(0);
+  const refresh = useCallback(() => setReload((n) => n + 1), []);
+  const [state, setState] = useState<AgentActivitySnapshot & { loading: boolean; error: string | null }>({
+    ...emptyAgentActivity(),
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     const id = clientId.trim();
@@ -118,7 +137,9 @@ export function useAgentActivity(clientId: string): AgentActivity {
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),
         table("agent_findings")
-          .select("id, agent, client_id, kind, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason")
+          .select(
+            "id, agent, client_id, kind, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id",
+          )
           .eq("client_id", id)
           .order("created_at", { ascending: false })
           .limit(ROW_LIMIT),
@@ -196,7 +217,7 @@ export function useAgentActivity(clientId: string): AgentActivity {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [clientId]);
+  }, [clientId, reload]);
 
-  return state;
+  return { ...state, refresh };
 }

@@ -76,12 +76,14 @@ export function OwnerAccountant({
   invite,
   uploads,
   signed,
+  requests,
   onConnect,
 }: {
   joined: boolean;
   firmName: string | null;
   invite: ReactNode;
   uploads: ReactNode;
+  requests?: ReactNode;
   signed: OwnerSignoffRow[];
   onConnect: () => void;
 }) {
@@ -95,6 +97,7 @@ export function OwnerAccountant({
       </p>
       {joined ? null : <p className="owner-free">{ownerPlanFreeLine()}</p>}
       {invite}
+      <div id="owner-accountant-requests">{requests}</div>
       <h2 className="owner-sub">What your accountant signed</h2>
       {signed.length ? (
         <div className="owner-promises">

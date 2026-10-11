@@ -1347,3 +1347,66 @@ html[data-bot-fade="plain"] .owner-door .owner-pane {
     animation: owner-bot-in 180ms ease both;
   }
 }
+
+.owner-door .owner-draft-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.owner-door .owner-draft-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.owner-door .owner-draft-edit input,
+.owner-door .owner-draft-edit textarea {
+  font-family: var(--owner-sans);
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--owner-edge);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.owner-door .owner-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.owner-door.accountant-portal .owner-draft-approve,
+.owner-door.accountant-portal .owner-draft-dismiss {
+  font-family: var(--owner-sans);
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.owner-door .owner-draft-dismiss {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--owner-edge);
+}
+
+.owner-door .owner-draft-link {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold-deep);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}

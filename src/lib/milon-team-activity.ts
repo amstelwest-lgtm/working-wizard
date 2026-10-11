@@ -42,7 +42,27 @@ export type AgentFindingRow = {
   evidence: unknown;
   as_of: string | null;
   created_at: string;
+  /** Null while a draft is waiting. Approved rows stay visible. */
+  status?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approved_table?: string | null;
+  approved_row_id?: string | null;
+  superseded_by?: string | null;
+  dismissed_reason?: string | null;
 };
+
+/** Dismissed and superseded drafts stay off the owner surfaces. Approved rows stay. */
+export function isVisibleAgentFinding(row: {
+  superseded_by?: unknown;
+  status?: string | null;
+  dismissed_reason?: string | null;
+}): boolean {
+  if (row.superseded_by) return false;
+  if (row.status === "dismissed") return false;
+  if (typeof row.dismissed_reason === "string" && row.dismissed_reason.trim()) return false;
+  return true;
+}
 
 export type AgentMessageRow = {
   id: string;

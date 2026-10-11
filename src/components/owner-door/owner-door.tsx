@@ -3,6 +3,7 @@
  * and accountant sign-offs. Empty reads stay empty.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
@@ -466,6 +467,16 @@ export function OwnerDoor({
             ) : null
           }
           uploads={clientId ? <OwnerUploadsPanel clientId={clientId} /> : null}
+          requests={
+            clientId ? (
+              <DataRequestsPanel
+                clientId={clientId}
+                audience="owner"
+                onUpload={onConnect}
+                onOpenForecast={() => setScreen("cash")}
+              />
+            ) : null
+          }
           signed={signoffs.map((row, index) => ({
             id: row.id ?? `${row.scope ?? "sign"}-${index}`,
             scope: row.scope ?? "advisory",

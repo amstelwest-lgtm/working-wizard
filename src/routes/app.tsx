@@ -152,6 +152,7 @@ import { BalanceSheetPrompt } from "@/components/balance-sheet-prompt";
 import { needsBalanceSheetPrompt } from "@/lib/balance-sheet-prompt";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { FindAccountantPanel } from "@/components/find-accountant-panel";
@@ -4090,6 +4091,15 @@ function Index() {
                               health: Number.isFinite(s.health) ? s.health : Number.NaN,
                             }))}
                             onViewAnalysis={() => go("health")}
+                            onInviteAccountant={() => go("accountant")}
+                            onOpenApproved={(target) => {
+                              if (target.screen === "accountant") {
+                                go("accountant");
+                                requestRevealDataRequests();
+                                return;
+                              }
+                              go("moves");
+                            }}
                           />
                         ) : (
                           <p className="owner-lede">Your accountant sets this up</p>

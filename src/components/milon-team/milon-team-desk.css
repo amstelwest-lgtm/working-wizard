@@ -520,8 +520,51 @@
 .milon-desk-hint {
   margin: 0;
   color: var(--desk-dim);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
+}
+
+.milon-desk-draft-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.milon-desk-draft-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.milon-desk-draft-edit input,
+.milon-desk-draft-edit textarea {
+  font: inherit;
+  font-size: 14px;
+  color: var(--desk-ink);
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.milon-desk-draft-actions .milon-desk-btn {
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.milon-desk .owner-draft-link {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--desk-gold);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .milon-desk-more {
