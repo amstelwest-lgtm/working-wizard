@@ -90,6 +90,47 @@ const pool = [
     assert(kept.evidence.figures.cash === 40, "the stored cash is the evidence");
     assert(kept.evidence.period_label === "Sep 2026", "the period stays on the evidence");
   }
+  const grouped = prepareDraftRecord({
+    kind: "action_point_draft",
+    allowedKinds: FM_DRAFT_KINDS,
+    severity: "watch",
+    title: "Margins on the September books",
+    detail: "Gross margin on file is 0.58. The saved cashflow lowest week is 1.",
+    claimedFigures: { "Gross Margin": 0.58, lowest_week: 1 },
+    pool: [
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { "Gross Margin": 0.58 } },
+      {
+        snapshotId: "snap-ytd",
+        periodLabel: "1 Jan 2026 – 30 Sep 2026",
+        figures: { "Gross Margin": 0.58 },
+      },
+      { snapshotId: null, periodLabel: "saved cashflow", figures: { lowest_week: 1 } },
+    ],
+    recordedKeys: new Set(),
+  });
+  assert(grouped.ok === true, "a flat map spanning one period end is grouped instead of rejected");
+  if (grouped.ok) {
+    const byPeriod = grouped.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Sep 2026"]?.["Gross Margin"] === 0.58, "September keeps the margin");
+    assert(byPeriod["saved cashflow"]?.lowest_week === 1, "the saved cashflow stays its own period");
+  }
+  const stillAmbiguous = prepareDraftRecord({
+    kind: "action_point_draft",
+    allowedKinds: FM_DRAFT_KINDS,
+    severity: "watch",
+    title: "Cash on file",
+    detail: "Cash on file is 10.",
+    claimedFigures: { cash: 10 },
+    pool: [
+      { snapshotId: "snap-aug", periodLabel: "Aug 2026", figures: { cash: 10 } },
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { cash: 10 } },
+    ],
+    recordedKeys: new Set(),
+  });
+  assert(stillAmbiguous.ok === false, "a figure that fits two period ends is still rejected");
+  if (!stillAmbiguous.ok) {
+    assert(stillAmbiguous.error.includes("more than one period"), "the draft rejection still names the periods");
+  }
 }
 
 // Dedupe is by kind and period end. Dismissed rows are not in the set the writer queries.
@@ -126,10 +167,105 @@ const pool = [
     },
     recent,
   });
-  assert(otherKind === null, "a different kind is a different draft");
+  assert(otherKind === null, "an action point is not a data request");
+  const sharedFigures = {
+    overall: 75,
+    "Gross Margin": 0.58,
+    "Net Margin": 0.09,
+    "Debtor Days": 26,
+    "pillar:profit": 58,
+  };
+  const nextMove = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:02:13Z"),
+    candidate: {
+      kind: "advisory_deliverable_draft",
+      figures: { "1 Jan 2026 – 30 Sep 2026": sharedFigures },
+      periodLabel: null,
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "e37ea580",
+        kind: "next_move_draft",
+        figures: { "Sep 2026": sharedFigures },
+        seenAtMs: Date.parse("2026-10-11T09:28:12Z"),
+        periodLabel: null,
+        snapshotId: null,
+        severity: "watch",
+      },
+    ],
+  });
+  assert(
+    nextMove?.id === "e37ea580",
+    "a next move and an advisory deliverable match when the period end and the figures overlap",
+  );
+  const thinRelated = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:02:13Z"),
+    candidate: {
+      kind: "advisory_deliverable_draft",
+      figures: { "Sep 2026": { cash: 1 } },
+      periodLabel: null,
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "e37ea580",
+        kind: "next_move_draft",
+        figures: { "Sep 2026": sharedFigures },
+        seenAtMs: Date.parse("2026-10-11T09:28:12Z"),
+        periodLabel: null,
+        snapshotId: null,
+        severity: "watch",
+      },
+    ],
+  });
+  assert(thinRelated === null, "related kinds on the same period need a material figure overlap");
+  const otherPeriod = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:02:13Z"),
+    candidate: {
+      kind: "advisory_deliverable_draft",
+      figures: { "Oct 2026": sharedFigures },
+      periodLabel: null,
+      snapshotId: "snap-sep",
+    },
+    recent: [
+      {
+        id: "e37ea580",
+        kind: "next_move_draft",
+        figures: { "Sep 2026": sharedFigures },
+        seenAtMs: Date.parse("2026-10-11T09:28:12Z"),
+        periodLabel: null,
+        snapshotId: "snap-sep",
+        severity: "watch",
+      },
+    ],
+  });
+  assert(otherPeriod === null, "related kinds do not match on a shared snapshot without a shared period end");
+  const handoff = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:03:10Z"),
+    candidate: {
+      kind: "accountant_handoff_draft",
+      figures: { "Sep 2026": { has_upload: 1, connected_ledgers: 0, "Operating Margin": 0.12 } },
+      periodLabel: null,
+      snapshotId: null,
+    },
+    recent: [
+      {
+        id: "2905a21a",
+        kind: "data_request_draft",
+        figures: { has_upload: 1, connected_ledgers: 0, "Operating Margin": 0.12 },
+        seenAtMs: Date.parse("2026-10-11T10:02:10Z"),
+        periodLabel: "Sep 2026",
+        snapshotId: null,
+        severity: "watch",
+      },
+    ],
+  });
+  assert(handoff?.id === "2905a21a", "a data request and an accountant hand-off match on the same period and figures");
   const desk = read("supabase/functions/_shared/agent-desk.ts");
   assert(desk.includes('.is("dismissed_reason", null)'), "dismissed findings are not revived");
   assert(desk.includes('.is("superseded_by", null)'), "superseded findings are not revived");
+  assert(desk.includes("last_seen: seenAt"), "a duplicate draft bumps last_seen on the existing row");
 }
 
 // Drafts only. Signed off is refused. No live records.
@@ -264,6 +400,29 @@ function deskWritesLiveRecords(src: string): boolean {
     .join("\n");
   assert(!applied.includes("SET value = 'true'"), "the migration does not flip a flag on");
   assert(!applied.includes("cron.alter_job"), "the migration does not activate the cron");
+  const cleanup = read("supabase/migrations/20261012140000_agent_findings_draft_kind_dedupe.sql");
+  for (const id of [
+    "e37ea580-249a-4d8c-b52c-74cd795c4928",
+    "d3604217-2f05-4375-873e-232662b46c77",
+    "2905a21a-2ee9-4d78-a019-c709c3c702f7",
+    "a1dd5a9f-1c80-4d0b-88c2-afbdb210bc4a",
+  ]) {
+    assert(cleanup.includes(id), `the draft cleanup names ${id}`);
+  }
+  assert(cleanup.includes("superseded_by IS NULL"), "a second run does not supersede a draft twice");
+  assert(cleanup.includes("GREATEST(keeper.last_seen, dup.last_seen)"), "the kept draft last_seen moves forward");
+  const cleanupCode = cleanup.replace(/--[^\n]*/g, "");
+  assert(!/\bDELETE\b/i.test(cleanupCode), "the draft cleanup deletes nothing");
+  assert(
+    cleanupCode.indexOf("'e37ea580-249a-4d8c-b52c-74cd795c4928'") <
+      cleanupCode.indexOf("'d3604217-2f05-4375-873e-232662b46c77'"),
+    "the existing next move is the keeper",
+  );
+  assert(
+    cleanupCode.indexOf("'2905a21a-2ee9-4d78-a019-c709c3c702f7'") <
+      cleanupCode.indexOf("'a1dd5a9f-1c80-4d0b-88c2-afbdb210bc4a'"),
+    "the existing data request is the keeper",
+  );
 }
 
 // Same statuses as the analyst. Sonnet 5.5 call shape. Cost envelope. No pre-card.

@@ -198,6 +198,26 @@ const DAY = 24 * 60 * 60 * 1000;
     assert(byPeriod["Aug 2026"]?.cash === 10, "August keeps the stored cash");
     assert(byPeriod["Sep 2026"]?.debtor_days === 43.79, "September keeps the stored debtor days");
   }
+  const sameEnd = groundFindingEvidence({
+    pool: [
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { "Gross Margin": 0.58, "Net Margin": 0.09 } },
+      {
+        snapshotId: "snap-ytd",
+        periodLabel: "1 Jan 2026 – 30 Sep 2026",
+        figures: { "Gross Margin": 0.58, "Net Margin": 0.09 },
+      },
+      { snapshotId: null, periodLabel: "saved cashflow", figures: { lowest_week: 1 } },
+    ],
+    claimedFigures: { "Gross Margin": 0.58, lowest_week: 1 },
+  });
+  assert(sameEnd.ok === true, "a month and the range that ends in that month are one period");
+  if (sameEnd.ok) {
+    assert(sameEnd.evidence.period_label === null, "September and the saved cashflow are not one label");
+    const byPeriod = sameEnd.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Sep 2026"]?.["Gross Margin"] === 0.58, "the month stamp keeps the margin");
+    assert(byPeriod["1 Jan 2026 – 30 Sep 2026"] == null, "the longer range is not a second period");
+    assert(byPeriod["saved cashflow"]?.lowest_week === 1, "the saved cashflow keeps its own period");
+  }
   const ambiguous = groundFindingEvidence({
     pool: [
       { snapshotId: "snap-aug", periodLabel: "Aug 2026", figures: { cash: 10 } },
