@@ -108,7 +108,10 @@ const usCost = homepageFaqItems(false).find((item) => item.question === HOMEPAGE
 const zaCost = homepageFaqItems(true).find((item) => item.question === HOMEPAGE_COST_QUESTION);
 assert(usCost != null && zaCost != null, "cost answers exist");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
-assert(zaCost!.answer === usCost!.answer, "ZA and US cost answers match");
+assert(usCost!.answer.includes("$39/mo"), "US owners see the dollar price");
+assert(!usCost!.answer.includes("R299"), "US owners do not see the rand price");
+assert(zaCost!.answer.includes("R299/mo"), "SA owners see the rand price");
+assert(!zaCost!.answer.includes("$39"), "SA owners do not see the dollar price");
 assert(
   PRICING_TRIAL_AFTER.startsWith("See your first client's figures with no card."),
   "VERIFY-2 after-trial sentence",

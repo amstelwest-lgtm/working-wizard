@@ -63,10 +63,10 @@ function TermsPage() {
       </p>
       ) : null}
       <p>
-        Spark is free during early access and does not ask for a card. Accounting firms: see your
-        first client&apos;s figures with no card, then add a card to start a 14-day free trial (up
-        to 3 clients). After day 14 a paid USD client-count band bills through Stripe Checkout.
-        Owner Spark stays free.
+        Business owners: <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
+        Milōn. Billing opens soon. Accounting firms: see your first client&apos;s figures with no
+        card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 a paid
+        USD client-count band bills through Stripe Checkout.
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">

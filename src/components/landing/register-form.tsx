@@ -228,7 +228,7 @@ export function LandingRegisterForm({
                   goToFirmSignup({ plan: "solo", scrollTo: "register" });
                 } else {
                   clearPendingCheckout();
-                  setRegPlan("Spark — Free early access");
+                  setRegPlan("Business owner");
                 }
               }}
             >
@@ -370,7 +370,7 @@ export function LandingRegisterForm({
                 </p>
                 <p style={{ textAlign: "center", marginTop: 16 }}>
                   <button type="button" className="reg-owner-link" onClick={goToOwnerSpark}>
-                    Business owners: start free
+                    Business owner? Get your own AI finance team →
                   </button>
                 </p>
               </>
@@ -445,7 +445,7 @@ export function LandingRegisterForm({
                     }
                   }}
                 >
-                  <option value="Spark — Free early access">Spark — Free early access</option>
+                  <option value="Business owner">Business owner</option>
                 </select>
                 <button
                   type="submit"
@@ -457,7 +457,7 @@ export function LandingRegisterForm({
                     ? "Creating your account…"
                     : paidPlanFromRegisterLabel(regPlan)
                       ? `Create account and start ${regPlan}`
-                      : "Get my free health score ✦"}
+                      : "Create owner account"}
                 </button>
                 <p
                   style={{
@@ -468,8 +468,9 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  Spark is free during early access and does not ask for a card. Accounting firms:{" "}
-                  {FIRM_CARD_TIMING} By creating an account you agree to the <a href="/terms">Terms</a>.{" "}
+                  Owner plan $39/mo (R299 in SA), free when your accountant is on Milōn. Billing opens soon.
+                  Accounting firms: {FIRM_CARD_TIMING} By creating an account you agree to the{" "}
+                  <a href="/terms">Terms</a>.{" "}
                   {AI_USE_LEAD}{" "}
                   <a href="/ai">AI notice</a>. <a href="/privacy">Privacy</a>
                 </p>

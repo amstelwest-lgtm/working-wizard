@@ -379,14 +379,14 @@ assert(landing.includes("FIRM_BILLING_SIGNIN_MESSAGE"), "firm already-registered
 assert(landing.includes("signupLooksAlreadyRegistered"), "register treats User already registered as sign-in, not a dead-end");
 assert(landing.includes('useState("Accountant / Advisory firm")'), "register defaults to accountant");
 assert(landing.includes("Create firm account"), "landing has a create-firm CTA");
-assert(landing.includes("Business owners: start free"), "owner Spark is a secondary path");
+assert(landing.includes("Get your own AI finance team"), "owner signup is a secondary path");
 assert(!landing.includes("accountant pricing — shown via body class set by quiz"), "firm prices are not quiz-gated in markup");
 assert(!landing.includes("See firm bands"), "owner Orbit/Constellation cards no longer hide prices behind /for-accountants");
 assert(!landing.includes("Start Orbit"), "landing no longer Checkouts Orbit");
 assert(!landing.includes("Start Constellation"), "landing no longer Checkouts Constellation");
 assert(!landing.includes("Join waitlist"), "landing no longer waitlists paid plans");
 assert(!landing.includes("billing is not live yet"), "landing no longer says billing is waitlist");
-assert(landing.includes("Spark — Free early access"), "register keeps Spark");
+assert(landing.includes('value="Business owner"'), "register keeps the owner plan option");
 assert(!landing.includes('option value="Orbit"'), "register no longer Checkouts Orbit through signup");
 assert(landing.includes("checkoutEmailRedirectTo"), "signup confirmation uses the allowlisted callback");
 assert(landing.includes("register-error"), "register errors render in the form, not only as a toast");

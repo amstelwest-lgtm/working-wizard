@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketingShell } from "@/components/marketing-shell";
+import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { publicFaqItems } from "@/lib/public-faq";
 import { visitorMarketBootScript } from "@/lib/market/marketing";
@@ -59,8 +59,8 @@ function FaqPage() {
       ctaTitle={<>Still the fastest way to decide</>}
       ctaBody={
         <>
-          Upload your own figures and look at your own score. It costs nothing and takes less time
-          than reading this page did.
+          Upload your own figures and look at your own score. It takes less time than reading this
+          page did.
         </>
       }
       copyPack={copyPack}
@@ -72,12 +72,23 @@ function FaqPage() {
         <p>{cost?.answer}</p>
       </Qa>
 
-      <Qa q="So what is the catch with free?">
+      <Qa q="What does a business owner pay?">
         <p>
-          You are early, and early users shape what gets built. Spark stays free during early
-          access. Accounting firms see their first client&apos;s figures with no card, then add a
-          card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD
-          band by active client count through Stripe Checkout.
+          <MarketCopy
+            us={
+              <>
+                Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon.
+              </>
+            }
+            za={
+              <>
+                Owner plan R299/mo · free when your accountant is on Milōn. Billing opens soon.
+              </>
+            }
+          />{" "}
+          Accounting firms see their first client&apos;s figures with no card, then add a card to
+          start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by
+          active client count through Stripe Checkout.
         </p>
       </Qa>
 

@@ -73,7 +73,7 @@ import {
   HERO_H1_GOLD,
   HERO_H1_LEAD,
   HERO_LEDE,
-  HERO_OWNER_PREFIX,
+  HERO_OWNER_LINK,
   HERO_POINTS,
   HERO_WALKTHROUGH_LABEL,
   FAQ_MORE_LEAD,
@@ -86,7 +86,8 @@ import {
   OWNER_TEASER_LINK,
   PRICING_H2_USD,
   PRICING_INTRO,
-  PRICING_OWNER_BAR,
+  PRICING_OWNER_BAR_US,
+  PRICING_OWNER_BAR_ZA,
   PRICING_OWNER_CTA,
   PROOF_AI_LINK,
   PROOF_CARDS,
@@ -774,7 +775,13 @@ function LandingPage() {
   }, []);
 
   useEffect(() => {
-    if (window.location.hash === "#register") setRegisterReady(true);
+    const ownerSignup = new URLSearchParams(window.location.search).get("signup") === "owner";
+    if (window.location.hash === "#register" || ownerSignup) setRegisterReady(true);
+    if (ownerSignup) {
+      clearPendingCheckout();
+      setRegRole("Business owner");
+      setRegPlan("Business owner");
+    }
     const el = document.getElementById("register");
     if (!el) return;
     if (!("IntersectionObserver" in window)) {
@@ -1425,7 +1432,7 @@ function LandingPage() {
   const goToOwnerSpark = () => {
     clearPendingCheckout();
     setRegRole("Business owner");
-    setRegPlan("Spark — Free early access");
+    setRegPlan("Business owner");
     setRegisterReady(true);
     setMobileNavOpen(false);
     document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1988,10 +1995,15 @@ function LandingPage() {
               ))}
             </ul>
             <p className="hero-owner">
-              {HERO_OWNER_PREFIX}{" "}
-              <button type="button" onClick={goToOwnerSpark}>
-                {PRICING_OWNER_CTA}
-              </button>
+              <a
+                href="/?signup=owner#register"
+                onClick={(e) => {
+                  e.preventDefault();
+                  goToOwnerSpark();
+                }}
+              >
+                {HERO_OWNER_LINK}
+              </a>
             </p>
           </div>
 
@@ -2110,7 +2122,14 @@ function LandingPage() {
                   <circle className="dip-dot" cx="272" cy="94" r="4" />
                 </svg>
                 <div className="alert-chip">
-                  <span className="dot" />
+                  <span className="attention-chip">
+                    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M8 4.5v4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                      <circle cx="8" cy="11.2" r="0.8" fill="currentColor" />
+                    </svg>
+                    Attention
+                  </span>
                   <span>
                     <b>Cash dip — Week 6.</b> <span>Action plan ready: 3 moves close the gap.</span>
                   </span>
@@ -2678,10 +2697,19 @@ function LandingPage() {
           />
 
           <div className="owner-spark-path">
-            <p>{PRICING_OWNER_BAR}</p>
-            <button type="button" className="btn btn-ghost" onClick={goToOwnerSpark}>
+            <p>
+              <RegionCopy pack={copyMarket.copyPack} us={PRICING_OWNER_BAR_US} za={PRICING_OWNER_BAR_ZA} />
+            </p>
+            <a
+              className="btn btn-ghost"
+              href="/?signup=owner#register"
+              onClick={(e) => {
+                e.preventDefault();
+                goToOwnerSpark();
+              }}
+            >
               {PRICING_OWNER_CTA}
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -2798,7 +2826,7 @@ function LandingPage() {
             </h2>
             <p className="sub">
               {FIRM_CARD_TIMING} After day 14 the paid band bills automatically. Business owners can
-              still start on Spark below, free during early access.
+              open an account below. Billing opens soon.
             </p>
           </div>
 

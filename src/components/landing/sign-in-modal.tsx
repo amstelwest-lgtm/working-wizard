@@ -311,7 +311,7 @@ export function LandingSignInModal({
                   textDecoration: "underline",
                 }}
               >
-                Get your free health score
+                Get your own AI finance team →
               </button>
             </p>
           </>

@@ -18,6 +18,8 @@ export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
 export const HERO_OWNER_PREFIX = "Business owner?";
+export const HERO_OWNER_LINK = "Business owner? Get your own AI finance team →";
+export const OWNER_SIGNUP_LINK = "Get your own AI finance team →";
 
 /**
  * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can
@@ -117,7 +119,7 @@ export const OWNER_TEASER = {
   accessibleName: "Play video: The owner's view, 30 seconds",
 } as const;
 
-export const OWNER_TEASER_LINK = "Spark is free during early access →";
+export const OWNER_TEASER_LINK = OWNER_SIGNUP_LINK;
 
 export const AI_USE_LEAD = "How we use AI is set out in our";
 
@@ -135,9 +137,9 @@ export const PRICING_INTRO =
 export const PRICING_TRIAL_AFTER = `${FIRM_CARD_TIMING} After day 14 the paid band bills.`;
 export const PRICING_WATCHLIST_NOTE =
   "Watchlist clients are free and don't count toward your band until you open a full workspace for them.";
-export const PRICING_OWNER_BAR =
-  "Business owners: Spark is free during early access, no card needed.";
-export const PRICING_OWNER_CTA = "Start free on Spark";
+export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
+export const PRICING_OWNER_BAR_ZA = "R299/mo · free when your accountant is on Milōn";
+export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
 export const SOLO_CARD_NOTE = FIRM_CARD_TIMING;
 
@@ -235,8 +237,14 @@ export const FAQ_MORE_LINK = "all questions";
 /** Must match the homepage cost question in `HOMEPAGE_FAQ_ITEMS`. */
 export const HOMEPAGE_COST_QUESTION = "What does it cost?";
 
-export function withSaPricingLines(answer: string, _showSaPricing: boolean): string {
-  return answer;
+const OWNER_COST_US =
+  "Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.";
+const OWNER_COST_ZA =
+  "Business owners: R299/mo · free when your accountant is on Milōn. Billing opens soon.";
+
+export function withSaPricingLines(answer: string, showSaPricing: boolean): string {
+  if (!showSaPricing) return answer;
+  return answer.replace(OWNER_COST_US, OWNER_COST_ZA);
 }
 
 /** Visible homepage FAQ and its FAQPage JSON-LD. US by default. */

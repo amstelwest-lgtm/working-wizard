@@ -37,10 +37,15 @@ function ForOwnersPage() {
         </>
       }
       ctaTitle={<>Start with your own figures</>}
+      ctaLabel="Get your own AI finance team →"
+      navCtaLabel="Get your own AI finance team"
+      ctaHref="/?signup=owner#register"
+      navCtaHref="/?signup=owner#register"
       ctaBody={
         <>
-          Spark is free during early access and needs no card. Upload what you have and see your
-          score before you decide whether any of this is worth your time.
+          Owner plan <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
+          Milōn. Upload what you have and see your score before you decide whether any of this is
+          worth your time. Billing opens soon.
         </>
       }
     >
@@ -142,9 +147,8 @@ function ForOwnersPage() {
       </div>
 
       <div className="mk-note">
-        We are early, and we would rather say so. Spark is free while we build alongside our first
-        users, paid plans are not being billed yet, and if something in the product is not finished
-        we tell you inside the product rather than hiding it.
+        We are early, and we would rather say so. Owner billing is not open yet, and if something
+        in the product is not finished we tell you inside the product rather than hiding it.
       </div>
 
       <h2>The short version</h2>

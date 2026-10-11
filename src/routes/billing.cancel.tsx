@@ -8,6 +8,9 @@ import {
   type PendingCheckout,
 } from "@/lib/pending-checkout";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { readVisitorDraft } from "@/lib/market/storage";
+import { visitorCopyPack } from "@/lib/market/marketing";
+import { ownerPlanPublicLine } from "@/lib/owner-plan";
 
 export const Route = createFileRoute("/billing/cancel")({
   component: BillingCancelPage,
@@ -22,6 +25,11 @@ export const Route = createFileRoute("/billing/cancel")({
 function BillingCancelPage() {
   const profile = useOptionalAccountantProfile();
   const [pending, setPending] = useState<PendingCheckout>(() => firmSignupCheckoutIntent());
+  const [ownerLine, setOwnerLine] = useState(ownerPlanPublicLine("us"));
+
+  useEffect(() => {
+    setOwnerLine(ownerPlanPublicLine(visitorCopyPack(readVisitorDraft())));
+  }, []);
 
   useEffect(() => {
     if (profile?.brandLoading) return;
@@ -40,7 +48,7 @@ function BillingCancelPage() {
         <h1 className="mt-2 text-xl font-semibold">Checkout cancelled</h1>
         <p className="mt-2 text-sm text-slate-400">
           Nothing was charged. Finish firm billing to open your practice — skipped Checkout does not
-          unlock the accountant workspace. Owner Spark stays free.
+          unlock the accountant workspace. Owner plan is {ownerLine}. Billing opens soon.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link
