@@ -410,7 +410,12 @@ assert(
 assert(client.includes("Other ways"), "upload/sync alternatives are folded");
 assert(dash.includes("<CheckoutAfterInsight />"), "a scored book offers Checkout");
 assert(dash.includes("markInsightSeen(firmId)"), "a scored book marks this firm's insight");
-assert(dash.includes("clientRows.length === 0 ? \"tb-btn\""), "empty book does not gold-button Reports");
+assert(
+  dash.includes('id="wizard-dash-reports"') &&
+    dash.includes('className="tb-btn"') &&
+    !dash.includes("tb-btn gold"),
+  "Reports studio stays a secondary button",
+);
 
 const overview = client.slice(client.indexOf('id="pane-overview"'), client.indexOf('id="pane-summary"'));
 assert(!overview.includes("btn gold"), "Overview chrome still has no gold button");
