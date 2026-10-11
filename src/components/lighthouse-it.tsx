@@ -224,7 +224,7 @@ export function LighthouseItPanel() {
             <input
               className="ops-input w-full"
               type="email"
-              placeholder="it@milon.co.za"
+              placeholder="it@milonfinance.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => {

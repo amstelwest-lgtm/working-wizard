@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   LEGAL_ADDRESS,
+  LEGAL_DOMAIN,
   LEGAL_EFFECTIVE,
   LEGAL_ENTITY,
   LEGAL_INFORMATION_OFFICER,
@@ -28,10 +29,19 @@ const tree = readFileSync(resolve("src/routeTree.gen.ts"), "utf8");
 
 assert(privacy.includes("{LEGAL_ENTITY}"), "privacy names the company");
 assert(privacy.includes("{LEGAL_EFFECTIVE}"), "privacy has an effective date");
-assert(privacy.includes("{LEGAL_INFORMATION_OFFICER}"), "privacy names the Information Officer");
+assert(privacy.includes("{LEGAL_INFORMATION_OFFICER}"), "privacy names the Privacy contact");
 assert(privacy.includes("{LEGAL_ADDRESS_LINES"), "privacy shows the registered address");
 assert(LEGAL_ENTITY === "Milon Inc", "legal entity is Milon Inc");
-assert(LEGAL_INFORMATION_OFFICER === "Theo", "Information Officer is Theo");
+assert(LEGAL_DOMAIN === "milonfinance.com", "legal domain is milonfinance.com");
+assert(LEGAL_INFORMATION_OFFICER === "Theo", "Privacy contact is Theo");
+assert(!privacy.includes("Information Officer"), "privacy names a Privacy contact, not an Information Officer");
+assert(privacy.includes("Privacy contact"), "privacy uses the Privacy contact title");
+assert(
+  privacy.replace(/\s+/g, " ").includes(
+    "If you are in South Africa, you also have rights under the Protection of Personal Information Act (POPIA)",
+  ),
+  "POPIA rights are framed for people in South Africa",
+);
 assert(LEGAL_ADDRESS === "[US ADDRESS]", "address is the visible US placeholder");
 assert(!LEGAL_ENTITY.includes("Pty"), "legal entity is not an SA proprietary company");
 assert(!LEGAL_ENTITY.includes("MILŌN"), "product name is not the registered company");
@@ -59,13 +69,16 @@ assert(!terms.includes("Claude"), "terms do not name the model vendor");
 assert(!terms.includes("Anthropic"), "terms do not name the model supplier");
 assert(terms.includes("AI_IDENTIFIERS_LINE") || terms.includes("amounts stay"), "terms: identifiers stripped, amounts stay");
 assert(!terms.includes("no raw amounts"), "terms do not claim amounts are stripped");
-assert(terms.includes("South Africa"), "terms sit under SA law");
+assert(terms.includes("State of Delaware"), "terms are governed by Delaware law");
+assert(terms.includes("courts of Delaware"), "Delaware courts have jurisdiction");
+assert(!terms.includes("South African law"), "terms do not keep South African governing law");
+assert(!terms.includes("Republic of South Africa"), "terms do not name the Republic as the venue");
 assert(
   terms.includes("not tax, legal, or investment advice"),
   "US terms: not tax/legal/investment advice",
 );
 assert(terms.includes("IRS"), "US terms mention IRS");
-assert(terms.includes("choice of law"), "US terms do not invent a US venue");
+assert(!terms.includes("choice of law has not been adopted"), "terms adopt Delaware rather than deferring the venue");
 
 assert(!ai.includes("Claude"), "AI notice does not name the model vendor");
 assert(!ai.includes("Anthropic"), "AI notice does not name the model supplier");

@@ -122,25 +122,15 @@ function TermsPage() {
       <p>
         Milōn is a decision-support tool. We are not liable for business decisions you take from a
         score, a forecast, or an AI draft, or for losses that follow from figures you uploaded.
-        Nothing in these terms limits liability that South African law does not allow us to limit.
+        Nothing in these terms limits liability that the law of the State of Delaware does not allow us to limit.
       </p>
 
-      <h2>
-        <MarketCopy za="South African law" us="Governing law" />
-      </h2>
-      {copyPack === "za" ? <div className="mk-copy-za">
-        <p>
-          These terms are governed by the law of the Republic of South Africa. If a dispute cannot
-          be resolved by talking to us, the courts of South Africa have jurisdiction.
-        </p>
-      </div> : <div className="mk-copy-us">
-        <p>
-          {LEGAL_ENTITY} runs this workspace. These terms are governed by the law of the Republic
-          of South Africa; the courts of South Africa have jurisdiction. US customers are in early
-          access. A US-specific choice of law has not been adopted — that is a counsel decision, not
-          a product toggle.
-        </p>
-      </div>}
+      <h2>Governing law</h2>
+      <p>
+        {LEGAL_ENTITY} runs this workspace. These terms are governed by the law of the State of
+        Delaware, USA. If a dispute cannot be resolved by talking to us, the courts of Delaware
+        have jurisdiction.
+      </p>
 
       <h2>Changes</h2>
       <p>
