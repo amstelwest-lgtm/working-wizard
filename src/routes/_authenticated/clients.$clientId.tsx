@@ -98,7 +98,8 @@ import { buildScorecardRatioResults, scorecardRatiosFromFinancials } from "@/lib
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
+import { SettingsMenu } from "@/components/settings-menu";
+import { RailSettingsButton } from "@/components/settings-nav-button";
 import { FeatureFinder } from "@/components/feature-finder";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -2781,12 +2782,17 @@ function ClientView() {
               <FirmSwitcher />
               <FeatureFinder audience="accountant" clientId={clientId} />
               <span className="spacer" />
-              <SettingsNavButton
+              <SettingsMenu
                 className="tb-btn settings-gear"
-                onClick={() => {
+                onSettings={() => {
                   setMobileNavOpen(false);
                   openPracticeSettings();
-                  navigate({ to: "/settings" });
+                  void navigate({ to: "/settings" });
+                }}
+                onPlan={() => {
+                  setMobileNavOpen(false);
+                  openPracticeSettings();
+                  void navigate({ to: "/settings", hash: "firm-billing" });
                 }}
               />
               <button
