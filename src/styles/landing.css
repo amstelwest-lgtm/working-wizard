@@ -1462,3 +1462,256 @@ html[data-landing="1"] .reg-owner-link:hover{
   border:0;
   transform:none;
 }
+
+/* Rebrand: white and blue. Gold stays on the wordmark and the trial CTAs
+   (.btn-gold, .nav-trial, .logo-word). Decorative gold below is cobalt. */
+html[data-landing="1"]:not(.dark) #landing-sky{display:none}
+html[data-landing="1"] ::selection{background:rgba(11,95,255,.22)}
+html[data-landing="1"] #atmos .g1{background:radial-gradient(circle,rgba(11,95,255,.16),transparent 65%)}
+html[data-landing="1"] #atmos .g2{background:radial-gradient(circle,rgba(56,189,248,.14),transparent 62%)}
+html[data-landing="1"] #atmos .g3{background:radial-gradient(circle,rgba(37,99,235,.12),transparent 66%)}
+html[data-landing="1"] #progress{background:linear-gradient(90deg,var(--cobalt),var(--royal));box-shadow:0 0 12px rgba(11,95,255,.28)}
+html[data-landing="1"] .btn-cobalt{
+  background-color:var(--cobalt);
+  background-image:none;
+  color:#fff;
+  -webkit-text-fill-color:#fff;
+  box-shadow:none;
+}
+html[data-landing="1"] .btn-cobalt:hover{background-color:var(--royal);background-image:none;transform:translateY(-2px)}
+html[data-landing="1"] .milon-signin-box .btn-gold{
+  background-color:var(--cobalt);
+  background-image:none;
+  color:#fff;
+  -webkit-text-fill-color:#fff;
+  box-shadow:none;
+}
+html[data-landing="1"] .milon-signin-box .btn-gold:hover{
+  background-color:var(--royal);
+  background-image:none;
+  box-shadow:none;
+}
+html[data-landing="1"] .skip-link{
+  background:var(--cobalt);
+  color:#fff;
+  -webkit-text-fill-color:#fff;
+}
+html[data-landing="1"] .skip-link:focus{outline:2px solid var(--royal)}
+html[data-landing="1"] .btn:focus-visible,
+html[data-landing="1"] a:focus-visible,
+html[data-landing="1"] button:focus-visible,
+html[data-landing="1"] select:focus-visible,
+html[data-landing="1"] input:focus-visible{outline-color:var(--royal)}
+html[data-landing="1"] .gold-text:not(.logo-word){
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+  background:none;
+  animation:none;
+}
+html[data-landing="1"].dark .gold-text:not(.logo-word){
+  color:#dbeafe;
+  -webkit-text-fill-color:#dbeafe;
+  background:none;
+  animation:none;
+}
+html[data-landing="1"] .logo-word,
+html[data-landing="1"] .logo-word.gold-text,
+html[data-landing="1"] footer .logo-word{
+  color:#7d5f0f;
+  -webkit-text-fill-color:#7d5f0f;
+  background:none;
+  animation:none;
+}
+html[data-landing="1"].dark .logo-word,
+html[data-landing="1"].dark .logo-word.gold-text,
+html[data-landing="1"].dark .dash-top .brand{
+  color:#d4af37;
+  -webkit-text-fill-color:#d4af37;
+  background:none;
+  animation:none;
+}
+html[data-landing="1"] .eyebrow,
+html[data-landing="1"] .eyebrow::before,
+html[data-landing="1"] #themeToggle,
+html[data-landing="1"] .hero-badge,
+html[data-landing="1"] .integrations-kicker,
+html[data-landing="1"] .hero-stats b,
+html[data-landing="1"] .gauge .val b,
+html[data-landing="1"] .fc-1 .tag,
+html[data-landing="1"] .fc-2 .tag,
+html[data-landing="1"] .persona-card .go,
+html[data-landing="1"] .milon-market-label,
+html[data-landing="1"] .quiz-reward,
+html[data-landing="1"] .profile-lines b,
+html[data-landing="1"] .marquee-band .cap,
+html[data-landing="1"] .marquee span::after,
+html[data-landing="1"] .feat-card .who,
+html[data-landing="1"] .feat-card li::before,
+html[data-landing="1"] .step-card .n,
+html[data-landing="1"] .step-card .time,
+html[data-landing="1"] .bridge-side .who,
+html[data-landing="1"] .pipeline,
+html[data-landing="1"] .idea-close,
+html[data-landing="1"] .bridge-side li::before,
+html[data-landing="1"] .bridge-link .node span,
+html[data-landing="1"] .bridge-fact .now b,
+html[data-landing="1"] .acc-pricing-kicker,
+html[data-landing="1"] .price-card li::before,
+html[data-landing="1"] .home-faq-more a,
+html[data-landing="1"] .proof-links a,
+html[data-landing="1"] .home-faq summary::after{
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+}
+html[data-landing="1"].dark .eyebrow,
+html[data-landing="1"].dark #themeToggle,
+html[data-landing="1"].dark .hero-badge,
+html[data-landing="1"].dark .integrations-kicker,
+html[data-landing="1"].dark .hero-stats b,
+html[data-landing="1"].dark .gauge .val b,
+html[data-landing="1"].dark .fc-1 .tag,
+html[data-landing="1"].dark .fc-2 .tag,
+html[data-landing="1"].dark .persona-card .go,
+html[data-landing="1"].dark .pipeline,
+html[data-landing="1"].dark .idea-close,
+html[data-landing="1"].dark .acc-pricing-kicker,
+html[data-landing="1"].dark .proof-links a,
+html[data-landing="1"].dark .home-faq-more a{
+  color:#dbeafe;
+  -webkit-text-fill-color:#dbeafe;
+}
+html[data-landing="1"] .eyebrow::before{background:var(--cobalt);background-image:none}
+html[data-landing="1"] .nav-burger span{background-color:var(--cobalt);background-image:none}
+html[data-landing="1"] nav#topnav .links a:not(.btn)::after{background:var(--cobalt)}
+html[data-landing="1"] nav#topnav .links a:not(.btn):hover,
+html[data-landing="1"] nav#topnav .nav-signin:hover,
+html[data-landing="1"] .hero-owner button:hover,
+html[data-landing="1"] .hero-owner a:hover,
+html[data-landing="1"] footer .fnav a:hover,
+html[data-landing="1"] footer .fnav button:hover,
+html[data-landing="1"] .reg-owner-link:hover{
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+}
+html[data-landing="1"].dark nav#topnav .links a:not(.btn):hover,
+html[data-landing="1"].dark footer .fnav a:hover{
+  color:#dbeafe;
+  -webkit-text-fill-color:#dbeafe;
+}
+html[data-landing="1"] .btn-ghost:hover,
+html[data-landing="1"] .persona-card:hover,
+html[data-landing="1"] .milon-market-choice:hover,
+html[data-landing="1"] .milon-market-choice.is-on,
+html[data-landing="1"] .milon-market-dd-btn:hover,
+html[data-landing="1"] .opt:hover,
+html[data-landing="1"] .opt.picked,
+html[data-landing="1"] .pillar-card:hover,
+html[data-landing="1"] .step-card:hover,
+html[data-landing="1"] .price-card:hover,
+html[data-landing="1"] #themeToggle:hover{border-color:var(--cobalt)}
+html[data-landing="1"] .btn-ghost:hover{color:var(--cobalt)}
+html[data-landing="1"] .persona-card .icon svg,
+html[data-landing="1"] .trust .item svg,
+html[data-landing="1"] .proof-facts svg{stroke:var(--cobalt);color:var(--cobalt)}
+html[data-landing="1"] .hero-badge .pulse{background:var(--cobalt);box-shadow:none}
+html[data-landing="1"] .pill-row .bar i,
+html[data-landing="1"] .quiz-progress i,
+html[data-landing="1"] .pillar-card .score .bar i{background:linear-gradient(90deg,var(--royal),var(--cobalt))}
+html[data-landing="1"] .pillar-card .node{background:var(--cobalt);box-shadow:0 0 16px rgba(11,95,255,.35)}
+html[data-landing="1"] .milon-market-choice.is-on,
+html[data-landing="1"] .opt.picked{background:var(--pale)}
+html[data-landing="1"] .milon-market-dd-btn::after{border-right-color:var(--cobalt);border-bottom-color:var(--cobalt)}
+html[data-landing="1"] .milon-market-dd.is-open .milon-market-dd-btn{border-color:var(--cobalt);box-shadow:0 0 0 3px rgba(11,95,255,.16)}
+html[data-landing="1"] .milon-market-dd-list button:hover,
+html[data-landing="1"] .milon-market-dd-list button.is-on,
+html[data-landing="1"][data-theme="light"] .milon-market-dd-list button:hover,
+html[data-landing="1"][data-theme="light"] .milon-market-dd-list button.is-on{
+  background:var(--pale);
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+}
+html[data-landing="1"] .reflect,
+html[data-landing="1"] .firm-bands-sa-note,
+html[data-landing="1"] .firm-bands-trial,
+html[data-landing="1"] .firm-trial-bar{border-color:var(--pale);background:var(--bg-3)}
+html[data-landing="1"] .firm-bands-toggle button.on{
+  background-color:var(--pale);
+  background-image:none;
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+}
+html[data-landing="1"] .firm-bands-table th,
+html[data-landing="1"] .firm-bands-table tbody tr.is-trial td,
+html[data-landing="1"] .firm-bands-table tbody tr:hover td{background-color:var(--bg-3)}
+html[data-landing="1"] .firm-bands-table .btn-ghost:hover{
+  border-color:var(--cobalt);
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+}
+html[data-landing="1"] .price-card .tag{
+  background-color:var(--cobalt);
+  background-image:none;
+  color:#fff;
+  -webkit-text-fill-color:#fff;
+  box-shadow:none;
+}
+html[data-landing="1"] .price-card.hot,
+html[data-landing="1"] .acc-pricing,
+html[data-landing="1"] .bridge-link{
+  background:var(--card);
+  border-color:var(--pale);
+  box-shadow:0 8px 24px rgba(16,42,67,.06);
+}
+html[data-landing="1"] .mini-orrery .core{
+  background:radial-gradient(circle at 35% 30%,#38bdf8,#0b5fff 62%,#102a43);
+  box-shadow:0 0 36px rgba(11,95,255,.35);
+}
+html[data-landing="1"] .mini-orrery .dot{
+  background:radial-gradient(circle at 35% 30%,#fff,#0b5fff);
+  box-shadow:0 0 14px rgba(11,95,255,.35);
+}
+html[data-landing="1"] .reg-shell input:focus,
+html[data-landing="1"] .reg-shell select:focus,
+html[data-landing="1"] .milon-signin-box .field input:focus{
+  border-color:var(--cobalt);
+  box-shadow:0 0 0 3px rgba(11,95,255,.16);
+}
+html[data-landing="1"] .trial-sticky{border-top-color:var(--pale)}
+@media (hover:hover) and (pointer:fine){
+  html[data-landing="1"] .gold-text:not(.logo-word){
+    background:none;
+    color:var(--cobalt);
+    -webkit-text-fill-color:var(--cobalt);
+    animation:none;
+  }
+  html[data-landing="1"] .logo-word.gold-text{
+    background:none;
+    color:#7d5f0f;
+    -webkit-text-fill-color:#7d5f0f;
+    animation:none;
+  }
+  html[data-landing="1"].dark .logo-word.gold-text{
+    color:#d4af37;
+    -webkit-text-fill-color:#d4af37;
+  }
+}
+@media (prefers-reduced-motion:reduce){
+  html[data-landing="1"] .gold-text:not(.logo-word){
+    color:var(--cobalt)!important;
+    -webkit-text-fill-color:var(--cobalt)!important;
+    background:none!important;
+  }
+  html[data-landing="1"].dark .gold-text:not(.logo-word){
+    color:#dbeafe!important;
+    -webkit-text-fill-color:#dbeafe!important;
+  }
+  html[data-landing="1"] .logo-word.gold-text{
+    color:#7d5f0f!important;
+    -webkit-text-fill-color:#7d5f0f!important;
+    background:none!important;
+  }
+  html[data-landing="1"].dark .logo-word.gold-text{
+    color:#d4af37!important;
+    -webkit-text-fill-color:#d4af37!important;
+  }
+}
