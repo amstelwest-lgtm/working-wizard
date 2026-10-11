@@ -171,7 +171,7 @@ export function OwnerDraftCard({
       {link ? (
         <>
           {" "}
-          <button type="button" className="owner-draft-link" data-approved-table={table ?? ""} data-record-id={recordId ?? ""} onClick={openLive}>
+          <button type="button" className="owner-btn-tertiary owner-draft-link" data-approved-table={table ?? ""} data-record-id={recordId ?? ""} onClick={openLive}>
             {link.label}
           </button>
         </>
@@ -210,7 +210,7 @@ export function OwnerDraftCard({
           </button>
           <button
             type="button"
-            className={layout === "desk" ? "milon-desk-btn outline" : "owner-draft-dismiss"}
+            className={layout === "desk" ? "milon-desk-btn outline" : "owner-btn-secondary owner-draft-dismiss"}
             onClick={() => {
               setEditing(false);
               setTitle(seedTitle);
