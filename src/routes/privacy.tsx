@@ -46,7 +46,7 @@ function PrivacyPage() {
           }
           us={
             <>
-              {LEGAL_ENTITY}, a South African company, runs Milōn for US businesses in early access.
+              {LEGAL_ENTITY} runs Milōn for US businesses in early access.
               This notice says what we keep and what the AI never sees. Effective {LEGAL_EFFECTIVE}.
             </>
           }
@@ -63,15 +63,15 @@ function PrivacyPage() {
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}
-        <MarketCopy za="South Africa" us="US early access · RSA company" />
+        <MarketCopy za="South Africa" us="US early access" />
       </p>
 
       <h2>Who we are</h2>
       {copyPack === "za" ? <div className="mk-copy-za">
         <p>
-          {LEGAL_ENTITY} is a South African company. We trade as Milōn — a financial-health
-          workspace for business owners and the accountants they invite. The responsible party for
-          personal information processed on this platform is {LEGAL_ENTITY}.
+          {LEGAL_ENTITY} runs Milōn, a financial-health workspace for business owners and the
+          accountants they invite. The responsible party for personal information processed on this
+          platform is {LEGAL_ENTITY}.
         </p>
         <p>
           The Information Officer is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
@@ -79,9 +79,8 @@ function PrivacyPage() {
         </p>
       </div> : <div className="mk-copy-us">
         <p>
-          {LEGAL_ENTITY} is a South African company trading as Milōn. US workspaces are early
-          access: the same product, offered by the same company, from the same address. We have not
-          formed a US legal entity.
+          {LEGAL_ENTITY} runs Milōn. US workspaces are early access, offered from the address
+          below.
         </p>
         <p>
           The privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
