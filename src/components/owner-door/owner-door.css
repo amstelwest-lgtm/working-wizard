@@ -1,17 +1,77 @@
 /* Owner door. Motion is transform and opacity. Reduced motion keeps a still pose. */
 
+@font-face {
+  font-family: "Owner Sans Fallback";
+  src: local("Arial");
+  font-display: swap;
+  size-adjust: 100.06%;
+  ascent-override: 101.83%;
+  descent-override: 27.16%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Owner Serif Fallback";
+  src: local("Georgia");
+  font-display: swap;
+  size-adjust: 112%;
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+
 .owner-door {
-  --owner-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
-  --owner-sans: "Noto Sans", sans-serif;
+  --owner-serif: "Cormorant Garamond", "Owner Serif Fallback", Georgia, "Times New Roman", serif;
+  --owner-sans: "Noto Sans", "Owner Sans Fallback", sans-serif;
   --owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg));
   --owner-stage: var(--bg-3);
   --owner-mark: var(--ink);
+  --owner-space-1: 8px;
+  --owner-space-2: 16px;
+  --owner-space-3: 24px;
+  --owner-space-4: 32px;
+  --owner-space-5: 40px;
+  --owner-space-6: 48px;
+  --owner-radius: 16px;
+  --owner-pad: 16px;
+  --owner-line: 1px solid var(--owner-edge);
+  --owner-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 8%, transparent);
+  --type-display-size: 40px;
+  --type-display-leading: 1.05;
+  --type-display-weight: 600;
+  --type-h1-size: 32px;
+  --type-h1-leading: 1.1;
+  --type-h1-weight: 600;
+  --type-h2-size: 24px;
+  --type-h2-leading: 1.2;
+  --type-h2-weight: 600;
+  --type-h3-size: 18px;
+  --type-h3-leading: 1.3;
+  --type-h3-weight: 600;
+  --type-body-size: 16px;
+  --type-body-leading: 1.5;
+  --type-body-weight: 400;
+  --type-body-sm-size: 14px;
+  --type-body-sm-leading: 1.45;
+  --type-body-sm-weight: 500;
+  --type-label-size: 14px;
+  --type-label-leading: 1.3;
+  --type-label-weight: 700;
+  --type-caption-size: 14px;
+  --type-caption-leading: 1.4;
+  --type-caption-weight: 500;
+  --type-numeric-lg-size: 28px;
+  --type-numeric-lg-leading: 1.15;
+  --type-numeric-lg-weight: 700;
+  --type-numeric-size: 16px;
+  --type-numeric-leading: 1.4;
+  --type-numeric-weight: 600;
   font-family: var(--owner-sans);
   font-size: 16px;
-  font-weight: 400;
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-leading);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
   -webkit-font-smoothing: antialiased;
   color: var(--ink);
 }
@@ -115,31 +175,37 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 .owner-door .owner-menu-item:hover,
-.owner-door .owner-menu-item:focus-visible {
+.owner-door .owner-menu .milon-settings-btn:hover {
   background: color-mix(in srgb, var(--gold) 18%, transparent);
-  outline: none;
+}
+
+.owner-door .owner-menu-item:focus-visible,
+.owner-door .owner-menu .milon-settings-btn:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 2px;
 }
 
 .owner-door .owner-pane {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: var(--owner-space-3);
   min-width: 0;
 }
 
 .owner-door .owner-title {
   margin: 0;
   font-family: var(--owner-serif);
-  font-size: 2.15rem;
-  font-weight: 600;
+  font-size: var(--type-h1-size);
+  font-weight: var(--type-h1-weight);
   letter-spacing: -0.02em;
-  line-height: 1.05;
+  line-height: var(--type-h1-leading);
 }
 
 .owner-door .owner-lede {
-  margin: 6px 0 0;
-  font-size: 15px;
-  font-weight: 500;
+  margin: var(--owner-space-1) 0 0;
+  font-size: var(--type-body-sm-size);
+  font-weight: var(--type-body-sm-weight);
+  line-height: var(--type-body-sm-leading);
   color: var(--ink-dim);
 }
 
@@ -265,10 +331,10 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 .owner-door .owner-name {
-  font-size: 15px;
+  font-size: var(--type-body-size);
   font-weight: 600;
   letter-spacing: 0.01em;
-  line-height: 1.25;
+  line-height: var(--type-label-leading);
   text-align: center;
 }
 
@@ -291,8 +357,18 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   max-width: none;
 }
 
+.owner-door .owner-money,
+.owner-door table,
+.owner-door time,
+.owner-door .tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
 .owner-door .owner-money {
-  font-weight: 700;
+  font-size: var(--type-numeric-size);
+  font-weight: var(--type-numeric-weight);
+  line-height: var(--type-numeric-leading);
   white-space: nowrap;
 }
 
@@ -313,9 +389,9 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door .owner-motion-label {
   display: block;
   max-width: 32ch;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 1.35;
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-sm-weight);
+  line-height: var(--type-body-sm-leading);
   text-align: center;
   color: var(--ink);
 }
@@ -388,6 +464,62 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   .owner-door .btn.gold:hover::after {
     left: 130%;
   }
+}
+
+.owner-door .btn.gold:focus-visible,
+.owner-door .owner-btn-secondary:focus-visible,
+.owner-door .owner-btn-tertiary:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 3px;
+}
+
+.owner-door .btn.gold:disabled,
+.owner-door .owner-btn-secondary:disabled,
+.owner-door .owner-btn-tertiary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.owner-door .owner-btn-secondary,
+.owner-door .owner-draft-dismiss,
+.owner-door .owner-back,
+.owner-door .owner-close {
+  min-height: 44px;
+  border: var(--owner-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.owner-door .owner-btn-secondary:hover,
+.owner-door .owner-draft-dismiss:hover,
+.owner-door .owner-back:hover,
+.owner-door .owner-close:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.owner-door .owner-btn-tertiary,
+.owner-door .owner-draft-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 var(--owner-space-1);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  line-height: var(--type-label-leading);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.owner-door .owner-btn-tertiary:hover,
+.owner-door .owner-draft-link:hover {
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
 }
 
 .owner-door .btn.gold.owner-ask {
@@ -1407,13 +1539,8 @@ html[data-bot-fade="plain"] .owner-door .owner-pane {
 }
 
 .owner-door .owner-draft-link {
-  font: inherit;
+  font-family: var(--owner-sans);
   font-size: 14px;
   font-weight: 700;
-  color: var(--gold-deep);
-  background: none;
-  border: 0;
-  padding: 0;
-  text-decoration: underline;
-  cursor: pointer;
+  color: var(--ink);
 }

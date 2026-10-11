@@ -296,7 +296,16 @@ assert(css.includes("var(--gold-grad)"), "ask and accents use the metallic gold 
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
 assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
-assert(css.includes('--owner-sans: "Noto Sans", sans-serif'), "the owner shell uses the accountant sans");
+assert(css.includes('--owner-sans: "Noto Sans"'), "the owner shell uses the accountant sans");
+assert(css.includes("lining-nums"), "tables and amounts use lining figures");
+assert(css.includes("--type-h1-size"), "the owner type scale is tokenised");
+assert(css.includes("--owner-space-1: 8px"), "spacing follows an 8px grid");
+assert(css.includes("font-display: swap"), "owner fonts swap in without blocking");
+assert(css.includes(".owner-door .owner-btn-secondary"), "secondary buttons are a distinct role");
+assert(css.includes(".owner-door .owner-btn-tertiary"), "tertiary buttons are a distinct role");
+assert(css.includes(".owner-door .btn.gold:focus-visible"), "the primary button shows focus");
+assert(css.includes(".owner-door .owner-btn-secondary:disabled"), "a secondary button has a disabled state");
+assert(css.includes(".owner-door .owner-btn-tertiary:hover"), "a tertiary button has a hover state");
 assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
