@@ -414,6 +414,73 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   font-size: 14px;
 }
 
+/* Active item is a solid highlight. The token pass recolours this neutral fill. */
+.owner-door.accountant-portal .deliverable-rail .tab.on {
+  color: var(--ink);
+  background-color: color-mix(in srgb, var(--ink) 10%, var(--bg));
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Desktop rail is a full-height panel on the left edge. Phone keeps the pill row. */
+@media (min-width: 861px) {
+  #board-pack.founder-shell > .owner-door.accountant-portal {
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-top: -1.25rem;
+    margin-bottom: -1.25rem;
+  }
+
+  .owner-door.accountant-portal {
+    display: flex;
+    min-height: 100dvh;
+    flex-direction: column;
+    background: var(--bg);
+  }
+
+  .owner-door.accountant-portal .topbar {
+    margin: 0;
+    flex: none;
+    padding: 0 24px 0 20px;
+  }
+
+  .owner-door.accountant-portal .client-workspace {
+    flex: 1;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 0;
+    align-items: stretch;
+    min-height: calc(100dvh - 66px);
+  }
+
+  .owner-door.accountant-portal .deliverable-rail {
+    position: sticky;
+    top: 66px;
+    align-self: stretch;
+    min-height: calc(100dvh - 66px);
+    margin: 0;
+    padding: 16px 8px;
+    border: 0;
+    border-right: 1px solid var(--owner-edge);
+    border-radius: 0;
+    background: var(--bg);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .owner-door.accountant-portal .deliverable-main {
+    min-width: 0;
+    padding: 24px 28px 48px;
+  }
+}
+
+@media (min-width: 1024px) {
+  #board-pack.founder-shell > .owner-door.accountant-portal {
+    margin-top: -1.75rem;
+    margin-bottom: -1.75rem;
+  }
+}
+
 .owner-door [data-owner-page="health"] .max-w-xl,
 .owner-door [data-owner-page="health"] .max-w-md,
 .owner-door [data-owner-page="accountant"] .max-w-xl,
