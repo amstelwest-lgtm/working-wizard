@@ -80,8 +80,15 @@ date (`Current`, `Days30`, `Days60`, …). The API accepts `AgeingPeriod` and
 `BasedOnDueDate`, and the help text does not define a day width. The seeded
 company (`AgeMonthly`, `AgeingPeriod` 0, `BasedOnDueDate` false) puts a bill
 dated 28 September into `Days30` on 11 October, so those buckets are labelled
-as months and are not counted as overdue. Summary true and summary false both
-return one totals object. Party names come from Customer/Get and Supplier/Get
-balances; zero balances are omitted. `BankAccount/Get` supplies cash. If it
+as months and are not counted as overdue. The totals row is stored as
+`{ basis: "calendar_month", current, month_1, month_2, month_3, older }` on
+the aged snapshot and on `clients.financials` (`sageArMonthBuckets`,
+`sageApMonthBuckets`). `olderThanCurrentMonth` is the sum of the months after
+the current one. `totalOverdue` stays the days-past-due figure, which this
+report does not provide. Customer/Get and Supplier/Get give a balance only, so
+a party gets month columns only when its own ageing row has them. Summary true
+and summary false both return one totals object. Zero balances are omitted.
+Derived money (EBIT, EBITDA, and the other computed statement fields) is
+rounded to cents before it is stored. `BankAccount/Get` supplies cash. If it
 fails, the error is logged and cash falls back to the balance-sheet lines of
 type 6 (the account name, for example "FNB Business Cheque").

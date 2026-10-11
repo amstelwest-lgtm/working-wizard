@@ -8,6 +8,10 @@ import {
   parseQboAgedReceivables,
   parseReportMoney,
   parseXeroAgedReceivablesByContact,
+  calendarMonthAgeingLine,
+  olderThanCurrentMonth,
+  readCalendarMonthAgeing,
+  type CalendarMonthAgeing,
   type CollectionsContact,
   type CollectionsInvoice,
 } from "./collections.ts";
@@ -31,6 +35,8 @@ export type PayablesSupplier = {
   overdue: number;
   ageBucket: string;
   buckets: { label: string; amount: number }[];
+  /** Set only when that supplier's own row carried the month columns. */
+  monthAgeing?: CalendarMonthAgeing | null;
   bills: PayablesBill[];
 };
 
@@ -46,6 +52,10 @@ export type PayablesSnapshot = {
   billCount: number;
   totalOutstanding: number;
   totalOverdue: number;
+  /** Company month buckets when the report is calendar-month ageing. */
+  monthAgeing?: CalendarMonthAgeing | null;
+  /** Sum of month_1 + month_2 + month_3 + older. Not days past due. */
+  olderThanCurrentMonth?: number | null;
   suppliers: PayablesSupplier[];
 };
 
@@ -123,7 +133,10 @@ function bucketIsOld(ageBucket: string): boolean {
  * Pay / delay / renegotiate from the age bucket plus a runway figure already
  * stored on the client. Without that figure the move stays "Decide".
  */
-export function supplierMove(ageBucket: string, runwayWeeks: number | null | undefined): SupplierMove {
+export function supplierMove(
+  ageBucket: string,
+  runwayWeeks: number | null | undefined,
+): SupplierMove {
   const weeks = normalizeRunwayWeeks(runwayWeeks);
   if (weeks == null) return "Decide";
   const old = bucketIsOld(ageBucket);
@@ -150,7 +163,9 @@ export function finalizePayables(input: {
     .filter((supplier) => supplier.name.trim() && Math.abs(supplier.outstanding) >= 0.005)
     .sort((a, b) => b.overdue - a.overdue || b.outstanding - a.outstanding);
   const billCount = suppliers.reduce((sum, supplier) => sum + supplier.bills.length, 0);
-  const totalOutstanding = moneyOrZero(suppliers.reduce((sum, supplier) => sum + supplier.outstanding, 0));
+  const totalOutstanding = moneyOrZero(
+    suppliers.reduce((sum, supplier) => sum + supplier.outstanding, 0),
+  );
   const totalOverdue = moneyOrZero(suppliers.reduce((sum, supplier) => sum + supplier.overdue, 0));
   const status: PayablesStatus = suppliers.length ? "applied" : "empty";
   return {
@@ -228,6 +243,7 @@ function readSupplier(raw: unknown): PayablesSupplier | null {
         return parsed ? [parsed] : [];
       })
     : [];
+  const monthAgeing = readCalendarMonthAgeing(row.monthAgeing);
   return {
     supplierId,
     name,
@@ -235,6 +251,7 @@ function readSupplier(raw: unknown): PayablesSupplier | null {
     overdue: numOrNull(row.overdue) ?? 0,
     ageBucket: typeof row.ageBucket === "string" ? row.ageBucket : "",
     buckets,
+    ...(monthAgeing ? { monthAgeing } : {}),
     bills,
   };
 }
@@ -265,17 +282,33 @@ export function readPayablesSnapshot(raw: unknown): PayablesSnapshot | null {
     billCount: numOrNull(row.billCount) ?? suppliers.reduce((sum, s) => sum + s.bills.length, 0),
     totalOutstanding: numOrNull(row.totalOutstanding) ?? 0,
     totalOverdue: numOrNull(row.totalOverdue) ?? 0,
+    ...payablesMonthFields(row),
     suppliers,
   };
 }
 
-export function choosePayables(rows: Array<PayablesSnapshot | null | undefined>): PayablesSnapshot | null {
+function payablesMonthFields(row: Record<string, unknown>): {
+  monthAgeing?: CalendarMonthAgeing;
+  olderThanCurrentMonth?: number;
+} {
+  const monthAgeing = readCalendarMonthAgeing(row.monthAgeing);
+  const older = numOrNull(row.olderThanCurrentMonth);
+  return {
+    ...(monthAgeing ? { monthAgeing } : {}),
+    ...(older != null ? { olderThanCurrentMonth: older } : {}),
+  };
+}
+
+export function choosePayables(
+  rows: Array<PayablesSnapshot | null | undefined>,
+): PayablesSnapshot | null {
   const present = rows.filter((row): row is PayablesSnapshot => row != null);
   if (!present.length) return null;
   const usable = present.filter((row) => row.status === "applied" || row.status === "empty");
   const pool = usable.length ? usable : present;
   return [...pool].sort((a, b) => {
-    const rank = (snap: PayablesSnapshot) => (snap.status === "applied" ? 2 : snap.status === "empty" ? 1 : 0);
+    const rank = (snap: PayablesSnapshot) =>
+      snap.status === "applied" ? 2 : snap.status === "empty" ? 1 : 0;
     const byStatus = rank(b) - rank(a);
     if (byStatus !== 0) return byStatus;
     return (b.syncedAt || "").localeCompare(a.syncedAt || "");
@@ -373,7 +406,8 @@ export function parseXeroSuppliersPage(json: unknown): XeroSupplierCandidate[] {
     const contactId = typeof row.ContactID === "string" ? row.ContactID : "";
     const name = typeof row.Name === "string" ? row.Name.trim() : "";
     if (!contactId || !name) continue;
-    const status = typeof row.ContactStatus === "string" ? row.ContactStatus.toUpperCase() : "ACTIVE";
+    const status =
+      typeof row.ContactStatus === "string" ? row.ContactStatus.toUpperCase() : "ACTIVE";
     if (status === "ARCHIVED") continue;
     if (row.IsSupplier !== true) continue;
     const balances =
@@ -403,9 +437,12 @@ export function selectXeroSuppliersForAging(
   const withBalances = suppliers.some((supplier) => supplier.hasBalances);
   if (withBalances) {
     const owing = suppliers
-      .filter((supplier) => (supplier.outstanding ?? 0) >= 0.005 || (supplier.overdue ?? 0) >= 0.005)
+      .filter(
+        (supplier) => (supplier.outstanding ?? 0) >= 0.005 || (supplier.overdue ?? 0) >= 0.005,
+      )
       .sort(
-        (a, b) => (b.overdue ?? 0) - (a.overdue ?? 0) || (b.outstanding ?? 0) - (a.outstanding ?? 0),
+        (a, b) =>
+          (b.overdue ?? 0) - (a.overdue ?? 0) || (b.outstanding ?? 0) - (a.outstanding ?? 0),
       );
     if (owing.length > limit) {
       return {
@@ -424,7 +461,9 @@ export function selectXeroSuppliersForAging(
   }
   return {
     selected: recent,
-    note: recent.length ? "Xero's contact list has no balances, so every supplier returned was aged." : null,
+    note: recent.length
+      ? "Xero's contact list has no balances, so every supplier returned was aged."
+      : null,
   };
 }
 
@@ -607,7 +646,9 @@ export type PayablesDraft = {
 };
 
 function isCurrentTitle(title: string): boolean {
-  return title.trim().toLowerCase() === "current" || title.trim().toLowerCase().startsWith("current ");
+  return (
+    title.trim().toLowerCase() === "current" || title.trim().toLowerCase().startsWith("current ")
+  );
 }
 
 export function runwayParagraph(weeks: number | null, overduePlain: string): string {
@@ -633,22 +674,40 @@ export function payablesPromptBlock(
   const lines = [
     `Aged payables (${payablesSourceLabel(snap.source)}${snap.asOf ? `, as of ${snap.asOf}` : ""}):`,
     `Overdue total: ${moneyPlain(snap.totalOverdue)}. Outstanding total: ${moneyPlain(snap.totalOutstanding)}. Suppliers: ${snap.supplierCount}. Bill lines: ${snap.billCount}.`,
+  ];
+  if (snap.monthAgeing) {
+    lines.push(
+      calendarMonthAgeingLine(
+        snap.monthAgeing,
+        snap.olderThanCurrentMonth ?? olderThanCurrentMonth(snap.monthAgeing),
+      ),
+    );
+  }
+  lines.push(
     weeks == null
       ? "No cash-runway figure is on file. Do not invent weeks of cash or a cash balance."
       : `Cash runway already on file: ${weeksLabel(weeks)}. Do not invent a different runway or cash figure.`,
-  ];
+  );
   for (const supplier of snap.suppliers.slice(0, 8)) {
     const bills = supplier.bills
       .slice(0, 4)
-      .map((bill) => `${bill.reference} (${moneyPlain(bill.amount)}${bill.ageBucket ? `, ${bill.ageBucket}` : ""})`)
+      .map(
+        (bill) =>
+          `${bill.reference} (${moneyPlain(bill.amount)}${bill.ageBucket ? `, ${bill.ageBucket}` : ""})`,
+      )
       .join("; ");
     const move = movePhrase(supplierMove(supplier.ageBucket, weeks));
+    const months = supplier.monthAgeing
+      ? ` Months: ${calendarMonthAgeingLine(supplier.monthAgeing, olderThanCurrentMonth(supplier.monthAgeing))}`
+      : "";
     lines.push(
-      `- ${supplier.name}: ${move}; overdue ${moneyPlain(supplier.overdue)}, outstanding ${moneyPlain(supplier.outstanding)}, oldest bucket ${supplier.ageBucket || "n/a"}.${bills ? ` Bills: ${bills}.` : " Bill numbers were not on this pull."}`,
+      `- ${supplier.name}: ${move}; overdue ${moneyPlain(supplier.overdue)}, outstanding ${moneyPlain(supplier.outstanding)}, oldest bucket ${supplier.ageBucket || "n/a"}.${months}${bills ? ` Bills: ${bills}.` : " Bill numbers were not on this pull."}`,
     );
   }
   if (snap.note) lines.push(snap.note);
-  lines.push("Do not invent suppliers or bills beyond this list. Milōn does not send a payment or record a bill.");
+  lines.push(
+    "Do not invent suppliers or bills beyond this list. Milōn does not send a payment or record a bill.",
+  );
   return lines.join("\n");
 }
 
@@ -669,7 +728,10 @@ export function buildPayablesDraft(
       .slice(0, 4);
     const refs = bills.length
       ? ` Bills: ${bills
-          .map((bill) => `${bill.reference} (${moneyPlain(bill.amount)}${bill.ageBucket ? `, ${bill.ageBucket}` : ""})`)
+          .map(
+            (bill) =>
+              `${bill.reference} (${moneyPlain(bill.amount)}${bill.ageBucket ? `, ${bill.ageBucket}` : ""})`,
+          )
           .join("; ")}.`
       : " Bill numbers were not on this report — name the supplier and the age bucket only.";
     lines.push(
@@ -724,7 +786,10 @@ export function buildPayablesDraft(
     problem: `${books} aged payables${asOf} show ${overduePlain} overdue across ${overdueSuppliers.length} suppliers.`,
     rationale,
     assumptions: [
-      `Read from the ${books} aged payables report${asOf}. Milōn does not send a payment or record a bill.`.slice(0, 300),
+      `Read from the ${books} aged payables report${asOf}. Milōn does not send a payment or record a bill.`.slice(
+        0,
+        300,
+      ),
       depth.slice(0, 300),
       runwayAssumption.slice(0, 300),
       ...(snap.note ? [snap.note.slice(0, 300)] : []),

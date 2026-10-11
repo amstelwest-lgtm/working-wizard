@@ -20,6 +20,7 @@ import {
   fetchSageLedgerStatement,
   mapSageToFinancialInputs,
   sageCredentialsConfigured,
+  sageMonthAgeingFinancialFields,
   type SageLedgerStatement,
 } from "@/lib/sage-sync";
 import { calendarMonthStamp, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-period";
@@ -319,6 +320,16 @@ export async function executeSageSync(input: {
 
     const merged = applyLedgerSyncFinancials(prev, fields, "sage");
     if (Number.isFinite(ledger.cash)) merged.cash = ledger.cash;
+    const ageingFields = sageMonthAgeingFinancialFields(ledger.agedAr, ledger.agedAp);
+    for (const key of [
+      "sageArMonthBuckets",
+      "sageArOlderThanCurrentMonth",
+      "sageApMonthBuckets",
+      "sageApOlderThanCurrentMonth",
+    ]) {
+      if (key in ageingFields) merged[key] = ageingFields[key];
+      else delete merged[key];
+    }
     const nowIso = new Date().toISOString();
     const { error: saveError } = await supabaseAdmin
       .from("clients")

@@ -11,6 +11,7 @@ import { getCollections } from "@/lib/collections.functions";
 import {
   agedArProofLine,
   buildCollectionsDraft,
+  calendarMonthFigures,
   collectionsAnswerSentence,
   collectionsNoFiguresLead,
   collectionsStatementLead,
@@ -115,7 +116,8 @@ export function CollectionsPanel({
   const fromStatements = hasStatementWorkingCapital(position);
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.contacts.length > 0;
-  const buckets = namedList ? rollupAgeBuckets(snapshot.contacts) : [];
+  const rolled = namedList ? rollupAgeBuckets(snapshot.contacts) : [];
+  const buckets = rolled.length ? rolled : calendarMonthFigures(snapshot?.monthAgeing);
   const pack = copyPackOf(market);
   const tileMoney = (n: number) => statementArApMoney(n, market);
   const sentence = loading ? "" : collectionsAnswerSentence(snapshot, position, tileMoney);

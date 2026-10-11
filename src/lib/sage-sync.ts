@@ -7,7 +7,9 @@
 import { SAGE_SA_LIVE_API_BASE, sageApiBase } from "@/lib/sage-config";
 import {
   finalizeCollections,
+  olderThanCurrentMonth,
   skippedCollections,
+  type CalendarMonthAgeing,
   type CollectionsContact,
   type CollectionsSnapshot,
 } from "@/lib/collections";
@@ -440,19 +442,20 @@ export function parseSageProfitAndLoss(json: unknown, periodMonths = 1): SagePnL
   const netIncome = netAfter ?? netGeneric ?? grossProfit + (otherIncome ?? 0) - operatingExpenses;
   const ebt = netBefore ?? (tax ? netIncome + tax : netIncome);
   const ebit = interest ? ebt + interest : grossProfit + (otherIncome ?? 0) - operatingExpenses;
+  const salesTotal = pickAmount(flat, ["total for sales"]);
 
   return {
-    revenue,
-    otherIncome: otherIncome ?? 0,
-    salesTotal: pickAmount(flat, ["total for sales"]),
-    cogs,
-    grossProfit,
-    operatingExpenses,
-    ebit,
-    ebt,
-    netIncome,
-    ebitda: ebit + depreciation,
-    depreciation,
+    revenue: round2(revenue),
+    otherIncome: round2(otherIncome ?? 0),
+    salesTotal: salesTotal == null ? null : round2(salesTotal),
+    cogs: round2(cogs),
+    grossProfit: round2(grossProfit),
+    operatingExpenses: round2(operatingExpenses),
+    ebit: round2(ebit),
+    ebt: round2(ebt),
+    netIncome: round2(netIncome),
+    ebitda: round2(ebit + depreciation),
+    depreciation: round2(depreciation),
     periodMonths,
   };
 }
@@ -520,15 +523,15 @@ export function parseSageBalanceSheet(json: unknown): SageBalanceSheet {
     pickAmount(flat, ["cash and cash equivalents", "cash at bank", "bank", "cash"]) ??
     0;
   return {
-    totalAssets,
-    totalLiabilities,
-    equity,
-    receivables,
-    inventory,
-    payables,
-    cash,
-    currentAssets,
-    currentLiabilities,
+    totalAssets: round2(totalAssets),
+    totalLiabilities: round2(totalLiabilities),
+    equity: round2(equity),
+    receivables: round2(receivables),
+    inventory: round2(inventory),
+    payables: round2(payables),
+    cash: round2(cash),
+    currentAssets: round2(currentAssets),
+    currentLiabilities: round2(currentLiabilities),
   };
 }
 
@@ -654,6 +657,37 @@ function ageingBuckets(row: Record<string, unknown>): { label: string; amount: n
   ];
 }
 
+function calendarMonthAgeing(row: Record<string, unknown>): CalendarMonthAgeing {
+  return {
+    basis: "calendar_month",
+    current: round2(ageingAmount(row, "Current")),
+    month_1: round2(ageingAmount(row, "Days30")),
+    month_2: round2(ageingAmount(row, "Days60")),
+    month_3: round2(ageingAmount(row, "Days90")),
+    older: round2(ageingAmount(row, "Days120Plus") || ageingAmount(row, "Days120")),
+  };
+}
+
+function sumCalendarMonthAgeing(parts: CalendarMonthAgeing[]): CalendarMonthAgeing | null {
+  if (!parts.length) return null;
+  const total = {
+    basis: "calendar_month" as const,
+    current: 0,
+    month_1: 0,
+    month_2: 0,
+    month_3: 0,
+    older: 0,
+  };
+  for (const part of parts) {
+    total.current = round2(total.current + part.current);
+    total.month_1 = round2(total.month_1 + part.month_1);
+    total.month_2 = round2(total.month_2 + part.month_2);
+    total.month_3 = round2(total.month_3 + part.month_3);
+    total.older = round2(total.older + part.older);
+  }
+  return total;
+}
+
 function monthAgeBucket(buckets: { label: string; amount: number }[]): string {
   for (let i = buckets.length - 1; i >= 0; i--) {
     const bucket = buckets[i];
@@ -742,6 +776,7 @@ export function parseSageCustomerAgeing(
     const who = party(row, "Customer");
     if (!who) continue;
     const buckets = ageingBuckets(row);
+    const monthAgeing = calendarMonthAgeing(row);
     contacts.push({
       contactId: who.id,
       name: who.name,
@@ -749,6 +784,7 @@ export function parseSageCustomerAgeing(
       overdue: 0,
       ageBucket: monthAgeBucket(buckets),
       buckets,
+      monthAgeing,
       invoices: [],
     });
   }
@@ -768,12 +804,20 @@ export function parseSageCustomerAgeing(
           ? monthBucketNote(summary.row)
           : null,
   });
-  if (!summary) return snap;
+  const monthAgeing = summary
+    ? calendarMonthAgeing(summary.row)
+    : sumCalendarMonthAgeing(
+        listed.flatMap((contact) => (contact.monthAgeing ? [contact.monthAgeing] : [])),
+      );
+  if (!summary && !monthAgeing) return snap;
   return {
     ...snap,
-    status: "applied",
-    totalOutstanding: summary.outstanding,
+    status: summary || listed.length ? "applied" : snap.status,
+    ...(summary ? { totalOutstanding: summary.outstanding } : {}),
     totalOverdue: 0,
+    ...(monthAgeing
+      ? { monthAgeing, olderThanCurrentMonth: olderThanCurrentMonth(monthAgeing) }
+      : {}),
   };
 }
 
@@ -789,6 +833,7 @@ export function parseSageSupplierAgeing(
     const who = party(row, "Supplier");
     if (!who) continue;
     const buckets = ageingBuckets(row);
+    const monthAgeing = calendarMonthAgeing(row);
     suppliers.push({
       supplierId: who.id,
       name: who.name,
@@ -796,6 +841,7 @@ export function parseSageSupplierAgeing(
       overdue: 0,
       ageBucket: monthAgeBucket(buckets),
       buckets,
+      monthAgeing,
       bills: [],
     });
   }
@@ -815,13 +861,40 @@ export function parseSageSupplierAgeing(
           ? monthBucketNote(summary.row)
           : null,
   });
-  if (!summary) return snap;
+  const monthAgeing = summary
+    ? calendarMonthAgeing(summary.row)
+    : sumCalendarMonthAgeing(
+        listed.flatMap((supplier) => (supplier.monthAgeing ? [supplier.monthAgeing] : [])),
+      );
+  if (!summary && !monthAgeing) return snap;
   return {
     ...snap,
-    status: "applied",
-    totalOutstanding: summary.outstanding,
+    status: summary || listed.length ? "applied" : snap.status,
+    ...(summary ? { totalOutstanding: summary.outstanding } : {}),
     totalOverdue: 0,
+    ...(monthAgeing
+      ? { monthAgeing, olderThanCurrentMonth: olderThanCurrentMonth(monthAgeing) }
+      : {}),
   };
+}
+
+/** Month buckets stored on clients.financials beside the statement figures. */
+export function sageMonthAgeingFinancialFields(
+  agedAr: CollectionsSnapshot,
+  agedAp: PayablesSnapshot,
+): Record<string, number | CalendarMonthAgeing> {
+  const out: Record<string, number | CalendarMonthAgeing> = {};
+  if (agedAr.monthAgeing) {
+    out.sageArMonthBuckets = agedAr.monthAgeing;
+    out.sageArOlderThanCurrentMonth =
+      agedAr.olderThanCurrentMonth ?? olderThanCurrentMonth(agedAr.monthAgeing);
+  }
+  if (agedAp.monthAgeing) {
+    out.sageApMonthBuckets = agedAp.monthAgeing;
+    out.sageApOlderThanCurrentMonth =
+      agedAp.olderThanCurrentMonth ?? olderThanCurrentMonth(agedAp.monthAgeing);
+  }
+  return out;
 }
 
 export function sumSageBankBalances(accounts: SageBankAccount[]): number | null {
@@ -846,7 +919,7 @@ export function mapSageToFinancialInputs(
   const set = (key: string, value: number) => {
     if (!Number.isFinite(value)) return;
     if (!dated && value === 0) return;
-    out[key] = value;
+    out[key] = round2(value);
   };
   set("revenue", pnl.revenue);
   set("cogs", pnl.cogs);
@@ -873,8 +946,8 @@ export function mapSageToFinancialInputs(
     out.periodLabel = period.label || formatStatementPeriodLabel(period.from, period.to);
   }
   if (year?.from && year.to && !(period?.from === year.from && period?.to === year.to)) {
-    if (Number.isFinite(year.pnl.revenue)) out.ytdRevenue = year.pnl.revenue;
-    if (Number.isFinite(year.pnl.netIncome)) out.ytdNetIncome = year.pnl.netIncome;
+    if (Number.isFinite(year.pnl.revenue)) out.ytdRevenue = round2(year.pnl.revenue);
+    if (Number.isFinite(year.pnl.netIncome)) out.ytdNetIncome = round2(year.pnl.netIncome);
     out.ytdPeriodStart = year.from;
     out.ytdPeriodEnd = year.to;
     out.ytdPeriodLabel = year.label || formatStatementPeriodLabel(year.from, year.to);
