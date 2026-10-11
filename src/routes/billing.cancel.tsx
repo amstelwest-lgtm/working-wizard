@@ -48,7 +48,7 @@ function BillingCancelPage() {
         <h1 className="mt-2 text-xl font-semibold">Checkout cancelled</h1>
         <p className="mt-2 text-sm text-slate-400">
           Nothing was charged. Finish firm billing to open your practice — skipped Checkout does not
-          unlock the accountant workspace. Owner plan is {ownerLine}. Billing opens soon.
+          unlock the accountant workspace. Owner plan is {ownerLine}.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link

@@ -91,7 +91,7 @@ export function BillingRequiredCard({
           {clientName ? ` ${clientName} is still open. The firm dashboard and reports need a card. ` : " "}
           Checkout for {planName} ({priceLabel}) starts the subscription. A card is required. A first
           subscription includes a {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing resumes on
-          the paid band without another trial. Owner plan is {ownerLine}. Billing opens soon.
+          the paid band without another trial. Owner plan is {ownerLine}.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {backClientId && backLabel ? (

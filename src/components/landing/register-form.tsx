@@ -23,6 +23,7 @@ import {
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { setPortalIntent } from "@/lib/user-roles";
 import { AI_USE_LEAD } from "@/lib/landing-copy";
+import { ownerRegisterPlanNote } from "@/lib/owner-plan";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 
 type SignedIn = { email?: string | null } | null;
@@ -468,11 +469,9 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  Owner plan $39/mo (R299 in SA), free when your accountant is on Milōn. Billing opens soon.
-                  Accounting firms: {FIRM_CARD_TIMING} By creating an account you agree to the{" "}
-                  <a href="/terms">Terms</a>.{" "}
-                  {AI_USE_LEAD}{" "}
-                  <a href="/ai">AI notice</a>. <a href="/privacy">Privacy</a>
+                  {ownerRegisterPlanNote(visitorCopyPack(draftMarket))}. Accounting firms:{" "}
+                  {FIRM_CARD_TIMING} By creating an account you agree to the <a href="/terms">Terms</a>.{" "}
+                  {AI_USE_LEAD} <a href="/ai">AI notice</a>. <a href="/privacy">Privacy</a>
                 </p>
               </>
             )}

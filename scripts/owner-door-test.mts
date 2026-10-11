@@ -676,7 +676,7 @@ assert(
   "a linked accountant replaces the price",
 );
 assert(!ownerPlanLine({ visitor: null, accountantOnMilon: false, firmName: null }).match(/R299|\$39/), "no price before the visitor is known");
-assert(ownerPlanFreeLine() === "Free when your accountant is on Milōn.", "the free line has no price");
+assert(ownerPlanFreeLine() === "Free when your accountant joins.", "the free line has no price");
 const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(!homeSrc.includes("R299") && !homeSrc.includes("$39"), "home does not show a price");
 const pagesSrc = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
