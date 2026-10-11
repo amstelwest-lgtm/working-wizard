@@ -223,6 +223,8 @@ assert(css.includes("var(--gold-grad)"), "ask and accents use the metallic gold 
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
 assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
+assert(css.includes('--owner-sans: "Noto Sans", sans-serif'), "the owner shell uses the accountant sans");
+assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
 assert(/\.owner-tile p \{[^}]*color: var\(--ink\)/.test(css), "tile sentences use the foreground colour");
@@ -232,9 +234,16 @@ assert(shell.split("<ThemeToggle />").length >= 3, "the toggle sits in the heade
 assert(shell.includes('label: "Health"'), "health is on the rail");
 assert(shell.includes('label: "Cash flow"'), "cash flow is on the rail");
 assert(shell.includes('label: "Budget"'), "budget is on the rail");
-assert(shell.includes('label: "Action plan"'), "the original action plan is on the rail");
 assert(shell.includes('label: "Profit"'), "profit stays reachable");
 assert(shell.includes('label: "Next moves"'), "next moves stay reachable");
+assert(!shell.includes('label: "Action plan"'), "action plan is not a separate rail item");
+assert(!shell.includes('label: "Actions"'), "actions is not a separate rail item");
+const railLabels = [...shell.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
+assert(
+  railLabels.join(" | ") ===
+    "Home | Health | Cash flow | Profit | Budget | Next moves | Accountant | Deliverables",
+  `rail order is ${railLabels.join(" | ")}`,
+);
 const app = readFileSync("src/routes/app.tsx", "utf8");
 assert(app.includes("<SphereHero"), "home and health reuse the health orb");
 assert(app.includes("readOnly"), "cash flow and budget can be shown without editing");
@@ -311,6 +320,16 @@ assert(shell.includes('className="gold-text">MILŌN'), "the owner wordmark uses 
 assert(!shell.includes("milon-wordmark.png"), "the tiny image wordmark is gone");
 assert(!home.includes("Milōn Financial Manager"), "the view does not hardcode a display name");
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(door.includes('setScreen("moves")'), "what needs an answer opens Next moves");
+assert(!door.includes('setScreen("actions")'), "the separate actions screen is gone");
+assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");
+const plan = readFileSync("src/components/action-plan.tsx", "utf8");
+assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
+assert(plan.includes("Hand to {agentDisplayName(agent)}"), "handing off names the bot");
+assert(plan.includes("data-bot-handoff"), "the hand-off controls are in the action row");
+assert(plan.includes("Handed to "), "a hand-off writes a request note");
+assert(plan.includes("does not enqueue agent_runs"), "the hand-off does not pretend to start a run");
+assert(app.includes("ownerView"), "Next moves renders the owner action list");
 assert(!door.includes("Dana"), "the door does not use a retired name");
 const prompt = readFileSync("supabase/functions/ask-ai/prompt.ts", "utf8");
 assert(prompt.includes("askAiAgentPersona"), "ask-ai keeps an agent persona");

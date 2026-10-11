@@ -19,7 +19,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { agentDisplayName } from "@/lib/milon-team";
+import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { useServerFn } from "@tanstack/react-start";
@@ -174,6 +177,11 @@ interface Props {
   onAnswer?: (actions: readonly { title: string }[]) => void;
   /** The strip's Add action uses this same focus. */
   onRegisterAdd?: (focus: () => void) => void;
+  /**
+   * Owner rail: the action list and the two progress graphs only.
+   * Accountant pages leave this off, so their header, filters, and load chart stay.
+   */
+  ownerView?: boolean;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -227,6 +235,13 @@ export function driverHealthLabel(health: number) {
  * `action_items_v` view. PostgREST rejects them on `action_items` writes
  * ("Could not find the 'owner_name' column of 'action_items' in the schema cache").
  */
+/** Newest action_updates note that records a bot handoff. Person assigns use a different note. */
+export function handoffAssignee(note: string | null | undefined): string | null {
+  if (!note?.startsWith("Handed to ")) return null;
+  const name = note.slice("Handed to ".length).trim();
+  return name || null;
+}
+
 export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown> {
   const {
     owner_name: _ownerName,
@@ -456,6 +471,7 @@ export default function ActionPlanPanel({
   reviewSignoff = null,
   onAnswer,
   onRegisterAdd,
+  ownerView = false,
 }: Props) {
   const { date } = useMarketFormat();
   const { profile } = useAccountantProfile();
@@ -563,7 +579,39 @@ export default function ActionPlanPanel({
         practice = [];
       }
       const list = (its ?? []) as Item[];
-      setItems(list);
+      let shown = list;
+      if (ownerView && list.length) {
+        const { data: notes } = await supabase
+          .from("action_updates")
+          .select("action_item_id,note,created_at")
+          .in(
+            "action_item_id",
+            list.map((item) => item.id),
+          )
+          .order("created_at", { ascending: false });
+        const applied = new Set<string>();
+        const names = new Map<string, string>();
+        for (const row of (notes ?? []) as { action_item_id?: string; note?: string | null }[]) {
+          const id = row.action_item_id;
+          if (!id || applied.has(id)) continue;
+          applied.add(id);
+          const name = handoffAssignee(row.note);
+          if (name) names.set(id, name);
+        }
+        if (names.size) {
+          shown = list.map((item) =>
+            names.has(item.id)
+              ? {
+                  ...item,
+                  owner_id: null,
+                  owner_name: names.get(item.id) ?? item.owner_name,
+                  owner_email: null,
+                }
+              : item,
+          );
+        }
+      }
+      setItems(shown);
       setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
       if (list.length) {
         const ids = list.map((i) => i.id);
@@ -607,7 +655,7 @@ export default function ActionPlanPanel({
     } finally {
       setLoading(false);
     }
-  }, [clientId, isOwner]);
+  }, [clientId, isOwner, ownerView]);
 
   useEffect(() => {
     setLoading(true);
@@ -957,6 +1005,9 @@ export default function ActionPlanPanel({
     () => new Set(items.filter((i) => i.source_move_key).map((i) => i.source_move_key)),
     [items],
   );
+  const suggestedMoves = ownerView
+    ? moves.filter((move) => !importedKeys.has(move.key))
+    : [];
   const importMoves = async (keys: string[]) => {
     if (!plan) return;
     const rows = buildStrategicMoveImportRows({
@@ -1107,6 +1158,7 @@ export default function ActionPlanPanel({
 
   return (
     <div id="wizard-action-plan" className="space-y-5">
+      {ownerView ? null : (
       <GoalHeader
         plan={plan}
         confidence={confidence}
@@ -1117,8 +1169,9 @@ export default function ActionPlanPanel({
           if (error) toast.error(error.message);
         }}
       />
+      )}
 
-      {moves.length > 0 && <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />}
+      {!ownerView && moves.length > 0 && <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />}
 
       {/* ── The table ── */}
       <Card id="wizard-action-list" className={CARD_SHELL}>
@@ -1134,6 +1187,7 @@ export default function ActionPlanPanel({
                 progress
               </span>
             </div>
+            {ownerView ? null : (
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 id="action-plan-export-pdf"
@@ -1217,8 +1271,9 @@ export default function ActionPlanPanel({
               </div>
             )}
             </div>
+            )}
           </div>
-          {/* Filters */}
+          {ownerView ? null : (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {(
               [
@@ -1276,6 +1331,7 @@ export default function ActionPlanPanel({
               <option value="status">Sort: status</option>
             </select>
           </div>
+          )}
           {filter === "overdue" && healthCounts.overdue > 0 && (
             <p className="mt-3 rounded-md border border-[#ef4444]/25 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#b45309] dark:text-[#fbbf24]">
               Showing overdue work. Open an item to send a chase, or use Chase overdue to remind
@@ -1340,6 +1396,20 @@ export default function ActionPlanPanel({
                   setDrawerId(null);
                   setTeamOpen(true);
                 }}
+                onHandOff={
+                  ownerView
+                    ? (agent) =>
+                        patchItem(
+                          it.id,
+                          {
+                            owner_id: null,
+                            owner_name: agentDisplayName(agent),
+                            owner_email: null,
+                          },
+                          { note: `Handed to ${agentDisplayName(agent)}` },
+                        )
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -1347,26 +1417,57 @@ export default function ActionPlanPanel({
         </CardContent>
       </Card>
 
+      {ownerView && suggestedMoves.length > 0 ? (
+        <section className="space-y-2" data-owner-suggestions="true">
+          <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+            Suggested by {agentDisplayName("advisor")}
+          </h2>
+          <ul className="space-y-2">
+            {suggestedMoves.map((move) => (
+              <li
+                key={move.key}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50"
+              >
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{move.title}</span>
+                <AddToPlanButton
+                  clientId={clientId}
+                  moveKey={move.key}
+                  title={move.title}
+                  outcomeWhy={move.impactLine}
+                  onAssign={() => void refresh()}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* ── Footer visuals ── */}
       {enriched.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className={ownerView ? "grid gap-3 sm:grid-cols-2" : "grid gap-4 md:grid-cols-3"}>
           <HealthDonut
             counts={healthCounts}
             total={enriched.length}
-            onPick={(h) => {
-              setFilter(
-                h === "overdue"
-                  ? "overdue"
-                  : h === "at_risk" || h === "off_track"
-                    ? "at_risk"
-                    : h === "complete"
-                      ? "done"
-                      : "all",
-              );
-            }}
+            onPick={
+              ownerView
+                ? () => undefined
+                : (h) => {
+                    setFilter(
+                      h === "overdue"
+                        ? "overdue"
+                        : h === "at_risk" || h === "off_track"
+                          ? "at_risk"
+                          : h === "complete"
+                            ? "done"
+                            : "all",
+                    );
+                  }
+            }
           />
           <BurnUp plan={plan} items={enriched} confidence={confidence} />
-          <OwnerLoad items={enriched} employees={employees} onPick={setOwnerFilter} />
+          {ownerView ? null : (
+            <OwnerLoad items={enriched} employees={employees} onPick={setOwnerFilter} />
+          )}
         </div>
       )}
 
@@ -1786,6 +1887,7 @@ function ItemRow({
   onPatch,
   onAddEmployee,
   onManageTeam,
+  onHandOff,
   focused,
 }: {
   item: Item & { health?: Health };
@@ -1802,6 +1904,11 @@ function ItemRow({
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
   onManageTeam?: () => void;
+  /**
+   * Owner rail only. Writes an action_updates note and shows the bot as assignee.
+   * It does not enqueue agent_runs. Authenticated clients cannot insert those.
+   */
+  onHandOff?: (agent: AgentKey) => void;
 }) {
   const { date } = useMarketFormat();
   const h = healthMeta(item.health);
@@ -1814,7 +1921,7 @@ function ItemRow({
 
   return (
     <div
-      className={`group flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-900/10 px-3 py-3 transition-colors hover:bg-amber-900/[0.03] dark:border-slate-800/70 dark:hover:bg-slate-800/30 sm:flex-nowrap sm:gap-3 sm:px-4 ${
+      className={`group border-b border-amber-900/10 transition-colors hover:bg-amber-900/[0.03] dark:border-slate-800/70 dark:hover:bg-slate-800/30 ${
         overdue ? "border-l-2 border-l-[#ef4444]" : "border-l-2 border-l-transparent"
       } ${focused ? "bg-[#f7d98a]/20 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.10)]" : ""}`}
       draggable={draggable}
@@ -1827,6 +1934,7 @@ function ItemRow({
       onClick={pickOwner ? undefined : onOpen}
       data-row-id={item.id}
     >
+      <div className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:flex-nowrap sm:gap-3 sm:px-4">
       {draggable && (
         <GripVertical
           className="hidden h-4 w-4 shrink-0 cursor-grab text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600 sm:block"
@@ -1915,12 +2023,16 @@ function ItemRow({
               setPickOwner(false);
               if (id) {
                 const emp = employees.find((e) => e.id === id);
-                onPatch({
-                  owner_id: id,
-                  owner_name: name ?? emp?.name,
-                  owner_email: emp?.email ?? null,
-                  sent_at: null,
-                });
+                const ownerName = name ?? emp?.name;
+                onPatch(
+                  {
+                    owner_id: id,
+                    owner_name: ownerName,
+                    owner_email: emp?.email ?? null,
+                    sent_at: null,
+                  },
+                  onHandOff ? { note: `Assigned to ${ownerName ?? "a team member"}` } : undefined,
+                );
               }
             }}
             onAdd={onAddEmployee}
@@ -1936,7 +2048,7 @@ function ItemRow({
           />
         ) : (
           <button
-            className={`w-full truncate rounded-md px-1.5 py-1 text-left text-xs font-medium text-slate-700 dark:text-slate-300 ${isOwner ? "hover:bg-amber-900/5 dark:hover:bg-slate-800" : "cursor-default"}`}
+            className={`w-full rounded-md px-1.5 py-1 text-left text-xs font-medium text-slate-700 dark:text-slate-300 ${onHandOff ? "" : "truncate"} ${isOwner ? "hover:bg-amber-900/5 dark:hover:bg-slate-800" : "cursor-default"}`}
             onClick={
               isOwner
                 ? (e) => {
@@ -1946,13 +2058,18 @@ function ItemRow({
                 : (e) => e.stopPropagation()
             }
           >
+            {onHandOff ? (
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                Assign
+              </span>
+            ) : null}
             {item.owner_name ??
               (isOwner ? (
                 <span className="text-slate-400 dark:text-slate-500">+ Owner</span>
               ) : (
                 <span className="text-slate-400 dark:text-slate-500">—</span>
               ))}
-          </button>
+        </button>
         )}
       </div>
 
@@ -2040,6 +2157,25 @@ function ItemRow({
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
+      </div>
+      {onHandOff ? (
+        <div
+          className="flex flex-wrap gap-1.5 px-3 pb-3 sm:px-4"
+          data-bot-handoff="true"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {AGENT_KEYS.map((agent) => (
+            <button
+              key={agent}
+              type="button"
+              className="rounded-md border border-amber-900/15 px-2 py-1 text-left text-[11px] font-semibold text-slate-700 hover:bg-amber-900/5 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              onClick={() => onHandOff(agent)}
+            >
+              Hand to {agentDisplayName(agent)}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

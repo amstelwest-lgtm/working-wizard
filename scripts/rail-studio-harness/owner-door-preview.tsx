@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import ActionPlanPanel from "@/components/action-plan";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { CashForecastPanel } from "@/components/cash-forecast";
-import { NextStepsPanel } from "@/components/next-steps-panel";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { OwnerChat } from "@/components/owner-door/owner-chat";
 import { OwnerHome } from "@/components/owner-door/owner-home";
@@ -14,7 +13,6 @@ import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import {
   OwnerAccountant,
-  OwnerActions,
   OwnerDeliverables,
   OwnerFirst,
   OwnerPlan,
@@ -159,18 +157,17 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
       screen={
         view === "chat" || view === "recording"
           ? "chat"
-          : view === "actions" ||
-              view === "accountant" ||
-              view === "deliverables" ||
-              view === "plan" ||
-              view === "health" ||
-              view === "cash" ||
-              view === "budget" ||
-              view === "tasks" ||
-              view === "profit" ||
-              view === "moves"
-            ? view
-            : "home"
+          : view === "tasks" || view === "actions" || view === "moves"
+            ? "moves"
+            : view === "accountant" ||
+                view === "deliverables" ||
+                view === "plan" ||
+                view === "health" ||
+                view === "cash" ||
+                view === "budget" ||
+                view === "profit"
+              ? view
+              : "home"
       }
       businessName="Northline Studio"
       initials="NS"
@@ -239,42 +236,30 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           />
         </section>
       ) : null}
-      {view === "tasks" ? (
-        <section className="owner-pane" data-owner-page="tasks">
-          <h1 className="owner-title">Action plan</h1>
-          <ActionPlanPanel clientId="harness-client" clientName="Northline Studio" simplified isOwner />
-        </section>
-      ) : null}
       {view === "profit" ? (
         <section className="owner-pane" data-owner-page="profit">
           <h1 className="owner-title">Profit</h1>
           <ProfitabilityWaterfall clientId="harness-client" clientName="Northline Studio" periodLabel="September 2026" />
         </section>
       ) : null}
-      {view === "moves" ? (
+      {view === "moves" || view === "tasks" || view === "actions" ? (
         <section className="owner-pane" data-owner-page="moves">
           <h1 className="owner-title">Next moves</h1>
-          <NextStepsPanel
+          <ActionPlanPanel
+            clientId="harness-client"
+            clientName="Northline Studio"
             simplified
-            steps={[
+            isOwner
+            ownerView
+            moves={[
               {
                 key: "debtorDays",
                 title: "Collect the two largest invoices",
                 ratioName: "Debtor days",
-                icon: "cash",
-                cynefin: "Clear",
-                eisenhower: "Do",
-                impact: 80,
                 impactLine: "Cash arrives sooner.",
                 health: 48,
-                score: 48,
               },
             ]}
-            done={new Set()}
-            onToggleDone={() => undefined}
-            onOpenSop={() => undefined}
-            clientName="Northline Studio"
-            isOwner
           />
         </section>
       ) : null}
@@ -299,13 +284,6 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           onSend={() => undefined}
           onListen={() => undefined}
           onBack={() => undefined}
-        />
-      ) : null}
-      {view === "actions" ? (
-        <OwnerActions
-          ready
-          rows={[{ id: "a1", title: "Approve the payroll run.", status: "not_started", due: "16 Oct 2026" }]}
-          onAsk={() => undefined}
         />
       ) : null}
       {view === "accountant" ? (

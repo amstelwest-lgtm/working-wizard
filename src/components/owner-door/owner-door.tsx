@@ -26,11 +26,9 @@ import { OwnerChat, type OwnerChatTurn } from "./owner-chat";
 import { OwnerHome } from "./owner-home";
 import {
   OwnerAccountant,
-  OwnerActions,
   OwnerDeliverables,
   OwnerFirst,
   OwnerPlan,
-  type OwnerActionRow,
 } from "./owner-pages";
 import { holdFor } from "./owner-sections";
 import { OwnerHold, OwnerShell, type OwnerScreen } from "./owner-shell";
@@ -133,7 +131,6 @@ export function OwnerDoor({
   const [listening, setListening] = useState(false);
   const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
   const [openAction, setOpenAction] = useState<string | null>(null);
-  const [actionRows, setActionRows] = useState<OwnerActionRow[]>([]);
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
@@ -169,7 +166,6 @@ export function OwnerDoor({
       else setLedger(null);
       if (actions.error) {
         setOpenAction(null);
-        setActionRows([]);
         setActionsReady(true);
         return;
       }
@@ -185,7 +181,6 @@ export function OwnerDoor({
           },
         ];
       });
-      setActionRows(rows);
       setOpenAction(rows[0]?.title ?? null);
       setActionsReady(true);
     });
@@ -279,7 +274,7 @@ export function OwnerDoor({
       return;
     }
     if (tile.id === "answer") {
-      setScreen("actions");
+      setScreen("moves");
       return;
     }
     if (tile.ask) openChat(tile.ask);
@@ -357,6 +352,7 @@ export function OwnerDoor({
     rec.start();
   }
 
+  const railScreen = screen === "tasks" || screen === "actions" ? "moves" : screen;
   const restored = boards?.(setScreen);
   const hold = holdFor(screen, tiles, {
     onConnect,
@@ -366,7 +362,7 @@ export function OwnerDoor({
 
   return (
     <OwnerShell
-      screen={screen}
+      screen={railScreen}
       businessName={businessName}
       initials={initialsFrom(businessName)}
       workspaces={workspaces}
@@ -377,7 +373,7 @@ export function OwnerDoor({
       onSettings={onSettings}
       onProfile={onProfile}
     >
-      {screen === "home" ? (
+      {railScreen === "home" ? (
         <OwnerHome
           variant="character"
           presence={presence}
@@ -388,13 +384,12 @@ export function OwnerDoor({
           hero={hero?.(setScreen)}
         />
       ) : null}
-      {screen === "health" ? restored?.health : null}
-      {screen === "cash" ? restored?.cash : null}
-      {screen === "budget" ? restored?.budget : null}
-      {screen === "tasks" ? restored?.tasks : null}
-      {screen === "profit" ? restored?.profit : null}
-      {screen === "moves" ? restored?.moves : null}
-      {screen === "chat" && active ? (
+      {railScreen === "health" ? restored?.health : null}
+      {railScreen === "cash" ? restored?.cash : null}
+      {railScreen === "budget" ? restored?.budget : null}
+      {railScreen === "profit" ? restored?.profit : null}
+      {railScreen === "moves" ? restored?.moves : null}
+      {railScreen === "chat" && active ? (
         <OwnerChat
           agent={agent}
           variant="character"
@@ -411,14 +406,7 @@ export function OwnerDoor({
           onBack={() => setScreen("home")}
         />
       ) : null}
-      {screen === "actions" ? (
-        <OwnerActions
-          rows={actionRows}
-          ready={actionsReady}
-          onAsk={() => openChat("financial_manager")}
-        />
-      ) : null}
-      {screen === "accountant" ? (
+      {railScreen === "accountant" ? (
         <OwnerAccountant
           joined={Boolean(firmId)}
           firmName={firmName}
@@ -431,7 +419,7 @@ export function OwnerDoor({
           onConnect={onConnect}
         />
       ) : null}
-      {screen === "deliverables" ? (
+      {railScreen === "deliverables" ? (
         <OwnerDeliverables
           rows={signoffs.map((row, index) => ({
             id: row.id ?? `${row.scope ?? "sign"}-${index}`,
@@ -442,10 +430,10 @@ export function OwnerDoor({
           onInvite={() => setScreen("accountant")}
         />
       ) : null}
-      {screen === "plan" ? (
+      {railScreen === "plan" ? (
         <OwnerPlan visitor={visitor} accountantOnMilon={Boolean(firmId)} firmName={firmName} />
       ) : null}
-      {screen === "first" ? (
+      {railScreen === "first" ? (
         <OwnerFirst
           joined={Boolean(firmId)}
           onQuickBooks={onQuickBooks}
@@ -453,7 +441,7 @@ export function OwnerDoor({
           onInvite={() => setScreen("accountant")}
         />
       ) : null}
-      {hold && screen === "settings" ? (
+      {hold && railScreen === "settings" ? (
         <OwnerHold title={hold.title} sentence={hold.sentence} action={hold.action} />
       ) : null}
     </OwnerShell>

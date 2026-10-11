@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import "./owner-fonts";
 import "./owner-door.css";
 
 export type OwnerScreen =
@@ -24,10 +23,8 @@ const RAIL: { id: string; label: string; screen: OwnerScreen }[] = [
   { id: "home", label: "Home", screen: "home" },
   { id: "health", label: "Health", screen: "health" },
   { id: "cash", label: "Cash flow", screen: "cash" },
-  { id: "budget", label: "Budget", screen: "budget" },
-  { id: "tasks", label: "Action plan", screen: "tasks" },
-  { id: "actions", label: "Actions", screen: "actions" },
   { id: "profit", label: "Profit", screen: "profit" },
+  { id: "budget", label: "Budget", screen: "budget" },
   { id: "moves", label: "Next moves", screen: "moves" },
   { id: "accountant", label: "Accountant", screen: "accountant" },
   { id: "deliverables", label: "Deliverables", screen: "deliverables" },

@@ -1,8 +1,8 @@
 /* Owner door. Motion is transform and opacity. Reduced motion keeps a still pose. */
 
 .owner-door {
-  --owner-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
-  --owner-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --owner-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --owner-sans: "Noto Sans", sans-serif;
   --owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg));
   --owner-stage: var(--bg-3);
   --owner-mark: var(--ink);
@@ -227,7 +227,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 999px;
-  font-family: var(--owner-sans, Inter, ui-sans-serif, system-ui, sans-serif);
+  font-family: var(--owner-sans, "Noto Sans", sans-serif);
   font-size: 15px;
   font-weight: 600;
   line-height: 1.2;

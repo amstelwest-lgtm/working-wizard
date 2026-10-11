@@ -4066,17 +4066,27 @@ function Index() {
                   moves: (
                     <section className="owner-pane" data-owner-page="moves">
                       <h1 className="owner-title">Next moves</h1>
-                      <NextStepsPanel
-                        steps={nextSteps}
-                        simplified
-                        done={doneSteps}
-                        onToggleDone={toggleDone}
-                        onOpenSop={(k) => setOpenSop(k)}
-                        clientId={effectiveClientId}
-                        clientName={actingClientName ?? undefined}
-                        isOwner={userRole !== "client_member"}
-                        onGoToPlan={() => go("tasks")}
-                      />
+                      <Suspense fallback={<p className="owner-lede">Loading next moves…</p>}>
+                        {effectiveClientId ? (
+                          <ActionPlanPanel
+                            clientId={effectiveClientId}
+                            clientName={actingClientName ?? undefined}
+                            simplified
+                            isOwner={userRole !== "client_member"}
+                            ownerView
+                            moves={nextSteps.map((s) => ({
+                              key: s.key,
+                              title: s.title,
+                              ratioName: s.ratioName,
+                              impactLine: s.impactLine,
+                              health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                            }))}
+                            onViewAnalysis={() => go("health")}
+                          />
+                        ) : (
+                          <p className="owner-lede">Your accountant sets this up</p>
+                        )}
+                      </Suspense>
                     </section>
                   ),
                 })}
