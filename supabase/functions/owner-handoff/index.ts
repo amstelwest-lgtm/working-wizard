@@ -2,7 +2,7 @@
  * Owner hands one action to a bot.
  * The caller must own the client or belong to that client's workspace.
  * The queued agent_runs row is written with the service role.
- * Only the analyst has a runner. Other bots return no_runner and write nothing.
+ * Each bot has a runner. A runner whose agent_settings flag is false does not start.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.ts";
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
   const decision = handoffDecision(agent);
   if (!decision.ok) {
-    return json({ error: decision.error, missing: decision.missing }, decision.error === "no_runner" ? 409 : 400);
+    return json({ error: decision.error, missing: decision.missing }, 400);
   }
 
   const { data: client, error: clientError } = await admin
@@ -108,15 +108,14 @@ Deno.serve(async (req) => {
   const { data: setting, error: settingError } = await admin
     .from("agent_settings")
     .select("value")
-    .eq("key", "enabled")
+    .eq("key", decision.settingKey)
     .maybeSingle();
   if (settingError) return json({ error: "runner_check_failed" }, 500);
   if (!runnerEnabled(setting?.value)) {
     return json(
       {
         error: "runner_disabled",
-        missing:
-          "The analyst runner exists at supabase/functions/agent-analyst, but agent_settings.enabled is false, so a hand-off will not start it.",
+        missing: `${decision.displayName} has a runner at supabase/functions/${decision.runner}, but agent_settings.${decision.settingKey} is false, so a hand-off will not start it.`,
       },
       409,
     );

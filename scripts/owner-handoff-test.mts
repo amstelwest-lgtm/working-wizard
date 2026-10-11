@@ -21,17 +21,23 @@ function assert(cond: boolean, msg: string) {
 const analyst = handoffDecision("analyst");
 assert(analyst.ok && analyst.runner === "agent-analyst", "the analyst has a runner");
 assert(analyst.ok && analyst.displayName === agentDisplayName("analyst"), "the analyst note uses the shared name");
+assert(analyst.ok && analyst.settingKey === "enabled", "the analyst still uses the original flag");
 
 const manager = handoffDecision("financial_manager");
-assert(!manager.ok && manager.error === "no_runner", "the financial manager has no runner");
-assert(
-  !manager.ok && manager.missing.includes("agent-analyst") && manager.missing.includes("financial_manager"),
-  "the financial manager message names what is missing",
-);
+assert(manager.ok === true, "the financial manager has a runner");
+if (manager.ok) {
+  assert(manager.runner === "agent-financial-manager", "the financial manager runner is its edge function");
+  assert(manager.agent === "financial_manager", "the financial manager key is unchanged");
+  assert(manager.settingKey === "financial_manager_enabled", "the financial manager has its own flag");
+}
 
 const advisor = handoffDecision("advisor");
-assert(!advisor.ok && advisor.error === "no_runner", "the advisor has no runner");
-assert(!advisor.ok && advisor.missing.includes("advisor"), "the advisor message names the missing runner");
+assert(advisor.ok === true, "the advisor has a runner");
+if (advisor.ok) {
+  assert(advisor.runner === "agent-advisor", "the advisor runner is its edge function");
+  assert(advisor.agent === "advisor", "the advisor key is unchanged");
+  assert(advisor.settingKey === "advisor_enabled", "the advisor has its own flag");
+}
 assert(handoffDecision("bookkeeper").error === "unknown_agent", "an unknown bot is rejected");
 
 assert(
@@ -80,7 +86,10 @@ assert(decideAt > 0 && enabledAt > decideAt && insertAt > enabledAt, "a missing 
 assert(fn.includes("owner_user_id") && fn.includes("client_memberships"), "the function checks the owner and the workspace");
 assert(fn.includes("callerMayHandOff"), "the access decision is the shared check");
 assert(fn.includes("action.client_id !== clientId"), "the action must belong to that client");
-assert(fn.includes('rpc("agent_invoke"'), "the analyst runner is triggered with the service role");
+assert(fn.includes('rpc("agent_invoke"'), "the runner is triggered with the service role");
+assert(fn.includes("decision.runner"), "the invoke target is the resolved runner");
+assert(fn.includes("decision.settingKey"), "each bot checks its own flag");
+assert(!fn.includes("no_runner"), "a known bot is not rejected for a missing runner");
 assert(!fn.includes("GRANT INSERT"), "the function does not grant client writes");
 
 const sql = readFileSync("supabase/migrations/20261012090000_owner_handoff_action_item.sql", "utf8");

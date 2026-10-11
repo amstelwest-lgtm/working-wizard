@@ -8,27 +8,36 @@ import { agentDisplayNameFromKey } from "./milon-team-names.ts";
 export const HANDOFF_TRIGGER = "on_demand";
 export const ANALYST_RUNNER = "agent-analyst";
 
-const MISSING_RUNNER: Record<Exclude<AgentKey, "analyst">, string> = {
-  financial_manager:
-    "No runner exists for financial_manager. supabase/functions has agent-analyst only; there is no function that leases a financial_manager run.",
-  advisor:
-    "No runner exists for advisor. supabase/functions has agent-analyst only; there is no function that leases an advisor run.",
-};
+export const AGENT_RUNNERS = {
+  analyst: "agent-analyst",
+  financial_manager: "agent-financial-manager",
+  advisor: "agent-advisor",
+} as const satisfies Record<AgentKey, string>;
 
 export type HandoffDecision =
-  | { ok: true; agent: "analyst"; runner: typeof ANALYST_RUNNER; displayName: string }
-  | { ok: false; error: "unknown_agent" | "no_runner"; missing: string };
+  | { ok: true; agent: AgentKey; runner: string; displayName: string; settingKey: string }
+  | { ok: false; error: "unknown_agent"; missing: string };
+
+/** Analyst keeps the original dispatch flag. The other two have their own rows. */
+export function runnerSettingKey(agent: AgentKey): string {
+  if (agent === "financial_manager") return "financial_manager_enabled";
+  if (agent === "advisor") return "advisor_enabled";
+  return "enabled";
+}
 
 export function handoffDecision(agent: string): HandoffDecision {
-  if (agent === "analyst") {
-    const displayName = agentDisplayNameFromKey(agent);
-    if (!displayName) return { ok: false, error: "unknown_agent", missing: "That is not one of the three bots." };
-    return { ok: true, agent: "analyst", runner: ANALYST_RUNNER, displayName };
+  if (agent !== "analyst" && agent !== "financial_manager" && agent !== "advisor") {
+    return { ok: false, error: "unknown_agent", missing: "That is not one of the three bots." };
   }
-  if (agent === "financial_manager" || agent === "advisor") {
-    return { ok: false, error: "no_runner", missing: MISSING_RUNNER[agent] };
-  }
-  return { ok: false, error: "unknown_agent", missing: "That is not one of the three bots." };
+  const displayName = agentDisplayNameFromKey(agent);
+  if (!displayName) return { ok: false, error: "unknown_agent", missing: "That is not one of the three bots." };
+  return {
+    ok: true,
+    agent,
+    runner: AGENT_RUNNERS[agent],
+    displayName,
+    settingKey: runnerSettingKey(agent),
+  };
 }
 
 /** Same switch as agent-dispatch. A hand-off does not start a run while this is off. */

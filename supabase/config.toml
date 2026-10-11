@@ -46,6 +46,14 @@ verify_jwt = true
 [functions.agent-analyst]
 verify_jwt = true
 
+# Background financial manager. Service-role JWT. Drafts only.
+[functions.agent-financial-manager]
+verify_jwt = true
+
+# Background advisor. Service-role JWT. Drafts only. Does not sign off.
+[functions.agent-advisor]
+verify_jwt = true
+
 # Owner action hand-off. Caller JWT. Service role writes the queued run.
 [functions.owner-handoff]
 verify_jwt = true

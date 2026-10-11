@@ -1,0 +1,9 @@
+/**
+ * Milōn Financial Manager. Service-role only.
+ * Invoked by agent-dispatch via pg_net, or by an owner hand-off.
+ * Does not consume pre-card Bot answers.
+ */
+import { serveQueueRunner } from "../_shared/agent-core/serve-runner.ts";
+import { runFinancialManagerJob } from "./run.ts";
+
+serveQueueRunner("agent-financial-manager", runFinancialManagerJob);
