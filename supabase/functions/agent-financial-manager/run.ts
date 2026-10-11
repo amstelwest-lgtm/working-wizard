@@ -6,7 +6,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runQueueJob, type RunnerJob } from "../_shared/agent-core/job.ts";
 import { FINANCIAL_MANAGER_SYSTEM, financialManagerToolSchemas } from "../_shared/agent-prompts/financial-manager.ts";
 import {
-  FM_COST_STOP_USD,
+  FM_COST_CEILING_USD,
   FM_DRAFT_KINDS,
   FM_MAX_ITERATIONS,
   FM_TOOLS,
@@ -32,7 +32,7 @@ export function runFinancialManagerJob(db: SupabaseClient, job: RunnerJob) {
     toolSchemas: financialManagerToolSchemas,
     writeTools: FM_WRITE_TOOLS,
     fallbackDraftKind: FM_DRAFT_KINDS[0],
-    costStopUsd: FM_COST_STOP_USD,
+    costCeilingUsd: FM_COST_CEILING_USD,
     runOutcome: fmRunOutcome,
     execute: executeFinancialManagerTool,
   });

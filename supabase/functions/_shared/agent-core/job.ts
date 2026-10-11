@@ -18,8 +18,10 @@ import {
   evidenceKeysNote,
 } from "../../../../src/lib/agent-analyst.ts";
 import {
+  CUT_OFF_DRAFT_RESULT,
+  recordDraftWasCutOff,
   runnerEarlyFinish,
-  runnerShouldStopForCost,
+  runnerNextCallExceedsCeiling,
   RUNNER_MAX_OUTPUT_TOKENS,
   withDraftFlags,
 } from "../../../../src/lib/agent-draft.ts";
@@ -55,8 +57,8 @@ export type QueueJobConfig = {
   toolSchemas: () => ToolSchema[];
   writeTools: readonly string[];
   fallbackDraftKind: string;
-  /** Stop before another model call once spend reaches this. At most $0.06. */
-  costStopUsd: number;
+  /** Do not start a call whose proxy cost would take the run over this. */
+  costCeilingUsd: number;
   runOutcome: (input: {
     stopReason: string;
     steps: Array<{ tool: string | null; status: string }>;
@@ -274,6 +276,11 @@ export async function runQueueJob(
   let outputTokens = 0;
   let cacheWriteTokens = 0;
   let cacheReadTokens = 0;
+  let lastInputTokens = 0;
+  let lastOutputTokens = 0;
+  let lastCacheWriteTokens = 0;
+  let lastCacheReadTokens = 0;
+  let roundStopReason = "";
 
   try {
     const result = await runAgentLoop({
@@ -289,7 +296,14 @@ export async function runQueueJob(
         const drafted = runnerEarlyFinish(recordedKeys.size);
         if (drafted) return { kind: "stop", reason: drafted.reason, summary: drafted.summary };
         const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL);
-        if (runnerShouldStopForCost(spent, config.costStopUsd)) {
+        const lastCall = analystRunCostUsd(
+          lastInputTokens,
+          lastOutputTokens,
+          lastCacheWriteTokens,
+          lastCacheReadTokens,
+          CLAUDE_MODEL,
+        );
+        if (runnerNextCallExceedsCeiling({ spentUsd: spent, lastCallUsd: lastCall, ceilingUsd: config.costCeilingUsd })) {
           return {
             kind: "stop",
             reason: "insufficient_information",
@@ -306,13 +320,21 @@ export async function runQueueJob(
           maxTokens: RUNNER_MAX_OUTPUT_TOKENS,
           cachePrompt: true,
         });
+        lastInputTokens = round.inputTokens;
+        lastOutputTokens = round.outputTokens;
+        lastCacheWriteTokens = round.cacheCreationTokens;
+        lastCacheReadTokens = round.cacheReadTokens;
         inputTokens += round.inputTokens;
         outputTokens += round.outputTokens;
         cacheWriteTokens += round.cacheCreationTokens;
         cacheReadTokens += round.cacheReadTokens;
+        roundStopReason = round.stopReason;
         return decisionFromClaude({ text: round.text, toolUses: round.toolUses });
       },
       execute: async (name, args) => {
+        if (recordDraftWasCutOff({ stopReason: roundStopReason, name, args })) {
+          return { error: CUT_OFF_DRAFT_RESULT };
+        }
         const payload = await config.execute(name, args, {
           agent: config.agent,
           clientId: job.clientId,
