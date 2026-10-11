@@ -15,9 +15,14 @@ import { formatVariancePct, varianceLine } from "@/lib/budget.variance";
 import type { ResolvedMarket } from "@/lib/market";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 
+/** Keep a currency amount on one line. Grouping spaces must not become wrap points. */
+function stickyMoney(n: number, market: ResolvedMarket): string {
+  return fmtBudgetMoney(n, market).replace(/ /g, "\u00A0");
+}
+
 function signedMoney(n: number, market: ResolvedMarket): string {
-  if (Math.abs(n) < 1) return fmtBudgetMoney(0, market);
-  const body = fmtBudgetMoney(n, market);
+  if (Math.abs(n) < 1) return stickyMoney(0, market);
+  const body = stickyMoney(n, market);
   if (n > 0) return `+${body}`;
   return body;
 }
@@ -82,7 +87,7 @@ export function BudgetVerdictStrip({
   signoffKnown?: boolean;
   extraActions?: ReactNode;
 }) {
-  const money = (n: number) => fmtBudgetMoney(n, market);
+  const money = (n: number) => stickyMoney(n, market);
   const hasActuals = revenueActual != null && chip !== "None";
   const seeded = budgetSeededFromStatement({
     chip,
@@ -110,17 +115,22 @@ export function BudgetVerdictStrip({
               <span className="font-semibold">Revenue</span>{" "}
               {hasActuals ? (
                 <>
-                  {money(revenueActual!)} vs budget {money(revenueBudget)} (
-                  <Delta
-                    budget={revenueBudget}
-                    actual={revenueActual!}
-                    higherIsBetter
-                    market={market}
-                  />
-                  )
+                  <span className="whitespace-nowrap tabular-nums">{money(revenueActual!)}</span>
+                  {" vs budget "}
+                  <span className="whitespace-nowrap tabular-nums">{money(revenueBudget)}</span>{" "}
+                  <span className="whitespace-nowrap">
+                    (
+                    <Delta
+                      budget={revenueBudget}
+                      actual={revenueActual!}
+                      higherIsBetter
+                      market={market}
+                    />
+                    )
+                  </span>
                 </>
               ) : (
-                <span className="tabular-nums">{money(revenueBudget)}</span>
+                <span className="whitespace-nowrap tabular-nums">{money(revenueBudget)}</span>
               )}
             </span>
             <span className="hidden text-slate-400 sm:inline"> · </span>
@@ -128,17 +138,22 @@ export function BudgetVerdictStrip({
               <span className="font-semibold">Profit</span>{" "}
               {hasActuals && profitActual != null ? (
                 <>
-                  {money(profitActual)} vs budget {money(profitBudget)} (
-                  <Delta
-                    budget={profitBudget}
-                    actual={profitActual}
-                    higherIsBetter
-                    market={market}
-                  />
-                  )
+                  <span className="whitespace-nowrap tabular-nums">{money(profitActual)}</span>
+                  {" vs budget "}
+                  <span className="whitespace-nowrap tabular-nums">{money(profitBudget)}</span>{" "}
+                  <span className="whitespace-nowrap">
+                    (
+                    <Delta
+                      budget={profitBudget}
+                      actual={profitActual}
+                      higherIsBetter
+                      market={market}
+                    />
+                    )
+                  </span>
                 </>
               ) : (
-                <span className="tabular-nums">{money(profitBudget)}</span>
+                <span className="whitespace-nowrap tabular-nums">{money(profitBudget)}</span>
               )}
             </span>
           </span>

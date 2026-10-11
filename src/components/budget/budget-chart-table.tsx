@@ -11,7 +11,9 @@ import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { ViewToggle } from "@/components/ui/view-toggle";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import {
+  budgetChartDomain,
   budgetMonthViews,
+  budgetPlanIsSet,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
@@ -51,6 +53,7 @@ export function BudgetChartTable({
   lens,
   onLensChange,
   actualMonths,
+  readOnly = false,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -58,6 +61,8 @@ export function BudgetChartTable({
   onLensChange?: (next: BudgetLens) => void;
   /** Harness preview. Production leaves this empty and reads stored month actuals. */
   actualMonths?: readonly BudgetActualMonth[];
+  /** Owner view hides a $0 draft instead of drawing an empty axis. */
+  readOnly?: boolean;
 }) {
   const { market } = useMarketFormat();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -105,6 +110,22 @@ export function BudgetChartTable({
     setLocalLens(next);
     onLensChange?.(next);
   };
+
+  if (readOnly && !budgetPlanIsSet(views)) {
+    return (
+      <section
+        className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#d4a550]/25 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
+        data-budget-lens={shown}
+        data-budget-chart="draft"
+        aria-label="Budget chart and table"
+      >
+        <h3 className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">Budget vs actual</h3>
+        <p className="mt-2 text-sm leading-relaxed text-[#6b6354] dark:text-slate-300">
+          Your accountant is still setting the budget
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -160,6 +181,7 @@ function BudgetMonthChart({
     signal: row.revenue?.signal ?? null,
     delta: row.revenue?.delta ?? null,
   }));
+  const domain = budgetChartDomain(data.flatMap((row) => [row.budget, row.actual]));
 
   return (
     <div className="mt-4 min-w-0">
@@ -181,6 +203,7 @@ function BudgetMonthChart({
               fontSize={10}
               tickLine={false}
               axisLine={false}
+              domain={domain}
               tickFormatter={(value) => tick(Number(value))}
               width={48}
             />

@@ -199,11 +199,14 @@ const ownerDoorRoute = createRoute({
       search.bot === "financial_manager" || search.bot === "analyst" || search.bot === "advisor"
         ? search.bot
         : undefined,
+    budgetCase:
+      search.budgetCase === "empty" || search.budgetCase === "draft" ? search.budgetCase : "ready",
   }),
   component: function OwnerDoorHarness() {
     const search = useSearch({ strict: false }) as {
       view?: OwnerPreviewView;
       bot?: "financial_manager" | "analyst" | "advisor";
+      budgetCase?: "ready" | "empty" | "draft";
     };
     const navigate = useNavigate();
     return (
@@ -211,6 +214,7 @@ const ownerDoorRoute = createRoute({
         <OwnerDoorPreview
           view={search.view ?? "rest"}
           bot={search.bot ?? null}
+          budgetCase={search.budgetCase ?? "ready"}
           onBot={(next, mode) => {
             void navigate({
               to: "/owner-door",

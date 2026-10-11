@@ -1,6 +1,6 @@
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import {
-  budgetYearCompare,
+  compareOwnerYear,
   type BudgetYearMoney,
 } from "@/lib/budget-year-compare";
 import type { ResolvedMarket } from "@/lib/market";
@@ -9,20 +9,25 @@ const ARROW = { up: "↑", down: "↓", flat: "→" } as const;
 
 export function BudgetYearStrip({
   thisYear,
+  thisMonths = null,
   lastYear,
+  lastMonths = null,
   lastYearLabel,
   market,
 }: {
-  thisYear: BudgetYearMoney;
+  thisYear: BudgetYearMoney | null;
+  /** Months in the statement window. Compared only when last year matches. */
+  thisMonths?: number | null;
   lastYear: BudgetYearMoney | null;
+  lastMonths?: number | null;
   lastYearLabel?: string | null;
   market: ResolvedMarket;
 }) {
   const money = (n: number) => fmtBudgetMoney(n, market);
-  const compared = budgetYearCompare(thisYear, lastYear);
+  const compared = compareOwnerYear(thisYear, thisMonths, lastYear, lastMonths);
   const lastHeading = lastYearLabel ? `Last year · ${lastYearLabel}` : "Last year";
   return (
-    <section className="space-y-2" data-budget-year={compared.empty ? "empty" : "compared"}>
+    <section className="space-y-2" data-budget-year={compared.mode}>
       <h3 className="text-base font-semibold text-[#1b1608] dark:text-slate-100">This year vs last year</h3>
       <p className="text-sm leading-relaxed text-[#6b6354] dark:text-slate-300">{compared.summary}</p>
       <div className="overflow-x-auto rounded-xl border border-[#d4a550]/25">

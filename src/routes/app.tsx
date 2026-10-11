@@ -100,6 +100,7 @@ import {
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
+  periodMonthsOf,
   scoreTier,
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
@@ -3995,6 +3996,11 @@ function Index() {
                               : null
                           }
                           priorYearLabel={ownerPrior?.period_label ?? null}
+                          priorYearMonths={
+                            ownerPrior?.financials
+                              ? periodMonthsOf(ownerPrior.financials as Record<string, unknown>)
+                              : null
+                          }
                           businessTypeId={businessTypeId}
                           operatingProfile={operatingProfile}
                           fyStartMonthDefault={

@@ -162,6 +162,7 @@ assert(
 );
 assert(versus!.chip === "Estimated from statement pace", versus!.chip);
 assert(versus!.label === "Jan–Sep 2026, prorated", versus!.label);
+assert(versus!.periodMonths === 9, `the cover is 9 months, got ${versus!.periodMonths}`);
 assert(
   budgetSeededFromStatement(versus),
   "a budget seeded from this statement is not a 0% verdict",

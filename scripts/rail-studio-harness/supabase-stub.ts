@@ -231,22 +231,65 @@ function belowFloorClient() {
   };
 }
 
+function budgetCase(): "ready" | "empty" | "draft" {
+  if (typeof location === "undefined") return "ready";
+  const match = /(?:^|[?&])budgetCase=(ready|empty|draft)(?:&|$)/.exec(location.search);
+  if (match?.[1] === "empty" || match?.[1] === "draft") return match[1];
+  return "ready";
+}
+
+/** Seven months of $70,000. Exclusive of tax, so revenue stays volume × price. */
+function harnessBudget(priced: boolean) {
+  const profile = parseOperatingProfile(CLIENT_ROW.operating_profile);
+  if (!profile) return null;
+  const doc = createBudgetDocument({
+    templateId: profile.templateId,
+    qualification: profileToBudgetQualification(profile),
+    fyStartMonth: profile.fyStartMonth,
+    fyStart: "2026-03",
+  });
+  if (!priced) return doc;
+  return {
+    ...doc,
+    revenueLines: doc.revenueLines.map((line, index) =>
+      index === 0
+        ? {
+            ...line,
+            months: Object.fromEntries(
+              Object.keys(line.months).map((month) => [month, { volume: 100, price: 700 }]),
+            ),
+          }
+        : line,
+    ),
+  };
+}
+
+const YTD_FINANCIALS = {
+  cash: "186000",
+  revenue: "420000",
+  cogs: "160000",
+  fixedCosts: "140000",
+  ebit: "120000",
+  netIncome: "120000",
+  periodStart: "2026-03-01",
+  periodEnd: "2026-09-30",
+  periodMonths: "7",
+};
+
 function clientRow() {
   if (typeof location !== "undefined" && /(?:^|[?&])open=below(?:&|$)/.test(location.search)) {
     return belowFloorClient();
   }
   if (typeof location !== "undefined" && /(?:^|[?&])view=budget(?:&|$)/.test(location.search)) {
-    const profile = parseOperatingProfile(CLIENT_ROW.operating_profile);
-    if (profile) {
+    const budgetCaseName = budgetCase();
+    const priced = budgetCaseName !== "draft";
+    const budget = harnessBudget(priced);
+    if (budget) {
       return {
         ...CLIENT_ROW,
-        budget: createBudgetDocument({
-          templateId: profile.templateId,
-          qualification: profileToBudgetQualification(profile),
-          fyStartMonth: profile.fyStartMonth,
-          fyStart: "2026-03",
-        }),
+        budget,
         budget_updated_at: "2026-10-01T00:00:00.000Z",
+        financials: budgetCaseName === "empty" ? { cash: "186000", periodEnd: "2026-09-30" } : YTD_FINANCIALS,
       };
     }
   }

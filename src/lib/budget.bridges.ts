@@ -784,6 +784,7 @@ export function budgetVersusStatement(
   budgetOverheads: number;
   ebit: number;
   budgetEbit: number;
+  periodMonths: number;
 }) | null {
   if (!periodFinancials) return null;
   const aliased = withCostAliases(
@@ -803,6 +804,7 @@ export function budgetVersusStatement(
   let budgetOverheads = 0;
   let budgetEbit = 0;
   let label = "Statement, prorated";
+  let periodMonths = 1;
   if (days != null && days < 28 && months <= 1 && rows.length) {
     const row = (endInFy ? rows.find((r) => r.month === endMonth) : null) ?? rows[0];
     const frac = days / 30;
@@ -814,6 +816,7 @@ export function budgetVersusStatement(
     label = dated
       ? `${dated}, prorated`
       : `${endInFy ? budgetCoverWindowLabel([endMonth]) : "Statement"}, prorated`;
+    periodMonths = 1;
   } else {
     const keys = coverMonths(fy, endInFy ? endMonth : "", months);
     for (const row of rows) {
@@ -824,6 +827,7 @@ export function budgetVersusStatement(
       budgetEbit += row.ebit;
     }
     label = `${budgetCoverWindowLabel(keys)}, prorated`;
+    periodMonths = keys.length;
   }
   return {
     label,
@@ -836,5 +840,6 @@ export function budgetVersusStatement(
     budgetCogs,
     budgetOverheads,
     budgetEbit,
+    periodMonths,
   };
 }

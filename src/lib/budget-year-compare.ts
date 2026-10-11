@@ -59,6 +59,90 @@ function numberField(financials: Record<string, unknown>, key: string): number |
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export const NO_FIGURES_THIS_YEAR =
+  "No figures for this year yet. Your accountant will update this.";
+
+export const YEAR_MONTHS_DIFFER =
+  "Last year covers a different number of months, so it is not compared with this year-to-date.";
+
+function hasMeasuredFigures(money: BudgetYearMoney | null | undefined): money is BudgetYearMoney {
+  if (!money) return false;
+  return LINES.some((line) => {
+    const value = money[line.key];
+    return finite(value) && Math.abs(value) >= 1;
+  });
+}
+
+/** Statement window the header already scored. A $0 plan is not this year. */
+export function ownerYearFromStatement(
+  actuals: {
+    revenue: number;
+    cogs: number;
+    fixedCosts: number;
+    ebit?: number | null;
+  } | null | undefined,
+): BudgetYearMoney | null {
+  if (!actuals) return null;
+  const revenue = finite(actuals.revenue) ? actuals.revenue : null;
+  const cogs = finite(actuals.cogs) ? actuals.cogs : null;
+  const expenses = finite(actuals.fixedCosts) ? actuals.fixedCosts : null;
+  const netProfit = finite(actuals.ebit) ? actuals.ebit : null;
+  const grossProfit = revenue != null && cogs != null ? revenue - cogs : null;
+  const money = { revenue, cogs, grossProfit, netProfit, expenses };
+  return hasMeasuredFigures(money) ? money : null;
+}
+
+function blankRows(thisYear: BudgetYearMoney | null): BudgetYearRow[] {
+  return LINES.flatMap((line) => {
+    const current = thisYear && finite(thisYear[line.key]) ? thisYear[line.key] : null;
+    if (line.key === "expenses" && current == null) return [];
+    return [
+      {
+        key: line.key,
+        label: line.label,
+        thisYear: current,
+        lastYear: null,
+        change: null,
+        changePct: null,
+        direction: "flat" as const,
+      },
+    ];
+  });
+}
+
+function monthCount(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  const months = Math.round(value);
+  return months >= 1 && months <= 12 ? months : null;
+}
+
+/**
+ * Owner year strip. This year is the statement window, compared only with
+ * the same number of months last year. A missing or all-zero year never
+ * becomes "down 100%".
+ */
+export type OwnerYearMode = "empty" | "partial" | "compared";
+
+export function compareOwnerYear(
+  thisYear: BudgetYearMoney | null,
+  thisMonths: number | null | undefined,
+  lastYear: BudgetYearMoney | null,
+  lastMonths: number | null | undefined,
+): { empty: boolean; mode: OwnerYearMode; summary: string; rows: BudgetYearRow[] } {
+  if (!hasMeasuredFigures(thisYear)) {
+    return { empty: true, mode: "empty", summary: NO_FIGURES_THIS_YEAR, rows: blankRows(thisYear) };
+  }
+  if (!hasMeasuredFigures(lastYear)) {
+    return { empty: true, mode: "empty", summary: "No prior year on file.", rows: blankRows(thisYear) };
+  }
+  const currentMonths = monthCount(thisMonths);
+  const priorMonths = monthCount(lastMonths);
+  if (currentMonths == null || priorMonths == null || currentMonths !== priorMonths) {
+    return { empty: false, mode: "partial", summary: YEAR_MONTHS_DIFFER, rows: blankRows(thisYear) };
+  }
+  return { ...budgetYearCompare(thisYear, lastYear), mode: "compared" };
+}
+
 export function budgetYearCompare(
   thisYear: BudgetYearMoney,
   lastYear: BudgetYearMoney | null,

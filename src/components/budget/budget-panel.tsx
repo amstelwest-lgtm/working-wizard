@@ -75,6 +75,7 @@ export function BudgetPanel({
   onInvite,
   priorYear = null,
   priorYearLabel = null,
+  priorYearMonths = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -115,6 +116,7 @@ export function BudgetPanel({
   onInvite?: () => void;
   priorYear?: BudgetYearMoney | null;
   priorYearLabel?: string | null;
+  priorYearMonths?: number | null;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -646,6 +648,7 @@ export function BudgetPanel({
         actualMonths={actualMonths}
         priorYear={priorYear}
         priorYearLabel={priorYearLabel}
+        priorYearMonths={priorYearMonths}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>
