@@ -22,6 +22,9 @@ export const SAGE_SA_API_BASE = SAGE_SA_LIVE_API_BASE;
 export const SAGE_EMPTY_SYNC_MESSAGE =
   "Sage is connected, but no statement has been synced. Overview figures were left unchanged.";
 
+/** A live Sage company whose statements are all zero. Not a failed login. */
+export const SAGE_EMPTY_COMPANY_MESSAGE = "Connected, no transactions yet";
+
 export { sageApiBase, sageApiKey, sageCredentialsConfigured } from "@/lib/sage-config";
 
 export function normalizeSageCompanyId(raw: string): string {
@@ -220,18 +223,24 @@ export function sageConnectionInsert(input: {
 }
 
 export type SageSyncWriteDecision =
-  | { write: false; error: string }
+  | { write: false; error: string; neutral?: boolean }
   | { write: true };
 
 /**
  * Empty-sync guard for Sage. No figures, or an all-zero dated report, must
  * not replace the live book or become a health score.
+ * An all-zero dated report is a connected company with nothing posted yet:
+ * leave the figures, and do not mark the connection as an error.
  * Eng1 calls this before applyLedgerSyncFinancials.
  */
 export function sageSyncWriteDecision(
   fields: Record<string, unknown>,
   prev: unknown,
 ): SageSyncWriteDecision {
+  const dated = Boolean(fields.periodStart && fields.periodEnd);
+  if (dated && ledgerSyncReportIsEmpty(fields)) {
+    return { write: false, error: SAGE_EMPTY_COMPANY_MESSAGE, neutral: true };
+  }
   if (ledgerSyncReportIsEmpty(fields) || ledgerSyncWouldWipe(prev, fields)) {
     return { write: false, error: emptyLedgerSyncError("sage") };
   }

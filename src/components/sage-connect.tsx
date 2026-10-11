@@ -189,7 +189,7 @@ export function SageConnectCard({
             <p className="ledger-connect__meta ledger-connect__meta--flush">
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
-                : "Connected. No Sage statement yet."}
+                : status.syncError?.trim() || "Connected. No Sage statement yet."}
             </p>
             <p id="sage-empty-sync" className="ledger-connect__meta">
               {emptySyncMessage ??

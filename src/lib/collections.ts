@@ -265,7 +265,10 @@ export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): s
   if (!snap) return AGED_AR_PENDING;
   if (snap.status === "skipped") return snap.skipReason ?? "Aged receivables were not applied";
   const when = snap.asOf ? `as of ${snap.asOf}` : "applied";
-  if (snap.status === "empty" || snap.contactCount === 0) {
+  if (snap.contactCount === 0) {
+    if (Math.abs(snap.totalOutstanding) >= 0.005) {
+      return `Aged receivables ${when} · ${moneyPlain(snap.totalOutstanding)} outstanding`;
+    }
     return `Aged receivables ${when} · nothing outstanding`;
   }
   const contacts = `${snap.contactCount} contact${snap.contactCount === 1 ? "" : "s"}`;
