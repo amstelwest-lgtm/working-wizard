@@ -327,6 +327,30 @@ assert(shell.includes('className="gold-text">MILŌN'), "the owner wordmark uses 
 assert(!shell.includes("milon-wordmark.png"), "the tiny image wordmark is gone");
 assert(!home.includes("Milōn Financial Manager"), "the view does not hardcode a display name");
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(door.includes("onOpen={openChat}") && door.includes("onAsk={openChat}"), "the avatar and the ask pill open the same chat");
+assert(door.includes("window.history.back"), "closing a bot the owner opened uses the browser back stack");
+assert(door.includes("runBotTransition"), "opening a bot runs the shared-element transition");
+assert(app.includes('search.bot === "analyst"'), "a bot deep link is kept on /app");
+const chatSrc = readFileSync("src/components/owner-door/owner-chat.tsx", "utf8");
+assert(chatSrc.includes('size="stage"'), "the open bot is the large stage");
+assert(chatSrc.includes('aria-label="Close"'), "the stage has a close control");
+assert(chatSrc.includes('event.key !== "Escape"'), "escape closes the stage");
+const avatarSrc = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8");
+assert(avatarSrc.includes("viewTransitionName"), "the home avatar and the stage share a transition name");
+assert(avatarSrc.includes('"stage"'), "the stage is an avatar size");
+const botMotion = readFileSync("src/components/owner-door/owner-bot-motion.ts", "utf8");
+assert(botMotion.includes("startViewTransition"), "the zoom uses the view transition API");
+assert(botMotion.includes("prefers-reduced-motion"), "reduced motion is detected before the zoom");
+assert(botMotion.includes('dataset.botFade = "cross"'), "reduced motion crossfades the zoom");
+assert(botMotion.includes('dataset.botFade = "plain"'), "a browser without view transitions crossfades");
+assert(css.includes(".owner-presence.is-stage") && css.includes("width: 280px"), "the open bot is 280px on a desktop");
+assert(css.includes("width: 160px"), "the open bot is 160px on a phone");
+assert(
+  css.includes("::view-transition-group(*)") && css.includes("animation: none"),
+  "reduced motion drops the spatial zoom",
+);
+assert(css.includes("@keyframes owner-bot-in") && css.includes("@keyframes owner-bot-out"), "the fallback is a crossfade");
+assert(home.includes("share"), "the home avatar opts into the shared element");
 assert(door.includes('setScreen("moves")'), "what needs an answer opens Next moves");
 assert(!door.includes('setScreen("actions")'), "the separate actions screen is gone");
 assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");

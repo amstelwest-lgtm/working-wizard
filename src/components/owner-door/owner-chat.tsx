@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerMotion } from "@/lib/owner-presence";
@@ -43,23 +44,32 @@ export function OwnerChat({
   onBack: () => void;
 }) {
   const short = agentShortName(agent);
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onBack();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onBack]);
   return (
-    <div className="owner-pane" data-owner-chat="true" data-agent={agent}>
-      <div className="owner-chat-head">
-        <button type="button" className="owner-back" onClick={onBack}>
-          Home
+    <div className="owner-pane" data-owner-chat="true" data-agent={agent} data-bot-stage="true">
+      <div className="owner-chat-stage">
+        <button type="button" className="owner-close" aria-label="Close" onClick={onBack}>
+          <CloseIcon />
         </button>
         <OwnerAvatar
           agent={agent}
           variant={variant}
-          size="md"
+          size="stage"
+          share
           motion={motion}
           label={agentAriaLabel(agent, MOTION_LABEL[motion])}
         />
-        <div>
-          <h1 className="owner-title">{agentDisplayName(agent)}</h1>
-          <p className="owner-lede">{sentence}</p>
-        </div>
+        <h1 className="owner-title">{agentDisplayName(agent)}</h1>
+        <p className="owner-lede">{sentence}</p>
+        <span className="owner-motion-label">{MOTION_LABEL[motion]}</span>
       </div>
       <ol className="owner-transcript">
         {messages.length === 0 ? (
@@ -109,6 +119,20 @@ export function OwnerChat({
         </button>
       </form>
     </div>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path
+        d="M6 6l12 12M18 6L6 18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

@@ -9,7 +9,7 @@ import type { OwnerMotion } from "@/lib/owner-presence";
 import { avatarRhythm } from "./owner-rhythm";
 
 export type AvatarVariant = "orb" | "character";
-export type AvatarSize = "lg" | "md" | "sm";
+export type AvatarSize = "lg" | "md" | "sm" | "stage";
 
 const JUMP: Keyframe[] = [
   { transform: "translate3d(0, 0, 0) scale(1, 1)" },
@@ -30,6 +30,7 @@ export function OwnerAvatar({
   size = "lg",
   lookAt = null,
   label,
+  share = false,
 }: {
   agent: AgentKey;
   variant: AvatarVariant;
@@ -37,6 +38,8 @@ export function OwnerAvatar({
   size?: AvatarSize;
   lookAt?: AgentKey | null;
   label?: string;
+  /** Same view-transition name on the home avatar and the open stage. */
+  share?: boolean;
 }) {
   const node = useRef<HTMLSpanElement>(null);
   const prev = useRef(motion);
@@ -82,10 +85,12 @@ export function OwnerAvatar({
       data-motion={motion}
       data-look={lookAt ?? undefined}
       data-size={size}
+      data-bot-shared={share ? "true" : undefined}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
       style={{
+        viewTransitionName: share ? `owner-bot-${agent}` : undefined,
         ["--breathe" as string]: rhythm.breathe,
         ["--breathe-delay" as string]: rhythm.breatheDelay,
         ["--drift" as string]: rhythm.drift,

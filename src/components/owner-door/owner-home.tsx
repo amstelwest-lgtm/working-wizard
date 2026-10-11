@@ -47,6 +47,7 @@ export function OwnerHome({
                   agent={card.agent}
                   variant={variant}
                   size="lg"
+                  share
                   motion={card.motion}
                   lookAt={card.lookAt}
                   label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}

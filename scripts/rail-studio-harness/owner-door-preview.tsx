@@ -2,12 +2,13 @@
  * Presentational owner door for local screenshots. Fixture figures stay in this
  * file. Production /app never imports it.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ActionPlanPanel from "@/components/action-plan";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
-import { OwnerChat } from "@/components/owner-door/owner-chat";
+import { ownerBotKey, runBotTransition } from "@/components/owner-door/owner-bot-motion";
+import { OwnerChat, type OwnerChatTurn } from "@/components/owner-door/owner-chat";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
@@ -19,10 +20,10 @@ import {
 } from "@/components/owner-door/owner-pages";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { agentShortName } from "@/lib/milon-team";
-import { AGENT_KEYS } from "@/lib/milon-team-feed";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerAnswerTiles } from "@/lib/owner-answers";
-import { ownerPresence, type OwnerMotion } from "@/lib/owner-presence";
+import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
+import { ownerPresence, type OwnerMotion, type OwnerTalk } from "@/lib/owner-presence";
 
 const USD = { currency: "USD" as const, locale: "en-US" as const };
 
@@ -111,10 +112,27 @@ export type OwnerPreviewView =
   | "profit"
   | "moves";
 
-export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
+export function OwnerDoorPreview({
+  view,
+  bot = null,
+  onBot,
+}: {
+  view: OwnerPreviewView;
+  bot?: AgentKey | null;
+  onBot?: (agent: AgentKey | null, mode: "push" | "replace") => void;
+}) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
   const [done, setDone] = useState(false);
   const [openedHealth, setOpenedHealth] = useState(false);
+  const [liveBot, setLiveBot] = useState<AgentKey | null>(ownerBotKey(bot));
+  const [draft, setDraft] = useState("");
+  const [liveMessages, setLiveMessages] = useState<OwnerChatTurn[]>([]);
+  const [talk, setTalk] = useState<OwnerTalk>(null);
+  const [busy, setBusy] = useState(false);
+  const liveRef = useRef(liveBot);
+  const pushedRef = useRef(false);
+  const botHydrated = useRef(false);
+  liveRef.current = liveBot;
 
   useEffect(() => {
     if (view !== "reel") return;
@@ -129,6 +147,16 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
       for (const timer of timers) window.clearTimeout(timer);
     };
   }, [view]);
+
+  useEffect(() => {
+    const next = ownerBotKey(bot);
+    if (!botHydrated.current) {
+      botHydrated.current = true;
+      return;
+    }
+    if (next === liveRef.current) return;
+    void runBotTransition(() => setLiveBot(next));
+  }, [bot]);
 
   const presence = ownerPresence(emptyAgentActivity());
   const shown =
@@ -153,14 +181,68 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
         : presence;
 
   const chatAgent = shown.agents.find((agent) => agent.agent === "analyst") ?? shown.agents[0];
+  const liveAgent = shown.agents.find((agent) => agent.agent === liveBot) ?? null;
   const homeView = view === "rest" || view === "work" || view === "ask";
+  const liveMotion: OwnerMotion = talk?.mode ?? liveAgent?.motion ?? "idle";
+  const liveSentence =
+    talk?.mode === "listening"
+      ? "Listening."
+      : talk?.mode === "working"
+        ? "Working…"
+        : talk?.mode === "speaking"
+          ? "Speaking."
+          : (liveAgent?.sentence ?? "");
+
+  function openLive(next: AgentKey) {
+    pushedRef.current = true;
+    void runBotTransition(() => setLiveBot(next));
+    onBot?.(next, "push");
+  }
+
+  function closeLive() {
+    const popped = pushedRef.current;
+    pushedRef.current = false;
+    setTalk(null);
+    void runBotTransition(() => setLiveBot(null)).then(() => {
+      if (popped && new URLSearchParams(window.location.search).has("bot")) {
+        window.history.back();
+        return;
+      }
+      onBot?.(null, "replace");
+    });
+  }
+
+  function sendLive() {
+    const question = draft.trim();
+    if (!question || busy || !liveBot) return;
+    setDraft("");
+    setLiveMessages((current) => [...current, { role: "owner", text: question }]);
+    setBusy(true);
+    setTalk({ agent: liveBot, mode: "working" });
+    window.setTimeout(() => {
+      setLiveMessages((current) => [
+        ...current,
+        { role: "agent", text: "Cash is the first thing to look at." },
+      ]);
+      setBusy(false);
+      setTalk({ agent: liveBot, mode: "speaking" });
+      window.setTimeout(() => setTalk(null), 900);
+    }, 700);
+  }
+
+  function listenLive() {
+    if (!liveBot) return;
+    setTalk((current) =>
+      current?.mode === "listening" ? null : { agent: liveBot, mode: "listening" },
+    );
+  }
 
   return (
     <OwnerShell
       screen={
         homeView && openedHealth
           ? "health"
-          : view === "chat" || view === "recording"
+          : view === "chat" || view === "recording" || (homeView && liveBot)
           ? "chat"
           : view === "tasks" || view === "actions" || view === "moves"
             ? "moves"
@@ -280,7 +362,7 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
         <OwnerChat
           agent={chatAgent.agent}
           variant="character"
-          motion="idle"
+          motion={view === "recording" ? "listening" : "idle"}
           sentence={chatAgent.sentence}
           messages={[
             { role: "owner", text: "What should I look at first?" },
@@ -297,6 +379,23 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           onSend={() => undefined}
           onListen={() => undefined}
           onBack={() => undefined}
+        />
+      ) : null}
+      {homeView && liveBot && liveAgent ? (
+        <OwnerChat
+          agent={liveAgent.agent}
+          variant="character"
+          motion={liveMotion}
+          sentence={liveSentence}
+          messages={liveMessages}
+          draft={draft}
+          listening={talk?.mode === "listening"}
+          busy={busy}
+          error={null}
+          onDraft={setDraft}
+          onSend={sendLive}
+          onListen={listenLive}
+          onBack={closeLive}
         />
       ) : null}
       {view === "accountant" ? (
@@ -318,13 +417,13 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
       {view === "first" ? (
         <OwnerFirst joined={false} onQuickBooks={() => undefined} onXero={() => undefined} onInvite={() => undefined} />
       ) : null}
-      {homeView && !openedHealth ? (
+      {homeView && !openedHealth && !liveBot ? (
         <OwnerHome
           variant="character"
           presence={shown}
           tiles={TILES}
-          onOpen={() => undefined}
-          onAsk={() => undefined}
+          onOpen={openLive}
+          onAsk={openLive}
           onTile={() => undefined}
           hero={<HealthOrb compact onOpen={() => setOpenedHealth(true)} />}
         />
