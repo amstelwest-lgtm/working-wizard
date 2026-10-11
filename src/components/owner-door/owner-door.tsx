@@ -18,6 +18,7 @@ import { latestRunByAgent } from "@/lib/milon-team-activity";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
   ownerAnswerTiles,
+  ownerCardStatuses,
   ownerHomeLines,
   parseOwnerNumber,
   type OwnerBooks,
@@ -430,6 +431,7 @@ export function OwnerDoor({
           variant="character"
           presence={presence}
           lines={ownerHomeLines(tiles, topMove)}
+          status={ownerCardStatuses(books)}
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}

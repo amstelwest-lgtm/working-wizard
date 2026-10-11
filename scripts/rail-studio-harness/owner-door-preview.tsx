@@ -21,31 +21,32 @@ import {
 import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
-import { ownerAnswerTiles, ownerHomeLines } from "@/lib/owner-answers";
+import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines } from "@/lib/owner-answers";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerPresence, type OwnerMotion, type OwnerTalk } from "@/lib/owner-presence";
 
 const USD = { currency: "USD" as const, locale: "en-US" as const };
 
-const TILES = ownerAnswerTiles({
+const BOOKS = {
   hasBooks: true,
-  ledger: "QuickBooks",
+  ledger: "QuickBooks" as const,
   revenue: 120000,
   priorRevenue: 100000,
   cogs: 48000,
   priorCogs: 40000,
   receivables: 18000,
   cashflow: {
-    openingBalance: "80000",
-    revenue: [{ amount: "5000", frequency: "recurring-weekly", startWeek: 1 }],
-    expenses: [{ amount: "3000", frequency: "recurring-weekly", startWeek: 1 }],
+    openingBalance: "42000",
+    revenue: [{ amount: "1000", frequency: "recurring-weekly", startWeek: 1 }],
+    expenses: [{ amount: "2500", frequency: "recurring-weekly", startWeek: 1 }],
   },
   openAction: "Approve the payroll run.",
   actionsReady: true,
   signedBy: "Alex Morgan",
   signedOn: "2 Oct 2026",
   market: USD,
-});
+};
+const TILES = ownerAnswerTiles(BOOKS);
 
 const PILLARS: SpherePillar[] = [
   {
@@ -473,6 +474,7 @@ export function OwnerDoorPreview({
           variant="character"
           presence={shown}
           lines={ownerHomeLines(TILES, "Collect the two largest invoices")}
+          status={ownerCardStatuses(BOOKS)}
           onOpen={openLive}
           onAsk={openLive}
         />

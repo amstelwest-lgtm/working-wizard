@@ -16,6 +16,7 @@
   --gold-ink:#7d5f0f;
   --gold-grad:linear-gradient(120deg,#ac8400,#d4af37 40%,#fdee79 60%,#d4af37 80%,#ac8400);
   --cobalt:#0b5fff; --royal:#2563eb; --ice:#38bdf8; --pale:#dbeafe; --navy:#102a43;
+  --on-cobalt:#ffffff;
   --line:#dbeafe; --line-soft:#e8f1fe;
   --card:#ffffff; --glass:#ffffff;
   --risk:#c43d4b; --warn:#b7791f; --ok:#16845b;
@@ -1579,4 +1580,67 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   line-height:1.35;
   color:var(--ink-dim,#9b958a);
 }
+
+/* Accountant rebrand. The wordmark (.gold-text) stays gold. */
+.accountant-portal ::selection{background:rgba(11,95,255,.22)}
+#atmos .g1{background:radial-gradient(circle,rgba(11,95,255,.16),transparent 65%)}
+#atmos .g2{background:radial-gradient(circle,rgba(56,189,248,.12),transparent 60%)}
+.accountant-portal .tb-btn.gold,
+.accountant-portal .btn.gold,
+.ask-ai-handoff{
+  background:var(--cobalt);
+  background-image:none;
+  color:var(--on-cobalt);
+  -webkit-text-fill-color:var(--on-cobalt);
+  box-shadow:none;
+}
+.accountant-portal .tb-btn.gold:hover,
+.accountant-portal .btn.gold:hover,
+.ask-ai-handoff:hover{
+  background:var(--royal);
+  background-image:none;
+  color:var(--on-cobalt);
+}
+.accountant-portal .tb-btn:hover{border-color:var(--cobalt);color:var(--cobalt)}
+.accountant-portal .card:hover,
+.accountant-portal .followup-row:hover,
+.accountant-portal .attn-card:hover,
+.accountant-portal .section-tab:hover{border-color:var(--pale)}
+.accountant-portal .deliverable-rail .tab.on,
+.accountant-portal .section-tab[aria-selected="true"]{
+  color:var(--cobalt);
+  background:var(--pale);
+  background-image:none;
+  box-shadow:inset 3px 0 0 var(--cobalt);
+}
+.accountant-portal .deliverable-rail .tab.bot-primary:not(.on)::before{background:var(--cobalt);box-shadow:none}
+.accountant-portal .deliverable-rail .tab:hover,
+.accountant-portal .deliverable-rail .tab.bot-primary:not(.on):hover{background:var(--bg-3)}
+.accountant-portal .deliverable-rail .tab.on .star{color:var(--cobalt)}
+.accountant-portal .tab.on{color:var(--cobalt)}
+.accountant-portal .tab::after,
+.accountant-portal .tab.on::after{background:var(--cobalt)}
+.accountant-portal .topbar .firm-chip b,
+.accountant-portal .topbar .firm-switcher select{color:var(--cobalt)}
+html.dark .accountant-portal .topbar .firm-chip b,
+html.dark .accountant-portal .topbar .firm-switcher select,
+html.dark .accountant-portal .deliverable-rail .tab.on,
+html.dark .accountant-portal .section-tab[aria-selected="true"],
+html.dark .accountant-portal .tab.on{color:var(--ink)}
+.accountant-portal .brain-input:focus,
+.accountant-portal .fin-grid input:focus{border-color:var(--cobalt);box-shadow:0 0 0 3px rgba(11,95,255,.16)}
+.accountant-portal .ctable tr.row:hover td{background:var(--bg-3);border-color:var(--pale)}
+.step .n{color:var(--on-cobalt);background:var(--cobalt)}
+.tag.gold{color:var(--cobalt);border-color:var(--pale)}
+.def-block{border-left-color:var(--cobalt);background:var(--bg-3)}
+.accountant-portal .topbar .profile-chip .av{background:var(--pale);color:var(--cobalt)}
+.accountant-portal .doc{background:var(--card);border-color:var(--pale)}
+.accountant-portal .doc .bar i,
+.accountant-portal .pb-card .bar i{background:var(--cobalt)}
+html[data-theme="light"] .accountant-portal .data-fresh{
+  border:1px solid var(--pale);
+  background:var(--bg);
+  color:var(--ink);
+}
+.accountant-portal .topbar .brand img{filter:none}
 
