@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { agentShortName } from "@/lib/milon-team";
+import { OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import { ownerPlanFreeLine, ownerPlanLine, type OwnerVisitor } from "@/lib/owner-plan";
 
 export type OwnerActionRow = {
@@ -79,6 +80,7 @@ export function OwnerAccountant({
   signed,
   requests,
   onConnect,
+  onHome,
 }: {
   joined: boolean;
   firmName: string | null;
@@ -87,10 +89,22 @@ export function OwnerAccountant({
   requests?: ReactNode;
   signed: OwnerSignoffRow[];
   onConnect: () => void;
+  onHome?: () => void;
 }) {
   return (
     <section className="owner-pane" data-owner-page="accountant">
-      <h1 className="owner-title">Accountant</h1>
+      <nav className="owner-crumb" aria-label="breadcrumb">
+        {onHome ? (
+          <button type="button" className="owner-crumb-link" onClick={onHome}>
+            Home
+          </button>
+        ) : (
+          <span>Home</span>
+        )}
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Accountant portal</span>
+      </nav>
+      <h1 className="owner-title">Accountant portal</h1>
       <p className="owner-lede">
         {joined
           ? `${firmName?.trim() || "Your accountant"} is on Milōn.`
@@ -99,64 +113,31 @@ export function OwnerAccountant({
       {joined ? null : <p className="owner-free">{ownerPlanFreeLine()}</p>}
       {invite}
       <div id="owner-accountant-requests">{requests}</div>
-      <h2 className="owner-sub">What your accountant signed</h2>
-      {signed.length ? (
-        <div className="owner-promises">
-          {signed.map((row) => (
-            <article key={row.id} className="owner-tile">
-              <div>
-                <h2>{SCOPE_LABEL[row.scope] ?? row.scope}</h2>
-                <p>
-                  {row.name} signed off on {row.when}.
-                </p>
-              </div>
-              <span className="owner-badge">Signed off ✓</span>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="owner-lede">Invite your accountant to sign off.</p>
-      )}
+      <section id={OWNER_SIGNED_SECTION_ID} aria-label="Signed deliverables">
+        <h2 className="owner-sub">What your accountant signed</h2>
+        {signed.length ? (
+          <div className="owner-promises">
+            {signed.map((row) => (
+              <article key={row.id} className="owner-tile">
+                <div>
+                  <h2>{SCOPE_LABEL[row.scope] ?? row.scope}</h2>
+                  <p>
+                    {row.name} signed off on {row.when}.
+                  </p>
+                </div>
+                <span className="owner-badge">Signed off ✓</span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="owner-lede">Invite your accountant to sign off.</p>
+        )}
+      </section>
       <h2 className="owner-sub">Uploads</h2>
       {uploads}
       <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onConnect}>
         Connect your books
       </button>
-    </section>
-  );
-}
-
-export function OwnerDeliverables({
-  rows,
-  onInvite,
-}: {
-  rows: OwnerSignoffRow[];
-  onInvite: () => void;
-}) {
-  return (
-    <section className="owner-pane" data-owner-page="deliverables">
-      <h1 className="owner-title">Deliverables</h1>
-      <p className="owner-lede">
-        {rows.length ? "What your accountant signed." : "Invite your accountant to sign off."}
-      </p>
-      <div className="owner-promises">
-        {rows.map((row) => (
-          <article key={row.id} className="owner-tile">
-            <div>
-              <h2>{SCOPE_LABEL[row.scope] ?? row.scope}</h2>
-              <p>
-                {row.name} signed off on {row.when}.
-              </p>
-            </div>
-            <span className="owner-badge">Signed off ✓</span>
-          </article>
-        ))}
-      </div>
-      {rows.length ? null : (
-        <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onInvite}>
-          Invite your accountant
-        </button>
-      )}
     </section>
   );
 }
@@ -270,7 +251,11 @@ export function OwnerFirst({
       {joined ? null : (
         <>
           <p className="owner-free">{ownerPlanFreeLine()}</p>
-          <button type="button" className="owner-btn-tertiary owner-ask owner-ask-inline" onClick={onInvite}>
+          <button
+            type="button"
+            className="owner-btn-tertiary owner-ask owner-ask-inline"
+            onClick={onInvite}
+          >
             Invite your accountant
           </button>
         </>

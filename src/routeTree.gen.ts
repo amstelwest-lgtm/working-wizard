@@ -15,6 +15,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AiRouteImport } from './routes/ai'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as DeliverablesRouteImport } from './routes/deliverables'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
 import { Route as ForOwnersRouteImport } from './routes/for-owners'
@@ -33,6 +34,7 @@ import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
 import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
+import { Route as AppDeliverablesRouteImport } from './routes/app_.deliverables'
 import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
 import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
 import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
@@ -88,6 +90,11 @@ const AppRoute = AppRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeliverablesRoute = DeliverablesRouteImport.update({
+  id: '/deliverables',
+  path: '/deliverables',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FaqRoute = FaqRouteImport.update({
@@ -178,6 +185,11 @@ const ApiMetricsDigestRoute = ApiMetricsDigestRouteImport.update({
 const ApiTaskEngagedRoute = ApiTaskEngagedRouteImport.update({
   id: '/api/task-engaged',
   path: '/api/task-engaged',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppDeliverablesRoute = AppDeliverablesRouteImport.update({
+  id: '/app_/deliverables',
+  path: '/app/deliverables',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -333,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/ai': typeof AiRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/deliverables': typeof DeliverablesRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -351,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
+  '/app/deliverables': typeof AppDeliverablesRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/verified': typeof AuthVerifiedRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -385,6 +399,7 @@ export interface FileRoutesByTo {
   '/ai': typeof AiRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/deliverables': typeof DeliverablesRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -403,6 +418,7 @@ export interface FileRoutesByTo {
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
+  '/app/deliverables': typeof AppDeliverablesRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/verified': typeof AuthVerifiedRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -439,6 +455,7 @@ export interface FileRoutesById {
   '/ai': typeof AiRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/deliverables': typeof DeliverablesRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -457,6 +474,7 @@ export interface FileRoutesById {
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
+  '/app_/deliverables': typeof AppDeliverablesRoute
   '/auth_/callback': typeof AuthCallbackRoute
   '/auth_/verified': typeof AuthVerifiedRoute
   '/billing/cancel': typeof BillingCancelRoute
@@ -493,6 +511,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/app'
     | '/auth'
+    | '/deliverables'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
@@ -511,6 +530,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
+    | '/app/deliverables'
     | '/auth/callback'
     | '/auth/verified'
     | '/billing/cancel'
@@ -545,6 +565,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/app'
     | '/auth'
+    | '/deliverables'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
@@ -563,6 +584,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
+    | '/app/deliverables'
     | '/auth/callback'
     | '/auth/verified'
     | '/billing/cancel'
@@ -598,6 +620,7 @@ export interface FileRouteTypes {
     | '/ai'
     | '/app'
     | '/auth'
+    | '/deliverables'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
@@ -616,6 +639,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
+    | '/app_/deliverables'
     | '/auth_/callback'
     | '/auth_/verified'
     | '/billing/cancel'
@@ -652,6 +676,7 @@ export interface RootRouteChildren {
   AiRoute: typeof AiRoute
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRoute
+  DeliverablesRoute: typeof DeliverablesRoute
   FaqRoute: typeof FaqRoute
   ForAccountantsRoute: typeof ForAccountantsRoute
   ForOwnersRoute: typeof ForOwnersRoute
@@ -668,6 +693,7 @@ export interface RootRouteChildren {
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
   ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
+  AppDeliverablesRoute: typeof AppDeliverablesRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthVerifiedRoute: typeof AuthVerifiedRoute
   BillingCancelRoute: typeof BillingCancelRoute
@@ -731,6 +757,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/deliverables': {
+      id: '/deliverables'
+      path: '/deliverables'
+      fullPath: '/deliverables'
+      preLoaderRoute: typeof DeliverablesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/faq': {
@@ -857,6 +890,13 @@ declare module '@tanstack/react-router' {
       path: '/api/task-engaged'
       fullPath: '/api/task-engaged'
       preLoaderRoute: typeof ApiTaskEngagedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app_/deliverables': {
+      id: '/app_/deliverables'
+      path: '/app/deliverables'
+      fullPath: '/app/deliverables'
+      preLoaderRoute: typeof AppDeliverablesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth_/callback': {
@@ -1088,6 +1128,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiRoute: AiRoute,
   AppRoute: AppRoute,
   AuthRoute: AuthRoute,
+  DeliverablesRoute: DeliverablesRoute,
   FaqRoute: FaqRoute,
   ForAccountantsRoute: ForAccountantsRoute,
   ForOwnersRoute: ForOwnersRoute,
@@ -1104,6 +1145,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiClientErrorRoute: ApiClientErrorRoute,
   ApiMetricsDigestRoute: ApiMetricsDigestRoute,
   ApiTaskEngagedRoute: ApiTaskEngagedRoute,
+  AppDeliverablesRoute: AppDeliverablesRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthVerifiedRoute: AuthVerifiedRoute,
   BillingCancelRoute: BillingCancelRoute,

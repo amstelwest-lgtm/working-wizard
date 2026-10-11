@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { flushServerErrors, reportServerError } from "./lib/monitoring.server";
+import { ownerDeliverablesRedirectTarget } from "./lib/owner-nav";
 import { retiredCoZaRedirect } from "./lib/retired-coza-host";
 
 type ServerEntry = {
@@ -14,7 +15,7 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
-      (m) => ((m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry)),
+      (m) => (m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry),
     );
   }
   return serverEntryPromise;
@@ -111,6 +112,8 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const retired = retiredCoZaRedirect(request);
     if (retired) return retired;
+    const ownerNav = ownerDeliverablesRedirectTarget(request.url);
+    if (ownerNav) return Response.redirect(new URL(ownerNav, request.url), 302);
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
