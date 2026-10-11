@@ -1242,7 +1242,7 @@ function Dashboard() {
       const linked: string[] = [];
       for (const id of orphanIds) {
         const { error: attachErr } = await supabase.rpc(
-          "link_client_firm" as never,
+          "link_own_client_to_firm" as never,
           { p_client_id: id, p_firm_id: activeFirmId } as never,
         );
         if (!attachErr) linked.push(id);

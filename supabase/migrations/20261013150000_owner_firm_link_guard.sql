@@ -143,7 +143,10 @@ CREATE POLICY "clients insert own"
     AND firm_link_accepted_by IS NULL
   );
 
--- Firm member (or service role, with an explicit member) attaches a client.
+-- Service role (invite redeem) and SECURITY DEFINER callers (marketplace
+-- accept) attach a client. Signed-in users cannot execute this. When a JWT
+-- is present anyway, the caller must own the client or the client must have
+-- an open or accepted request for this firm.
 CREATE OR REPLACE FUNCTION public.link_client_firm(
   p_client_id uuid,
   p_firm_id uuid,
@@ -158,6 +161,7 @@ DECLARE
   v_uid uuid := auth.uid();
   v_actor uuid;
   v_role text := coalesce(auth.role(), '');
+  v_owner uuid;
 BEGIN
   IF p_client_id IS NULL OR p_firm_id IS NULL THEN
     RAISE EXCEPTION 'client and firm are required';
@@ -170,6 +174,18 @@ BEGIN
     v_actor := p_accepted_by;
   ELSE
     v_actor := v_uid;
+    SELECT c.owner_user_id INTO v_owner
+    FROM public.clients c
+    WHERE c.id = p_client_id;
+    IF v_owner IS DISTINCT FROM v_uid AND NOT EXISTS (
+      SELECT 1
+      FROM public.accountant_requests r
+      WHERE r.client_id = p_client_id
+        AND r.firm_id = p_firm_id
+        AND r.status IN ('open', 'accepted')
+    ) THEN
+      RAISE EXCEPTION 'Only the business owner or an accepted firm request can link this client';
+    END IF;
   END IF;
 
   IF v_actor IS NULL OR NOT public.is_firm_member(v_actor, p_firm_id) THEN
@@ -193,8 +209,63 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.link_client_firm(uuid, uuid, uuid) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM anon;
+REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.link_client_firm(uuid, uuid, uuid) TO service_role;
+
+-- Dashboard orphan attach. The caller must own the client and belong to the firm.
+CREATE OR REPLACE FUNCTION public.link_own_client_to_firm(
+  p_client_id uuid,
+  p_firm_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Not authenticated';
+  END IF;
+  IF p_client_id IS NULL OR p_firm_id IS NULL THEN
+    RAISE EXCEPTION 'client and firm are required';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.clients c
+    WHERE c.id = p_client_id
+      AND c.owner_user_id = v_uid
+  ) THEN
+    RAISE EXCEPTION 'Only the business owner can link this client';
+  END IF;
+  IF NOT public.is_firm_member(v_uid, p_firm_id) THEN
+    RAISE EXCEPTION 'Only a member of the firm can link this client';
+  END IF;
+
+  PERFORM set_config('milon.firm_link', 'accept', true);
+
+  UPDATE public.clients
+  SET
+    firm_id = p_firm_id,
+    firm_connected_at = COALESCE(firm_connected_at, now()),
+    firm_link_accepted_at = COALESCE(firm_link_accepted_at, now()),
+    firm_link_accepted_by = COALESCE(firm_link_accepted_by, v_uid)
+  WHERE id = p_client_id
+    AND owner_user_id = v_uid
+    AND (firm_id IS NULL OR firm_id = p_firm_id);
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Client is linked to a different firm';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.link_own_client_to_firm(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.link_own_client_to_firm(uuid, uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.link_own_client_to_firm(uuid, uuid) TO authenticated;
 
 -- Firm-created clients stamp acceptance in the same insert.
 CREATE OR REPLACE FUNCTION public.create_firm_client(
@@ -252,6 +323,7 @@ BEGIN
 
   v_code := public.generate_client_code();
 
+  -- New row only. An update of an existing id would let a member claim it.
   PERFORM set_config('milon.firm_link', 'accept', true);
 
   INSERT INTO public.clients (
@@ -279,6 +351,16 @@ BEGIN
     v_uid
   )
   RETURNING id INTO v_client_id;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.clients c
+    WHERE c.id = v_client_id
+      AND c.owner_user_id = v_uid
+      AND c.firm_id = v_firm_id
+  ) THEN
+    RAISE EXCEPTION 'create_firm_client must not claim an existing client';
+  END IF;
 
   RETURN jsonb_build_object(
     'id', v_client_id,

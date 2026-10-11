@@ -946,7 +946,31 @@ assert(
 assert(linkGuard.includes("firm_link_accepted_at"), "acceptance is stored on the client");
 assert(
   linkGuard.includes("CREATE OR REPLACE FUNCTION public.link_client_firm"),
-  "invite and firm attach go through link_client_firm",
+  "invite and marketplace accept go through link_client_firm",
+);
+assert(
+  linkGuard.includes("REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM authenticated"),
+  "signed-in users cannot execute link_client_firm",
+);
+assert(
+  !/GRANT EXECUTE ON FUNCTION public\.link_client_firm\(uuid, uuid, uuid\) TO authenticated/.test(linkGuard),
+  "link_client_firm is not granted to authenticated",
+);
+assert(
+  linkGuard.includes("GRANT EXECUTE ON FUNCTION public.link_client_firm(uuid, uuid, uuid) TO service_role"),
+  "service role can execute link_client_firm",
+);
+assert(
+  linkGuard.includes("status IN ('open', 'accepted')"),
+  "a signed-in caller needs an open or accepted firm request",
+);
+assert(
+  linkGuard.includes("CREATE OR REPLACE FUNCTION public.link_own_client_to_firm"),
+  "owners who are firm members use link_own_client_to_firm",
+);
+assert(
+  linkGuard.includes("create_firm_client must not claim an existing client"),
+  "create_firm_client cannot adopt an existing client",
 );
 assert(
   linkGuard.includes("firm_link_accepted_at,\n    firm_link_accepted_by"),
@@ -969,11 +993,34 @@ assert(
   "accountant invite does not write firm_id with the user client",
 );
 const dashboard = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
-assert(dashboard.includes('rpc(\n          "link_client_firm"'), "orphan clients attach through the RPC");
+assert(
+  dashboard.includes('rpc(\n          "link_own_client_to_firm"'),
+  "orphan clients attach through link_own_client_to_firm",
+);
+assert(!dashboard.includes('"link_client_firm"'), "the dashboard does not call link_client_firm");
 assert(
   !dashboard.includes("firm_id: activeFirmId, firm_connected_at"),
   "the dashboard does not update clients.firm_id directly",
 );
+const linkLock = readFileSync(
+  resolve("supabase/migrations/20261013160000_link_client_firm_execute_lock.sql"),
+  "utf8",
+);
+assert(
+  linkLock.includes("REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM authenticated"),
+  "already-applied databases revoke authenticated execute",
+);
+const linkSql = readFileSync(resolve("scripts/link-client-firm-guard-sql-tests.sql"), "utf8");
+for (const name of [
+  "cross_tenant_member_refused",
+  "owner_self_link_refused",
+  "invite_redeem_links",
+  "marketplace_accept_links",
+  "link_own_client_to_firm_owner_member",
+  "create_firm_client_does_not_claim_existing",
+]) {
+  assert(linkSql.includes(name), `sql tests include ${name}`);
+}
 const disconnect = readFileSync(resolve("src/lib/practice-access.functions.ts"), "utf8");
 assert(
   disconnect.includes("firm_link_accepted_at: null"),
