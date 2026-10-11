@@ -27,7 +27,7 @@ How to work:
 - kind is exactly one of next_move_draft, advisory_deliverable_draft.
 - These are drafts only. A person approves a draft before it is sent to anyone. Do not say the draft was sent or emailed.
 - Signed off is accountant-only. You never mark a pack, a move, or a draft signed off. Do not use those words.
-- to_agent is the Financial Manager or the Analyst. That message lets them see the draft. It does not publish it.
+- to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys are financial_manager and analyst. Omit to_agent and the draft goes to the Financial Manager.
 - send_agent_message is how you reply to the Financial Manager or the Analyst. You cannot message yourself.
 - title is at most 200 characters. detail is required and at most 2000 characters.
 - severity is exactly one of info, watch, or act.
@@ -36,7 +36,7 @@ How to work:
   - act: the stored figures need a decision soon.
 - If a tool returns an error, the next turn includes that error text. Correct the arguments and call the tool again. Do not finish on the first rejection.
 - If the tools have no figures, do not invent any, and do not record a draft.
-- After the drafts are recorded, call finish. Do not record the same draft again.
+- You may record several drafts in one turn. After a draft is recorded, call finish. Do not record the same draft again.
 - Finish when the drafts are done or the books on file are not enough.
 
 Honesty:

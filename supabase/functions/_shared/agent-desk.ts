@@ -12,6 +12,7 @@ import {
   draftMessageType,
   periodsFromFindingEvidence,
   prepareDraftRecord,
+  resolveDraftRecipient,
   type AgentOutboundType,
 } from "../../../src/lib/agent-draft.ts";
 import { findingDuplicates, higherFindingSeverity, numericFigures } from "../../../src/lib/agent-analyst.ts";
@@ -277,8 +278,12 @@ export async function recordAgentDraft(
   peers: readonly AgentKey[],
   allowedKinds: readonly string[],
 ): Promise<unknown> {
-  const toAgent = peerName(args.to_agent, peers);
-  if (!toAgent) return { error: `to_agent must be one of: ${peers.join(", ")}.` };
+  const recipient = resolveDraftRecipient({
+    agent: ctx.agent,
+    kind: typeof args.kind === "string" ? args.kind : "",
+    toAgent: args.to_agent,
+    peers,
+  });
   const prepared = prepareDraftRecord({
     kind: typeof args.kind === "string" ? args.kind : "",
     allowedKinds,
@@ -339,7 +344,9 @@ export async function recordAgentDraft(
       recorded: true,
       deduped: true,
       finding_id: duplicate.id,
+      to_agent: recipient.toAgent,
       evidence: prepared.evidence,
+      ...(recipient.normalised ? { normalised_to_agent: true } : {}),
       ...(prepared.warning ? { warning: prepared.warning } : {}),
     };
   }
@@ -362,8 +369,19 @@ export async function recordAgentDraft(
   if (error || !data?.id) return { error: error?.message || "The draft was not saved." };
   for (const key of prepared.recordKeys) ctx.recordedKeys.add(key);
 
+  if (!recipient.toAgent) {
+    return {
+      recorded: true,
+      finding_id: data.id,
+      to_agent: null,
+      evidence: prepared.evidence,
+      ...(recipient.normalised ? { normalised_to_agent: true } : {}),
+      ...(prepared.warning ? { warning: prepared.warning } : {}),
+    };
+  }
+
   const sent = await insertAgentMessage(ctx, {
-    toAgent,
+    toAgent: recipient.toAgent,
     type: draftMessageType(prepared.kind),
     payload: {
       finding_id: data.id,
@@ -378,7 +396,9 @@ export async function recordAgentDraft(
   return {
     recorded: true,
     finding_id: data.id,
+    to_agent: recipient.toAgent,
     evidence: prepared.evidence,
+    ...(recipient.normalised ? { normalised_to_agent: true } : {}),
     ...(prepared.warning ? { warning: prepared.warning } : {}),
   };
 }

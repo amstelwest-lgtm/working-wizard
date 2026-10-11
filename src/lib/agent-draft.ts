@@ -16,21 +16,25 @@ import {
 } from "./agent-bus.ts";
 import { findingRecordKey } from "./agent-analyst.ts";
 
-export const RUNNER_COST_CEILING_USD = 0.05;
-/** Stop before another model call once the run is already this close to the ceiling. */
-export const RUNNER_COST_STOP_USD = 0.04;
-export const RUNNER_MAX_ITERATIONS = 4;
+/** Hard cap for one Financial Manager or Advisor run. */
+export const RUNNER_COST_CEILING_USD = 0.06;
+/**
+ * Stop before another model call once spend is this close to the ceiling.
+ * A normal 3–4 turn run stays under this line; the ceiling is the headroom.
+ */
+export const RUNNER_COST_STOP_USD = 0.055;
 export const RUNNER_MAX_OUTPUT_TOKENS = 500;
 
 /**
- * Token envelope the runners are sized for: four short rounds, one cache
- * write, then cache reads. Priced with the Sonnet 5.5 rates in the runner test.
+ * Token envelope for a normal four-turn run: one cache write, then cache
+ * reads, plus the uncached tool results. Priced with the Sonnet 5.5 rates
+ * in the runner test. It stays under the stop line, inside the ceiling.
  */
 export const RUNNER_TOKEN_ENVELOPE = {
-  uncachedInputTokens: 8_000,
+  uncachedInputTokens: 10_000,
   outputTokens: 2_000,
-  cacheWriteTokens: 2_500,
-  cacheReadTokens: 7_500,
+  cacheWriteTokens: 3_000,
+  cacheReadTokens: 10_000,
 } as const;
 
 export const DRAFT_SEVERITIES = ["info", "watch", "act"] as const;
@@ -44,8 +48,66 @@ export function draftClaimsSignedOff(parts: readonly string[]): boolean {
   return parts.some((part) => SIGNED_OFF.test(part));
 }
 
-export function runnerShouldStopForCost(costUsd: number): boolean {
-  return costUsd >= RUNNER_COST_STOP_USD;
+export function runnerShouldStopForCost(costUsd: number, stopUsd = RUNNER_COST_STOP_USD): boolean {
+  return costUsd >= stopUsd;
+}
+
+/** Draft kinds a person approves. They are not handed to another bot. */
+const HUMAN_APPROVER_DRAFT_KINDS = new Set([
+  "action_point_draft",
+  "data_request_draft",
+  "accountant_handoff_draft",
+]);
+
+export type DraftBotKey = "financial_manager" | "analyst" | "advisor";
+
+export type DraftRecipient = {
+  toAgent: DraftBotKey | null;
+  /** True when a supplied value was not a peer bot key and was dropped. */
+  normalised: boolean;
+};
+
+/**
+ * Missing or invalid to_agent uses the default. It is not a rejection.
+ * Financial Manager drafts for a person stay with no bot recipient.
+ * A Financial Manager next move goes to the Advisor.
+ * An Advisor draft goes to the Financial Manager.
+ */
+export function defaultDraftRecipient(agent: "financial_manager" | "advisor", kind: string): DraftBotKey | null {
+  if (agent === "advisor") return "financial_manager";
+  if (HUMAN_APPROVER_DRAFT_KINDS.has(kind)) return null;
+  return "advisor";
+}
+
+export function resolveDraftRecipient(input: {
+  agent: "financial_manager" | "advisor";
+  kind: string;
+  toAgent: unknown;
+  peers: readonly string[];
+}): DraftRecipient {
+  const raw = typeof input.toAgent === "string" ? input.toAgent.trim() : "";
+  if (raw && input.peers.includes(raw)) {
+    return { toAgent: raw as DraftBotKey, normalised: false };
+  }
+  return {
+    toAgent: defaultDraftRecipient(input.agent, input.kind),
+    normalised: raw.length > 0,
+  };
+}
+
+/**
+ * Once a draft is on file, the next turn does not call the model.
+ * Same finish as the Analyst after a finding: the run is complete.
+ */
+export function runnerEarlyFinish(draftsRecorded: number): {
+  reason: "objective_complete";
+  summary: string;
+} | null {
+  if (draftsRecorded < 1) return null;
+  return {
+    reason: "objective_complete",
+    summary: "Drafts are recorded. A person approves them before anything is sent.",
+  };
 }
 
 export function draftMessageType(kind: string): "request" | "handoff" {
@@ -218,11 +280,12 @@ export function recordDraftToolSchema(kinds: readonly string[], peers: readonly 
         to_agent: {
           type: "string",
           enum: [...peers],
-          description: "The other bot who should see this draft. A person still approves before it goes to anyone.",
+          description:
+            "Optional bot key. Never the accountant or the owner. Human approval is implied by draft=true. Omit it to use the default recipient.",
         },
         figures: FIGURES_SCHEMA,
       },
-      required: ["kind", "severity", "title", "detail", "to_agent"],
+      required: ["kind", "severity", "title", "detail"],
       additionalProperties: false,
     },
   };
