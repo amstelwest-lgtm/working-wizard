@@ -160,7 +160,7 @@ function FieldRow({
       <div className="flex-1 min-w-0">
         <span className="text-xs text-slate-400">{label}</span>
         {derived && hasValue && (
-          <span className="ml-1.5 rounded border border-amber-800/80 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-400">
+          <span className="ml-1.5 rounded border border-amber-800/80 px-1 py-px text-xs font-semibold uppercase tracking-wide text-amber-400">
             Derived
           </span>
         )}
@@ -171,7 +171,7 @@ function FieldRow({
         )}
       </div>
       {source && (
-        <span className="text-[9px] text-slate-600 bg-slate-800 rounded px-1 py-0.5">{source}</span>
+        <span className="text-xs text-slate-600 bg-slate-800 rounded px-1 py-0.5">{source}</span>
       )}
       {isEditing ? (
         <Input
@@ -474,7 +474,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
                           />
                           <div>
                             <p className="text-xs text-slate-200">{fmtMoney(val, money)}</p>
-                            <p className="text-[9px] text-slate-500">
+                            <p className="text-xs text-slate-500">
                               {src.replace("document_", "Doc ")}
                             </p>
                           </div>
@@ -690,7 +690,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
               <div className="space-y-1">
                 {result.file_names.map((name, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] text-slate-400">
+                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">
                       Doc {i + 1}
                     </span>
                     <span className="text-slate-300 truncate">{name}</span>
@@ -719,7 +719,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPo
             <Button
               onClick={handleConfirm}
               disabled={unresolvedConflicts.length > 0 || !acceptedQuality}
-              className="flex-1 bg-[#b7872a] hover:bg-[#d4a550] text-white font-semibold"
+              className="flex-1 bg-[#0B5FFF] hover:bg-[#2563EB] text-white font-semibold"
             >
               <CheckCircle2 className="h-4 w-4 mr-1.5" />
               {unresolvedConflicts.length > 0

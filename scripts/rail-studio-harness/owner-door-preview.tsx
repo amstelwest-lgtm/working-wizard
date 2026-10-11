@@ -28,6 +28,7 @@ import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines } from "@/lib/owner
 import { ownerNeedsView } from "@/lib/owner-needs";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerPresence, type OwnerMotion, type OwnerTalk } from "@/lib/owner-presence";
+import type { OwnerSubscribeView } from "@/lib/owner-subscribe";
 
 const USD = { currency: "USD" as const, locale: "en-US" as const };
 
@@ -204,16 +205,28 @@ const READY_ACTUAL_MONTHS = [
   "2026-09",
 ].map((month) => ({ month, totals: { revenue: 60_000 } }));
 
+function previewBilling(
+  bill: "none" | "stripe" | "firm" | "unavailable" | undefined,
+): OwnerSubscribeView {
+  if (bill === "stripe") return { kind: "manage" };
+  if (bill === "firm") return { kind: "covered", firmName: "Harbour & Co" };
+  if (bill === "unavailable") return { kind: "unavailable" };
+  if (bill === "none") return { kind: "subscribe" };
+  return { kind: "pending" };
+}
+
 export function OwnerDoorPreview({
   view,
   bot = null,
   onBot,
   budgetCase = "ready",
+  bill,
 }: {
   view: OwnerPreviewView;
   bot?: AgentKey | null;
   onBot?: (agent: AgentKey | null, mode: "push" | "replace") => void;
   budgetCase?: "ready" | "empty" | "draft";
+  bill?: "none" | "stripe" | "firm" | "unavailable";
 }) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
   const [done, setDone] = useState(false);
@@ -520,7 +533,13 @@ export function OwnerDoorPreview({
         />
       ) : null}
       {view === "plan" ? (
-        <OwnerPlan visitor="us" accountantOnMilon={false} firmName={null} />
+        <OwnerPlan
+          visitor="us"
+          accountantOnMilon={false}
+          firmName={null}
+          billing={previewBilling(bill)}
+          onSubscribe={() => undefined}
+        />
       ) : null}
       {view === "settings" ? (
         <OwnerSettings
@@ -531,6 +550,8 @@ export function OwnerDoorPreview({
           onQuickBooks={() => undefined}
           onXero={() => undefined}
           onBack={() => undefined}
+          billing={previewBilling(bill)}
+          onSubscribe={() => undefined}
         />
       ) : null}
       {view === "first" ? (

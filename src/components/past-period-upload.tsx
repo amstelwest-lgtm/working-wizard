@@ -48,8 +48,8 @@ export function PastPeriodUploadDialog({ open, onOpenChange, onFiles, onContinue
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-w-lg overflow-hidden border border-[#d4a550]/25 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_42%),linear-gradient(180deg,#fffdf8,#f7f1e4)] text-[#1b1608] dark:border-[#d4a550]/20 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_42%),linear-gradient(180deg,#141b28,#0b1220)] dark:text-slate-100">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent" />
+      <DialogContent className="max-w-lg overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#0B5FFF] via-[#F4F7FB] to-transparent" />
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold tracking-tight">
             {PAST_PERIOD_UPLOAD_TITLE}
@@ -69,7 +69,7 @@ export function PastPeriodUploadDialog({ open, onOpenChange, onFiles, onContinue
         <label className="flex items-start gap-2 text-[12px] text-[#4a3d22] dark:text-slate-300">
           <input
             type="checkbox"
-            className="mt-0.5 accent-[#b7872a]"
+            className="mt-0.5 accent-[#0B5FFF]"
             checked={replaceLive}
             onChange={(e) => setReplaceLive(e.target.checked)}
           />
@@ -89,7 +89,7 @@ export function PastPeriodUploadDialog({ open, onOpenChange, onFiles, onContinue
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c4963e]"
+            className="bg-[#0B5FFF] text-white hover:bg-[#c4963e]"
             onClick={() => {
               if (onContinue) {
                 onContinue({ replaceLive });

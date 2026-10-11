@@ -1358,8 +1358,8 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   const panel = readFileSync(resolve("src/components/recommendations-panel.tsx"), "utf8");
   assert(panel.includes("Propose from brain"), "Propose from brain stays the accountant primary");
   assert(
-    (panel.match(/from-\[#f3d98a\]/g) ?? []).length >= 1,
-    "the gold propose control is unchanged",
+    (panel.match(/bg-\[#0B5FFF\]/g) ?? []).length >= 1,
+    "the propose control is cobalt",
   );
 }
 

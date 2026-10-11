@@ -395,7 +395,7 @@ export function ProfitabilityWaterfall({
   const showHeader = !hideLead || Boolean(yearToDate?.periodLabel) || Boolean(periodNote) || !hideCardExport;
 
   return (
-    <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-slate-800 dark:bg-[#102A43] dark:text-[#f1f5f9] dark:shadow-none">
+    <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
       <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]" />
       {showHeader ? (
       <CardHeader className="border-b border-[#DBEAFE] pb-5 dark:border-slate-800">
@@ -403,7 +403,7 @@ export function ProfitabilityWaterfall({
           <div className="flex-1">
             {hideLead ? null : (
               <>
-                <CardTitle className="text-xl font-semibold tracking-tight text-[#102A43] dark:text-[#f8fafc]">
+                <CardTitle className="text-xl font-semibold tracking-tight text-[#102A43] dark:text-[#F4F7FB]">
                   Profitability Waterfall
                 </CardTitle>
                 <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">{answerSentence}</p>
@@ -526,12 +526,12 @@ export function ProfitabilityWaterfall({
                         }}
                       >
                         <div
-                          className="truncate rounded-sm bg-[#fffdf8]/90 px-0.5 text-[10px] font-extrabold tracking-tight dark:bg-[#0b1220]/85 sm:text-[11px]"
+                          className="truncate rounded-sm bg-[#FFFFFF]/90 px-0.5 text-[10px] font-extrabold tracking-tight dark:bg-[#0b1220]/85 sm:text-[11px]"
                           style={{
                             color: isDec || negNet ? "#c0392b" : undefined,
                           }}
                         >
-                          <span className={isDec || negNet ? "" : "text-[#0f172a] dark:text-[#f8fafc]"}>
+                          <span className={isDec || negNet ? "" : "text-[#102A43] dark:text-[#F4F7FB]"}>
                             {isDec
                               ? negative === "minus"
                                 ? ownerOutflow(fmtCompact(Math.abs(s.delta)))
@@ -539,7 +539,7 @@ export function ProfitabilityWaterfall({
                               : fmtCompact(s.runningEnd)}
                           </span>
                         </div>
-                        <div className="truncate text-[9px] font-medium text-[#475569] dark:text-[#94a3b8]">
+                        <div className="truncate text-xs font-medium text-[#475569] dark:text-[#94a3b8]">
                           {pct(value, revenue)}
                         </div>
                       </div>
@@ -564,7 +564,7 @@ export function ProfitabilityWaterfall({
 
                       {/* column label + badge */}
                       <div className="absolute bottom-0 left-0 right-0 flex h-[84px] flex-col items-center gap-1 pt-2">
-                        <span className="w-full truncate px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
+                        <span className="w-full truncate px-0.5 text-center text-xs font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
                           {s.label}
                         </span>
                         {isNet && taxNote ? (
@@ -574,7 +574,7 @@ export function ProfitabilityWaterfall({
                         ) : null}
                         {status && (
                           <span
-                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold tracking-wide sm:px-1.5 sm:text-[9px]"
+                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold tracking-wide sm:px-1.5 sm:text-xs"
                             style={{
                               color: status.color,
                               background: status.bg,
@@ -631,7 +631,7 @@ export function ProfitabilityWaterfall({
                       <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[#475569] dark:text-[#94a3b8]">
                         {s.label}
                       </div>
-                      <div className="truncate text-sm font-extrabold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
+                      <div className="truncate text-sm font-extrabold tracking-tight text-[#102A43] dark:text-[#F4F7FB]">
                         {fmt(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd)}
                         <span className="ml-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                           {pct(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd, revenue)}
@@ -639,7 +639,7 @@ export function ProfitabilityWaterfall({
                       </div>
                     </div>
                     <span
-                      className="shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide"
+                      className="shrink-0 rounded border px-1.5 py-0.5 text-xs font-extrabold tracking-wide"
                       style={{
                         color: status.color,
                         background: status.bg,

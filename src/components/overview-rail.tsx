@@ -126,7 +126,7 @@ export function OverviewRail({
     <aside className="flex w-full flex-col gap-2.5">
       {showLiveBadge && liveLabel && (
         <div className="flex justify-end">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
             {liveLabel}
           </span>
@@ -158,7 +158,7 @@ export function OverviewRail({
         <button
           type="button"
           onClick={onOpenBenchmarks ?? onOpenMoves}
-          className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-[#b8860b] hover:text-[#d4a550] dark:text-[#d4a550]"
+          className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-[#102A43] hover:text-[#0B5FFF] dark:text-[#0B5FFF]"
         >
           Benchmarks <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -186,7 +186,7 @@ export function OverviewRail({
           <button
             type="button"
             onClick={onOpenMoves}
-            className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-[#b8860b] hover:text-[#d4a550] dark:text-[#d4a550]"
+            className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-[#102A43] hover:text-[#0B5FFF] dark:text-[#0B5FFF]"
           >
             See all <ChevronRight className="h-3.5 w-3.5" />
           </button>

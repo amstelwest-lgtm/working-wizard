@@ -41,29 +41,29 @@ assert(
   "portal dark (not only html.dark) paints the card",
 );
 assert(
-  block.includes("background-color: #101018 !important"),
-  "dark surface is an explicit near-black",
+  block.includes("background-color: #0b1b2b !important"),
+  "dark surface is the brand canvas",
 );
-assert(block.includes("--paywall-bg: #fffdf8"), "light theme keeps a cream card");
-assert(block.includes("#f7f1e4 !important"), "dark ink is pinned over Tailwind foreground");
-assert(block.includes("#e4dccb !important"), "dark muted copy is pinned over Tailwind muted");
-assert(block.includes("#1b1300 !important"), "gold CTAs keep near-black type");
+assert(block.includes("--paywall-bg: #ffffff"), "light theme keeps a white card");
+assert(block.includes("#f4f7fb !important"), "dark ink is pinned over Tailwind foreground");
+assert(block.includes("#c5d4e4 !important"), "dark muted copy is pinned over Tailwind muted");
+assert(block.includes("#ffffff !important"), "primary buttons keep white type");
+assert(!block.includes("#d4af37"), "the paywall does not use wordmark gold");
+assert(!block.includes("#1b1300"), "the paywall does not use brown button ink");
 assert(
   block.includes('html[data-theme="light"] .accountant-portal .firm-band-upgrade'),
-  "light settings picker stays dark ink",
+  "light settings picker stays navy ink",
 );
 
 const pairs: Array<[string, string, string]> = [
-  ["#101018", "#f7f1e4", "dark title and prices"],
-  ["#101018", "#e4dccb", "dark limit lines"],
-  ["#0a0a10", "#f7f1e4", "dark voucher field"],
-  ["#0a0a10", "#a39c8c", "dark voucher placeholder"],
-  ["#fffdf8", "#1b1608", "light title and prices"],
-  ["#fffdf8", "#4a4030", "light limit lines"],
-  ["#fffdf8", "#6b5f48", "light voucher placeholder"],
-  ["#d4af37", "#1b1300", "gold CTA on mid gold"],
-  ["#ac8400", "#1b1300", "gold CTA on deep gold"],
-  ["#fdee79", "#1b1300", "gold CTA on bright gold"],
+  ["#0b1b2b", "#f4f7fb", "dark title and prices"],
+  ["#0b1b2b", "#c5d4e4", "dark limit lines"],
+  ["#102a43", "#f4f7fb", "dark voucher field"],
+  ["#102a43", "#c5d4e4", "dark voucher placeholder"],
+  ["#ffffff", "#102a43", "light title and prices"],
+  ["#ffffff", "#3d5270", "light limit lines"],
+  ["#ffffff", "#0b5fff", "white on cobalt button"],
+  ["#2563eb", "#ffffff", "white on royal hover"],
 ];
 for (const [bg, fg, name] of pairs) {
   const ratio = contrast(bg, fg);
@@ -71,8 +71,8 @@ for (const [bg, fg, name] of pairs) {
 }
 
 const borders: Array<[string, string, string]> = [
-  ["#09090f", "#a08436", "dark voucher border"],
-  ["#fffdf8", "#8a6508", "light voucher border"],
+  ["#102a43", "#8cb4ff", "dark voucher border"],
+  ["#ffffff", "#0b5fff", "light voucher border"],
 ];
 for (const [bg, fg, name] of borders) {
   const ratio = contrast(bg, fg);
@@ -85,8 +85,8 @@ assert(
   "the shared picker is marked for portal ink",
 );
 assert(picker.includes('htmlFor="firm-voucher-code"'), "voucher field has a visible label");
-assert(css.includes("border-color: #a08436 !important"), "dark paywall input border is #a08436");
-assert(css.includes("#8a6508"), "light voucher border token is present");
+assert(css.includes("border-color: #8cb4ff !important"), "dark paywall input border is #8cb4ff");
+assert(css.includes("#0b5fff !important"), "light voucher border is cobalt");
 const card = readFileSync(resolve("src/components/trial-ended-plan-block.tsx"), "utf8");
 assert(card.includes("trial-ended-block"), "the trial card keeps its hook");
 assert(

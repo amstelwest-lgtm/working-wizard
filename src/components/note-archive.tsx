@@ -87,7 +87,7 @@ function ArchiveRow({
               closeArchive();
               requestOpenNote(note.id);
             }}
-            className="inline-flex items-center gap-1 rounded-full bg-[#d4a550] px-3 py-1 text-[11px] font-semibold text-[#0a1628] hover:bg-[#e0b85c]"
+            className="inline-flex items-center gap-1 rounded-full bg-[#0B5FFF] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[#e0b85c]"
           >
             <ArrowUpRight className="h-3 w-3" />
             {jumpLabel}
@@ -137,7 +137,7 @@ export function NoteArchiveSheet() {
       >
         <SheetHeader className="border-b border-black/8 px-5 py-4 pr-12 text-left dark:border-white/10">
           <SheetTitle className="flex items-center gap-2 text-base">
-            <Archive className="h-4 w-4 text-[#c9962b]" />
+            <Archive className="h-4 w-4 text-[#0B5FFF]" />
             Notes
           </SheetTitle>
           <SheetDescription>
@@ -150,7 +150,7 @@ export function NoteArchiveSheet() {
             onClick={() => openArchive("open")}
             className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
               archiveFilter === "open"
-                ? "bg-[#c9962b] text-[#0a1628]"
+                ? "bg-[#0B5FFF] text-[#0a1628]"
                 : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
             }`}
           >
@@ -161,7 +161,7 @@ export function NoteArchiveSheet() {
             onClick={() => openArchive("resolved")}
             className={`rounded-full px-3 py-1 text-[12px] font-semibold ${
               archiveFilter === "resolved"
-                ? "bg-[#c9962b] text-[#0a1628]"
+                ? "bg-[#0B5FFF] text-[#0a1628]"
                 : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
             }`}
           >

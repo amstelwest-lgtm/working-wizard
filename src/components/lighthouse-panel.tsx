@@ -282,7 +282,7 @@ export function LighthousePanel({
       <button
         type="button"
         onClick={() => setAddOpen((o) => !o)}
-        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#0B5FFF] hover:bg-[#2563EB] px-4 text-xs font-bold uppercase tracking-wider text-white"
       >
         <Plus className="h-3.5 w-3.5" /> Lead
       </button>
@@ -445,7 +445,7 @@ export function LighthousePanel({
                   }
                   setPlanPreview(true);
                 }}
-                className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-sm font-bold text-[#1b1300]"
+                className="inline-flex h-10 items-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-4 text-sm font-bold text-white"
               >
                 {nextUp.label}
               </button>
@@ -614,7 +614,7 @@ export function LighthousePanel({
                                 title: item.title,
                               });
                             }}
-                            className="rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 py-1 text-[11px] font-bold text-[#1b1300] disabled:opacity-40"
+                            className="rounded-full bg-[#0B5FFF] hover:bg-[#2563EB] px-3 py-1 text-[11px] font-bold text-white disabled:opacity-40"
                           >
                             Send now
                           </button>
@@ -1048,7 +1048,7 @@ export function LighthousePanel({
                     })
                     .catch((e) => toast.error(e instanceof Error ? e.message : "Send failed"));
                 }}
-                className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-10 items-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-4 text-xs font-bold uppercase tracking-wider text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Confirm send
               </button>
@@ -1311,7 +1311,7 @@ function AddLeadForm({
         <button
           type="submit"
           disabled={busy}
-          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-60"
+          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-4 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-60"
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2619,7 +2619,7 @@ function LeadDrawer({
               onRequestSend(touchId, subject, body);
               setSending(false);
             }}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-4 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-50"
           >
             <Send className="h-3.5 w-3.5" />
             Send now

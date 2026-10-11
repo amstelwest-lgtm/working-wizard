@@ -40,7 +40,7 @@ import {
 
 const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
 const SOURCE_CHIP_CLS =
-  "ml-2 rounded-full border border-[#d4a550]/40 bg-[#d4a550]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]";
+  "ml-2 rounded-full border border-[#0B5FFF]/40 bg-[#0B5FFF]/10 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-[#8a6a12] dark:text-[#e2b964]";
 const INPUT_CLS =
   "h-8 border-amber-900/15 bg-white/80 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100";
 
@@ -161,8 +161,8 @@ export function DeliverableInputConfig({
         defaultOpen={false}
       >
         {needsRefresh ? (
-          <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#d4a550]/35 bg-[#d4a550]/10 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#b8860b]" />
+          <div className="mb-5 flex items-start gap-2 rounded-lg border border-[#0B5FFF]/35 bg-[#0B5FFF]/10 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#102A43]" />
             <span>
               Choices are saved for this analysis. The figures below still reflect the last run —
               they do not update on their own when you uncheck a source or edit an assumption that
@@ -186,7 +186,7 @@ export function DeliverableInputConfig({
                     id={`${deliverableId}-src-${src.id}`}
                     checked={checked}
                     onCheckedChange={(v) => setSource(src.id, v === true)}
-                    className="mt-0.5 border-[#b8860b]/50 data-[state=checked]:bg-[#d4a550] data-[state=checked]:text-[#1b1300]"
+                    className="mt-0.5 border-[#102A43]/50 data-[state=checked]:bg-[#0B5FFF] data-[state=checked]:text-white"
                   />
                   <label
                     htmlFor={`${deliverableId}-src-${src.id}`}
@@ -223,7 +223,7 @@ export function DeliverableInputConfig({
                   key={q.id}
                   className="flex gap-2.5 rounded-lg border border-amber-900/10 bg-white/60 px-3 py-2 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-100"
                 >
-                  <span className="mt-0.5 w-4 shrink-0 text-[10px] font-semibold text-[#b8860b]">
+                  <span className="mt-0.5 w-4 shrink-0 text-[10px] font-semibold text-[#102A43]">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <span className="leading-snug">{q.prompt}</span>
@@ -283,7 +283,7 @@ export function DeliverableInputConfig({
                           <span className="ml-1 font-normal text-slate-500">({a.unit})</span>
                         ) : null}
                         {a.id === "daysAr" || a.id === "daysAp" ? (
-                          <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">
+                          <span className="ml-2 rounded-full border border-slate-200 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
                             {(() => {
                               const n = typeof value === "number" ? value : Number(value);
                               const ratios =

@@ -310,7 +310,7 @@ const css = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
 assert(!css.includes("workflow-arrival"), "arrival bar styles are gone");
 assert(!css.includes(".workflow-coach"), "reading path strip styles are gone");
 assert(css.includes(".ask-ai-handoff{"), "bot handoff button keeps its styles");
-assert(css.includes("color:#1b1300"), "handoff button uses dark text on gold");
+assert(css.includes("color:#ffffff"), "handoff button uses white text on cobalt");
 assert(css.includes(".accountant-portal .data-fresh{"), "data section is styled");
 assert(css.includes("#data-up-to-date"), "data section anchor still clears the top bar");
 assert(!css.includes("scroll-margin-top:150px"), "scroll offset no longer reserves the strip");

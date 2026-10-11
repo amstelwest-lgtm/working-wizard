@@ -176,8 +176,8 @@ assert(studio.includes('activeTab === "cash"'), "cash tab hides simple/complex")
 assert(!studio.includes('id="wizard-profit-walk" style={{ colorScheme: "dark" }}'), "no dark island");
 
 const wf = readFileSync(resolve("src/components/profitability-waterfall.tsx"), "utf8");
-assert(wf.includes("text-[#0f172a]"), "waterfall values use ink that survives light-mode overrides");
-assert(wf.includes("bg-[#fffdf8]/90"), "value labels sit on a readable chip");
+assert(wf.includes("text-[#102A43]"), "waterfall values use navy that survives light-mode overrides");
+assert(wf.includes("bg-[#FFFFFF]/90"), "value labels sit on a readable chip");
 assert(wf.includes("profitStepBand"), "waterfall chips use the shared score band");
 assert(!wf.includes('"AT RISK"'), "waterfall does not keep a private AT RISK label");
 

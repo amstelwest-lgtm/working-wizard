@@ -87,7 +87,7 @@ const COPY = {
 
 const PRIORITY_CLASS: Record<Recommendation["priority"], string> = {
   critical: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  high: "border-[#b7872a]/45 bg-[#d4a550]/15 text-[#7a5a0e] dark:text-[#f1d28b]",
+  high: "border-[#0B5FFF]/45 bg-[#0B5FFF]/15 text-[#102A43] dark:text-[#F4F7FB]",
   medium:
     "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:border-white/15 dark:text-slate-300",
   low: "border-slate-300/50 bg-transparent text-slate-500 dark:border-white/10 dark:text-slate-400",
@@ -245,7 +245,7 @@ export function RecommendationsPanel({
   if (!clientId) return null;
 
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#0B5FFF]/25 bg-white/70 p-4 shadow-sm dark:border-[#0B5FFF]/20 dark:bg-white/[0.035]",
     className,
   ]
     .filter(Boolean)
@@ -255,10 +255,10 @@ export function RecommendationsPanel({
     <section className={shell} id="recommendations-panel" data-audience={audience}>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
             {copy.eyebrow}
           </span>
-          <h3 className="mt-0.5 text-[16px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
+          <h3 className="mt-0.5 text-[16px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]">
             {copy.title}
           </h3>
           <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
@@ -267,14 +267,14 @@ export function RecommendationsPanel({
         </div>
         <div className="flex items-center gap-2">
           {loading && rows.length > 0 ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#b7872a]" aria-hidden />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#0B5FFF]" aria-hidden />
           ) : null}
           <button
             type="button"
             onClick={() => void handlePropose()}
             disabled={proposing || !canPropose}
             title={canPropose ? undefined : copy.emptyNoFigures}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12.5px] font-bold text-[#1b1300] shadow-[0_4px_14px_rgba(183,135,42,0.28)] disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-3 py-1.5 text-[12.5px] font-bold text-white shadow-[0_4px_14px_rgba(11,95,255,0.22)] disabled:opacity-50"
             data-propose
           >
             {proposing ? (
@@ -303,11 +303,11 @@ export function RecommendationsPanel({
         </div>
       ) : loading && rows.length === 0 ? (
         <div className="space-y-2" aria-busy="true">
-          <div className="h-14 animate-pulse rounded-lg bg-[#b7872a]/10" />
-          <div className="h-14 animate-pulse rounded-lg bg-[#b7872a]/10" />
+          <div className="h-14 animate-pulse rounded-lg bg-[#0B5FFF]/10" />
+          <div className="h-14 animate-pulse rounded-lg bg-[#0B5FFF]/10" />
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-[#b7872a]/30 px-4 py-5 text-center">
+        <div className="rounded-lg border border-dashed border-[#0B5FFF]/30 px-4 py-5 text-center">
           <p className="text-[12.5px] text-slate-600 dark:text-slate-300/80">
             {canPropose ? copy.emptyReady : copy.emptyNoFigures}
           </p>
@@ -315,7 +315,7 @@ export function RecommendationsPanel({
             <button
               type="button"
               onClick={onAddFigures}
-              className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a6a14] underline-offset-2 hover:underline dark:text-[#e1b85e]"
+              className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#102A43] underline-offset-2 hover:underline dark:text-[#F4F7FB]"
             >
               Add figures <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -333,30 +333,30 @@ export function RecommendationsPanel({
               <li
                 key={rec.id}
                 data-status={rec.status}
-                className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                className="rounded-xl border border-[#0B5FFF]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       {migrated ? (
                         <span
-                          className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${PRIORITY_CLASS[rec.priority]}`}
+                          className={`rounded-full border px-2 py-[1px] text-xs font-bold uppercase tracking-[0.12em] ${PRIORITY_CLASS[rec.priority]}`}
                         >
                           {priorityLabel(rec.priority)}
                         </span>
                       ) : null}
                       {actionable ? (
-                        <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+                        <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-[1px] text-xs font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
                           {audience === "owner" ? "Accepted" : "Approved"}
                         </span>
                       ) : null}
                       {impact ? (
-                        <span className="text-[11px] font-semibold text-[#7a5a0e] dark:text-[#f1d28b]">
+                        <span className="text-[11px] font-semibold text-[#102A43] dark:text-[#F4F7FB]">
                           {impact}
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 dark:text-[#f4e7c2]">
+                    <p className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 dark:text-[#F4F7FB]">
                       {rec.title}
                     </p>
                     {rec.problem ? (
@@ -382,7 +382,7 @@ export function RecommendationsPanel({
                           type="button"
                           disabled={busy}
                           onClick={() => void handleDecide(rec, "approve")}
-                          className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-2.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                           data-decide="approve"
                         >
                           {busy ? (
@@ -408,7 +408,7 @@ export function RecommendationsPanel({
                         type="button"
                         disabled={busy}
                         onClick={() => void handleToAction(rec)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-2.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                         data-to-action
                       >
                         {busy ? (
@@ -445,7 +445,7 @@ export function RecommendationsPanel({
             <button
               type="button"
               onClick={onOpenActions}
-              className="font-semibold text-[#8a6a14] underline-offset-2 hover:underline dark:text-[#e1b85e]"
+              className="font-semibold text-[#102A43] underline-offset-2 hover:underline dark:text-[#F4F7FB]"
             >
               Open it
             </button>

@@ -209,12 +209,20 @@ const ownerDoorRoute = createRoute({
         ? search.signoff
         : undefined,
     bots: search.bots === "stack" ? "stack" : search.bots === "row" ? "row" : undefined,
+    bill:
+      search.bill === "none" ||
+      search.bill === "stripe" ||
+      search.bill === "firm" ||
+      search.bill === "unavailable"
+        ? search.bill
+        : undefined,
   }),
   component: function OwnerDoorHarness() {
     const search = useSearch({ strict: false }) as {
       view?: OwnerPreviewView;
       bot?: "financial_manager" | "analyst" | "advisor";
       budgetCase?: "ready" | "empty" | "draft";
+      bill?: "none" | "stripe" | "firm" | "unavailable";
     };
     const navigate = useNavigate();
     return (
@@ -223,6 +231,7 @@ const ownerDoorRoute = createRoute({
           view={search.view ?? "rest"}
           bot={search.bot ?? null}
           budgetCase={search.budgetCase ?? "ready"}
+          bill={search.bill}
           onBot={(next, mode) => {
             void navigate({
               to: "/owner-door",

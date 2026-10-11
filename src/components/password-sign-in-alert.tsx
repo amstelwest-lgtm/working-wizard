@@ -43,7 +43,7 @@ export function PasswordSignInAlert({
             {" "}
             <button
               type="button"
-              className="font-medium text-[#d4a550] underline underline-offset-2"
+              className="font-medium text-[#0B5FFF] underline underline-offset-2"
               onClick={onForgotPassword}
             >
               Forgot password

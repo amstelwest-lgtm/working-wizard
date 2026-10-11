@@ -208,9 +208,49 @@ export function normalizeChatReply(raw: string): string {
   }
   while (out.length && !out[out.length - 1].trim()) out.pop();
 
-  return out
+  const shapedOut = fences.length ? out : enforceReplyShape(out);
+  return shapedOut
     .map((line) => (line.startsWith(FENCE) ? fences[Number(line.slice(FENCE.length))] : line))
     .join("\n");
+}
+
+/**
+ * Headline rule: when the first line has more than one sentence, keep the
+ * first sentence if it has at least 8 words, otherwise the first two.
+ */
+export function trimHeadline(line: string): string {
+  const sentences = line
+    .trim()
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9"“'(*$€£R])/)
+    .filter((part) => part.trim());
+  if (sentences.length <= 1) return line.trim();
+  const firstWords = sentences[0].split(/\s+/).filter(Boolean).length;
+  return (firstWords >= 8 ? sentences.slice(0, 1) : sentences.slice(0, 2)).join(" ");
+}
+
+/**
+ * Fixed structure, applied only when a reply has both a figures list and a
+ * **Next actions** block: headline, figures, Next actions. Prose between the
+ * headline and the figures, between the last figure and Next actions, and after
+ * the last numbered action is dropped. Anything else is returned unchanged.
+ */
+function enforceReplyShape(lines: string[]): string[] {
+  const naIdx = lines.indexOf("**Next actions**");
+  if (naIdx < 0) return lines;
+  const firstFig = lines.findIndex((line, i) => i < naIdx && isBullet(line));
+  if (firstFig < 0) return lines;
+  let lastFig = firstFig;
+  for (let i = firstFig; i < naIdx; i++) if (isBullet(lines[i])) lastFig = i;
+  const actions: string[] = [];
+  for (let i = naIdx + 1; i < lines.length; i++) {
+    if (isNumbered(lines[i])) actions.push(lines[i]);
+    else if (actions.length && lines[i].trim()) break;
+  }
+  if (!actions.length) return lines;
+  const headlineIdx = lines.findIndex((line) => line.trim() !== "");
+  if (headlineIdx < 0 || headlineIdx >= firstFig) return lines;
+  const figures = lines.slice(firstFig, lastFig + 1).filter((line) => isBullet(line));
+  return [trimHeadline(lines[headlineIdx]), "", ...figures, "", "**Next actions**", ...actions];
 }
 
 export type TaggedTurn = { role?: unknown; content?: unknown; agent?: unknown };

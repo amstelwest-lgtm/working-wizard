@@ -80,7 +80,7 @@ export function BillingRequiredCard({
   const resumeClass =
     backClientId && backLabel
       ? "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
-      : "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]";
+      : "inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]";
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -97,7 +97,7 @@ export function BillingRequiredCard({
           {backClientId && backLabel ? (
             <a
               href={`/clients/${backClientId}`}
-              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]"
             >
               {backLabel}
             </a>

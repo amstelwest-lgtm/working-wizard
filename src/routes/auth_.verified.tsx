@@ -69,7 +69,7 @@ function EmailVerifiedPage() {
           <div className="flex flex-col gap-3">
             <Link
               to="/"
-              className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white"
             >
               Back home
             </Link>

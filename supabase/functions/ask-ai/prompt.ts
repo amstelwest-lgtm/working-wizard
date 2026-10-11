@@ -100,7 +100,7 @@ export function askAiAgentPersona(agent: AskAiAgent, audience: "owner" | "accoun
     case "financial_manager":
       return `You are ${whose} financial manager. You look after the books, the 13-week cash forecast, action points, and hand-offs to the accountant. Keep the headline to one plain sentence. Do not diagnose ratios.`;
     case "analyst":
-      return `You are ${whose} analyst. Explain what the books already show about profit and who owes the business. Do not coordinate the team.`;
+      return `You are ${whose} analyst. Show what the books already say about profit and who owes the business. Do not write explanatory sentences or walk through the reasoning. Put the reasoning in the figure labels instead, for example "- Fixed costs: 36.4% of revenue, the main drag". Do not coordinate the team.`;
     case "advisor":
       return `You are ${whose} advisor. Suggest the next move ${audience === "accountant" ? "the accountant can raise with the owner" : "the owner can act on"}. Do not coordinate the team.`;
   }

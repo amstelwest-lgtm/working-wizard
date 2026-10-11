@@ -135,7 +135,7 @@ function MentionComposer({
           if (e.key === "Escape") onCancel();
         }}
         placeholder={placeholder}
-        className="w-full rounded-full border border-[#d4a550]/50 bg-transparent px-4 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#d4a550] dark:text-white"
+        className="w-full rounded-full border border-[#0B5FFF]/50 bg-transparent px-4 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#0B5FFF] dark:text-white"
       />
       {mentionQuery != null && suggestions.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-[#16233d]">
@@ -145,7 +145,7 @@ function MentionComposer({
               type="button"
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] ${
                 i === mentionIndex
-                  ? "bg-[#d4a550]/15 text-slate-900 dark:text-white"
+                  ? "bg-[#0B5FFF]/15 text-slate-900 dark:text-white"
                   : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/5"
               }`}
               onMouseDown={(e) => {
@@ -153,7 +153,7 @@ function MentionComposer({
                 applyMention(c);
               }}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#d4a550] text-[10px] font-bold text-[#0a1628]">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0B5FFF] text-[10px] font-bold text-white">
                 {getInitials(c.name)}
               </span>
               <span className="min-w-0 flex-1 truncate">
@@ -170,7 +170,7 @@ function MentionComposer({
           {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mentionQuery) ? (
             <button
               type="button"
-              className="w-full text-left text-[#b8860b] hover:underline"
+              className="w-full text-left text-[#102A43] hover:underline"
               onMouseDown={(e) => {
                 e.preventDefault();
                 const email = mentionQuery.toLowerCase();
@@ -436,21 +436,21 @@ export function NoteLayer({
           data-notes-tray=""
           className={
             trayInFlow
-              ? "notes-tray relative z-[1] mb-3 w-full max-w-full rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
-              : "notes-tray fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+              ? "notes-tray relative z-[1] mb-3 w-full max-w-full rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+              : "notes-tray fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
           }
         >
           <div className="flex items-center justify-between gap-1 px-1">
             <button
               type="button"
               onClick={() => setTrayExpanded((o) => !o)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-[#d4a550]/10"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-[#2563EB]/10"
               title={trayExpanded ? "Minimise notes" : "Show notes on this tab"}
             >
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#102A43]">
                 Notes · {tabNotes.length}
               </span>
-              <span className="text-[#d4a550]">
+              <span className="text-[#0B5FFF]">
                 {trayExpanded ? (
                   <ChevronDown className="h-3.5 w-3.5" />
                 ) : (
@@ -462,7 +462,7 @@ export function NoteLayer({
               type="button"
               title="Open notes archive"
               onClick={() => openArchive("resolved")}
-              className="px-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#b8860b]"
+              className="px-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#102A43]"
             >
               Archive
             </button>
@@ -483,15 +483,15 @@ export function NoteLayer({
                   <button
                     type="button"
                     onClick={() => openNote(n.id)}
-                    className={`flex min-w-0 flex-1 items-start gap-2 rounded-xl px-2 py-1.5 text-left text-[11px] transition hover:bg-[#d4a550]/10 ${
-                      openNoteId === n.id ? "bg-[#d4a550]/15" : ""
+                    className={`flex min-w-0 flex-1 items-start gap-2 rounded-xl px-2 py-1.5 text-left text-[11px] transition hover:bg-[#2563EB]/10 ${
+                      openNoteId === n.id ? "bg-[#0B5FFF]/15" : ""
                     }`}
                   >
                     <span
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                         n.resolved
                           ? "bg-emerald-600/20 text-emerald-500"
-                          : "bg-[#d4a550]/25 text-[#b8860b]"
+                          : "bg-[#0B5FFF]/25 text-[#102A43]"
                       }`}
                     >
                       {n.resolved ? "✓" : getInitials(n.author)}
@@ -579,10 +579,10 @@ export function NoteLayer({
               className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-extrabold shadow-[0_2px_12px_rgba(0,0,0,0.4)] transition-all hover:scale-110 ${
                 note.resolved
                   ? "border-emerald-500 bg-emerald-900/80 text-emerald-400"
-                  : "border-[#d4a550] bg-[#1a2540] text-[#d4a550]"
+                  : "border-[#0B5FFF] bg-[#1a2540] text-[#0B5FFF]"
               } ${
                 highlightNoteId === note.id
-                  ? "scale-125 ring-2 ring-[#d4a550] ring-offset-2 ring-offset-white dark:ring-offset-[#0d1525]"
+                  ? "scale-125 ring-2 ring-[#0B5FFF] ring-offset-2 ring-offset-white dark:ring-offset-[#0d1525]"
                   : ""
               }`}
               onClick={(e) => {
@@ -608,7 +608,7 @@ export function NoteLayer({
                 <div className="px-4 pt-3 pb-2">
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#d4a550] text-[10px] font-extrabold text-[#0a1628]">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0B5FFF] text-[10px] font-extrabold text-white">
                         {getInitials(note.author)}
                       </div>
                       <div className="min-w-0">
@@ -659,7 +659,7 @@ export function NoteLayer({
                     {note.text}
                   </div>
                   {note.taggedMilonIt && (
-                    <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#d4a550]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
+                    <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#0B5FFF]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#102A43]">
                       <Shield className="h-3 w-3" /> Tagged Milōn IT
                     </div>
                   )}
@@ -669,7 +669,7 @@ export function NoteLayer({
                   <div className="space-y-2 border-t border-black/5 px-4 py-2 dark:border-white/6">
                     {note.replies.map((r) => (
                       <div key={r.id} className="flex gap-2">
-                        <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                           {getInitials(r.author)}
                         </div>
                         <div>
@@ -759,7 +759,7 @@ export function NoteLayer({
                       }
                       className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         note.taggedMilonIt
-                          ? "bg-[#d4a550]/20 text-[#b8860b]"
+                          ? "bg-[#0B5FFF]/20 text-[#102A43]"
                           : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-slate-200"
                       }`}
                     >
@@ -797,7 +797,7 @@ export function NoteLayer({
             <X className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-2.5 px-4 pb-3 pt-4 pr-10">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d4a550] text-[11px] font-extrabold text-[#0a1628]">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0B5FFF] text-[11px] font-extrabold text-white">
               {initials}
             </div>
             <div className="text-[13px] font-semibold text-slate-800 dark:text-white">
@@ -821,9 +821,9 @@ export function NoteLayer({
                 type="checkbox"
                 checked={tagIt}
                 onChange={(e) => setTagIt(e.target.checked)}
-                className="accent-[#b8860b]"
+                className="accent-[#102A43]"
               />
-              <Shield className="h-3 w-3 text-[#b8860b]" />
+              <Shield className="h-3 w-3 text-[#102A43]" />
               Tag Milōn IT
             </label>
           </div>

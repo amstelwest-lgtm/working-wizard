@@ -18,7 +18,7 @@ export function MarketGate({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-[#d4a550]">First step</p>
+        <p className="text-[10px] uppercase tracking-[0.16em] text-[#0B5FFF]">First step</p>
         <h2 className="mt-2 text-lg font-semibold text-slate-50">
           Where does this business operate?
         </h2>
@@ -30,7 +30,7 @@ export function MarketGate({
           <MarketPicker value={draft} onChange={setDraft} />
         </div>
         <Button
-          className="mt-5 w-full bg-[#d4a550] text-slate-950 hover:bg-[#e0b45c]"
+          className="mt-5 w-full bg-[#0B5FFF] text-slate-950 hover:bg-[#e0b45c]"
           disabled={!complete || busy || saving}
           onClick={async () => {
             const sel = draftToSelection(draft);

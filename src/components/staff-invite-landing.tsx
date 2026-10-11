@@ -156,7 +156,7 @@ export function StaffInviteLanding({
                   type="button"
                   onClick={onSignOut}
                   disabled={busy}
-                  className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 py-3 text-center text-[13px] font-bold leading-snug text-[#1b1300] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-4 py-3 text-center text-[13px] font-bold leading-snug text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {staffInviteSignOutLabel(memberEmail)}
                 </button>

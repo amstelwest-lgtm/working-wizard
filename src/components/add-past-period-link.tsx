@@ -19,7 +19,7 @@ export function AddPastPeriodLink({
       onClick={onOpen}
       className={
         className ??
-        "inline-flex items-center rounded-md px-0.5 text-[11px] font-medium text-[#8a6508] underline decoration-[#d4a550]/50 underline-offset-2 transition-colors hover:text-[#6b4e06] hover:decoration-[#b7872a] dark:text-[#e1b85e] dark:hover:text-[#f1d28b]"
+        "inline-flex items-center rounded-md px-0.5 text-[11px] font-medium text-[#102A43] underline decoration-[#0B5FFF]/50 underline-offset-2 transition-colors hover:text-[#6b4e06] hover:decoration-[#0B5FFF] dark:text-[#F4F7FB] dark:hover:text-[#F4F7FB]"
       }
     >
       {label}

@@ -318,7 +318,7 @@ function TeamAccessPage() {
 
         {!view && (rosterBusy || accessBusy) ? (
           <p className="flex items-center gap-2 text-sm text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin text-[#d4a550]" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin text-[#102A43] dark:text-[#F4F7FB]" /> Loading…
           </p>
         ) : null}
         {err ? (
@@ -340,8 +340,8 @@ function TeamAccessPage() {
           <>
             <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-2">
-                <UserPlus className="h-4 w-4 text-[#d4a550]" />
-                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+                <UserPlus className="h-4 w-4 text-[#102A43] dark:text-[#F4F7FB]" />
+                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#102A43] dark:text-[#F4F7FB]">
                   {view.firmName} · team
                 </h2>
               </div>
@@ -390,7 +390,7 @@ function TeamAccessPage() {
                     <p className="mt-1 text-[11px] text-slate-500">{CLASSIFICATION_HELP}</p>
                   </div>
                   <Button
-                    className="settings-gold sm:col-span-2 bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
+                    className="settings-gold sm:col-span-2 bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                     disabled={saving || !invEmail.trim()}
                     onClick={() => {
                       setSaving(true);
@@ -606,8 +606,8 @@ function TeamAccessPage() {
 
             <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-2">
-                <Shield className="h-4 w-4 text-[#d4a550]" />
-                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+                <Shield className="h-4 w-4 text-[#102A43] dark:text-[#F4F7FB]" />
+                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#102A43] dark:text-[#F4F7FB]">
                   Per-client access
                 </h2>
               </div>
@@ -615,7 +615,7 @@ function TeamAccessPage() {
                 <p className="flex items-center gap-2 text-sm text-slate-400">
                   {accessBusy ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin text-[#d4a550]" /> Loading client access…
+                      <Loader2 className="h-4 w-4 animate-spin text-[#102A43] dark:text-[#F4F7FB]" /> Loading client access…
                     </>
                   ) : (
                     "Client assignments could not be loaded."
@@ -666,7 +666,7 @@ function TeamAccessPage() {
                             >
                               <input
                                 type="checkbox"
-                                className="h-4 w-4 accent-[#d4a550]"
+                                className="h-4 w-4 accent-[#0B5FFF]"
                                 checked={checked}
                                 disabled={atCap}
                                 title={
@@ -703,7 +703,7 @@ function TeamAccessPage() {
                         ) : null}
                       </div>
                       <Button
-                        className="bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
+                        className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                         disabled={savingGrants}
                         onClick={() => {
                           setSavingGrants(true);

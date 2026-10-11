@@ -490,7 +490,7 @@ for (const block of [darkBlock, lightBlock]) {
   assert(contrast(edge, bg) >= 3, `owner edge on background is ${contrast(edge, bg).toFixed(2)}`);
 }
 const buttonInk = "#1b1300";
-assert(portal.includes(`color:${buttonInk}`), "the metallic button keeps its dark label");
+assert(portal.includes("color:var(--on-cobalt)"), "the primary button uses white on cobalt");
 function tokenOr(source: string, name: string, fallback: string): string {
   const found = source.match(new RegExp(`${name}:(#[0-9a-fA-F]{6})`));
   return found ? found[1] : fallback;

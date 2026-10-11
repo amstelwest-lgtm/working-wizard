@@ -72,7 +72,7 @@ import {
 const GOLD = "#0B5FFF";
 const GOLD_DARK = "#102A43";
 const CARD_SHELL =
-  "relative overflow-hidden border border-[#DBEAFE] bg-white shadow-[0_8px_24px_rgba(16,42,67,0.06)] dark:border-slate-800 dark:bg-[#102A43] dark:shadow-none";
+  "relative overflow-hidden border border-[#DBEAFE] bg-white shadow-[0_8px_24px_rgba(16,42,67,0.06)] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:shadow-none";
 const GOLD_RULE =
   "pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]";
 const INPUT_CLS =
@@ -1230,7 +1230,7 @@ export default function ActionPlanPanel({
                 {pendingRecs.length > 0 && (
                   <Button
                     size="sm"
-                    className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                    className="bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
                     onClick={() => setRecOpen(true)}
                     data-add-from-recommendations={pendingRecs.length}
                   >
@@ -1254,7 +1254,7 @@ export default function ActionPlanPanel({
                     className={INPUT_CLS}
                     onClick={() => setImportOpen(true)}
                   >
-                    <Sparkles className="mr-1 h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
+                    <Sparkles className="mr-1 h-3.5 w-3.5 text-[#102A43] dark:text-[#0B5FFF]" />
                     Import from Strategic Moves
                   </Button>
                 )}
@@ -1313,7 +1313,7 @@ export default function ActionPlanPanel({
                 onClick={() => setFilter(k)}
                 className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
                   filter === k
-                    ? "bg-[#b8860b] text-white dark:bg-[#d4a550] dark:text-slate-950"
+                    ? "bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950"
                     : "border border-amber-900/15 text-slate-600 hover:bg-amber-900/5 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
                 }`}
               >
@@ -1340,7 +1340,7 @@ export default function ActionPlanPanel({
                 className={`h-7 px-2 text-[11px] ${INPUT_CLS}`}
                 onClick={() => setTeamOpen(true)}
               >
-                <Users className="mr-1 h-3 w-3 text-[#b8860b] dark:text-[#d4a550]" />
+                <Users className="mr-1 h-3 w-3 text-[#102A43] dark:text-[#0B5FFF]" />
                 Team members
               </Button>
             )}
@@ -1667,12 +1667,12 @@ function GoalHeader({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
+              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
                 {plan.period_label} · Outcome goal
               </span>
               {isOwner && (
                 <button
-                  className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#b8860b] dark:hover:text-[#d4a550]"
+                  className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-[#102A43] dark:hover:text-[#0B5FFF]"
                   onClick={() => setEditing((e) => !e)}
                 >
                   {editing ? "Close" : "Edit"}
@@ -1795,7 +1795,7 @@ function GoalHeader({
                 <div>
                   <Button
                     size="sm"
-                    className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950"
+                    className="bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950"
                     onClick={() => {
                       onChange(draft);
                       setEditing(false);
@@ -1907,7 +1907,7 @@ function DriversStrip({
           <button
             key={m.key}
             onClick={() => onView?.(m.key)}
-            className="group rounded-xl border border-amber-900/10 bg-white/60 px-3.5 py-3 text-left transition-colors hover:border-[#d4a550]/40 dark:border-slate-800 dark:bg-slate-900/50"
+            className="group rounded-xl border border-amber-900/10 bg-white/60 px-3.5 py-3 text-left transition-colors hover:border-[#0B5FFF]/40 dark:border-slate-800 dark:bg-slate-900/50"
           >
             <div className="flex items-center justify-between gap-2">
               <span className={LABEL_CLS}>{m.ratioName}</span>
@@ -1923,7 +1923,7 @@ function DriversStrip({
                 <span className="text-slate-400">—</span>
               )}
             </div>
-            <div className="mt-0.5 flex items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-[#b8860b] dark:group-hover:text-[#d4a550]">
+            <div className="mt-0.5 flex items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-[#102A43] dark:group-hover:text-[#0B5FFF]">
               View full analysis <ChevronRight className="h-3 w-3" />
             </div>
           </button>
@@ -1984,7 +1984,7 @@ function ItemRow({
     <div
       className={`group border-b border-amber-900/10 transition-colors hover:bg-amber-900/[0.03] dark:border-slate-800/70 dark:hover:bg-slate-800/30 ${
         overdue ? "border-l-2 border-l-[#ef4444]" : "border-l-2 border-l-transparent"
-      } ${focused ? "bg-[#f7d98a]/20 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.10)]" : ""}`}
+      } ${focused ? "bg-[#f7d98a]/20 ring-2 ring-inset ring-[#0B5FFF] dark:bg-[rgba(247,217,138,0.10)]" : ""}`}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={(e) => e.preventDefault()}
@@ -2050,7 +2050,7 @@ function ItemRow({
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
           {item.recommendation_id ? (
             <span
-              className="inline-flex min-w-0 items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b8860b] dark:text-[#d4a550]/90"
+              className="inline-flex min-w-0 items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#102A43] dark:text-[#0B5FFF]/90"
               title={item.recommendation_title ?? undefined}
               data-recommendation={item.recommendation_id}
             >
@@ -2063,7 +2063,7 @@ function ItemRow({
               ) : null}
             </span>
           ) : item.source === "strategic_move" ? (
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b8860b] dark:text-[#d4a550]/90">
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#102A43] dark:text-[#0B5FFF]/90">
               <Sparkles className="h-2.5 w-2.5" /> From strategic moves
             </span>
           ) : null}
@@ -2314,7 +2314,7 @@ function OwnerPicker({
           </div>
           <button
             type="button"
-            className="mt-1 flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-semibold text-[#b8860b] hover:bg-amber-900/5 dark:text-[#d4a550] dark:hover:bg-slate-800"
+            className="mt-1 flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-semibold text-[#102A43] hover:bg-amber-900/5 dark:text-[#0B5FFF] dark:hover:bg-slate-800"
             onClick={(e) => {
               e.stopPropagation();
               setAdding(true);
@@ -2354,7 +2354,7 @@ function OwnerPicker({
           <div className="flex gap-1">
             <Button
               size="sm"
-              className="h-7 flex-1 bg-[#b8860b] text-xs text-white dark:bg-[#d4a550] dark:text-slate-950"
+              className="h-7 flex-1 bg-[#0B5FFF] text-xs text-white dark:bg-[#0B5FFF] dark:text-slate-950"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (!name.trim()) return;
@@ -2395,8 +2395,8 @@ function QuickAdd({
     setV("");
   };
   return (
-    <div className="mx-3 mb-3 flex items-center gap-2 rounded-xl border border-dashed border-[#d4a550]/45 bg-[#d4a550]/5 px-3 py-2 dark:border-[#d4a550]/35 dark:bg-[#d4a550]/8">
-      <Plus className="h-4 w-4 shrink-0 text-[#b8860b] dark:text-[#d4a550]" />
+    <div className="mx-3 mb-3 flex items-center gap-2 rounded-xl border border-dashed border-[#0B5FFF]/45 bg-[#0B5FFF]/5 px-3 py-2 dark:border-[#0B5FFF]/35 dark:bg-[#0B5FFF]/8">
+      <Plus className="h-4 w-4 shrink-0 text-[#102A43] dark:text-[#0B5FFF]" />
       <input
         ref={inputRef}
         value={v}
@@ -2416,7 +2416,7 @@ function QuickAdd({
         size="sm"
         disabled={!v.trim()}
         onClick={submit}
-        className="h-8 shrink-0 bg-[#b8860b] px-3 text-xs text-white hover:bg-[#9a7009] disabled:opacity-40 dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+        className="h-8 shrink-0 bg-[#0B5FFF] px-3 text-xs text-white hover:bg-[#9a7009] disabled:opacity-40 dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
       >
         Add
       </Button>
@@ -2475,14 +2475,14 @@ function ImportPanel({
                   added
                     ? "cursor-default border-transparent opacity-45"
                     : checked
-                      ? "border-[#d4a550]/60 bg-[#d4a550]/10"
-                      : "border-amber-900/10 hover:border-[#d4a550]/40 dark:border-slate-800"
+                      ? "border-[#0B5FFF]/60 bg-[#0B5FFF]/10"
+                      : "border-amber-900/10 hover:border-[#0B5FFF]/40 dark:border-slate-800"
                 }`}
               >
                 <span
                   className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${
                     checked
-                      ? "border-[#b8860b] bg-[#b8860b] text-white dark:border-[#d4a550] dark:bg-[#d4a550] dark:text-slate-950"
+                      ? "border-[#102A43] bg-[#0B5FFF] text-white dark:border-[#0B5FFF] dark:bg-[#0B5FFF] dark:text-slate-950"
                       : "border-slate-300 dark:border-slate-600"
                   }`}
                 >
@@ -2516,7 +2516,7 @@ function ImportPanel({
               setBusy(false);
             }
           }}
-          className="mt-4 w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+          className="mt-4 w-full bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
         >
           {busy
             ? "Adding…"
@@ -2581,14 +2581,14 @@ function FromRecommendationsPanel({
                 }
                 className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                   checked
-                    ? "border-[#d4a550]/60 bg-[#d4a550]/10"
-                    : "border-amber-900/10 hover:border-[#d4a550]/40 dark:border-slate-800"
+                    ? "border-[#0B5FFF]/60 bg-[#0B5FFF]/10"
+                    : "border-amber-900/10 hover:border-[#0B5FFF]/40 dark:border-slate-800"
                 }`}
               >
                 <span
                   className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${
                     checked
-                      ? "border-[#b8860b] bg-[#b8860b] text-white dark:border-[#d4a550] dark:bg-[#d4a550] dark:text-slate-950"
+                      ? "border-[#102A43] bg-[#0B5FFF] text-white dark:border-[#0B5FFF] dark:bg-[#0B5FFF] dark:text-slate-950"
                       : "border-slate-300 dark:border-slate-600"
                   }`}
                 >
@@ -2618,7 +2618,7 @@ function FromRecommendationsPanel({
               setBusy(false);
             }
           }}
-          className="mt-4 w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+          className="mt-4 w-full bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
         >
           {busy ? (
             <>
@@ -2724,7 +2724,7 @@ function TeamPanel({
                   <div className="flex gap-1">
                     <Button
                       size="sm"
-                      className="h-7 bg-[#b8860b] px-3 text-xs text-white dark:bg-[#d4a550] dark:text-slate-950"
+                      className="h-7 bg-[#0B5FFF] px-3 text-xs text-white dark:bg-[#0B5FFF] dark:text-slate-950"
                       onClick={saveEdit}
                     >
                       Save
@@ -2810,7 +2810,7 @@ function TeamPanel({
           <Button
             disabled={!name.trim() || saving}
             onClick={submit}
-            className="w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+            className="w-full bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
           >
             <UserPlus className="mr-1 h-3.5 w-3.5" />
             {saving ? "Adding…" : "Add team member"}
@@ -2915,7 +2915,7 @@ function ItemDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-amber-900/15 bg-[#fffdf8] p-5 shadow-2xl dark:border-slate-800 dark:bg-[#0d1524]"
+        className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-amber-900/15 bg-[#FFFFFF] p-5 shadow-2xl dark:border-slate-800 dark:bg-[#0d1524]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -2931,7 +2931,7 @@ function ItemDrawer({
             </h3>
             {item.recommendation_id ? (
               <p
-                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#b8860b] dark:text-[#d4a550]"
+                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#102A43] dark:text-[#0B5FFF]"
                 data-drawer-recommendation
               >
                 <Lightbulb className="h-3 w-3" />
@@ -2976,7 +2976,7 @@ function ItemDrawer({
                   }
                   className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
                     item.status === s
-                      ? "bg-[#b8860b] text-white dark:bg-[#d4a550] dark:text-slate-950"
+                      ? "bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950"
                       : "border border-amber-900/15 text-slate-600 dark:border-slate-700 dark:text-slate-400"
                   }`}
                 >
@@ -2997,13 +2997,13 @@ function ItemDrawer({
               step={5}
               value={item.progress_pct}
               onChange={(e) => onPatch({ progress_pct: Number(e.target.value) } as any, {})}
-              className="mt-1 w-full accent-[#d4a550]"
+              className="mt-1 w-full accent-[#0B5FFF]"
             />
           </>
         ) : (
           <>
             <div className={LABEL_CLS}>Status</div>
-            <span className="mt-1.5 inline-block rounded-md px-2.5 py-1 text-[11px] font-semibold bg-[#b8860b] text-white dark:bg-[#d4a550] dark:text-slate-950">
+            <span className="mt-1.5 inline-block rounded-md px-2.5 py-1 text-[11px] font-semibold bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950">
               {STATUS_LABEL[item.status]}
             </span>
             {item.status === "blocked" && item.blocker_note && (
@@ -3014,7 +3014,7 @@ function ItemDrawer({
             <div className={`mt-4 ${LABEL_CLS}`}>Progress — {item.progress_pct}%</div>
             <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-amber-900/10 dark:bg-slate-800">
               <div
-                className="h-2 rounded-full bg-[#d4a550]"
+                className="h-2 rounded-full bg-[#0B5FFF]"
                 style={{ width: `${item.progress_pct}%` }}
               />
             </div>
@@ -3088,7 +3088,7 @@ function ItemDrawer({
                 className={`mt-5 w-full ${
                   item.health === "overdue"
                     ? "bg-[#ef4444] text-white hover:bg-[#dc2626]"
-                    : "bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                    : "bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
                 }`}
               >
                 {chasing ? (
@@ -3239,7 +3239,7 @@ function ItemDrawer({
           {updates.length === 0 && <p className="text-xs text-slate-400">No updates yet.</p>}
           {updates.map((u) => (
             <div key={u.id} className="relative">
-              <span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-[#d4a550]" />
+              <span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-[#0B5FFF]" />
               <p className="text-xs text-slate-800 dark:text-slate-200">
                 <span className="font-semibold">{u.actor_label}</span>
                 {u.status_from !== u.status_to && u.status_to && (
@@ -3370,7 +3370,7 @@ function HealthDonut({
             textAnchor="middle"
             dominantBaseline="central"
             transform={`rotate(90 ${cx} ${cy + 12})`}
-            className="fill-slate-500 text-[9px] font-semibold uppercase tracking-wide dark:fill-slate-400"
+            className="fill-slate-500 text-xs font-semibold uppercase tracking-wide dark:fill-slate-400"
           >
             open
           </text>

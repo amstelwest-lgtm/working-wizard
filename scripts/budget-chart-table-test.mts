@@ -129,7 +129,7 @@ assert(chart.includes("<ViewToggle"), "budget uses the shared toggle");
 assert(!chart.includes("data-view-mode-toggle"), "the chart toggle is not the drawer toggle");
 assert(toggle.includes('role="tablist"'), "the toggle is a tablist");
 assert(toggle.includes('role="tab"'), "each option is a tab");
-assert(toggle.includes("#d4af37"), "the active segment is gold");
+assert(toggle.includes("#0B5FFF"), "the active segment is cobalt");
 assert(toggle.includes("ArrowRight") && toggle.includes("ArrowLeft"), "arrow keys move the toggle");
 assert(toggle.includes("Home") && toggle.includes("End"), "home and end move the toggle");
 assert(route.includes('search.view === "table"'), "the client route keeps view=table");

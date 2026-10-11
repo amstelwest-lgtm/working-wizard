@@ -270,7 +270,7 @@ function ForecastAmountCell({
           }}
           inputMode="decimal"
           aria-label="Edit amount"
-          className="w-[4.75rem] border-0 border-b border-[#d4a550] bg-transparent p-0 text-right text-xs font-inherit tabular-nums text-inherit outline-none"
+          className="w-[4.75rem] border-0 border-b border-[#0B5FFF] bg-transparent p-0 text-right text-xs font-inherit tabular-nums text-inherit outline-none"
         />
       </span>
     );
@@ -284,7 +284,7 @@ function ForecastAmountCell({
         e.preventDefault();
         begin();
       }}
-      className="milon-forecast-amount w-full cursor-text border-0 bg-transparent p-0 text-right text-inherit decoration-[#d4a550]/70 decoration-dotted underline-offset-2 hover:underline"
+      className="milon-forecast-amount w-full cursor-text border-0 bg-transparent p-0 text-right text-inherit decoration-[#0B5FFF]/70 decoration-dotted underline-offset-2 hover:underline"
     >
       {display}
     </button>
@@ -1557,7 +1557,7 @@ export function CashForecastPanel({
         ) : null}
       </div>
     ) : (
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
         <span>
           Nothing is forecast yet. This needs a bank statement or forecast inputs — the figures
           below stay at {cur}0 until then. Upload bank statements, or set the line items in
@@ -2118,7 +2118,7 @@ export function CashForecastPanel({
       <CardContent className="pt-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43]">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
               {horizonLabel || "Next 13 weeks"}
             </p>
             <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
@@ -2138,7 +2138,7 @@ export function CashForecastPanel({
           />
         </div>
         {scenarioLabel ? (
-          <p className="mb-3 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+          <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
         ) : null}
         {simplified && xeroBankNote ? (
           <p

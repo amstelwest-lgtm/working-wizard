@@ -29,7 +29,7 @@ type Props = {
 const VERDICT_CLASS: Record<OutcomeVerdict, string> = {
   exceeded: "border-emerald-400/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   on_target: "border-emerald-400/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  partial: "border-[#b7872a]/45 bg-[#d4a550]/15 text-[#7a5a0e] dark:text-[#f1d28b]",
+  partial: "border-[#0B5FFF]/45 bg-[#0B5FFF]/15 text-[#102A43] dark:text-[#F4F7FB]",
   missed: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
   worsened: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
   unmeasured:
@@ -117,7 +117,7 @@ export function OutcomesPanel({ clientId, audience, onChanged, refreshKey, class
 
   const measured = data.stories.filter((s) => s.verdict !== "unmeasured").length;
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#0B5FFF]/25 bg-white/70 p-4 shadow-sm dark:border-[#0B5FFF]/20 dark:bg-white/[0.035]",
     className,
   ]
     .filter(Boolean)
@@ -127,10 +127,10 @@ export function OutcomesPanel({ clientId, audience, onChanged, refreshKey, class
     <section className={shell} id="outcomes" data-audience={audience} data-measured={measured}>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
             Did the money move?
           </span>
-          <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
+          <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]">
             {measured === 0
               ? "Results arrive with the next figures"
               : `${measured} of ${data.stories.length} recommendation${data.stories.length === 1 ? "" : "s"} measured`}
@@ -155,12 +155,12 @@ export function OutcomesPanel({ clientId, audience, onChanged, refreshKey, class
             <li
               key={s.recommendationId}
               data-verdict={s.verdict}
-              className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+              className="rounded-xl border border-[#0B5FFF]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <span
-                    className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${VERDICT_CLASS[s.verdict]}`}
+                    className={`rounded-full border px-2 py-[1px] text-xs font-bold uppercase tracking-[0.12em] ${VERDICT_CLASS[s.verdict]}`}
                   >
                     {s.verdictLabel}
                   </span>
@@ -172,7 +172,7 @@ export function OutcomesPanel({ clientId, audience, onChanged, refreshKey, class
                   <button
                     type="button"
                     onClick={() => setRecordingId(s.recommendationId)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-[#b7872a]/40 px-2.5 py-1.5 text-[12px] font-semibold text-[#7a5a0e] dark:text-[#f1d28b]"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#0B5FFF]/40 px-2.5 py-1.5 text-[12px] font-semibold text-[#102A43] dark:text-[#F4F7FB]"
                     data-record-outcome
                   >
                     <Target className="h-3.5 w-3.5" aria-hidden /> Record result
@@ -215,7 +215,7 @@ export function OutcomesPanel({ clientId, audience, onChanged, refreshKey, class
                   <button
                     type="submit"
                     disabled={busy}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                   >
                     {busy ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

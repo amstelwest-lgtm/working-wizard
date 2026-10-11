@@ -448,9 +448,9 @@ export function ClientBriefing(p: ClientBriefingProps) {
       )}
 
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="briefing-profile-dialog max-w-xl border-[#d4a550]/35 bg-[linear-gradient(180deg,#fffdf8,#f7f1e3)] text-[#1b1300] shadow-[0_28px_80px_rgba(109,79,22,0.18)] dark:bg-[linear-gradient(180deg,#121826,#0b1220)] dark:text-slate-100">
+        <DialogContent className="briefing-profile-dialog max-w-xl border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_16px_40px_rgba(16,42,67,0.12)] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]">
           <DialogHeader>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b8860b]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#102A43]">
               Business profile
             </p>
             <DialogTitle className="font-serif text-[22px] font-semibold tracking-tight">
@@ -461,10 +461,10 @@ export function ClientBriefing(p: ClientBriefingProps) {
             </DialogDescription>
           </DialogHeader>
           {p.profile ? (
-            <dl className="mt-2 grid gap-x-8 gap-y-3 border-t border-[#d4a550]/20 pt-4 text-sm sm:grid-cols-[minmax(0,11rem)_1fr]">
+            <dl className="mt-2 grid gap-x-8 gap-y-3 border-t border-[#0B5FFF]/20 pt-4 text-sm sm:grid-cols-[minmax(0,11rem)_1fr]">
               {profileDisplayRows(p.profile, market).map((r) => (
                 <div key={r.label} className="contents">
-                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b] sm:pt-0.5">
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43] sm:pt-0.5">
                     {r.label}
                   </dt>
                   <dd className="text-[14px] leading-snug">{r.value}</dd>

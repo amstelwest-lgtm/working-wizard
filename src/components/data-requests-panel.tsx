@@ -62,7 +62,7 @@ const UPLOAD_KINDS: ReadonlySet<DataRequestKind> = new Set([
 
 const SEVERITY_CLASS = {
   critical: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  important: "border-[#b7872a]/45 bg-[#d4a550]/15 text-[#7a5a0e] dark:text-[#f1d28b]",
+  important: "border-[#0B5FFF]/45 bg-[#0B5FFF]/15 text-[#102A43] dark:text-[#F4F7FB]",
   nice_to_have:
     "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:border-white/15 dark:text-slate-300",
 } as const;
@@ -215,7 +215,7 @@ export function DataRequestsPanel({
   if (shownRows.length === 0 && audience === "owner") return null;
 
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#0B5FFF]/25 bg-white/70 p-4 shadow-sm dark:border-[#0B5FFF]/20 dark:bg-white/[0.035]",
     className,
   ]
     .filter(Boolean)
@@ -239,12 +239,12 @@ export function DataRequestsPanel({
       ) : null}
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#5b420e] dark:text-[#e1b85e]">
+          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#5b420e] dark:text-[#F4F7FB]">
             {audience === "owner" ? "MILŌN needs" : "Data requests"}
           </span>
           <h3
             id="data-requests-heading"
-            className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]"
+            className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]"
           >
             {rows.length === 0
               ? "Nothing outstanding"
@@ -263,7 +263,7 @@ export function DataRequestsPanel({
             <button
               type="button"
               onClick={() => setAsking((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#b7872a]/40 px-2.5 py-1.5 text-[12px] font-semibold text-[#7a5a0e] dark:text-[#f1d28b]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF]/40 px-2.5 py-1.5 text-[12px] font-semibold text-[#102A43] dark:text-[#F4F7FB]"
               data-ask-toggle
             >
               <Plus className="h-3.5 w-3.5" aria-hidden /> Ask for a document
@@ -290,7 +290,7 @@ export function DataRequestsPanel({
 
       {asking ? (
         <form
-          className="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-[#b7872a]/35 p-3"
+          className="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-[#0B5FFF]/35 p-3"
           onSubmit={(e) => {
             e.preventDefault();
             void ask();
@@ -323,7 +323,7 @@ export function DataRequestsPanel({
           <button
             type="submit"
             disabled={askBusy}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
           >
             {askBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
             Add request
@@ -341,13 +341,13 @@ export function DataRequestsPanel({
                 key={r.id}
                 data-kind={r.kind}
                 data-severity={r.severity}
-                className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                className="rounded-xl border border-[#0B5FFF]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span
-                        className={`rounded-full border px-2 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.12em] ${SEVERITY_CLASS[r.severity]}`}
+                        className={`rounded-full border px-2 py-[1px] text-xs font-bold uppercase tracking-[0.12em] ${SEVERITY_CLASS[r.severity]}`}
                       >
                         {severityLabel(r.severity)}
                       </span>
@@ -360,7 +360,7 @@ export function DataRequestsPanel({
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 dark:text-[#f4e7c2]">
+                    <p className="mt-1 text-[14px] font-semibold leading-snug text-slate-900 dark:text-[#F4F7FB]">
                       {r.title}
                     </p>
                     {r.reason ? (

@@ -338,7 +338,7 @@ function AccessApprovePage() {
                   <button
                     type="button"
                     onClick={() => void act("approve")}
-                    className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300] sm:max-w-[160px]"
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-5 text-xs font-bold uppercase tracking-[0.14em] text-white sm:max-w-[160px]"
                   >
                     Approve
                   </button>

@@ -132,7 +132,7 @@
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
-    background: color-mix(in srgb, var(--brand-gold, var(--milon-gold, #d4af37)) 7%, transparent) !important;
+    background: color-mix(in srgb, #dbeafe 70%, #ffffff) !important;
   }
 
   .milon-scroll-table--cards .milon-data-table tbody td:first-child::before {

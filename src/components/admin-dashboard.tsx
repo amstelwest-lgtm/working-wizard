@@ -63,7 +63,7 @@ export function AdminDashboard() {
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5 border-[#d4a550]/30 bg-[#d4a550]/10 text-[10px] text-[#d4a550] hover:bg-[#d4a550]/20"
+          className="gap-1.5 border-[#0B5FFF]/30 bg-[#0B5FFF]/10 text-[10px] text-[#0B5FFF] hover:bg-[#2563EB]/20"
           onClick={exportCSV}
           disabled={events.length === 0}
         >
@@ -93,7 +93,7 @@ export function AdminDashboard() {
                 <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
                   {tab}
                 </div>
-                <div className="text-xl font-extrabold text-[#d4a550]">{count}</div>
+                <div className="text-xl font-extrabold text-[#0B5FFF]">{count}</div>
               </div>
             ))}
           </div>
@@ -114,7 +114,7 @@ export function AdminDashboard() {
                 </div>
                 <div className="h-2 flex-1 overflow-hidden rounded bg-white/6">
                   <div
-                    className="h-full rounded bg-[#d4a550] transition-[width] duration-500"
+                    className="h-full rounded bg-[#0B5FFF] transition-[width] duration-500"
                     style={{ width: `${(count / maxFeatureCount) * 100}%` }}
                   />
                 </div>
@@ -146,7 +146,7 @@ export function AdminDashboard() {
                   <span className="flex-1 capitalize text-white">
                     {e.event.replace(/_/g, " ")}
                   </span>
-                  <span className="font-semibold text-[#d4a550]">{e.userId}</span>
+                  <span className="font-semibold text-[#0B5FFF]">{e.userId}</span>
                 </div>
               ))}
           </div>
