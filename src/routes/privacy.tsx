@@ -74,7 +74,7 @@ function PrivacyPage() {
           platform is {LEGAL_ENTITY}.
         </p>
         <p>
-          The Information Officer is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
+          The Privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
           reply to the email that brought you here, or write from inside the product.
         </p>
       </div> : <div className="mk-copy-us">
@@ -166,10 +166,10 @@ function PrivacyPage() {
       <h2>Your rights</h2>
       {copyPack === "za" ? <div className="mk-copy-za">
         <p>
-          Under the Protection of Personal Information Act you can ask what we hold, ask us to
-          correct it, or ask us to delete it. The fastest path for deletion is Settings. For
-          anything else, write to {LEGAL_INFORMATION_OFFICER} (Information Officer) at the address
-          above, or reply to the email that brought you. You can also lodge a complaint with the{" "}
+          If you are in South Africa, you also have rights under the Protection of Personal Information Act (POPIA). You can ask what we hold, ask us to correct it, or ask us to
+          delete it. The fastest path for deletion is Settings. For anything else, write to{" "}
+          {LEGAL_INFORMATION_OFFICER} (Privacy contact) at the address above, or reply to the email
+          that brought you. You can also lodge a complaint with the{" "}
           <a href="https://inforegulator.org.za" target="_blank" rel="noreferrer">
             Information Regulator
           </a>
