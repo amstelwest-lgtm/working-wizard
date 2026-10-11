@@ -3,6 +3,7 @@
  * Empty books never invent a figure. Run: pnpm test:owner-door
  */
 import { readFileSync } from "node:fs";
+import { ownerBotLayout } from "../src/components/owner-door/owner-home.tsx";
 import { avatarRhythm } from "../src/components/owner-door/owner-rhythm.ts";
 import { agentShortName } from "../src/lib/milon-team.ts";
 import { emptyAgentActivity, isVisibleAgentFinding, type AgentActivitySnapshot } from "../src/lib/milon-team-activity.ts";
@@ -311,6 +312,9 @@ const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
 assert(home.includes('className="owner-money"'), "home amounts are bold");
 assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "home reads the bot lines");
+assert(ownerBotLayout("") === "row" && ownerBotLayout("?bots=row") === "row", "three across stays the default bot layout");
+assert(ownerBotLayout("?bots=stack") === "stack", "the stack flag is the wide-row trial");
+assert(css.includes('data-bots="stack"') && css.includes("grid-template-columns: 1fr"), "phone and the stack flag use one column");
 assert(css.includes("width: 172px") && css.includes("height: 172px"), "desktop avatars are the hero size");
 assert(css.includes("width: 96px") && css.includes("height: 96px"), "phone avatars are the hero size");
 assert(

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
@@ -26,6 +26,14 @@ function voiceNodes(line: string): ReactNode[] {
   return nodes.length > 0 ? nodes : [line];
 }
 
+export type OwnerBotLayout = "row" | "stack";
+
+/** Desktop only. Phone always stacks. `?bots=stack` is the wide-row trial. */
+export function ownerBotLayout(search: string): OwnerBotLayout {
+  const value = new URLSearchParams(search).get("bots");
+  return value === "stack" ? "stack" : "row";
+}
+
 const MOTION_LABEL: Record<OwnerMotion, string> = {
   idle: "Idle",
   working: "Working…",
@@ -51,8 +59,16 @@ export function OwnerHome({
   onAsk: (agent: AgentKey) => void;
 }) {
   const handoff = presence.handoff;
+  const [bots, setBots] = useState<OwnerBotLayout>(() =>
+    ownerBotLayout(typeof window === "undefined" ? "" : window.location.search),
+  );
+  useEffect(() => {
+    const read = () => setBots(ownerBotLayout(window.location.search));
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
   return (
-    <div className="owner-pane" data-owner-home="true">
+    <div className="owner-pane" data-owner-home="true" data-bots={bots}>
       <div className="owner-head">
         <h1 className="owner-title">Your finance team</h1>
       </div>

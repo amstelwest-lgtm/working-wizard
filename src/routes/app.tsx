@@ -324,6 +324,7 @@ export const Route = createFileRoute("/app")({
     reason?: string;
     view?: "chart" | "table" | "13week";
     bot?: "financial_manager" | "analyst" | "advisor";
+    bots?: "row" | "stack";
   } => {
     const out: {
       tab?: string;
@@ -332,6 +333,7 @@ export const Route = createFileRoute("/app")({
       reason?: string;
       view?: "chart" | "table" | "13week";
       bot?: "financial_manager" | "analyst" | "advisor";
+      bots?: "row" | "stack";
     } = {};
     if (
       typeof search.tab === "string" &&
@@ -358,6 +360,7 @@ export const Route = createFileRoute("/app")({
     ) {
       out.bot = search.bot;
     }
+    if (search.bots === "row" || search.bots === "stack") out.bots = search.bots;
     return out;
   },
   pendingComponent: AppBootSpinner,
