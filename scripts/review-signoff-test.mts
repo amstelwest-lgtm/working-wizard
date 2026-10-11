@@ -117,8 +117,18 @@ assert(
 assert(initialsFromName("Ada Lovelace") === "AL", "initials");
 
 assert(
-  SIGNOFF_GOLD_BTN.includes("#d4af37") || SIGNOFF_GOLD_BTN.includes("#ac8400"),
-  "sign-off CTA is gold",
+  SIGNOFF_GOLD_BTN.includes("#0B5FFF") &&
+    SIGNOFF_GOLD_BTN.includes("text-white") &&
+    SIGNOFF_GOLD_BTN.includes("signoff-primary"),
+  "sign-off CTA is the cobalt primary",
+);
+assert(
+  !SIGNOFF_GOLD_BTN.includes("#d4af37") && !SIGNOFF_GOLD_BTN.includes("#ac8400"),
+  "sign-off CTA is not metallic gold",
+);
+assert(
+  !SIGNOFF_GOLD_BTN.includes("rounded-") && !SIGNOFF_GOLD_BTN.includes("border"),
+  "sign-off CTA is not caught by the light card white fill",
 );
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");

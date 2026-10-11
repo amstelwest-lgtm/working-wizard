@@ -47,9 +47,13 @@ export const SCOPE_SHORT_LABEL: Record<ReviewScope, string> = {
   advisory: "advisory",
 };
 
-/** Gold pill used for the unsigned / re-sign CTA. */
+/**
+ * Primary sign-off / approve pill. The export name stays SIGNOFF_GOLD_BTN.
+ * Paint is cobalt because the confirm button is portaled outside `.accountant-portal`,
+ * so a portal stylesheet cannot recolor it.
+ */
 export const SIGNOFF_GOLD_BTN =
-  "inline-flex items-center gap-2 rounded-full border-0 bg-[linear-gradient(120deg,#ac8400,#d4af37_40%,#fdee79_60%,#d4af37_80%,#ac8400)] bg-[length:200%_auto] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1b1300] shadow-[0_4px_20px_rgba(212,175,55,0.35)] transition hover:shadow-[0_8px_30px_rgba(212,175,55,0.5)] hover:brightness-105";
+  "signoff-primary inline-flex items-center gap-2 bg-[#0B5FFF] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-none transition hover:bg-[#2563EB]";
 
 const GOLD = "#d4a550";
 const GOLD_DEEP = "#b8860b";
@@ -526,13 +530,13 @@ export function ReviewSignoffButton({
         <button
           type="button"
           onClick={() => setConfirmRemove(true)}
-          className="mt-1.5 text-[10px] uppercase tracking-wider text-slate-500 hover:text-[#d4a550] transition"
+          className="mt-1.5 text-[10px] uppercase tracking-wider text-slate-500 hover:text-[#0B5FFF] transition"
         >
           Remove sign-off
         </button>
 
         <Dialog open={confirmRemove} onOpenChange={setConfirmRemove}>
-          <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
+          <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0d1525] dark:text-[#F4F7FB]">
             <DialogHeader>
               <DialogTitle>Remove sign-off?</DialogTitle>
               <DialogDescription className="text-slate-400">
@@ -589,7 +593,7 @@ export function ReviewSignoffButton({
                 className={
                   hideStatus
                     ? SIGNOFF_GOLD_BTN
-                    : "h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
+                    : "h-8 border-[#0B5FFF]/40 text-[11px] uppercase tracking-[0.12em] text-[#0B5FFF]"
                 }
                 disabled={saving}
                 onClick={() => {
@@ -627,7 +631,7 @@ export function ReviewSignoffButton({
         </>
       )}
       <Dialog open={askChanges} onOpenChange={setAskChanges}>
-        <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
+        <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0d1525] dark:text-[#F4F7FB]">
           <DialogHeader>
             <DialogTitle>Request changes</DialogTitle>
             <DialogDescription className="text-slate-400">
@@ -688,9 +692,9 @@ export function ReviewSignoffButton({
           }
         }}
       >
-        <DialogContent className="border-[#d4a550]/30 bg-[#0d1117] text-slate-100 sm:max-w-lg">
+        <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0d1525] dark:text-[#F4F7FB] sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-[#e1b85e]">Sign off {SCOPE_LABEL[scope]}</DialogTitle>
+            <DialogTitle className="text-[#102A43] dark:text-[#F4F7FB]">Sign off {SCOPE_LABEL[scope]}</DialogTitle>
             <DialogDescription className="text-slate-400">
               You are formally endorsing {SCOPE_LABEL[scope]}
               {clientName ? ` for ${clientName}` : ""}. Your name, date and signature are logged on

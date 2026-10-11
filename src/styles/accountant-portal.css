@@ -66,7 +66,7 @@ html[data-theme="light"] #atmos .glow{opacity:.3}
 .accountant-portal .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;height:66px;margin:0 -28px 34px;padding:0 28px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
 .accountant-portal .topbar .brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:.3em;font-size:15px}
 .accountant-portal .topbar .brand img{height:30px;filter:none}
-.accountant-portal .topbar .firm-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-size:12px;letter-spacing:.1em;color:var(--ink-dim)}
+.accountant-portal .topbar .firm-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-size:12px;letter-spacing:.1em;color:var(--ink-dim);white-space:nowrap;flex-shrink:0;max-width:100%}
 .accountant-portal .topbar .firm-chip b{color:var(--accent-text);letter-spacing:.18em}
 .accountant-portal .topbar .firm-switcher{cursor:pointer;padding-right:10px}
 .accountant-portal .topbar .firm-switcher-label{letter-spacing:.1em}
@@ -202,15 +202,16 @@ html[data-theme="light"] .accountant-portal .doc{background:#ffffff;border-color
 .accountant-portal .clients-head input{width:100%;padding:10px 16px 10px 38px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:13px;transition:border-color .3s}
 .accountant-portal .clients-head input:focus{outline:none;border-color:var(--accent-text)}
 .accountant-portal .clients-head .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:14px;height:14px;stroke:var(--ink-dim);stroke-width:1.8;fill:none;stroke-linecap:round}
-.accountant-portal .ctable{width:100%;border-collapse:separate;border-spacing:0 10px}
-.accountant-portal .ctable th{text-align:left;font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;padding:0 18px 2px}
-.accountant-portal .ctable td{padding:16px 18px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:middle;font-size:14px;transition:background .25s}
+.accountant-portal .ctable{width:100%;min-width:0;border-collapse:separate;border-spacing:0 8px}
+.accountant-portal .ctable th{text-align:left;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;padding:0 10px 2px;white-space:nowrap}
+.accountant-portal .ctable td{padding:8px 10px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:middle;font-size:14px;transition:background .25s;line-height:1.25}
 .accountant-portal .ctable td:first-child{border-left:1px solid var(--line);border-radius:16px 0 0 16px}
 .accountant-portal .ctable td:last-child{border-right:1px solid var(--line);border-radius:0 16px 16px 0}
 .accountant-portal .ctable tr.row{cursor:pointer;transition:transform .25s var(--ease)}
 .accountant-portal .ctable tr.row:hover td{background:rgba(11,95,255,.05);border-color:rgba(11,95,255,.35)}
-.accountant-portal .cname{font-weight:700;font-size:15px}
-.accountant-portal .ctype{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .cname{font-weight:700;font-size:14px;line-height:1.2}
+.accountant-portal .ctype{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);line-height:1.2;margin-top:2px}
+.accountant-portal .runway-val{display:inline-block;white-space:nowrap;font-variant-numeric:tabular-nums}
 .accountant-portal .op-profile summary::-webkit-details-marker{display:none}
 .accountant-portal .op-profile summary{list-style:none}
 .accountant-portal .op-profile[open] summary span:last-child{opacity:.55}
@@ -218,19 +219,23 @@ html[data-theme="light"] .accountant-portal .doc{background:#ffffff;border-color
 .accountant-portal .chip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;border-radius:99px;padding:4px 12px}
 .accountant-portal .chip i{width:6px;height:6px;border-radius:50%;background:currentColor}
 .accountant-portal .chip.ok{color:var(--ok-ink);background:rgba(92,207,138,.09);border:1px solid rgba(92,207,138,.28)}
-.accountant-portal .chip.warn{color:var(--warn-ink);background:rgba(232,179,75,.09);border:1px solid rgba(232,179,75,.3)}
+.accountant-portal .chip.warn{color:#b7791f;background:rgba(183,121,31,.12);border:1px solid rgba(183,121,31,.28)}
 .accountant-portal .chip.risk{color:var(--risk-ink);background:rgba(226,92,92,.09);border:1px solid rgba(226,92,92,.3)}
-.accountant-portal .ring{position:relative;width:46px;height:46px;flex-shrink:0}
-.accountant-portal .ring svg{transform:rotate(-90deg)}
-.accountant-portal .ring .tr{stroke:rgba(11,95,255,.12)}
+.accountant-portal .ring,
+.accountant-portal .ring svg,
+.accountant-portal .ring .ring-score{border:0 !important;outline:none !important;box-shadow:none !important;background:transparent !important}
+.accountant-portal .ring{position:relative;width:40px;height:40px;flex-shrink:0}
+.accountant-portal .ring svg{display:block;transform:rotate(-90deg);overflow:visible}
+.accountant-portal .ring .tr{stroke:var(--pale)}
 .accountant-portal .ring .fl{stroke-linecap:round;transition:stroke-dashoffset 1.4s var(--ease)}
-.accountant-portal .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.accountant-portal .ring b,
+.accountant-portal .ring .ring-score{position:absolute;inset:0;display:grid;place-items:center;border:0;outline:none;background:transparent;box-shadow:none;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;color:var(--ink)}
 .accountant-portal .cell-health{display:flex;align-items:center;gap:12px}
 .accountant-portal .spark{width:84px;height:26px}
 .accountant-portal .spark path{fill:none;stroke-width:1.8;stroke-linecap:round}
-.accountant-portal .row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.accountant-portal .row-actions{display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap}
 .accountant-portal .icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;transition:all .25s}
-.accountant-portal .row-actions .icon-btn{width:auto;height:auto;min-height:32px;padding:5px 8px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1}
+.accountant-portal .row-actions .icon-btn{width:auto;height:28px;min-height:28px;padding:0 7px;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1}
 .accountant-portal .row-actions .icon-btn span{white-space:nowrap}
 .accountant-portal .icon-btn:hover{border-color:var(--accent-text);color:var(--accent-text);transform:translateY(-2px)}
 .accountant-portal .icon-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
@@ -238,6 +243,12 @@ html[data-theme="light"] .accountant-portal .doc{background:#ffffff;border-color
 .accountant-portal .dash-trial-banner__link{color:var(--accent-text);font-weight:700;text-decoration:none}
 .accountant-portal .dash-trial-banner__link:hover{text-decoration:underline}
 @media(max-width:860px){.accountant-portal .hide-sm{display:none}}
+@media(max-width:1500px){.accountant-portal .hide-desk{display:none}}
+.accountant-portal .trial-next{margin:0 0 18px;padding:18px 20px;border:1px solid var(--pale);background:var(--card)}
+.accountant-portal .trial-next .kicker{margin:0 0 6px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--cobalt)}
+.accountant-portal .trial-next h3{margin:0 0 6px;font-size:18px;font-weight:700;line-height:1.25;color:var(--ink)}
+.accountant-portal .trial-next p{margin:0 0 14px;max-width:62ch;font-size:14px;line-height:1.45;color:var(--ink-dim)}
+html.dark .accountant-portal .trial-next{border-color:var(--line);background:var(--card)}
 
 /* ===== playbook library ===== */
 .accountant-portal .pb-section{margin-top:40px}
@@ -778,7 +789,8 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 .accountant-portal .attn-card .attn-sev{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-left:8px}
 .accountant-portal .attn-card.critical .attn-sev{color:var(--risk-ink)}
 .accountant-portal .attn-card.high .attn-sev{color:var(--warn-ink)}
-.accountant-portal .attn-card.medium .attn-sev{color:#c4a574}
+.accountant-portal .attn-card.medium .attn-sev{color:#b7791f}
+html.dark .accountant-portal .attn-card.medium .attn-sev{color:#f0d59a}
 .accountant-portal .attn-card .attn-reason{font-size:12.5px;color:var(--ink-dim);margin-top:4px}
 .accountant-portal .attn-card .attn-detail{font-size:12px;color:var(--ink-faint);margin-top:2px}
 .accountant-portal .attn-empty{flex:1;display:grid;place-items:center;text-align:center;color:var(--ink-dim);font-size:13.5px;padding:24px}
@@ -807,10 +819,16 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 .accountant-portal .prio i{width:7px;height:7px;border-radius:50%;background:var(--ink-faint)}
 .accountant-portal .prio.critical{color:var(--risk-ink)}
 .accountant-portal .prio.critical i{background:var(--risk)}
-.accountant-portal .prio.high{color:var(--warn-ink)}
-.accountant-portal .prio.high i{background:var(--warn)}
-.accountant-portal .prio.medium{color:#c4a574}
-.accountant-portal .prio.medium i{background:#c4a574}
+.accountant-portal .prio.high,
+.accountant-portal .prio.medium{color:#b7791f;background:rgba(183,121,31,.12);border-radius:999px;padding:3px 8px}
+.accountant-portal .prio.high i,
+.accountant-portal .prio.medium i{background:#b7791f}
+html.dark .accountant-portal .prio.high,
+html.dark .accountant-portal .prio.medium{color:#f0d59a;background:rgba(240,213,154,.14)}
+html.dark .accountant-portal .prio.high i,
+html.dark .accountant-portal .prio.medium i{background:#f0d59a}
+.accountant-portal .milon-status-pill--warn{color:#b7791f;background:rgba(183,121,31,.12);border:1px solid rgba(183,121,31,.28)}
+html.dark .accountant-portal .milon-status-pill--warn{color:#f0d59a;background:rgba(240,213,154,.14);border-color:rgba(240,213,154,.35)}
 .accountant-portal .prio.none{color:var(--ink-faint);font-weight:500}
 
 .accountant-portal .topbar .profile-chip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;border:1px solid var(--line);border-radius:99px;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--card)}
@@ -822,7 +840,7 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   background:transparent;color:var(--ink);place-items:center;flex-shrink:0;padding:0;
 }
 .accountant-portal .topbar-menu-btn svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.accountant-portal .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.accountant-portal .topbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;flex-shrink:0}
 .accountant-portal .ctable-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .accountant-portal .debt-line{
   display:grid;grid-template-columns:1.4fr 1fr .7fr .7fr auto;gap:8px;align-items:end;
@@ -832,16 +850,18 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 @media(max-width:760px){
   .accountant-portal .shell{padding:0 14px 72px}
   .accountant-portal .topbar{
-    height:auto;min-height:56px;margin:0 -14px 20px;padding:10px 14px;
-    gap:10px;flex-wrap:wrap;align-items:center;
+    height:auto;min-height:56px;margin:0 -14px 20px;padding:8px 14px;
+    gap:8px;flex-wrap:wrap;align-items:center;
   }
-  .accountant-portal .topbar .brand{gap:8px;font-size:13px;letter-spacing:.22em}
+  .accountant-portal .topbar .brand{gap:8px;font-size:13px;letter-spacing:.18em;flex-shrink:0}
   .accountant-portal .topbar .brand img{height:24px}
-  .accountant-portal .topbar .brand .gold-text{letter-spacing:.22em}
-  .accountant-portal .topbar .firm-chip{padding:4px 10px;font-size:11px;max-width:42vw}
-  .accountant-portal .topbar .firm-switcher select{max-width:38vw;font-size:11px}
+  .accountant-portal .topbar .brand .gold-text{letter-spacing:.18em}
+  .accountant-portal .topbar .firm-chip{padding:4px 10px;font-size:11px;flex:1 1 auto;min-width:0;max-width:none;overflow:hidden;text-overflow:ellipsis}
+  .accountant-portal .topbar .firm-switcher select{max-width:28vw;font-size:11px}
   .accountant-portal .topbar .spacer{display:none}
-  .accountant-portal .topbar-menu-btn{display:grid;margin-left:auto}
+  .accountant-portal .topbar .profile-name{display:none}
+  .accountant-portal .topbar .settings-gear{margin-left:auto}
+  .accountant-portal .topbar-menu-btn{display:grid;margin-left:0}
   .accountant-portal .topbar-actions{
     display:none;width:100%;flex-direction:column;align-items:stretch;
     gap:8px;padding:8px 0 4px;border-top:1px solid var(--line-soft);
@@ -863,8 +883,8 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   .accountant-portal .clients-head{flex-wrap:wrap;gap:10px}
   .accountant-portal .clients-head .search{max-width:none;width:100%;order:3}
   .accountant-portal .clients-head h2{font-size:18px}
-  .accountant-portal .ctable{min-width:520px}
-  .accountant-portal .ctable th,.accountant-portal .ctable td{padding:12px 12px;font-size:13px}
+  .accountant-portal .ctable{min-width:0}
+  .accountant-portal .ctable th,.accountant-portal .ctable td{padding:8px 10px;font-size:13px}
   .accountant-portal .ph-scatter,.accountant-portal .attn-panel{min-height:0;padding:16px}
   .accountant-portal .ph-scatter-chart{min-height:220px}
   .accountant-portal .c-inner{padding:4px 16px 18px}
@@ -888,18 +908,17 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   .accountant-portal .debt-line{grid-template-columns:1fr}
   .accountant-portal .hide-xs{display:none}
   .accountant-portal .topbar{
-    display:grid;
-    grid-template-columns:minmax(0,1fr) auto;
-    grid-template-areas:"brand menu""firm menu""actions actions";
+    display:flex;
+    flex-wrap:wrap;
     align-items:center;
-    gap:6px 10px;
+    gap:6px 8px;
   }
-  .accountant-portal .topbar .brand{grid-area:brand;min-width:0}
+  .accountant-portal .topbar .brand{min-width:0;flex-shrink:0}
   .accountant-portal .topbar .firm-chip,.accountant-portal .topbar .firm-switcher{
-    grid-area:firm;max-width:100%;min-width:0;justify-self:start
+    max-width:none;min-width:0;flex:1 1 0
   }
-  .accountant-portal .topbar-menu-btn{grid-area:menu;margin-left:0;align-self:center}
-  .accountant-portal .topbar-actions{grid-area:actions;width:100%}
+  .accountant-portal .topbar-menu-btn{margin-left:0;align-self:center}
+  .accountant-portal .topbar-actions{flex-basis:100%;width:100%}
 }
 
 @media(max-width:375px){
@@ -1653,14 +1672,14 @@ html[data-theme="light"] .accountant-portal .data-fresh{
 .accountant-portal .settings-gear svg{width:18px;height:18px}
 .accountant-portal .topbar-profile-menu{display:none}
 @media (min-width:761px){
+  .accountant-portal .topbar{flex-wrap:nowrap;height:66px}
   .accountant-portal .topbar .topbar-actions{order:1}
   .accountant-portal .topbar .settings-gear{order:2}
   .accountant-portal .topbar .topbar-profile{order:3}
   .accountant-portal .topbar .topbar-menu-btn{order:4}
 }
 @media (max-width:760px){
-  .accountant-portal .topbar-profile{display:none}
-  .accountant-portal .topbar-actions.open .topbar-profile-menu{display:inline-flex}
+  .accountant-portal .topbar .profile-chip.topbar-profile{display:inline-flex;flex-shrink:0;padding-right:5px}
 }
 .accountant-portal .rail-settings{
   margin-top:auto;
@@ -1674,7 +1693,21 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   min-height:44px;
 }
 .accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
-/* Sign-off pills keep their class name. On accountant surfaces they are cobalt. */
+/* Sign-off pills keep their class name. On accountant surfaces they are cobalt.
+   The class is unscoped because the confirm button is portaled to document.body. */
+.signoff-primary{
+  border:0 !important;
+  border-radius:999px !important;
+  background-color:#0b5fff !important;
+  background-image:none !important;
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
+  box-shadow:none !important;
+}
+.signoff-primary:hover:not(:disabled){
+  background-color:#2563eb !important;
+  color:#ffffff !important;
+}
 .accountant-portal .answer-strip__primary,
 .accountant-portal button[data-approve]{
   background:#0b5fff !important;
@@ -1730,11 +1763,7 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   .settings-portal .deliverable-rail{display:none}
 }
 @media (max-width:480px){
-  .accountant-portal .topbar{
-    grid-template-columns:minmax(0,1fr) auto auto;
-    grid-template-areas:"brand gear menu""firm gear menu""actions actions";
-  }
-  .accountant-portal .settings-gear{grid-area:gear;margin-left:0}
+  .accountant-portal .topbar .settings-gear{margin-left:auto}
 }
 
 /* Accountant rails are flush to the screen edge, with the same item size
@@ -1757,6 +1786,8 @@ html[data-theme="light"] .accountant-portal .data-fresh{
     padding:0 0 48px;
   }
   .accountant-portal:not(.owner-door) .topbar{
+    margin-left:0;
+    margin-right:0;
     padding-left:20px;
     padding-right:24px;
   }

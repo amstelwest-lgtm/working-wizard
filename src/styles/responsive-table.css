@@ -155,7 +155,8 @@
   }
 
   /* Show columns hidden on tablet when collapsed to phone cards */
-  .accountant-portal .milon-scroll-table--cards .hide-sm {
+  .accountant-portal .milon-scroll-table--cards .hide-sm,
+  .accountant-portal .milon-scroll-table--cards .hide-desk {
     display: flex !important;
   }
 }
