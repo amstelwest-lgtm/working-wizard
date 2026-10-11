@@ -230,16 +230,16 @@ function applyLandingTheme(theme: "light" | "dark") {
   root.dataset.theme = theme;
   if (theme === "light") {
     root.classList.remove("dark");
-    root.style.backgroundColor = "#f7f4ec";
-    root.style.color = "#1b1608";
-    body.style.backgroundColor = "#f7f4ec";
-    body.style.color = "#1b1608";
+    root.style.backgroundColor = "#ffffff";
+    root.style.color = "#102a43";
+    body.style.backgroundColor = "#ffffff";
+    body.style.color = "#102a43";
   } else {
     root.classList.add("dark");
-    root.style.backgroundColor = "#050507";
-    root.style.color = "#f2ecdc";
-    body.style.backgroundColor = "#050507";
-    body.style.color = "#f2ecdc";
+    root.style.backgroundColor = "#0b1b2b";
+    root.style.color = "#f4f7fb";
+    body.style.backgroundColor = "#0b1b2b";
+    body.style.color = "#f4f7fb";
   }
   syncLandingColorScheme(theme);
   const wrap = document.querySelector<HTMLElement>("[data-milon-landing]");

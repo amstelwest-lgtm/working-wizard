@@ -1,23 +1,28 @@
 /* MILŌN landing page CSS — scoped to html[data-landing="1"] so it cannot leak into /app */
 html[data-landing="1"]{
-  --bg:#050507;
-  --bg-2:#0a0a10;
-  --bg-3:#0f0f18;
-  --ink:#f2ecdc;
-  --ink-dim:#9b958a;
+  --bg:#ffffff;
+  --bg-2:#ffffff;
+  --bg-3:#f4f8ff;
+  --ink:#102a43;
+  --ink-dim:#3d5270;
   --gold-deep:#ac8400;
   --gold:#d4af37;
-  --gold-ink:#d4af37;
-  --gold-bright:#fdee79;
-  --gold-grad:linear-gradient(120deg,#ac8400 0%,#d4af37 35%,#fdee79 55%,#d4af37 75%,#ac8400 100%);
-  --line:rgba(212,175,55,.16);
-  --line-soft:rgba(212,175,55,.09);
-  --card:rgba(255,255,255,.024);
-  --glass:rgba(13,13,20,.72);
-  --risk:#e25c5c;
-  --warn:#e8b34b;
-  --ok:#5ccf8a;
-  --shadow-gold:0 0 60px rgba(212,175,55,.12);
+  --gold-ink:#7d5f0f;
+  --gold-bright:#8a6000;
+  --gold-grad:linear-gradient(120deg,#7a5400 0%,#b8860b 30%,#d4af37 55%,#b8860b 75%,#7a5400 100%);
+  --cobalt:#0b5fff;
+  --royal:#2563eb;
+  --ice:#38bdf8;
+  --pale:#dbeafe;
+  --navy:#102a43;
+  --line:#dbeafe;
+  --line-soft:#e8f1fe;
+  --card:#ffffff;
+  --glass:#ffffff;
+  --risk:#c43d4b;
+  --warn:#b7791f;
+  --ok:#16845b;
+  --shadow-gold:0 8px 24px rgba(16,42,67,.08);
   --ease:cubic-bezier(.22,.9,.24,1);
 }
 
@@ -30,24 +35,39 @@ html[data-landing="1"],html[data-landing="1"] body{
   background:var(--bg) !important;
   background-color:var(--bg) !important;
   color:var(--ink) !important;
+  color-scheme:light;
+  color-scheme:only light;
+}
+html[data-landing="1"].dark{
+  --bg:#0b1b2b;
+  --bg-2:#102a43;
+  --bg-3:#163654;
+  --ink:#f4f7fb;
+  --ink-dim:#c5d4e4;
+  --line:#1e3a5f;
+  --line-soft:#17304e;
+  --card:#102a43;
+  --glass:#102a43;
+  --gold-bright:#fdee79;
+  --gold-ink:#d4af37;
+  --gold-grad:linear-gradient(120deg,#ac8400 0%,#d4af37 35%,#fdee79 55%,#d4af37 75%,#ac8400 100%);
+  --shadow-gold:0 0 60px rgba(11,95,255,.16);
   color-scheme:dark;
   color-scheme:only dark;
 }
 html[data-landing="1"][data-theme="light"]{
-  --bg:#f7f4ec;
+  --bg:#ffffff;
   --bg-2:#ffffff;
-  --bg-3:#f0ecdf;
-  --ink:#1b1608;
-  --ink-dim:#6b6354;
-  --line:rgba(140,110,10,.25);
-  --line-soft:rgba(140,110,10,.13);
-  --card:rgba(52,40,0,.04);
-  --glass:rgba(255,255,255,.8);
-  --shadow-gold:0 0 60px rgba(172,132,0,.10);
-  /* #fdee79 is near-invisible on cream — remap to readable amber */
+  --bg-3:#f4f8ff;
+  --ink:#102a43;
+  --ink-dim:#3d5270;
+  --line:#dbeafe;
+  --line-soft:#e8f1fe;
+  --card:#ffffff;
+  --glass:#ffffff;
+  --shadow-gold:0 8px 24px rgba(16,42,67,.08);
   --gold-bright:#8a6000;
   --gold-ink:#7d5f0f;
-  /* Gradient: drop the pale #fdee79 midpoint, keep rich amber tones */
   --gold-grad:linear-gradient(120deg,#7a5400 0%,#b8860b 30%,#d4af37 55%,#b8860b 75%,#7a5400 100%);
   color-scheme:light;
   color-scheme:only light;
