@@ -5,6 +5,7 @@ import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { ownerPlanPublicLine } from "@/lib/owner-plan";
 import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
 import {
   billingStartPath,
@@ -187,7 +188,8 @@ function BillingStartPage() {
         <p className="mt-2 text-sm text-slate-400">
           {user
             ? `Redirecting to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.`
-            : `Create a firm account or sign in, then we will send you to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
+            : `Create a firm account or sign in, then we will send you to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE}. Owner plan: ${ownerPlanPublicLine(copyPack)}.`
+          }
         </p>
         {user ? (
           <div className="mt-5">

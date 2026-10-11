@@ -2828,7 +2828,7 @@ function LandingPage() {
             </h2>
             <p className="sub">
               {FIRM_CARD_TIMING} After day 14 the paid band bills automatically. Business owners can
-              open an account below. Billing opens soon.
+              open an account below.
             </p>
           </div>
 

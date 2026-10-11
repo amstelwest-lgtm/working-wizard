@@ -64,7 +64,7 @@ function TermsPage() {
       ) : null}
       <p>
         Business owners: <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
-        Milōn. Billing opens soon. Accounting firms: see your first client&apos;s figures with no
+        Milōn. Accounting firms: see your first client&apos;s figures with no
         card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 a paid
         USD client-count band bills through Stripe Checkout.
       </p>
