@@ -5,6 +5,7 @@
  */
 
 import type { FirmCouponDiscount } from "./firm-sa-market";
+import { isOwnerCatalogPrice } from "./owner-price";
 import { parseZaLookupKey } from "./pricing/za-ladder";
 import {
   FIRM_BAND_CATALOG,
@@ -218,6 +219,8 @@ export type SubscriptionPriceSnapshot = {
   lookupKey: string | null;
   /** Product metadata.band, when the Product is expanded. */
   productBand: string | null;
+  /** Product metadata.plan. Owner prices use plan=owner and no band. */
+  productPlan: string | null;
   unitAmount: number | null;
   /** Price object currency. Live catalog prices, including $0 Starter, are USD. */
   currency: string | null;
@@ -240,13 +243,20 @@ type PriceLike =
   | null
   | undefined;
 
-function productBandOf(price: Exclude<PriceLike, string | null | undefined>): string | null {
+function productMetaOf(price: Exclude<PriceLike, string | null | undefined>): {
+  band: string | null;
+  plan: string | null;
+} {
   const product = price.product;
-  if (!product || typeof product !== "object") return null;
+  if (!product || typeof product !== "object") return { band: null, plan: null };
   const metadata = (product as { metadata?: unknown }).metadata;
-  if (!metadata || typeof metadata !== "object") return null;
+  if (!metadata || typeof metadata !== "object") return { band: null, plan: null };
   const band = (metadata as { band?: unknown }).band;
-  return typeof band === "string" && band.trim() ? band.trim() : null;
+  const plan = (metadata as { plan?: unknown }).plan;
+  return {
+    band: typeof band === "string" && band.trim() ? band.trim() : null,
+    plan: typeof plan === "string" && plan.trim() ? plan.trim() : null,
+  };
 }
 
 export function readSubscriptionPrice(sub: {
@@ -262,6 +272,7 @@ export function readSubscriptionPrice(sub: {
       priceId: typeof price === "string" ? price : null,
       lookupKey: null,
       productBand: null,
+      productPlan: null,
       unitAmount: null,
       currency: chargeCurrency,
       chargeCurrency,
@@ -273,11 +284,13 @@ export function readSubscriptionPrice(sub: {
     recurring === "month" || recurring === "year"
       ? recurring
       : intervalFromLookupKey(price.lookup_key);
+  const meta = productMetaOf(price);
   return {
     itemId: item?.id ?? null,
     priceId: price.id ?? null,
     lookupKey: price.lookup_key ?? null,
-    productBand: productBandOf(price),
+    productBand: meta.band,
+    productPlan: meta.plan,
     unitAmount: typeof price.unit_amount === "number" ? price.unit_amount : null,
     currency: price.currency ?? chargeCurrency,
     chargeCurrency,
@@ -285,11 +298,13 @@ export function readSubscriptionPrice(sub: {
   };
 }
 
-/** lookup_key first, then product metadata.band. Never a hardcoded price id. */
+/** lookup_key first, then product metadata.band. Owner prices are not a band. */
 export function billedBandFromPrice(input: {
   lookupKey?: string | null;
   productBand?: string | null;
+  productPlan?: string | null;
 }): FirmBandId | null {
+  if (isOwnerCatalogPrice(input)) return null;
   return (
     bandIdFromLookupKey(input.lookupKey) ??
     bandIdFromStripeMetadata({ milon_plan: input.productBand })
@@ -304,9 +319,11 @@ export function billedBandFromPrice(input: {
 export function bandFromSubscriptionSnapshot(input: {
   lookupKey?: string | null;
   productBand?: string | null;
+  productPlan?: string | null;
   metadataPlan?: string | null;
   downgradeBlocked?: boolean | string | null;
 }): FirmBandId | null {
+  if (isOwnerCatalogPrice(input)) return null;
   const fromPrice = billedBandFromPrice(input);
   const fromMeta = bandIdFromStripeMetadata({ milon_plan: input.metadataPlan });
   const blocked = input.downgradeBlocked === true || input.downgradeBlocked === "1";
@@ -319,6 +336,8 @@ export type RankedSubscription = {
   status: string;
   created: number;
   band: FirmBandId | null;
+  /** Owner catalog price. Never selected as the firm's plan. */
+  owner?: boolean;
 };
 
 function limitRank(band: FirmBandId | null): number {
@@ -334,11 +353,12 @@ function limitRank(band: FirmBandId | null): number {
  * subscription cannot hide a Solo upgrade.
  */
 export function pickEntitlingFirmSubscription<T extends RankedSubscription>(subs: T[]): T | null {
-  const trialing = subs.filter((sub) => sub.status === "trialing");
+  const firmSubs = subs.filter((sub) => !sub.owner);
+  const trialing = firmSubs.filter((sub) => sub.status === "trialing");
   if (trialing.length) {
     return trialing.slice().sort((a, b) => b.created - a.created)[0] ?? null;
   }
-  const active = subs.filter((sub) => sub.status === "active");
+  const active = firmSubs.filter((sub) => sub.status === "active");
   if (!active.length) return null;
   return (
     active.slice().sort((a, b) => {
@@ -509,12 +529,15 @@ function copyStringMetadata(metadata?: Record<string, string> | null): Record<st
 export function metadataPatchForPrice(input: {
   lookupKey: string | null;
   productBand?: string | null;
+  productPlan?: string | null;
   metadata?: Record<string, string> | null;
   clientCount?: number | null;
 }): Record<string, string> | null {
+  if (isOwnerCatalogPrice(input)) return null;
   const band = billedBandFromPrice({
     lookupKey: input.lookupKey,
     productBand: input.productBand,
+    productPlan: input.productPlan,
   });
   if (!band) return null;
   const interval = intervalFromLookupKey(input.lookupKey) ?? "month";

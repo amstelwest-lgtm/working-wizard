@@ -3,7 +3,8 @@
  *
  * Endpoint: POST /api/stripe/webhook
  * Events: checkout.session.completed, customer.subscription.created,
- *         customer.subscription.updated
+ *         customer.subscription.updated, and customer.subscription.deleted
+ *         for the owner plan. Firm bands ignore subscription.deleted.
  *
  * Verifies Stripe-Signature with STRIPE_WEBHOOK_SECRET, then writes
  * milon_plan from the catalog lookup_key and cancels a replaced subscription
@@ -28,8 +29,10 @@ import {
   constructFirmBillingEvent,
   enforceZaCheckoutBillingCountry,
   isFirmBillingWebhookEvent,
+  ownerBillingEventSignal,
   stripeEventSubscriptionId,
   syncFirmSubscriptionBand,
+  syncOwnerBillingEvent,
 } from "@/lib/stripe-billing-sync.server";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 
@@ -56,6 +59,18 @@ export const Route = createFileRoute("/api/stripe/webhook")({
             err instanceof Error ? err.message : err,
           );
           return Response.json({ error: "Invalid signature" }, { status: 400 });
+        }
+        if (ownerBillingEventSignal(event).owner) {
+          try {
+            const owner = await syncOwnerBillingEvent(event);
+            return Response.json({ received: true, owner: true, ...owner });
+          } catch (err) {
+            console.error(
+              "[stripe-webhook] owner sync failed",
+              err instanceof Error ? err.message : err,
+            );
+            return Response.json({ error: "Sync failed" }, { status: 500 });
+          }
         }
         if (!isFirmBillingWebhookEvent(event.type)) {
           return Response.json({ received: true, ignored: event.type });

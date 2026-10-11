@@ -313,7 +313,10 @@ assert(!landing.includes("Live sync"), "landing does not claim live ledger sync"
 assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
-assert(landing.includes("faqPageJson(homepageFaqItems(showSaPricing))"), "landing emits homepage FAQ schema");
+assert(
+  landing.includes("faqPageJson(homepageFaqItems(showSaPricing, zaOwnerCost))"),
+  "landing emits homepage FAQ schema",
+);
 assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ is six questions after the VERIFY-6 fallback");
 assert(
   HOMEPAGE_FAQ_ITEMS[2].answer.includes("you do not need QuickBooks or Xero"),

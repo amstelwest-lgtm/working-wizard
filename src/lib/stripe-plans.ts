@@ -14,6 +14,7 @@
  * (default Solo monthly) with a 14-day trial and a card on file.
  */
 
+import { isOwnerLookupKey } from "@/lib/owner-price";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 
 export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
@@ -204,8 +205,9 @@ export function firmLookupKey(band: FirmCheckoutBand, interval: FirmInterval): s
   return key;
 }
 
-/** Catalog band for a Stripe price lookup_key. Unknown keys return null. */
+/** Catalog band for a Stripe price lookup_key. Unknown keys, including owner prices, return null. */
 export function bandIdFromLookupKey(lookupKey: string | null | undefined): FirmBandId | null {
+  if (isOwnerLookupKey(lookupKey)) return null;
   const parsed = parseZaLookupKey(lookupKey);
   if (parsed) return parsed.band;
   const key = lookupKey?.trim();
@@ -217,6 +219,7 @@ export function bandIdFromLookupKey(lookupKey: string | null | undefined): FirmB
 }
 
 export function intervalFromLookupKey(lookupKey: string | null | undefined): FirmInterval | null {
+  if (isOwnerLookupKey(lookupKey)) return null;
   const parsed = parseZaLookupKey(lookupKey);
   if (parsed) return parsed.interval;
   const key = lookupKey?.trim();

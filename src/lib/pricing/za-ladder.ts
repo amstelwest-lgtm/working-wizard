@@ -52,10 +52,15 @@ export function zaLookupKey(band: ZaCheckoutBand, interval: "month" | "year"): s
 const ZA_LOOKUP =
   /^milon_za_(solo|small|growing|established|larger|advanced|scale)_(monthly|annual)$/;
 
+/**
+ * Firm-band keys only. milon_za_owner_monthly / milon_za_owner_annual are
+ * owner prices and must not become a band named owner.
+ */
 export function parseZaLookupKey(
   lookupKey: string | null | undefined,
 ): { band: ZaCheckoutBand; interval: "month" | "year" } | null {
   const key = lookupKey?.trim() ?? "";
+  if (key === "milon_za_owner_monthly" || key === "milon_za_owner_annual") return null;
   const match = ZA_LOOKUP.exec(key);
   if (!match) return null;
   const band = match[1] ?? "";

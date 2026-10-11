@@ -138,7 +138,6 @@ export const PRICING_TRIAL_AFTER = `${FIRM_CARD_TIMING} After day 14 the paid ba
 export const PRICING_WATCHLIST_NOTE =
   "Watchlist clients are free and don't count toward your band until you open a full workspace for them.";
 export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
-export const PRICING_OWNER_BAR_ZA = "R299/mo · free when your accountant is on Milōn";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";
 export const SOLO_CARD_NOTE = FIRM_CARD_TIMING;
@@ -239,19 +238,22 @@ export const HOMEPAGE_COST_QUESTION = "What does it cost?";
 
 const OWNER_COST_US =
   "Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.";
-const OWNER_COST_ZA =
-  "Business owners: R299/mo · free when your accountant is on Milōn. Billing opens soon.";
 
-export function withSaPricingLines(answer: string, showSaPricing: boolean): string {
-  if (!showSaPricing) return answer;
-  return answer.replace(OWNER_COST_US, OWNER_COST_ZA);
+/**
+ * `zaOwnerCost` comes from the server pricing chunk. The rand sentence is not
+ * a literal here, so a US client bundle does not contain it.
+ */
+export function withSaPricingLines(answer: string, zaOwnerCost: string | null): string {
+  if (!zaOwnerCost) return answer;
+  return answer.replace(OWNER_COST_US, zaOwnerCost);
 }
 
-/** Visible homepage FAQ and its FAQPage JSON-LD. US by default. */
-export function homepageFaqItems(showSaPricing: boolean): FaqItem[] {
+/** Visible homepage FAQ and its FAQPage JSON-LD. US unless a server line is passed. */
+export function homepageFaqItems(showSaPricing: boolean, zaOwnerCost?: string | null): FaqItem[] {
+  const line = showSaPricing ? (zaOwnerCost ?? null) : null;
   return HOMEPAGE_FAQ_ITEMS.map((item) =>
     item.question === HOMEPAGE_COST_QUESTION
-      ? { ...item, answer: withSaPricingLines(item.answer, showSaPricing) }
+      ? { ...item, answer: withSaPricingLines(item.answer, line) }
       : item,
   );
 }

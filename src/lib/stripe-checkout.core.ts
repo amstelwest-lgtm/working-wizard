@@ -7,6 +7,7 @@ import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
 import { isSaMarketFirm } from "@/lib/firm-sa-market";
+import { resolveOwnerCheckoutMarket } from "@/lib/billing-market";
 import { isZaCatalogLookup, priceMarketForFirm } from "@/lib/pricing/za-checkout";
 import { zaLookupKey } from "@/lib/pricing/za-ladder";
 import {
@@ -14,6 +15,7 @@ import {
   FIRM_SETUP_PROMOTION_CODE_ID,
   normalizeVoucherCode,
 } from "@/lib/firm-voucher";
+import { isZaOwnerLookup, OWNER_LOOKUP_KEYS, isOwnerLookupKey } from "@/lib/owner-price";
 import {
   assertFoundingMonthlyOnly,
   FIRM_BAND_CATALOG,
@@ -171,11 +173,7 @@ export function firmCheckoutCharge(input: {
   lookupKey: string;
   billingFallback: boolean;
 } {
-  const firmMarket = resolveFirmCheckoutMarket(
-    input.firmMarket,
-    input.requested,
-    input.geoCountry,
-  );
+  const firmMarket = resolveFirmCheckoutMarket(input.firmMarket, input.requested, input.geoCountry);
   const priceMarket = priceMarketForFirm({
     firmMarket,
     billingCountry: input.billingCountry,
@@ -469,3 +467,167 @@ export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionC
 }
 
 export { isFoundingCode, assertFoundingMonthlyOnly };
+
+export { isOwnerLookupKey, isZaOwnerLookup, OWNER_LOOKUP_KEYS } from "@/lib/owner-price";
+
+export const OWNER_MONTHLY_USD_CENTS = 3_900;
+/** Rand monthly amount in cents. The letters of the currency code stay out of this file. */
+export const OWNER_MONTHLY_ZA_CENTS = 29_900;
+
+/** Annual charge is monthly × 12 × 0.8, in cents. */
+export function ownerAnnualCents(monthlyCents: number): number {
+  return Math.round((monthlyCents * 12 * 4) / 5);
+}
+
+export function ownerLookupKey(market: StripePlanMarket, interval: FirmInterval): string {
+  const keys = market === "za" ? OWNER_LOOKUP_KEYS.za : OWNER_LOOKUP_KEYS.us;
+  return interval === "year" ? keys.year : keys.month;
+}
+
+export function ownerMarketFromLookup(
+  lookupKey: string | null | undefined,
+): StripePlanMarket | null {
+  if (!isOwnerLookupKey(lookupKey)) return null;
+  return isZaOwnerLookup(lookupKey) ? "za" : "us";
+}
+
+export function ownerIntervalFromLookup(lookupKey: string | null | undefined): FirmInterval | null {
+  const key = lookupKey?.trim() ?? "";
+  if (!isOwnerLookupKey(key)) return null;
+  return key.endsWith("_annual") ? "year" : "month";
+}
+
+/**
+ * Currency for one owner Checkout. Stored owner market wins over the URL.
+ * A US owner stays on the USD lookup even when the billing country is ZA.
+ * A ZA owner with a known non-ZA billing country falls back to USD.
+ */
+export function ownerCheckoutCharge(input: {
+  ownerMarket: unknown;
+  requested: StripePlanMarket;
+  billingCountry?: string | null;
+  geoCountry?: string | null;
+  interval: FirmInterval;
+}): {
+  ownerMarket: StripePlanMarket;
+  priceMarket: StripePlanMarket;
+  lookupKey: string;
+  billingFallback: boolean;
+} {
+  const ownerMarket = resolveOwnerCheckoutMarket(
+    input.ownerMarket,
+    input.requested,
+    input.geoCountry,
+  );
+  const priceMarket = priceMarketForFirm({
+    firmMarket: ownerMarket,
+    billingCountry: input.billingCountry,
+  });
+  return {
+    ownerMarket,
+    priceMarket,
+    lookupKey: ownerLookupKey(priceMarket, input.interval),
+    billingFallback: ownerMarket === "za" && priceMarket === "us",
+  };
+}
+
+/**
+ * Active owner catalog price for one lookup key.
+ * Missing annual (or monthly) returns null. Never throws and never returns a firm price.
+ */
+export async function findOwnerCatalogPrice(
+  stripe: PriceLister,
+  market: StripePlanMarket,
+  interval: FirmInterval,
+): Promise<{ price: CatalogPrice; lookupKey: string } | null> {
+  const lookupKey = ownerLookupKey(market, interval);
+  const listed = await stripe.prices.list({
+    lookup_keys: [lookupKey],
+    active: true,
+    limit: 1,
+  });
+  const price = listed.data.find((row) => (row.lookup_key ?? lookupKey) === lookupKey) ?? null;
+  if (!price?.id || !isOwnerLookupKey(price.lookup_key ?? lookupKey)) return null;
+  const currency = price.currency?.trim().toLowerCase() ?? "";
+  if (currency === "zar" && market !== "za") return null;
+  if (currency === "usd" && market !== "us") return null;
+  if (currency && currency !== "zar" && currency !== "usd") return null;
+  return { price, lookupKey };
+}
+
+export function ownerIntegrationIdentifier(
+  interval: FirmInterval,
+  suffix = randomIntegrationSuffix(),
+): string {
+  return `milon-owner-${interval}-${suffix}`;
+}
+
+export type OwnerCheckoutSessionInput = {
+  priceId: string;
+  lookupKey: string;
+  interval: FirmInterval;
+  origin: string;
+  userId: string;
+  email?: string;
+  customerId?: string;
+  /** Stored owner market, not the URL. */
+  market: StripePlanMarket;
+  billingFallback?: boolean;
+  integrationIdentifier: string;
+};
+
+/**
+ * Owner Checkout. Adaptive Pricing stays off. A rand lookup is the line item
+ * only when the charge already selected it. No coupon, no promotion box,
+ * no trial. Tax matches the rand firm price: automatic tax off, no tax rates.
+ */
+export function ownerCheckoutSessionParams(
+  input: OwnerCheckoutSessionInput,
+): Stripe.Checkout.SessionCreateParams {
+  const origin = appRedirectOrigin([input.origin]);
+  const localZar = isZaOwnerLookup(input.lookupKey);
+  const meta: Record<string, string> = {
+    milon_plan: "owner",
+    milon_interval: input.interval,
+    milon_market: input.market,
+    milon_user_id: input.userId,
+    milon_lookup_key: input.lookupKey,
+  };
+  if (input.billingFallback) meta.milon_za_billing_fallback = "usd";
+
+  const params: Stripe.Checkout.SessionCreateParams = {
+    mode: "subscription",
+    adaptive_pricing: { enabled: false },
+    billing_address_collection: "required",
+    tax_id_collection: { enabled: true },
+    payment_method_collection: "always",
+    line_items: [{ price: input.priceId, quantity: 1 }],
+    success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/billing/cancel`,
+    client_reference_id: input.userId,
+    metadata: meta,
+    subscription_data: { metadata: meta },
+    integration_identifier: input.integrationIdentifier,
+  };
+
+  if (input.customerId) {
+    params.customer = input.customerId;
+  } else if (input.email) {
+    params.customer_email = input.email;
+  }
+
+  if (localZar) {
+    params.automatic_tax = { enabled: false };
+  }
+
+  return params;
+}
+
+/** After Checkout, a rand owner price stays only when the billing country is ZA. */
+export function ownerZarNeedsUsdFallback(
+  lookupKey: string | null | undefined,
+  billingCountry: string | null | undefined,
+): boolean {
+  if (!isZaOwnerLookup(lookupKey)) return false;
+  return (billingCountry ?? "").trim().toUpperCase() !== "ZA";
+}

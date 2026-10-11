@@ -201,6 +201,74 @@ assert(
   billedBandFromPrice({ lookupKey: null, productBand: "solo" }) === "solo",
   "product metadata.band is used when the lookup key is missing",
 );
+assert(
+  billedBandFromPrice({
+    lookupKey: "milon_za_owner_monthly",
+    productPlan: "owner",
+  }) === null,
+  "milon_za_owner_monthly is not a firm band",
+);
+assert(
+  billedBandFromPrice({ lookupKey: "milon_owner_monthly", productPlan: "owner" }) === null,
+  "milon_owner_monthly is not a firm band",
+);
+assert(
+  billedBandFromPrice({ lookupKey: null, productPlan: "owner", productBand: "solo" }) === null,
+  "product metadata plan=owner is not parsed as a band",
+);
+assert(
+  bandFromSubscriptionSnapshot({
+    lookupKey: "milon_za_owner_monthly",
+    productPlan: "owner",
+    metadataPlan: "solo",
+  }) === null,
+  "an owner price does not inherit a firm metadata band",
+);
+const ownerPrice = readSubscriptionPrice({
+  items: {
+    data: [
+      {
+        id: "si_owner",
+        price: {
+          id: "price_1UPTfiGXDN6PFbnzfAJ9I36b",
+          lookup_key: "milon_za_owner_monthly",
+          currency: "zar",
+          unit_amount: 29900,
+          recurring: { interval: "month" },
+          product: { id: "prod_VQKKjT1uyUzG2b", metadata: { plan: "owner" } },
+        },
+      },
+    ],
+  },
+});
+assert(ownerPrice.productPlan === "owner", "the owner product plan is read from metadata");
+assert(ownerPrice.productBand === null, "the owner product has no band key");
+assert(
+  metadataPatchForPrice({
+    lookupKey: "milon_za_owner_monthly",
+    productPlan: "owner",
+    metadata: { milon_plan: "solo" },
+  }) === null,
+  "firm sync does not rewrite an owner price into a band",
+);
+assert(
+  metadataPatchForPrice({
+    lookupKey: "milon_solo_monthly",
+    metadata: { milon_plan: "owner" },
+  })?.milon_plan === "solo",
+  "a firm lookup key replaces a stale owner metadata plan",
+);
+const ownerSkipped = pickEntitlingFirmSubscription([
+  { id: "sub_owner", status: "active", created: 5, band: null, owner: true },
+  { id: "sub_solo", status: "active", created: 2, band: "solo" as const },
+]);
+assert(ownerSkipped?.id === "sub_solo", "the plan picker skips an owner subscription");
+assert(
+  pickEntitlingFirmSubscription([
+    { id: "sub_owner", status: "active", created: 5, band: null, owner: true },
+  ]) === null,
+  "an owner subscription alone does not entitle the firm",
+);
 
 let downgradeBlocked = false;
 try {

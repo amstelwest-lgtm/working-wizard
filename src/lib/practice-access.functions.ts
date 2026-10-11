@@ -1357,7 +1357,12 @@ export const ownerDisconnectFirm = createServerFn({ method: "POST" })
       .in("status", ["pending", "active"]);
     const { error } = await admin
       .from("clients")
-      .update({ firm_id: null, firm_connected_at: null })
+      .update({
+        firm_id: null,
+        firm_connected_at: null,
+        firm_link_accepted_at: null,
+        firm_link_accepted_by: null,
+      })
       .eq("id", data.clientId)
       .eq("owner_user_id", ctx.userId);
     if (error) throw new Error(error.message);

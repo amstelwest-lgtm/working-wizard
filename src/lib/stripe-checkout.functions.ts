@@ -801,6 +801,53 @@ export const finalizeFirmBandCheckout = createServerFn({ method: "POST" })
     return { ok: true as const, message, band };
   });
 
+const ownerCheckoutInput = z.object({
+  interval: z.enum(["month", "year"]).default("month"),
+  market: z.enum(["za", "us"]).default("us"),
+});
+
+/**
+ * Signed-in owner Checkout. Firm coverage skips Stripe. A missing owner
+ * lookup key returns owner_price_unavailable and does not use a firm price.
+ */
+export const startOwnerCheckout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => ownerCheckoutInput.parse(input ?? {}))
+  .handler(async ({ data, context }) => {
+    const { startOwnerCheckoutForUser } = await import("@/lib/owner-billing.server");
+    const ctx = context as unknown as BillingAuthCtx;
+    const { userId, email } = await checkoutActor(ctx);
+    let geoCountry = "";
+    try {
+      geoCountry = (getRequest().headers.get("x-vercel-ip-country") ?? "").trim();
+    } catch {
+      // No request scope.
+    }
+    if (!geoCountry && process.env.NODE_ENV !== "production") {
+      geoCountry = (process.env.MILON_DEV_GEO ?? "").trim();
+    }
+    return startOwnerCheckoutForUser({
+      userId,
+      email,
+      interval: data.interval,
+      requestedMarket: data.market,
+      origin: appOrigin(),
+      geoCountry: geoCountry || null,
+    });
+  });
+
+/** Owner entitlement for the plan UI. Stripe, covering firm, or none. */
+export const getOwnerEntitlement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({}).parse(input ?? {}))
+  .handler(async ({ context }) => {
+    const { loadOwnerEntitlement } = await import("@/lib/owner-billing.server");
+    const { userId } = await checkoutActor(context);
+    return loadOwnerEntitlement(userId);
+  });
+
+export type { OwnerEntitlement, StartOwnerCheckoutResult } from "@/lib/owner-billing";
+
 /** Live Stripe entitlement for the accountant firm shell. */
 export const getFirmBillingEntitlement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
