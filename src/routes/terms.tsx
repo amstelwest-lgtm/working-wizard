@@ -3,12 +3,17 @@ import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { LIST_PRICES, visitorMarketBootScript } from "@/lib/market";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { AI_IDENTIFIERS_LINE, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/terms")({
-  loader: () => readMarketingVisitor(),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
+  },
   component: TermsPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.terms),
@@ -18,7 +23,7 @@ export const Route = createFileRoute("/terms")({
 });
 
 function TermsPage() {
-  const { copyPack, geoZa } = Route.useLoaderData();
+  const { copyPack, geoZa, saPricing } = Route.useLoaderData();
   return (
     <MarketingShell
       copyPack={copyPack}
@@ -63,10 +68,8 @@ function TermsPage() {
       </p>
       ) : null}
       <p>
-        Business owners: <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
-        Milōn. Billing opens soon. Accounting firms: see your first client&apos;s figures with no
-        card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 a paid
-        USD client-count band bills through Stripe Checkout.
+        Business owners pay {saPricing?.ownerMonthly ?? "$39/mo"}, or nothing when their accountant
+        is on Milōn. Accounting firms are billed through Stripe after a 14-day trial.
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">

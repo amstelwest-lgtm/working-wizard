@@ -1,17 +1,16 @@
-import { FIRM_CARD_TIMING } from "./firm-signup-copy";
 import { LIST_PRICES } from "./market/marketing";
 import { FIRM_BAND_CATALOG } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
 export const ACCOUNTING_SOFTWARE_ANSWER =
-  "MILŌN is not a ledger, so you keep your existing accounting system and books. Connect QuickBooks Online or Xero, or upload the financial statements you already have — PDF, Excel, CSV, or a bank statement — and MILŌN turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
+  "Milōn is not a ledger, so you keep your existing accounting system and books. Connect QuickBooks Online or Xero, or Sage, or upload the financial statements you already have — PDF, Excel, CSV, or a bank statement — and Milōn turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
-export const LEDGER_CONNECT_QUESTION = "Does MILŌN work with QuickBooks or Xero?";
+export const LEDGER_CONNECT_QUESTION = "Does Milōn work with QuickBooks, Xero or Sage?";
 
 export const LEDGER_CONNECT_ANSWER =
-  "Yes. Connect QuickBooks Online or Xero and MILŌN reads the profit and loss and balance sheet. You do not need either system — a PDF, Excel file, CSV, or bank statement still works. MILŌN is not a ledger and does not replace QuickBooks Online or Xero.";
+  "Yes. Connect QuickBooks Online or Xero, or Sage, and Milōn reads the profit and loss and balance sheet. You do not need either system — a PDF, Excel file, CSV, or bank statement still works. Milōn is not a ledger and does not replace QuickBooks Online, Xero or Sage.";
 
 /**
  * Ask-AI sanitizer strips identifiers (VAT/tax IDs, account numbers, company-name
@@ -32,7 +31,11 @@ export const WATCHLIST_DEFINITION =
 export const FOUNDING_CALLOUT =
   "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
-const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${FIRM_CARD_TIMING} Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.`;
+/** Last sentence of the homepage cost answer. USD only. ZA replaces this from the server chunk. */
+export const HOMEPAGE_OWNER_COST_US =
+  "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
+
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
 
 /**
  * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.
@@ -45,7 +48,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Does Milōn replace the accountant?",
     answer:
-      "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off every advisory pack. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
+      "No, Milōn works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off every advisory pack. Milōn is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
   },
   {
     question: "Is client data used to train AI models?",
@@ -55,7 +58,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Do I need QuickBooks or Xero to use Milōn?",
     answer:
-      "No, you do not need QuickBooks or Xero to use MILŌN. When the books are already there, connect QuickBooks Online or Xero and MILŌN reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
+      "No, you do not need QuickBooks or Xero to use Milōn. When the books are already there, connect QuickBooks Online or Xero, or Sage, and Milōn reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
   },
   {
     question: "What does it cost?",
@@ -64,10 +67,11 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "What does the AI finance team do, and what's left to me?",
     answer:
-      "Three AI agents work in Milōn Bot from the client's QuickBooks Online, Xero or uploaded figures. Milōn Financial Manager checks data quality, the 13-week cash and the budget, and prepares action points and the hand-off to you. Milōn Analyst calculates the health score, the ratios and the variances. Milōn Advisor drafts the next moves and the advisory deliverables. Each works only from what's on file and stops when a decision needs you. You review, edit and sign off every advisory pack.",
+      "Three AI agents work in Milōn Bot from the client's QuickBooks Online, Xero, Sage or uploaded figures. Milōn Financial Manager checks data quality, the 13-week cash and the budget, and prepares action points and the hand-off to you. Milōn Analyst calculates the health score, the ratios and the variances. Milōn Advisor drafts the next moves and the advisory deliverables. Each works only from what's on file and stops when a decision needs you. You review, edit and sign off every advisory pack.",
   },
   {
     question: "What happens when the trial ends?",
-    answer: `${FIRM_CARD_TIMING} After day 14 your chosen band bills automatically through Stripe Checkout. Milōn never stores card details, and you can delete your account and its data from Settings.`,
+    answer:
+      "After day 14 your chosen band bills automatically through Stripe Checkout. Milōn never stores card details, and you can delete your account and its data from Settings.",
   },
 ];

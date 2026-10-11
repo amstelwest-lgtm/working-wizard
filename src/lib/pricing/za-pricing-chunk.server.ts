@@ -12,6 +12,15 @@ export type SaPricingCopy = {
   footerTagline: string;
   footerBuilt: string;
   footerLine: string;
+  /** Owner-plan sentences. Rand only. Never import this module from client code. */
+  ownerHomepageCost: string;
+  ownerBar: string;
+  ownerHeroLink: string;
+  ownerRegisterNote: string;
+  ownerEarly: string;
+  ownerMonthly: string;
+  faqCostLead: string;
+  ownerPlanAnswer: string;
   labels: Record<(typeof ZA_CHECKOUT_BANDS)[number], ZaBandPriceLabel>;
 };
 
@@ -43,12 +52,24 @@ export function loadSaPricingCopy(): SaPricingCopy {
     heroNote: "Plans from R799/mo for SA firms after day 14.",
     accountantsIntro:
       "South African pricing, in rand. One monthly price, set by how many clients you actively advise.",
-    accountantsLead: "Built for firms in South Africa and the United States.",
+    accountantsLead:
+      "Management accounts, 13-week cash and advisory drafts for South African firms on Xero and QuickBooks.",
+    ownerHomepageCost:
+      "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
+    ownerBar: "R299/mo · free when your accountant is on Milōn",
+    ownerHeroLink: "Business owner? R299/mo, or free when your accountant is on Milōn →",
+    ownerRegisterNote:
+      "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
+    ownerEarly:
+      "The owner plan is R299 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.",
+    ownerMonthly: "R299/mo",
+    faqCostLead: "Business owners: R299 a month, or free when your accountant is on Milōn.",
+    ownerPlanAnswer: "R299 a month in South Africa, and free when your accountant is on Milōn.",
     footerTagline:
       "for accounting firms and small businesses in South Africa and the United States.",
     footerBuilt: "Built for South Africa and the United States",
     footerLine:
-      "MILŌN — the AI finance function for accounting firms and the businesses they serve in South Africa and the United States.",
+      "Milōn — the AI finance function for accounting firms and the businesses they serve in South Africa and the United States.",
     labels,
   };
 }

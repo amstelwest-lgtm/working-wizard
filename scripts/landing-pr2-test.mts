@@ -5,6 +5,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
+import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import {
   HOMEPAGE_COST_QUESTION,
@@ -35,7 +36,7 @@ const ids = [...index.matchAll(/id="(hero|watch|how|proof|method|problem|bridge|
 );
 assert(
   ids.join(",") ===
-    "hero,watch,how,proof,method,problem,bridge,idea,pricing,persona,quiz,home-faq,register",
+    "hero,watch,persona,quiz,how,proof,method,bridge,pricing,home-faq,register",
   `section order ${ids.join(",")}`,
 );
 
@@ -105,7 +106,9 @@ assert(!faq.includes("AI_IDENTIFIERS_LINE") || !HOMEPAGE_FAQ_ITEMS.some((item) =
 assert(!HOMEPAGE_FAQ_ITEMS.some((item) => /claude/i.test(item.question + item.answer)), "no Claude on homepage FAQ");
 
 const usCost = homepageFaqItems(false).find((item) => item.question === HOMEPAGE_COST_QUESTION);
-const zaCost = homepageFaqItems(true).find((item) => item.question === HOMEPAGE_COST_QUESTION);
+const zaCost = homepageFaqItems(true, loadSaPricingCopy().ownerHomepageCost).find(
+  (item) => item.question === HOMEPAGE_COST_QUESTION,
+);
 assert(usCost != null && zaCost != null, "cost answers exist");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
 assert(usCost!.answer.includes("$39/mo"), "US owners see the dollar price");
@@ -113,8 +116,9 @@ assert(!usCost!.answer.includes("R299"), "US owners do not see the rand price");
 assert(zaCost!.answer.includes("R299/mo"), "SA owners see the rand price");
 assert(!zaCost!.answer.includes("$39"), "SA owners do not see the dollar price");
 assert(
-  PRICING_TRIAL_AFTER.startsWith("See your first client's figures with no card."),
-  "VERIFY-2 after-trial sentence",
+  PRICING_TRIAL_AFTER ===
+    "Free to explore your first client — no card. Trial covers up to 3 clients for 14 days.",
+  "VERIFY-2 trial sentence lives on the pricing section",
 );
 assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 3 clients", "trial sentence unchanged");
 

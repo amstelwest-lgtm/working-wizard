@@ -554,6 +554,7 @@ export function OwnerDoor({
           needs={needs}
           onMoves={() => go("moves")}
           onDeliverables={() => go("deliverables")}
+          inviteClientId={clientId}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}

@@ -1,12 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { MILON_BOT_LINE, OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-owners")({
-  loader: () => readMarketingVisitor(),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
+  },
   component: ForOwnersPage,
   head: ({ loaderData }) => ({
     ...pageHead(SEO_PAGES.forOwners),
@@ -16,12 +23,12 @@ export const Route = createFileRoute("/for-owners")({
 });
 
 function ForOwnersPage() {
-  const { copyPack, geoZa } = Route.useLoaderData();
+  const { copyPack, geoZa, saPricing } = Route.useLoaderData();
   return (
     <MarketingShell
       copyPack={copyPack}
       geoZa={geoZa}
-      eyebrow="For business owners"
+      eyebrow="AI CFO for small business owners"
       title={
         <>
           Your numbers, <span className="mk-gold">in plain language</span>, before it is too late to
@@ -41,16 +48,14 @@ function ForOwnersPage() {
       navCtaLabel="Get your own AI finance team"
       ctaHref="/?signup=owner#register"
       navCtaHref="/?signup=owner#register"
-      ctaBody={
-        <>
-          Owner plan <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
-          Milōn. Upload what you have and see your score before you decide whether any of this is
-          worth your time. Billing opens soon.
-        </>
-      }
+      ctaBody={<>{saPricing?.ownerEarly ?? OWNER_PLAN_EARLY_US}</>}
     >
       <h2>What you get in the first week</h2>
       <ul className="mk-list">
+        <li>
+          <strong>Three agents, one conversation.</strong> Milōn Financial Manager, Milōn Analyst
+          and Milōn Advisor read QuickBooks, Xero or Sage. {MILON_BOT_LINE}
+        </li>
         <li>
           <strong>One health score.</strong> Nineteen ratios and four pillar scores collapsed into
           a single number you can actually hold in your head, with the workings still there when you
@@ -81,7 +86,7 @@ function ForOwnersPage() {
           <div>
             <h3>Give it your figures</h3>
             <p>
-              Your accountant can connect QuickBooks Online or Xero, or you can upload financials or
+              Your accountant can connect QuickBooks Online, Xero or Sage, or you can upload financials or
               a bank statement. You do not need a clean, finalised set — the point is to start from
               what you actually have.
             </p>
@@ -125,7 +130,7 @@ function ForOwnersPage() {
         <div className="mk-card">
           <h3>Not accounting software</h3>
           <p>
-            It does not replace QuickBooks Online, Xero, or any other ledger, and it does not file
+            It does not replace QuickBooks Online, Xero, Sage, or any other ledger, and it does not file
             anything with <MarketCopy za="SARS" us="the IRS" />. It reads what your books already
             say and tells you what it means.
           </p>
@@ -146,10 +151,7 @@ function ForOwnersPage() {
         </div>
       </div>
 
-      <div className="mk-note">
-        We are early, and we would rather say so. Owner billing is not open yet, and if something
-        in the product is not finished we tell you inside the product rather than hiding it.
-      </div>
+      <OwnerInviteNudge variant="marketing" />
 
       <h2>The short version</h2>
       <p>

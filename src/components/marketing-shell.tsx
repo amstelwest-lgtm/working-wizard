@@ -10,7 +10,6 @@ import { createContext, useContext, useEffect, useState, type ComponentType, typ
 import { createPortal } from "react-dom";
 import {
   DUAL_MARKET_FOOTER,
-  FIRM_CARD_TIMING,
   MARKETING_COPYRIGHT_ENTITY,
 } from "@/lib/firm-signup-copy";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
@@ -171,8 +170,7 @@ export function MarketingShell({
           <span>
             © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
           </span>
-          <span>{FIRM_CARD_TIMING}</span>
-          <span>Works with QuickBooks Online and Xero.</span>
+          <span>Works with QuickBooks Online and Xero. Sage connects the same way.</span>
           <a href="/">milonfinance.com</a>
           <a href="/about">About</a>
           <a href="/faq">Questions</a>

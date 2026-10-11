@@ -1,4 +1,3 @@
-import { FIRM_CARD_TIMING } from "./firm-signup-copy";
 import { LIST_PRICES } from "./market/marketing";
 import type { FaqItem } from "./seo";
 import {
@@ -10,6 +9,19 @@ import {
   WATCHLIST_DEFINITION,
 } from "./marketing-faq";
 
+/** Lead sentence of the cost answer. USD. The ZA page swaps this from the server chunk. */
+export const FAQ_OWNER_COST_US =
+  "Business owners: $39 a month, or free when your accountant is on Milōn.";
+
+/** Visible US answer and FAQPage JSON-LD. The ZA page shows the server rand sentence instead. */
+export const FAQ_OWNER_PLAN_US =
+  "$39 a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.";
+
+export const FAQ_NOT_A_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
+
+export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
+  "No. Milōn is an AI finance team that works alongside your accountant. The books stay in QuickBooks Online, Xero or Sage. Milōn Financial Manager checks the data quality, the 13-week cash and the budget, Milōn Analyst explains the health score, ratios and variances, and Milōn Advisor drafts the next moves. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and signs off every advisory pack.";
+
 /**
  * US answers for FAQPage JSON-LD. Must match the visible US copy on /faq.
  */
@@ -17,12 +29,11 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms: ${FIRM_CARD_TIMING} Then they pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
+      answer: `${FAQ_OWNER_COST_US} Accounting firms pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
-      question: "What does a business owner pay?",
-      answer:
-        "Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.",
+      question: "What does the owner plan cost?",
+      answer: FAQ_OWNER_PLAN_US,
     },
     {
       question: "What happens if I stop using it?",
@@ -52,6 +63,10 @@ export function publicFaqUsItems(): FaqItem[] {
       question: "Do you track how I use the product?",
       answer:
         "We keep product-event keys — things like “report sent” or “task completed” — so we can tell whether the product is actually working. We do not store financial amounts, ID numbers, or employee emails in that log. Magic-link clicks are stored as a hash of the link, not a name. Those raw events are kept for 24 months; the weekly totals stay.",
+    },
+    {
+      question: FAQ_NOT_A_BOOKKEEPER_QUESTION,
+      answer: FAQ_NOT_A_BOOKKEEPER_ANSWER,
     },
     {
       question: "My accountant already does this.",

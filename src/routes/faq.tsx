@@ -1,7 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { publicFaqItems } from "@/lib/public-faq";
+import {
+  FAQ_NOT_A_BOOKKEEPER_ANSWER,
+  FAQ_NOT_A_BOOKKEEPER_QUESTION,
+  FAQ_OWNER_COST_US,
+  FAQ_OWNER_PLAN_US,
+  publicFaqItems,
+} from "@/lib/public-faq";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketBootScript } from "@/lib/market/marketing";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
@@ -12,7 +19,11 @@ import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/faq")({
-  loader: () => readMarketingVisitor(),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const saPricing = visitor.showSaPricing ? await readSaPricingCopy() : null;
+    return { ...visitor, saPricing };
+  },
   component: FaqPage,
   head: async ({ loaderData }) => {
     const showSaPricing = loaderData?.showSaPricing === true;
@@ -38,9 +49,14 @@ function Qa({ q, children }: { q: string; children: React.ReactNode }) {
 }
 
 function FaqPage() {
-  const { showSaPricing, copyPack, geoZa } = Route.useLoaderData();
-  const cost = publicFaqItems(showSaPricing).find((item) => item.question === "What does it cost?");
-  const ai = publicFaqItems(showSaPricing).find((item) => item.question === "What does the AI see?");
+  const { showSaPricing, copyPack, geoZa, saPricing } = Route.useLoaderData();
+  const cost = publicFaqItems(false).find((item) => item.question === "What does it cost?");
+  const ai = publicFaqItems(false).find((item) => item.question === "What does the AI see?");
+  const costAnswer =
+    showSaPricing && saPricing?.faqCostLead && cost
+      ? cost.answer.replace(FAQ_OWNER_COST_US, saPricing.faqCostLead)
+      : cost?.answer;
+  const ownerAnswer = showSaPricing && saPricing?.ownerPlanAnswer ? saPricing.ownerPlanAnswer : FAQ_OWNER_PLAN_US;
   return (
     <MarketingShell
       eyebrow="Straight answers"
@@ -69,27 +85,11 @@ function FaqPage() {
       <h2>Money</h2>
 
       <Qa q="What does it cost?">
-        <p>{cost?.answer}</p>
+        <p>{costAnswer}</p>
       </Qa>
 
-      <Qa q="What does a business owner pay?">
-        <p>
-          <MarketCopy
-            us={
-              <>
-                Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon.
-              </>
-            }
-            za={
-              <>
-                Owner plan R299/mo · free when your accountant is on Milōn. Billing opens soon.
-              </>
-            }
-          />{" "}
-          Accounting firms see their first client&apos;s figures with no card, then add a card to
-          start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by
-          active client count through Stripe Checkout.
-        </p>
+      <Qa q="What does the owner plan cost?">
+        <p>{ownerAnswer}</p>
       </Qa>
 
       <Qa q="What happens if I stop using it?">
@@ -135,6 +135,10 @@ function FaqPage() {
       </Qa>
 
       <h2>The obvious objections</h2>
+
+      <Qa q={FAQ_NOT_A_BOOKKEEPER_QUESTION}>
+        <p>{FAQ_NOT_A_BOOKKEEPER_ANSWER}</p>
+      </Qa>
 
       <Qa q="My accountant already does this.">
         <p>
