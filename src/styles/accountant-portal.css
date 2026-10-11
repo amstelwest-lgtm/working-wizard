@@ -10,23 +10,35 @@
  * not as a side-effect import, so it stays out of the public entry CSS.
  */
 :root{
-  --bg:#050507; --bg-2:#0a0a10; --bg-3:#101018;
-  --ink:#f2ecdc; --ink-dim:#9b958a; --ink-faint:#6b665c;
+  --bg:#ffffff; --bg-2:#ffffff; --bg-3:#f4f8ff;
+  --ink:#102a43; --ink-dim:#3d5270; --ink-faint:#5c7190;
   --gold-deep:#ac8400; --gold:#d4af37; --gold-bright:#fdee79;
+  --gold-ink:#7d5f0f;
   --gold-grad:linear-gradient(120deg,#ac8400,#d4af37 40%,#fdee79 60%,#d4af37 80%,#ac8400);
-  --line:rgba(212,175,55,.16); --line-soft:rgba(212,175,55,.08);
-  --card:rgba(255,255,255,.024); --glass:rgba(13,13,20,.78);
-  --risk:#e25c5c; --warn:#e8b34b; --ok:#5ccf8a;
+  --cobalt:#0b5fff; --royal:#2563eb; --ice:#38bdf8; --pale:#dbeafe; --navy:#102a43;
+  --line:#dbeafe; --line-soft:#e8f1fe;
+  --card:#ffffff; --glass:#ffffff;
+  --risk:#c43d4b; --warn:#b7791f; --ok:#16845b;
+  --status-healthy:#16845b; --status-attention:#b7791f; --status-critical:#c43d4b;
+  --status-healthy-ink:#0e5c40; --status-attention-ink:#8a5a12; --status-critical-ink:#8e2430;
   --ease:cubic-bezier(.22,.9,.24,1);
-  --shadow-gold:0 0 50px rgba(212,175,55,.1);
+  --shadow-gold:0 8px 24px rgba(16,42,67,.08);
 }
 html[data-theme="light"]{
-  --bg:#f6f3ea; --bg-2:#ffffff; --bg-3:#efeadb;
-  --ink:#1b1608; --ink-dim:#6b6354; --ink-faint:#98917f;
+  --bg:#ffffff; --bg-2:#ffffff; --bg-3:#f4f8ff;
+  --ink:#102a43; --ink-dim:#3d5270; --ink-faint:#5c7190;
   --gold-ink:#7d5f0f;
-  --line:rgba(140,110,10,.22); --line-soft:rgba(140,110,10,.1);
-  --card:rgba(52,40,0,.035); --glass:rgba(255,255,255,.86);
-  --shadow-gold:0 0 50px rgba(172,132,0,.08);
+  --line:#dbeafe; --line-soft:#e8f1fe;
+  --card:#ffffff; --glass:#ffffff;
+  --shadow-gold:0 8px 24px rgba(16,42,67,.06);
+}
+html.dark{
+  --bg:#0b1b2b; --bg-2:#102a43; --bg-3:#163654;
+  --ink:#f4f7fb; --ink-dim:#c5d4e4; --ink-faint:#8aa0b8;
+  --line:#1e3a5f; --line-soft:#17304e;
+  --card:#102a43; --glass:#102a43;
+  --pale:#163654;
+  --shadow-gold:0 8px 24px rgba(0,0,0,.28);
 }
 .accountant-portal{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh}
 .accountant-portal ::selection{background:rgba(212,175,55,.3)}
