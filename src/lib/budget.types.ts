@@ -259,6 +259,8 @@ export type BudgetActuals = {
   /** Operating profit for the same window. */
   ebit?: number;
   budgetEbit?: number;
+  /** Months in the statement window the header compared. */
+  periodMonths?: number;
 };
 
 export type UnmappedDriver = {

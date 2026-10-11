@@ -112,14 +112,36 @@ export type OwnerPreviewView =
   | "profit"
   | "moves";
 
+const YTD_PRIOR = {
+  revenue: 390000,
+  cogs: 150000,
+  grossProfit: 240000,
+  netProfit: 90000,
+  expenses: 150000,
+};
+
+const FULL_PRIOR = {
+  revenue: 980000,
+  cogs: 390000,
+  grossProfit: 590000,
+  netProfit: 120000,
+  expenses: 470000,
+};
+
+const READY_ACTUAL_MONTHS = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].map(
+  (month) => ({ month, totals: { revenue: 60_000 } }),
+);
+
 export function OwnerDoorPreview({
   view,
   bot = null,
   onBot,
+  budgetCase = "ready",
 }: {
   view: OwnerPreviewView;
   bot?: AgentKey | null;
   onBot?: (agent: AgentKey | null, mode: "push" | "replace") => void;
+  budgetCase?: "ready" | "empty" | "draft";
 }) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
   const [done, setDone] = useState(false);
@@ -322,14 +344,10 @@ export function OwnerDoorPreview({
             hideReadOnlyStamp
             readOnly
             onInvite={() => undefined}
-            priorYear={{
-              revenue: 980000,
-              cogs: 390000,
-              grossProfit: 590000,
-              netProfit: 120000,
-              expenses: 470000,
-            }}
-            priorYearLabel="2025"
+            priorYear={budgetCase === "empty" ? FULL_PRIOR : YTD_PRIOR}
+            priorYearMonths={budgetCase === "empty" ? 12 : 7}
+            priorYearLabel={budgetCase === "empty" ? "2025" : "Mar–Sep 2025"}
+            actualMonths={budgetCase === "ready" ? READY_ACTUAL_MONTHS : undefined}
           />
         </section>
       ) : null}

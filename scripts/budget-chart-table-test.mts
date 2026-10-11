@@ -7,8 +7,10 @@ import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import { createBudgetDocument } from "../src/lib/budget.months";
 import {
+  budgetChartDomain,
   budgetLensFromSearch,
   budgetMonthViews,
+  budgetPlanIsSet,
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
@@ -132,5 +134,15 @@ assert(toggle.includes("ArrowRight") && toggle.includes("ArrowLeft"), "arrow key
 assert(toggle.includes("Home") && toggle.includes("End"), "home and end move the toggle");
 assert(route.includes('search.view === "table"'), "the client route keeps view=table");
 assert(harness.includes('search.view === "table"'), "the harness keeps view=table");
+
+assert(!budgetPlanIsSet([{ budget: { revenue: 0 } }, { budget: { revenue: 0.4 } }]), "a drafted plan is not set");
+assert(budgetPlanIsSet([{ budget: { revenue: 70_000 } }]), "a real month sets the plan");
+assert(budgetChartDomain([0, 0]) === undefined, "a zero series does not invent an axis");
+const scaled = budgetChartDomain([70_000, 60_000]);
+assert(scaled?.[0] === 0 && scaled[1] === 80_000, `the axis reaches the real values, got ${scaled}`);
+assert(chart.includes("Your accountant is still setting the budget"), "a draft tells the owner the budget is not set");
+assert(chart.includes("data-budget-chart=\"draft\""), "the draft chart is marked");
+assert(chart.includes("domain={domain}"), "the axis uses the scaled domain");
+assert(simple.includes("readOnly={readOnly}"), "only the owner view hides a draft chart");
 
 console.log("budget chart table ok");

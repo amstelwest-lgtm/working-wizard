@@ -32,6 +32,29 @@ export type BudgetMonthView = {
   revenue: VarianceLine | null;
 };
 
+/** A drafted plan has no month of revenue. Sub-dollar noise does not count. */
+export function budgetPlanIsSet(views: readonly { budget: { revenue: number } }[]): boolean {
+  return views.some((row) => Math.abs(row.budget.revenue) >= 1);
+}
+
+/**
+ * Chart axis for the larger of budget and actual. A zero series stays unset
+ * so a drafted plan is not drawn as $0–$4.
+ */
+export function budgetChartDomain(
+  values: readonly (number | null | undefined)[],
+): [number, number] | undefined {
+  const nums = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (nums.length === 0) return undefined;
+  const peak = Math.max(...nums.map((value) => Math.abs(value)));
+  if (peak < 1) return undefined;
+  const padded = peak * 1.1;
+  const exp = 10 ** Math.floor(Math.log10(padded));
+  const nice = Math.ceil(padded / exp) * exp;
+  const floor = Math.min(0, ...nums);
+  return [floor < 0 ? -nice : 0, nice];
+}
+
 export function budgetMonthViews(
   doc: BudgetDocument,
   actuals: readonly BudgetActualMonth[],

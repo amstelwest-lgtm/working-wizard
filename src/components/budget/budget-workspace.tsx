@@ -78,6 +78,7 @@ export function BudgetWorkspace({
   readOnly = false,
   priorYear = null,
   priorYearLabel = null,
+  priorYearMonths = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -102,6 +103,7 @@ export function BudgetWorkspace({
   readOnly?: boolean;
   priorYear?: BudgetYearMoney | null;
   priorYearLabel?: string | null;
+  priorYearMonths?: number | null;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -134,6 +136,7 @@ export function BudgetWorkspace({
           readOnly={readOnly}
           priorYear={priorYear}
           priorYearLabel={priorYearLabel}
+          priorYearMonths={priorYearMonths}
         />
       </div>
     );

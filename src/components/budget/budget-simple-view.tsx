@@ -20,7 +20,7 @@ import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
 import { BudgetYearStrip } from "@/components/budget/budget-year-strip";
-import type { BudgetYearMoney } from "@/lib/budget-year-compare";
+import { ownerYearFromStatement, type BudgetYearMoney } from "@/lib/budget-year-compare";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
@@ -111,6 +111,7 @@ export function BudgetSimpleView({
   readOnly = false,
   priorYear = null,
   priorYearLabel = null,
+  priorYearMonths = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -131,6 +132,8 @@ export function BudgetSimpleView({
   /** Prior-period books. The owner strip stays empty when this is missing. */
   priorYear?: BudgetYearMoney | null;
   priorYearLabel?: string | null;
+  /** Months the prior books cover. A different length is not a percent change. */
+  priorYearMonths?: number | null;
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -250,18 +253,15 @@ export function BudgetSimpleView({
         lens={lens}
         onLensChange={onLensChange}
         actualMonths={actualMonths}
+        readOnly={readOnly}
       />
       {readOnly ? null : <>{drawer}</>}
       {readOnly ? (
         <BudgetYearStrip
-          thisYear={{
-            revenue: fyTotals.revenue,
-            cogs: fyTotals.cogs,
-            grossProfit: fyTotals.grossProfit,
-            netProfit: results.reduce((sum, row) => sum + row.ebit, 0),
-            expenses: fyTotals.overheads,
-          }}
+          thisYear={ownerYearFromStatement(compared)}
+          thisMonths={compared?.periodMonths ?? null}
           lastYear={priorYear}
+          lastMonths={priorYearMonths}
           lastYearLabel={priorYearLabel}
           market={market}
         />
