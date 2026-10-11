@@ -17,9 +17,9 @@ import { latestRunByAgent } from "@/lib/milon-team-activity";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
   ownerAnswerTiles,
+  ownerHomeLines,
   parseOwnerNumber,
   type OwnerBooks,
-  type OwnerTile,
 } from "@/lib/owner-answers";
 import { ownerPresence, type OwnerTalk } from "@/lib/owner-presence";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
@@ -93,7 +93,7 @@ export function OwnerDoor({
   onProfile,
   onSettings,
   onSignOut,
-  hero,
+  topMove = null,
   boards,
   bot = null,
   onBotChange,
@@ -120,7 +120,8 @@ export function OwnerDoor({
   onProfile: () => void;
   onSettings: () => void;
   onSignOut: () => void;
-  hero?: (go: (screen: OwnerScreen) => void) => ReactNode;
+  /** Top ranked next move. Empty stays an honest line under the advisor. */
+  topMove?: string | null;
   boards?: (
     go: (screen: OwnerScreen) => void,
   ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
@@ -330,30 +331,6 @@ export function OwnerDoor({
     setScreen(next);
   }
 
-  function onTile(tile: OwnerTile) {
-    if (
-      tile.empty &&
-      !hasBooks &&
-      (tile.id === "cash" || tile.id === "owes" || tile.id === "profit")
-    ) {
-      setScreen("first");
-      return;
-    }
-    if (tile.id === "signed" && tile.empty) {
-      setScreen("accountant");
-      return;
-    }
-    if (tile.id === "signed") {
-      setScreen("deliverables");
-      return;
-    }
-    if (tile.id === "answer") {
-      setScreen("moves");
-      return;
-    }
-    if (tile.ask) openChat(tile.ask);
-  }
-
   async function send(text: string) {
     const question = text.trim();
     if (!question || busy) return;
@@ -451,11 +428,9 @@ export function OwnerDoor({
         <OwnerHome
           variant="character"
           presence={presence}
-          tiles={tiles}
+          lines={ownerHomeLines(tiles, topMove)}
           onOpen={openChat}
           onAsk={openChat}
-          onTile={onTile}
-          hero={hero?.(setScreen)}
           runState={runState}
         />
       ) : null}
@@ -491,6 +466,12 @@ export function OwnerDoor({
             ) : null
           }
           uploads={clientId ? <OwnerUploadsPanel clientId={clientId} /> : null}
+          signed={signoffs.map((row, index) => ({
+            id: row.id ?? `${row.scope ?? "sign"}-${index}`,
+            scope: row.scope ?? "advisory",
+            name: row.signed_off_by_name,
+            when: formatDate(row.signed_off_at, market),
+          }))}
           onConnect={onConnect}
         />
       ) : null}

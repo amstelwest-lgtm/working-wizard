@@ -19,9 +19,9 @@ import {
   OwnerPlan,
 } from "@/components/owner-door/owner-pages";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
-import { agentShortName } from "@/lib/milon-team";
+import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
-import { ownerAnswerTiles } from "@/lib/owner-answers";
+import { ownerAnswerTiles, ownerHomeLines } from "@/lib/owner-answers";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerPresence, type OwnerMotion, type OwnerTalk } from "@/lib/owner-presence";
 
@@ -78,16 +78,20 @@ const PILLARS: SpherePillar[] = [
   },
 ];
 
-function HealthOrb({ compact = false, onOpen }: { compact?: boolean; onOpen?: () => void }) {
+function HealthOrb({
+  onDriver,
+}: {
+  onDriver?: (key: string) => void;
+}) {
   return (
     <div className="owner-health-hero">
       <SphereHero
-        compact={compact}
         overallHealth={64}
         displayStatus="at_risk"
         pillars={PILLARS}
-        caption={compact ? "Tap to see what's behind your score" : "Collections are the lever."}
-        onOrbOpen={onOpen}
+        caption="Collections are the lever."
+        onTopPriority={() => undefined}
+        onDriverClick={onDriver}
       />
     </div>
   );
@@ -110,7 +114,8 @@ export type OwnerPreviewView =
   | "budget"
   | "tasks"
   | "profit"
-  | "moves";
+  | "moves"
+  | "faces";
 
 const YTD_PRIOR = {
   revenue: 390000,
@@ -145,7 +150,7 @@ export function OwnerDoorPreview({
 }) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
   const [done, setDone] = useState(false);
-  const [openedHealth, setOpenedHealth] = useState(false);
+  const [driver, setDriver] = useState<string | null>(null);
   const [liveBot, setLiveBot] = useState<AgentKey | null>(ownerBotKey(bot));
   const [draft, setDraft] = useState("");
   const [liveMessages, setLiveMessages] = useState<OwnerChatTurn[]>([]);
@@ -185,11 +190,11 @@ export function OwnerDoorPreview({
     view === "work"
       ? {
           ...presence,
-          agents: presence.agents.map((agent) => ({
-            ...agent,
-            motion: "working" as const,
-            sentence: "Working…",
-          })),
+          agents: presence.agents.map((agent) =>
+            agent.agent === "financial_manager"
+              ? { ...agent, motion: "working" as const, sentence: "Working…" }
+              : agent,
+          ),
         }
       : view === "reel"
         ? {
@@ -264,10 +269,10 @@ export function OwnerDoorPreview({
   return (
     <OwnerShell
       screen={
-        homeView && openedHealth
-          ? "health"
-          : view === "chat" || view === "recording" || (homeView && liveBot)
+        view === "chat" || view === "recording" || (homeView && liveBot)
           ? "chat"
+          : view === "faces"
+          ? "home"
           : view === "tasks" || view === "actions" || view === "moves"
             ? "moves"
             : view === "accountant" ||
@@ -314,10 +319,11 @@ export function OwnerDoorPreview({
           ))}
         </div>
       ) : null}
-      {view === "health" || (homeView && openedHealth) ? (
+      {view === "health" ? (
         <section className="owner-pane" data-owner-page="health">
           <h1 className="owner-title">Business Health</h1>
-          <HealthOrb />
+          <HealthOrb onDriver={setDriver} />
+          {driver ? <p data-health-driver={driver}>Opened {driver}</p> : null}
         </section>
       ) : null}
       {view === "cash" ? (
@@ -424,6 +430,7 @@ export function OwnerDoorPreview({
           firmName={null}
           invite={<p className="owner-lede">Invite form</p>}
           uploads={<p className="owner-lede">No files uploaded yet.</p>}
+          signed={[{ id: "s1", scope: "cash_forecast", name: "Alex Morgan", when: "2 Oct 2026" }]}
           onConnect={() => undefined}
         />
       ) : null}
@@ -437,15 +444,32 @@ export function OwnerDoorPreview({
       {view === "first" ? (
         <OwnerFirst joined={false} onQuickBooks={() => undefined} onXero={() => undefined} onInvite={() => undefined} />
       ) : null}
-      {homeView && !openedHealth && !liveBot ? (
+      {view === "faces" ? (
+        <section className="owner-pane" data-owner-faces="advisor">
+          <h1 className="owner-title">{agentDisplayName("advisor")}</h1>
+          <div className="owner-agents">
+            {(["character", "orb"] as const).map((variant) => (
+              <div key={variant} className="owner-agent" data-face={variant}>
+                <OwnerAvatar
+                  agent="advisor"
+                  variant={variant}
+                  motion="idle"
+                  size="stage"
+                  label={`${agentDisplayName("advisor")} ${variant}`}
+                />
+                <span className="owner-name">{variant === "character" ? "Character" : "Orb"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {homeView && !liveBot ? (
         <OwnerHome
           variant="character"
           presence={shown}
-          tiles={TILES}
+          lines={ownerHomeLines(TILES, "Collect the two largest invoices")}
           onOpen={openLive}
           onAsk={openLive}
-          onTile={() => undefined}
-          hero={<HealthOrb compact onOpen={() => setOpenedHealth(true)} />}
         />
       ) : null}
     </OwnerShell>

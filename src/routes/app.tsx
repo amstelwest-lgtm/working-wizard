@@ -3896,35 +3896,7 @@ function Index() {
                     window.location.href = "/";
                   });
                 }}
-                hero={(go) =>
-                  showScoredBoard ? (
-                    <div className="owner-health-hero">
-                      <OwnerHealthOrb
-                        compact
-                        overallHealth={avgHealth}
-                        displayStatus={overallHealth.displayStatus}
-                        pillars={spherePillars}
-                        caption="Tap to see what's behind your score"
-                        onOrbOpen={() => go("health")}
-                        onTopPriority={() => go("moves")}
-                        onDriverClick={(key) => {
-                          if (key in RATIO_META) setOpenRatio(key as RatioKey);
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <section className="owner-pane">
-                      <p className="owner-lede">Your accountant sets this up</p>
-                      <button
-                        type="button"
-                        className="btn gold owner-ask owner-ask-inline"
-                        onClick={() => go("accountant")}
-                      >
-                        Invite your accountant
-                      </button>
-                    </section>
-                  )
-                }
+                topMove={showScoredBoard ? (nextSteps[0]?.title ?? null) : null}
                 boards={(go) => ({
                   health: (
                     <section className="owner-pane" data-owner-page="health">

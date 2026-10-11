@@ -1,9 +1,8 @@
 import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
-import { ownerTileLabel, type OwnerTile } from "@/lib/owner-answers";
+import type { OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
-import type { ReactNode } from "react";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 
 const MOTION_LABEL: Record<OwnerMotion, string> = {
@@ -17,65 +16,69 @@ const MOTION_LABEL: Record<OwnerMotion, string> = {
 export function OwnerHome({
   variant,
   presence,
-  tiles,
+  lines,
   onOpen,
   onAsk,
-  onTile,
-  hero,
   runState,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
-  tiles: OwnerTile[];
+  lines: OwnerHomeLines;
   /** Live agent_runs. Missing runners stay off this line. */
   runState?: Partial<Record<AgentKey, OwnerRunPhase | null>>;
   onOpen: (agent: AgentKey) => void;
   onAsk: (agent: AgentKey) => void;
-  onTile: (tile: OwnerTile) => void;
-  hero?: ReactNode;
 }) {
   const handoff = presence.handoff;
   return (
     <div className="owner-pane" data-owner-home="true">
       <div className="owner-head">
         <h1 className="owner-title">Your finance team</h1>
-        <p className="owner-lede">Plain answers from the books. One thing for you.</p>
       </div>
-      {hero ? <div className="owner-health-hero">{hero}</div> : null}
       <div className="owner-stage">
         <div className="owner-agents">
-          {presence.agents.map((card) => (
-            <div key={card.agent} className="owner-agent" data-agent={card.agent}>
-              <button type="button" className="owner-agent-open" onClick={() => onOpen(card.agent)}>
-                <OwnerAvatar
-                  agent={card.agent}
-                  variant={variant}
-                  size="lg"
-                  share
-                  motion={card.motion}
-                  lookAt={card.lookAt}
-                  label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
-                />
-                <span className="owner-name">{agentDisplayName(card.agent)}</span>
-                {runState?.[card.agent] ? (
-                  <span className="owner-run-state" data-run-state={runState[card.agent]}>
-                    {ownerRunPhaseLabel(runState[card.agent]!)}
+          {presence.agents.map((card) => {
+            const brief = lines[card.agent] ?? [];
+            const motion = card.motion === "idle" ? null : MOTION_LABEL[card.motion];
+            return (
+              <div key={card.agent} className="owner-agent" data-agent={card.agent}>
+                <button type="button" className="owner-agent-open" onClick={() => onOpen(card.agent)}>
+                  <OwnerAvatar
+                    agent={card.agent}
+                    variant={variant}
+                    size="lg"
+                    share
+                    motion={card.motion}
+                    lookAt={card.lookAt}
+                    label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
+                  />
+                  <span className="owner-name">{agentDisplayName(card.agent)}</span>
+                  <span className="owner-lines">
+                    {brief.map((line, index) => (
+                      <span key={`${card.agent}-${index}`} className="owner-voice">
+                        {line}
+                      </span>
+                    ))}
                   </span>
-                ) : null}
-                <span className="owner-voice">{card.sentence}</span>
-                <span className="owner-motion-label">{MOTION_LABEL[card.motion]}</span>
-              </button>
-              <button
-                type="button"
-                className="btn gold owner-ask"
-                data-ask={card.agent}
-                onClick={() => onAsk(card.agent)}
-              >
-                <ChatIcon />
-                Ask {agentShortName(card.agent)}
-              </button>
-            </div>
-          ))}
+                  {runState?.[card.agent] ? (
+                    <span className="owner-run-state" data-run-state={runState[card.agent]}>
+                      {ownerRunPhaseLabel(runState[card.agent]!)}
+                    </span>
+                  ) : null}
+                  {motion ? <span className="owner-motion-label">{motion}</span> : null}
+                </button>
+                <button
+                  type="button"
+                  className="btn gold owner-ask"
+                  data-ask={card.agent}
+                  onClick={() => onAsk(card.agent)}
+                >
+                  <ChatIcon />
+                  Ask {agentShortName(card.agent)}
+                </button>
+              </div>
+            );
+          })}
         </div>
         {handoff ? (
           <HandoffBeam
@@ -84,29 +87,6 @@ export function OwnerHome({
             toIndex={AGENT_KEYS.indexOf(handoff.to)}
           />
         ) : null}
-      </div>
-      <div className="owner-promises">
-        {tiles.map((tile) => (
-          <article
-            key={tile.id}
-            className="owner-tile"
-            data-tile={tile.id}
-            data-empty={tile.empty ? "true" : "false"}
-          >
-            <div>
-              <h2>{tile.heading}</h2>
-              <p>{tile.sentence}</p>
-              <div className="owner-tile-source">{tile.source}</div>
-            </div>
-            <div className="owner-tile-actions">
-              {tile.signed ? <span className="owner-badge">Signed off ✓</span> : null}
-              <button type="button" className="btn gold owner-ask" onClick={() => onTile(tile)}>
-                {tile.ask ? <ChatIcon /> : null}
-                {ownerTileLabel(tile, agentShortName)}
-              </button>
-            </div>
-          </article>
-        ))}
       </div>
     </div>
   );

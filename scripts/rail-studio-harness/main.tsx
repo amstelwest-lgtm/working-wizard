@@ -191,6 +191,7 @@ const ownerDoorRoute = createRoute({
         "tasks",
         "profit",
         "moves",
+        "faces",
       ].includes(String(search.view))
         ? String(search.view)
         : "rest"
