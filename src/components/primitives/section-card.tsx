@@ -9,6 +9,7 @@ export type SectionCardProps = {
   pad?: boolean;
   className?: string;
   headClassName?: string;
+  id?: string;
 };
 
 export function SectionCard({
@@ -19,11 +20,15 @@ export function SectionCard({
   pad = true,
   className,
   headClassName,
+  id,
 }: SectionCardProps) {
   const hasHead = eyebrow || title || description;
 
   return (
-    <section className={cn("milon-section-card", pad && "milon-section-card--pad", className)}>
+    <section
+      id={id}
+      className={cn("milon-section-card", pad && "milon-section-card--pad", className)}
+    >
       {hasHead ? (
         <div className={cn("milon-section-card__head", headClassName)}>
           {eyebrow ? <span className="milon-section-card__eyebrow">{eyebrow}</span> : null}

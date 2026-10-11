@@ -90,6 +90,7 @@ import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { OwnerRatioBriefing } from "@/components/owner-ratio-briefing";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsMenu } from "@/components/settings-menu";
 import { SettingsNavButton } from "@/components/settings-nav-button";
 import { FeatureFinder } from "@/components/feature-finder";
 import {
@@ -326,7 +327,7 @@ export const Route = createFileRoute("/app")({
     view?: "chart" | "table" | "13week";
     bot?: "financial_manager" | "analyst" | "advisor";
     bots?: "row" | "stack";
-    screen?: "settings" | "accountant";
+    screen?: "settings" | "accountant" | "plan";
     section?: "signed";
   } => {
     const out: {
@@ -337,7 +338,7 @@ export const Route = createFileRoute("/app")({
       view?: "chart" | "table" | "13week";
       bot?: "financial_manager" | "analyst" | "advisor";
       bots?: "row" | "stack";
-      screen?: "settings" | "accountant";
+      screen?: "settings" | "accountant" | "plan";
       section?: "signed";
     } = {};
     if (
@@ -379,8 +380,8 @@ export const Route = createFileRoute("/app")({
     ) {
       out.screen = "accountant";
       out.section = "signed";
-    } else if (rawScreen === "settings") {
-      out.screen = "settings";
+    } else if (rawScreen === "settings" || rawScreen === "plan") {
+      out.screen = rawScreen;
     } else if (rawScreen === "accountant") {
       out.screen = "accountant";
       if (rawSection === "signed") out.section = "signed";
@@ -3928,6 +3929,7 @@ function Index() {
                 onProfile={() => openProfileDialog("retake")}
                 settingsOpen={oauthReturn.screen === "settings"}
                 openAccountant={oauthReturn.screen === "accountant"}
+                openPlan={oauthReturn.screen === "plan"}
                 focusSigned={oauthReturn.section === "signed"}
                 onSettings={() => {
                   openOwnerSettings();
@@ -4319,11 +4321,14 @@ function Index() {
                         ⬡ Admin
                       </button>
                     )}
-                    <SettingsNavButton
+                    <SettingsMenu
                       className="milon-settings-btn"
-                      onClick={() => {
+                      onSettings={() => {
                         openOwnerSettings();
-                        navigate({ to: "/settings" });
+                        void navigate({ to: "/settings" });
+                      }}
+                      onPlan={() => {
+                        void navigate({ to: "/app", search: { screen: "plan" } });
                       }}
                     />
                     <button

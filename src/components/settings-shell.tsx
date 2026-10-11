@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
+import { useNavigate } from "@tanstack/react-router";
+import { SettingsMenu } from "@/components/settings-menu";
+import { RailSettingsButton } from "@/components/settings-nav-button";
 
 type Width = "md" | "lg" | "xl";
 
@@ -8,7 +10,28 @@ type Width = "md" | "lg" | "xl";
  * Same atmos as the accountant portal, with Settings in the top-right
  * and pinned to the bottom of the desktop sidebar.
  */
-export function SettingsShell({ children, width = "md" }: { children: ReactNode; width?: Width }) {
+export function SettingsShell({
+  children,
+  width = "md",
+  onSettings,
+  onPlan,
+}: {
+  children: ReactNode;
+  width?: Width;
+  onSettings?: () => void;
+  onPlan?: () => void;
+}) {
+  const navigate = useNavigate();
+  const openSettings =
+    onSettings ??
+    (() => {
+      void navigate({ to: "/settings" });
+    });
+  const openPlan =
+    onPlan ??
+    (() => {
+      void navigate({ to: "/settings", hash: "firm-billing" });
+    });
   return (
     <div className="accountant-portal settings-portal milon-page-enter">
       <div id="atmos" aria-hidden="true">
@@ -22,11 +45,16 @@ export function SettingsShell({ children, width = "md" }: { children: ReactNode;
             <span className="gold-text">MILŌN</span>
           </span>
           <span className="spacer" />
-          <SettingsNavButton className="tb-btn settings-gear" aria-current="page" />
+          <SettingsMenu
+            className="tb-btn settings-gear"
+            current
+            onSettings={openSettings}
+            onPlan={openPlan}
+          />
         </header>
         <div className="client-workspace">
           <nav className="deliverable-rail" aria-label="Settings">
-            <RailSettingsButton active onClick={() => undefined} />
+            <RailSettingsButton active onClick={openSettings} />
           </nav>
           <div className="deliverable-main">
             <div className={`settings-portal__shell settings-portal__shell--${width}`}>{children}</div>
