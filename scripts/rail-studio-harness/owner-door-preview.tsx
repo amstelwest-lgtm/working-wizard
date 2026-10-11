@@ -23,6 +23,7 @@ import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines } from "@/lib/owner-answers";
+import { ownerNeedsView } from "@/lib/owner-needs";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerPresence, type OwnerMotion, type OwnerTalk } from "@/lib/owner-presence";
 
@@ -48,6 +49,28 @@ const BOOKS = {
   market: USD,
 };
 const TILES = ownerAnswerTiles(BOOKS);
+
+const HOME_NEEDS = ownerNeedsView({
+  ownerEmail: "alex@northline.test",
+  actionsReady: true,
+  actionsUnavailable: false,
+  actions: [
+    { title: "Approve the payroll run.", email: "alex@northline.test" },
+    { title: "Call the two largest overdue accounts.", email: "alex@northline.test" },
+    { title: "Send the supplier statement.", email: "alex@northline.test" },
+    { title: "Reconcile the till.", email: "ada@example.test" },
+  ],
+  draftsReady: true,
+  draftsUnavailable: false,
+  draftTitles: ["Chase the top three invoices."],
+  deliverablesReady: true,
+  deliverablesUnavailable: false,
+  deliverableCount: 2,
+  advisoryTitles: [],
+  quickBooks: { state: "linked", at: "2026-10-02T08:00:00.000Z" },
+  xero: { state: "absent" },
+  when: () => "2 Oct 2026",
+});
 
 const PILLARS: SpherePillar[] = [
   {
@@ -491,6 +514,9 @@ export function OwnerDoorPreview({
           status={ownerCardStatuses(BOOKS)}
           onOpen={openLive}
           onAsk={openLive}
+          needs={HOME_NEEDS}
+          onMoves={() => undefined}
+          onDeliverables={() => undefined}
         />
       ) : null}
     </OwnerShell>

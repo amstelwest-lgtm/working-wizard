@@ -19,6 +19,7 @@ import {
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { ownerMoney, ownerOutflow } from "../src/lib/owner-money.ts";
 import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
+import { ownerNeedsView } from "../src/lib/owner-needs.ts";
 import {
   draftFindingKindLabel,
   draftFindingLabel,
@@ -681,5 +682,61 @@ assert(!homeSrc.includes("R299") && !homeSrc.includes("$39"), "home does not sho
 const pagesSrc = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pagesSrc.includes("ownerPlanLine"), "the plan view is where the price lives");
 assert(pagesSrc.includes("ownerPlanFreeLine"), "the free line is on the invite surfaces");
+
+const emptyNeeds = ownerNeedsView({
+  ownerEmail: "alex@northline.test",
+  actionsReady: true,
+  actionsUnavailable: false,
+  actions: [{ title: "Staff task", email: "ada@example.test" }],
+  draftsReady: true,
+  draftsUnavailable: false,
+  draftTitles: [],
+  deliverablesReady: true,
+  deliverablesUnavailable: false,
+  deliverableCount: 0,
+  advisoryTitles: [],
+  quickBooks: { state: "absent" },
+  xero: { state: "absent" },
+  when: () => "2 Oct 2026",
+});
+assert(emptyNeeds.actionLines[0] === "No open actions assigned to you.", "someone else's action is not the owner's");
+assert(emptyNeeds.draftLines[0] === "No drafts need your OK.", "an empty draft list stays empty");
+assert(emptyNeeds.deliverableLines[0] === "No deliverables awaiting review.", "an empty deliverable list stays empty");
+assert(emptyNeeds.syncLines[0] === "Books are not connected yet.", "no ledger stays unconnected");
+
+const filledNeeds = ownerNeedsView({
+  ownerEmail: "alex@northline.test",
+  actionsReady: true,
+  actionsUnavailable: false,
+  actions: [
+    { title: "Approve the payroll run.", email: "alex@northline.test" },
+    { title: "Call the two largest overdue accounts.", email: "Alex@northline.test" },
+    { title: "Send the supplier statement.", email: "alex@northline.test" },
+  ],
+  draftsReady: true,
+  draftsUnavailable: false,
+  draftTitles: ["Chase the top three invoices."],
+  deliverablesReady: true,
+  deliverablesUnavailable: false,
+  deliverableCount: 2,
+  advisoryTitles: [],
+  quickBooks: { state: "linked", at: "2026-10-02T08:00:00.000Z" },
+  xero: { state: "absent" },
+  when: () => "2 Oct 2026",
+});
+assert(filledNeeds.actionsHeading === "3 open actions", "the strip counts the owner's open actions");
+assert(filledNeeds.actionLines.length === 2, "the strip shows the top two actions");
+assert(filledNeeds.actionLines[0] === "Approve the payroll run.", "the first owner action leads");
+assert(!filledNeeds.actionLines.join(" ").includes("Send the supplier"), "the third action stays off the strip");
+assert(filledNeeds.draftsHeading === "1 draft needs your OK", "a draft that needs an OK is counted");
+assert(filledNeeds.deliverablesHeading === "2 deliverables awaiting review", "unsigned deliverables are counted");
+assert(filledNeeds.syncHeading === "QuickBooks", "the sync names the ledger");
+assert(filledNeeds.syncLines[0] === "Last synced 2 Oct 2026.", "the sync shows the last time");
+assert(homeSrc.includes("What needs you"), "home has the needs strip");
+assert(homeSrc.includes("OwnerNeedsStrip"), "the strip is the home block");
+assert(!homeSrc.includes('className="btn gold"'), "the home strip does not add another primary button");
+assert(css.includes(".owner-needs"), "the strip has its own rhythm");
+assert(door.includes("onMoves={() => go(\"moves\")}"), "open actions and drafts open Next moves");
+assert(door.includes("onDeliverables={() => go(\"deliverables\")}"), "deliverables open Deliverables");
 
 console.log("owner-door tests passed");

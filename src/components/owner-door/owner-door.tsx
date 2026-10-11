@@ -28,6 +28,13 @@ import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
 import { OwnerChat, type OwnerChatTurn } from "./owner-chat";
+import {
+  advisoryDeliverableTitles,
+  ownerDraftTitles,
+  ownerNeedsView,
+  type BooksLink,
+  type OwnerActionRow,
+} from "@/lib/owner-needs";
 import { OwnerHome } from "./owner-home";
 import {
   OwnerAccountant,
@@ -151,6 +158,13 @@ export function OwnerDoor({
   const [error, setError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [ledger, setLedger] = useState<"QuickBooks" | "Xero" | null>(null);
+  const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
+  const [actionRows, setActionRows] = useState<OwnerActionRow[]>([]);
+  const [actionsUnavailable, setActionsUnavailable] = useState(false);
+  const [deliverableCount, setDeliverableCount] = useState(0);
+  const [deliverablesUnavailable, setDeliverablesUnavailable] = useState(false);
+  const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
+  const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
   const [openAction, setOpenAction] = useState<string | null>(null);
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
@@ -183,46 +197,85 @@ export function OwnerDoor({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setOwnerEmail(data.user?.email ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setLedger(null);
     setOpenAction(null);
     setActionsReady(false);
+    setActionRows([]);
+    setActionsUnavailable(false);
+    setDeliverableCount(0);
+    setDeliverablesUnavailable(false);
+    setQuickBooks({ state: "unknown" });
+    setXeroLink({ state: "unknown" });
     if (!clientId) {
       setActionsReady(true);
+      setQuickBooks({ state: "absent" });
+      setXeroLink({ state: "absent" });
       return;
     }
     let cancelled = false;
     void Promise.all([
-      supabase.from("qbo_connections").select("id").eq("client_id", clientId).limit(1),
-      supabase.from("xero_connections").select("id").eq("client_id", clientId).limit(1),
+      supabase.from("qbo_connections").select("id, last_synced_at").eq("client_id", clientId).limit(1),
+      supabase.from("xero_connections").select("id, last_synced_at").eq("client_id", clientId).limit(1),
       supabase
-        .from("action_items")
-        .select("id, title, status, due_date")
+        .from("action_items_v")
+        .select("id, title, status, owner_email, seq")
         .eq("client_id", clientId)
         .neq("status", "done")
         .order("seq", { ascending: true })
         .limit(20),
-    ]).then(([qbo, xero, actions]) => {
+      supabase
+        .from("deliverable_drafts")
+        .select("id")
+        .eq("client_id", clientId)
+        .in("status", ["draft", "ready"])
+        .limit(20),
+    ]).then(([qbo, xero, actions, drafts]) => {
       if (cancelled) return;
-      if (!qbo.error && (qbo.data?.length ?? 0) > 0) setLedger("QuickBooks");
-      else if (!xero.error && (xero.data?.length ?? 0) > 0) setLedger("Xero");
+      const qboRow = qbo.error ? null : (qbo.data?.[0] ?? null);
+      const xeroRow = xero.error ? null : (xero.data?.[0] ?? null);
+      if (qboRow) setLedger("QuickBooks");
+      else if (xeroRow) setLedger("Xero");
       else setLedger(null);
+      setQuickBooks(
+        qbo.error ? { state: "unknown" } : qboRow ? { state: "linked", at: qboRow.last_synced_at } : { state: "absent" },
+      );
+      setXeroLink(
+        xero.error
+          ? { state: "unknown" }
+          : xeroRow
+            ? { state: "linked", at: xeroRow.last_synced_at }
+            : { state: "absent" },
+      );
+      if (drafts.error) {
+        setDeliverablesUnavailable(true);
+        setDeliverableCount(0);
+      } else {
+        setDeliverablesUnavailable(false);
+        setDeliverableCount(drafts.data?.length ?? 0);
+      }
       if (actions.error) {
         setOpenAction(null);
+        setActionRows([]);
+        setActionsUnavailable(true);
         setActionsReady(true);
         return;
       }
       const rows = (actions.data ?? []).flatMap((row) => {
         const title = row.title?.trim() ?? "";
         if (!title || !row.id) return [];
-        return [
-          {
-            id: row.id,
-            title,
-            status: row.status,
-            due: row.due_date ? formatDate(row.due_date, market) : null,
-          },
-        ];
+        return [{ title, email: row.owner_email }];
       });
+      setActionRows(rows);
       setOpenAction(rows[0]?.title ?? null);
       setActionsReady(true);
     });
@@ -289,6 +342,39 @@ export function OwnerDoor({
   ]);
 
   const tiles = useMemo(() => ownerAnswerTiles(books), [books]);
+  const needs = useMemo(
+    () =>
+      ownerNeedsView({
+        ownerEmail,
+        actionsReady,
+        actionsUnavailable,
+        actions: actionRows,
+        draftsReady: !activity.loading,
+        draftsUnavailable: Boolean(activity.error),
+        draftTitles: ownerDraftTitles(activity.findings),
+        deliverablesReady: actionsReady,
+        deliverablesUnavailable,
+        deliverableCount,
+        advisoryTitles: advisoryDeliverableTitles(activity.findings),
+        quickBooks,
+        xero: xeroLink,
+        when: (iso) => formatDate(iso, market),
+      }),
+    [
+      ownerEmail,
+      actionsReady,
+      actionsUnavailable,
+      actionRows,
+      activity.loading,
+      activity.error,
+      activity.findings,
+      deliverablesUnavailable,
+      deliverableCount,
+      quickBooks,
+      xeroLink,
+      market,
+    ],
+  );
   const presence = ownerPresence(activity, talk);
   const runState = useMemo(() => {
     const latest = latestRunByAgent(activity.runs);
@@ -465,6 +551,9 @@ export function OwnerDoor({
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}
+          needs={needs}
+          onMoves={() => go("moves")}
+          onDeliverables={() => go("deliverables")}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}
