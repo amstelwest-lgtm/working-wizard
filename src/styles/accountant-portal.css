@@ -1674,7 +1674,21 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   min-height:44px;
 }
 .accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
-/* Sign-off pills keep their class name. On accountant surfaces they are cobalt. */
+/* Sign-off pills keep their class name. On accountant surfaces they are cobalt.
+   The class is unscoped because the confirm button is portaled to document.body. */
+.signoff-primary{
+  border:0 !important;
+  border-radius:999px !important;
+  background-color:#0b5fff !important;
+  background-image:none !important;
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
+  box-shadow:none !important;
+}
+.signoff-primary:hover:not(:disabled){
+  background-color:#2563eb !important;
+  color:#ffffff !important;
+}
 .accountant-portal .answer-strip__primary,
 .accountant-portal button[data-approve]{
   background:#0b5fff !important;
@@ -1757,6 +1771,8 @@ html[data-theme="light"] .accountant-portal .data-fresh{
     padding:0 0 48px;
   }
   .accountant-portal:not(.owner-door) .topbar{
+    margin-left:0;
+    margin-right:0;
     padding-left:20px;
     padding-right:24px;
   }

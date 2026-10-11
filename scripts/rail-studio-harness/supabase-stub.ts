@@ -20,9 +20,38 @@ const SESSION = {
   expires_at: 4_102_444_800,
 };
 
+const FIRM_ID = "11111111-1111-4111-8111-111111111111";
+
+const FIRM_ROW = {
+  id: FIRM_ID,
+  name: "Harbour & Co",
+  owner_user_id: HARNESS_USER.id,
+  referral_code: "HARBOUR",
+  logo_url: null,
+  accent_color: "#0B5FFF",
+  primary_color: "#102A43",
+  secondary_color: "#DBEAFE",
+  tagline: "The passion to perform.",
+  brand_contact_name: "Ada Mbeki",
+  brand_contact_email: "ada@harbour.example",
+  brand_updated_at: "2026-09-01T00:00:00.000Z",
+  market: { country: "ZA", regionCode: null },
+  created_at: "2026-01-15T00:00:00.000Z",
+};
+
+function onPracticeRoute(): boolean {
+  if (typeof location === "undefined") return false;
+  const path = location.pathname;
+  return path === "/dashboard" || path.startsWith("/dashboard/") || path === "/settings" || path.startsWith("/settings/");
+}
+
 const CLIENT_ROW = {
   id: "harness-client",
   name: "Harbour Glass",
+  firm_id: FIRM_ID,
+  owner_user_id: HARNESS_USER.id,
+  business_type: "professional_services",
+  created_at: "2026-06-12T00:00:00.000Z",
   cashflow: {
     startDate: "2026-10-05",
     openingBalance: "186000",
@@ -296,6 +325,21 @@ function clientRow() {
   return CLIENT_ROW;
 }
 
+const SECOND_CLIENT = {
+  ...CLIENT_ROW,
+  id: "harness-client-north",
+  name: "North Quay Studio",
+  business_type: "retail",
+  created_at: "2026-08-02T00:00:00.000Z",
+  financials: {
+    cash: "42000",
+    revenue: "180000",
+    cogs: "90000",
+    fixedCosts: "70000",
+    periodEnd: "2026-09-30",
+  },
+};
+
 const DRAFT_FINDINGS = [
   {
     id: "draft-request",
@@ -426,6 +470,16 @@ function materialize(table: string, mode: Mode): { data: unknown; error: null } 
     if (mode === "list") return { data: rows, error: null };
     return { data: rows[0] ?? null, error: null };
   }
+  if (onPracticeRoute() && table === "firms") {
+    return { data: mode === "list" ? [FIRM_ROW] : FIRM_ROW, error: null };
+  }
+  if (onPracticeRoute() && table === "user_roles") {
+    const roles = [{ user_id: HARNESS_USER.id, role: "firm_admin" }];
+    return { data: mode === "list" ? roles : roles[0], error: null };
+  }
+  if (table === "clients" && mode === "list" && onPracticeRoute()) {
+    return { data: [clientRow(), SECOND_CLIENT], error: null };
+  }
   const row = table === "clients" ? clientRow() : TABLES[table];
   if (mode === "list") {
     if (Array.isArray(row)) return { data: row, error: null };
@@ -510,7 +564,8 @@ export const supabase = {
   from(table: string) {
     return builder(table);
   },
-  rpc() {
+  rpc(name?: string) {
+    if (name === "is_milon_it_member") return Promise.resolve({ data: false, error: null });
     return Promise.resolve({ data: [], error: { message: "harness-local" } });
   },
   channel() {
@@ -530,6 +585,9 @@ export const supabase = {
   auth: {
     async getSession() {
       return { data: { session: SESSION }, error: null };
+    },
+    async getUser() {
+      return { data: { user: HARNESS_USER }, error: null };
     },
     onAuthStateChange(callback: (event: string, session: typeof SESSION | null) => void) {
       queueMicrotask(() => callback("INITIAL_SESSION", SESSION));

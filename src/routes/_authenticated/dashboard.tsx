@@ -1038,7 +1038,7 @@ function InviteOwnerDialog({
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
-function Dashboard() {
+export function Dashboard() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 

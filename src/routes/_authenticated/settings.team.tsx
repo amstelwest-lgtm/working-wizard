@@ -103,7 +103,7 @@ function formatInviteExpiry(iso: string): string {
 const INVITE_EMAIL_FAILED =
   "Invite saved, but the email didn't send. Copy the link and send it yourself.";
 
-function TeamAccessPage() {
+export function TeamAccessPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const loadRoster = useServerFn(getPracticeTeamRoster);

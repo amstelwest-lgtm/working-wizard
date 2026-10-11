@@ -26,9 +26,9 @@ import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
-import { SettingsShell } from "@/components/settings-shell";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { PracticePreview } from "./practice-preview";
+import { Dashboard } from "@/routes/_authenticated/dashboard";
+import { SettingsPage } from "@/routes/_authenticated/settings.index";
+import { TeamAccessPage } from "@/routes/_authenticated/settings.team";
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {
@@ -268,7 +268,7 @@ const dashboardRoute = createRoute({
   component: function DashboardHarness() {
     return (
       <MarketProvider selection={{ country: "ZA", regionCode: null }}>
-        <PracticePreview />
+        <Dashboard />
       </MarketProvider>
     );
   },
@@ -279,10 +279,9 @@ const settingsTeamRoute = createRoute({
   path: "/settings/team",
   component: function SettingsTeamHarness() {
     return (
-      <SettingsShell>
-        <h1 className="owner-title">Team</h1>
-        <p>People who can open this practice.</p>
-      </SettingsShell>
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <TeamAccessPage />
+      </MarketProvider>
     );
   },
 });
@@ -292,15 +291,9 @@ const settingsRoute = createRoute({
   path: "/settings",
   component: function SettingsHarness() {
     return (
-      <SettingsShell>
-        <h1 className="owner-title">Settings</h1>
-        <p>Profile, practice preferences, and account controls.</p>
-        <div className="settings-theme-row">
-          <span className="settings-label">Theme</span>
-          <ThemeToggle />
-        </div>
-        <p>Signed in as harbour@example.com</p>
-      </SettingsShell>
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <SettingsPage />
+      </MarketProvider>
     );
   },
 });
