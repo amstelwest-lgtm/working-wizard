@@ -516,7 +516,10 @@ export function CashForecastPanel({
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
-  const { money: fmtR, moneyCompact: fmtCompact, date, market } = useMarketFormat();
+  const { money: fullMoney, moneyCompact: compactMoney, date, market } = useMarketFormat();
+  const sign = (text: string) => (simplified ? text.replace(/^-/, "−") : text);
+  const fmtR = (n: number, opts?: Parameters<typeof fullMoney>[1]) => sign(fullMoney(n, opts));
+  const fmtCompact = (n: number) => sign(compactMoney(n));
   const cur = currencySymbol(market);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);

@@ -24,6 +24,7 @@ import { ownerYearFromStatement, type BudgetYearMoney } from "@/lib/budget-year-
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
+import { ownerMinus } from "@/lib/owner-money";
 import {
   budgetDaysNeedReview,
   budgetDaysSourceLabel,
@@ -136,7 +137,10 @@ export function BudgetSimpleView({
   priorYearMonths?: number | null;
 }) {
   const { market } = useMarket();
-  const money = (n: number) => fmtBudgetMoney(n, market);
+  const money = (n: number) => {
+    const text = fmtBudgetMoney(n, market);
+    return role === "owner" ? ownerMinus(text) : text;
+  };
   const symbol = currencySymbol(market);
   const monthLabel = (ym: string) => formatMonthLabelMarket(ym, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
@@ -254,6 +258,7 @@ export function BudgetSimpleView({
         onLensChange={onLensChange}
         actualMonths={actualMonths}
         readOnly={readOnly}
+        signed={role === "owner"}
       />
       {readOnly ? null : <>{drawer}</>}
       {readOnly ? (
@@ -264,6 +269,7 @@ export function BudgetSimpleView({
           lastMonths={priorYearMonths}
           lastYearLabel={priorYearLabel}
           market={market}
+          signed={role === "owner"}
         />
       ) : null}
       {readOnly ? null : (

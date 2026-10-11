@@ -1,4 +1,5 @@
 import { fmtBudgetMoney } from "@/lib/budget.compute";
+import { ownerMinus } from "@/lib/owner-money";
 import {
   compareOwnerYear,
   type BudgetYearMoney,
@@ -14,6 +15,7 @@ export function BudgetYearStrip({
   lastMonths = null,
   lastYearLabel,
   market,
+  signed = false,
 }: {
   thisYear: BudgetYearMoney | null;
   /** Months in the statement window. Compared only when last year matches. */
@@ -22,8 +24,13 @@ export function BudgetYearStrip({
   lastMonths?: number | null;
   lastYearLabel?: string | null;
   market: ResolvedMarket;
+  /** Owner door uses one unicode minus. */
+  signed?: boolean;
 }) {
-  const money = (n: number) => fmtBudgetMoney(n, market);
+  const money = (n: number) => {
+    const text = fmtBudgetMoney(n, market);
+    return signed ? ownerMinus(text) : text;
+  };
   const compared = compareOwnerYear(thisYear, thisMonths, lastYear, lastMonths);
   const lastHeading = lastYearLabel ? `Last year · ${lastYearLabel}` : "Last year";
   return (
