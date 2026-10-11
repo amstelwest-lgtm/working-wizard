@@ -3,10 +3,9 @@
 // POST /task-link/:token  → apply an update (status / progress / milestones / note)
 // A GET must NEVER change data. Outlook Safe Links & Gmail proxies prefetch URLs.
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { appRedirectOrigin } from "../_shared/app-origin.ts";
+import { transactionalFrom, transactionalSiteUrl } from "../_shared/transactional-mail.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
-const FROM_ADDRESS = "MILŌN <noreply@notify.milon.co.za>";
 
 // ── Owner notification email ──────────────────────────────────────────────────
 
@@ -68,7 +67,7 @@ function buildOwnerNotificationHtml(opts: {
       </a>
     </div>
 
-    <p style="font-size:12px;color:#94a3b8;margin:20px 0 0">— MILŌN${businessName ? ` · ${businessName}` : ""}</p>
+    <p style="font-size:12px;color:#94a3b8;margin:20px 0 0">— The MILŌN Team${businessName ? ` · ${businessName}` : ""}</p>
   </div>
 </body>
 </html>`;
@@ -84,7 +83,7 @@ function buildOwnerNotificationHtml(opts: {
     "",
     `View action plan: ${actionPlanUrl}`,
     "",
-    `— MILŌN${businessName ? ` · ${businessName}` : ""}`,
+    `— The MILŌN Team${businessName ? ` · ${businessName}` : ""}`,
   ].filter((l) => l !== undefined).join("\n");
 
   return { html, text, subject };
@@ -142,7 +141,7 @@ async function sendOwnerNotification(opts: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: FROM_ADDRESS,
+        from: transactionalFrom(Deno.env.get("RESEND_FROM_EMAIL")),
         to: [ownerEmail],
         subject,
         html,
@@ -343,7 +342,7 @@ Deno.serve(async (req) => {
 
     // Notify the client owner — fire-and-forget (never blocks the success response).
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-    const siteUrl = appRedirectOrigin([Deno.env.get("SITE_URL")]);
+    const siteUrl = transactionalSiteUrl(Deno.env.get("SITE_URL"));
     const newStatus = (patch.status as string) ?? itemRow.status;
     const noteText = typeof body.note === "string" && body.note.trim() ? body.note.trim() : null;
     let ownerNotified = false;

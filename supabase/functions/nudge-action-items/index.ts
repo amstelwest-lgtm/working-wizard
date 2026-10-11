@@ -9,12 +9,9 @@
  * Auth: service role key as Bearer token.
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { appRedirectOrigin } from "../_shared/app-origin.ts";
+import { transactionalFrom, transactionalSiteUrl } from "../_shared/transactional-mail.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
-const FROM_DOMAIN = "milon.co.za";
-const SENDER_DOMAIN = "notify.milon.co.za";
-const SITE_NAME = "Working Capital Compass";
 // How long to wait before re-nudging the same item (7 days).
 const COOLDOWN_DAYS = 7;
 
@@ -129,7 +126,7 @@ function buildEmailHtml(opts: {
     </div>
 
     <p style="font-size:12px;color:#94a3b8;margin:4px 0 0">No login needed — the buttons open your task page.</p>
-    <p style="font-size:12px;color:#94a3b8;margin:20px 0 0">— MILŌN${clientName ? ` · ${clientName}` : ""}</p>
+    <p style="font-size:12px;color:#94a3b8;margin:20px 0 0">— The MILŌN Team${clientName ? ` · ${clientName}` : ""}</p>
   </div>
 </body>
 </html>`;
@@ -148,7 +145,7 @@ function buildEmailHtml(opts: {
     `I'm blocked: ${taskUrl}?intent=blocked`,
     "",
     "No login needed — the links open your task page.",
-    `— MILŌN${clientName ? ` · ${clientName}` : ""}`,
+    `— The MILŌN Team${clientName ? ` · ${clientName}` : ""}`,
   ]
     .filter((l) => l !== undefined)
     .join("\n");
@@ -172,7 +169,7 @@ async function sendViaResend(opts: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      from: transactionalFrom(Deno.env.get("RESEND_FROM_EMAIL")),
       to: [opts.to],
       subject: opts.subject,
       html: opts.html,
@@ -218,7 +215,7 @@ Deno.serve(async (req) => {
   }
 
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
-  const siteUrl = appRedirectOrigin([Deno.env.get("SITE_URL")]);
+  const siteUrl = transactionalSiteUrl(Deno.env.get("SITE_URL"));
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   if (!resendApiKey) return json({ error: "RESEND_API_KEY not configured" }, 500);
