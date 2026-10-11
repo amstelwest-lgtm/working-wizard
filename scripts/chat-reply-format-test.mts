@@ -127,6 +127,9 @@ assert(
   "rules use the market currency",
 );
 assert(BOT_SYSTEM.includes("**Next actions**"), "milon-bot carries the reply format");
+assert(rules.includes("No paragraphs between the figures and Next actions"), "rules forbid a prose middle");
+assert(rules.includes("Hard limit of 120 words") && rules.includes("Never more than 5"), "rules cap length and figures");
+assert(rules.includes("override any other length or style rule"), "format rules win over older length rules");
 assert(!BOT_SYSTEM.includes("3–8 sentences"), "milon-bot drops the old sentence count");
 
 const ctx = { copyPack: "us", ratios: [] } as unknown as AskAiContext;
