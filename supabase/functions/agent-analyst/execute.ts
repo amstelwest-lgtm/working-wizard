@@ -10,7 +10,9 @@ import {
   evidenceMetrics,
   groundFindingEvidence,
   moneyMarketFromClient,
+  severityWithFloor,
   shapeRecordedCopy,
+  storedFigureValues,
   type StoredFigures,
 } from "../../../src/lib/agent-bus.ts";
 import {
@@ -249,6 +251,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     figures: grounded.evidence.figures,
     periodLabel: grounded.evidence.period_label,
     market,
+    storedNumbers: storedFigureValues(ctx.pool),
   });
   if (!shaped.ok) return { error: shaped.error };
   const cited = attachCitedEvidence({
@@ -259,10 +262,11 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   });
   if (!cited.ok) return { error: cited.error, tool_blocked: true };
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
+  const storedSeverity = severityWithFloor(severity, metrics);
   const evidence = {
     ...cited.evidence,
     metrics,
-    status: agentCopyStatus(severity, metrics),
+    status: agentCopyStatus(storedSeverity),
   };
   const warning = cited.warning;
   const recordKeys = [
@@ -323,7 +327,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
         title: shaped.title,
         detail: shaped.detail,
         seenAt,
-        severity,
+        severity: storedSeverity,
         existingSeverity: duplicate.severity,
         existingEvidence: asRecord(kept?.evidence),
         nextEvidence: evidence as Record<string, unknown>,
@@ -348,7 +352,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       client_id: ctx.clientId,
       run_id: ctx.runId,
       kind,
-      severity,
+      severity: storedSeverity,
       title: shaped.title,
       detail: shaped.detail,
       evidence,
@@ -372,7 +376,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       finding_id: data.id,
       kind,
       title: shaped.title,
-      severity,
+      severity: storedSeverity,
     },
     correlation_id: ctx.correlationId,
     run_id: ctx.runId,

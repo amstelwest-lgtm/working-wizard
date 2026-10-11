@@ -14,6 +14,7 @@ import {
   evidenceMetrics,
   moneyMarketFromClient,
   sanitizeAgentError,
+  severityWithFloor,
   type FindingEvidence,
   type StoredFigures,
 } from "../../../../src/lib/agent-bus.ts";
@@ -191,18 +192,19 @@ async function recordHandoffFinish(
   }
   if ((count ?? 0) > 0) return;
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
+  const severity = severityWithFloor("info", metrics);
   const { error: findingError } = await db.from("agent_findings").insert({
     agent: config.agent,
     client_id: input.clientId,
     run_id: input.runId,
     kind: config.fallbackDraftKind,
-    severity: "info",
+    severity,
     title: finding.title,
     detail: finding.detail,
     evidence: withDraftFlags({
       ...cited.evidence,
       metrics,
-      status: agentCopyStatus("info", metrics),
+      status: agentCopyStatus(severity),
     }),
     last_seen: new Date().toISOString(),
   });

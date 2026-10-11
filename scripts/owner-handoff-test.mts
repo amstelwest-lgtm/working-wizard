@@ -77,6 +77,7 @@ const finding = handoffFinding({
 });
 assert(finding?.evidence.figures && (finding.evidence.figures as { cash: number }).cash === 1200, "a finding keeps stored figures");
 assert(finding && !("nope" in (finding.evidence.figures as object)), "a finding drops a non-number");
+assert(finding?.severity === "act" && finding.evidence.status === "critical", "cash under the floor is act and critical");
 
 const fn = readFileSync("supabase/functions/owner-handoff/index.ts", "utf8");
 const decideAt = fn.indexOf("handoffDecision");

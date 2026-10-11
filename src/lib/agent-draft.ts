@@ -13,7 +13,9 @@ import {
   attachCitedEvidence,
   evidenceMetrics,
   groundFindingEvidence,
+  severityWithFloor,
   shapeRecordedCopy,
+  storedFigureValues,
   type FindingEvidence,
   type MoneyMarket,
   type StoredFigures,
@@ -207,6 +209,7 @@ export function prepareDraftRecord(input: {
     figures: grounded.evidence.figures,
     periodLabel: grounded.evidence.period_label,
     market: input.market,
+    storedNumbers: storedFigureValues(input.pool),
   });
   if (!shaped.ok) return { ok: false, error: shaped.error };
   const cited = attachCitedEvidence({
@@ -217,10 +220,11 @@ export function prepareDraftRecord(input: {
   });
   if (!cited.ok) return { ok: false, error: cited.error, tool_blocked: true };
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, input.market);
+  const storedSeverity = severityWithFloor(severity, metrics);
   const evidence = withDraftFlags({
     ...cited.evidence,
     metrics,
-    status: agentCopyStatus(severity, metrics),
+    status: agentCopyStatus(storedSeverity),
   });
   const recordKeys = [
     findingRecordKey({
@@ -240,7 +244,7 @@ export function prepareDraftRecord(input: {
   return {
     ok: true,
     kind,
-    severity,
+    severity: storedSeverity,
     title: shaped.title,
     detail: shaped.detail,
     evidence,

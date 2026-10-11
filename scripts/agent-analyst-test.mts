@@ -233,6 +233,31 @@ const DAY = 24 * 60 * 60 * 1000;
     assert(ambiguous.error.includes("Aug 2026") && ambiguous.error.includes("Sep 2026"), "the error names both cash periods");
     assert(!ambiguous.error.includes("snap-oct"), "the rejection does not stamp a snapshot");
   }
+  const anchored = groundFindingEvidence({
+    pool: [
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { "Gross Margin": 0.6, "Net Margin": 0.09 } },
+      { snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { "Gross Margin": 0.6, "Debtor Days": 43.8 } },
+      { snapshotId: null, periodLabel: "saved cashflow", figures: { opening_balance: 128450 } },
+    ],
+    claimedFigures: { "Gross Margin": 0.6, "Debtor Days": 43.8, opening_balance: 128450 },
+  });
+  assert(anchored.ok === true, "a shared figure follows the period the rest of the map already uses");
+  if (anchored.ok) {
+    const byPeriod = anchored.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Oct 2026"]?.["Gross Margin"] === 0.6, "gross margin follows October, which holds the debtor days");
+    assert(byPeriod["Oct 2026"]?.["Debtor Days"] === 43.8, "October keeps the debtor days");
+    assert(byPeriod["saved cashflow"]?.opening_balance === 128450, "opening cash stays on the saved cashflow");
+    assert(byPeriod["Sep 2026"] == null, "September is not a home when nothing else in the map is only September");
+  }
+  const bothAnchors = groundFindingEvidence({
+    pool: [
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { "Gross Margin": 0.6, "Net Margin": 0.09 } },
+      { snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { "Gross Margin": 0.6, "Debtor Days": 43.8 } },
+    ],
+    claimedFigures: { "Gross Margin": 0.6, "Net Margin": 0.09, "Debtor Days": 43.8 },
+  });
+  assert(bothAnchors.ok === false, "a figure that fits two periods the map already uses is still rejected");
+  if (!bothAnchors.ok) assert(bothAnchors.error.includes("more than one period"), "two anchored periods stay a mixed-period rejection");
   const structured = groundFindingEvidence({
     pool: [older, newer],
     claimedFigures: { "Aug 2026": { cash: 10 }, "Sep 2026": { debtor_days: 43.8 } },
