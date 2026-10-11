@@ -507,6 +507,30 @@ function relatedDraftKinds(left: string, right: string): boolean {
   return RELATED_DRAFT_KINDS.some((group) => group.includes(left) && group.includes(right));
 }
 
+/**
+ * Books-quality topic. `has_upload`, `connected_ledgers`, `sync_status`, and
+ * statement totals. A key on either related draft is enough.
+ */
+const BOOKS_QUALITY_FIGURE_KEYS = new Set([
+  "hasupload",
+  "connectedledgers",
+  "syncstatus",
+  "revenue",
+  "cogs",
+  "grossprofit",
+  "netincome",
+  "cash",
+  "receivables",
+  "payables",
+  "inventory",
+  "totalassets",
+  "equity",
+]);
+
+function citesBooksQuality(figures: Record<string, number>): boolean {
+  return Object.keys(figures).some((key) => BOOKS_QUALITY_FIGURE_KEYS.has(key.toLowerCase().replace(/[\s_-]/g, "")));
+}
+
 function findingPeriodEndsOverlap(
   a: { periodLabel: string | null; figures: unknown },
   b: { periodLabel: string | null; figures: unknown },
@@ -524,7 +548,9 @@ function findingPeriodEndsOverlap(
  * each other. The same kind matches when any period end is shared
  * (`1 Jan 2026 – 30 Sep 2026` is Sep 2026) or the snapshot is the same, or
  * when the figure overlap is at least 60 percent. Related draft kinds match
- * only when a period end is shared and the figure overlap is at least 60 percent.
+ * when a period end is shared and either the figures overlap by at least 60
+ * percent or either side cites the books-quality topic. A match on a
+ * superseded row is a match on its keeper.
  */
 export function findingDuplicates<T extends {
   id: string;
@@ -534,6 +560,7 @@ export function findingDuplicates<T extends {
   periodLabel: string | null;
   snapshotId: string | null;
   severity: string;
+  supersededBy?: string | null;
 }>(input: {
   nowMs: number;
   candidate: {
@@ -551,7 +578,9 @@ export function findingDuplicates<T extends {
     figures: input.candidate.figures,
   });
   const figures = comparableFindingFigures(input.candidate.figures, candidatePeriod);
+  const byId = new Map(input.recent.map((row) => [row.id, row]));
   let best: T | null = null;
+  let bestSeen = -1;
   for (const row of input.recent) {
     if (row.seenAtMs < cutoff) continue;
     const rowKind = normalizeFindingKind(row.kind);
@@ -559,6 +588,7 @@ export function findingDuplicates<T extends {
     const related = relatedDraftKinds(kind, rowKind);
     if (!sameKind && !related) continue;
     const rowPeriod = dedupePeriodOf({ periodLabel: row.periodLabel, figures: row.figures });
+    const rowFigures = comparableFindingFigures(row.figures, rowPeriod);
     const samePeriod = sharesFindingPeriod(
       {
         periodLabel: input.candidate.periodLabel,
@@ -567,17 +597,36 @@ export function findingDuplicates<T extends {
       },
       { periodLabel: row.periodLabel, snapshotId: row.snapshotId, figures: row.figures },
     );
-    const overlap = figureKeyOverlap(figures, comparableFindingFigures(row.figures, rowPeriod));
+    const overlap = figureKeyOverlap(figures, rowFigures);
     if (related) {
       const sharedEnd = findingPeriodEndsOverlap(
         { periodLabel: input.candidate.periodLabel, figures: input.candidate.figures },
         { periodLabel: row.periodLabel, figures: row.figures },
       );
-      if (!sharedEnd || overlap < FINDING_FIGURE_OVERLAP) continue;
+      const sameTopic = citesBooksQuality(figures) || citesBooksQuality(rowFigures);
+      if (!sharedEnd || (overlap < FINDING_FIGURE_OVERLAP && !sameTopic)) continue;
     } else if (!samePeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
-    if (!best || row.seenAtMs >= best.seenAtMs) best = row;
+    if (best && row.seenAtMs < bestSeen) continue;
+    best = keeperFinding(row, byId);
+    bestSeen = row.seenAtMs;
   }
   return best;
+}
+
+/** A superseded row points at the row that replaced it. That keeper is the duplicate. */
+function keeperFinding<T extends { id: string; supersededBy?: string | null }>(
+  row: T,
+  byId: Map<string, T>,
+): T {
+  const seen = new Set<string>();
+  let current = row;
+  while (current.supersededBy && !seen.has(current.id)) {
+    seen.add(current.id);
+    const keeper = byId.get(current.supersededBy);
+    if (!keeper) return { ...current, id: current.supersededBy, supersededBy: null };
+    current = keeper;
+  }
+  return current;
 }
 
 /** A review that saved findings and then hit the turn cap is finished. */

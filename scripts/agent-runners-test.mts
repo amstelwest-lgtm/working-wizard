@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { analystRunCostUsd } from "../src/lib/agent-analyst.ts";
-import { findingDuplicates } from "../src/lib/agent-analyst.ts";
+import { figureKeyOverlap, findingDuplicates, comparableFindingFigures } from "../src/lib/agent-analyst.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../src/lib/agent-books.ts";
 import {
   CUT_OFF_DRAFT_RESULT,
@@ -203,7 +203,7 @@ const pool = [
     nowMs: Date.parse("2026-10-11T10:02:13Z"),
     candidate: {
       kind: "advisory_deliverable_draft",
-      figures: { "Sep 2026": { cash: 1 } },
+      figures: { "Sep 2026": { "Debtor Days": 99 } },
       periodLabel: null,
       snapshotId: null,
     },
@@ -262,9 +262,96 @@ const pool = [
     ],
   });
   assert(handoff?.id === "2905a21a", "a data request and an accountant hand-off match on the same period and figures");
+
+  // Signup Demo Co, 11 Oct 2026. The hand-off cites margins, not the keeper's upload counts.
+  const signupKeeper = {
+    id: "2905a21a-2ee9-4d78-a019-c709c3c702f7",
+    kind: "data_request_draft",
+    figures: { has_upload: 1, connected_ledgers: 0 },
+    seenAtMs: Date.parse("2026-10-11T10:03:10.037Z"),
+    periodLabel: "Sep 2026",
+    snapshotId: null,
+    severity: "watch",
+    supersededBy: null,
+  };
+  const signupHandoff = {
+    kind: "accountant_handoff_draft",
+    figures: {
+      "Sep 2026": {
+        "Net Margin": 0.0927184410965925,
+        "Debtor Days": 26,
+        "Gross Margin": 0.5849514537921812,
+        "Creditor Days": 40,
+        "Inventory Days": 47,
+        "Fixed Cost Ratio": 0.4587378668612735,
+        "Operating Margin": 0.1262135869309077,
+        "Working Capital Days": 33,
+      },
+      "saved cashflow": { horizon_weeks: 13, cash_runway_weeks: 13 },
+      "1 Jan 2026 – 30 Sep 2026": {
+        "Net Margin": 0.0927184410965925,
+        "Debtor Days": 26,
+        "Gross Margin": 0.5849514537921812,
+        "Creditor Days": 40,
+      },
+    },
+    periodLabel: null,
+    snapshotId: null,
+  };
+  assert(
+    figureKeyOverlap(
+      comparableFindingFigures(signupHandoff.figures, null),
+      comparableFindingFigures(signupKeeper.figures, signupKeeper.periodLabel),
+    ) < 0.6,
+    "the Signup hand-off and the data request do not share 60 percent of their figures",
+  );
+  const signup = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:23:09.111Z"),
+    candidate: signupHandoff,
+    recent: [signupKeeper],
+  });
+  assert(
+    signup?.id === "2905a21a-2ee9-4d78-a019-c709c3c702f7",
+    "Signup books-quality keys on the data request match the later hand-off",
+  );
+  const signupOtherMonth = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:23:09.111Z"),
+    candidate: {
+      kind: "accountant_handoff_draft",
+      figures: { "Oct 2026": { "Operating Margin": 0.12 } },
+      periodLabel: null,
+      snapshotId: null,
+    },
+    recent: [signupKeeper],
+  });
+  assert(signupOtherMonth === null, "a books-quality topic does not match across period ends");
+  const supersededHandoff = {
+    id: "a1dd5a9f-1c80-4d0b-88c2-afbdb210bc4a",
+    kind: "accountant_handoff_draft",
+    figures: {
+      "Sep 2026": { has_upload: 1, "Operating Margin": 0.1262135869309077, connected_ledgers: 0 },
+      "saved cashflow": { horizon_weeks: 13, cash_runway_weeks: 13 },
+    },
+    seenAtMs: Date.parse("2026-10-11T10:03:10.037Z"),
+    periodLabel: null,
+    snapshotId: null,
+    severity: "watch",
+    supersededBy: "2905a21a-2ee9-4d78-a019-c709c3c702f7",
+  };
+  const viaSuperseded = findingDuplicates({
+    nowMs: Date.parse("2026-10-11T10:23:09.111Z"),
+    candidate: signupHandoff,
+    recent: [supersededHandoff],
+  });
+  assert(
+    viaSuperseded?.id === "2905a21a-2ee9-4d78-a019-c709c3c702f7",
+    "a hit on the superseded Signup hand-off bumps the data-request keeper",
+  );
   const desk = read("supabase/functions/_shared/agent-desk.ts");
+  const lookup = desk.slice(desk.indexOf('.gte("last_seen", since)'), desk.indexOf("findingDuplicates"));
+  assert(!lookup.includes('.is("superseded_by", null)'), "dedupe compares superseded rows");
   assert(desk.includes('.is("dismissed_reason", null)'), "dismissed findings are not revived");
-  assert(desk.includes('.is("superseded_by", null)'), "superseded findings are not revived");
+  assert(desk.includes('.is("superseded_by", null)'), "the last_seen bump does not rewrite a superseded row");
   assert(desk.includes("last_seen: seenAt"), "a duplicate draft bumps last_seen on the existing row");
 }
 
@@ -422,6 +509,18 @@ function deskWritesLiveRecords(src: string): boolean {
     cleanupCode.indexOf("'2905a21a-2ee9-4d78-a019-c709c3c702f7'") <
       cleanupCode.indexOf("'a1dd5a9f-1c80-4d0b-88c2-afbdb210bc4a'"),
     "the existing data request is the keeper",
+  );
+  const topicCleanup = read("supabase/migrations/20261012150000_agent_findings_books_topic_dedupe.sql");
+  assert(topicCleanup.includes("0cb4b83a-de25-4407-b57a-769585a14732"), "the Signup hand-off is named");
+  assert(topicCleanup.includes("2905a21a-2ee9-4d78-a019-c709c3c702f7"), "the Signup data request stays the keeper");
+  assert(topicCleanup.includes("superseded_by IS NULL"), "a second run does not supersede the Signup hand-off twice");
+  assert(topicCleanup.includes("GREATEST(keeper.last_seen, dup.last_seen)"), "the Signup keeper last_seen moves forward");
+  const topicCode = topicCleanup.replace(/--[^\n]*/g, "");
+  assert(!/\bDELETE\b/i.test(topicCode), "the Signup cleanup deletes nothing");
+  assert(
+    topicCode.indexOf("'2905a21a-2ee9-4d78-a019-c709c3c702f7'") <
+      topicCode.indexOf("'0cb4b83a-de25-4407-b57a-769585a14732'"),
+    "2905a21a is the keeper and 0cb4b83a is superseded",
   );
 }
 
