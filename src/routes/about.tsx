@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
@@ -32,10 +32,8 @@ function AboutPage() {
       ctaTitle={<>See it on your own figures</>}
       ctaBody={
         <>
-          <MarketCopy
-            us="The owner plan is $39 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it."
-            za="The owner plan is R299 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it."
-          />
+          Spark is free during early access and needs no card. Upload what you have and read your
+          score before you decide whether any of this is worth your time.
         </>
       }
     >
@@ -87,10 +85,8 @@ function AboutPage() {
         actions with their clients.
       </p>
       <p>
-        QuickBooks Online and Xero, plug-and-play. In Milōn Bot, three AI agents do the work: Milōn
-        Financial Manager checks data quality, the 13-week cash and the budget; Milōn Analyst
-        diagnoses the business; Milōn Advisor drafts the next moves and the advisory deliverables.
-        The accountant reviews and signs off.
+        QuickBooks Online and Xero, plug-and-play. Milōn Bot reads the numbers, diagnoses the
+        business, and drafts the advisory deliverables. The accountant reviews and signs off.
       </p>
       <p>MILŌN does not provide licensed financial advice.</p>
       <p>

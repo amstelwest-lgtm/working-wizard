@@ -21,7 +21,7 @@ function ForOwnersPage() {
     <MarketingShell
       copyPack={copyPack}
       geoZa={geoZa}
-      eyebrow="AI CFO for small business owners"
+      eyebrow="For business owners"
       title={
         <>
           Your numbers, <span className="mk-gold">in plain language</span>, before it is too late to
@@ -31,9 +31,9 @@ function ForOwnersPage() {
       lead={
         <>
           Most owners find out how the business is really doing months after the fact, in a set of
-          financial statements written for <MarketCopy za="SARS" us="the IRS" /> rather than for
-          them. Milōn turns the same figures into a score, a cash forecast, and a short list of what
-          to do next.
+          financial statements written for <MarketCopy za="SARS" us="the IRS" /> rather than
+          for them. Milōn turns the same figures into a score, a cash forecast, and a short list of
+          what to do next.
         </>
       }
       ctaTitle={<>Start with your own figures</>}
@@ -43,23 +43,17 @@ function ForOwnersPage() {
       navCtaHref="/?signup=owner#register"
       ctaBody={
         <>
-          <MarketCopy
-            us="The owner plan is $39 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it."
-            za="The owner plan is R299 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it."
-          />
+          Owner plan <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
+          Milōn. Upload what you have and see your score before you decide whether any of this is
+          worth your time. Billing opens soon.
         </>
       }
     >
       <h2>What you get in the first week</h2>
       <ul className="mk-list">
         <li>
-          <strong>Your AI finance team.</strong> Milōn Financial Manager checks your figures and the
-          13-week cash, Milōn Analyst explains the health score and what moved, and Milōn Advisor
-          drafts the next moves.
-        </li>
-        <li>
-          <strong>One health score.</strong> Nineteen ratios and four pillar scores collapsed into a
-          single number you can actually hold in your head, with the workings still there when you
+          <strong>One health score.</strong> Nineteen ratios and four pillar scores collapsed into
+          a single number you can actually hold in your head, with the workings still there when you
           want them.
         </li>
         <li>
@@ -68,8 +62,8 @@ function ForOwnersPage() {
           <MarketCopy za="debit order" us="ACH" /> bounces.
         </li>
         <li>
-          <strong>A ranked list of fixes.</strong> A playbook of ranked next moves, filtered to your
-          situation and sorted by what would move your number most.
+          <strong>A ranked list of fixes.</strong> A playbook of ranked next moves, filtered
+          to your situation and sorted by what would move your number most.
         </li>
         <li>
           <strong>An action plan you can work from.</strong> The next moves become tasks, so the
@@ -153,10 +147,8 @@ function ForOwnersPage() {
       </div>
 
       <div className="mk-note">
-        <MarketCopy
-          us="The owner plan is $39 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it."
-          za="The owner plan is R299 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it."
-        />
+        We are early, and we would rather say so. Owner billing is not open yet, and if something
+        in the product is not finished we tell you inside the product rather than hiding it.
       </div>
 
       <h2>The short version</h2>

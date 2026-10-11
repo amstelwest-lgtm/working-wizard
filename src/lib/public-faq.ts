@@ -10,44 +10,19 @@ import {
   WATCHLIST_DEFINITION,
 } from "./marketing-faq";
 
-/** US lead for "What does it cost?". ZA visible copy swaps this sentence only. */
-export const PUBLIC_OWNER_COST_LEAD_US =
-  "Business owners: $39 a month, or free when your accountant is on Milōn.";
-export const PUBLIC_OWNER_COST_LEAD_ZA =
-  "Business owners: R299 a month, or free when your accountant is on Milōn.";
-
-export const PUBLIC_FIRM_COST_TAIL = `Accounting firms: ${FIRM_CARD_TIMING} Then they pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`;
-
-export const OWNER_PLAN_COST_QUESTION = "What does the owner plan cost?";
-export const OWNER_PLAN_COST_ANSWER_US =
-  "$39 a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.";
-export const OWNER_PLAN_COST_ANSWER_ZA =
-  "R299 a month in South Africa, and free when your accountant is on Milōn.";
-
-export const AI_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
-export const AI_BOOKKEEPER_ANSWER =
-  "No. Milōn is an AI finance team that works alongside your accountant. The books stay in QuickBooks Online or Xero. Milōn Financial Manager checks the data quality, the 13-week cash and the budget, Milōn Analyst explains the health score, ratios and variances, and Milōn Advisor drafts the next moves. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and signs off every advisory pack.";
-
-const OWNER_PAY_ANSWER =
-  "Owners pay nothing while their accountant is on Milōn. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.";
-
 /**
  * US answers for FAQPage JSON-LD. Must match the visible US copy on /faq.
- * ZA visitors see a rand sentence on the page; this list stays USD.
  */
 export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `${PUBLIC_OWNER_COST_LEAD_US} ${PUBLIC_FIRM_COST_TAIL}`,
+      answer: `Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms: ${FIRM_CARD_TIMING} Then they pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
       question: "What does a business owner pay?",
-      answer: OWNER_PAY_ANSWER,
-    },
-    {
-      question: OWNER_PLAN_COST_QUESTION,
-      answer: OWNER_PLAN_COST_ANSWER_US,
+      answer:
+        "Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.",
     },
     {
       question: "What happens if I stop using it?",
@@ -82,10 +57,6 @@ export function publicFaqUsItems(): FaqItem[] {
       question: "My accountant already does this.",
       answer:
         "Some of it, once a year, in a format built for compliance. The difference is frequency and direction: a score every month that points forward, instead of a set of statements that explains a year that has already happened. Most owners who try it end up inviting their accountant into the workspace, which is exactly what it is designed for.",
-    },
-    {
-      question: AI_BOOKKEEPER_QUESTION,
-      answer: AI_BOOKKEEPER_ANSWER,
     },
     {
       question: "I already have accounting software.",

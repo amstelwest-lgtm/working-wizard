@@ -1,17 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import {
-  AI_BOOKKEEPER_ANSWER,
-  AI_BOOKKEEPER_QUESTION,
-  OWNER_PLAN_COST_ANSWER_US,
-  OWNER_PLAN_COST_ANSWER_ZA,
-  OWNER_PLAN_COST_QUESTION,
-  PUBLIC_FIRM_COST_TAIL,
-  PUBLIC_OWNER_COST_LEAD_US,
-  PUBLIC_OWNER_COST_LEAD_ZA,
-  publicFaqItems,
-} from "@/lib/public-faq";
+import { publicFaqItems } from "@/lib/public-faq";
 import { visitorMarketBootScript } from "@/lib/market/marketing";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
@@ -49,9 +39,8 @@ function Qa({ q, children }: { q: string; children: React.ReactNode }) {
 
 function FaqPage() {
   const { showSaPricing, copyPack, geoZa } = Route.useLoaderData();
-  const ai = publicFaqItems(showSaPricing).find(
-    (item) => item.question === "What does the AI see?",
-  );
+  const cost = publicFaqItems(showSaPricing).find((item) => item.question === "What does it cost?");
+  const ai = publicFaqItems(showSaPricing).find((item) => item.question === "What does the AI see?");
   return (
     <MarketingShell
       eyebrow="Straight answers"
@@ -80,25 +69,26 @@ function FaqPage() {
       <h2>Money</h2>
 
       <Qa q="What does it cost?">
-        <p>
-          <MarketCopy us={PUBLIC_OWNER_COST_LEAD_US} za={PUBLIC_OWNER_COST_LEAD_ZA} />{" "}
-          {PUBLIC_FIRM_COST_TAIL}
-        </p>
+        <p>{cost?.answer}</p>
       </Qa>
 
       <Qa q="What does a business owner pay?">
         <p>
-          {
-            publicFaqItems(false).find(
-              (item) => item.question === "What does a business owner pay?",
-            )?.answer
-          }
-        </p>
-      </Qa>
-
-      <Qa q={OWNER_PLAN_COST_QUESTION}>
-        <p>
-          <MarketCopy us={OWNER_PLAN_COST_ANSWER_US} za={OWNER_PLAN_COST_ANSWER_ZA} />
+          <MarketCopy
+            us={
+              <>
+                Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon.
+              </>
+            }
+            za={
+              <>
+                Owner plan R299/mo · free when your accountant is on Milōn. Billing opens soon.
+              </>
+            }
+          />{" "}
+          Accounting firms see their first client&apos;s figures with no card, then add a card to
+          start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by
+          active client count through Stripe Checkout.
         </p>
       </Qa>
 
@@ -146,10 +136,6 @@ function FaqPage() {
 
       <h2>The obvious objections</h2>
 
-      <Qa q={AI_BOOKKEEPER_QUESTION}>
-        <p>{AI_BOOKKEEPER_ANSWER}</p>
-      </Qa>
-
       <Qa q="My accountant already does this.">
         <p>
           Some of it, once a year, in a format built for compliance. The difference is frequency and
@@ -183,18 +169,16 @@ function FaqPage() {
         </p>
       </Qa>
 
-      {copyPack === "us" ? (
-        <div className="mk-copy-us">
-          <Qa q="Is this a South African product with a dollar sign glued on?">
-            <p>
-              No. Choosing the United States switches currency, dates, sales tax (not VAT), and the
-              advice pack. It is not a rand product with the symbol swapped. US industry medians are
-              still being built, so we show days and percentages rather than pretending SA bands are
-              Texas ones.
-            </p>
-          </Qa>
-        </div>
-      ) : null}
+      {copyPack === "us" ? <div className="mk-copy-us">
+        <Qa q="Is this a South African product with a dollar sign glued on?">
+          <p>
+            No. Choosing the United States switches currency, dates, sales tax (not VAT), and the
+            advice pack. It is not a rand product with the symbol swapped. US industry medians are
+            still being built, so we show days and percentages rather than pretending SA bands are
+            Texas ones.
+        </p>
+      </Qa>
+      </div> : null}
 
       <h2>The cold email</h2>
 

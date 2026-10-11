@@ -73,8 +73,7 @@ import {
   HERO_H1_GOLD,
   HERO_H1_LEAD,
   HERO_LEDE,
-  HERO_OWNER_LINK_US,
-  HERO_OWNER_LINK_ZA,
+  HERO_OWNER_LINK,
   HERO_POINTS,
   HERO_WALKTHROUGH_LABEL,
   FAQ_MORE_LEAD,
@@ -84,10 +83,12 @@ import {
   NAV_TRIAL_ARIA,
   NAV_TRIAL_LABEL,
   OWNER_TEASER,
+  OWNER_TEASER_LINK,
   PRICING_H2_USD,
   PRICING_INTRO,
   PRICING_OWNER_BAR_US,
   PRICING_OWNER_BAR_ZA,
+  PRICING_OWNER_CTA,
   PROOF_AI_LINK,
   PROOF_CARDS,
   PROOF_EYEBROW,
@@ -197,7 +198,7 @@ export const Route = createFileRoute("/")({
         { children: visitorMarketBootScript(copyPack) },
         {
           type: "application/ld+json",
-          children: faqPageJson(homepageFaqItems(false)),
+          children: faqPageJson(homepageFaqItems(showSaPricing)),
         },
       ],
     };
@@ -2003,7 +2004,7 @@ function LandingPage() {
                   goToOwnerSpark();
                 }}
               >
-                <RegionCopy pack={copyMarket.copyPack} us={HERO_OWNER_LINK_US} za={HERO_OWNER_LINK_ZA} />
+                {HERO_OWNER_LINK}
               </a>
             </p>
           </div>
@@ -2237,7 +2238,7 @@ function LandingPage() {
                   goToOwnerSpark();
                 }}
               >
-                <RegionCopy pack={copyMarket.copyPack} us={HERO_OWNER_LINK_US} za={HERO_OWNER_LINK_ZA} />
+                {OWNER_TEASER_LINK}
               </a>
             </article>
           </div>
@@ -2709,7 +2710,7 @@ function LandingPage() {
                 goToOwnerSpark();
               }}
             >
-              <RegionCopy pack={copyMarket.copyPack} us={HERO_OWNER_LINK_US} za={HERO_OWNER_LINK_ZA} />
+              {PRICING_OWNER_CTA}
             </a>
           </div>
         </div>
@@ -2827,7 +2828,7 @@ function LandingPage() {
             </h2>
             <p className="sub">
               {FIRM_CARD_TIMING} After day 14 the paid band bills automatically. Business owners can
-              open an account below.
+              open an account below. Billing opens soon.
             </p>
           </div>
 

@@ -37,7 +37,7 @@ function BillingCancelPage() {
     setPending(
       profile?.hasFirm
         ? firmBillingResumeIntent(profile.firmMarket, stored)
-        : (stored ?? firmSignupCheckoutIntent()),
+        : stored ?? firmSignupCheckoutIntent(),
     );
   }, [profile?.brandLoading, profile?.hasFirm, profile?.firmMarket]);
 

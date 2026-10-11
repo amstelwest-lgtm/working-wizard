@@ -20,7 +20,7 @@ export function ownerPlanLine(input: {
 
 /** Invite surfaces only. Not the home tiles and not the priced plan line. */
 export function ownerPlanFreeLine(): string {
-  return "Free when your accountant is on Milōn.";
+  return "Free when your accountant joins.";
 }
 
 /** Register <option> value. Not a Stripe price. Checkout for owners does not exist yet. */
@@ -30,7 +30,7 @@ export const OWNER_REGISTER_PLAN = "Business owner";
  * Shown under the owner signup fields. One market's price. There is no owner Checkout.
  */
 export function ownerRegisterPlanNote(visitor: OwnerVisitor): string {
-  return `Owner plan: ${ownerPlanPublicPrice(visitor)} · free when your accountant is on Milōn`;
+  return `Owner plan: ${ownerPlanPublicPrice(visitor)} · free when your accountant joins`;
 }
 
 /** Display-only. R299 is for a known SA visitor. There is no owner Checkout. */
@@ -39,5 +39,5 @@ export function ownerPlanPublicPrice(visitor: OwnerVisitor): string {
 }
 
 export function ownerPlanPublicLine(visitor: OwnerVisitor): string {
-  return `${ownerPlanPublicPrice(visitor)} · free when your accountant is on Milōn`;
+  return `${ownerPlanPublicPrice(visitor)} · free when your accountant joins`;
 }

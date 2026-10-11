@@ -379,7 +379,7 @@ assert(landing.includes("FIRM_BILLING_SIGNIN_MESSAGE"), "firm already-registered
 assert(landing.includes("signupLooksAlreadyRegistered"), "register treats User already registered as sign-in, not a dead-end");
 assert(landing.includes('useState("Accountant / Advisory firm")'), "register defaults to accountant");
 assert(landing.includes("Create firm account"), "landing has a create-firm CTA");
-assert(landing.includes("HERO_OWNER_LINK_US"), "owner signup is a secondary path");
+assert(landing.includes("Get your own AI finance team"), "owner signup is a secondary path");
 assert(!landing.includes("accountant pricing — shown via body class set by quiz"), "firm prices are not quiz-gated in markup");
 assert(!landing.includes("See firm bands"), "owner Orbit/Constellation cards no longer hide prices behind /for-accountants");
 assert(!landing.includes("Start Orbit"), "landing no longer Checkouts Orbit");

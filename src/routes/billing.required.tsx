@@ -88,12 +88,10 @@ export function BillingRequiredCard({
         <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
         <p className="mt-2 text-sm text-slate-400">
           The figures stay.
-          {clientName
-            ? ` ${clientName} is still open. The firm dashboard and reports need a card. `
-            : " "}
-          Checkout for {planName} ({priceLabel}) starts the subscription. A card is required. A
-          first subscription includes a {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing
-          resumes on the paid band without another trial. Owner plan is {ownerLine}.
+          {clientName ? ` ${clientName} is still open. The firm dashboard and reports need a card. ` : " "}
+          Checkout for {planName} ({priceLabel}) starts the subscription. A card is required. A first
+          subscription includes a {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing resumes on
+          the paid band without another trial. Owner plan is {ownerLine}.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {backClientId && backLabel ? (
@@ -132,7 +130,9 @@ function BillingRequiredPage() {
   const [quote, setQuote] = useState<FirmBillingQuote | null>(loadedQuote);
   const [quoteError, setQuoteError] = useState("");
 
-  const priced = quote ? billingIntentForResolvedMarket(quote.market, pending) : null;
+  const priced = quote
+    ? billingIntentForResolvedMarket(quote.market, pending)
+    : null;
 
   useEffect(() => {
     if (priced) stashPendingCheckout(priced);
@@ -193,8 +193,7 @@ function BillingRequiredPage() {
         if (!cancelled) setQuote(next);
       })
       .catch(() => {
-        if (!cancelled)
-          setQuoteError("We couldn't read this firm's billing market. Refresh and try again.");
+        if (!cancelled) setQuoteError("We couldn't read this firm's billing market. Refresh and try again.");
       });
     return () => {
       cancelled = true;
@@ -224,14 +223,9 @@ function BillingRequiredPage() {
   if (quoteError || !priceLabel || !priced) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
-        <div
-          className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6"
-          role="alert"
-        >
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6" role="alert">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
-          <h1 className="mt-2 text-xl font-semibold">
-            Continue on {planName} to keep this practice
-          </h1>
+          <h1 className="mt-2 text-xl font-semibold">Continue on {planName} to keep this practice</h1>
           <p className="mt-2 text-sm text-slate-400">
             The figures stay. {quoteError || "Refresh and try again."}
           </p>

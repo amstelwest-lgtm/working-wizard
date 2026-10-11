@@ -8,7 +8,6 @@ import {
   LEGAL_ADDRESS,
   LEGAL_EFFECTIVE,
   LEGAL_ENTITY,
-  LEGAL_CONTACT_EMAIL,
   LEGAL_INFORMATION_OFFICER,
 } from "../src/lib/legal";
 
@@ -32,11 +31,7 @@ assert(privacy.includes("{LEGAL_EFFECTIVE}"), "privacy has an effective date");
 assert(privacy.includes("{LEGAL_INFORMATION_OFFICER}"), "privacy names the Privacy contact");
 assert(privacy.includes("{LEGAL_ADDRESS_LINES"), "privacy shows the registered address");
 assert(LEGAL_ENTITY === "Milon Inc", "legal entity is Milon Inc");
-assert(LEGAL_INFORMATION_OFFICER === "Privacy contact", "privacy contact is a role, not a person");
-assert(LEGAL_CONTACT_EMAIL === "hello@milonfinance.com", "privacy contact uses the team email");
-assert(privacy.includes("{LEGAL_CONTACT_EMAIL}"), "privacy shows the team email");
-assert(!privacy.includes("Theo"), "privacy does not name a person");
-assert(!privacy.includes("Nothing is being billed"), "privacy does not say billing has not started");
+assert(LEGAL_INFORMATION_OFFICER === "Theo", "Privacy contact is Theo");
 assert(!privacy.includes("Information Officer"), "privacy names a Privacy contact, not an Information Officer");
 assert(privacy.includes("Privacy contact"), "privacy uses the Privacy contact title");
 assert(
