@@ -27,13 +27,15 @@ export function chatReplyFormatRules(copyPack: "za" | "us" | null = null): strin
       : copyPack === "za"
         ? "Amounts use the South African rand format, for example R4,200,000."
         : "Amounts use the currency format already shown in the figures you were given, for example R4,200,000 or $4,200,000.";
-  return `Reply format (always, unless the user asks for more detail):
-- Line 1: one plain sentence that answers the question. No heading marks, no bold.
-- Then a blank line, then 3–5 key figures, one per line, each as "- Label: value". ${money} Percentages have one decimal place, for example 12.9%.
-- Then a blank line, then the line **Next actions** on its own, then at most 3 numbered items ("1. ", "2. ", "3. "), each one short plain sentence.
-- Skip the figures section when there are no figures (for example small talk or a definition). Skip Next actions when there is nothing to do.
+  return `Reply format (always, unless the user asks for more detail). These rules override any other length or style rule above:
+- The reply has only three parts, in this order, and nothing else.
+- Part 1, line 1: one plain sentence that answers the question. No heading marks, no bold.
+- Part 2: a blank line, then 3–5 key figures, one per line, each as "- Label: value". Never more than 5. ${money} Percentages have one decimal place, for example 12.9%.
+- Part 3: a blank line, then the line **Next actions** on its own, then at most 3 numbered items ("1. ", "2. ", "3. "), each one short plain sentence of at most 20 words.
+- No paragraphs between the figures and Next actions, and nothing after the last action. If a figure or date is missing, say so as one figure line, for example "- Due dates: none on file", not as a paragraph.
+- Skip the figures part when there are no figures (for example small talk or a definition). Skip Next actions when there is nothing to do.
 - Dates look like 8 Sep 2026. Never write ISO dates such as 2026-09-08.
-- Plain words. No jargon dumps. About 120 words in total.
+- Plain words. No jargon dumps. Hard limit of 120 words in total. Cut detail rather than go over.
 - Use bold sparingly and never for whole sentences. No tables, no code blocks, no headings.
 - Never put list items inline in a sentence. Each bullet or numbered item is on its own line.`;
 }
