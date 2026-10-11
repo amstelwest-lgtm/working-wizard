@@ -23,6 +23,7 @@
 html[data-theme="light"]{
   --bg:#f6f3ea; --bg-2:#ffffff; --bg-3:#efeadb;
   --ink:#1b1608; --ink-dim:#6b6354; --ink-faint:#98917f;
+  --gold-ink:#7d5f0f;
   --line:rgba(140,110,10,.22); --line-soft:rgba(140,110,10,.1);
   --card:rgba(52,40,0,.035); --glass:rgba(255,255,255,.86);
   --shadow-gold:0 0 50px rgba(172,132,0,.08);

@@ -289,6 +289,26 @@ assert(portal.includes(`color:${buttonInk}`), "the metallic button keeps its dar
 for (const stop of [goldDeep, gold, goldBright]) {
   assert(contrast(buttonInk, stop) >= 4.5, `gold button text on ${stop} is ${contrast(buttonInk, stop).toFixed(2)}`);
 }
+const goldInk = token(lightBlock, "--gold-ink");
+const pillarCard = token(lightBlock, "--bg-2");
+const landing = readFileSync("src/styles/landing.css", "utf8");
+const landingLight = landing.slice(landing.indexOf('html[data-landing="1"][data-theme="light"]'));
+assert(goldInk === token(landingLight, "--gold-ink"), "portal light mode uses the landing dark-gold ink");
+assert(
+  contrast(goldInk, pillarCard) >= 4.5,
+  `dark-gold ink on the white pillar card is ${contrast(goldInk, pillarCard).toFixed(2)}`,
+);
+assert(
+  css.includes('html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400') &&
+    css.includes("color: var(--gold-ink)"),
+  "light watch scores use the dark-gold ink token",
+);
+const sphere = readFileSync("src/components/sphere-hero.tsx", "utf8");
+assert(sphere.includes("owner-pillar-score"), "pillar numbers opt into the dark-gold ink");
+assert(sphere.includes("bg-white"), "the pillar card is white");
+assert(shell.includes('className="brand"'), "the owner wordmark uses the accountant brand size");
+assert(shell.includes('className="gold-text">MILŌN'), "the owner wordmark uses the accountant gold colour");
+assert(!shell.includes("milon-wordmark.png"), "the tiny image wordmark is gone");
 assert(!home.includes("Milōn Financial Manager"), "the view does not hardcode a display name");
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(!door.includes("Dana"), "the door does not use a retired name");

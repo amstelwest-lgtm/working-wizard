@@ -22,9 +22,14 @@
 
 .owner-door .owner-brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+/* Watch-tier pillar figures are amber on the white card. Dark-gold ink passes AA. */
+html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
+  color: var(--gold-ink);
 }
 
 .owner-door .owner-word {

@@ -80,7 +80,9 @@ export function OwnerShell({
     <div className="owner-door accountant-portal" data-owner-ready="true" data-screen={screen}>
       <header className="topbar">
         <div className="owner-brand">
-          <img src="/milon-wordmark.png" alt="Milōn" className="h-5 w-auto" />
+          <span className="brand">
+            <span className="gold-text">MILŌN</span>
+          </span>
           <span className="owner-biz">
             <b>{businessName}</b>
           </span>
