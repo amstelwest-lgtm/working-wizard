@@ -15,7 +15,7 @@ import {
   type OwnerBooks,
 } from "../src/lib/owner-answers.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
-import { ownerMoney } from "../src/lib/owner-money.ts";
+import { ownerMoney, ownerOutflow } from "../src/lib/owner-money.ts";
 import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
 import {
   draftFindingKindLabel,
@@ -316,6 +316,8 @@ assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "ho
 assert(ownerMoney(-1200, ZA_MARKET) === "−R 1 200", "a rand loss uses one unicode minus");
 assert(ownerMoney(-1200, usd) === "−$1,200", "a dollar loss uses the same minus");
 assert(ownerMoney(1200, ZA_MARKET) === "R 1 200", "a positive rand amount has no sign");
+assert(ownerOutflow("$1,200") === "−$1,200", "an outflow uses the same minus");
+assert(ownerOutflow("R 1 200") === "−R 1 200", "a rand outflow keeps the space");
 assert(ownerBotLayout("") === "row" && ownerBotLayout("?bots=row") === "row", "three across stays the default bot layout");
 assert(ownerBotLayout("?bots=stack") === "stack", "the stack flag is the wide-row trial");
 assert(css.includes('data-bots="stack"') && css.includes("grid-template-columns: 1fr"), "phone and the stack flag use one column");

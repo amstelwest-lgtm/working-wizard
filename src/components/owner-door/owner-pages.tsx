@@ -199,14 +199,14 @@ export function OwnerFirst({
         <button type="button" className="btn gold owner-ask" onClick={onQuickBooks}>
           Connect QuickBooks
         </button>
-        <button type="button" className="btn gold owner-ask" onClick={onXero}>
+        <button type="button" className="owner-btn-secondary owner-ask" onClick={onXero}>
           Connect Xero
         </button>
       </div>
       {joined ? null : (
         <>
           <p className="owner-free">{ownerPlanFreeLine()}</p>
-          <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onInvite}>
+          <button type="button" className="owner-btn-tertiary owner-ask owner-ask-inline" onClick={onInvite}>
             Invite your accountant
           </button>
         </>

@@ -3,6 +3,7 @@ import { cashBalanceSeries } from "@/lib/cash-forecast-view";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { cn } from "@/lib/utils";
 import { parseEditableAmount } from "@/lib/cash-week-overrides";
+import { ownerOutflow } from "@/lib/owner-money";
 
 const WEEKS = 13;
 
@@ -39,8 +40,13 @@ function showMoney(
   fmt: (n: number) => string,
   kind: CellKind,
   blankZero: boolean,
+  signStyle: "paren" | "minus" = "paren",
 ): string {
   if (!Number.isFinite(value) || (blankZero && Math.abs(value) < 0.005)) return "—";
+  if (signStyle === "minus") {
+    if (kind === "out" || value < -0.005) return ownerOutflow(fmt(Math.abs(value)));
+    return fmt(value);
+  }
   const body = fmt(Math.abs(value));
   if (kind === "out") return `(${body})`;
   if (value < -0.005) return `(${body})`;
@@ -156,6 +162,7 @@ export function CashThirteenWeekGrid({
   openingNote,
   symbol,
   format,
+  signStyle = "paren",
   openingChip,
   flowChip,
   onCommit,
@@ -174,6 +181,8 @@ export function CashThirteenWeekGrid({
   openingNote?: string | null;
   symbol: string;
   format: (n: number) => string;
+  /** Owner door uses a unicode minus. The accountant grid keeps parentheses. */
+  signStyle?: "paren" | "minus";
   openingChip: string;
   flowChip: string;
   /** Owner door views the weeks. Editing stays available for the accountant. */
@@ -300,7 +309,8 @@ export function CashThirteenWeekGrid({
     },
   ];
 
-  const money = (value: number, row: GridRow) => showMoney(value, format, row.kind, row.blankZero);
+  const money = (value: number, row: GridRow) =>
+    showMoney(value, format, row.kind, row.blankZero, signStyle);
 
   return (
     <div>

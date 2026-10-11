@@ -4046,6 +4046,7 @@ function Index() {
                       />
                       {showScoredBoard ? (
                         <ProfitabilityWaterfall
+                          negative="minus"
                           clientName={actingClientName ?? undefined}
                           clientId={effectiveClientId ?? undefined}
                           reviewSignoff={stampFromSignoff(

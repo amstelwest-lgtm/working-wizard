@@ -8,3 +8,8 @@ export function ownerMinus(text: string): string {
 export function ownerMoney(n: number, market: MoneyMarket): string {
   return ownerMinus(formatMoney(n, market));
 }
+
+/** A positive formatted amount, shown as money out with the owner minus. */
+export function ownerOutflow(formattedAbs: string): string {
+  return `−${formattedAbs.replace(/^[−-]/, "")}`;
+}

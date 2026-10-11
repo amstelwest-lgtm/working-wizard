@@ -1373,7 +1373,7 @@ export function CashForecastPanel({
             fontSize={10}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => formatMoneyChartTick(v, market)}
+            tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
             width={68}
             tick={{ fill: "#94a3b8", fontSize: 10 }}
           />
@@ -2184,6 +2184,7 @@ export function CashForecastPanel({
               openingNote={openingAsOf ? openingLabel : null}
               symbol={cur}
               format={fmtR}
+              signStyle={simplified ? "minus" : "paren"}
               openingChip={openingChipKey}
               flowChip={flowChipKey}
               readOnly={readOnly}

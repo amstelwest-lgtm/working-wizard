@@ -1454,11 +1454,12 @@ export default function ActionPlanPanel({
             Drafts
           </h2>
           <ul className="space-y-2">
-            {draftFindings.map((row) => (
+            {draftFindings.map((row, index) => (
               <OwnerDraftCard
                 key={row.id}
                 layout="moves"
                 row={row}
+                primary={index === 0}
                 onOpen={onOpenApproved}
                 onInvite={onInviteAccountant}
                 onRefresh={draftActivity.refresh}
