@@ -5,6 +5,7 @@
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../ask-ai/sanitizer.ts";
+import { normalizeChatReply, parseChatAgent, scopeHistoryToAgent } from "../_shared/chat-reply.ts";
 import { callClaudeRound, type ClaudeMessage, type ClaudeTool } from "./claude.ts";
 import { publicRun, runMilonbotObjective } from "./handler.ts";
 import { buildMilonBotChatPayload, redactToolResult } from "./prompt.ts";
@@ -340,9 +341,10 @@ async function handleMilonBot(req: Request): Promise<Response> {
     message?: string;
     objective?: string;
     mode?: string;
-    history?: Array<{ role?: string; content?: string }>;
+    history?: Array<{ role?: string; content?: string; agent?: string | null }>;
     audience?: string;
     turnId?: string;
+    agent?: string;
   };
   try {
     body = await req.json();
@@ -369,6 +371,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     );
   }
   const audience = body.audience === "accountant" ? "accountant" : "owner";
+  const agent = parseChatAgent(body.agent);
 
   const { data: hasAccess, error: accessErr } = await adminClient.rpc("has_client_access", {
     _user_id: user.id,
@@ -553,7 +556,8 @@ async function handleMilonBot(req: Request): Promise<Response> {
   }
 
   const message = sanitize(rawMessage ?? "");
-  const history = (body.history ?? [])
+  // Only this agent's thread. Turns tagged with another agent never reach the prompt.
+  const history = scopeHistoryToAgent(body.history, agent)
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .slice(-BOT_MAX_HISTORY)
     .map((m) => ({
@@ -568,6 +572,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     message,
     audience,
     subject: { clientName },
+    agent,
   });
   const messages: ClaudeMessage[] = sealedChat.messages;
 
@@ -683,7 +688,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
       : "I could not complete that. Try again, or use Propose / Draft on the Summary tab.";
   }
 
-  const shown = rehydrateForUi(answer, sealedChat.session, message);
+  const shown = normalizeChatReply(rehydrateForUi(answer, sealedChat.session, message));
   // Charge a real model answer, or the grounded "nothing on file" reply.
   // The failure fallback is not an answer. A retry of the same turn id
   // does not consume a second allowance.

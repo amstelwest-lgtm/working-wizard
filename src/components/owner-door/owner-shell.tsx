@@ -32,8 +32,7 @@ const RAIL: { id: string; label: string; screen: OwnerScreen }[] = [
   { id: "profit", label: "Profit", screen: "profit" },
   { id: "budget", label: "Budget", screen: "budget" },
   { id: "moves", label: "Next moves", screen: "moves" },
-  { id: "accountant", label: "Accountant", screen: "accountant" },
-  { id: "deliverables", label: "Deliverables", screen: "deliverables" },
+  { id: "accountant", label: "Accountant portal", screen: "accountant" },
 ];
 
 export function OwnerShell({
@@ -162,6 +161,7 @@ export function OwnerShell({
                 key={item.id}
                 type="button"
                 className={`tab${active ? " on" : ""}`}
+                aria-label={item.label}
                 aria-current={active ? "page" : undefined}
                 onClick={() => onNavigate(item.screen)}
               >

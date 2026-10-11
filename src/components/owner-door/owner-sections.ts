@@ -15,27 +15,17 @@ export function holdFor(
       action: { label: "Back to home", onClick: actions.onHome },
     };
   }
-  if (screen === "accountant") {
+  const page = screen === "deliverables" ? "accountant" : screen;
+  if (page === "accountant") {
     const signed = tile("signed");
     return {
-      title: "Accountant",
+      title: "Accountant portal",
       sentence: signed?.empty
         ? "Invite your accountant."
         : (signed?.sentence ?? "Invite your accountant."),
       action: signed?.empty
         ? { label: "Invite your accountant", onClick: actions.onInvite }
         : { label: "Back to home", onClick: actions.onHome },
-    };
-  }
-  if (screen === "deliverables") {
-    const signed = tile("signed");
-    return {
-      title: "Deliverables",
-      sentence: signed?.sentence ?? "Invite your accountant to sign off.",
-      action: {
-        label: signed?.empty ? "Invite your accountant" : "Back to home",
-        onClick: signed?.empty ? actions.onInvite : actions.onHome,
-      },
     };
   }
   if (screen === "plan") {
