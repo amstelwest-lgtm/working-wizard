@@ -5,6 +5,7 @@ import {
   LEGAL_EFFECTIVE,
   LEGAL_ENTITY,
   LEGAL_INFORMATION_OFFICER,
+  LEGAL_PRIVACY_EMAIL,
 } from "@/lib/legal";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { visitorMarketBootScript } from "@/lib/market";
@@ -46,7 +47,7 @@ function PrivacyPage() {
           }
           us={
             <>
-              {LEGAL_ENTITY} runs Milōn for US businesses in early access.
+              {LEGAL_ENTITY} runs Milōn for US businesses.
               This notice says what we keep and what the AI never sees. Effective {LEGAL_EFFECTIVE}.
             </>
           }
@@ -63,7 +64,7 @@ function PrivacyPage() {
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}
-        <MarketCopy za="South Africa" us="US early access" />
+        <MarketCopy za="South Africa" us="United States" />
       </p>
 
       <h2>Who we are</h2>
@@ -74,17 +75,16 @@ function PrivacyPage() {
           platform is {LEGAL_ENTITY}.
         </p>
         <p>
-          The Privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
-          reply to the email that brought you here, or write from inside the product.
+          The Privacy contact is {LEGAL_INFORMATION_OFFICER}. Email {LEGAL_PRIVACY_EMAIL}, reply to
+          the email that brought you here, or write from inside the product.
         </p>
       </div> : <div className="mk-copy-us">
         <p>
-          {LEGAL_ENTITY} runs Milōn. US workspaces are early access, offered from the address
-          below.
+          {LEGAL_ENTITY} runs Milōn. US workspaces are offered from the address below.
         </p>
         <p>
-          The privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
-          reply to the email that brought you here, or write from inside the product.
+          The privacy contact is {LEGAL_INFORMATION_OFFICER}. Email {LEGAL_PRIVACY_EMAIL}, reply to
+          the email that brought you here, or write from inside the product.
         </p>
       </div>}
       <p className="mk-legal-address">
@@ -151,7 +151,8 @@ function PrivacyPage() {
       <ul className="mk-list">
         <li>We do not sell your figures, your email list, or your client book.</li>
         <li>
-          We do not store card details. Nothing is being billed yet, so there is nothing to store.
+          We do not store card details. Card numbers are collected by Stripe. Accounting firms bill
+          through Stripe after the 14-day trial. Milōn never stores the card number.
         </li>
         <li>We do not use your financials to train a public model of our own.</li>
       </ul>

@@ -4,6 +4,7 @@ type Props = {
   videoId: string;
   title: string;
   accessibleName: string;
+  imageAlt: string;
 };
 
 function preconnectYouTube() {
@@ -21,7 +22,7 @@ function preconnectYouTube() {
  * Click-to-load YouTube facade. No youtube.com request until the button is
  * activated. Preconnect runs on pointerover only.
  */
-export function LiteYouTube({ videoId, title, accessibleName }: Props) {
+export function LiteYouTube({ videoId, title, accessibleName, imageAlt }: Props) {
   const [active, setActive] = useState(false);
   const poster = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   const fallback = poster;
@@ -60,7 +61,7 @@ export function LiteYouTube({ videoId, title, accessibleName }: Props) {
         src={poster}
         srcSet={srcSet}
         sizes="(max-width: 767px) 260px, 560px"
-        alt=""
+        alt={imageAlt}
         width={1280}
         height={720}
         loading="lazy"

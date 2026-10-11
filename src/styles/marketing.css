@@ -988,9 +988,35 @@ html .mk .firm-bands-table .firm-bands-name strong {
   margin: 0;
   padding: 0;
 }
+.mk .firm-bands-featured {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mk .firm-bands:has(.firm-bands-more[open]) .firm-bands-featured { display: none; }
+.mk .firm-band-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--bg-2);
+}
+.mk .firm-band-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mk .firm-band-card-name { margin: 0; font-weight: 700; }
+.mk .firm-band-card.is-trial .firm-band-card-name { font-size: 20px; }
+.mk .firm-band-card-limit { margin: 4px 0 0; font-size: 14px; }
+.mk .firm-band-card-price { margin: 0; font-weight: 800; }
+.mk .firm-band-card.is-trial .firm-band-card-price { font-size: 28px; color: var(--gold); }
+.mk .firm-band-card .btn { width: 100%; justify-content: center; margin-top: 12px; min-height: 44px; }
 @media (max-width: 767px) {
-  .mk .firm-bands-table-wrap { display: none; }
-  .mk .firm-band-cards { display: grid; gap: 10px; }
+  .mk .firm-bands-featured { grid-template-columns: 1fr; }
+  .mk .firm-bands-more .firm-bands-table-wrap { display: block; overflow-x: auto; max-width: 100%; }
   .mk .firm-band-card {
     border: 1px solid var(--line);
     border-radius: 16px;
@@ -1086,4 +1112,26 @@ html.dark .mk .firm-bands-table tbody tr:hover td {
   background: var(--cobalt);
   color: #fff;
   -webkit-text-fill-color: #fff;
+}
+.mk .owner-invite-nudge {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.mk .owner-invite-nudge-title { margin: 0; font-weight: 700; }
+.mk .owner-invite-nudge-copybtn,
+.mk .owner-invite-nudge-dismiss {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  width: fit-content;
+  padding: 0 16px;
 }

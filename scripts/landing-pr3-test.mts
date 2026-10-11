@@ -104,6 +104,8 @@ assert(index.includes(">Skip to main content<") || index.includes("Skip to main 
 assert(index.includes('<main id="main">'), "main landmark exists");
 assert(index.includes('className="marquee-toggle"'), "marquee has a pause control");
 assert(index.includes("aria-pressed={marqueePaused}"), "marquee pause exposes aria-pressed");
+assert(index.includes('matchMedia("(prefers-reduced-motion: reduce)")'), "reduced motion starts the ticker paused");
+assert(css.includes(".marquee-toggle:focus-visible"), "marquee pause has a visible focus ring");
 assert(index.includes('marqueePaused ? "Play" : "Pause"'), "marquee control labels are Pause and Play");
 assert(css.includes(".marquee.is-paused"), "paused marquee stops the animation");
 assert(css.includes("prefers-reduced-motion:reduce") && css.includes(".marquee{animation:none"), "reduced motion stops the marquee");

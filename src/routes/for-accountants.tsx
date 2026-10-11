@@ -4,7 +4,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
+import { FIRM_NOT_A_BOOKKEEPER, FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
@@ -42,7 +42,7 @@ function ForAccountantsPage() {
 
   return (
     <MarketingShell
-      eyebrow="For accounting and advisory practices"
+      eyebrow="AI finance team for accounting firms"
       title={
         <>
           Advisory work that <span className="mk-gold">scales across the whole book</span>, not one
@@ -74,9 +74,9 @@ function ForAccountantsPage() {
     >
       <h2>Works with QuickBooks Online and Xero</h2>
       <p>
-        Connect QuickBooks Online or Xero for a client. MILŌN reads the profit and loss and balance
-        sheet into the same workspace as an upload, and you review and sign off. The books stay in
-        QuickBooks or Xero — MILŌN is not a ledger.
+        Connect QuickBooks Online or Xero for a client. Sage connects the same way. Milōn reads the
+        profit and loss and balance sheet into the same workspace as an upload, and you review and
+        sign off. The books stay in QuickBooks, Xero or Sage — Milōn is not a ledger.
       </p>
       <div className="mk-grid">
         <div className="mk-card">
@@ -93,6 +93,7 @@ function ForAccountantsPage() {
       </div>
 
       <h2>An AI finance team for accountants, not instead of them</h2>
+      <p>{FIRM_NOT_A_BOOKKEEPER}</p>
       <ul className="mk-list">
         <li>
           <strong>Portfolio triage.</strong> Live health across every client on one screen, so the
@@ -195,13 +196,6 @@ function ForAccountantsPage() {
         showSaPricing={Boolean(saPricing)}
         saLabels={saPricing?.labels}
       />
-      <ul className="mk-list">
-        <li>
-          <strong>See your first client&apos;s figures with no card.</strong> Add a card to start a
-          14-day free trial (up to 3 clients). After day 14 the paid band bills automatically.
-        </li>
-      </ul>
-
       <div className="mk-note">
         Where we are honest about being early: our first pilots are running now, so we are not
         showing you case studies from firms that do not exist. If you want to be one of the first

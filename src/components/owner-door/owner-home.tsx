@@ -5,6 +5,7 @@ import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
+import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 
 const MONEY_TOKEN =
@@ -106,6 +107,7 @@ export function OwnerHome({
   needs,
   onMoves,
   onDeliverables,
+  inviteClientId,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -118,6 +120,7 @@ export function OwnerHome({
   needs?: OwnerNeedsView;
   onMoves?: () => void;
   onDeliverables?: () => void;
+  inviteClientId?: string | null;
 }) {
   const handoff = presence.handoff;
   const [bots, setBots] = useState<OwnerBotLayout>(() =>
@@ -196,6 +199,7 @@ export function OwnerHome({
       {needs && onMoves && onDeliverables ? (
         <OwnerNeedsStrip needs={needs} onMoves={onMoves} onDeliverables={onDeliverables} />
       ) : null}
+      <OwnerInviteNudge variant="app" clientId={inviteClientId} />
     </div>
   );
 }

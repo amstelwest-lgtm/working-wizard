@@ -119,7 +119,7 @@ function BandCards({
   saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
 }) {
   return (
-    <ul className="firm-band-cards">
+    <ul className="firm-band-cards firm-bands-featured">
       {bands.map((band) => {
         const price = bandPriceLabel(band, interval, saLabels);
         const solo = band.id === "solo";
@@ -140,7 +140,7 @@ function BandCards({
               {enterprise ? null : <p className="firm-band-card-price">{price}</p>}
             </div>
             {startControl(band, solo ? "btn btn-gold" : "btn btn-ghost")}
-            {solo ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
+            {solo && SOLO_CARD_NOTE ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
           </li>
         );
       })}
@@ -159,8 +159,7 @@ export function FirmBandPricingTable({
 }: Props) {
   const labels = showSaPricing ? saLabels : null;
   const bands = FIRM_BAND_TABLE.filter((band) => band.id !== "starter");
-  const solo = bands.find((band) => band.id === "solo");
-  const largerBands = solo ? bands.filter((band) => band.id !== solo.id) : bands;
+  const featured = bands.filter((band) => band.id === "solo" || band.id === "growing" || band.id === "scale");
 
   const startControl = (band: FirmBand, className: string) => {
     const billed = pricedInterval(band, interval);
@@ -218,16 +217,10 @@ export function FirmBandPricingTable({
         </div>
       ) : null}
       <div data-funnel={FUNNEL_SOLO_FIRST}>
-        {solo ? (
-          <>
-            <BandTable bands={[solo]} interval={interval} startControl={startControl} saLabels={labels} />
-            <BandCards bands={[solo]} interval={interval} startControl={startControl} saLabels={labels} />
-          </>
-        ) : null}
+        <BandCards bands={featured} interval={interval} startControl={startControl} saLabels={labels} />
         <details className="firm-bands-more">
-          <summary>Larger bands, from Small to Scale</summary>
-          <BandTable bands={largerBands} interval={interval} startControl={startControl} saLabels={labels} />
-          <BandCards bands={largerBands} interval={interval} startControl={startControl} saLabels={labels} />
+          <summary>See all plans</summary>
+          <BandTable bands={bands} interval={interval} startControl={startControl} saLabels={labels} />
         </details>
       </div>
       <p className="firm-bands-watchlist">{PRICING_WATCHLIST_NOTE}</p>

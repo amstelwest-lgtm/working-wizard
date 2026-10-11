@@ -2187,3 +2187,36 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
     grid-template-columns: 1fr;
   }
 }
+
+.owner-door .owner-invite-nudge {
+  display: grid;
+  gap: var(--owner-space-1);
+  margin: 16px 0 0;
+  padding: 16px;
+  border: 1px solid var(--owner-edge);
+  border-radius: 16px;
+  background: var(--bg-2);
+}
+.owner-door .owner-invite-nudge-title {
+  margin: 0;
+  font-weight: 700;
+}
+.owner-door .owner-invite-nudge-copy p {
+  margin: 4px 0 0;
+}
+.owner-door .owner-invite-nudge-copybtn,
+.owner-door .owner-invite-nudge-dismiss {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--owner-edge);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.owner-door .owner-invite-nudge-copybtn:focus-visible,
+.owner-door .owner-invite-nudge-dismiss:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
