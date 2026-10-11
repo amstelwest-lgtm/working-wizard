@@ -152,7 +152,7 @@ assert(
 );
 assert(!client.includes("data-team-desk"), "the chat node is not marked as the desk");
 assert(!client.includes("dataset.teamDesk"), "the client effect still mounts the chat");
-assert(client.includes('resolveAccountantTab(search) ?? "overview"'), "default tab stays Overview");
+assert(client.includes('resolveAccountantTab(search) ?? "ask"'), "default tab is Home");
 for (const file of ["src/lib/ask-ai.js", "public/ask-ai.css", "src/hooks/use-ask-ai-mount.ts", "src/lib/milon-bot-client.ts", "src/lib/milon-bot-copy.ts"]) {
   assert(!readFileSync(file, "utf8").includes("teamDeskOwnsMount"), `${file} does not own the desk mount`);
   assert(!readFileSync(file, "utf8").includes("data-team-desk"), `${file} does not special-case the desk`);

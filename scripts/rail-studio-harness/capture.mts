@@ -43,9 +43,9 @@ for (const theme of themes) {
       if (/supabase\.(co|in|com)/i.test(request.url())) blocked.push(request.url());
     });
     for (const shot of shots) {
+      console.log("shot", theme, size.suffix, shot.name, shot.path);
       await page.goto(`${base}${shot.path}`, { waitUntil: "networkidle" });
-      await page.waitForSelector("[data-rail-ready='true']");
-      await page.waitForSelector("nav.deliverable-rail");
+      await page.waitForSelector("nav.deliverable-rail", { timeout: 15000 });
       if (shot.palette) {
         await page.getByRole("button", { name: /Search features/i }).click();
         await page.getByRole("dialog").waitFor();

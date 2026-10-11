@@ -56,7 +56,7 @@ export function SettingsShell({
         <div className="client-workspace">
           <nav className="deliverable-rail" aria-label="Practice">
             <PracticeRailItems />
-            <RailSettingsButton active onClick={openSettings} />
+            <RailSettingsButton onClick={openSettings} />
           </nav>
           <div className="deliverable-main">
             <div className={`settings-portal__shell settings-portal__shell--${width}`}>{children}</div>
