@@ -135,13 +135,16 @@ export function defaultPeriodCoverage(input: {
     const to = utcDate(end);
     if (from && to && to >= from) {
       const months =
-        (to.getUTCFullYear() - from.getUTCFullYear()) * 12 + (to.getUTCMonth() - from.getUTCMonth()) + 1;
+        (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+        (to.getUTCMonth() - from.getUTCMonth()) +
+        1;
       return { months: Math.min(12, Math.max(1, months)), periodStart: start.slice(0, 10) };
     }
   }
   const endDate = end ? utcDate(end) : null;
   if (endDate) {
-    const monthEnd = endDate.getUTCDate() === lastUtcDay(endDate.getUTCFullYear(), endDate.getUTCMonth());
+    const monthEnd =
+      endDate.getUTCDate() === lastUtcDay(endDate.getUTCFullYear(), endDate.getUTCMonth());
     if (!monthEnd) {
       const month = String(endDate.getUTCMonth() + 1).padStart(2, "0");
       return { months: 1, periodStart: `${endDate.getUTCFullYear()}-${month}-01` };
@@ -153,11 +156,44 @@ export function defaultPeriodCoverage(input: {
   return { months: 12, periodStart: null };
 }
 
-/** Calendar month containing `now`, shifted back `monthsBack` months. Month 0 ends today when the month is still open. */
+/** Calendar year, month (1–12), and day of `now` in `timeZone`. */
+export function calendarDateInTimeZone(
+  now: Date,
+  timeZone: string,
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "");
+  const year = read("year");
+  const month = read("month");
+  const day = read("day");
+  if (!year || !month || !day) {
+    return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1, day: now.getUTCDate() };
+  }
+  return { year, month, day };
+}
+
+/** UTC noon on the calendar day `now` has in `timeZone`, so month bounds stay on that day. */
+function asUtcCalendarDate(now: Date, timeZone: string): Date {
+  const { year, month, day } = calendarDateInTimeZone(now, timeZone);
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+/**
+ * Calendar month containing `now`, shifted back `monthsBack` months.
+ * Month 0 ends today when the month is still open.
+ * Without `timeZone` the day is UTC. Sage passes Africa/Johannesburg.
+ */
 export function calendarMonthBounds(
   now = new Date(),
   monthsBack = 0,
+  timeZone?: string,
 ): { from: string; to: string } {
+  if (timeZone) return calendarMonthBounds(asUtcCalendarDate(now, timeZone), monthsBack);
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth() - monthsBack;
   const start = new Date(Date.UTC(y, m, 1));
@@ -178,13 +214,16 @@ function utcDay(year: number, monthIndex: number, day: number): Date {
 
 /**
  * Financial year that contains `now`, from the day after the previous year-end
- * through today (UTC). `fyEndMonth` is 1–12. `fyEndDay` is clamped to the month.
+ * through today. `fyEndMonth` is 1–12. `fyEndDay` is clamped to the month.
+ * Without `timeZone` the day is UTC. Sage passes Africa/Johannesburg.
  */
 export function financialYearToDate(
   now: Date,
   fyEndMonth: number,
   fyEndDay: number,
+  timeZone?: string,
 ): { from: string; to: string } {
+  if (timeZone) return financialYearToDate(asUtcCalendarDate(now, timeZone), fyEndMonth, fyEndDay);
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const year = today.getUTCFullYear();
   const monthIndex = fyEndMonth - 1;

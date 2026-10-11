@@ -34,13 +34,14 @@ function legacyKeyMaterial(): string {
 }
 
 export function encryptSagePassword(plain: string): string {
-  const secret = plain.trim();
-  if (!secret) throw new Error("Sage password is empty");
+  // Trim only to reject a blank password. Sage already accepted `plain` as typed,
+  // including any spaces, and a trimmed copy fails the next login.
+  if (!plain.trim()) throw new Error("Sage password is empty");
   const material = dedicatedKeyMaterial();
   if (!material) throw new Error("SAGE_SA_PASSWORD_KEY is not set");
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", sha256(material), iv);
-  const ciphertext = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return SAGE_PASSWORD_PREFIX + Buffer.concat([iv, tag, ciphertext]).toString("base64url");
 }

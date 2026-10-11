@@ -139,6 +139,7 @@ export const connectSage = createServerFn({ method: "POST" })
       throw new Error(sageValidateError("not_configured"));
     }
 
+    if (!data.password.trim()) throw new Error("Sage password is empty");
     const validated = await validateSageLogin({
       username: data.username.trim(),
       password: data.password,
@@ -147,6 +148,7 @@ export const connectSage = createServerFn({ method: "POST" })
     });
     if (!validated.ok) throw new Error(sageValidateError(validated.reason));
 
+    // Same string Sage accepted. encryptSagePassword must not trim it.
     const passwordEnc = encryptSagePassword(data.password);
     const row = sageConnectionInsert({
       clientId: data.clientId,

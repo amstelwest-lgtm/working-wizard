@@ -10,16 +10,20 @@ import {
   ledgerSyncWouldWipe,
 } from "../src/lib/ledger-sync-financials";
 import { decryptSagePassword, encryptSagePassword } from "../src/lib/sage-password";
-import { sageSyncWriteDecision } from "../src/lib/sage";
+import { SAGE_EMPTY_COMPANY_MESSAGE, sageSyncWriteDecision } from "../src/lib/sage";
+import { agedArProofLine } from "../src/lib/collections";
+import { agedApProofLine } from "../src/lib/payables";
 import {
   fetchSageLedgerStatement,
   mapSageToFinancialInputs,
   parseSageBalanceSheet,
   parseSageBankAccounts,
   parseSageCustomerAgeing,
+  parseSageFinancialYearStartMonth,
   parseSageProfitAndLoss,
   parseSageSupplierAgeing,
   SAGE_SA_API_BASE,
+  SAGE_SA_TIME_ZONE,
   sageBasicAuthHeader,
   sageLedgerRanges,
   sageLevelAmount,
@@ -223,6 +227,15 @@ assert(ranges.year?.from === "2026-01-01", "missing financial year is calendar y
 assert(ranges.year?.basis === "calendar", "calendar basis is labeled calendar");
 const octoberYear = sageLedgerRanges(now, 10);
 assert(octoberYear.year == null, "a financial year that started this month is not stored twice");
+assert(SAGE_SA_TIME_ZONE === "Africa/Johannesburg", "Sage periods use South African time");
+const afterUtcMidnight = sageLedgerRanges(new Date("2026-10-11T22:30:00.000Z"), null);
+assert(afterUtcMidnight.month.from === "2026-10-01", "Johannesburg month still opens on the 1st");
+assert(afterUtcMidnight.month.to === "2026-10-12", "22:30 UTC is the next morning in Johannesburg");
+assert(afterUtcMidnight.year?.to === "2026-10-12", "calendar year ends on the Johannesburg day");
+const marchYear = sageLedgerRanges(new Date("2026-10-11T22:30:00.000Z"), 3);
+assert(marchYear.year?.from === "2026-03-01", "a March year start is financial year to date");
+assert(marchYear.year?.basis === "financial", "client financial year is labeled financial");
+assert(marchYear.year?.to === "2026-10-12", "financial year ends on the Johannesburg day");
 
 const mapped = mapSageToFinancialInputs(
   month,
@@ -295,6 +308,16 @@ assert(
 );
 const blankDecision = sageSyncWriteDecision(zeroFields, {});
 assert(!blankDecision.write, "sync refuses an empty report even on a blank file");
+const quietCompany = sageSyncWriteDecision(zeroFields, prior);
+assert(!quietCompany.write, "an all-zero company does not overwrite live figures");
+if (!quietCompany.write) {
+  assert(quietCompany.neutral === true, "an all-zero company is not a connection error");
+  assert(
+    quietCompany.error === SAGE_EMPTY_COMPANY_MESSAGE,
+    "empty company says it is connected with no transactions",
+  );
+  assert(!quietCompany.error.includes("left unchanged"), "empty company is not the wipe error");
+}
 assert(
   sageSyncWriteDecision(mapped, prior).write === true,
   "a real Sage statement may replace the file",
@@ -342,6 +365,18 @@ const stored = encryptSagePassword("secret");
 assert(stored.startsWith("enc:v1:"), "password ciphertext is versioned");
 assert(!stored.includes("secret"), "ciphertext does not contain the password");
 assert(decryptSagePassword(stored) === "secret", "password round-trips");
+const spaced = encryptSagePassword("  secret  ");
+assert(
+  decryptSagePassword(spaced) === "  secret  ",
+  "stored password is the one Sage validated, spaces included",
+);
+let blankPassword = false;
+try {
+  encryptSagePassword("   ");
+} catch {
+  blankPassword = true;
+}
+assert(blankPassword, "trim is only the emptiness check");
 let rejected = false;
 try {
   decryptSagePassword("plaintext-password");
@@ -439,6 +474,11 @@ assert(ledger.cashSource === "bank_accounts", "cash came from bank accounts");
 assert(ledger.year?.pnl.revenue === 480000, "year companion");
 assert(ledger.agedAr.status === "applied", "customer ageing applied");
 assert(ledger.agedAp.status === "skipped", "supplier ageing failure does not fail the statement");
+assert(
+  calls.some((call) => call.includes("FinancialYear/GetCurrent")),
+  "a missing client year asks Sage for FinancialYear/GetCurrent",
+);
+assert(ledger.year?.basis === "calendar", "a failed year lookup stays on the calendar year");
 assert(!calls.some((call) => call.includes("Company/Get")), "sync does not call Company/Get");
 assert(!calls.some((call) => call.includes("Login/Validate")), "sync does not call Login/Validate");
 
@@ -453,6 +493,27 @@ for (const file of [src, server, route, read("docs/SAGE.md")]) {
 }
 assert(server.includes("sageSyncWriteDecision"), "Sage sync refuses an empty report");
 assert(
+  server.includes('neutral ? "idle" : "error"'),
+  "an empty company stays connected, not in error",
+);
+assert(
+  server.includes("SAGE_EMPTY_COMPANY_MESSAGE"),
+  "the connection stores the empty-company message",
+);
+assert(route.includes("result.neutral"), "an empty company is not an HTTP error");
+assert(
+  read("src/lib/sage.functions.ts").includes("encryptSagePassword(data.password)"),
+  "connect stores the password Sage validated",
+);
+assert(
+  read("src/lib/sage-password.ts").includes("if (!plain.trim())"),
+  "trim is only the emptiness check",
+);
+assert(
+  read("src/lib/sage-password.ts").includes('cipher.update(plain, "utf8")'),
+  "the ciphertext is the password Sage validated",
+);
+assert(
   server.includes('applyLedgerSyncFinancials(prev, fields, "sage")'),
   "Sage sync owns the live file",
 );
@@ -466,6 +527,605 @@ assert(route.includes('createFileRoute("/api/sage/sync")'), "sync route is /api/
 assert(
   !read("src/lib/sage-password.ts").includes("sk_live"),
   "no live secret in the password helper",
+);
+
+// Real Sage SA sandbox layout (company 18721, empty). Section headers have no
+// Total. The amount sits on the following "Total for …" line. Ageing Summary
+// is one object with no customer or supplier. Numbers below are injected.
+type SageFixtureNode = {
+  Description?: string;
+  Total?: number | number[];
+  Children?: SageFixtureNode[];
+  [key: string]: unknown;
+};
+
+function cloneFixture<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function injectTotal(nodes: SageFixtureNode[], description: string, total: number | number[]) {
+  const walk = (list: SageFixtureNode[]) => {
+    for (const node of list) {
+      if (node.Description === description) node.Total = total;
+      if (node.Children?.length) walk(node.Children);
+    }
+  };
+  walk(nodes);
+}
+
+const realProfitAndLoss: SageFixtureNode[] = [
+  {
+    ID: 1,
+    Description: "Sales",
+    Category: "",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    Children: [],
+    ReportingLevelType: 1,
+    AccountCategoryId: 1,
+    AccountCategoryOrder: 1,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 1,
+    Description: "Total for Sales",
+    CategoryId: 1,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    ID: 2,
+    Description: "Cost of Sales",
+    Category: "",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    Children: [],
+    ReportingLevelType: 1,
+    AccountCategoryId: 2,
+    AccountCategoryOrder: 2,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 2,
+    Description: "Total for Cost of Sales",
+    CategoryId: 2,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 5,
+    Description: "Gross Profit",
+    CategoryId: 5,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    ID: 3,
+    Description: "Other Income",
+    Category: "",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    Children: [],
+    ReportingLevelType: 1,
+    AccountCategoryId: 3,
+    AccountCategoryOrder: 3,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 3,
+    Description: "Total for Other Income",
+    CategoryId: 3,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    ID: 4,
+    Description: "Expenses",
+    Category: "",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    Children: [],
+    ReportingLevelType: 1,
+    AccountCategoryId: 4,
+    AccountCategoryOrder: 4,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 4,
+    Description: "Total for Expenses",
+    CategoryId: 4,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 6,
+    Description: "Net Profit Or Loss Before Tax",
+    Category: "",
+    CategoryId: 6,
+    AccountTypeId: 0,
+    Children: [
+      {
+        Total: [0],
+        ID: 664737,
+        Description: "Income Tax",
+        Category: "Income Tax",
+        CategoryId: 10,
+        AccountTypeId: 0,
+        Children: [],
+        ReportingLevelType: 3,
+        AccountCategoryId: 10,
+        AccountCategoryOrder: 5,
+        AccountNumber: "",
+        ItemReportingGroupTypeId: 0,
+      },
+    ],
+    ReportingLevelType: 10,
+    AccountCategoryId: 10,
+    AccountCategoryOrder: 5,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: [0],
+    ID: 7,
+    Description: "Net Profit Or Loss After Tax",
+    CategoryId: 7,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+];
+
+const realBalanceSheet: SageFixtureNode[] = [
+  {
+    ID: 0,
+    Description: "Assets",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    Children: [
+      {
+        ID: 5,
+        Description: "Non-Current Assets",
+        Category: "",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        Children: [],
+        ReportingLevelType: 1,
+        AccountCategoryId: 5,
+        AccountCategoryOrder: 6,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        Total: 0,
+        ID: 0,
+        Description: "Total Non-Current Assets",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        ReportingLevelType: 10,
+        AccountCategoryId: 0,
+        AccountCategoryOrder: 0,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        ID: 6,
+        Description: "Current Assets",
+        Category: "",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        Children: [],
+        ReportingLevelType: 1,
+        AccountCategoryId: 6,
+        AccountCategoryOrder: 7,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        Total: 0,
+        ID: 0,
+        Description: "Total Current Assets",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        ReportingLevelType: 10,
+        AccountCategoryId: 0,
+        AccountCategoryOrder: 0,
+        ItemReportingGroupTypeId: 0,
+      },
+    ],
+    ReportingLevelType: 1,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: 0,
+    ID: 0,
+    Description: "Total Assets",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    ID: 0,
+    Description: "Equity and Liabilities",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    Children: [
+      {
+        ID: 9,
+        Description: "Owners Equity",
+        Category: "",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        Children: [
+          {
+            Total: 0,
+            ID: -19,
+            Description: "Profit and Loss (This Year)",
+            Category: "Owners Equity",
+            CategoryId: 9,
+            AccountTypeId: 2,
+            Children: [],
+            ReportingLevelType: 4,
+            AccountCategoryId: 9,
+            AccountCategoryOrder: 10,
+            AccountNumber: "",
+            ItemReportingGroupTypeId: 0,
+          },
+        ],
+        ReportingLevelType: 1,
+        AccountCategoryId: 9,
+        AccountCategoryOrder: 10,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        Total: 0,
+        ID: 0,
+        Description: "Total Owners Equity",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        ReportingLevelType: 10,
+        AccountCategoryId: 0,
+        AccountCategoryOrder: 0,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        ID: 7,
+        Description: "Non-Current Liabilities",
+        Category: "",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        Children: [],
+        ReportingLevelType: 1,
+        AccountCategoryId: 7,
+        AccountCategoryOrder: 8,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        Total: 0,
+        ID: 0,
+        Description: "Total Non-Current Liabilities",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        ReportingLevelType: 10,
+        AccountCategoryId: 0,
+        AccountCategoryOrder: 0,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        ID: 8,
+        Description: "Current Liabilities",
+        Category: "",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        Children: [],
+        ReportingLevelType: 1,
+        AccountCategoryId: 8,
+        AccountCategoryOrder: 9,
+        ItemReportingGroupTypeId: 0,
+      },
+      {
+        Total: 0,
+        ID: 0,
+        Description: "Total Current Liabilities",
+        CategoryId: 0,
+        AccountTypeId: 0,
+        ReportingLevelType: 10,
+        AccountCategoryId: 0,
+        AccountCategoryOrder: 0,
+        ItemReportingGroupTypeId: 0,
+      },
+    ],
+    ReportingLevelType: 1,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+  {
+    Total: 0,
+    ID: 0,
+    Description: "Total Equity and Liabilities",
+    CategoryId: 0,
+    AccountTypeId: 0,
+    ReportingLevelType: 10,
+    AccountCategoryId: 0,
+    AccountCategoryOrder: 0,
+    ItemReportingGroupTypeId: 0,
+  },
+];
+
+const sandboxProfitAndLoss = cloneFixture(realProfitAndLoss);
+injectTotal(sandboxProfitAndLoss, "Total for Sales", [100000]);
+injectTotal(sandboxProfitAndLoss, "Total for Cost of Sales", [40000]);
+injectTotal(sandboxProfitAndLoss, "Gross Profit", [60000]);
+injectTotal(sandboxProfitAndLoss, "Total for Other Income", [0]);
+injectTotal(sandboxProfitAndLoss, "Total for Expenses", [25000]);
+injectTotal(sandboxProfitAndLoss, "Net Profit Or Loss Before Tax", [35000]);
+injectTotal(sandboxProfitAndLoss, "Income Tax", [9450]);
+injectTotal(sandboxProfitAndLoss, "Net Profit Or Loss After Tax", [25550]);
+
+const sandboxBalanceSheet = cloneFixture(realBalanceSheet);
+injectTotal(sandboxBalanceSheet, "Total Non-Current Assets", 180000);
+injectTotal(sandboxBalanceSheet, "Total Current Assets", 120000);
+injectTotal(sandboxBalanceSheet, "Total Assets", 300000);
+injectTotal(sandboxBalanceSheet, "Total Owners Equity", 120000);
+injectTotal(sandboxBalanceSheet, "Total Non-Current Liabilities", 100000);
+injectTotal(sandboxBalanceSheet, "Total Current Liabilities", 80000);
+injectTotal(sandboxBalanceSheet, "Total Equity and Liabilities", 300000);
+
+const sandboxMonth = parseSageProfitAndLoss(sandboxProfitAndLoss, 1);
+assert(sandboxMonth.revenue === 100000, "real layout: sales total, not the empty header");
+assert(sandboxMonth.cogs === 40000, "real layout: total for cost of sales");
+assert(sandboxMonth.grossProfit === 60000, "real layout: gross profit");
+assert(sandboxMonth.operatingExpenses === 25000, "real layout: total for expenses");
+assert(sandboxMonth.ebt === 35000, "real layout: net profit or loss before tax");
+assert(sandboxMonth.netIncome === 25550, "real layout: net profit or loss after tax");
+assert(sandboxMonth.netIncome !== sandboxMonth.grossProfit, "net income is not gross profit");
+
+const sandboxBs = parseSageBalanceSheet(sandboxBalanceSheet);
+assert(sandboxBs.totalAssets === 300000, "real layout: total assets");
+assert(sandboxBs.currentAssets === 120000, "real layout: total current assets");
+assert(sandboxBs.currentLiabilities === 80000, "real layout: total current liabilities");
+assert(sandboxBs.equity === 120000, "real layout: total owners equity, not equity and liabilities");
+assert(sandboxBs.equity !== 300000, "total equity and liabilities is not owners equity");
+
+const sandboxMapped = mapSageToFinancialInputs(
+  sandboxMonth,
+  sandboxBs,
+  { from: "2026-10-01", to: "2026-10-11", label: "1 Oct 2026 – 11 Oct 2026" },
+  null,
+  0,
+);
+assert(sandboxMapped.revenue === 100000, "mapped sales");
+assert(sandboxMapped.cogs === 40000, "mapped cost of sales");
+assert(sandboxMapped.fixedCosts === 25000, "mapped expenses");
+assert(sandboxMapped.ebt === 35000, "mapped profit before tax");
+assert(sandboxMapped.netIncome === 25550, "mapped profit after tax");
+assert(sandboxMapped.equity === 120000, "mapped owners equity");
+assert(sandboxMapped.totalAssets === 300000, "mapped assets");
+
+const childSales = parseSageProfitAndLoss(
+  [
+    {
+      Description: "Sales",
+      Category: "Sales",
+      ReportingLevelType: 1,
+      Children: [
+        { Description: "Products", ReportingLevelType: 3, Total: [70000], Children: [] },
+        { Description: "Services", ReportingLevelType: 3, Total: [30000], Children: [] },
+      ],
+    },
+  ],
+  1,
+);
+assert(childSales.revenue === 100000, "a header with no total sums its child accounts");
+
+assert(
+  parseSageFinancialYearStartMonth({
+    ID: 1,
+    YearStart: "2026-03-01T00:00:00",
+    YearEnd: "2027-02-28T00:00:00",
+    IsCurrentYear: true,
+  }) === 3,
+  "FinancialYear/GetCurrent YearStart month is March",
+);
+assert(
+  parseSageFinancialYearStartMonth({ YearStart: "2026-03-01" }) === 3,
+  "a date-only YearStart still yields the month",
+);
+assert(parseSageFinancialYearStartMonth({}) === null, "a year with no start stays unknown");
+
+const customerSummary = {
+  Date: "0001-01-01T00:00:00Z",
+  Total: 5000,
+  Current: 2000,
+  Days30: 3000,
+  Days60: 0,
+  Days90: 0,
+  Days120Plus: 0,
+};
+const sandboxCustomers = parseSageCustomerAgeing(customerSummary, "2026-10-11");
+assert(sandboxCustomers.status === "applied", "a summary total is applied");
+assert(sandboxCustomers.contactCount === 0, "summary ageing has no customer names");
+assert(sandboxCustomers.totalOutstanding === 5000, "customer ageing total");
+assert(sandboxCustomers.totalOverdue === 3000, "summary overdue is the aged buckets");
+assert(
+  !agedArProofLine(sandboxCustomers).includes("nothing outstanding"),
+  "a non-zero customer summary is not empty",
+);
+assert(agedArProofLine(sandboxCustomers).includes("5,000.00"), "proof line shows the total");
+
+const zeroCustomers = parseSageCustomerAgeing(
+  {
+    Date: "0001-01-01T00:00:00Z",
+    Total: 0,
+    Current: 0,
+    Days30: 0,
+    Days60: 0,
+    Days90: 0,
+    Days120Plus: 0,
+  },
+  "2026-10-11",
+);
+assert(zeroCustomers.status === "empty", "a zero summary stays empty");
+assert(
+  agedArProofLine(zeroCustomers).includes("nothing outstanding"),
+  "zero summary has nothing outstanding",
+);
+
+const supplierSummary = parseSageSupplierAgeing(
+  {
+    Date: "0001-01-01T00:00:00Z",
+    Total: 800,
+    Current: 800,
+    Days30: 0,
+    Days60: 0,
+    Days90: 0,
+    Days120Plus: 0,
+  },
+  "2026-10-11",
+);
+assert(supplierSummary.supplierCount === 0, "summary ageing has no supplier names");
+assert(supplierSummary.totalOutstanding === 800, "supplier ageing total");
+assert(supplierSummary.status === "applied", "a supplier summary total is applied");
+assert(agedApProofLine(supplierSummary).includes("800.00"), "supplier proof line shows the total");
+
+const namedBesideSummary = parseSageCustomerAgeing(
+  [customerSummary, { Total: 800, Current: 800, Customer: { ID: 9, Name: "Northwind" } }],
+  "2026-10-11",
+);
+assert(namedBesideSummary.contacts.length === 1, "named customers still parse");
+assert(
+  namedBesideSummary.contacts[0]?.outstanding === 800,
+  "the summary row is not a second customer",
+);
+assert(
+  namedBesideSummary.totalOutstanding === 800,
+  "named rows are not added to the summary total",
+);
+
+const fyCalls: string[] = [];
+const marchLedger = await fetchSageLedgerStatement(
+  {
+    username: "owner@example.com",
+    password: "secret",
+    apiKey: "test-key-not-a-secret",
+    companyId: "18721",
+  },
+  now,
+  null,
+  async (input, init) => {
+    const href = String(input);
+    const path = new URL(href).pathname;
+    fyCalls.push(`${init?.method ?? "GET"} ${path}`);
+    if (path.endsWith("/FinancialYear/GetCurrent")) {
+      return new Response(
+        JSON.stringify({
+          ID: 1,
+          YearStart: "2026-03-01T00:00:00",
+          YearEnd: "2027-02-28T00:00:00",
+          IsCurrentYear: true,
+        }),
+      );
+    }
+    if (path.endsWith("/ProfitAndLoss/Get"))
+      return new Response(JSON.stringify(sandboxProfitAndLoss));
+    if (path.endsWith("/BalanceSheet/Get"))
+      return new Response(JSON.stringify(sandboxBalanceSheet));
+    if (path.endsWith("/BankAccount/Get")) {
+      return new Response(JSON.stringify({ TotalResults: 0, ReturnedResults: 0, Results: [] }));
+    }
+    if (path.endsWith("/CustomerAgeing/GetSummary"))
+      return new Response(JSON.stringify(customerSummary));
+    if (path.endsWith("/SupplierAgeing/GetSummary")) {
+      return new Response(
+        JSON.stringify({
+          Date: "0001-01-01T00:00:00Z",
+          Total: 0,
+          Current: 0,
+          Days30: 0,
+          Days60: 0,
+          Days90: 0,
+          Days120Plus: 0,
+        }),
+      );
+    }
+    return new Response("missing", { status: 404 });
+  },
+);
+assert(
+  fyCalls.some((call) => call.startsWith("GET") && call.includes("FinancialYear/GetCurrent")),
+  "sync reads the current financial year",
+);
+assert(marchLedger.year?.from === "2026-03-01", "sandbox company year is March to February");
+assert(marchLedger.year?.basis === "financial", "YearStart wins over the calendar year");
+assert(marchLedger.pnl.revenue === 100000, "fetched real layout revenue");
+assert(marchLedger.pnl.netIncome === 25550, "fetched real layout net profit after tax");
+assert(marchLedger.bs.equity === 120000, "fetched real layout owners equity");
+assert(marchLedger.agedAr.totalOutstanding === 5000, "fetched customer ageing total");
+assert(marchLedger.agedAp.status === "empty", "a zero supplier summary stays empty");
+assert(
+  marchLedger.cashSource === "balance_sheet",
+  "no bank accounts leaves the balance-sheet cash",
+);
+
+const clientYearCalls: string[] = [];
+await fetchSageLedgerStatement(
+  {
+    username: "owner@example.com",
+    password: "secret",
+    apiKey: "test-key-not-a-secret",
+    companyId: "18721",
+  },
+  now,
+  3,
+  async (input) => {
+    const path = new URL(String(input)).pathname;
+    clientYearCalls.push(path);
+    if (path.endsWith("/ProfitAndLoss/Get"))
+      return new Response(JSON.stringify(sandboxProfitAndLoss));
+    if (path.endsWith("/BalanceSheet/Get"))
+      return new Response(JSON.stringify(sandboxBalanceSheet));
+    if (path.endsWith("/BankAccount/Get")) {
+      return new Response(JSON.stringify({ TotalResults: 0, ReturnedResults: 0, Results: [] }));
+    }
+    if (
+      path.endsWith("/CustomerAgeing/GetSummary") ||
+      path.endsWith("/SupplierAgeing/GetSummary")
+    ) {
+      return new Response(
+        JSON.stringify({ Total: 0, Current: 0, Days30: 0, Days60: 0, Days90: 0, Days120Plus: 0 }),
+      );
+    }
+    return new Response("missing", { status: 404 });
+  },
+);
+assert(
+  !clientYearCalls.some((path) => path.includes("FinancialYear")),
+  "a client financial year is not asked of Sage again",
 );
 
 console.log("sage-sync-test: ok");

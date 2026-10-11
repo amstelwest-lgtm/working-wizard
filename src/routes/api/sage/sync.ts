@@ -72,7 +72,9 @@ export const Route = createFileRoute("/api/sage/sync")({
           clientId = parsed.data.clientId;
           const { userId } = await authorize(request, clientId);
           const result = await executeSageSync({ clientId, userId });
-          if (!result.populated) return json({ ok: false, error: result.message, ...result }, 409);
+          if (!result.populated && !result.neutral) {
+            return json({ ok: false, error: result.message, ...result }, 409);
+          }
           return json({ ok: true, ...result }, 200);
         } catch (err) {
           if (err instanceof Response) return err;

@@ -19,6 +19,7 @@ import {
 } from "@/lib/payables";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
+  calendarDateInTimeZone,
   calendarMonthBounds,
   financialYearToDate,
   formatStatementPeriodLabel,
@@ -29,6 +30,8 @@ import { periodMonthsBetween } from "@/lib/xero";
 /** Live host. The host actually called is sageApiBase() (SAGE_SA_BASE_URL). */
 export const SAGE_SA_API_BASE = SAGE_SA_LIVE_API_BASE;
 export const SAGE_STATEMENT_SOURCE = "sage" as const;
+/** Sage SA companies keep their books on South African time, not UTC. */
+export const SAGE_SA_TIME_ZONE = "Africa/Johannesburg";
 
 const CATEGORY = 1;
 const GROUP = 2;
@@ -161,8 +164,9 @@ export function sageAgeingBody(date: string): Record<string, unknown> {
   };
 }
 
-function isoDate(now: Date): string {
-  return now.toISOString().slice(0, 10);
+function sageIsoDate(now: Date): string {
+  const { year, month, day } = calendarDateInTimeZone(now, SAGE_SA_TIME_ZONE);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 export function sageLedgerRanges(
@@ -172,19 +176,19 @@ export function sageLedgerRanges(
   month: { from: string; to: string; label: string };
   year: { from: string; to: string; label: string; basis: YearBasis; periodMonths: number } | null;
 } {
-  const month = calendarMonthBounds(now, 0);
+  const month = calendarMonthBounds(now, 0, SAGE_SA_TIME_ZONE);
   const monthLabel = formatStatementPeriodLabel(month.from, month.to);
   let yearFrom: string;
   let basis: YearBasis;
   if (fyStartMonth != null && fyStartMonth >= 1 && fyStartMonth <= 12) {
     const endMonth = fyStartMonth === 1 ? 12 : fyStartMonth - 1;
-    yearFrom = financialYearToDate(now, endMonth, 31).from;
+    yearFrom = financialYearToDate(now, endMonth, 31, SAGE_SA_TIME_ZONE).from;
     basis = "financial";
   } else {
-    yearFrom = `${now.getUTCFullYear()}-01-01`;
+    yearFrom = `${calendarDateInTimeZone(now, SAGE_SA_TIME_ZONE).year}-01-01`;
     basis = "calendar";
   }
-  const yearTo = isoDate(now);
+  const yearTo = sageIsoDate(now);
   if (yearFrom === month.from && yearTo === month.to) {
     return { month: { ...month, label: monthLabel }, year: null };
   }
@@ -277,17 +281,48 @@ function pickAmount(flat: FlatNode[], phrases: string[], exclude: string[] = [])
   return null;
 }
 
-function categorySum(flat: FlatNode[], names: string[]): number | null {
+function categorySum(flat: FlatNode[], names: string[], exclude: string[] = []): number | null {
   const wanted = new Set(names);
   const cats = flat.filter(({ node }) => {
     if (node.ReportingLevelType !== CATEGORY) return false;
     const cat = norm(node.Category);
     const desc = norm(node.Description);
     if (!wanted.has(cat) && !wanted.has(desc)) return false;
+    if (exclude.some((skipped) => `${cat} ${desc}`.includes(skipped))) return false;
     return sageLevelAmount(node) != null;
   });
   if (!cats.length) return null;
   return cats.reduce((sum, { node }) => sum + (sageLevelAmount(node) ?? 0), 0);
+}
+
+/** Header has no total of its own. Sum the account lines under it, skipping "Total …" children. */
+function headerChildSum(flat: FlatNode[], names: string[]): number | null {
+  const wanted = new Set(names);
+  const headers = flat.filter(({ node }) => {
+    if (node.ReportingLevelType !== CATEGORY) return false;
+    const cat = norm(node.Category);
+    const desc = norm(node.Description);
+    return wanted.has(cat) || wanted.has(desc);
+  });
+  if (!headers.length) return null;
+  let any = false;
+  let sum = 0;
+  for (const { node } of headers) {
+    for (const child of node.Children ?? []) {
+      if (!isNode(child)) continue;
+      const label = nodeLabel(child);
+      if (label.startsWith("total ")) continue;
+      const amount = sageLevelAmount(child);
+      if (amount == null) continue;
+      any = true;
+      sum += amount;
+    }
+  }
+  return any ? sum : null;
+}
+
+function sectionAmount(flat: FlatNode[], names: string[], totalPhrases: string[]): number | null {
+  return categorySum(flat, names) ?? pickAmount(flat, totalPhrases) ?? headerChildSum(flat, names);
 }
 
 function leafSum(flat: FlatNode[], pattern: RegExp, exclude?: RegExp): number {
@@ -312,35 +347,65 @@ function absOr(value: number | null, fallback = 0): number {
 
 export function parseSageProfitAndLoss(json: unknown, periodMonths = 1): SagePnL {
   const flat = flatten(sageReportNodes(json));
-  const sales = categorySum(flat, ["sales", "turnover", "trading income", "revenue"]);
-  const otherIncome = categorySum(flat, ["other income"]);
-  const revenueFromCategories =
+  const sales = sectionAmount(
+    flat,
+    ["sales", "turnover", "trading income", "revenue"],
+    ["total for sales", "total sales"],
+  );
+  const otherIncome = sectionAmount(
+    flat,
+    ["other income"],
+    ["total for other income", "total other income"],
+  );
+  const revenueFromSections =
     sales == null && otherIncome == null ? null : (sales ?? 0) + (otherIncome ?? 0);
-  const revenueLine = pickAmount(flat, [
-    "total sales",
-    "total income",
-    "total revenue",
-    "total trading income",
-  ]);
-  const revenue = revenueFromCategories ?? revenueLine ?? 0;
+  const revenueLine = pickAmount(flat, ["total income", "total revenue", "total trading income"]);
+  const revenue = revenueFromSections ?? revenueLine ?? 0;
 
-  const cogsRaw = categorySum(flat, ["cost of sales", "cost of goods sold", "cost of goods"]);
-  const cogs = absOr(cogsRaw ?? pickAmount(flat, ["total cost of sales", "total cost of goods"]));
+  const cogs = absOr(
+    sectionAmount(
+      flat,
+      ["cost of sales", "cost of goods sold", "cost of goods"],
+      [
+        "total for cost of sales",
+        "total cost of sales",
+        "total for cost of goods",
+        "total cost of goods",
+      ],
+    ),
+  );
 
   const grossLine = pickAmount(flat, ["gross profit"]);
   const grossProfit = grossLine ?? revenue - cogs;
 
-  const expenseCategories = categorySum(flat, ["expenses", "operating expenses", "other expenses"]);
   const operatingExpenses = absOr(
-    expenseCategories ?? pickAmount(flat, ["total expenses", "total operating expenses"]),
+    sectionAmount(
+      flat,
+      ["expenses", "operating expenses", "other expenses"],
+      [
+        "total for expenses",
+        "total expenses",
+        "total for operating expenses",
+        "total operating expenses",
+      ],
+    ),
   );
 
   const depreciation = leafSum(flat, /depreciat|amortis|amortiz/);
   const interest = leafSum(flat, /interest (paid|expense|on)/);
   const tax = leafSum(flat, /income tax|taxation|tax expense/, /receivable|refund|control/);
 
-  const netAfter = pickAmount(flat, ["net profit after tax", "profit after tax", "net income"]);
-  const netBefore = pickAmount(flat, ["net profit before tax", "profit before tax"]);
+  const netAfter = pickAmount(flat, [
+    "net profit or loss after tax",
+    "net profit after tax",
+    "profit after tax",
+    "net income",
+  ]);
+  const netBefore = pickAmount(flat, [
+    "net profit or loss before tax",
+    "net profit before tax",
+    "profit before tax",
+  ]);
   const netGeneric = pickAmount(
     flat,
     ["net profit", "net profit loss", "profit loss"],
@@ -384,13 +449,16 @@ export function parseSageBalanceSheet(json: unknown): SageBalanceSheet {
   const totalLiabilities =
     absOr(pickAmount(flat, ["total liabilities"])) || currentLiabilities + nonCurrentLiabilities;
   const equityLine =
-    categorySum(flat, [
-      "owners equity",
-      "owner equity",
-      "equity",
-      "shareholders equity",
-      "members equity",
-    ]) ?? pickAmount(flat, ["total equity", "total owners equity", "capital and reserves"]);
+    categorySum(
+      flat,
+      ["owners equity", "owner equity", "equity", "shareholders equity", "members equity"],
+      ["liabilities"],
+    ) ??
+    pickAmount(
+      flat,
+      ["total owners equity", "total owner equity", "total equity", "capital and reserves"],
+      ["liabilities"],
+    );
   const equity = equityLine ?? totalAssets - totalLiabilities;
   const receivables = absOr(
     pickAmount(flat, [
@@ -519,13 +587,37 @@ function outstandingOf(row: Record<string, unknown>, buckets: { amount: number }
   return round2(buckets.reduce((sum, bucket) => sum + bucket.amount, 0));
 }
 
+/**
+ * Summary:true returns one totals object and no customer or supplier.
+ * A non-zero total on that row is the company total. Named rows (Summary:false)
+ * stay on the per-party path so a totals row is not added twice.
+ */
+function unnamedAgeingTotal(
+  rows: Record<string, unknown>[],
+  key: "Customer" | "Supplier",
+): { outstanding: number; overdue: number } | null {
+  if (rows.some((row) => party(row, key))) return null;
+  for (const row of rows) {
+    const buckets = ageingBuckets(row);
+    const outstanding = outstandingOf(row, buckets);
+    if (outstanding === 0) continue;
+    const current = buckets
+      .filter((bucket) => bucket.current)
+      .reduce((sum, bucket) => sum + bucket.amount, 0);
+    const overdue = round2(outstanding - current);
+    return { outstanding, overdue: overdue > 0 ? overdue : 0 };
+  }
+  return null;
+}
+
 export function parseSageCustomerAgeing(
   json: unknown,
   asOf: string,
   syncedAt = new Date().toISOString(),
 ): CollectionsSnapshot {
+  const rows = ageingRows(json);
   const contacts: CollectionsContact[] = [];
-  for (const row of ageingRows(json)) {
+  for (const row of rows) {
     const who = party(row, "Customer");
     if (!who) continue;
     const buckets = ageingBuckets(row);
@@ -546,7 +638,16 @@ export function parseSageCustomerAgeing(
       invoices: [],
     });
   }
-  return finalizeCollections({ source: "sage", asOf, syncedAt, contacts });
+  const snap = finalizeCollections({ source: "sage", asOf, syncedAt, contacts });
+  const summary = unnamedAgeingTotal(rows, "Customer");
+  if (!summary) return snap;
+  return {
+    ...snap,
+    status: "applied",
+    totalOutstanding: summary.outstanding,
+    totalOverdue: summary.overdue,
+    note: "Sage ageing summary has no customer names.",
+  };
 }
 
 export function parseSageSupplierAgeing(
@@ -554,8 +655,9 @@ export function parseSageSupplierAgeing(
   asOf: string,
   syncedAt = new Date().toISOString(),
 ): PayablesSnapshot {
+  const rows = ageingRows(json);
   const suppliers: PayablesSupplier[] = [];
-  for (const row of ageingRows(json)) {
+  for (const row of rows) {
     const who = party(row, "Supplier");
     if (!who) continue;
     const buckets = ageingBuckets(row);
@@ -576,7 +678,16 @@ export function parseSageSupplierAgeing(
       bills: [],
     });
   }
-  return finalizePayables({ source: "sage", asOf, syncedAt, suppliers });
+  const snap = finalizePayables({ source: "sage", asOf, syncedAt, suppliers });
+  const summary = unnamedAgeingTotal(rows, "Supplier");
+  if (!summary) return snap;
+  return {
+    ...snap,
+    status: "applied",
+    totalOutstanding: summary.outstanding,
+    totalOverdue: summary.overdue,
+    note: "Sage ageing summary has no supplier names.",
+  };
 }
 
 export function sumSageBankBalances(accounts: SageBankAccount[]): number | null {
@@ -714,13 +825,57 @@ async function fetchBankAccounts(
   return accounts;
 }
 
+function monthFromYearStart(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 12)
+    return value;
+  if (typeof value !== "string") return null;
+  const iso = /^(\d{4})-(\d{2})/.exec(value.trim());
+  if (!iso) return null;
+  const month = Number(iso[2]);
+  return month >= 1 && month <= 12 ? month : null;
+}
+
+/** FinancialYear/GetCurrent.YearStart is a date. The month is the year-start month. */
+export function parseSageFinancialYearStartMonth(json: unknown): number | null {
+  if (!json || typeof json !== "object") return null;
+  const record = json as { YearStart?: unknown; Results?: unknown };
+  const direct = monthFromYearStart(record.YearStart);
+  if (direct) return direct;
+  if (!Array.isArray(record.Results)) return null;
+  const current =
+    record.Results.find(
+      (row) =>
+        row &&
+        typeof row === "object" &&
+        (row as { IsCurrentYear?: unknown }).IsCurrentYear === true,
+    ) ?? record.Results[0];
+  if (!current || typeof current !== "object") return null;
+  return monthFromYearStart((current as { YearStart?: unknown }).YearStart);
+}
+
+async function resolveFyStartMonth(
+  auth: SageAuth,
+  fyStartMonth: number | null,
+  fetchImpl: typeof fetch,
+): Promise<number | null> {
+  if (fyStartMonth != null && fyStartMonth >= 1 && fyStartMonth <= 12) return fyStartMonth;
+  try {
+    const json = await sageCall(auth, "FinancialYear/GetCurrent", { method: "GET" }, fetchImpl);
+    return parseSageFinancialYearStartMonth(json);
+  } catch (err) {
+    if (err instanceof SageApiError && (err.status === 401 || err.status === 403)) throw err;
+    return null;
+  }
+}
+
 export async function fetchSageLedgerStatement(
   auth: SageAuth,
   now = new Date(),
   fyStartMonth: number | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<SageLedgerStatement> {
-  const ranges = sageLedgerRanges(now, fyStartMonth);
+  const resolvedFy = await resolveFyStartMonth(auth, fyStartMonth, fetchImpl);
+  const ranges = sageLedgerRanges(now, resolvedFy);
   const monthJson = await sageCall(
     auth,
     "ProfitAndLoss/Get",

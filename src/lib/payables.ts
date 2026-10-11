@@ -338,7 +338,10 @@ export function agedApProofLine(snap: PayablesSnapshot | null | undefined): stri
   if (!snap) return AGED_AP_PENDING;
   if (snap.status === "skipped") return snap.skipReason ?? "Aged payables were not applied";
   const when = snap.asOf ? `as of ${snap.asOf}` : "applied";
-  if (snap.status === "empty" || snap.supplierCount === 0) {
+  if (snap.supplierCount === 0) {
+    if (Math.abs(snap.totalOutstanding) >= 0.005) {
+      return `Aged payables ${when} · ${moneyPlain(snap.totalOutstanding)} outstanding`;
+    }
     return `Aged payables ${when} · nothing outstanding`;
   }
   const suppliers = `${snap.supplierCount} supplier${snap.supplierCount === 1 ? "" : "s"}`;

@@ -10,7 +10,11 @@ import { agedArProofLine } from "@/lib/collections";
 import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
 import { agedApProofLine } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
-import { sageCompanyIdIsValid, sageSyncWriteDecision } from "@/lib/sage";
+import {
+  SAGE_EMPTY_COMPANY_MESSAGE,
+  sageCompanyIdIsValid,
+  sageSyncWriteDecision,
+} from "@/lib/sage";
 import { decryptSagePasswordDetailed, encryptSagePassword } from "@/lib/sage-password";
 import {
   fetchSageLedgerStatement,
@@ -22,6 +26,8 @@ import { calendarMonthStamp, STATEMENT_YTD_FIELD_KEYS } from "@/lib/statement-pe
 
 export type SageSyncResult = {
   populated: boolean;
+  /** True when Sage answered and the company simply has no transactions yet. */
+  neutral?: boolean;
   fields: Record<string, string>;
   message: string;
   periodLabel: string;
@@ -229,6 +235,8 @@ export async function executeSageSync(input: {
     const decrypted = decryptSagePasswordDetailed(String(conn.password_enc ?? ""));
     const password = decrypted.plain;
     const apiKey = process.env.SAGE_SA_API_KEY?.trim() ?? "";
+    // A null financial_year_start_month is resolved from FinancialYear/GetCurrent
+    // inside the fetch (a March–February company must not use the calendar year).
     const ledger = await fetchSageLedgerStatement(
       { username, password, apiKey, companyId },
       new Date(),
@@ -244,12 +252,14 @@ export async function executeSageSync(input: {
         : {};
     const decision = sageSyncWriteDecision(fields, prev);
     if (!decision.write) {
+      const neutral = decision.neutral === true;
       await markSync(input.clientId, {
-        sync_status: "error",
-        sync_error: decision.error.slice(0, 500),
+        sync_status: neutral ? "idle" : "error",
+        sync_error: neutral ? SAGE_EMPTY_COMPANY_MESSAGE : decision.error.slice(0, 500),
       });
       return {
         populated: false,
+        neutral,
         fields,
         message: decision.error,
         periodLabel: ledger.periodLabel,
@@ -351,6 +361,7 @@ export async function executeSageSync(input: {
 
     return {
       populated: true,
+      neutral: false,
       fields,
       message: "",
       periodLabel: ledger.periodLabel,
