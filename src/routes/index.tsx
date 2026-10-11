@@ -12,7 +12,13 @@ import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
-import { DUAL_MARKET_BUILT, DUAL_MARKET_TAGLINE, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
+import {
+  DUAL_MARKET_BUILT,
+  DUAL_MARKET_TAGLINE,
+  FIRM_CARD_TIMING,
+  MARKETING_COPYRIGHT_ENTITY,
+} from "@/lib/firm-signup-copy";
+import { persistPortalTheme, resolvePortalTheme, THEME_BOOT_SCRIPT } from "@/lib/portal-theme";
 import { RegionCopy } from "@/components/region-copy";
 import { withMarketRpcFallback } from "@/lib/market/compat";
 import {
@@ -186,7 +192,7 @@ export const Route = createFileRoute("/")({
       ],
       scripts: [
         {
-          children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
+          children: THEME_BOOT_SCRIPT,
         },
         { children: visitorMarketBootScript(copyPack) },
         {
@@ -197,8 +203,6 @@ export const Route = createFileRoute("/")({
     };
   },
 });
-
-const LANDING_THEME_KEY = "milon.landing.theme";
 
 /** Invite claim links: `/?invite=<token>&mode=signup`. */
 function pendingInviteTokenFromUrl(): string | null {
@@ -250,11 +254,7 @@ function applyLandingTheme(theme: "light" | "dark") {
       theme === "light" ? "Switch to dark theme" : "Switch to light theme",
     );
   }
-  try {
-    localStorage.setItem(LANDING_THEME_KEY, theme);
-  } catch {
-    /* ignore */
-  }
+  persistPortalTheme(theme);
 }
 
 /* ─────────────────────────────────────────────────────────────── */
@@ -374,7 +374,7 @@ function LandingPage() {
   /* ── mounted gate — form is client-only to prevent browser-extension
      (e.g. LastPass) DOM injections from causing a hydration mismatch crash ── */
   const [mounted, setMounted] = useState(false);
-  const [landingTheme, setLandingTheme] = useState<"light" | "dark">("dark");
+  const [landingTheme, setLandingTheme] = useState<"light" | "dark">("light");
   const setLandingThemeRef = useRef(setLandingTheme);
   setLandingThemeRef.current = setLandingTheme;
   // Declared before the persist effect: that effect's dependency array
@@ -592,13 +592,7 @@ function LandingPage() {
     const prevRootColor = root.style.color;
     const prevBodyBg = body.style.backgroundColor;
     const prevBodyColor = body.style.color;
-    let initial: "light" | "dark" = "dark";
-    try {
-      const saved = localStorage.getItem(LANDING_THEME_KEY);
-      if (saved === "light" || saved === "dark") initial = saved;
-    } catch {
-      /* ignore */
-    }
+    const initial = resolvePortalTheme();
     applyLandingTheme(initial);
     setLandingThemeRef.current(initial);
     return () => {
@@ -2350,7 +2344,6 @@ function LandingPage() {
             <div className="pillar-card">
               <div className="node" />
               <h3>Profitability</h3>
-              <div className="metaphor">The Sun</div>
               <p className="ask">
                 Is the business actually making money, and what is driving its profitability?
               </p>
@@ -2366,7 +2359,6 @@ function LandingPage() {
             <div className="pillar-card">
               <div className="node" />
               <h3>Cash Flow</h3>
-              <div className="metaphor">The Orbit</div>
               <p className="ask">
                 Is cash coming in and going out at a rate the business can sustain?
               </p>
@@ -2390,7 +2382,6 @@ function LandingPage() {
             <div className="pillar-card warn">
               <div className="node" />
               <h3>Asset Productivity</h3>
-              <div className="metaphor">The Mass</div>
               <p className="ask">
                 How effectively is the business using the assets and working capital it already has?
               </p>
@@ -2406,7 +2397,6 @@ function LandingPage() {
             <div className="pillar-card">
               <div className="node" />
               <h3>Financing &amp; Solvency</h3>
-              <div className="metaphor">The Gravity</div>
               <p className="ask">
                 How is the business funded, and how much financial pressure is that creating?
               </p>
@@ -2901,7 +2891,7 @@ function LandingPage() {
             <span>{FIRM_CARD_TIMING}</span>
             <span>Works with QuickBooks Online and Xero.</span>
             <span>
-              © {new Date().getFullYear()} Eish2oh (Pty) Ltd. Trading as MILŌN. All rights reserved.
+              © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
             </span>
             <span>
               <a href="/privacy" style={{ color: "inherit" }}>

@@ -88,7 +88,13 @@ assert(landing.includes('href="/privacy"'), "landing footer links to privacy");
 assert(landing.includes('href="/terms"'), "landing footer links to terms");
 assert(landing.includes('href="/ai"'), "landing footer links to AI notice");
 assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ as Privacy");
-assert(landing.includes("Eish2oh (Pty) Ltd"), "landing copyright uses the registered company");
+assert(
+  readFileSync(resolve("src/lib/firm-signup-copy.ts"), "utf8").includes("Milon Inc [US ADDRESS]"),
+  "copyright entity is the US placeholder, brackets included",
+);
+assert(landing.includes("MARKETING_COPYRIGHT_ENTITY"), "landing copyright uses the shared entity");
+assert(!landing.includes("Trading as MILŌN"), "landing footer no longer names the SA trading line");
+assert(shell.includes("MARKETING_COPYRIGHT_ENTITY"), "shared marketing footer uses the same copyright entity");
 assert(landing.includes("FirmBandPricingTable"), "landing prices render through the band table");
 assert(
   readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("firmUsdListPrice"),

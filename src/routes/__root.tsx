@@ -17,7 +17,7 @@ import { AppChromeReadyContext } from "@/contexts/app-chrome-ready";
 
 import appCss from "../styles.css?url";
 import { notFoundHead, organizationGraphJson } from "@/lib/seo";
-import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
+import { applyPortalTheme, resolvePortalTheme, THEME_BOOT_SCRIPT } from "@/lib/portal-theme";
 
 const PublicChrome = lazy(() =>
   import("@/components/app-chrome").then((mod) => ({ default: mod.PublicChrome })),
@@ -264,7 +264,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p!="/"&&p!="")return;var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
+            __html: THEME_BOOT_SCRIPT,
           }}
         />
         <script

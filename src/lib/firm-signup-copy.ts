@@ -65,6 +65,9 @@ export const BUSINESS_LOCATION_PROMPT = "Where is this business?";
 export const DUAL_MARKET_TAGLINE =
   "for accounting firms and small businesses in the United States.";
 
+/** Footer copyright entity. The brackets are a literal placeholder. */
+export const MARKETING_COPYRIGHT_ENTITY = "Milon Inc [US ADDRESS]";
+
 export const DUAL_MARKET_FOOTER =
   "MILŌN — the AI finance function for accounting firms and the businesses they serve in the United States.";
 
