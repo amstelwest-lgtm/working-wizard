@@ -261,13 +261,16 @@ function Face({ agent }: { agent: AgentKey }) {
       {agent === "advisor" ? (
         <>
           <rect className="shell" x="22" y="18" width="36" height="42" rx="16" />
-          <path className="smile" d="M31 46q9 8 18 0" />
+          <circle className="eye" cx="34" cy="34" r="2.6" />
+          <circle className="eye" cx="46" cy="34" r="2.6" />
+          <path className="smile" d="M30 44q10 10 20 0" />
         </>
-      ) : null}
-      <g className="eyes">
-        <rect className="eye" x="31" y="34" width="6" height="6" rx="1.4" />
-        <rect className="eye" x="43" y="34" width="6" height="6" rx="1.4" />
-      </g>
+      ) : (
+        <g className="eyes">
+          <rect className="eye" x="31" y="34" width="6" height="6" rx="1.4" />
+          <rect className="eye" x="43" y="34" width="6" height="6" rx="1.4" />
+        </g>
+      )}
     </g>
   );
 }

@@ -1071,6 +1071,12 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   fill: color-mix(in srgb, var(--gold) 28%, transparent);
 }
 
+.owner-presence.is-advisor .smile {
+  stroke: var(--gold);
+  stroke-width: 2.6;
+  fill: none;
+}
+
 .owner-orbit {
   position: absolute;
   inset: 0;
@@ -1417,9 +1423,31 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   }
 }
 
+@media (max-width: 767px) {
+  body:has(.owner-door) button[aria-label="Share Milōn"] {
+    display: none !important;
+  }
+}
+
 @media (max-width: 760px) {
   .owner-door:not([data-screen="chat"]) {
     padding-inline: var(--owner-space-2);
+    padding-bottom: calc(var(--owner-space-6) + var(--owner-space-6));
+  }
+
+  .owner-door .owner-tools > .milon-theme-toggle {
+    display: none;
+  }
+
+  .owner-door .owner-brand {
+    flex: 1;
+  }
+
+  .owner-door .owner-biz {
+    flex: 1;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: nowrap;
   }
 
   .owner-door .owner-pane[data-owner-home="true"] {

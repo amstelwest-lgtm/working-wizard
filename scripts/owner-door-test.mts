@@ -429,6 +429,13 @@ assert(css.includes(".owner-door .btn.gold:hover::after"), "owner gold keeps the
 const avatar = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8");
 assert(!avatar.includes('d="M32 28l8 6 8-6"'), "the advisor brow is not a frown");
 assert(avatar.includes('className="smile"'), "the advisor face has a smile");
+assert(avatar.includes('d="M30 44q10 10 20 0"'), "the advisor smile is a wide curve");
+assert(
+  avatar.indexOf('className="visor"') < avatar.indexOf('agent === "advisor"'),
+  "the visor stays on the financial manager",
+);
+assert(css.includes(".owner-presence.is-advisor .smile"), "the advisor smile is drawn in gold");
+assert(css.includes('button[aria-label="Share Milōn"]'), "the owner door hides the phone share button");
 const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");
 assert((pages.match(/What your accountant signed/g) ?? []).length >= 1, "the accountant tab names the sign-off");
