@@ -20,8 +20,11 @@ import {
   parseSageBankAccounts,
   parseSageCustomerAgeing,
   parseSageFinancialYearStartMonth,
+  parseSagePartyBalances,
   parseSageProfitAndLoss,
   parseSageSupplierAgeing,
+  sageAgeingBody,
+  sageMappingIssue,
   SAGE_SA_API_BASE,
   SAGE_SA_TIME_ZONE,
   sageBasicAuthHeader,
@@ -210,7 +213,9 @@ assert(aged.source === "sage", "aged receivables are tagged sage");
 assert(aged.status === "applied", "a named customer is applied");
 assert(aged.contacts[0]?.name === "Northwind", "customer name");
 assert(aged.contacts[0]?.outstanding === 800, "customer total");
-assert(aged.totalOverdue === 500, "current bucket is not overdue");
+assert(aged.totalOverdue === 0, "a previous calendar month is not days overdue");
+assert(aged.contacts[0]?.buckets[1]?.label === "1 month", "Days30 is one month back");
+assert(aged.contacts[0]?.buckets[1]?.amount === 500, "previous month keeps its amount");
 
 const suppliers = parseSageSupplierAgeing(
   { Results: [{ Total: 150, Current: 150, Days30: 0, Supplier: { ID: 4, Name: "Acme Timber" } }] },
@@ -492,6 +497,12 @@ for (const file of [src, server, route, read("docs/SAGE.md")]) {
   assert(!file.includes("/api/sage/callback"), "no OAuth callback");
 }
 assert(server.includes("sageSyncWriteDecision"), "Sage sync refuses an empty report");
+assert(
+  server.includes("if (ledger.mappingIssue)") &&
+    server.indexOf("if (ledger.mappingIssue)") <
+      server.indexOf("const decision = sageSyncWriteDecision"),
+  "a contradictory statement is refused before figures are written",
+);
 assert(
   server.includes('neutral ? "idle" : "error"'),
   "an empty company stays connected, not in error",
@@ -971,7 +982,7 @@ const sandboxCustomers = parseSageCustomerAgeing(customerSummary, "2026-10-11");
 assert(sandboxCustomers.status === "applied", "a summary total is applied");
 assert(sandboxCustomers.contactCount === 0, "summary ageing has no customer names");
 assert(sandboxCustomers.totalOutstanding === 5000, "customer ageing total");
-assert(sandboxCustomers.totalOverdue === 3000, "summary overdue is the aged buckets");
+assert(sandboxCustomers.totalOverdue === 0, "summary month buckets are not overdue");
 assert(
   !agedArProofLine(sandboxCustomers).includes("nothing outstanding"),
   "a non-zero customer summary is not empty",
@@ -1126,6 +1137,304 @@ await fetchSageLedgerStatement(
 assert(
   !clientYearCalls.some((path) => path.includes("FinancialYear")),
   "a client financial year is not asked of Sage again",
+);
+
+const ageingBody = sageAgeingBody("2026-10-11");
+assert(ageingBody.AgeingPeriod === 0, "ageing sends AgeingPeriod");
+assert(
+  ageingBody.BasedOnDueDate === false,
+  "BasedOnDueDate true is not a documented day-ageing switch",
+);
+
+function loadSageFixture(name: string): unknown {
+  return JSON.parse(read(`scripts/fixtures/sage-seeded/${name}`));
+}
+
+function near(actual: number, expected: number, msg: string) {
+  assert(Math.abs(actual - expected) < 0.02, `${msg} (${actual} vs ${expected})`);
+}
+
+const seededMtd = parseSageProfitAndLoss(loadSageFixture("mtd-profit-and-loss.json"), 1);
+near(seededMtd.revenue, 30000, "October revenue");
+near(seededMtd.cogs, 2400, "October cost of sales");
+near(seededMtd.operatingExpenses, 31833.33, "October expenses");
+near(seededMtd.ebt, -4233.33, "October profit before tax");
+near(seededMtd.netIncome, -14700.33, "October profit after tax");
+assert(seededMtd.periodMonths === 1, "an 11-day month is still periodMonths 1");
+assert(
+  sageMappingIssue(seededMtd, parseSageBalanceSheet(loadSageFixture("balance-sheet.json"))) ===
+    null,
+);
+
+const seededYtd = parseSageProfitAndLoss(loadSageFixture("ytd-profit-and-loss.json"), 8);
+near(seededYtd.revenue, 275000, "year-to-date revenue");
+near(seededYtd.cogs, 2400, "year-to-date cost of sales");
+near(seededYtd.operatingExpenses, 233833.33, "year-to-date expenses");
+near(seededYtd.ebt, 38766.67, "year-to-date profit before tax");
+near(seededYtd.netIncome, 28299.67, "year-to-date profit after tax");
+assert(seededYtd.periodMonths === 8, "March to October is 8 months");
+
+const seededBs = parseSageBalanceSheet(loadSageFixture("balance-sheet.json"));
+near(seededBs.totalAssets, 493216.67, "total assets");
+near(seededBs.totalLiabilities, 50517, "liabilities");
+near(seededBs.equity, 442699.67, "owners equity");
+near(seededBs.receivables, 71300, "debtors");
+near(seededBs.payables, 20700, "creditors");
+near(seededBs.cash, 227750, "type-6 bank line is cash");
+near(seededBs.inventory, 12000, "inventory");
+assert(seededBs.equity !== seededBs.totalAssets, "equity is not total equity and liabilities");
+assert(
+  sageMappingIssue(seededYtd, seededBs) === null,
+  "the seeded company passes the mapping guard",
+);
+
+const zeroPnl = parseSageProfitAndLoss(
+  [
+    { Description: "Total for Sales", ReportingLevelType: 10, Total: [0], Children: [] },
+    { Description: "Gross Profit", ReportingLevelType: 10, Total: [0], Children: [] },
+  ],
+  1,
+);
+const zeroBs = parseSageBalanceSheet([
+  { Description: "Total Assets", ReportingLevelType: 10, Total: 0, Children: [] },
+  { Description: "Total Owners Equity", ReportingLevelType: 10, Total: 0, Children: [] },
+]);
+assert(sageMappingIssue(zeroPnl, zeroBs) === null, "an all-zero company is not a mapping error");
+assert(
+  sageMappingIssue(
+    { ...seededYtd, revenue: 0, otherIncome: 0, cogs: 0, grossProfit: 0 },
+    seededBs,
+  )?.includes("sales total"),
+  "a non-zero sales line with zero revenue is refused",
+);
+assert(
+  sageMappingIssue({ ...seededYtd, grossProfit: 1 }, seededBs)?.includes("gross profit"),
+  "gross profit must equal revenue minus cost of sales",
+);
+assert(
+  sageMappingIssue(seededYtd, { ...seededBs, equity: seededBs.totalAssets })?.includes("equity"),
+  "equity equal to assets while liabilities are outstanding is refused",
+);
+
+const summaryCustomers = loadSageFixture("customer-ageing-summary.json");
+const detailCustomers = loadSageFixture("customer-ageing-detail.json");
+assert(
+  JSON.stringify(summaryCustomers) === JSON.stringify(detailCustomers),
+  "Summary true and Summary false are the same totals object",
+);
+const seededParties = parseSagePartyBalances(loadSageFixture("customers.json"));
+assert(
+  seededParties.map((party) => party.name).join("|") ===
+    "Fynbos Design Studio|Table Mountain Dental Group",
+  "zero-balance customers are omitted",
+);
+near(
+  seededParties.find((party) => party.name === "Fynbos Design Studio")?.balance ?? 0,
+  36800,
+  "Fynbos balance",
+);
+near(
+  seededParties.find((party) => party.name === "Table Mountain Dental Group")?.balance ?? 0,
+  34500,
+  "Table Mountain Dental balance",
+);
+const seededAged = parseSageCustomerAgeing(
+  summaryCustomers,
+  "2026-10-11",
+  "2026-10-11T00:00:00.000Z",
+  seededParties,
+);
+assert(seededAged.contactCount === 2, "debtors are named from Customer/Get");
+near(seededAged.totalOutstanding, 71300, "debtor total comes from the ageing totals row");
+assert(seededAged.totalOverdue === 0, "month buckets are not overdue");
+assert(
+  seededAged.contacts.every((contact) => contact.buckets.length === 0),
+  "party rows are not given invented month buckets",
+);
+assert(seededAged.note?.includes("Current month"), "the totals row keeps the month buckets");
+assert(seededAged.note?.includes("2 months"), "Days60 is two months");
+
+const seededSuppliers = parseSagePartyBalances(loadSageFixture("suppliers.json"));
+assert(
+  seededSuppliers.length === 1 && seededSuppliers[0]?.name === "Bright IT Solutions (Pty) Ltd",
+  "zero-balance suppliers are omitted",
+);
+near(seededSuppliers[0]?.balance ?? 0, 20700, "Bright IT balance");
+const seededAp = parseSageSupplierAgeing(
+  loadSageFixture("supplier-ageing-summary.json"),
+  "2026-10-11",
+  "2026-10-11T00:00:00.000Z",
+  seededSuppliers,
+);
+assert(
+  JSON.stringify(loadSageFixture("supplier-ageing-summary.json")) ===
+    JSON.stringify(loadSageFixture("supplier-ageing-detail.json")),
+  "supplier Summary true and false are the same totals object",
+);
+near(seededAp.totalOutstanding, 20700, "creditor total");
+assert(seededAp.totalOverdue === 0, "a 13-day-old bill in Days30 is not overdue");
+assert(seededAp.note?.includes("1 month"), "Days30 is labelled as one month");
+
+const seededWhen = new Date("2026-10-11T08:00:00.000Z");
+const seededCalls: string[] = [];
+const seededLedger = await fetchSageLedgerStatement(
+  {
+    username: "owner@example.com",
+    password: "secret",
+    apiKey: "test-key-not-a-secret",
+    companyId: "18721",
+  },
+  seededWhen,
+  null,
+  async (input, init) => {
+    const href = String(input);
+    const path = new URL(href).pathname;
+    seededCalls.push(`${init?.method ?? "GET"} ${path}`);
+    if (path.endsWith("/FinancialYear/GetCurrent")) {
+      return new Response(JSON.stringify(loadSageFixture("financial-year.json")));
+    }
+    if (path.endsWith("/ProfitAndLoss/Get")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { FromDate?: string };
+      const file =
+        body.FromDate === "2026-03-01" ? "ytd-profit-and-loss.json" : "mtd-profit-and-loss.json";
+      return new Response(JSON.stringify(loadSageFixture(file)));
+    }
+    if (path.endsWith("/BalanceSheet/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("balance-sheet.json")));
+    }
+    if (path.endsWith("/BankAccount/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("bank-accounts.json")));
+    }
+    if (path.endsWith("/Customer/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("customers.json")));
+    }
+    if (path.endsWith("/Supplier/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("suppliers.json")));
+    }
+    if (path.endsWith("/CustomerAgeing/GetSummary")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        BasedOnDueDate?: boolean;
+        AgeingPeriod?: number;
+      };
+      assert(
+        body.BasedOnDueDate === false,
+        "the ageing request does not pretend to age by due date",
+      );
+      assert(body.AgeingPeriod === 0, "the ageing request sends AgeingPeriod 0");
+      return new Response(JSON.stringify(loadSageFixture("customer-ageing-summary.json")));
+    }
+    if (path.endsWith("/SupplierAgeing/GetSummary")) {
+      return new Response(JSON.stringify(loadSageFixture("supplier-ageing-summary.json")));
+    }
+    return new Response("missing", { status: 404 });
+  },
+);
+assert(seededLedger.mappingIssue === null, "seeded figures are consistent");
+assert(seededLedger.from === "2026-10-01", "October opens on the 1st");
+assert(seededLedger.to === "2026-10-11", "October ends on the seeded day");
+assert(seededLedger.pnl.periodMonths === 1, "partial October is one waterfall month");
+near(seededLedger.pnl.revenue, 30000, "fetched October revenue");
+near(seededLedger.pnl.netIncome, -14700.33, "fetched October profit after tax");
+assert(seededLedger.year?.from === "2026-03-01", "year to date starts at YearStart");
+assert(seededLedger.year?.basis === "financial", "YearStart is a financial year");
+assert(seededLedger.year?.pnl.periodMonths === 8, "March to October is eight months");
+near(seededLedger.year?.pnl.revenue ?? 0, 275000, "fetched year-to-date revenue");
+near(seededLedger.year?.pnl.netIncome ?? 0, 28299.67, "fetched year-to-date profit after tax");
+near(seededLedger.bs.equity, 442699.67, "fetched owners equity");
+near(seededLedger.bs.totalLiabilities, 50517, "fetched liabilities");
+assert(
+  seededLedger.cashSource === "bank_accounts",
+  "bank accounts supply cash when the call works",
+);
+near(seededLedger.cash, 227750, "FNB Business Cheque");
+assert(
+  seededLedger.agedAr.contacts.map((contact) => contact.name).join("|") ===
+    "Fynbos Design Studio|Table Mountain Dental Group",
+  "fetched debtor names",
+);
+near(seededLedger.agedAr.totalOutstanding, 71300, "fetched debtors");
+assert(seededLedger.agedAr.totalOverdue === 0, "fetched debtors are not marked overdue");
+assert(
+  seededLedger.agedAp.suppliers[0]?.name === "Bright IT Solutions (Pty) Ltd",
+  "fetched creditor",
+);
+near(seededLedger.agedAp.totalOutstanding, 20700, "fetched creditors");
+const seededMapped = mapSageToFinancialInputs(
+  seededLedger.pnl,
+  seededLedger.bs,
+  { from: seededLedger.from, to: seededLedger.to, label: seededLedger.periodLabel },
+  seededLedger.year,
+  seededLedger.cash,
+);
+assert(seededMapped.periodMonths === "1", "stored month count matches Xero and QuickBooks");
+assert(seededMapped.ytdPeriodMonths === "8", "stored year count is March to October");
+assert(
+  seededMapped.periodStart === "2026-10-01" && seededMapped.periodEnd === "2026-10-11",
+  "the dates keep the 11-day span",
+);
+assert(
+  read("src/lib/sage-sync.ts").includes("parseSageProfitAndLoss(monthJson, 1)"),
+  "the month parser is called with one month",
+);
+assert(
+  read("docs/SAGE.md").includes("periodMonths") && read("docs/SAGE.md").includes("QuickBooks"),
+  "the partial-month rule is documented next to Xero and QuickBooks",
+);
+
+const bankErrors: string[] = [];
+const logged = console.error;
+console.error = (...args: unknown[]) => {
+  bankErrors.push(args.map((arg) => String(arg)).join(" "));
+};
+const bankFallback = await fetchSageLedgerStatement(
+  {
+    username: "owner@example.com",
+    password: "secret",
+    apiKey: "test-key-not-a-secret",
+    companyId: "18721",
+  },
+  seededWhen,
+  3,
+  async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    if (path.endsWith("/ProfitAndLoss/Get")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { FromDate?: string };
+      const file =
+        body.FromDate === "2026-03-01" ? "ytd-profit-and-loss.json" : "mtd-profit-and-loss.json";
+      return new Response(JSON.stringify(loadSageFixture(file)));
+    }
+    if (path.endsWith("/BalanceSheet/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("balance-sheet.json")));
+    }
+    if (path.endsWith("/BankAccount/Get")) throw new Error("bank down");
+    if (path.endsWith("/Customer/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("customers.json")));
+    }
+    if (path.endsWith("/Supplier/Get")) {
+      return new Response(JSON.stringify(loadSageFixture("suppliers.json")));
+    }
+    if (path.endsWith("/CustomerAgeing/GetSummary")) {
+      return new Response(JSON.stringify(loadSageFixture("customer-ageing-summary.json")));
+    }
+    if (path.endsWith("/SupplierAgeing/GetSummary")) {
+      return new Response(JSON.stringify(loadSageFixture("supplier-ageing-summary.json")));
+    }
+    return new Response("missing", { status: 404 });
+  },
+);
+console.error = logged;
+assert(
+  bankFallback.cashSource === "balance_sheet",
+  "a bank failure falls back to the balance sheet",
+);
+near(bankFallback.cash, 227750, "fallback cash is the type-6 line");
+assert(
+  bankErrors.some((line) => line.includes("BankAccount/Get failed")),
+  "a bank failure is logged",
+);
+assert(
+  !bankErrors.some((line) => line.includes("secret")),
+  "the bank log does not include the password",
 );
 
 console.log("sage-sync-test: ok");

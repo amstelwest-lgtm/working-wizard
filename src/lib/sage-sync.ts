@@ -49,6 +49,13 @@ export type SageAuth = {
 
 export type SagePnL = {
   revenue: number;
+  /**
+   * Other income sits below gross profit on a Sage profit and loss, so the
+   * identity gross profit = revenue − cost of sales uses revenue excluding it.
+   */
+  otherIncome: number;
+  /** Amount on a "Total for Sales" line. Null when that line is absent. */
+  salesTotal: number | null;
   cogs: number;
   grossProfit: number;
   operatingExpenses: number;
@@ -99,6 +106,12 @@ export type SageLedgerStatement = {
   bankAccounts: SageBankAccount[];
   agedAr: CollectionsSnapshot;
   agedAp: PayablesSnapshot;
+  /**
+   * Set when mapped figures contradict the report (gross profit, a non-zero
+   * sales total read as zero revenue, or equity equal to assets while
+   * liabilities are outstanding). Sync must not write.
+   */
+  mappingIssue: string | null;
 };
 
 type SageNode = {
@@ -153,10 +166,23 @@ export function sageBalanceSheetBody(date: string): Record<string, unknown> {
   return { RunAtDate: date, DisplayReportingGroupDetail: false };
 }
 
+/**
+ * CustomerAgeing/GetSummary and SupplierAgeing/GetSummary.
+ *
+ * The help page lists AgeingPeriod (integer) and BasedOnDueDate (bool) and
+ * does not say what either does. Sage's own seeded request sends
+ * AgeingPeriod 0 and BasedOnDueDate false. That response is still calendar
+ * months by invoice date: a supplier bill dated 28 Sep sits in Days30 on
+ * 11 Oct, and the company has AgeMonthly. Sending BasedOnDueDate true is
+ * not a documented way to get day buckets, so the buckets are labelled as
+ * months and a non-current month is not treated as overdue.
+ */
 export function sageAgeingBody(date: string): Record<string, unknown> {
   return {
     ToDate: date,
     Summary: true,
+    AgeingPeriod: 0,
+    BasedOnDueDate: false,
     IncludeActive: true,
     IncludeInactive: false,
     ExcludeZeroBalance: true,
@@ -417,6 +443,8 @@ export function parseSageProfitAndLoss(json: unknown, periodMonths = 1): SagePnL
 
   return {
     revenue,
+    otherIncome: otherIncome ?? 0,
+    salesTotal: pickAmount(flat, ["total for sales"]),
     cogs,
     grossProfit,
     operatingExpenses,
@@ -477,7 +505,20 @@ export function parseSageBalanceSheet(json: unknown): SageBalanceSheet {
       "creditors",
     ]),
   );
-  const cash = pickAmount(flat, ["cash and cash equivalents", "cash at bank", "bank", "cash"]) ?? 0;
+  // Bank accounts are ReportingLevelType 6 and are named after the account
+  // ("FNB Business Cheque"), so a "bank" / "cash" phrase misses them.
+  // Overdrafts stay negative. A grouped "Bank" total is the fallback when
+  // the report has no type-6 lines.
+  const bankLines = flat.filter(
+    ({ node }) => node.ReportingLevelType === BANK && sageLevelAmount(node) != null,
+  );
+  const bankLineCash = bankLines.length
+    ? round2(bankLines.reduce((sum, { node }) => sum + (sageLevelAmount(node) ?? 0), 0))
+    : null;
+  const cash =
+    bankLineCash ??
+    pickAmount(flat, ["cash and cash equivalents", "cash at bank", "bank", "cash"]) ??
+    0;
   return {
     totalAssets,
     totalLiabilities,
@@ -526,6 +567,30 @@ export function parseSageBankAccounts(json: unknown): {
   return { accounts, complete: returned < 100 || accounts.length < 100 };
 }
 
+/** Customer/Get and Supplier/Get. Zero balances are omitted. */
+export function parseSagePartyBalances(json: unknown): SagePartyBalance[] {
+  const root =
+    json && typeof json === "object" && !Array.isArray(json)
+      ? (json as { Results?: unknown })
+      : null;
+  const rows = Array.isArray(json) ? json : Array.isArray(root?.Results) ? root.Results : [];
+  const parties: SagePartyBalance[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as { ID?: unknown; Name?: unknown; Balance?: unknown };
+    const balance = typeof record.Balance === "number" ? record.Balance : Number(record.Balance);
+    if (!Number.isFinite(balance) || Math.abs(balance) < 0.005) continue;
+    const name = String(record.Name ?? "").trim();
+    if (!name) continue;
+    parties.push({
+      id: record.ID == null ? name : String(record.ID),
+      name,
+      balance: round2(balance),
+    });
+  }
+  return parties;
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -565,20 +630,51 @@ function party(
   return { id: flat, name: flat };
 }
 
-function ageingBuckets(
-  row: Record<string, unknown>,
-): { label: string; amount: number; current: boolean }[] {
+export type SagePartyBalance = {
+  id: string;
+  name: string;
+  balance: number;
+};
+
+/**
+ * GetSummary columns are calendar months by invoice date, not days past due.
+ * Current is this month. Days30 is one month back. A bill dated 13 days ago
+ * can land in Days30, so these amounts are not overdue.
+ */
+function ageingBuckets(row: Record<string, unknown>): { label: string; amount: number }[] {
   return [
-    { label: "Current", amount: round2(ageingAmount(row, "Current")), current: true },
-    { label: "30 days", amount: round2(ageingAmount(row, "Days30")), current: false },
-    { label: "60 days", amount: round2(ageingAmount(row, "Days60")), current: false },
-    { label: "90 days", amount: round2(ageingAmount(row, "Days90")), current: false },
+    { label: "Current month", amount: round2(ageingAmount(row, "Current")) },
+    { label: "1 month", amount: round2(ageingAmount(row, "Days30")) },
+    { label: "2 months", amount: round2(ageingAmount(row, "Days60")) },
+    { label: "3 months", amount: round2(ageingAmount(row, "Days90")) },
     {
-      label: "120+ days",
+      label: "4+ months",
       amount: round2(ageingAmount(row, "Days120Plus") || ageingAmount(row, "Days120")),
-      current: false,
     },
   ];
+}
+
+function monthAgeBucket(buckets: { label: string; amount: number }[]): string {
+  for (let i = buckets.length - 1; i >= 0; i--) {
+    const bucket = buckets[i];
+    if (bucket.label === "Current month") continue;
+    if (Math.abs(bucket.amount) >= 0.005) return bucket.label;
+  }
+  return "Current month";
+}
+
+function monthBucketNote(row: Record<string, unknown> | null): string {
+  const parts = (row ? ageingBuckets(row) : [])
+    .filter((bucket) => Math.abs(bucket.amount) >= 0.005)
+    .map(
+      (bucket) =>
+        `${bucket.label} ${bucket.amount.toLocaleString("en-GB", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`,
+    );
+  const listed = parts.length ? ` (${parts.join("; ")})` : "";
+  return `Sage ages by calendar month${listed}, not days past due.`;
 }
 
 function outstandingOf(row: Record<string, unknown>, buckets: { amount: number }[]): number {
@@ -588,32 +684,57 @@ function outstandingOf(row: Record<string, unknown>, buckets: { amount: number }
 }
 
 /**
- * Summary:true returns one totals object and no customer or supplier.
- * A non-zero total on that row is the company total. Named rows (Summary:false)
- * stay on the per-party path so a totals row is not added twice.
+ * Summary true and Summary false both return one totals object and no party.
+ * A non-zero total on that row is the company total. A row that names a
+ * customer or supplier stays on the per-party path so the totals row is not
+ * added twice.
  */
 function unnamedAgeingTotal(
   rows: Record<string, unknown>[],
   key: "Customer" | "Supplier",
-): { outstanding: number; overdue: number } | null {
+): { row: Record<string, unknown>; outstanding: number } | null {
   if (rows.some((row) => party(row, key))) return null;
   for (const row of rows) {
-    const buckets = ageingBuckets(row);
-    const outstanding = outstandingOf(row, buckets);
+    const outstanding = outstandingOf(row, ageingBuckets(row));
     if (outstanding === 0) continue;
-    const current = buckets
-      .filter((bucket) => bucket.current)
-      .reduce((sum, bucket) => sum + bucket.amount, 0);
-    const overdue = round2(outstanding - current);
-    return { outstanding, overdue: overdue > 0 ? overdue : 0 };
+    return { row, outstanding };
   }
   return null;
+}
+
+function contactsFromBalances(parties: SagePartyBalance[]): CollectionsContact[] {
+  return parties
+    .filter((partyBalance) => partyBalance.name.trim() && Math.abs(partyBalance.balance) >= 0.005)
+    .map((partyBalance) => ({
+      contactId: partyBalance.id,
+      name: partyBalance.name,
+      outstanding: partyBalance.balance,
+      overdue: 0,
+      ageBucket: "Balance",
+      buckets: [],
+      invoices: [],
+    }));
+}
+
+function suppliersFromBalances(parties: SagePartyBalance[]): PayablesSupplier[] {
+  return parties
+    .filter((partyBalance) => partyBalance.name.trim() && Math.abs(partyBalance.balance) >= 0.005)
+    .map((partyBalance) => ({
+      supplierId: partyBalance.id,
+      name: partyBalance.name,
+      outstanding: partyBalance.balance,
+      overdue: 0,
+      ageBucket: "Balance",
+      buckets: [],
+      bills: [],
+    }));
 }
 
 export function parseSageCustomerAgeing(
   json: unknown,
   asOf: string,
   syncedAt = new Date().toISOString(),
+  parties: SagePartyBalance[] = [],
 ): CollectionsSnapshot {
   const rows = ageingRows(json);
   const contacts: CollectionsContact[] = [];
@@ -621,32 +742,38 @@ export function parseSageCustomerAgeing(
     const who = party(row, "Customer");
     if (!who) continue;
     const buckets = ageingBuckets(row);
-    const outstanding = outstandingOf(row, buckets);
-    const current = buckets
-      .filter((bucket) => bucket.current)
-      .reduce((sum, bucket) => sum + bucket.amount, 0);
-    const overdue = round2(outstanding - current);
     contacts.push({
       contactId: who.id,
       name: who.name,
-      outstanding,
-      overdue: overdue > 0 ? overdue : 0,
-      ageBucket:
-        buckets.filter((bucket) => !bucket.current && Math.abs(bucket.amount) >= 0.005).at(-1)
-          ?.label ?? "Current",
-      buckets: buckets.map((bucket) => ({ label: bucket.label, amount: bucket.amount })),
+      outstanding: outstandingOf(row, buckets),
+      overdue: 0,
+      ageBucket: monthAgeBucket(buckets),
+      buckets,
       invoices: [],
     });
   }
-  const snap = finalizeCollections({ source: "sage", asOf, syncedAt, contacts });
+  const named = contacts.length > 0;
+  const listed = named ? contacts : contactsFromBalances(parties);
   const summary = unnamedAgeingTotal(rows, "Customer");
+  const snap = finalizeCollections({
+    source: "sage",
+    asOf,
+    syncedAt,
+    contacts: listed,
+    note: named
+      ? monthBucketNote(null)
+      : listed.length
+        ? `Customer balances are from Customer/Get. ${monthBucketNote(summary?.row ?? null)}`
+        : summary
+          ? monthBucketNote(summary.row)
+          : null,
+  });
   if (!summary) return snap;
   return {
     ...snap,
     status: "applied",
     totalOutstanding: summary.outstanding,
-    totalOverdue: summary.overdue,
-    note: "Sage ageing summary has no customer names.",
+    totalOverdue: 0,
   };
 }
 
@@ -654,6 +781,7 @@ export function parseSageSupplierAgeing(
   json: unknown,
   asOf: string,
   syncedAt = new Date().toISOString(),
+  parties: SagePartyBalance[] = [],
 ): PayablesSnapshot {
   const rows = ageingRows(json);
   const suppliers: PayablesSupplier[] = [];
@@ -661,32 +789,38 @@ export function parseSageSupplierAgeing(
     const who = party(row, "Supplier");
     if (!who) continue;
     const buckets = ageingBuckets(row);
-    const outstanding = outstandingOf(row, buckets);
-    const current = buckets
-      .filter((bucket) => bucket.current)
-      .reduce((sum, bucket) => sum + bucket.amount, 0);
-    const overdue = round2(outstanding - current);
     suppliers.push({
       supplierId: who.id,
       name: who.name,
-      outstanding,
-      overdue: overdue > 0 ? overdue : 0,
-      ageBucket:
-        buckets.filter((bucket) => !bucket.current && Math.abs(bucket.amount) >= 0.005).at(-1)
-          ?.label ?? "Current",
-      buckets: buckets.map((bucket) => ({ label: bucket.label, amount: bucket.amount })),
+      outstanding: outstandingOf(row, buckets),
+      overdue: 0,
+      ageBucket: monthAgeBucket(buckets),
+      buckets,
       bills: [],
     });
   }
-  const snap = finalizePayables({ source: "sage", asOf, syncedAt, suppliers });
+  const named = suppliers.length > 0;
+  const listed = named ? suppliers : suppliersFromBalances(parties);
   const summary = unnamedAgeingTotal(rows, "Supplier");
+  const snap = finalizePayables({
+    source: "sage",
+    asOf,
+    syncedAt,
+    suppliers: listed,
+    note: named
+      ? monthBucketNote(null)
+      : listed.length
+        ? `Supplier balances are from Supplier/Get. ${monthBucketNote(summary?.row ?? null)}`
+        : summary
+          ? monthBucketNote(summary.row)
+          : null,
+  });
   if (!summary) return snap;
   return {
     ...snap,
     status: "applied",
     totalOutstanding: summary.outstanding,
-    totalOverdue: summary.overdue,
-    note: "Sage ageing summary has no supplier names.",
+    totalOverdue: 0,
   };
 }
 
@@ -825,6 +959,74 @@ async function fetchBankAccounts(
   return accounts;
 }
 
+async function fetchPartyBalances(
+  auth: SageAuth,
+  path: "Customer/Get" | "Supplier/Get",
+  fetchImpl: typeof fetch,
+): Promise<SagePartyBalance[]> {
+  const parties: SagePartyBalance[] = [];
+  let skip = 0;
+  for (let page = 0; page < 10; page++) {
+    const json = await sageCall(
+      auth,
+      path,
+      { method: "GET", query: { $top: "100", $skip: String(skip), $orderby: "ID" } },
+      fetchImpl,
+    );
+    parties.push(...parseSagePartyBalances(json));
+    const root =
+      json && typeof json === "object" && !Array.isArray(json)
+        ? (json as { ReturnedResults?: unknown; Results?: unknown })
+        : null;
+    const returned =
+      typeof root?.ReturnedResults === "number"
+        ? root.ReturnedResults
+        : Array.isArray(root?.Results)
+          ? root.Results.length
+          : 0;
+    if (returned < 100) break;
+    skip += 100;
+  }
+  return parties;
+}
+
+const MAPPING_TOLERANCE = 1;
+
+/**
+ * Refuse a write when the mapped statement contradicts itself.
+ * Other income is excluded from the gross-profit identity because Sage
+ * prints it below gross profit. Tolerance is one currency unit so cent
+ * rounding passes and a mismatched section does not.
+ */
+export function sageMappingIssue(pnl: SagePnL, bs: SageBalanceSheet): string | null {
+  const tradingRevenue = pnl.revenue - pnl.otherIncome;
+  if (Math.abs(pnl.grossProfit - (tradingRevenue - pnl.cogs)) > MAPPING_TOLERANCE) {
+    return "Sage gross profit does not equal revenue minus cost of sales. Overview figures were left unchanged.";
+  }
+  if (
+    pnl.salesTotal != null &&
+    Math.abs(pnl.salesTotal) > MAPPING_TOLERANCE &&
+    Math.abs(pnl.revenue) <= MAPPING_TOLERANCE
+  ) {
+    return "Sage reported a sales total but revenue mapped to zero. Overview figures were left unchanged.";
+  }
+  if (
+    bs.totalLiabilities > MAPPING_TOLERANCE &&
+    Math.abs(bs.equity - bs.totalAssets) <= MAPPING_TOLERANCE
+  ) {
+    return "Sage equity matches total assets while liabilities are outstanding. Overview figures were left unchanged.";
+  }
+  return null;
+}
+
+export function sageLedgerMappingIssue(
+  month: SagePnL,
+  year: SagePnL | null,
+  bs: SageBalanceSheet,
+): string | null {
+  return sageMappingIssue(month, bs) ?? (year ? sageMappingIssue(year, bs) : null);
+}
+
 function monthFromYearStart(value: unknown): number | null {
   if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 12)
     return value;
@@ -896,6 +1098,10 @@ export async function fetchSageLedgerStatement(
     { method: "POST", body: sageBalanceSheetBody(ranges.month.to) },
     fetchImpl,
   );
+  // An open month stays periodMonths 1, matching Xero (fetchXeroLedgerStatement)
+  // and QuickBooks (fetchQboLedgerStatement). periodStart/periodEnd carry the
+  // partial span (1 Oct–11 Oct is still one month). Year-to-date uses
+  // periodMonthsBetween, so March–October is 8.
   const pnl = parseSageProfitAndLoss(monthJson, 1);
   const yearPnl =
     yearJson && ranges.year ? parseSageProfitAndLoss(yearJson, ranges.year.periodMonths) : null;
@@ -904,12 +1110,38 @@ export async function fetchSageLedgerStatement(
   let bankAccounts: SageBankAccount[] = [];
   try {
     bankAccounts = await fetchBankAccounts(auth, fetchImpl);
-  } catch {
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "BankAccount/Get failed";
+    console.error(
+      "[sage sync] BankAccount/Get failed; cash falls back to the balance sheet.",
+      detail.replace(/\s+/g, " ").slice(0, 180),
+    );
     bankAccounts = [];
   }
   const bankCash = sumSageBankBalances(bankAccounts);
   const cash = bankCash ?? bs.cash;
   const syncedAt = now.toISOString();
+
+  let customers: SagePartyBalance[] = [];
+  try {
+    customers = await fetchPartyBalances(auth, "Customer/Get", fetchImpl);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Customer/Get failed";
+    console.error(
+      "[sage sync] Customer/Get failed; customer ageing keeps the totals row only.",
+      detail.replace(/\s+/g, " ").slice(0, 180),
+    );
+  }
+  let suppliers: SagePartyBalance[] = [];
+  try {
+    suppliers = await fetchPartyBalances(auth, "Supplier/Get", fetchImpl);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Supplier/Get failed";
+    console.error(
+      "[sage sync] Supplier/Get failed; supplier ageing keeps the totals row only.",
+      detail.replace(/\s+/g, " ").slice(0, 180),
+    );
+  }
 
   let agedAr: CollectionsSnapshot;
   try {
@@ -919,7 +1151,7 @@ export async function fetchSageLedgerStatement(
       { method: "POST", body: sageAgeingBody(ranges.month.to) },
       fetchImpl,
     );
-    agedAr = parseSageCustomerAgeing(json, ranges.month.to, syncedAt);
+    agedAr = parseSageCustomerAgeing(json, ranges.month.to, syncedAt, customers);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Aged receivables failed";
     agedAr = skippedCollections({
@@ -938,7 +1170,7 @@ export async function fetchSageLedgerStatement(
       { method: "POST", body: sageAgeingBody(ranges.month.to) },
       fetchImpl,
     );
-    agedAp = parseSageSupplierAgeing(json, ranges.month.to, syncedAt);
+    agedAp = parseSageSupplierAgeing(json, ranges.month.to, syncedAt, suppliers);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Aged payables failed";
     agedAp = skippedPayables({
@@ -974,5 +1206,6 @@ export async function fetchSageLedgerStatement(
     bankAccounts,
     agedAr,
     agedAp,
+    mappingIssue: sageLedgerMappingIssue(pnl, yearPnl, bs),
   };
 }

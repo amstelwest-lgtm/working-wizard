@@ -250,6 +250,38 @@ export async function executeSageSync(input: {
       row.financials && typeof row.financials === "object" && !Array.isArray(row.financials)
         ? (row.financials as Record<string, unknown>)
         : {};
+    if (ledger.mappingIssue) {
+      await markSync(input.clientId, {
+        sync_status: "error",
+        sync_error: ledger.mappingIssue.slice(0, 500),
+      });
+      return {
+        populated: false,
+        neutral: false,
+        fields,
+        message: ledger.mappingIssue,
+        periodLabel: ledger.periodLabel,
+        periodStart: ledger.from,
+        periodEnd: ledger.to,
+        summary: {
+          revenue: ledger.pnl.revenue,
+          netIncome: ledger.pnl.netIncome,
+          totalAssets: ledger.bs.totalAssets,
+          equity: ledger.bs.equity,
+          cash: ledger.cash,
+          periodLabel: ledger.periodLabel,
+          periodStart: ledger.from,
+          periodEnd: ledger.to,
+          ytdRevenue: ledger.year?.pnl.revenue ?? null,
+          ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
+          ytdPeriodLabel: ledger.year?.label ?? null,
+          ytdBasis: ledger.year?.basis ?? null,
+          agedArLine: agedArProofLine(ledger.agedAr),
+          agedApLine: agedApProofLine(ledger.agedAp),
+          bankAccountCount: ledger.bankAccounts.length,
+        },
+      };
+    }
     const decision = sageSyncWriteDecision(fields, prev);
     if (!decision.write) {
       const neutral = decision.neutral === true;
