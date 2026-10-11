@@ -108,6 +108,7 @@ export function OwnerDoor({
   onAccount,
   settingsOpen = false,
   openAccountant = false,
+  openPlan = false,
   focusSigned = false,
   onSignOut,
   topMove = null,
@@ -141,6 +142,8 @@ export function OwnerDoor({
   settingsOpen?: boolean;
   /** Deep link: /app?screen=accountant, including old deliverables URLs. */
   openAccountant?: boolean;
+  /** Deep link: /app?screen=plan from Plan & billing. */
+  openPlan?: boolean;
   /** Scroll the signed-deliverables section into view. */
   focusSigned?: boolean;
   onSignOut: () => void;
@@ -155,7 +158,15 @@ export function OwnerDoor({
   const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
-    openedBot ? "chat" : settingsOpen ? "settings" : openAccountant ? "accountant" : "home",
+    openedBot
+      ? "chat"
+      : settingsOpen
+        ? "settings"
+        : openPlan
+          ? "plan"
+          : openAccountant
+            ? "accountant"
+            : "home",
   );
   const beforeSettings = useRef<OwnerScreen>("home");
   const leavingSettings = useRef(false);
@@ -211,12 +222,16 @@ export function OwnerDoor({
       });
       return;
     }
+    if (openPlan) {
+      setScreen("plan");
+      return;
+    }
     if (leavingSettings.current) {
       leavingSettings.current = false;
       return;
     }
     setScreen((current) => (current === "settings" ? beforeSettings.current : current));
-  }, [settingsOpen]);
+  }, [settingsOpen, openPlan]);
 
   useEffect(() => {
     if (signedFocused.current || !focusSigned || screen !== "accountant") return;
