@@ -19,6 +19,20 @@ export function stripePlanMarketFromFirm(firmMarket: unknown): StripePlanMarket 
   return country.trim().toUpperCase() === "ZA" ? "za" : "us";
 }
 
+/**
+ * Owner Checkout market. Same rule as a firm: a stored country wins,
+ * and the URL market is not an input. No stored country: the edge.
+ * A za URL does not open the rand price when the edge is not ZA.
+ */
+export function resolveOwnerCheckoutMarket(
+  ownerMarket: unknown,
+  _requested: StripePlanMarket,
+  geoCountry?: string | null,
+): StripePlanMarket {
+  if (ownerMarket != null) return stripePlanMarketFromFirm(ownerMarket);
+  return geoCountry === "ZA" ? "za" : "us";
+}
+
 export function firmBillingResumeIntent(
   firmMarket: unknown,
   pending?: {

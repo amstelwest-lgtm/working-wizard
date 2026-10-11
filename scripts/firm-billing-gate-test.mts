@@ -439,6 +439,19 @@ assert(
 function mockStripe(opts: {
   customerId?: string;
   statuses?: string[];
+  subscriptions?: Array<{
+    id: string;
+    status: string;
+    metadata?: { milon_plan?: string | null; milon_lookup_key?: string | null } | null;
+    items?: {
+      data: Array<{
+        price: {
+          lookup_key?: string;
+          product?: { metadata?: { plan?: string; band?: string } };
+        };
+      }>;
+    };
+  }>;
 }): StripeCustomerSubscriptionReader {
   return {
     customers: {
@@ -448,7 +461,11 @@ function mockStripe(opts: {
     },
     subscriptions: {
       list: async ({ status }) => ({
-        data: (opts.statuses ?? []).includes(status) ? [{ id: "sub_1", status }] : [],
+        data: opts.subscriptions
+          ? opts.subscriptions.filter((sub) => sub.status === status)
+          : (opts.statuses ?? []).includes(status)
+            ? [{ id: "sub_1", status }]
+            : [],
       }),
     },
   };
@@ -485,6 +502,75 @@ assert(
     "cus_1",
   )) === false,
   "incomplete subscription → not entitled",
+);
+
+function ownerPriceSub(lookup: string) {
+  return {
+    id: "sub_owner",
+    status: "active",
+    items: {
+      data: [
+        {
+          price: {
+            lookup_key: lookup,
+            product: { metadata: { plan: "owner" } },
+          },
+        },
+      ],
+    },
+  };
+}
+
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [ownerPriceSub("milon_za_owner_monthly")],
+    }),
+    "cus_owner",
+  )) === false,
+  "the ZA owner price does not entitle the firm product",
+);
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [ownerPriceSub("milon_owner_monthly")],
+    }),
+    "cus_owner",
+  )) === false,
+  "the USD owner price does not entitle the firm product",
+);
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [
+        {
+          id: "sub_plan",
+          status: "active",
+          items: {
+            data: [{ price: { product: { metadata: { plan: "owner" } } } }],
+          },
+        },
+      ],
+    }),
+    "cus_owner",
+  )) === false,
+  "product metadata plan=owner does not entitle the firm product",
+);
+assert(
+  (await customerHasEntitlingSubscription(
+    mockStripe({
+      subscriptions: [
+        ownerPriceSub("milon_owner_monthly"),
+        {
+          id: "sub_solo",
+          status: "active",
+          items: { data: [{ price: { lookup_key: "milon_solo_monthly" } }] },
+        },
+      ],
+    }),
+    "cus_both",
+  )) === true,
+  "a firm band still entitles when the customer also has the owner price",
 );
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
@@ -615,7 +701,10 @@ const layout = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
 const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 const shell = `${layout}\n${gate}`;
 assert(layout.includes("codeSplitGroupings: []"), "auth shell is not a split chunk");
-assert(layout.includes('import("./_authenticated.gate")'), "auth gate loads after the shell hydrates");
+assert(
+  layout.includes('import("./_authenticated.gate")'),
+  "auth gate loads after the shell hydrates",
+);
 assert(gate.includes("getFirmBillingEntitlement"), "authenticated shell calls the Stripe gate");
 assert(gate.includes("isFirmProductPath"), "authenticated shell gates firm product paths");
 assert(gate.includes("/billing/required"), "unpaid firms redirect to billing required");
@@ -624,7 +713,10 @@ assert(
   !shell.includes("firmSignupCheckoutIntent"),
   "shell does not default an existing firm to a US signup intent",
 );
-assert(layout.includes("pendingComponent: FirmShellLoading"), "auth shell pending paint matches SSR");
+assert(
+  layout.includes("pendingComponent: FirmShellLoading"),
+  "auth shell pending paint matches SSR",
+);
 assert(gate.includes("loadFirmClientGateContext"), "shell loads the first-client count");
 assert(gate.includes("firmClientCount"), "shell passes the first-client count into the gate");
 assert(
@@ -642,7 +734,10 @@ assert(appSrc.includes("shouldBounceFromOwnerApp"), "owner bounce helper still u
 
 const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
 assert(required.includes("Continue on"), "required page is Checkout after the figures");
-assert(required.includes("The figures stay."), "required page does not pretend the workspace never opened");
+assert(
+  required.includes("The figures stay."),
+  "required page does not pretend the workspace never opened",
+);
 assert(required.includes("Resume Checkout"), "required page resumes Checkout");
 assert(required.includes('href="/#pricing"'), "back to pricing shows pricing, not Checkout");
 assert(!required.includes('to="/"'), "back to pricing does not link at /");
@@ -650,17 +745,17 @@ assert(required.includes("BillingSignOutButton"), "billing wall can sign out");
 assert(required.includes('createFileRoute("/billing/required")'), "required route");
 assert(required.includes("readFirmBillingQuote"), "wall price comes from the firm quote");
 assert(required.includes("billingIntentForResolvedMarket"), "wall checkout ignores the URL market");
-assert(
-  required.includes('quote?.market === "us"'),
-  "USD copy is only shown for a US firm quote",
-);
+assert(required.includes('quote?.market === "us"'), "USD copy is only shown for a US firm quote");
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
 assert(start.includes("BillingSignOutButton"), "billing start can sign out");
 const signOut = readFileSync(resolve("src/components/billing-sign-out.tsx"), "utf8");
 assert(signOut.includes("Sign out"), "sign out label is visible");
-assert(start.includes("readFirmBillingQuote"), "billing start loads the firm quote, not the URL market");
+assert(
+  start.includes("readFirmBillingQuote"),
+  "billing start loads the firm quote, not the URL market",
+);
 assert(
   !start.includes("readSaPricingCopy"),
   "billing start does not paint geo rand copy for a signed-in firm",
@@ -745,10 +840,7 @@ const staleSignup = decideAccountantAuthLanding({
   next: "/billing/start?plan=solo&interval=month&market=us",
   insightSeen: true,
 });
-assert(
-  staleSignup.kind === "workspace",
-  "a new firm signup ignores a stored insight flag",
-);
+assert(staleSignup.kind === "workspace", "a new firm signup ignores a stored insight flag");
 const earlyResume = decideAccountantAuthLanding({
   flow: "signin",
   hadFirmBefore: false,
@@ -756,10 +848,7 @@ const earlyResume = decideAccountantAuthLanding({
   pending: null,
   next: "/billing/start?plan=solo&interval=month&market=us",
 });
-assert(
-  earlyResume.kind === "workspace",
-  "before an insight, a billing next opens the practice",
-);
+assert(earlyResume.kind === "workspace", "before an insight, a billing next opens the practice");
 const resume = decideAccountantAuthLanding({
   flow: "signin",
   hadFirmBefore: false,
@@ -795,5 +884,151 @@ assert(
   authPage.includes('landAfterAccountantAuth(signInData.user.id, "signin")'),
   "password sign-in does not reuse the Create firm landing",
 );
+
+const ownerFns = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
+assert(
+  ownerFns.includes("export const startOwnerCheckout"),
+  "owner Checkout is a signed-in server function",
+);
+assert(
+  ownerFns.includes("export const getOwnerEntitlement"),
+  "owner entitlement helper is exported for the plan UI",
+);
+assert(ownerFns.includes("requireSupabaseAuth"), "owner Checkout requires a signed-in user");
+const ownerWebhook = readFileSync(resolve("src/routes/api/stripe/webhook.ts"), "utf8");
+assert(
+  ownerWebhook.includes("ownerBillingEventSignal"),
+  "webhook separates owner events from firm bands",
+);
+assert(
+  ownerWebhook.includes("customer.subscription.deleted"),
+  "owner cancellation is a webhook event",
+);
+const ownerMigration = readFileSync(
+  resolve("supabase/migrations/20261013140000_owner_subscriptions.sql"),
+  "utf8",
+);
+assert(ownerMigration.includes("enable row level security"), "owner entitlement table enables RLS");
+assert(ownerMigration.includes("owner_subscriptions read own"), "the owner can read their own row");
+assert(ownerMigration.includes("user_id = auth.uid()"), "the read policy is the signed-in owner");
+assert(
+  ownerMigration.includes("grant select on table public.owner_subscriptions to authenticated"),
+  "authenticated can select",
+);
+assert(
+  !/for insert/i.test(ownerMigration) &&
+    !/for update/i.test(ownerMigration) &&
+    !/for delete/i.test(ownerMigration),
+  "writes are not granted by an owner policy",
+);
+assert(ownerMigration.includes("service_role"), "service role can write the entitlement");
+assert(
+  ownerMigration.includes("source in ('stripe', 'firm')"),
+  "entitlement source is stripe or firm",
+);
+
+const linkGuard = readFileSync(
+  resolve("supabase/migrations/20261013150000_owner_firm_link_guard.sql"),
+  "utf8",
+);
+assert(
+  linkGuard.includes("clients.firm_id cannot be set by the owner"),
+  "an owner who sets firm_id is rejected",
+);
+assert(
+  linkGuard.includes("AND firm_id IS NULL"),
+  "owner insert cannot include a firm_id",
+);
+assert(
+  linkGuard.includes("NEW.firm_id IS NULL AND OLD.firm_id IS NOT NULL"),
+  "an owner may clear firm_id to leave the firm",
+);
+assert(linkGuard.includes("firm_link_accepted_at"), "acceptance is stored on the client");
+assert(
+  linkGuard.includes("CREATE OR REPLACE FUNCTION public.link_client_firm"),
+  "invite and marketplace accept go through link_client_firm",
+);
+assert(
+  linkGuard.includes("REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM authenticated"),
+  "signed-in users cannot execute link_client_firm",
+);
+assert(
+  !/GRANT EXECUTE ON FUNCTION public\.link_client_firm\(uuid, uuid, uuid\) TO authenticated/.test(linkGuard),
+  "link_client_firm is not granted to authenticated",
+);
+assert(
+  linkGuard.includes("GRANT EXECUTE ON FUNCTION public.link_client_firm(uuid, uuid, uuid) TO service_role"),
+  "service role can execute link_client_firm",
+);
+assert(
+  linkGuard.includes("status IN ('open', 'accepted')"),
+  "a signed-in caller needs an open or accepted firm request",
+);
+assert(
+  linkGuard.includes("CREATE OR REPLACE FUNCTION public.link_own_client_to_firm"),
+  "owners who are firm members use link_own_client_to_firm",
+);
+assert(
+  linkGuard.includes("create_firm_client must not claim an existing client"),
+  "create_firm_client cannot adopt an existing client",
+);
+assert(
+  linkGuard.includes("firm_link_accepted_at,\n    firm_link_accepted_by"),
+  "a firm-created client stamps acceptance",
+);
+assert(
+  linkGuard.includes("PERFORM public.link_client_firm"),
+  "marketplace accept links through the same function",
+);
+assert(
+  linkGuard.includes("lower(email) = lower(trim(p_email))"),
+  "webhook email match is exact and case-insensitive",
+);
+assert(!linkGuard.includes("ilike"), "the email lookup is not a LIKE pattern");
+
+const inviteServer = readFileSync(resolve("src/lib/accountant-invite.server.ts"), "utf8");
+assert(inviteServer.includes('rpc("link_client_firm"'), "accountant invite links through the RPC");
+assert(
+  !inviteServer.includes("firm_connected_at: new Date()"),
+  "accountant invite does not write firm_id with the user client",
+);
+const dashboard = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+assert(
+  dashboard.includes('rpc(\n          "link_own_client_to_firm"'),
+  "orphan clients attach through link_own_client_to_firm",
+);
+assert(!dashboard.includes('"link_client_firm"'), "the dashboard does not call link_client_firm");
+assert(
+  !dashboard.includes("firm_id: activeFirmId, firm_connected_at"),
+  "the dashboard does not update clients.firm_id directly",
+);
+const linkLock = readFileSync(
+  resolve("supabase/migrations/20261013160000_link_client_firm_execute_lock.sql"),
+  "utf8",
+);
+assert(
+  linkLock.includes("REVOKE ALL ON FUNCTION public.link_client_firm(uuid, uuid, uuid) FROM authenticated"),
+  "already-applied databases revoke authenticated execute",
+);
+const linkSql = readFileSync(resolve("scripts/link-client-firm-guard-sql-tests.sql"), "utf8");
+for (const name of [
+  "cross_tenant_member_refused",
+  "owner_self_link_refused",
+  "invite_redeem_links",
+  "marketplace_accept_links",
+  "link_own_client_to_firm_owner_member",
+  "create_firm_client_does_not_claim_existing",
+]) {
+  assert(linkSql.includes(name), `sql tests include ${name}`);
+}
+const disconnect = readFileSync(resolve("src/lib/practice-access.functions.ts"), "utf8");
+assert(
+  disconnect.includes("firm_link_accepted_at: null"),
+  "leaving a firm clears the acceptance marker",
+);
+const ownerServer = readFileSync(resolve("src/lib/owner-billing.server.ts"), "utf8");
+assert(ownerServer.includes("firmLinkCoversOwner"), "coverage requires an accepted firm link");
+assert(ownerServer.includes('rpc("user_id_by_email"'), "webhook email fallback uses the exact match");
+assert(!ownerServer.includes('.ilike("email"'), "webhook email fallback does not use ilike");
 
 console.log("firm-billing-gate ok");

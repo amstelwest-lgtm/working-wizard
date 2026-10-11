@@ -155,7 +155,6 @@ export const Route = createFileRoute("/")({
   },
   component: LandingPage,
   head: ({ loaderData }) => {
-    const showSaPricing = loaderData?.showSaPricing === true;
     const copyPack = loaderData?.copyPack === "za" ? "za" : "us";
     const homeHead = pageHead(SEO_PAGES.home);
     return {

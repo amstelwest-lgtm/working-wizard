@@ -14,7 +14,6 @@ import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import {
   OwnerAccountant,
-  OwnerDeliverables,
   OwnerFirst,
   OwnerPlan,
   OwnerSettings,
@@ -103,11 +102,7 @@ const PILLARS: SpherePillar[] = [
   },
 ];
 
-function HealthOrb({
-  onDriver,
-}: {
-  onDriver?: (key: string) => void;
-}) {
+function HealthOrb({ onDriver }: { onDriver?: (key: string) => void }) {
   return (
     <div className="owner-health-hero">
       <SphereHero
@@ -159,9 +154,15 @@ const FULL_PRIOR = {
   expenses: 470000,
 };
 
-const READY_ACTUAL_MONTHS = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].map(
-  (month) => ({ month, totals: { revenue: 60_000 } }),
-);
+const READY_ACTUAL_MONTHS = [
+  "2026-03",
+  "2026-04",
+  "2026-05",
+  "2026-06",
+  "2026-07",
+  "2026-08",
+  "2026-09",
+].map((month) => ({ month, totals: { revenue: 60_000 } }));
 
 export function OwnerDoorPreview({
   view,
@@ -292,25 +293,25 @@ export function OwnerDoorPreview({
     );
   }
 
+  const railView = view === "deliverables" ? "accountant" : view;
   return (
     <OwnerShell
       screen={
-        view === "chat" || view === "recording" || (homeView && liveBot)
+        railView === "chat" || view === "recording" || (homeView && liveBot)
           ? "chat"
-          : view === "faces"
-          ? "home"
-          : view === "tasks" || view === "actions" || view === "moves"
-            ? "moves"
-            : view === "accountant" ||
-                view === "deliverables" ||
-                view === "plan" ||
-                view === "health" ||
-                view === "cash" ||
-                view === "budget" ||
-                view === "profit" ||
-                view === "settings"
-              ? view
-              : "home"
+          : railView === "faces"
+            ? "home"
+            : railView === "tasks" || railView === "actions" || railView === "moves"
+              ? "moves"
+              : railView === "accountant" ||
+                  railView === "plan" ||
+                  railView === "health" ||
+                  railView === "cash" ||
+                  railView === "budget" ||
+                  railView === "profit" ||
+                  railView === "settings"
+                ? railView
+                : "home"
       }
       businessName="Northline Studio"
       initials="NS"
@@ -456,7 +457,7 @@ export function OwnerDoorPreview({
           onBack={closeLive}
         />
       ) : null}
-      {view === "accountant" ? (
+      {view === "accountant" || view === "deliverables" ? (
         <OwnerAccountant
           joined={false}
           firmName={null}
@@ -464,15 +465,12 @@ export function OwnerDoorPreview({
           uploads={<p className="owner-lede">No files uploaded yet.</p>}
           signed={[{ id: "s1", scope: "cash_forecast", name: "Alex Morgan", when: "2 Oct 2026" }]}
           onConnect={() => undefined}
+          onHome={() => undefined}
         />
       ) : null}
-      {view === "deliverables" ? (
-        <OwnerDeliverables
-          rows={[{ id: "s1", scope: "cash_forecast", name: "Alex Morgan", when: "2 Oct 2026" }]}
-          onInvite={() => undefined}
-        />
+      {view === "plan" ? (
+        <OwnerPlan visitor="us" accountantOnMilon={false} firmName={null} />
       ) : null}
-      {view === "plan" ? <OwnerPlan visitor="us" accountantOnMilon={false} firmName={null} /> : null}
       {view === "settings" ? (
         <OwnerSettings
           visitor="us"
@@ -485,7 +483,12 @@ export function OwnerDoorPreview({
         />
       ) : null}
       {view === "first" ? (
-        <OwnerFirst joined={false} onQuickBooks={() => undefined} onXero={() => undefined} onInvite={() => undefined} />
+        <OwnerFirst
+          joined={false}
+          onQuickBooks={() => undefined}
+          onXero={() => undefined}
+          onInvite={() => undefined}
+        />
       ) : null}
       {view === "faces" ? (
         <section className="owner-pane" data-owner-faces="advisor">

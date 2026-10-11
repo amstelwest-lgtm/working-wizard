@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, ClientOnly } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate, ClientOnly } from "@tanstack/react-router";
 import { founderPortalLinks } from "@/styles/app-route-styles";
 import { OwnerDoor } from "@/components/owner-door/owner-door";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
@@ -303,6 +303,7 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { isOwnerDeliverablesRequest, ownerDeliverablesRedirectTarget } from "@/lib/owner-nav";
 
 function AppBootSpinner() {
   return <OwnerBootSkeleton />;
@@ -325,7 +326,8 @@ export const Route = createFileRoute("/app")({
     view?: "chart" | "table" | "13week";
     bot?: "financial_manager" | "analyst" | "advisor";
     bots?: "row" | "stack";
-    screen?: "settings";
+    screen?: "settings" | "accountant";
+    section?: "signed";
   } => {
     const out: {
       tab?: string;
@@ -335,7 +337,8 @@ export const Route = createFileRoute("/app")({
       view?: "chart" | "table" | "13week";
       bot?: "financial_manager" | "analyst" | "advisor";
       bots?: "row" | "stack";
-      screen?: "settings";
+      screen?: "settings" | "accountant";
+      section?: "signed";
     } = {};
     if (
       typeof search.tab === "string" &&
@@ -363,8 +366,37 @@ export const Route = createFileRoute("/app")({
       out.bot = search.bot;
     }
     if (search.bots === "row" || search.bots === "stack") out.bots = search.bots;
-    if (search.screen === "settings") out.screen = "settings";
+    const rawScreen = typeof search.screen === "string" ? search.screen : null;
+    const rawTab = typeof search.tab === "string" ? search.tab : null;
+    const rawSection = typeof search.section === "string" ? search.section : null;
+    if (
+      isOwnerDeliverablesRequest({
+        pathname: "/app",
+        screen: rawScreen,
+        tab: rawTab,
+        section: rawSection,
+      })
+    ) {
+      out.screen = "accountant";
+      out.section = "signed";
+    } else if (rawScreen === "settings") {
+      out.screen = "settings";
+    } else if (rawScreen === "accountant") {
+      out.screen = "accountant";
+      if (rawSection === "signed") out.section = "signed";
+    }
     return out;
+  },
+  beforeLoad: ({ location }) => {
+    const search =
+      location.searchStr.startsWith("?") || location.searchStr === ""
+        ? location.searchStr
+        : `?${location.searchStr}`;
+    const target = ownerDeliverablesRedirectTarget(
+      `https://milonfinance.com${location.pathname}${search}`,
+    );
+    if (!target) return;
+    throw redirect({ href: target, replace: true });
   },
   pendingComponent: AppBootSpinner,
   component: function AppRoute() {
@@ -3895,6 +3927,8 @@ function Index() {
                 onXero={() => setShowXeroDialog(true)}
                 onProfile={() => openProfileDialog("retake")}
                 settingsOpen={oauthReturn.screen === "settings"}
+                openAccountant={oauthReturn.screen === "accountant"}
+                focusSigned={oauthReturn.section === "signed"}
                 onSettings={() => {
                   openOwnerSettings();
                   void navigate({

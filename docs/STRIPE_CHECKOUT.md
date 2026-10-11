@@ -1,8 +1,15 @@
-# Stripe Checkout (firm bands)
+# Stripe Checkout
 
 Firm billing uses the Stripe catalog documented in **[STRIPE_FIRM_BANDS.md](./STRIPE_FIRM_BANDS.md)**.
 
-Owner Spark stays free. Orbit / Constellation are no longer inline `price_data` Checkout SKUs. Accounting firms subscribe on catalog prices resolved by `lookup_key`. SA firms use the rand lookup keys. `adaptive_pricing` stays off.
+The owner plan is a separate catalog product, **Milōn Owner** (`prod_VQKKjT1uyUzG2b`). Its metadata is `plan=owner` and it has no band key, so firm upgrade and band sync skip it.
+
+- **$39/mo** USD — `price_1UPTfgGXDN6PFbnzzPyRVBi4`, lookup `milon_owner_monthly` (3900 cents)
+- **R299/mo** ZAR — `price_1UPTfiGXDN6PFbnzfAJ9I36b`, lookup `milon_za_owner_monthly` (29900 cents)
+
+ZAR is charged only when the owner's stored market is ZA and the Checkout billing country is ZA. A US owner stays on USD even if the page asks for ZA. The owner plan is free when the owner's business is accepted by a firm on an active, trialing, or 14-day grace Milōn firm plan. Checkout is skipped and the entitlement is `covered_by_firm`.
+
+Orbit / Constellation are no longer inline `price_data` Checkout SKUs. Accounting firms subscribe on catalog prices resolved by `lookup_key`. SA firms use the rand lookup keys. `adaptive_pricing` stays off. Owner prices are resolved by lookup key too; the price ids above are the live catalog, not hardcoded in Checkout.
 
 ## Merchant of record and tax
 

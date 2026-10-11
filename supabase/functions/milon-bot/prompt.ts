@@ -11,19 +11,33 @@ import {
   type IdentifierSubject,
   type RedactionSession,
 } from "../_shared/redact-identifiers.ts";
+import { scopeHistoryToAgent, type ChatAgent } from "../_shared/chat-reply.ts";
+import { askAiAgentPersona } from "../ask-ai/prompt.ts";
 
 export type BotChatTurn = {
   role: "user" | "assistant";
   content: string;
 };
 
+/** A history turn as the client sends it. `agent` names the thread it came from. */
+export type BotHistoryTurn = BotChatTurn & { agent?: string | null };
+
+/** Bot system prompt for one agent's chat. No agent keeps the plain Milōn Bot prompt. */
+export function milonBotChatSystem(base: string, agent: ChatAgent | null, audience: string): string {
+  if (!agent) return base;
+  const persona = askAiAgentPersona(agent, audience === "accountant" ? "accountant" : "owner");
+  return `${base}\n\nThis chat: ${persona} Only this agent's own earlier turns are in this conversation. Do not refer to chats with the other agents.`;
+}
+
 export function buildMilonBotChatPayload(input: {
   system: string;
   overviewBlock?: string;
-  history: BotChatTurn[];
+  history: BotHistoryTurn[];
   message: string;
   audience: string;
   subject?: IdentifierSubject;
+  /** The agent this chat belongs to. Turns tagged with another agent are dropped. */
+  agent?: ChatAgent | null;
 }): {
   system: string;
   messages: BotChatTurn[];
@@ -32,15 +46,17 @@ export function buildMilonBotChatPayload(input: {
   workingContext: string;
 } {
   const session = createRedactionSession(input.subject);
+  const agent = input.agent ?? null;
+  const baseSystem = milonBotChatSystem(input.system, agent, input.audience);
   const system = appendClientIdentity(
     applyRedaction(
-      input.overviewBlock ? `${input.system}\n\n${input.overviewBlock}` : input.system,
+      input.overviewBlock ? `${baseSystem}\n\n${input.overviewBlock}` : baseSystem,
       session,
     ),
     session,
   );
   const messages: BotChatTurn[] = [
-    ...input.history.map((turn) => ({
+    ...scopeHistoryToAgent(input.history, agent).map((turn) => ({
       role: turn.role,
       content: applyRedaction(turn.content, session),
     })),

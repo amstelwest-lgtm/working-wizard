@@ -4,6 +4,7 @@ import { DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
 import { formatOverviewForPrompt } from "./overview-brief.ts";
 import { formatAdvisorySignoffGrounding } from "../../../src/lib/advisory-signoff.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
+import { chatReplyFormatRules, humanDate } from "../_shared/chat-reply.ts";
 import {
   appendClientIdentity,
   applyRedaction,
@@ -23,7 +24,6 @@ function askAiSystemBase(copyPack: "za" | "us"): string {
       : "- South African English is fine. VAT and SARS context is allowed when the numbers support it.";
   return `You are a sharp, concise SME CFO copilot.
 Rules:
-- Answer in 3–6 short sentences or a tight bullet list.
 - Be specific and grounded in the numbers provided.
 - Never fabricate figures. If data is missing, say so plainly and name the one input needed.
 - Do NOT reference company names or ${taxWord}.
@@ -37,10 +37,11 @@ Rules:
 - When OVERVIEW FIGURES says the stored period is year to date, answer a revenue year-to-date question with the listed revenue and the exact "year to date to <end date>" phrase from that block. Do not say no year-to-date split is stored.
 - When asked which deliverable to prepare first, recommend one deliverable and why, using OVERVIEW FIGURES. Do not say a draft or a pack version was saved.
 - Advisory pack sign-off and version come only from the ADVISORY PACK SIGN-OFF block. Quote its Status line. Do not say no sign-off or version is on file when that block is present. Do not create or save a pack version while answering.
-- Offer 1–2 concrete next actions.
+- Offer 1–3 concrete next actions under Next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Quote Net profit, Gross profit, Operating profit, Profit before tax, Inventory, and Current ratio when OVERVIEW FIGURES lists them. Do not multiply a margin by revenue in their place. Raw income-statement and balance-sheet lines other than those listed headlines are not provided — use the outputs above.
-${locale}`;
+${locale}
+${chatReplyFormatRules(copyPack)}`;
 }
 
 const CAMEL_TO_DISPLAY: Record<string, string> = {};
@@ -89,15 +90,19 @@ function formatRatio(
 
 export type AskAiAgent = "financial_manager" | "analyst" | "advisor";
 
-/** Role for one owner-door agent. Display names stay in src/lib/milon-team.ts. */
-export function askAiAgentPersona(agent: AskAiAgent): string {
+/**
+ * Role for one agent chat, owner or accountant. Display names stay in
+ * src/lib/milon-team.ts. Each agent only sees its own thread.
+ */
+export function askAiAgentPersona(agent: AskAiAgent, audience: "owner" | "accountant" = "owner"): string {
+  const whose = audience === "accountant" ? "this client's" : "this owner's";
   switch (agent) {
     case "financial_manager":
-      return "You are this owner's financial manager. You look after the books, the 13-week cash forecast, action points, and hand-offs to the accountant. Answer in one or two plain sentences. Do not diagnose ratios.";
+      return `You are ${whose} financial manager. You look after the books, the 13-week cash forecast, action points, and hand-offs to the accountant. Keep the headline to one plain sentence. Do not diagnose ratios.`;
     case "analyst":
-      return "You are this owner's analyst. Explain what the books already show about profit and who owes the business. Do not coordinate the team.";
+      return `You are ${whose} analyst. Explain what the books already show about profit and who owes the business. Do not coordinate the team.`;
     case "advisor":
-      return "You are this owner's advisor. Suggest the next move the owner can act on. Do not coordinate the team.";
+      return `You are ${whose} advisor. Suggest the next move ${audience === "accountant" ? "the accountant can raise with the owner" : "the owner can act on"}. Do not coordinate the team.`;
   }
 }
 
@@ -111,8 +116,8 @@ export function buildPrompt(
   const lines: string[] = [];
   const copyPack = ctx.copyPack ?? "za";
   let system = askAiSystemBase(copyPack);
-  if (agent && audience === "owner") {
-    system += `\n- ${askAiAgentPersona(agent)} Use only the tools and figures already in this prompt.`;
+  if (agent) {
+    system += `\n- ${askAiAgentPersona(agent, audience)} Use only the tools and figures already in this prompt. Earlier chats with the other agents are not part of this conversation.`;
   }
   if (audience === "accountant") {
     system +=
@@ -305,7 +310,7 @@ export function buildPrompt(
     } else {
       lines.push("  Planned / outstanding:");
       for (const task of ctx.actionPlan.open) {
-        const due = task.dueDate ? ` · due ${task.dueDate}` : "";
+        const due = task.dueDate ? ` · due ${humanDate(String(task.dueDate)) ?? task.dueDate}` : "";
         lines.push(
           `  - ${task.title} [${task.status}, ${task.progressPct}%]${due}`,
         );

@@ -36,13 +36,8 @@ import {
   type OwnerActionRow,
 } from "@/lib/owner-needs";
 import { OwnerHome } from "./owner-home";
-import {
-  OwnerAccountant,
-  OwnerDeliverables,
-  OwnerFirst,
-  OwnerPlan,
-  OwnerSettings,
-} from "./owner-pages";
+import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
+import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
 
 type Signoff = {
@@ -104,6 +99,8 @@ export function OwnerDoor({
   onLeaveSettings,
   onAccount,
   settingsOpen = false,
+  openAccountant = false,
+  focusSigned = false,
   onSignOut,
   topMove = null,
   boards,
@@ -134,6 +131,10 @@ export function OwnerDoor({
   onLeaveSettings?: () => void;
   onAccount?: () => void;
   settingsOpen?: boolean;
+  /** Deep link: /app?screen=accountant, including old deliverables URLs. */
+  openAccountant?: boolean;
+  /** Scroll the signed-deliverables section into view. */
+  focusSigned?: boolean;
   onSignOut: () => void;
   /** Top ranked next move. Empty stays an honest line under the advisor. */
   topMove?: string | null;
@@ -146,7 +147,7 @@ export function OwnerDoor({
   const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
-    openedBot ? "chat" : settingsOpen ? "settings" : "home",
+    openedBot ? "chat" : settingsOpen ? "settings" : openAccountant ? "accountant" : "home",
   );
   const beforeSettings = useRef<OwnerScreen>("home");
   const leavingSettings = useRef(false);
@@ -174,6 +175,7 @@ export function OwnerDoor({
   const agentRef = useRef(agent);
   const pushedRef = useRef(false);
   const botHydrated = useRef(false);
+  const signedFocused = useRef(false);
   screenRef.current = screen;
   agentRef.current = agent;
 
@@ -191,6 +193,12 @@ export function OwnerDoor({
     }
     setScreen((current) => (current === "settings" ? beforeSettings.current : current));
   }, [settingsOpen]);
+
+  useEffect(() => {
+    if (signedFocused.current || !focusSigned || screen !== "accountant") return;
+    signedFocused.current = true;
+    document.getElementById(OWNER_SIGNED_SECTION_ID)?.scrollIntoView({ block: "start" });
+  }, [focusSigned, screen]);
 
   useEffect(() => {
     setVisitor(visitorCopyPack(readVisitorDraft()));
@@ -224,8 +232,16 @@ export function OwnerDoor({
     }
     let cancelled = false;
     void Promise.all([
-      supabase.from("qbo_connections").select("id, last_synced_at").eq("client_id", clientId).limit(1),
-      supabase.from("xero_connections").select("id, last_synced_at").eq("client_id", clientId).limit(1),
+      supabase
+        .from("qbo_connections")
+        .select("id, last_synced_at")
+        .eq("client_id", clientId)
+        .limit(1),
+      supabase
+        .from("xero_connections")
+        .select("id, last_synced_at")
+        .eq("client_id", clientId)
+        .limit(1),
       supabase
         .from("action_items_v")
         .select("id, title, status, owner_email, seq")
@@ -247,7 +263,11 @@ export function OwnerDoor({
       else if (xeroRow) setLedger("Xero");
       else setLedger(null);
       setQuickBooks(
-        qbo.error ? { state: "unknown" } : qboRow ? { state: "linked", at: qboRow.last_synced_at } : { state: "absent" },
+        qbo.error
+          ? { state: "unknown" }
+          : qboRow
+            ? { state: "linked", at: qboRow.last_synced_at }
+            : { state: "absent" },
       );
       setXeroLink(
         xero.error
@@ -434,24 +454,33 @@ export function OwnerDoor({
     onLeaveSettings?.();
   }
 
+  function focusSignedDeliverables() {
+    queueMicrotask(() => {
+      document.getElementById(OWNER_SIGNED_SECTION_ID)?.scrollIntoView({ block: "start" });
+    });
+  }
+
   function go(next: OwnerScreen) {
-    if (next === "chat") return;
-    if (screenRef.current === "settings" && next !== "settings") {
+    const target = canonicalOwnerScreen(next);
+    if (target === "chat") return;
+    if (screenRef.current === "settings" && target !== "settings") {
       leavingSettings.current = true;
       onLeaveSettings?.();
     }
     if (screenRef.current === "chat") {
-      if (next === "home") {
+      if (target === "home") {
         closeChat();
         return;
       }
       pushedRef.current = false;
-      void runBotTransition(() => setScreen(next)).then(() => {
+      void runBotTransition(() => setScreen(target)).then(() => {
         onBotChange?.(null, "replace");
+        if (next === "deliverables") focusSignedDeliverables();
       });
       return;
     }
-    setScreen(next);
+    setScreen(target);
+    if (next === "deliverables") focusSignedDeliverables();
   }
 
   async function send(text: string) {
@@ -526,7 +555,8 @@ export function OwnerDoor({
     rec.start();
   }
 
-  const railScreen = screen === "tasks" || screen === "actions" ? "moves" : screen;
+  const shown = canonicalOwnerScreen(screen);
+  const railScreen = shown === "tasks" || shown === "actions" ? "moves" : shown;
   const restored = boards?.(setScreen);
 
   return (
@@ -606,17 +636,7 @@ export function OwnerDoor({
             when: formatDate(row.signed_off_at, market),
           }))}
           onConnect={onConnect}
-        />
-      ) : null}
-      {railScreen === "deliverables" ? (
-        <OwnerDeliverables
-          rows={signoffs.map((row, index) => ({
-            id: row.id ?? `${row.scope ?? "sign"}-${index}`,
-            scope: row.scope ?? "advisory",
-            name: row.signed_off_by_name,
-            when: formatDate(row.signed_off_at, market),
-          }))}
-          onInvite={() => setScreen("accountant")}
+          onHome={() => go("home")}
         />
       ) : null}
       {railScreen === "plan" ? (

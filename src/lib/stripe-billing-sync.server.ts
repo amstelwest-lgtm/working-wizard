@@ -18,8 +18,17 @@ import {
   zarCentsFromPrice,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
-import { readFirmSetupUpgrade, resolveFirmCatalogPrice } from "@/lib/stripe-checkout.core";
-import { priceMarketForFirm, readStripeCustomerCountry, zarBillingCountryOk } from "@/lib/pricing/za-checkout";
+import { isOwnerCatalogPrice } from "@/lib/owner-price";
+import {
+  isOwnerLookupKey,
+  readFirmSetupUpgrade,
+  resolveFirmCatalogPrice,
+} from "@/lib/stripe-checkout.core";
+import {
+  priceMarketForFirm,
+  readStripeCustomerCountry,
+  zarBillingCountryOk,
+} from "@/lib/pricing/za-checkout";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 import {
   isSaMarketFirm,
@@ -190,7 +199,7 @@ async function retrieveFirmSubscription(
 ): Promise<RetrievedSubscription> {
   try {
     return await stripe.subscriptions.retrieve(subscriptionId, {
-      expand: ["items.data.price", "customer"],
+      expand: ["items.data.price.product", "customer"],
     });
   } catch (err) {
     console.warn("[stripe] subscription expand failed", err instanceof Error ? err.message : err);
@@ -213,6 +222,21 @@ export async function syncFirmSubscriptionBand(
   const sub = await retrieveFirmSubscription(stripe, subscriptionId);
   const price = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
   const metadata = { ...(sub.metadata ?? {}) };
+  const ownerPrice = price.lookupKey
+    ? isOwnerCatalogPrice({ lookupKey: price.lookupKey, productPlan: price.productPlan })
+    : metadata.milon_plan === "owner" ||
+      isOwnerCatalogPrice({
+        lookupKey: metadata.milon_lookup_key,
+        productPlan: price.productPlan,
+      });
+  if (ownerPrice) {
+    const { syncOwnerBillingEvent } = await import("@/lib/owner-billing.server");
+    await syncOwnerBillingEvent({
+      type: "customer.subscription.updated",
+      data: { object: sub },
+    });
+    return { band: null, cancelledReplaced: false, downgradeBlocked: false };
+  }
   const replacesFromSession = options?.replacesSubscriptionId?.trim();
   if (replacesFromSession && !metadata.milon_replaces_subscription) {
     metadata.milon_replaces_subscription = replacesFromSession;
@@ -227,11 +251,13 @@ export async function syncFirmSubscriptionBand(
   const billedBand = billedBandFromPrice({
     lookupKey: price.lookupKey,
     productBand: price.productBand,
+    productPlan: price.productPlan,
   });
   const downgradeBlocked = downgradeDropsBelowUsage(billedBand, clientCount);
   const patch = metadataPatchForPrice({
     lookupKey: price.lookupKey,
     productBand: price.productBand,
+    productPlan: price.productPlan,
     metadata,
     clientCount,
   });
@@ -549,6 +575,7 @@ export async function enforceZaCheckoutBillingCountry(
   stripe: StripeLike = getStripe() as unknown as StripeLike,
 ): Promise<boolean> {
   if (session.mode && session.mode !== "subscription") return false;
+  if (isOwnerLookupKey(session.metadata?.milon_lookup_key)) return false;
   const parsed = parseZaLookupKey(session.metadata?.milon_lookup_key);
   if (!parsed) return false;
   if (zarBillingCountryOk(session.customer_details?.address?.country)) return false;
@@ -590,6 +617,12 @@ export async function syncCheckoutSessionSubscription(
   stripe?: StripeLike,
 ): Promise<{ band: string | null; cancelledReplaced: boolean } | null> {
   if (session.mode && session.mode !== "subscription") return null;
+  const lookupKey = session.metadata?.milon_lookup_key ?? "";
+  if (session.metadata?.milon_plan === "owner" || isOwnerCatalogPrice({ lookupKey })) {
+    const { syncOwnerCheckoutSession } = await import("@/lib/owner-billing.server");
+    await syncOwnerCheckoutSession(session);
+    return { band: "owner", cancelledReplaced: false };
+  }
   const subscriptionId =
     typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
   if (!subscriptionId) return null;
@@ -629,6 +662,9 @@ export const FIRM_BILLING_WEBHOOK_EVENTS = [
 export function isFirmBillingWebhookEvent(type: string | undefined): boolean {
   return (FIRM_BILLING_WEBHOOK_EVENTS as readonly string[]).includes(type ?? "");
 }
+
+export { syncOwnerBillingEvent, syncOwnerCheckoutSession } from "@/lib/owner-billing.server";
+export { ownerBillingEventSignal } from "@/lib/owner-billing";
 
 /** Signature helper so the route stays a thin wrapper. */
 export function constructFirmBillingEvent(

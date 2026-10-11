@@ -277,7 +277,12 @@ async function applyAccountantInvite(opts: {
     if (linkedClient) {
       await supabaseAdmin
         .from("clients")
-        .update({ firm_id: previousFirmId })
+        .update({
+          firm_id: previousFirmId,
+          firm_connected_at: null,
+          firm_link_accepted_at: null,
+          firm_link_accepted_by: null,
+        } as never)
         .eq("id", client.id);
     }
     await releaseInviteToken(resolved.tokenId);
@@ -300,11 +305,18 @@ async function applyAccountantInvite(opts: {
     await ensurePracticeRole(opts.userId, asOwner);
 
     if (!client.firm_id) {
-      const { error: linkErr } = await supabaseAdmin
-        .from("clients")
-        .update({ firm_id: firmId, firm_connected_at: new Date().toISOString() })
-        .eq("id", client.id)
-        .is("firm_id", null);
+      const { error: linkErr } = await (
+        supabaseAdmin as unknown as {
+          rpc: (
+            fn: string,
+            args: Record<string, unknown>,
+          ) => Promise<{ error: { message: string } | null }>;
+        }
+      ).rpc("link_client_firm", {
+        p_client_id: client.id,
+        p_firm_id: firmId,
+        p_accepted_by: opts.userId,
+      });
       if (linkErr) throw new Error(`Could not link workspace: ${linkErr.message}`);
       linkedClient = true;
     }

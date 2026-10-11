@@ -21,6 +21,12 @@ import { ownerMoney, ownerOutflow } from "../src/lib/owner-money.ts";
 import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
 import { ownerNeedsView } from "../src/lib/owner-needs.ts";
 import {
+  canonicalOwnerScreen,
+  isOwnerDeliverablesRequest,
+  OWNER_SIGNED_SECTION_ID,
+  ownerDeliverablesRedirectTarget,
+} from "../src/lib/owner-nav.ts";
+import {
   draftFindingKindLabel,
   draftFindingLabel,
   DRAFT_NEEDS_ACCOUNTANT,
@@ -409,9 +415,16 @@ assert(!shell.includes('label: "Actions"'), "actions is not a separate rail item
 const railLabels = [...shell.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
 assert(
   railLabels.join(" | ") ===
-    "Home | Health | Cash flow | Profit | Budget | Next moves | Accountant | Deliverables",
+    "Home | Health | Cash flow | Profit | Budget | Next moves | Accountant portal",
   `rail order is ${railLabels.join(" | ")}`,
 );
+assert(!shell.includes('label: "Deliverables"'), "Deliverables is not an owner rail item");
+assert(
+  [...shell.matchAll(/label: "([^"]+)"/g)].every((match) => match[1] !== "Accountant"),
+  "the owner tab is not labelled Accountant",
+);
+assert(shell.includes("aria-label={item.label}"), "rail items expose their label to assistive tech");
+assert(shell.includes('label: "Accountant portal"'), "the phone pill and the rail share Accountant portal");
 const app = readFileSync("src/routes/app.tsx", "utf8");
 assert(app.includes("<OwnerHealthOrb"), "health keeps the orb");
 assert(app.includes("const OwnerHealthOrb = SphereHero"), "health reuses the sphere");
@@ -498,6 +511,15 @@ assert(css.includes('button[aria-label="Share Milōn"]'), "the owner door hides 
 const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");
 assert((pages.match(/What your accountant signed/g) ?? []).length >= 1, "the accountant tab names the sign-off");
+assert(pages.includes('className="owner-title">Accountant portal'), "the page heading is Accountant portal");
+assert(pages.includes('aria-label="breadcrumb"'), "the portal page has a breadcrumb");
+assert(pages.includes('aria-current="page">Accountant portal'), "the breadcrumb names Accountant portal");
+assert(pages.includes("OWNER_SIGNED_SECTION_ID"), "signed deliverables stay on Accountant portal");
+assert(OWNER_SIGNED_SECTION_ID === "owner-signed-deliverables", "the signed section has a stable id");
+assert(pages.includes('aria-label="Signed deliverables"'), "the moved section is labelled");
+assert(!pages.includes('data-owner-page="deliverables"'), "Deliverables is not its own owner page");
+const studioChrome = readFileSync("src/components/client-studio-chrome.tsx", "utf8");
+assert(studioChrome.includes('label: "Deliverables"'), "the accountant Deliverables tab stays");
 const goldInk = token(lightBlock, "--gold-ink");
 const pillarCard = token(lightBlock, "--bg-2");
 const landing = readFileSync("src/styles/landing.css", "utf8");
@@ -737,6 +759,60 @@ assert(homeSrc.includes("OwnerNeedsStrip"), "the strip is the home block");
 assert(!homeSrc.includes('className="btn gold"'), "the home strip does not add another primary button");
 assert(css.includes(".owner-needs"), "the strip has its own rhythm");
 assert(door.includes("onMoves={() => go(\"moves\")}"), "open actions and drafts open Next moves");
-assert(door.includes("onDeliverables={() => go(\"deliverables\")}"), "deliverables open Deliverables");
+assert(door.includes("onDeliverables={() => go(\"deliverables\")}"), "the needs strip still opens the old deliverables target");
+assert(canonicalOwnerScreen("deliverables") === "accountant", "that target is Accountant portal");
+assert(canonicalOwnerScreen("home") === "home", "other owner screens stay put");
+assert(door.includes("canonicalOwnerScreen"), "the door remaps deliverables before it renders");
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/deliverables") ===
+    "/app?screen=accountant&section=signed",
+  "/deliverables opens Accountant portal",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app/deliverables?bot=analyst") ===
+    "/app?bot=analyst&screen=accountant&section=signed",
+  "/app/deliverables keeps unrelated params",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?screen=deliverables") ===
+    "/app?screen=accountant&section=signed",
+  "screen=deliverables opens Accountant portal",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?tab=deliverables&section=pack") ===
+    "/app?screen=accountant&section=signed",
+  "tab=deliverables and its section open Accountant portal",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?section=reports") ===
+    "/app?screen=accountant&section=signed",
+  "a deliverable section param opens Accountant portal",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?tab=deliverables&section=plan") ===
+    "/app?screen=accountant&section=signed",
+  "the deliverables plan section opens Accountant portal",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/clients/abc?tab=deliverables&section=pack") === null,
+  "accountant Deliverables URLs stay",
+);
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?screen=accountant&section=signed") === null,
+  "the canonical portal URL does not redirect again",
+);
+assert(ownerDeliverablesRedirectTarget("https://milonfinance.com/app?tab=today") === null, "owner board tabs stay");
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?section=plan") === null,
+  "a bare plan section is not the old deliverables tab",
+);
+assert(
+  isOwnerDeliverablesRequest({ pathname: "/app", screen: "settings", section: "signed" }) === false,
+  "settings keeps a leftover signed section",
+);
+const appRoute = readFileSync("src/routes/app.tsx", "utf8");
+assert(appRoute.includes("ownerDeliverablesRedirectTarget"), "the owner app redirects old deliverables URLs");
+const server = readFileSync("src/server.ts", "utf8");
+assert(server.includes("ownerDeliverablesRedirectTarget"), "full page loads redirect old deliverables URLs");
 
 console.log("owner-door tests passed");

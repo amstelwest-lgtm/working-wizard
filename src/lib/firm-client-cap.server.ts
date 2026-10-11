@@ -33,6 +33,7 @@ import {
   readSubscriptionPrice,
   type FirmUpgradeSnapshot,
 } from "@/lib/firm-band-upgrade";
+import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import { parseMarketSelection } from "@/lib/market/parse";
 import { isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
 import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
@@ -176,17 +177,27 @@ export async function findEntitlingFirmSubscription(
   const ranked = listed.data.map((sub) => {
     const price = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
     const metadata = stringMetadata((sub as { metadata?: unknown }).metadata);
+    const owner = price.lookupKey
+      ? isOwnerCatalogPrice({ lookupKey: price.lookupKey, productPlan: price.productPlan })
+      : isOwnerCatalogPrice({
+          lookupKey: metadata.milon_lookup_key,
+          productPlan: price.productPlan || metadata.milon_plan,
+        });
     return {
       raw: sub,
       id: sub.id,
       status: sub.status,
       created: typeof sub.created === "number" ? sub.created : 0,
-      band: bandFromSubscriptionSnapshot({
-        lookupKey: price.lookupKey,
-        productBand: price.productBand,
-        metadataPlan: metadata.milon_plan,
-        downgradeBlocked: metadata.milon_downgrade_blocked,
-      }),
+      owner,
+      band: owner
+        ? null
+        : bandFromSubscriptionSnapshot({
+            lookupKey: price.lookupKey,
+            productBand: price.productBand,
+            productPlan: price.productPlan,
+            metadataPlan: metadata.milon_plan,
+            downgradeBlocked: metadata.milon_downgrade_blocked,
+          }),
       price,
       metadata,
     };
