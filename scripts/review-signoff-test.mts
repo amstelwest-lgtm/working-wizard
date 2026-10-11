@@ -134,11 +134,13 @@ assert(
   !/mt-6[\s\S]{0,180}ReviewSignoffBadge/.test(appSrc),
   "owner stamps are not parked at the bottom of tabs",
 );
-assert(appSrc.includes('placement="corner"'), "health orb card hosts the corner signature");
-assert(appSrc.includes("OwnerTabSignoffRow"), "other owner tabs pin the signature top-right");
-assert(appSrc.includes('scope="profitability"'), "client profit tab uses profitability scope");
-assert(appSrc.includes('scope="action_plan"'), "client action plan tab has its own sign-off");
-assert(appSrc.includes('scope="financials"'), "client health tab keeps financials sign-off");
+assert(appSrc.includes("OwnerSignoffMark"), "owner tabs use the subtle sign-off");
+assert(!appSrc.includes("ReviewSignoffBadge"), "the gold certificate is off the owner board");
+assert(!appSrc.includes("OwnerTabSignoffRow"), "floating gold sign-off rows are off the owner board");
+assert(!appSrc.includes('placement="corner"'), "the gold corner badge is off the owner board");
+assert(appSrc.includes("profitabilitySignoff"), "client profit tab uses profitability scope");
+assert(appSrc.includes("actionPlanSignoff"), "client action plan tab has its own sign-off");
+assert(appSrc.includes("financialsSignoff"), "client health tab keeps financials sign-off");
 assert(appSrc.includes("CashForecastPanel"), "owner cash mounts the forecast panel");
 assert(appSrc.includes("BudgetPanel"), "owner budget mounts the budget panel");
 assert(

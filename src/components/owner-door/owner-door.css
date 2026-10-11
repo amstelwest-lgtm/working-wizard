@@ -277,7 +277,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 
 .owner-door .health-orb:hover,
 .owner-door .health-orb:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--cobalt);
   outline-offset: 6px;
 }
 
@@ -298,7 +298,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door .sphere-caption:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--cobalt);
   outline-offset: 3px;
 }
 
@@ -2052,4 +2052,39 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
   .owner-door .owner-needs-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Appearance control on the owner door follows cobalt. Gold stays on the wordmark. */
+.owner-door .milon-theme-toggle {
+  border-color: var(--pale);
+  background: var(--pale);
+  color: var(--cobalt);
+  box-shadow: none;
+}
+.owner-door .milon-theme-toggle:hover {
+  border-color: var(--cobalt);
+  background: var(--pale);
+  box-shadow: none;
+}
+.owner-door .milon-theme-toggle:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cobalt);
+}
+
+/* Chart/table switches on the owner tabs use cobalt. Gold stays on the wordmark. */
+.owner-door [data-owner-page="health"] [data-view-toggle],
+.owner-door [data-owner-page="cash"] [data-view-toggle],
+.owner-door [data-owner-page="profit"] [data-view-toggle],
+.owner-door [data-owner-page="budget"] [data-view-toggle],
+.owner-door [data-owner-page="moves"] [data-view-toggle],
+.owner-door [data-owner-page="tasks"] [data-view-toggle] {
+  border-color: var(--pale);
+}
+.owner-door [data-owner-page="health"] [data-view-toggle] button[aria-selected="true"],
+.owner-door [data-owner-page="cash"] [data-view-toggle] button[aria-selected="true"],
+.owner-door [data-owner-page="profit"] [data-view-toggle] button[aria-selected="true"],
+.owner-door [data-owner-page="budget"] [data-view-toggle] button[aria-selected="true"],
+.owner-door [data-owner-page="moves"] [data-view-toggle] button[aria-selected="true"],
+.owner-door [data-owner-page="tasks"] [data-view-toggle] button[aria-selected="true"] {
+  background: var(--cobalt);
+  color: var(--on-cobalt);
 }

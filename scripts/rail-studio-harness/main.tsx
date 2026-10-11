@@ -204,6 +204,10 @@ const ownerDoorRoute = createRoute({
         : undefined,
     budgetCase:
       search.budgetCase === "empty" || search.budgetCase === "draft" ? search.budgetCase : "ready",
+    signoff:
+      search.signoff === "signed" || search.signoff === "unsigned" || search.signoff === "stale"
+        ? search.signoff
+        : undefined,
     bots: search.bots === "stack" ? "stack" : search.bots === "row" ? "row" : undefined,
   }),
   component: function OwnerDoorHarness() {

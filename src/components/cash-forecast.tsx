@@ -50,6 +50,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
@@ -1640,6 +1641,9 @@ export function CashForecastPanel({
             onChange={patchForecastSignoff}
           />
         ) : null}
+        {readOnly ? (
+          <OwnerSignoffMark signoff={forecastSignoff} isStale={forecastStale} />
+        ) : null}
         {readOnly ? null : (
           <Button
             type="button"
@@ -1668,13 +1672,15 @@ export function CashForecastPanel({
             {stripChip}
           </span>
         ) : null}
-        <SignoffStatusChip
-          clientId={clientId}
-          scope="cash_forecast"
-          signoff={forecastSignoff}
-          isStale={forecastStale}
-          known={signoffKnown}
-        />
+        {readOnly ? null : (
+          <SignoffStatusChip
+            clientId={clientId}
+            scope="cash_forecast"
+            signoff={forecastSignoff}
+            isStale={forecastStale}
+            known={signoffKnown}
+          />
+        )}
       </div>
     </section>
   );
@@ -2112,13 +2118,13 @@ export function CashForecastPanel({
       <CardContent className="pt-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43]">
               {horizonLabel || "Next 13 weeks"}
             </p>
             <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
               {view === "13week"
                 ? "Double-click a figure to edit. Red marks cash under the runway floor."
-                : `Gold line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
+                : `The line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
             </p>
           </div>
           <ViewToggle

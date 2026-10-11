@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ const STEP_RATIO: Record<string, string> = {
 
 const BAND_CHIP: Record<string, { color: string; bg: string }> = {
   healthy: { color: "#4caf82", bg: "rgba(76,175,130,0.15)" },
-  at_risk: { color: "#d4a550", bg: "rgba(212,165,80,0.15)" },
+  at_risk: { color: "#B7791F", bg: "rgba(183,121,31,0.12)" },
   critical: { color: "#e05c5c", bg: "rgba(224,92,92,0.15)" },
 };
 
@@ -211,6 +211,7 @@ export function ProfitabilityWaterfall({
   hideLead = false,
   hideCardExport = false,
   negative = "paren",
+  headerAside = null,
   onExportReady,
 }: {
   fallback?: WaterfallFallback;
@@ -237,6 +238,8 @@ export function ProfitabilityWaterfall({
   hideLead?: boolean;
   /** Export PDF sits on the answer strip. The card does not repeat it. */
   hideCardExport?: boolean;
+  /** Owner sign-off, aligned with this card's header. */
+  headerAside?: ReactNode;
   onExportReady?: (api: WaterfallExportApi) => void;
 }) {
   const { weeklyInputs } = useFinancialInputs();
@@ -392,15 +395,15 @@ export function ProfitabilityWaterfall({
   const showHeader = !hideLead || Boolean(yearToDate?.periodLabel) || Boolean(periodNote) || !hideCardExport;
 
   return (
-    <Card className="relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] text-[#0f172a] shadow-[0_20px_60px_rgba(109,79,22,0.10)] print:hidden dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:text-[#f1f5f9] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent" />
+    <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-slate-800 dark:bg-[#102A43] dark:text-[#f1f5f9] dark:shadow-none">
+      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]" />
       {showHeader ? (
-      <CardHeader className="border-b border-amber-900/10 pb-5 dark:border-slate-800">
+      <CardHeader className="border-b border-[#DBEAFE] pb-5 dark:border-slate-800">
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1">
             {hideLead ? null : (
               <>
-                <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
+                <CardTitle className="text-xl font-semibold tracking-tight text-[#102A43] dark:text-[#f8fafc]">
                   Profitability Waterfall
                 </CardTitle>
                 <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">{answerSentence}</p>
@@ -418,12 +421,13 @@ export function ProfitabilityWaterfall({
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">{periodNote}</p>
             ) : null}
           </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {headerAside}
           {hideCardExport ? null : (
-          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#d4a550] hover:bg-[#d4a550]/20"
+              className="h-7 gap-1.5 border-[#0B5FFF] bg-transparent px-2.5 text-[11px] font-semibold text-[#102A43] hover:bg-[#DBEAFE]"
               disabled={exporting}
               onClick={(e) => {
                 e.stopPropagation();
@@ -433,8 +437,8 @@ export function ProfitabilityWaterfall({
               <Download className="h-3 w-3" />
               {exporting ? "Preparing…" : "Export PDF"}
             </Button>
+            )}
           </div>
-          )}
         </div>
       </CardHeader>
       ) : null}

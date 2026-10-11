@@ -278,11 +278,8 @@ import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
-import {
-  ReviewSignoffBadge,
-  OwnerTabSignoffRow,
-  computeIsStale,
-} from "@/components/review-signoff";
+import { computeIsStale } from "@/components/review-signoff";
+import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import {
   currentPeriodDate,
   currentPeriodLabel,
@@ -3962,15 +3959,16 @@ function Index() {
                   health: (
                     <section className="owner-pane" data-owner-page="health">
                       <h1 className="owner-title">Business Health</h1>
-                      <ReviewSignoffBadge
-                        signoff={financialsSignoff}
-                        scope="financials"
-                        isStale={computeIsStale(
-                          financialsSignoff,
-                          clientMeta?.financials_updated_at ?? null,
-                        )}
-                      />
                       {showScoredBoard ? (
+                        <div className="owner-health-hero">
+                          <OwnerSignoffMark
+                            signoff={financialsSignoff}
+                            isStale={computeIsStale(
+                              financialsSignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            )}
+                            className="mb-2"
+                          />
                         <OwnerHealthOrb
                           overallHealth={avgHealth}
                           displayStatus={overallHealth.displayStatus}
@@ -3981,6 +3979,7 @@ function Index() {
                             if (key in RATIO_META) setOpenRatio(key as RatioKey);
                           }}
                         />
+                        </div>
                       ) : (
                         <>
                           <p className="owner-lede">Your accountant sets this up</p>
@@ -4061,12 +4060,6 @@ function Index() {
                   ),
                   tasks: (
                     <section className="owner-pane" data-owner-page="tasks">
-                      <OwnerTabSignoffRow
-                        label="Action Plan"
-                        signoff={actionPlanSignoff}
-                        scope="action_plan"
-                        isStale={false}
-                      />
                       <Suspense fallback={<p className="owner-lede">Loading tasks…</p>}>
                         {effectiveClientId ? (
                           <ActionPlanPanel
@@ -4074,6 +4067,11 @@ function Index() {
                             clientName={actingClientName ?? undefined}
                             simplified
                             isOwner={userRole !== "client_member"}
+                            ownerSignoff={actionPlanSignoff}
+                            ownerSignoffStale={computeIsStale(
+                              actionPlanSignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            )}
                             moves={nextSteps.map((s) => ({
                               key: s.key,
                               title: s.title,
@@ -4092,17 +4090,17 @@ function Index() {
                   profit: (
                     <section className="owner-pane" data-owner-page="profit">
                       <h1 className="owner-title">Profit</h1>
-                      <OwnerTabSignoffRow
-                        label="Profitability Waterfall"
-                        signoff={profitabilitySignoff}
-                        scope="profitability"
-                        isStale={computeIsStale(
-                          profitabilitySignoff,
-                          clientMeta?.financials_updated_at ?? null,
-                        )}
-                      />
                       {showScoredBoard ? (
                         <ProfitabilityWaterfall
+                          headerAside={
+                            <OwnerSignoffMark
+                              signoff={profitabilitySignoff}
+                              isStale={computeIsStale(
+                                profitabilitySignoff,
+                                clientMeta?.financials_updated_at ?? null,
+                              )}
+                            />
+                          }
                           negative="minus"
                           clientName={actingClientName ?? undefined}
                           clientId={effectiveClientId ?? undefined}
@@ -4153,6 +4151,11 @@ function Index() {
                             }))}
                             onViewAnalysis={() => go("health")}
                             onInviteAccountant={() => go("accountant")}
+                            ownerSignoff={actionPlanSignoff}
+                            ownerSignoffStale={computeIsStale(
+                              actionPlanSignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            )}
                             onOpenApproved={(target) => {
                               if (target.screen === "accountant") {
                                 go("accountant");
@@ -4795,17 +4798,6 @@ function Index() {
                         subtitle="Your financial pulse at a glance."
                         meta={
                           <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
-                            <div className="sm:hidden">
-                              <ReviewSignoffBadge
-                                signoff={financialsSignoff}
-                                scope="financials"
-                                isStale={computeIsStale(
-                                  financialsSignoff,
-                                  clientMeta?.financials_updated_at ?? null,
-                                )}
-                                placement="corner"
-                              />
-                            </div>
                             {hasRealFinancials ? (
                               <StatusPill
                                 variant="live"
@@ -5061,18 +5053,15 @@ function Index() {
                               ) : null}
                               <CollectionsOverdueNote clientId={effectiveClientId} market={boardMarket} />
                               <PayablesOverdueNote clientId={effectiveClientId} market={boardMarket} />
-                              <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
-                                <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
-                                  <ReviewSignoffBadge
-                                    signoff={financialsSignoff}
-                                    scope="financials"
-                                    isStale={computeIsStale(
-                                      financialsSignoff,
-                                      clientMeta?.financials_updated_at ?? null,
-                                    )}
-                                    placement="corner"
-                                  />
-                                </div>
+                              <div className="relative rounded-xl border border-[#DBEAFE] bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
+                                <OwnerSignoffMark
+                                  signoff={financialsSignoff}
+                                  isStale={computeIsStale(
+                                    financialsSignoff,
+                                    clientMeta?.financials_updated_at ?? null,
+                                  )}
+                                  className="mb-2"
+                                />
                                 <SphereHero
                                   compact
                                   overallHealth={avgHealth}
@@ -5130,15 +5119,16 @@ function Index() {
                     </div>
                   ) : (
                     <div>
-                      <OwnerTabSignoffRow
-                        label="Financial Ratios"
-                        signoff={financialsSignoff}
-                        scope="financials"
-                        isStale={computeIsStale(
-                          financialsSignoff,
-                          clientMeta?.financials_updated_at ?? null,
-                        )}
-                      />
+                      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                        <span className="text-[13px] font-semibold text-[#102A43]">Financial ratios</span>
+                        <OwnerSignoffMark
+                          signoff={financialsSignoff}
+                          isStale={computeIsStale(
+                            financialsSignoff,
+                            clientMeta?.financials_updated_at ?? null,
+                          )}
+                        />
+                      </div>
                       {isUsCopy(boardMarket) && (
                         <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
                           {industryBenchmarkCaption(boardMarket)}
@@ -5527,16 +5517,15 @@ function Index() {
 
               <TabsContent value="waterfall">
                 <TabErrorBoundary label="Profit">
-                  <OwnerTabSignoffRow
-                    id="wizard-owner-signoff"
-                    label="Profitability Waterfall"
-                    signoff={profitabilitySignoff}
-                    scope="profitability"
-                    isStale={computeIsStale(
-                      profitabilitySignoff,
-                      clientMeta?.financials_updated_at ?? null,
-                    )}
-                  />
+                  <div id="wizard-owner-signoff" className="mb-3 flex justify-end">
+                    <OwnerSignoffMark
+                      signoff={profitabilitySignoff}
+                      isStale={computeIsStale(
+                        profitabilitySignoff,
+                        clientMeta?.financials_updated_at ?? null,
+                      )}
+                    />
+                  </div>
                   {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
                     <NoFiguresBanner
                       tabLabel="Profit"
@@ -5756,12 +5745,6 @@ function Index() {
               </TabsContent>
 
               <TabsContent value="tasks">
-                <OwnerTabSignoffRow
-                  label="Action Plan"
-                  signoff={actionPlanSignoff}
-                  scope="action_plan"
-                  isStale={false}
-                />
                 <div id="wizard-tasks-panel">
                   <TabErrorBoundary label="Action Plan">
                     <Suspense
@@ -5773,6 +5756,11 @@ function Index() {
                           clientName={actingClientName ?? undefined}
                           simplified={viewMode === "simplified"}
                           isOwner={userRole !== "client_member"}
+                          ownerSignoff={actionPlanSignoff}
+                          ownerSignoffStale={computeIsStale(
+                            actionPlanSignoff,
+                            clientMeta?.financials_updated_at ?? null,
+                          )}
                           moves={nextSteps.map((s) => ({
                             key: s.key,
                             title: s.title,

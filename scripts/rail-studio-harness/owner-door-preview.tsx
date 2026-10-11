@@ -10,8 +10,10 @@ import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { ownerBotKey, runBotTransition } from "@/components/owner-door/owner-bot-motion";
 import { OwnerChat, type OwnerChatTurn } from "@/components/owner-door/owner-chat";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
+import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import {
   OwnerAccountant,
   OwnerFirst,
@@ -102,12 +104,49 @@ const PILLARS: SpherePillar[] = [
   },
 ];
 
-function HealthOrb({ onDriver }: { onDriver?: (key: string) => void }) {
+const SIGNATURE =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="36" viewBox="0 0 120 36"><path d="M4 28 C 18 6, 28 8, 40 24 S 72 42, 112 8" fill="none" stroke="#102A43" stroke-width="2"/></svg>',
+  );
+
+function previewSignoff(scope: ReviewScope): { signoff: ClientReviewSignoff | null; stale: boolean } {
+  const mode = new URLSearchParams(window.location.search).get("signoff") ?? "stale";
+  if (mode === "unsigned") return { signoff: null, stale: false };
+  const signedAt = mode === "signed" ? "2026-10-02T12:00:00.000Z" : "2026-09-01T14:26:00.000Z";
+  return {
+    stale: mode !== "signed",
+    signoff: {
+      id: `preview-${scope}`,
+      client_id: "harness-client",
+      scope,
+      signed_off_by_id: "preview",
+      signed_off_by_name: "Theo",
+      signed_off_by_initials: "TH",
+      signed_off_by_title: null,
+      firm_name: "My practice",
+      note: null,
+      signature_data: SIGNATURE,
+      signed_off_at: signedAt,
+    },
+  };
+}
+
+function HealthOrb({
+  onDriver,
+  signoff,
+  stale,
+}: {
+  onDriver?: (key: string) => void;
+  signoff: ClientReviewSignoff | null;
+  stale: boolean;
+}) {
   return (
     <div className="owner-health-hero">
+      <OwnerSignoffMark signoff={signoff} isStale={stale} className="mb-2" />
       <SphereHero
-        overallHealth={64}
-        displayStatus="at_risk"
+        overallHealth={80}
+        displayStatus="healthy"
         pillars={PILLARS}
         caption="Collections are the lever."
         onTopPriority={() => undefined}
@@ -350,7 +389,7 @@ export function OwnerDoorPreview({
       {view === "health" ? (
         <section className="owner-pane" data-owner-page="health">
           <h1 className="owner-title">Business Health</h1>
-          <HealthOrb onDriver={setDriver} />
+          <HealthOrb onDriver={setDriver} {...previewSignoff("financials")} />
           {driver ? <p data-health-driver={driver}>Opened {driver}</p> : null}
         </section>
       ) : null}
@@ -364,6 +403,9 @@ export function OwnerDoorPreview({
             hideReadOnlyStamp
             readOnly
             onInvite={() => undefined}
+            signoff={previewSignoff("cash_forecast").signoff}
+            signoffStale={previewSignoff("cash_forecast").stale}
+            signoffKnown
           />
         </section>
       ) : null}
@@ -378,6 +420,8 @@ export function OwnerDoorPreview({
             hideReadOnlyStamp
             readOnly
             onInvite={() => undefined}
+            signoff={previewSignoff("budget").signoff}
+            signoffKnown
             priorYear={budgetCase === "empty" ? FULL_PRIOR : YTD_PRIOR}
             priorYearMonths={budgetCase === "empty" ? 12 : 7}
             priorYearLabel={budgetCase === "empty" ? "2025" : "Mar–Sep 2025"}
@@ -389,6 +433,12 @@ export function OwnerDoorPreview({
         <section className="owner-pane" data-owner-page="profit">
           <h1 className="owner-title">Profit</h1>
           <ProfitabilityWaterfall
+            headerAside={
+              <OwnerSignoffMark
+                signoff={previewSignoff("profitability").signoff}
+                isStale={previewSignoff("profitability").stale}
+              />
+            }
             clientId="harness-client"
             clientName="Northline Studio"
             periodLabel="September 2026"
@@ -405,6 +455,8 @@ export function OwnerDoorPreview({
             simplified
             isOwner
             ownerView
+            ownerSignoff={previewSignoff("action_plan").signoff}
+            ownerSignoffStale={previewSignoff("action_plan").stale}
             moves={[
               {
                 key: "debtorDays",

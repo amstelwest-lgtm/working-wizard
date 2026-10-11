@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
+import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName } from "@/lib/milon-team";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
@@ -67,12 +69,12 @@ import {
 } from "lucide-react";
 
 // ── Brand (matches cash-forecast / waterfall) ────────────────────────────────
-const GOLD = "#d4a550";
-const GOLD_DARK = "#b8860b";
+const GOLD = "#0B5FFF";
+const GOLD_DARK = "#102A43";
 const CARD_SHELL =
-  "relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] shadow-[0_20px_60px_rgba(109,79,22,0.10)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]";
+  "relative overflow-hidden border border-[#DBEAFE] bg-white shadow-[0_8px_24px_rgba(16,42,67,0.06)] dark:border-slate-800 dark:bg-[#102A43] dark:shadow-none";
 const GOLD_RULE =
-  "pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent";
+  "pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]";
 const INPUT_CLS =
   "border-amber-900/15 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100";
 const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
@@ -191,6 +193,9 @@ interface Props {
   onOpenApproved?: (target: { table: string; recordId: string | null; screen: "moves" | "accountant" }) => void;
   /** 409 client_has_no_firm. The accountant page holds the invite. */
   onInviteAccountant?: () => void;
+  /** Owner tab sign-off. Unsigned renders nothing. */
+  ownerSignoff?: ClientReviewSignoff | null;
+  ownerSignoffStale?: boolean;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -481,6 +486,8 @@ export default function ActionPlanPanel({
   ownerView = false,
   onOpenApproved,
   onInviteAccountant,
+  ownerSignoff = null,
+  ownerSignoffStale = false,
 }: Props) {
   const { date } = useMarketFormat();
   const { profile } = useAccountantProfile();
@@ -1191,7 +1198,7 @@ export default function ActionPlanPanel({
       {/* ── The table ── */}
       <Card id="wizard-action-list" className={CARD_SHELL}>
         <div className={GOLD_RULE} />
-        <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
+        <CardHeader className="border-b border-[#DBEAFE] pb-4 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-100">
@@ -1202,7 +1209,9 @@ export default function ActionPlanPanel({
                 progress
               </span>
             </div>
-            {ownerView ? null : (
+            {ownerView ? (
+              <OwnerSignoffMark signoff={ownerSignoff} isStale={ownerSignoffStale} />
+            ) : (
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 id="action-plan-export-pdf"
