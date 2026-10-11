@@ -70,6 +70,8 @@ export function BudgetPanel({
   lens,
   onLensChange,
   actualMonths,
+  readOnly = false,
+  onInvite,
 }: {
   clientId?: string;
   clientName?: string;
@@ -104,6 +106,10 @@ export function BudgetPanel({
   onLensChange?: (next: BudgetLens) => void;
   /** Preview months. Production reads stored month actuals instead. */
   actualMonths?: readonly BudgetActualMonth[];
+  /** Owner door: show the plan and sign-off, hide setup and edits. */
+  readOnly?: boolean;
+  /** Invite control shown when a read-only budget is not configured. */
+  onInvite?: () => void;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -457,6 +463,18 @@ export function BudgetPanel({
   );
 
   if (!doc) {
+    if (readOnly) {
+      return (
+        <div className="space-y-3 rounded-xl border border-[var(--line)] bg-[var(--card)] p-6 text-[15px] text-[var(--ink)]">
+          <p>Your accountant sets this up</p>
+          {onInvite ? (
+            <button type="button" className="btn gold" onClick={onInvite}>
+              Invite your accountant
+            </button>
+          ) : null}
+        </div>
+      );
+    }
     return (
       <>
         <ReviewInputsDrawer>{budgetInputConfig}</ReviewInputsDrawer>
@@ -553,7 +571,7 @@ export function BudgetPanel({
 
   return (
     <>
-      {scaleBroken && (
+      {scaleBroken && !readOnly && (
         <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
           <p className="font-semibold">Rebuild is a suggestion — nothing has been replaced</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
@@ -579,7 +597,7 @@ export function BudgetPanel({
           </p>
         </div>
       )}
-      {implausible && (
+      {implausible && !readOnly && (
         <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
           <p className="font-semibold">This budget does not line up with the saved statement</p>
           <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
@@ -616,7 +634,8 @@ export function BudgetPanel({
         canSign={Boolean(canSign && clientId)}
         onSignoffChange={patchBudgetSignoff}
         signoffKnown={signoffKnown}
-        drawer={reviewDrawer}
+        drawer={readOnly ? null : reviewDrawer}
+        readOnly={readOnly}
         lens={lens}
         onLensChange={onLensChange}
         actualMonths={actualMonths}

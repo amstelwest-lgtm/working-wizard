@@ -106,6 +106,7 @@ export function BudgetSimpleView({
   lens,
   onLensChange,
   actualMonths,
+  readOnly = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -122,6 +123,7 @@ export function BudgetSimpleView({
   lens?: BudgetLens;
   onLensChange?: (next: BudgetLens) => void;
   actualMonths?: readonly BudgetActualMonth[];
+  readOnly?: boolean;
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -242,7 +244,7 @@ export function BudgetSimpleView({
         onLensChange={onLensChange}
         actualMonths={actualMonths}
       />
-      {drawer}
+      {readOnly ? null : <>{drawer}</>}
       <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
         {plainBudgetWindowHeading(tpl.label, doc, market)}
       </p>
@@ -291,6 +293,7 @@ export function BudgetSimpleView({
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
+            {readOnly ? null : (
             <button
               type="button"
               onClick={() => {
@@ -306,6 +309,7 @@ export function BudgetSimpleView({
             >
               {sameEveryMonth ? "Same every month · on" : "Same every month"}
             </button>
+            )}
           </div>
         </div>
 
@@ -315,6 +319,9 @@ export function BudgetSimpleView({
             label={localizeCopy(line?.volumeLabel ?? "Volume", market)}
             hint={line?.name ? `${line.name}` : "Units they move this month"}
           >
+            {readOnly ? (
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]">{cell.volume}</p>
+            ) : (
             <Input
               type="number"
               inputMode="decimal"
@@ -323,6 +330,7 @@ export function BudgetSimpleView({
               value={cell.volume}
               onChange={(e) => patchFocus({ volume: parseFloat(e.target.value) || 0 })}
             />
+            )}
           </DriverPad>
           <EquationOp symbol="×" label="times" />
           <DriverPad
@@ -332,6 +340,9 @@ export function BudgetSimpleView({
           >
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-lg font-medium text-[#b8860b]">{symbol}</span>
+              {readOnly ? (
+                <span className="text-2xl font-semibold tabular-nums text-[var(--ink)]">{cell.price}</span>
+              ) : (
               <Input
                 type="number"
                 inputMode="decimal"
@@ -340,6 +351,7 @@ export function BudgetSimpleView({
                 value={cell.price}
                 onChange={(e) => patchFocus({ price: parseFloat(e.target.value) || 0 })}
               />
+              )}
             </div>
           </DriverPad>
           <EquationOp symbol="=" label="equals" />
@@ -362,6 +374,9 @@ export function BudgetSimpleView({
             hint="Share of revenue left after cost of sales"
           >
             <div className="flex items-center gap-3">
+              {readOnly ? (
+                <span className="text-lg font-semibold tabular-nums text-[var(--ink)]">{doc.gpPct}</span>
+              ) : (
               <Input
                 type="number"
                 inputMode="decimal"
@@ -370,6 +385,7 @@ export function BudgetSimpleView({
                 value={doc.gpPct}
                 onChange={(e) => setGp(parseFloat(e.target.value) || 0)}
               />
+              )}
               <span className="text-sm font-semibold text-[#b8860b]">%</span>
               <span className="hidden text-[13px] tabular-nums text-[#6b6354] sm:inline dark:text-slate-400">
                 → {money(focus?.grossProfit ?? 0)}
@@ -391,6 +407,11 @@ export function BudgetSimpleView({
             label="Fixed overheads"
             hint="Rent, salaries, keep-the-lights-on this month"
           >
+            {readOnly ? (
+              <span className="text-lg font-semibold tabular-nums text-[var(--ink)]">
+                {money(monthOverheadTotal(doc, focusMonth))}
+              </span>
+            ) : (
             <MoneyField
               value={monthOverheadTotal(doc, focusMonth)}
               onChange={setOverhead}
@@ -398,6 +419,7 @@ export function BudgetSimpleView({
               market={market}
               className="budget-driver-input h-10 w-36 border-0 bg-transparent px-0 text-right text-lg font-semibold tabular-nums shadow-none focus-visible:ring-0"
             />
+            )}
           </CascadeRow>
           <CascadeRow
             kicker="Leftover"
@@ -496,6 +518,11 @@ export function BudgetSimpleView({
                 </span>
               ) : null}
             </Label>
+            {readOnly ? (
+              <p className="mt-1 text-[15px] font-semibold tabular-nums text-[var(--ink)]">
+                {money(doc.openingCash ?? 0)}
+              </p>
+            ) : (
             <MoneyField
               value={doc.openingCash ?? 0}
               label="Opening cash"
@@ -510,6 +537,7 @@ export function BudgetSimpleView({
                 })
               }
             />
+            )}
             <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
               {role === "accountant"
                 ? "Cash in the bank on day one of this financial year. Month-end cash stacks on this number, so closing cash is only as true as this start."
@@ -528,6 +556,9 @@ export function BudgetSimpleView({
                 </span>
               ) : null}
             </Label>
+            {readOnly ? (
+              <p className="mt-1 text-[15px] font-semibold tabular-nums text-[var(--ink)]">{doc.wc.debtorDays}</p>
+            ) : (
             <Input
               type="number"
               className="mt-1 h-9"
@@ -541,6 +572,7 @@ export function BudgetSimpleView({
                 })
               }
             />
+            )}
             <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
               {role === "accountant"
                 ? "How many days customers typically take to pay. Longer days delay cash even when the month’s profit looks fine — this is what creates a cash trough."
@@ -559,6 +591,9 @@ export function BudgetSimpleView({
                 </span>
               ) : null}
             </Label>
+            {readOnly ? (
+              <p className="mt-1 text-[15px] font-semibold tabular-nums text-[var(--ink)]">{doc.wc.creditorDays}</p>
+            ) : (
             <Input
               type="number"
               className="mt-1 h-9"
@@ -572,6 +607,7 @@ export function BudgetSimpleView({
                 })
               }
             />
+            )}
             <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
               {role === "accountant"
                 ? "How many days this business typically takes to pay suppliers. Longer days hold cash in; shorter days pull it out sooner."

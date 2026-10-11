@@ -3,9 +3,15 @@
  * file. Production /app never imports it.
  */
 import { useEffect, useState } from "react";
+import ActionPlanPanel from "@/components/action-plan";
+import { BudgetPanel } from "@/components/budget/budget-panel";
+import { CashForecastPanel } from "@/components/cash-forecast";
+import { NextStepsPanel } from "@/components/next-steps-panel";
 import { OwnerAvatar } from "@/components/owner-door/owner-avatar";
 import { OwnerChat } from "@/components/owner-door/owner-chat";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
+import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import {
   OwnerAccountant,
   OwnerActions,
@@ -42,17 +48,69 @@ const TILES = ownerAnswerTiles({
   market: USD,
 });
 
+const PILLARS: SpherePillar[] = [
+  {
+    id: "profit",
+    label: "Profit",
+    health: 72,
+    blurb: "Margin is holding.",
+    drivers: [{ key: "grossMargin", label: "Gross margin", health: 74 }],
+  },
+  {
+    id: "assets",
+    label: "Assets",
+    health: 61,
+    blurb: "Assets are working.",
+    drivers: [{ key: "roa", label: "Return on assets", health: 61 }],
+  },
+  {
+    id: "financing",
+    label: "Financing",
+    health: 68,
+    blurb: "Debt is light.",
+    drivers: [{ key: "debtToEquity", label: "Debt to equity", health: 68 }],
+  },
+  {
+    id: "cash",
+    label: "Cash",
+    health: 54,
+    blurb: "Collections are the lever.",
+    drivers: [{ key: "debtorDays", label: "Debtor days", health: 48 }],
+  },
+];
+
+function HealthOrb({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className="owner-health-hero">
+      <SphereHero
+        compact={compact}
+        overallHealth={64}
+        displayStatus="at_risk"
+        pillars={PILLARS}
+        caption="Collections are the lever."
+      />
+    </div>
+  );
+}
+
 export type OwnerPreviewView =
   | "rest"
   | "work"
   | "chat"
+  | "recording"
   | "ask"
   | "reel"
   | "actions"
   | "accountant"
   | "deliverables"
   | "plan"
-  | "first";
+  | "first"
+  | "health"
+  | "cash"
+  | "budget"
+  | "tasks"
+  | "profit"
+  | "moves";
 
 export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
@@ -99,9 +157,18 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
   return (
     <OwnerShell
       screen={
-        view === "chat"
+        view === "chat" || view === "recording"
           ? "chat"
-          : view === "actions" || view === "accountant" || view === "deliverables" || view === "plan"
+          : view === "actions" ||
+              view === "accountant" ||
+              view === "deliverables" ||
+              view === "plan" ||
+              view === "health" ||
+              view === "cash" ||
+              view === "budget" ||
+              view === "tasks" ||
+              view === "profit" ||
+              view === "moves"
             ? view
             : "home"
       }
@@ -139,7 +206,79 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           ))}
         </div>
       ) : null}
-      {view === "chat" && chatAgent ? (
+      {view === "health" ? (
+        <section className="owner-pane" data-owner-page="health">
+          <h1 className="owner-title">Business Health</h1>
+          <HealthOrb />
+        </section>
+      ) : null}
+      {view === "cash" ? (
+        <section className="owner-pane" data-owner-page="cash">
+          <CashForecastPanel
+            clientId="harness-client"
+            clientName="Northline Studio"
+            simplified
+            canSign={false}
+            hideReadOnlyStamp
+            readOnly
+            onInvite={() => undefined}
+          />
+        </section>
+      ) : null}
+      {view === "budget" ? (
+        <section className="owner-pane" data-owner-page="budget">
+          <BudgetPanel
+            clientId="harness-client"
+            clientName="Northline Studio"
+            simplified
+            role="owner"
+            canSign={false}
+            hideReadOnlyStamp
+            readOnly
+            onInvite={() => undefined}
+          />
+        </section>
+      ) : null}
+      {view === "tasks" ? (
+        <section className="owner-pane" data-owner-page="tasks">
+          <h1 className="owner-title">Action plan</h1>
+          <ActionPlanPanel clientId="harness-client" clientName="Northline Studio" simplified isOwner />
+        </section>
+      ) : null}
+      {view === "profit" ? (
+        <section className="owner-pane" data-owner-page="profit">
+          <h1 className="owner-title">Profit</h1>
+          <ProfitabilityWaterfall clientId="harness-client" clientName="Northline Studio" periodLabel="September 2026" />
+        </section>
+      ) : null}
+      {view === "moves" ? (
+        <section className="owner-pane" data-owner-page="moves">
+          <h1 className="owner-title">Next moves</h1>
+          <NextStepsPanel
+            simplified
+            steps={[
+              {
+                key: "debtorDays",
+                title: "Collect the two largest invoices",
+                ratioName: "Debtor days",
+                icon: "cash",
+                cynefin: "Clear",
+                eisenhower: "Do",
+                impact: 80,
+                impactLine: "Cash arrives sooner.",
+                health: 48,
+                score: 48,
+              },
+            ]}
+            done={new Set()}
+            onToggleDone={() => undefined}
+            onOpenSop={() => undefined}
+            clientName="Northline Studio"
+            isOwner
+          />
+        </section>
+      ) : null}
+      {(view === "chat" || view === "recording") && chatAgent ? (
         <OwnerChat
           agent={chatAgent.agent}
           variant="character"
@@ -153,7 +292,7 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
             },
           ]}
           draft=""
-          listening={false}
+          listening={view === "recording"}
           busy={false}
           error={null}
           onDraft={() => undefined}
@@ -196,6 +335,7 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           onOpen={() => undefined}
           onAsk={() => undefined}
           onTile={() => undefined}
+          hero={<HealthOrb compact />}
         />
       ) : null}
     </OwnerShell>

@@ -159,6 +159,7 @@ export function CashThirteenWeekGrid({
   openingChip,
   flowChip,
   onCommit,
+  readOnly = false,
 }: {
   weeks: string[];
   opening: number;
@@ -175,6 +176,8 @@ export function CashThirteenWeekGrid({
   format: (n: number) => string;
   openingChip: string;
   flowChip: string;
+  /** Owner door views the weeks. Editing stays available for the accountant. */
+  readOnly?: boolean;
   onCommit: (
     bucket: "revenue" | "expenses" | "other",
     id: string,
@@ -204,7 +207,7 @@ export function CashThirteenWeekGrid({
     kind,
     blankZero: true,
     tone,
-    editable: line.bucket ? { bucket: line.bucket, id: line.id } : undefined,
+    editable: !readOnly && line.bucket ? { bucket: line.bucket, id: line.id } : undefined,
   });
 
   const sections: Array<{ label: string; rows: GridRow[] }> = [

@@ -478,6 +478,8 @@ export function CashForecastPanel({
   onBankPublish,
   initialBankDraft = null,
   statementChip = null,
+  readOnly = false,
+  onInvite,
 }: {
   clientId?: string;
   clientName?: string;
@@ -507,6 +509,10 @@ export function CashForecastPanel({
   initialBankDraft?: CashFromBanksDraftResult | null;
   /** QuickBooks / Uploaded statement / Xero / Sage chip from the statement file. */
   statementChip?: string | null;
+  /** Owner door: show the forecast and sign-off, hide setup and edits. */
+  readOnly?: boolean;
+  /** Invite control shown when a read-only forecast has no lines yet. */
+  onInvite?: () => void;
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
@@ -1537,13 +1543,24 @@ export function CashForecastPanel({
   ) : null;
 
   const emptyNotice = forecastEmpty ? (
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
-      <span>
-        Nothing is forecast yet. This needs a bank statement or forecast inputs — the figures
-        below stay at {cur}0 until then. Upload bank statements, or set the line items in
-        Forecast Setup.
-      </span>
-    </div>
+    readOnly ? (
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--card)] px-4 py-3 text-[15px] text-[var(--ink)]">
+        <span>Your accountant sets this up</span>
+        {onInvite ? (
+          <button type="button" className="btn gold" onClick={onInvite}>
+            Invite your accountant
+          </button>
+        ) : null}
+      </div>
+    ) : (
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+        <span>
+          Nothing is forecast yet. This needs a bank statement or forecast inputs — the figures
+          below stay at {cur}0 until then. Upload bank statements, or set the line items in
+          Forecast Setup.
+        </span>
+      </div>
+    )
   ) : null;
 
   const configureInputs = (
@@ -1620,15 +1637,17 @@ export function CashForecastPanel({
             onChange={patchForecastSignoff}
           />
         ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="answer-strip__secondary"
-          onClick={() => setShowBankUpload(true)}
-        >
-          Upload bank statements
-        </Button>
+        {readOnly ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="answer-strip__secondary"
+            onClick={() => setShowBankUpload(true)}
+          >
+            Upload bank statements
+          </Button>
+        )}
         <button
           type="button"
           className="answer-strip__icon"
@@ -2164,6 +2183,7 @@ export function CashForecastPanel({
               format={fmtR}
               openingChip={openingChipKey}
               flowChip={flowChipKey}
+              readOnly={readOnly}
               onCommit={commitWeekOverride}
             />
           ) : (
@@ -2179,7 +2199,7 @@ export function CashForecastPanel({
     return (
       <div id="wizard-cash-outlook" className="space-y-0">
         {answerStrip}
-        {reviewInputs}
+        {readOnly ? null : reviewInputs}
         {forecastCard}
       </div>
     );
@@ -2189,10 +2209,10 @@ export function CashForecastPanel({
   return (
     <div id="wizard-cash-outlook" className="space-y-5">
       {answerStrip}
-      {reviewInputs}
+      {readOnly ? null : reviewInputs}
       {forecastCard}
-
-      {/* Setup + inputs */}
+      {readOnly ? null : (
+      <>
       <CollapsibleGoldCard
         id="wizard-cash-setup"
         icon={Settings2}
@@ -2297,6 +2317,8 @@ export function CashForecastPanel({
           </div>
         </div>
       </CollapsibleGoldCard>
+      </>
+      )}
 
       <CashFromBanksDrafter
         open={showBankUpload}
