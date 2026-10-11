@@ -20,10 +20,12 @@ import { priorActivityIso } from "../src/lib/agent-enqueue.ts";
 import {
   ANALYST_MAX_ITERATIONS,
   ANALYST_TOOLS,
+  analystEmptyFindingStop,
   analystFailurePlan,
   analystRunCostUsd,
   analystRunOutcome,
   analystRunSummary,
+  EMPTY_FINDING_RESULT,
   analystToolAllowed,
   collectStoredReads,
   dataQualityComparesPeriods,
@@ -706,8 +708,59 @@ const DAY = 24 * 60 * 60 * 1000;
     maxIterations: 10,
   });
   assert(early.status === "partial", "a safety stop before the cap stays partial");
+  const emptyClass = classifyResult("record_finding", EMPTY_FINDING_RESULT);
+  assert(emptyClass.status === "empty", "an empty finding is not an error");
+  assert(EMPTY_FINDING_RESULT.finish === "Call finish if nothing new.", "an empty finding tells the model to finish");
+  assert(analystEmptyFindingStop([{ tool: "record_finding", status: "empty" }])?.reason === "no_further_action", "a run of only empty calls finishes");
+  assert(
+    analystEmptyFindingStop([
+      { tool: "get_health", status: "ok" },
+      { tool: "record_finding", status: "empty" },
+    ]) == null,
+    "one empty call after a read still lets the model finish",
+  );
+  assert(
+    analystEmptyFindingStop([
+      { tool: "get_health", status: "ok" },
+      { tool: "record_finding", status: "empty" },
+      { tool: "record_finding", status: "empty" },
+    ])?.summary === "Nothing new to record.",
+    "a second empty call finishes the run",
+  );
+  const onlyEmpty = analystRunOutcome({
+    stopReason: "safety_limit",
+    steps: [{ tool: "record_finding", status: "empty" }],
+    maxIterations: 10,
+  });
+  assert(onlyEmpty.status === "succeeded" && onlyEmpty.stopReason === "no_further_action", "a cap of only empty findings finishes");
+  const emptySeen: string[] = [];
+  await runAgentLoop({
+    objective: "Review the books.",
+    audience: "accountant",
+    maxIterations: 3,
+    allowedTools: ["record_finding"],
+    toolLabels: { record_finding: "Finding" },
+    reason: async (ctx) => {
+      const prior = ctx.exchanges?.at(-1)?.calls[0]?.content;
+      if (prior) emptySeen.push(prior);
+      if (ctx.iteration > 1) return { kind: "stop", reason: "no_further_action", summary: "Done." };
+      return { kind: "tool", name: "record_finding", args: {}, why: "nothing new" };
+    },
+    execute: async () => EMPTY_FINDING_RESULT,
+  });
+  assert(emptySeen[0]?.includes("Call finish if nothing new."), "the next turn sees the cheap finish instruction");
+  assert(!emptySeen[0]?.includes("A finding needs a title"), "an empty finding is not a title error");
   const runSrc = readFileSync(resolve("supabase/functions/agent-analyst/run.ts"), "utf8");
   assert(runSrc.includes("analystRunOutcome"), "the analyst run uses the cap outcome");
+  const reasonBody = runSrc.slice(runSrc.indexOf("reason: async"));
+  assert(
+    reasonBody.includes("analystEmptyFindingStop") &&
+      reasonBody.indexOf("analystEmptyFindingStop") < reasonBody.indexOf("callClaudeRound"),
+    "an empty finding finishes before another model call",
+  );
+  const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
+  assert(executeSrc.includes("EMPTY_FINDING_RESULT"), "a finding with no title returns the empty result");
+  assert(!executeSrc.includes("A finding needs a title"), "a missing title is not an error turn");
   assert(runSrc.includes("analystRunSummary"), "the analyst run replaces the cap summary");
   assert(runSrc.includes("evidence_keys_note"), "each read result lists the evidence keys");
   const loopSrc = readFileSync(resolve("supabase/functions/_shared/agent-core/loop.ts"), "utf8");

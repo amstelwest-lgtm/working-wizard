@@ -204,8 +204,8 @@ if (ask.ok) {
   assert(ask.severity === "watch" && ask.evidence.status === "attention", "watch is attention when cash is not under the floor");
   const margin = ask.evidence.metrics?.find((metric) => metric.metric === "Gross Margin");
   const days = ask.evidence.metrics?.find((metric) => metric.metric === "Debtor Days");
-  assert(margin?.value === 0.6 && margin.unit === "percent" && margin.period === "Sep 2026", "gross margin keeps the stored 0.6");
-  assert(days?.value === 43.8 && days.unit === "days", "debtor days keep the stored 43.8");
+  assert(margin?.value === 60 && margin.value_raw === 0.6 && margin.unit === "percent" && margin.period === "Sep 2026", "gross margin is stored as 60, with the fraction beside it");
+  assert(days?.value === 43.8 && days.unit === "days" && days.value_raw == null, "debtor days keep the stored 43.8");
 }
 
 const sales = polishAgentCopy({
@@ -219,7 +219,7 @@ const costMetrics = evidenceMetrics({ cost_of_sales: 13846, fixed_cost_ratio: 0.
 const salesMetric = costMetrics.find((metric) => metric.metric === "cost_of_sales");
 const costRatio = costMetrics.find((metric) => metric.metric === "fixed_cost_ratio");
 assert(salesMetric?.unit === "currency" && salesMetric.value === 13846, "cost of sales is a currency metric");
-assert(costRatio?.unit === "percent" && costRatio.value === 0.6, "a cost ratio keeps the stored ratio");
+assert(costRatio?.unit === "percent" && costRatio.value === 60 && costRatio.value_raw === 0.6, "a cost ratio is stored as a percentage");
 
 const runway = polishAgentCopy({
   text: "Cash runway is 13 weeks.",
@@ -252,12 +252,18 @@ const netLow = polishAgentCopy({
   market: US,
 });
 assert(netLow.ok === true && netLow.text === "Net margin is 8.6%.", "8% for 0.0857 is rewritten to one decimal");
-const netMetrics = evidenceMetrics({ "Net Margin": 0.08571428571428572, "Debtor Days": 43.8 }, "Oct 2026", US);
-assert(
-  netMetrics.find((metric) => metric.metric === "Net Margin")?.value === 0.08571428571428572,
-  "a percent metric keeps the raw stored ratio",
+const netMetrics = evidenceMetrics(
+  { "Net Margin": 0.08571428571428572, "Operating Margin": 0.16, "Gross Margin": 60, "Debtor Days": 43.8 },
+  "Oct 2026",
+  US,
 );
-assert(netMetrics.find((metric) => metric.metric === "Debtor Days")?.value === 43.8, "a days metric keeps the raw stored days");
+const netMetric = netMetrics.find((metric) => metric.metric === "Net Margin");
+const operating = netMetrics.find((metric) => metric.metric === "Operating Margin");
+const alreadyPercent = netMetrics.find((metric) => metric.metric === "Gross Margin");
+assert(netMetric?.value === 8.6 && netMetric.value_raw === 0.08571428571428572, "0.0857 is stored as 8.6, with the fraction beside it");
+assert(operating?.value === 16 && operating.value_raw === 0.16, "0.16 is stored as 16");
+assert(alreadyPercent?.value === 60 && alreadyPercent.value_raw == null, "a percentage already on the percent scale is not doubled");
+assert(netMetrics.find((metric) => metric.metric === "Debtor Days")?.value === 43.8, "a days metric keeps the stored days");
 const band = polishAgentCopy({
   text: "Creditor days of 73 days are above the 30–60 day healthy band on file.",
   role: "detail",
@@ -285,6 +291,26 @@ assert(
   bandKept.ok === true && bandKept.text === "Creditor days of 73 days are above the 30–60 day healthy band on file.",
   "a stored healthy band stays in the sentence",
 );
+const storedBand = polishAgentCopy({
+  text: "Creditor days of 73 days are above the stored 30–60 day band.",
+  role: "detail",
+  figures: { "Creditor Days": 73 },
+  storedNumbers: [73, 43.8],
+});
+assert(
+  storedBand.ok === true && storedBand.text === "Creditor days of 73 days are above the band.",
+  "an unstored day band loses its range",
+);
+const storedBandKept = polishAgentCopy({
+  text: "Creditor days of 73 days are above the stored 30–60 day band.",
+  role: "detail",
+  figures: { "Creditor Days": 73 },
+  storedNumbers: [30, 60, 73],
+});
+assert(
+  storedBandKept.ok === true && storedBandKept.text === "Creditor days of 73 days are above the stored 30–60 day band.",
+  "a day band stays when both ends were read",
+);
 const thinCash = prepareDraftRecord({
   kind: "action_point_draft",
   allowedKinds: FM_DRAFT_KINDS,
@@ -307,6 +333,7 @@ for (const prompt of [ANALYST_SYSTEM, FINANCIAL_MANAGER_SYSTEM, ADVISOR_SYSTEM])
 assert(AGENT_COPY_GUIDE.includes("R 13 846") && AGENT_COPY_GUIDE.includes("$13,846"), "the guide names both amount formats");
 assert(AGENT_COPY_GUIDE.includes("8.6%"), "the guide keeps one decimal on a percent");
 assert(AGENT_COPY_GUIDE.includes("30–60 day healthy band on file"), "the guide refuses an invented healthy band");
+assert(AGENT_COPY_GUIDE.includes("the stored 30–60 day band"), "the guide refuses a stored day band that was not read");
 
 const keptOpen = polishAgentCopy({
   text: "Next move: lift Profit Drivers (58/100) — review pricing on top lines and the fixed-cost base",
@@ -396,5 +423,11 @@ assert(statusSync.includes("superseded_by IS NULL") && statusSync.includes("dism
 assert(statusSync.includes("2905a21a") && statusSync.includes("e37ea580") && statusSync.includes("8556e68f"), "the status sync names the mismatched rows");
 assert(!/\bDELETE\b/i.test(statusSync), "the status sync deletes nothing");
 assert(!statusSync.includes("SET severity"), "the status sync does not change severity");
+const percentScale = readFileSync(resolve("supabase/migrations/20261012200000_agent_findings_percent_metrics.sql"), "utf8");
+assert(percentScale.includes("unit") && percentScale.includes("percent") && percentScale.includes("* 100"), "the percent migration scales fraction metrics");
+assert(percentScale.includes("value_raw"), "the percent migration keeps the stored fraction");
+assert(percentScale.includes("superseded_by IS NULL") && percentScale.includes("dismissed_reason IS NULL"), "the percent migration touches active findings");
+assert(!/\bDELETE\b/i.test(percentScale), "the percent migration deletes nothing");
+assert(!percentScale.includes("SET severity"), "the percent migration does not change severity");
 
 console.log("agent-copy: ok");
