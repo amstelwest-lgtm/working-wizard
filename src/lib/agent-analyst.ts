@@ -493,10 +493,38 @@ export function figureKeyOverlap(a: Record<string, number>, b: Record<string, nu
 }
 
 /**
- * Same client and agent is the caller's filter. Kinds never match each other.
- * The same kind matches when any period end is shared (`1 Jan 2026 – 30 Sep 2026`
- * is Sep 2026) or the snapshot is the same, or when the figure overlap is at
- * least 60 percent.
+ * Related draft kinds are one draft when a period end is shared and the
+ * figures overlap by at least 60 percent. Action points stay on their own.
+ * Analyst kinds never match each other.
+ */
+const RELATED_DRAFT_KINDS: readonly (readonly string[])[] = [
+  ["next_move_draft", "advisory_deliverable_draft"],
+  ["data_request_draft", "accountant_handoff_draft"],
+];
+
+function relatedDraftKinds(left: string, right: string): boolean {
+  if (left === right) return false;
+  return RELATED_DRAFT_KINDS.some((group) => group.includes(left) && group.includes(right));
+}
+
+function findingPeriodEndsOverlap(
+  a: { periodLabel: string | null; figures: unknown },
+  b: { periodLabel: string | null; figures: unknown },
+): boolean {
+  const left = findingPeriodKeys(a);
+  const right = findingPeriodKeys(b);
+  for (const key of left) {
+    if (right.has(key)) return true;
+  }
+  return false;
+}
+
+/**
+ * Same client and agent is the caller's filter. Analyst kinds never match
+ * each other. The same kind matches when any period end is shared
+ * (`1 Jan 2026 – 30 Sep 2026` is Sep 2026) or the snapshot is the same, or
+ * when the figure overlap is at least 60 percent. Related draft kinds match
+ * only when a period end is shared and the figure overlap is at least 60 percent.
  */
 export function findingDuplicates<T extends {
   id: string;
@@ -526,7 +554,10 @@ export function findingDuplicates<T extends {
   let best: T | null = null;
   for (const row of input.recent) {
     if (row.seenAtMs < cutoff) continue;
-    if (normalizeFindingKind(row.kind) !== kind) continue;
+    const rowKind = normalizeFindingKind(row.kind);
+    const sameKind = rowKind === kind;
+    const related = relatedDraftKinds(kind, rowKind);
+    if (!sameKind && !related) continue;
     const rowPeriod = dedupePeriodOf({ periodLabel: row.periodLabel, figures: row.figures });
     const samePeriod = sharesFindingPeriod(
       {
@@ -537,7 +568,13 @@ export function findingDuplicates<T extends {
       { periodLabel: row.periodLabel, snapshotId: row.snapshotId, figures: row.figures },
     );
     const overlap = figureKeyOverlap(figures, comparableFindingFigures(row.figures, rowPeriod));
-    if (!samePeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
+    if (related) {
+      const sharedEnd = findingPeriodEndsOverlap(
+        { periodLabel: input.candidate.periodLabel, figures: input.candidate.figures },
+        { periodLabel: row.periodLabel, figures: row.figures },
+      );
+      if (!sharedEnd || overlap < FINDING_FIGURE_OVERLAP) continue;
+    } else if (!samePeriod && overlap < FINDING_FIGURE_OVERLAP) continue;
     if (!best || row.seenAtMs >= best.seenAtMs) best = row;
   }
   return best;

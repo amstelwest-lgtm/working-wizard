@@ -576,10 +576,35 @@ function groupLabel(rows: StoredFigures[]): string {
   return rows.find((row) => row.periodLabel)?.periodLabel ?? rows.find((row) => row.snapshotId)?.snapshotId ?? "period";
 }
 
+const SCORE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * `Sep 2026` and `1 Jan 2026 – 30 Sep 2026` are one period end. A score day
+ * stays its own period, so 5 Oct and 6 Oct are not collapsed into October.
+ */
+function statementPeriodIdentity(label: string): string {
+  if (SCORE_DAY.test(label)) return `day:${label}`;
+  const end = periodEndKey(label);
+  if (end) return `end:${end}`;
+  return `label:${normalizeLabel(label)}`;
+}
+
+/** A month stamp wins over the longer range that ends in the same month. */
+function preferPeriodLabel(labels: string[]): string {
+  const month = labels.find(
+    (label) =>
+      !SCORE_DAY.test(label) &&
+      periodEndKey(label) != null &&
+      !/[\u2010-\u2015]|\bto\b/i.test(label),
+  );
+  return month ?? labels[0];
+}
+
 /**
  * A flat map whose every figure lives in exactly one period is filed under
  * those periods. Score history (`score:2026-10-05` beside `score:2026-10-06`)
- * is that case. A figure that fits more than one period stays a rejection.
+ * is that case. A month and the range that ends in that month are one period.
+ * A figure that fits more than one period end stays a rejection.
  */
 function nestUnambiguousFlat(
   groups: Map<string, StoredFigures[]>,
@@ -598,12 +623,21 @@ function nestUnambiguousFlat(
       if (stored == null) continue;
       homes.push({ label: groupLabel(rows), rows, stored });
     }
-    if (homes.length !== 1) return null;
-    const home = homes[0];
-    const bucket = nested[home.label] ?? {};
-    bucket[key] = home.stored;
-    nested[home.label] = bucket;
-    rowsByLabel.set(home.label, home.rows);
+    const byPeriod = new Map<string, Array<{ label: string; rows: StoredFigures[]; stored: number }>>();
+    for (const home of homes) {
+      const identity = statementPeriodIdentity(home.label);
+      const list = byPeriod.get(identity) ?? [];
+      list.push(home);
+      byPeriod.set(identity, list);
+    }
+    if (byPeriod.size !== 1) return null;
+    const matches = [...byPeriod.values()][0];
+    const label = preferPeriodLabel(matches.map((home) => home.label));
+    const chosen = matches.find((home) => home.label === label) ?? matches[0];
+    const bucket = nested[chosen.label] ?? {};
+    bucket[key] = chosen.stored;
+    nested[chosen.label] = bucket;
+    rowsByLabel.set(chosen.label, chosen.rows);
   }
   const labels = Object.keys(nested);
   if (labels.length === 0) return null;
