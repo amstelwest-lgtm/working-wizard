@@ -24,6 +24,7 @@ export async function askOwnerAgent(input: {
         message: question,
         audience: "owner",
         mode: "chat",
+        agent: input.agent,
       });
       const answer = result.answer.trim();
       return answer ? { ok: true, answer } : { ok: false, error: "No answer came back." };

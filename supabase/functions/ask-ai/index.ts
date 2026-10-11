@@ -4,6 +4,7 @@ import { classify } from "./classifier.ts";
 import { buildContext } from "./context-builder.ts";
 import { buildPrompt, sealAskAiPrompt } from "./prompt.ts";
 import { callClaude } from "./anthropic.ts";
+import { chatCacheScope, normalizeChatReply, parseChatAgent } from "../_shared/chat-reply.ts";
 import {
   sealedCacheAnswer,
   cacheHitIsDisplaySafe,
@@ -114,10 +115,7 @@ async function handleAskAi(req: Request): Promise<Response> {
 
   const { clientId, question: rawQuestion } = body;
   const audience = body.audience === "accountant" ? "accountant" : "owner";
-  const agent =
-    body.agent === "financial_manager" || body.agent === "analyst" || body.agent === "advisor"
-      ? body.agent
-      : null;
+  const agent = parseChatAgent(body.agent);
   if (!clientId || !rawQuestion?.trim()) {
     return respond({ error: "clientId and question are required" }, 400);
   }
@@ -161,7 +159,8 @@ async function handleAskAi(req: Request): Promise<Response> {
   // Cache reads/writes use adminClient (service role only; no authenticated SELECT policy).
   if (tier === "none") {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
-    const hash = await sha256(canonical);
+    // One cached answer per audience + agent, so one agent's reply never shows up in another's chat.
+    const hash = await sha256(`${chatCacheScope(audience, agent)}|${canonical}`);
 
     const { data: cached } = await adminClient
       .from("ask_ai_cache")
@@ -194,7 +193,7 @@ async function handleAskAi(req: Request): Promise<Response> {
       const cachedRemaining =
         precard.applies && precard.remaining != null && precard.remaining > 0 ? precard.remaining : null;
       return respond({
-        answer: cached.answer,
+        answer: normalizeChatReply(String(cached.answer)),
         cached: true,
         chips: deriveChips(question, tier),
         ...(cachedRemaining != null ? { precardRemaining: cachedRemaining } : {}),
@@ -254,7 +253,8 @@ async function handleAskAi(req: Request): Promise<Response> {
   // ── Cache definitional answers (hash key, service-role write) ─────────────
   if (tier === "none" && claudeResult.text) {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
-    const hash = await sha256(canonical);
+    // One cached answer per audience + agent, so one agent's reply never shows up in another's chat.
+    const hash = await sha256(`${chatCacheScope(audience, agent)}|${canonical}`);
     await adminClient.from("ask_ai_cache").upsert({
       question_hash: hash,
       answer: sealedCacheAnswer(claudeResult.text, sealed.session),
@@ -265,7 +265,7 @@ async function handleAskAi(req: Request): Promise<Response> {
     });
   }
 
-  const answer = rehydrateForUi(claudeResult.text, sealed.session, question);
+  const answer = normalizeChatReply(rehydrateForUi(claudeResult.text, sealed.session, question));
   let precardRemaining: number | null = null;
   // Charge only after a non-empty answer. An empty or failed call leaves the
   // allowance where it was. The turn id makes a client retry of this same
