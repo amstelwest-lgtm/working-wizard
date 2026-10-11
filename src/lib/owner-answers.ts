@@ -141,7 +141,40 @@ export function ownerAnswerTiles(books: OwnerBooks): OwnerTile[] {
   return [cash, owes, profit, answer, signed];
 }
 
-/** One or two lines under each bot. Sign-off stays off this page. */
+const MONEY_TOKEN =
+  /\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|R[\u00a0 ](?:\d{1,3}(?:[,\u00a0 ]\d{3})+|\d+)(?:\.\d+)?/g;
+
+function amountsIn(sentence: string): string[] {
+  return sentence.match(MONEY_TOKEN) ?? [];
+}
+
+/** Home cash copy. The tile sentence stays long for the hold screen. */
+function cashHomeLine(sentence: string): string {
+  if (sentence === CONNECT || sentence === "The 13-week line is not on file yet.") return sentence;
+  const amounts = amountsIn(sentence);
+  if (sentence.includes("stays above") && amounts.length >= 2) {
+    const [floor, low] = amounts;
+    return `Above the ${floor} floor. Low ${low}.`;
+  }
+  if (sentence.includes("under the") && amounts.length >= 3) {
+    const [low, under, floor] = amounts;
+    return `Low ${low}. ${under} under ${floor}.`;
+  }
+  return sentence;
+}
+
+/** Home profit copy. The tile sentence stays long for the hold screen. */
+function profitHomeLine(sentence: string): string {
+  if (sentence === CONNECT || sentence === "Profit is not on file yet.") return sentence;
+  const [amount] = amountsIn(sentence);
+  if (!amount) return sentence;
+  if (sentence.includes("more than the prior")) return `Profit ${amount}, up on last period.`;
+  if (sentence.includes("less than the prior")) return `Profit ${amount}, down on last period.`;
+  if (sentence.includes("the same as the prior")) return `Profit ${amount}, same as last period.`;
+  return `Profit ${amount}.`;
+}
+
+/** One or two short lines under each bot. Sign-off stays off this page. */
 export function ownerHomeLines(
   tiles: readonly OwnerTile[],
   topMove: string | null,
@@ -150,8 +183,8 @@ export function ownerHomeLines(
   const cash = sentence("cash");
   const move = topMove?.replace(/\s+/g, " ").trim() ?? "";
   return {
-    financial_manager: [cash, sentence("answer")].filter((line) => line.length > 0),
-    analyst: [sentence("profit"), sentence("owes")].filter((line) => line.length > 0),
+    financial_manager: [cashHomeLine(cash), sentence("answer")].filter((line) => line.length > 0),
+    analyst: [profitHomeLine(sentence("profit")), sentence("owes")].filter((line) => line.length > 0),
     advisor: [move || (cash === CONNECT ? CONNECT : "No next move yet.")],
   };
 }

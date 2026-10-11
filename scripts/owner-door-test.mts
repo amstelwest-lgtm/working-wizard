@@ -113,11 +113,59 @@ assert(
 assert(ownerTileLabel(cash!, agentShortName).startsWith("Ask "), "ask labels use the short name");
 const homeLines = ownerHomeLines(filled, "Collect the two largest invoices");
 assert(homeLines.financial_manager.length === 2, "the financial manager has cash and the open answer");
-assert(homeLines.financial_manager[0] === cash?.sentence, "cash stays under the financial manager");
+assert(
+  homeLines.financial_manager[0] !== cash?.sentence &&
+    /^Above the \$[\d,]+ floor\. Low \$[\d,]+\.$/.test(homeLines.financial_manager[0] ?? ""),
+  `cash on home is a short line (${homeLines.financial_manager[0]})`,
+);
 assert(homeLines.financial_manager[1] === "Approve the payroll run.", "the waiting answer stays under the financial manager");
-assert(homeLines.analyst[0]?.startsWith("Gross profit is"), "profit stays under the analyst");
+assert(
+  /^Profit \$[\d,]+, up on last period\.$/.test(homeLines.analyst[0] ?? ""),
+  `profit on home is a short line (${homeLines.analyst[0]})`,
+);
 assert(homeLines.analyst[1]?.startsWith("Customers owe"), "debtors stay under the analyst");
 assert(homeLines.advisor[0] === "Collect the two largest invoices", "the advisor carries the top next move");
+for (const line of [...homeLines.financial_manager, ...homeLines.analyst, ...homeLines.advisor]) {
+  assert(line.length <= 48, `a home line stays within two rows at desktop (${line})`);
+}
+const underBooks = ownerAnswerTiles(
+  books({
+    hasBooks: true,
+    ledger: "QuickBooks",
+    cashflow: {
+      openingBalance: "20000",
+      expenses: [{ amount: "4000", frequency: "recurring-weekly", startWeek: 1 }],
+    },
+  }),
+);
+const underHome = ownerHomeLines(underBooks, null);
+assert(
+  /^Low \$[\d,]+\. \$[\d,]+ under \$[\d,]+\.$/.test(underHome.financial_manager[0] ?? ""),
+  `a dip under the floor stays short (${underHome.financial_manager[0]})`,
+);
+assert(
+  /13-week line is/.test(underBooks.find((tile) => tile.id === "cash")?.sentence ?? ""),
+  "the cash tile keeps the long sentence",
+);
+const zaHome = ownerHomeLines(
+  ownerAnswerTiles(
+    books({
+      hasBooks: true,
+      ledger: "Xero",
+      market: ZA_MARKET,
+      revenue: 120000,
+      priorRevenue: 100000,
+      cogs: 48000,
+      priorCogs: 40000,
+      receivables: 18000,
+    }),
+  ),
+  null,
+);
+assert(
+  (zaHome.analyst[0] ?? "").includes("\u00a0") && (zaHome.analyst[1] ?? "").includes("\u00a0"),
+  "home amounts keep a non-breaking space",
+);
 const emptyLines = ownerHomeLines(empty, null);
 assert(emptyLines.financial_manager[0] === "Connect QuickBooks or Xero.", "an empty cash line stays honest");
 assert(emptyLines.financial_manager[1] === "Nothing is waiting on you.", "an empty answer line stays honest");
@@ -251,7 +299,17 @@ assert(css.includes('--owner-sans: "Noto Sans", sans-serif'), "the owner shell u
 assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
+assert(home.includes('className="owner-money"'), "home amounts are bold");
 assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "home reads the bot lines");
+assert(css.includes("width: 172px") && css.includes("height: 172px"), "desktop avatars are the hero size");
+assert(css.includes("width: 96px") && css.includes("height: 96px"), "phone avatars are the hero size");
+assert(
+  css.includes('.owner-door .owner-pane[data-owner-home="true"] .owner-ask') &&
+    css.includes("margin-top: auto"),
+  "ask pills sit on the bottom line of equal cards",
+);
+assert(css.includes("min-height: 2.7em"), "home text keeps a two-line slot");
+assert(css.includes("-webkit-line-clamp: 2"), "a single home line stays within two rows");
 assert(!home.includes("owner-promises"), "home does not render the answer tiles");
 assert(!home.includes("owner-health-hero"), "home does not render the health orb");
 assert(!home.includes("What your accountant signed"), "sign-off is not a home tile");

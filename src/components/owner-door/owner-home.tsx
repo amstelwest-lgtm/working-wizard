@@ -1,9 +1,30 @@
+import type { ReactNode } from "react";
 import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
+
+const MONEY_TOKEN =
+  /(\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|R[\u00a0 ](?:\d{1,3}(?:[,\u00a0 ]\d{3})+|\d+)(?:\.\d+)?)/g;
+
+function voiceNodes(line: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  for (const match of line.matchAll(MONEY_TOKEN)) {
+    const index = match.index ?? 0;
+    if (index > last) nodes.push(line.slice(last, index));
+    nodes.push(
+      <strong key={`${index}-${match[0]}`} className="owner-money">
+        {match[0]}
+      </strong>,
+    );
+    last = index + match[0].length;
+  }
+  if (last < line.length) nodes.push(line.slice(last));
+  return nodes.length > 0 ? nodes : [line];
+}
 
 const MOTION_LABEL: Record<OwnerMotion, string> = {
   idle: "Idle",
@@ -56,7 +77,7 @@ export function OwnerHome({
                   <span className="owner-lines">
                     {brief.map((line, index) => (
                       <span key={`${card.agent}-${index}`} className="owner-voice">
-                        {line}
+                        {voiceNodes(line)}
                       </span>
                     ))}
                   </span>
