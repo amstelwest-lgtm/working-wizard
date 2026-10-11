@@ -9,7 +9,7 @@ import {
   useSearch,
 } from "@tanstack/react-router";
 import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
-import { StrictMode } from "react";
+import { StrictMode, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { toast, Toaster } from "sonner";
 import { AccountantProfileProvider } from "@/contexts/accountant-profile";
@@ -26,9 +26,13 @@ import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
-import { Dashboard } from "@/routes/_authenticated/dashboard";
-import { SettingsPage } from "@/routes/_authenticated/settings.index";
-import { TeamAccessPage } from "@/routes/_authenticated/settings.team";
+import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
+import { Route as SettingsRoute } from "@/routes/_authenticated/settings.index";
+import { Route as TeamRoute } from "@/routes/_authenticated/settings.team";
+
+const Dashboard = DashboardRoute.options.component as ComponentType;
+const SettingsPage = SettingsRoute.options.component as ComponentType;
+const TeamAccessPage = TeamRoute.options.component as ComponentType;
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {

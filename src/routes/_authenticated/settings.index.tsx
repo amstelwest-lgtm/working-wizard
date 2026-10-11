@@ -72,7 +72,7 @@ export const Route = createFileRoute("/_authenticated/settings/")({
   }),
 });
 
-export function SettingsPage() {
+function SettingsPage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const doDelete = useServerFn(deleteOwnAccount);
