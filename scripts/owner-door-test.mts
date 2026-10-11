@@ -218,8 +218,77 @@ const css = readFileSync("src/components/owner-door/owner-door.css", "utf8");
 assert(css.includes("prefers-reduced-motion"), "reduced motion has a still pose");
 assert(css.includes("tabular-nums"), "amounts use tabular numerals");
 assert(css.includes("min-height: 44px"), "ask buttons meet the tap target");
+assert(!/#[0-9a-fA-F]{3,8}\b/.test(css), "owner door colours come from theme tokens");
+assert(css.includes("var(--gold-grad)"), "ask and accents use the metallic gold gradient");
+assert(css.includes("font-size: 16px"), "body text is at least 16px");
+assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
+assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
-assert(home.includes('className="owner-ask"'), "ask entry is a button");
+assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
+assert(/\.owner-tile p \{[^}]*color: var\(--ink\)/.test(css), "tile sentences use the foreground colour");
+const shell = readFileSync("src/components/owner-door/owner-shell.tsx", "utf8");
+assert(shell.includes("<ThemeToggle />"), "the owner shell uses the shared theme toggle");
+assert(shell.split("<ThemeToggle />").length >= 3, "the toggle sits in the header and in the menu");
+assert(shell.includes('label: "Health"'), "health is on the rail");
+assert(shell.includes('label: "Cash flow"'), "cash flow is on the rail");
+assert(shell.includes('label: "Budget"'), "budget is on the rail");
+assert(shell.includes('label: "Action plan"'), "the original action plan is on the rail");
+assert(shell.includes('label: "Profit"'), "profit stays reachable");
+assert(shell.includes('label: "Next moves"'), "next moves stay reachable");
+const app = readFileSync("src/routes/app.tsx", "utf8");
+assert(app.includes("<SphereHero"), "home and health reuse the health orb");
+assert(app.includes("readOnly"), "cash flow and budget can be shown without editing");
+assert(app.includes("Your accountant sets this up"), "an unconfigured view tells the owner who sets it up");
+
+function channel(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function linear(value: number): number {
+  const c = value / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+function luminance(hex: string): number {
+  const [r, g, b] = channel(hex);
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+function contrast(a: string, b: string): number {
+  const hi = Math.max(luminance(a), luminance(b));
+  const lo = Math.min(luminance(a), luminance(b));
+  return (hi + 0.05) / (lo + 0.05);
+}
+function mix(ink: string, bg: string, amount: number): string {
+  const [ir, ig, ib] = channel(ink);
+  const [br, bgc, bb] = channel(bg);
+  const blend = (a: number, b: number) => Math.round(a * amount + b * (1 - amount));
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${hex(blend(ir, br))}${hex(blend(ig, bgc))}${hex(blend(ib, bb))}`;
+}
+function token(source: string, name: string): string {
+  const found = source.match(new RegExp(`${name}:(#[0-9a-fA-F]{6})`));
+  if (!found) throw new Error(`missing ${name}`);
+  return found[1];
+}
+const portal = readFileSync("src/styles/accountant-portal.css", "utf8");
+const darkBlock = portal.slice(portal.indexOf(":root{"), portal.indexOf("html[data-theme=\"light\"]"));
+const lightBlock = portal.slice(portal.indexOf("html[data-theme=\"light\"]"), portal.indexOf(".accountant-portal{"));
+for (const block of [darkBlock, lightBlock]) {
+  const bg = token(block, "--bg");
+  const ink = token(block, "--ink");
+  const dim = token(block, "--ink-dim");
+  assert(contrast(ink, bg) >= 4.5, `body ink on background is ${contrast(ink, bg).toFixed(2)}`);
+  assert(contrast(dim, bg) >= 4.5, `secondary ink on background is ${contrast(dim, bg).toFixed(2)}`);
+  const edge = mix(ink, bg, 0.55);
+  assert(contrast(edge, bg) >= 3, `owner edge on background is ${contrast(edge, bg).toFixed(2)}`);
+}
+const goldDeep = token(darkBlock, "--gold-deep");
+const gold = token(darkBlock, "--gold");
+const goldBright = token(darkBlock, "--gold-bright");
+const buttonInk = "#1b1300";
+assert(portal.includes(`color:${buttonInk}`), "the metallic button keeps its dark label");
+for (const stop of [goldDeep, gold, goldBright]) {
+  assert(contrast(buttonInk, stop) >= 4.5, `gold button text on ${stop} is ${contrast(buttonInk, stop).toFixed(2)}`);
+}
 assert(!home.includes("Milōn Financial Manager"), "the view does not hardcode a display name");
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
 assert(!door.includes("Dana"), "the door does not use a retired name");

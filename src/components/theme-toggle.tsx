@@ -19,6 +19,9 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     const initial = resolvePortalTheme();
     setTheme(initial);
     applyPortalTheme(initial);
+    const sync = () => setTheme(resolvePortalTheme());
+    window.addEventListener("milon-theme", sync);
+    return () => window.removeEventListener("milon-theme", sync);
   }, []);
 
   const toggle = () => {
@@ -26,6 +29,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     setTheme(next);
     applyPortalTheme(next);
     persistPortalTheme(next);
+    window.dispatchEvent(new Event("milon-theme"));
   };
 
   const toLight = theme === "dark";

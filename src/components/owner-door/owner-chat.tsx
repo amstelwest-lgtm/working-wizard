@@ -83,7 +83,7 @@ export function OwnerChat({
       >
         <button
           type="button"
-          className={`owner-icon-btn${listening ? " is-on" : ""}`}
+          className={`owner-icon-btn btn${listening ? " gold is-on" : ""}`}
           aria-pressed={listening}
           aria-label={listening ? "Stop listening" : "Speak"}
           onClick={onListen}
@@ -103,7 +103,7 @@ export function OwnerChat({
             }
           }}
         />
-        <button type="submit" className="owner-ask" disabled={busy || !draft.trim()}>
+        <button type="submit" className="btn gold owner-ask" disabled={busy || !draft.trim()}>
           <ChatIcon />
           {busy ? "Working…" : `Ask ${short}`}
         </button>

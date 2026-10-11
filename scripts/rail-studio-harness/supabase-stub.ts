@@ -2,6 +2,8 @@
  * In-memory Supabase stand-in for the rail harness.
  * No URL, no key, no fetch. Reads return fixture rows. Writes resolve locally.
  */
+import { createBudgetDocument } from "@/lib/budget.months";
+import { parseOperatingProfile, profileToBudgetQualification } from "@/lib/client-profile";
 const HARNESS_USER = {
   id: "harness-local-user",
   email: "harness@example.test",
@@ -217,6 +219,21 @@ function belowFloorClient() {
 function clientRow() {
   if (typeof location !== "undefined" && /(?:^|[?&])open=below(?:&|$)/.test(location.search)) {
     return belowFloorClient();
+  }
+  if (typeof location !== "undefined" && /(?:^|[?&])view=budget(?:&|$)/.test(location.search)) {
+    const profile = parseOperatingProfile(CLIENT_ROW.operating_profile);
+    if (profile) {
+      return {
+        ...CLIENT_ROW,
+        budget: createBudgetDocument({
+          templateId: profile.templateId,
+          qualification: profileToBudgetQualification(profile),
+          fyStartMonth: profile.fyStartMonth,
+          fyStart: "2026-03",
+        }),
+        budget_updated_at: "2026-10-01T00:00:00.000Z",
+      };
+    }
   }
   return CLIENT_ROW;
 }

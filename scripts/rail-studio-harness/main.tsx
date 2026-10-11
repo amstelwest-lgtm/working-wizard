@@ -178,11 +178,18 @@ const ownerDoorRoute = createRoute({
         "chat",
         "ask",
         "reel",
+        "recording",
         "actions",
         "accountant",
         "deliverables",
         "plan",
         "first",
+        "health",
+        "cash",
+        "budget",
+        "tasks",
+        "profit",
+        "moves",
       ].includes(String(search.view))
         ? String(search.view)
         : "rest"

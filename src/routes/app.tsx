@@ -3871,6 +3871,214 @@ function Index() {
                     window.location.href = "/";
                   });
                 }}
+                hero={(go) =>
+                  showScoredBoard ? (
+                    <div className="owner-health-hero">
+                      <SphereHero
+                        compact
+                        overallHealth={avgHealth}
+                        displayStatus={overallHealth.displayStatus}
+                        pillars={spherePillars}
+                        caption={overviewCaption}
+                        onTopPriority={() => go("moves")}
+                        onDriverClick={(key) => {
+                          if (key in RATIO_META) setOpenRatio(key as RatioKey);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <section className="owner-pane">
+                      <p className="owner-lede">Your accountant sets this up</p>
+                      <button
+                        type="button"
+                        className="btn gold owner-ask owner-ask-inline"
+                        onClick={() => go("accountant")}
+                      >
+                        Invite your accountant
+                      </button>
+                    </section>
+                  )
+                }
+                boards={(go) => ({
+                  health: (
+                    <section className="owner-pane" data-owner-page="health">
+                      <h1 className="owner-title">Business Health</h1>
+                      <ReviewSignoffBadge
+                        signoff={financialsSignoff}
+                        scope="financials"
+                        isStale={computeIsStale(
+                          financialsSignoff,
+                          clientMeta?.financials_updated_at ?? null,
+                        )}
+                      />
+                      {showScoredBoard ? (
+                        <SphereHero
+                          overallHealth={avgHealth}
+                          displayStatus={overallHealth.displayStatus}
+                          pillars={spherePillars}
+                          caption={overviewCaption}
+                          onTopPriority={() => go("moves")}
+                          onDriverClick={(key) => {
+                            if (key in RATIO_META) setOpenRatio(key as RatioKey);
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <p className="owner-lede">Your accountant sets this up</p>
+                          <button
+                            type="button"
+                            className="btn gold owner-ask owner-ask-inline"
+                            onClick={() => go("accountant")}
+                          >
+                            Invite your accountant
+                          </button>
+                        </>
+                      )}
+                    </section>
+                  ),
+                  cash: (
+                    <section className="owner-pane" data-owner-page="cash">
+                      <Suspense fallback={<p className="owner-lede">Loading cash forecast…</p>}>
+                        <CashForecastPanel
+                          clientId={effectiveClientId ?? undefined}
+                          clientName={actingClientName ?? undefined}
+                          simplified
+                          canSign={false}
+                          hideReadOnlyStamp
+                          readOnly
+                          onInvite={() => go("accountant")}
+                          reloadToken={cashForecastReloadToken}
+                        />
+                      </Suspense>
+                    </section>
+                  ),
+                  budget: (
+                    <section className="owner-pane" data-owner-page="budget">
+                      <Suspense fallback={<p className="owner-lede">Loading budget…</p>}>
+                        <BudgetPanel
+                          clientId={effectiveClientId ?? undefined}
+                          clientName={actingClientName ?? undefined}
+                          simplified
+                          role="owner"
+                          canSign={false}
+                          hideReadOnlyStamp
+                          readOnly
+                          onInvite={() => go("accountant")}
+                          businessTypeId={businessTypeId}
+                          operatingProfile={operatingProfile}
+                          fyStartMonthDefault={
+                            operatingProfile?.fyStartMonth ??
+                            resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
+                          }
+                          firstActualsMonth={
+                            hasRealFinancials ? (history[0]?.period_date?.slice(0, 7) ?? null) : null
+                          }
+                          financials={{
+                            revenue: v.revenue,
+                            cogs: v.cogs,
+                            fixedCosts: v.fixedCosts,
+                            laborCost: v.laborCost,
+                            receivables: v.receivables,
+                            payables: v.payables,
+                            inventory: v.inventory,
+                            operatingCashflow: v.operatingCashflow,
+                            [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
+                          }}
+                          reloadToken={budgetReloadToken}
+                        />
+                      </Suspense>
+                    </section>
+                  ),
+                  tasks: (
+                    <section className="owner-pane" data-owner-page="tasks">
+                      <OwnerTabSignoffRow
+                        label="Action Plan"
+                        signoff={actionPlanSignoff}
+                        scope="action_plan"
+                        isStale={false}
+                      />
+                      <Suspense fallback={<p className="owner-lede">Loading tasks…</p>}>
+                        {effectiveClientId ? (
+                          <ActionPlanPanel
+                            clientId={effectiveClientId}
+                            clientName={actingClientName ?? undefined}
+                            simplified
+                            isOwner={userRole !== "client_member"}
+                            moves={nextSteps.map((s) => ({
+                              key: s.key,
+                              title: s.title,
+                              ratioName: s.ratioName,
+                              impactLine: s.impactLine,
+                              health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                            }))}
+                            onViewAnalysis={() => go("health")}
+                          />
+                        ) : (
+                          <p className="owner-lede">Your accountant sets this up</p>
+                        )}
+                      </Suspense>
+                    </section>
+                  ),
+                  profit: (
+                    <section className="owner-pane" data-owner-page="profit">
+                      <h1 className="owner-title">Profit</h1>
+                      <OwnerTabSignoffRow
+                        label="Profitability Waterfall"
+                        signoff={profitabilitySignoff}
+                        scope="profitability"
+                        isStale={computeIsStale(
+                          profitabilitySignoff,
+                          clientMeta?.financials_updated_at ?? null,
+                        )}
+                      />
+                      {showScoredBoard ? (
+                        <ProfitabilityWaterfall
+                          clientName={actingClientName ?? undefined}
+                          clientId={effectiveClientId ?? undefined}
+                          reviewSignoff={stampFromSignoff(
+                            profitabilitySignoff,
+                            computeIsStale(
+                              profitabilitySignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            ),
+                          )}
+                          fallback={derivePeriodWaterfallFallback(v)}
+                          periodLabel={readStatementMeta(v).periodLabel}
+                          preferPeriod={preferStatementPeriod(v)}
+                          yearToDate={statementYearLine(v)}
+                          statementSource={readStatementMeta(v).statementSource}
+                        />
+                      ) : (
+                        <>
+                          <p className="owner-lede">Your accountant sets this up</p>
+                          <button
+                            type="button"
+                            className="btn gold owner-ask owner-ask-inline"
+                            onClick={() => go("accountant")}
+                          >
+                            Invite your accountant
+                          </button>
+                        </>
+                      )}
+                    </section>
+                  ),
+                  moves: (
+                    <section className="owner-pane" data-owner-page="moves">
+                      <h1 className="owner-title">Next moves</h1>
+                      <NextStepsPanel
+                        steps={nextSteps}
+                        simplified
+                        done={doneSteps}
+                        onToggleDone={toggleDone}
+                        onOpenSop={(k) => setOpenSop(k)}
+                        clientId={effectiveClientId}
+                        clientName={actingClientName ?? undefined}
+                        isOwner={userRole !== "client_member"}
+                        onGoToPlan={() => go("tasks")}
+                      />
+                    </section>
+                  ),
+                })}
               />
             ) : (
             <header className="founder-app-bar relative mb-3 overflow-visible rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">

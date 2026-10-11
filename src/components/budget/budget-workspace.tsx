@@ -74,6 +74,7 @@ export function BudgetWorkspace({
   lens,
   onLensChange,
   actualMonths,
+  readOnly = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -94,6 +95,8 @@ export function BudgetWorkspace({
   lens?: BudgetLens;
   onLensChange?: (next: BudgetLens) => void;
   actualMonths?: readonly BudgetActualMonth[];
+  /** View the figures. Editing controls stay in the file for the accountant. */
+  readOnly?: boolean;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -104,7 +107,7 @@ export function BudgetWorkspace({
     />
   );
 
-  if (simplified) {
+  if (simplified || readOnly) {
     return (
       <div className="space-y-4">
         <BudgetSimpleView
@@ -119,10 +122,11 @@ export function BudgetWorkspace({
           canSign={canSign}
           onSignoffChange={onSignoffChange}
           signoffKnown={signoffKnown}
-          drawer={nestInDrawer(drawer, "Budget vs actuals", variance)}
+          drawer={readOnly ? null : nestInDrawer(drawer, "Budget vs actuals", variance)}
           lens={lens}
           onLensChange={onLensChange}
           actualMonths={actualMonths}
+          readOnly={readOnly}
         />
       </div>
     );

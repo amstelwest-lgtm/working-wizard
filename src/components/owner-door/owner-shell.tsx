@@ -1,12 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { SettingsNavButton } from "@/components/settings-nav-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import "./owner-fonts";
 import "./owner-door.css";
 
 export type OwnerScreen =
   | "home"
   | "chat"
+  | "health"
+  | "cash"
+  | "budget"
+  | "tasks"
   | "actions"
+  | "profit"
+  | "moves"
   | "accountant"
   | "deliverables"
   | "plan"
@@ -15,7 +22,13 @@ export type OwnerScreen =
 
 const RAIL: { id: string; label: string; screen: OwnerScreen }[] = [
   { id: "home", label: "Home", screen: "home" },
+  { id: "health", label: "Health", screen: "health" },
+  { id: "cash", label: "Cash flow", screen: "cash" },
+  { id: "budget", label: "Budget", screen: "budget" },
+  { id: "tasks", label: "Action plan", screen: "tasks" },
   { id: "actions", label: "Actions", screen: "actions" },
+  { id: "profit", label: "Profit", screen: "profit" },
+  { id: "moves", label: "Next moves", screen: "moves" },
   { id: "accountant", label: "Accountant", screen: "accountant" },
   { id: "deliverables", label: "Deliverables", screen: "deliverables" },
 ];
@@ -73,7 +86,9 @@ export function OwnerShell({
           </span>
         </div>
         <span className="spacer" />
-        <div className="owner-account">
+        <div className="owner-tools">
+          <ThemeToggle />
+          <div className="owner-account">
           <button
             type="button"
             className="profile-chip"
@@ -87,6 +102,10 @@ export function OwnerShell({
           </button>
           {menuOpen ? (
             <div className="owner-menu" role="menu" aria-label="Settings, plan, and profile">
+              <div className="owner-menu-theme">
+                <ThemeToggle />
+                Appearance
+              </div>
               {workspaces.length > 1
                 ? workspaces.map((workspace) => (
                     <button
@@ -121,6 +140,7 @@ export function OwnerShell({
               </button>
             </div>
           ) : null}
+          </div>
         </div>
       </header>
       <div className="client-workspace">
@@ -160,7 +180,7 @@ export function OwnerHold({
       <h1 className="owner-title">{title}</h1>
       <p className="owner-lede">{sentence}</p>
       {action ? (
-        <button type="button" className="owner-ask" onClick={action.onClick}>
+        <button type="button" className="btn gold owner-ask" onClick={action.onClick}>
           {action.label}
         </button>
       ) : null}

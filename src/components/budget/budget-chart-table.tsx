@@ -236,20 +236,20 @@ function BudgetMonthChart({
       <div className="mt-1 flex min-w-0">
         {data.map((row) => (
           <div key={row.month} className="min-w-0 flex-1 px-0.5 text-center">
-            <div className="truncate text-[10px] text-slate-500">{row.label}</div>
+            <div className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{row.label}</div>
             {row.delta == null ? (
               <div className="truncate text-[10px] text-slate-500/40" title="Budget only" aria-label="Budget only">
                 –
               </div>
             ) : (
-              <div className={`truncate text-[10px] font-semibold tabular-nums ${tone(row.signal)}`}>
+              <div className={`truncate text-sm font-semibold tabular-nums ${tone(row.signal)}`}>
                 {row.delta > 0 ? `+${tick(row.delta)}` : tick(row.delta)}
               </div>
             )}
           </div>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-600 dark:text-slate-300">
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-800 dark:text-slate-100">
         <LegendSwatch color={BUDGET_BAR} label="Budget" />
         <LegendSwatch color={ACTUAL_BAR} label="Actual" />
         <LegendSwatch color={BUDGET_ONLY} label="Budget only" faded />

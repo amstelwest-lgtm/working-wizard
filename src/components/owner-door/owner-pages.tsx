@@ -63,7 +63,7 @@ export function OwnerActions({
           </article>
         ))}
       </div>
-      <button type="button" className="owner-ask owner-ask-inline" onClick={onAsk}>
+      <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onAsk}>
         Ask {agentShortName("financial_manager")}
       </button>
     </section>
@@ -95,7 +95,7 @@ export function OwnerAccountant({
       {invite}
       <h2 className="owner-sub">Uploads</h2>
       {uploads}
-      <button type="button" className="owner-ask owner-ask-inline" onClick={onConnect}>
+      <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onConnect}>
         Connect your books
       </button>
     </section>
@@ -129,7 +129,7 @@ export function OwnerDeliverables({
         ))}
       </div>
       {rows.length ? null : (
-        <button type="button" className="owner-ask owner-ask-inline" onClick={onInvite}>
+        <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onInvite}>
           Invite your accountant
         </button>
       )}
@@ -173,17 +173,17 @@ export function OwnerFirst({
         Connect QuickBooks or Xero. Nothing is filled in until the books are on file.
       </p>
       <div className="owner-first-actions">
-        <button type="button" className="owner-ask" onClick={onQuickBooks}>
+        <button type="button" className="btn gold owner-ask" onClick={onQuickBooks}>
           Connect QuickBooks
         </button>
-        <button type="button" className="owner-ask" onClick={onXero}>
+        <button type="button" className="btn gold owner-ask" onClick={onXero}>
           Connect Xero
         </button>
       </div>
       {joined ? null : (
         <>
           <p className="owner-free">{ownerPlanFreeLine()}</p>
-          <button type="button" className="owner-ask owner-ask-inline" onClick={onInvite}>
+          <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onInvite}>
             Invite your accountant
           </button>
         </>

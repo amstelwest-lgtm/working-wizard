@@ -2,6 +2,7 @@ import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-te
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerTileLabel, type OwnerTile } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
+import type { ReactNode } from "react";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 
 const MOTION_LABEL: Record<OwnerMotion, string> = {
@@ -19,6 +20,7 @@ export function OwnerHome({
   onOpen,
   onAsk,
   onTile,
+  hero,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -26,6 +28,7 @@ export function OwnerHome({
   onOpen: (agent: AgentKey) => void;
   onAsk: (agent: AgentKey) => void;
   onTile: (tile: OwnerTile) => void;
+  hero?: ReactNode;
 }) {
   const handoff = presence.handoff;
   return (
@@ -34,6 +37,7 @@ export function OwnerHome({
         <h1 className="owner-title">Your finance team</h1>
         <p className="owner-lede">Plain answers from the books. One thing for you.</p>
       </div>
+      {hero ? <div className="owner-health-hero">{hero}</div> : null}
       <div className="owner-stage">
         <div className="owner-agents">
           {presence.agents.map((card) => (
@@ -53,7 +57,7 @@ export function OwnerHome({
               </button>
               <button
                 type="button"
-                className="owner-ask"
+                className="btn gold owner-ask"
                 data-ask={card.agent}
                 onClick={() => onAsk(card.agent)}
               >
@@ -86,7 +90,7 @@ export function OwnerHome({
             </div>
             <div className="owner-tile-actions">
               {tile.signed ? <span className="owner-badge">Signed off ✓</span> : null}
-              <button type="button" className="owner-ask" onClick={() => onTile(tile)}>
+              <button type="button" className="btn gold owner-ask" onClick={() => onTile(tile)}>
                 {tile.ask ? <ChatIcon /> : null}
                 {ownerTileLabel(tile, agentShortName)}
               </button>

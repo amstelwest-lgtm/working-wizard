@@ -2,7 +2,7 @@
  * Live owner door. Figures come from the books, the forecast, action points,
  * and accountant sign-offs. Empty reads stay empty.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
@@ -92,6 +92,8 @@ export function OwnerDoor({
   onProfile,
   onSettings,
   onSignOut,
+  hero,
+  boards,
 }: {
   clientId: string | null;
   businessName: string;
@@ -115,6 +117,10 @@ export function OwnerDoor({
   onProfile: () => void;
   onSettings: () => void;
   onSignOut: () => void;
+  hero?: (go: (screen: OwnerScreen) => void) => ReactNode;
+  boards?: (
+    go: (screen: OwnerScreen) => void,
+  ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
 }) {
   const activity = useAgentActivity(clientId ?? "");
   const [screen, setScreen] = useState<OwnerScreen>("home");
@@ -351,6 +357,7 @@ export function OwnerDoor({
     rec.start();
   }
 
+  const restored = boards?.(setScreen);
   const hold = holdFor(screen, tiles, {
     onConnect,
     onInvite: () => setScreen("accountant"),
@@ -378,8 +385,15 @@ export function OwnerDoor({
           onOpen={openChat}
           onAsk={openChat}
           onTile={onTile}
+          hero={hero?.(setScreen)}
         />
       ) : null}
+      {screen === "health" ? restored?.health : null}
+      {screen === "cash" ? restored?.cash : null}
+      {screen === "budget" ? restored?.budget : null}
+      {screen === "tasks" ? restored?.tasks : null}
+      {screen === "profit" ? restored?.profit : null}
+      {screen === "moves" ? restored?.moves : null}
       {screen === "chat" && active ? (
         <OwnerChat
           agent={agent}

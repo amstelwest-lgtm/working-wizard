@@ -3,14 +3,17 @@
 .owner-door {
   --owner-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
   --owner-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg));
+  --owner-stage: var(--bg-3);
+  --owner-mark: var(--ink);
   font-family: var(--owner-sans);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 400;
-  line-height: 1.45;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
   -webkit-font-smoothing: antialiased;
-  color: var(--ink, #e8eef8);
+  color: var(--ink);
 }
 
 .owner-door.accountant-portal .topbar {
@@ -44,8 +47,25 @@
   font-weight: 600;
 }
 
+.owner-door .owner-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .owner-door .owner-account {
   position: relative;
+}
+
+.owner-door .owner-menu-theme {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 8px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .owner-door .profile-chip {
@@ -60,9 +80,9 @@
   min-width: 220px;
   padding: 6px;
   border-radius: 14px;
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
-  background: var(--card, #121a28);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--owner-edge);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-gold);
 }
 
 .owner-door .owner-menu svg {
@@ -91,7 +111,7 @@
 
 .owner-door .owner-menu-item:hover,
 .owner-door .owner-menu-item:focus-visible {
-  background: rgba(212, 175, 55, 0.12);
+  background: color-mix(in srgb, var(--gold) 18%, transparent);
   outline: none;
 }
 
@@ -106,20 +126,27 @@
   margin: 0;
   font-family: var(--owner-serif);
   font-size: 2.15rem;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.05;
 }
 
 .owner-door .owner-lede {
   margin: 6px 0 0;
-  font-size: 0.95rem;
-  font-weight: 400;
-  color: var(--ink-dim, #9aa6bd);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-dim);
 }
 
 .owner-door .owner-stage {
   position: relative;
+}
+
+.owner-door .owner-health-hero {
+  border: 1px solid var(--owner-edge);
+  border-radius: 18px;
+  padding: 8px 4px 12px;
+  background: var(--card);
 }
 
 .owner-door .owner-agents {
@@ -154,13 +181,13 @@
 }
 
 .owner-door .owner-agent-open:focus-visible {
-  outline: 2px solid #fff4c2;
+  outline: 2px solid var(--gold-bright);
   outline-offset: 3px;
   border-radius: 16px;
 }
 
 .owner-door .owner-name {
-  font-size: 0.82rem;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.25;
@@ -171,18 +198,19 @@
 .owner-door .owner-motion-label {
   display: block;
   max-width: 28ch;
-  font-size: 0.8rem;
-  font-weight: 400;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.35;
   text-align: center;
-  color: var(--ink-dim, #9aa6bd);
+  color: var(--ink);
 }
 
 .owner-door .owner-motion-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--ink);
 }
 
 .owner-ask {
@@ -193,12 +221,9 @@
   justify-content: center;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #d4af37;
   border-radius: 999px;
-  background: #d4af37;
-  color: #1b1300;
   font-family: var(--owner-sans, Inter, ui-sans-serif, system-ui, sans-serif);
-  font-size: 0.8125rem;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -207,13 +232,15 @@
   cursor: pointer;
 }
 
-.owner-ask:hover {
-  background: #e3c56a;
-  border-color: #e3c56a;
+.owner-door .btn.gold.owner-ask {
+  background: var(--gold-grad);
+  background-size: 200% auto;
+  padding: 8px 12px;
+  font-size: 15px;
 }
 
 .owner-ask:focus-visible {
-  outline: 2px solid #fff4c2;
+  outline: 2px solid var(--gold-bright);
   outline-offset: 3px;
 }
 
@@ -240,33 +267,34 @@
   gap: 12px 18px;
   align-items: center;
   padding: 14px 16px;
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--owner-edge);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--card, #121a28) 88%, transparent);
+  background: var(--card);
 }
 
 .owner-door .owner-tile h2 {
   margin: 0;
   font-family: var(--owner-serif);
   font-size: 1.35rem;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.15;
 }
 
 .owner-door .owner-tile p {
   margin: 4px 0 0;
-  font-size: 0.95rem;
+  font-size: 16px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.4;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .owner-door .owner-tile-source {
   margin-top: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--ink-dim, #9aa6bd);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .owner-door .owner-tile-actions {
@@ -284,10 +312,11 @@
   justify-content: center;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(212, 175, 55, 0.16);
-  color: #e3c56a;
-  font-size: 0.75rem;
-  font-weight: 600;
+  border: 1px solid var(--owner-edge);
+  background: color-mix(in srgb, var(--gold) 16%, var(--bg));
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .owner-door .owner-hold {
@@ -305,7 +334,7 @@
   margin: 8px 0 0;
   font-family: var(--owner-serif);
   font-size: 1.35rem;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 .owner-door .owner-free,
@@ -336,7 +365,7 @@
 .owner-door .owner-back {
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--owner-edge);
   border-radius: 999px;
   background: transparent;
   color: inherit;
@@ -347,7 +376,7 @@
 
 .owner-door .owner-back:focus-visible,
 .owner-door .owner-icon-btn:focus-visible {
-  outline: 2px solid #fff4c2;
+  outline: 2px solid var(--gold-bright);
   outline-offset: 3px;
 }
 
@@ -370,18 +399,22 @@
 
 .owner-door .owner-turn.is-owner {
   align-self: flex-end;
-  background: rgba(212, 175, 55, 0.16);
+  background: color-mix(in srgb, var(--gold) 16%, var(--bg));
+  color: var(--ink);
 }
 
 .owner-door .owner-turn.is-agent {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--owner-edge);
+  background: var(--bg-2);
+  color: var(--ink);
 }
 
 .owner-door .owner-error {
   margin: 0;
-  color: #f0b4b4;
-  font-size: 0.875rem;
+  color: var(--risk);
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .owner-door .owner-composer {
@@ -396,7 +429,7 @@
   max-height: 140px;
   resize: vertical;
   padding: 10px 12px;
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--owner-edge);
   border-radius: 14px;
   background: transparent;
   color: inherit;
@@ -404,8 +437,15 @@
 }
 
 .owner-door .owner-composer textarea:focus-visible {
-  outline: 2px solid #fff4c2;
+  outline: 2px solid var(--gold-bright);
   outline-offset: 2px;
+}
+
+.owner-door .owner-icon-btn.btn {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 
 .owner-door .owner-icon-btn {
@@ -414,16 +454,17 @@
   height: 44px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d4af37;
+  border: 1px solid var(--owner-edge);
   border-radius: 999px;
   background: transparent;
-  color: #e3c56a;
+  color: var(--ink);
   cursor: pointer;
 }
 
 .owner-door .owner-icon-btn.is-on {
-  background: #d4af37;
-  color: #1b1300;
+  background: var(--gold-grad);
+  background-size: 200% auto;
+  border-color: transparent;
 }
 
 .owner-door .owner-composer .owner-ask {
@@ -491,7 +532,7 @@
   position: absolute;
   inset: 6%;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--accent, #d4af37) 0%, transparent 68%);
+  background: radial-gradient(circle, var(--accent) 0%, transparent 68%);
   opacity: 0.28;
   animation: owner-shimmer var(--shimmer) ease-in-out infinite;
   pointer-events: none;
@@ -508,13 +549,13 @@
 }
 
 .owner-presence.is-financial_manager {
-  --accent: #d4af37;
+  --accent: var(--gold);
 }
 .owner-presence.is-analyst {
-  --accent: #8fd0c6;
+  --accent: var(--gold-bright);
 }
 .owner-presence.is-advisor {
-  --accent: #f3d56a;
+  --accent: var(--gold-deep);
 }
 
 .owner-presence-svg {
@@ -524,8 +565,8 @@
 }
 
 .owner-presence .stage {
-  fill: #101820;
-  stroke: rgba(255, 255, 255, 0.08);
+  fill: var(--owner-stage);
+  stroke: var(--owner-edge);
   stroke-width: 1;
 }
 
@@ -540,7 +581,7 @@
 .owner-presence .sigil,
 .owner-presence .face {
   fill: none;
-  stroke: #f4efe2;
+  stroke: var(--owner-mark);
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -548,12 +589,12 @@
 
 .owner-presence .core,
 .owner-presence .eye {
-  fill: #f4efe2;
+  fill: var(--owner-mark);
   stroke: none;
 }
 
 .owner-presence .visor {
-  fill: rgba(212, 175, 55, 0.18);
+  fill: color-mix(in srgb, var(--gold) 28%, transparent);
 }
 
 .owner-orbit {
@@ -600,7 +641,7 @@
 
 .owner-presence .work-arc {
   fill: none;
-  stroke: #fff4c2;
+  stroke: var(--gold-bright);
   stroke-width: 2.4;
   stroke-dasharray: 46 170;
   stroke-linecap: round;
@@ -622,14 +663,14 @@
 
 .owner-presence .found-ring {
   fill: none;
-  stroke: #d4af37;
+  stroke: var(--gold);
   stroke-width: 1.6;
   transform-box: fill-box;
   transform-origin: center;
 }
 
 .owner-presence .found-dot {
-  fill: #d4af37;
+  fill: var(--gold);
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -649,7 +690,7 @@
 
 .owner-presence .speak-bars,
 .owner-presence .listen-bars {
-  stroke: #fff4c2;
+  stroke: var(--gold-bright);
   stroke-width: 1.6;
   stroke-linecap: round;
 }
@@ -662,7 +703,7 @@
 
 .owner-presence .mic {
   fill: none;
-  stroke: #fff4c2;
+  stroke: var(--gold-bright);
   stroke-width: 1.5;
 }
 
@@ -714,14 +755,14 @@
   height: 2px;
   overflow: hidden;
   border-radius: 99px;
-  background: rgba(212, 175, 55, 0.35);
+  background: var(--owner-edge);
 }
 
 .owner-beam-track i {
   display: block;
   width: 40%;
   height: 100%;
-  background: #f3d56a;
+  background: var(--gold-grad);
   animation: owner-beam 1.8s linear infinite;
 }
 
@@ -731,11 +772,11 @@
   left: calc(var(--beam-a) * 33.333%);
   width: calc((var(--beam-b) - var(--beam-a) + 1) * 33.333%);
   margin: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.3;
   text-align: center;
-  color: #f3d56a;
+  color: var(--ink);
 }
 
 @keyframes owner-breathe {
@@ -875,6 +916,24 @@
   }
   to {
     transform: translateX(280%);
+  }
+}
+
+@media (max-width: 767px) {
+  .owner-door.accountant-portal .deliverable-rail {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .owner-door.accountant-portal .deliverable-rail .tab {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 44px;
+    font-size: 14px;
+    white-space: nowrap;
   }
 }
 
