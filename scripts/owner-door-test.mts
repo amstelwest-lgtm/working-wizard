@@ -246,6 +246,12 @@ assert(
 );
 const app = readFileSync("src/routes/app.tsx", "utf8");
 assert(app.includes("<SphereHero"), "home and health reuse the health orb");
+assert(app.includes("Tap to see what's behind your score"), "the home orb tells the owner to open health");
+assert(app.includes('onOrbOpen={() => go("health")}'), "the home orb opens Health");
+assert(
+  css.includes(".owner-door .health-orb:hover") && css.includes(".owner-door .health-orb:focus-visible"),
+  "the home orb shows hover and focus",
+);
 assert(app.includes("readOnly"), "cash flow and budget can be shown without editing");
 assert(app.includes("Your accountant sets this up"), "an unconfigured view tells the owner who sets it up");
 
@@ -313,6 +319,7 @@ assert(
   "light watch scores use the dark-gold ink token",
 );
 const sphere = readFileSync("src/components/sphere-hero.tsx", "utf8");
+assert(sphere.includes("onOrbOpen"), "the orb can open Health instead of drilling in place");
 assert(sphere.includes("owner-pillar-score"), "pillar numbers opt into the dark-gold ink");
 assert(sphere.includes("bg-white"), "the pillar card is white");
 assert(shell.includes('className="brand"'), "the owner wordmark uses the accountant brand size");

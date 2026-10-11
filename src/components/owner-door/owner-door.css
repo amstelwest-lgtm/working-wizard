@@ -154,6 +154,33 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   background: var(--card);
 }
 
+.owner-door .health-orb:hover,
+.owner-door .health-orb:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 6px;
+}
+
+.owner-door .sphere-caption {
+  margin-top: 10px;
+  max-width: 28rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+}
+
+.owner-door .sphere-caption:hover,
+.owner-door .sphere-caption:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
 .owner-door .owner-agents {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

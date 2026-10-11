@@ -77,7 +77,7 @@ const PILLARS: SpherePillar[] = [
   },
 ];
 
-function HealthOrb({ compact = false }: { compact?: boolean }) {
+function HealthOrb({ compact = false, onOpen }: { compact?: boolean; onOpen?: () => void }) {
   return (
     <div className="owner-health-hero">
       <SphereHero
@@ -85,7 +85,8 @@ function HealthOrb({ compact = false }: { compact?: boolean }) {
         overallHealth={64}
         displayStatus="at_risk"
         pillars={PILLARS}
-        caption="Collections are the lever."
+        caption={compact ? "Tap to see what's behind your score" : "Collections are the lever."}
+        onOrbOpen={onOpen}
       />
     </div>
   );
@@ -113,6 +114,7 @@ export type OwnerPreviewView =
 export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
   const [motion, setMotion] = useState<OwnerMotion>("idle");
   const [done, setDone] = useState(false);
+  const [openedHealth, setOpenedHealth] = useState(false);
 
   useEffect(() => {
     if (view !== "reel") return;
@@ -151,11 +153,14 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
         : presence;
 
   const chatAgent = shown.agents.find((agent) => agent.agent === "analyst") ?? shown.agents[0];
+  const homeView = view === "rest" || view === "work" || view === "ask";
 
   return (
     <OwnerShell
       screen={
-        view === "chat" || view === "recording"
+        homeView && openedHealth
+          ? "health"
+          : view === "chat" || view === "recording"
           ? "chat"
           : view === "tasks" || view === "actions" || view === "moves"
             ? "moves"
@@ -203,7 +208,7 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           ))}
         </div>
       ) : null}
-      {view === "health" ? (
+      {view === "health" || (homeView && openedHealth) ? (
         <section className="owner-pane" data-owner-page="health">
           <h1 className="owner-title">Business Health</h1>
           <HealthOrb />
@@ -305,7 +310,7 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
       {view === "first" ? (
         <OwnerFirst joined={false} onQuickBooks={() => undefined} onXero={() => undefined} onInvite={() => undefined} />
       ) : null}
-      {view === "rest" || view === "work" || view === "ask" ? (
+      {homeView && !openedHealth ? (
         <OwnerHome
           variant="character"
           presence={shown}
@@ -313,7 +318,7 @@ export function OwnerDoorPreview({ view }: { view: OwnerPreviewView }) {
           onOpen={() => undefined}
           onAsk={() => undefined}
           onTile={() => undefined}
-          hero={<HealthOrb compact />}
+          hero={<HealthOrb compact onOpen={() => setOpenedHealth(true)} />}
         />
       ) : null}
     </OwnerShell>

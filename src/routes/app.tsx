@@ -3880,7 +3880,8 @@ function Index() {
                         overallHealth={avgHealth}
                         displayStatus={overallHealth.displayStatus}
                         pillars={spherePillars}
-                        caption={overviewCaption}
+                        caption="Tap to see what's behind your score"
+                        onOrbOpen={() => go("health")}
                         onTopPriority={() => go("moves")}
                         onDriverClick={(key) => {
                           if (key in RATIO_META) setOpenRatio(key as RatioKey);
