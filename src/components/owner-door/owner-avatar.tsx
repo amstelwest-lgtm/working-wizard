@@ -122,7 +122,7 @@ export function OwnerAvatar({
                 <circle className="found-ring" cx="40" cy="40" r="35" />
                 <circle className="found-dot" cx="62" cy="16" r="4.5" />
                 <WaveBars className="speak-bars" radius={36} />
-                <WaveBars className="listen-bars" radius={18} />
+                <WaveBars className="listen-bars" radius={33} />
                 <g className="mic" transform="translate(40 58)">
                   <rect x="-3" y="-10" width="6" height="9" rx="3" />
                   <path d="M-6 -3 a6 6 0 0 0 12 0 M0 3 v4 M-3 7 h6" />
@@ -192,14 +192,9 @@ function WaveBars({ className, radius }: { className: string; radius: number }) 
       {heights.map((height, index) => {
         const angle = (index / heights.length) * 360 - 90;
         return (
-          <line
-            key={index}
-            x1="40"
-            y1={40 - radius}
-            x2="40"
-            y2={40 - radius + height}
-            transform={`rotate(${angle} 40 40)`}
-          />
+          <g key={index} transform={`rotate(${angle} 40 40)`}>
+            <line x1="40" y1={40 - radius} x2="40" y2={40 - radius + height} />
+          </g>
         );
       })}
     </g>

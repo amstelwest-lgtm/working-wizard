@@ -1086,6 +1086,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   }
 }
 
+::view-transition-group(*) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 html[data-bot-fade="cross"]::view-transition-group(*),
 html[data-bot-fade="plain"]::view-transition-group(*) {
   animation: none;

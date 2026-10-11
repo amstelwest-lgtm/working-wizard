@@ -287,8 +287,8 @@ export function OwnerDoor({
       setAgent(next);
       setError(null);
       setScreen("chat");
+      onBotChange?.(next, "push");
     });
-    onBotChange?.(next, "push");
   }
 
   function closeChat() {

@@ -195,8 +195,10 @@ export function OwnerDoorPreview({
 
   function openLive(next: AgentKey) {
     pushedRef.current = true;
-    void runBotTransition(() => setLiveBot(next));
-    onBot?.(next, "push");
+    void runBotTransition(() => {
+      setLiveBot(next);
+      onBot?.(next, "push");
+    });
   }
 
   function closeLive() {
