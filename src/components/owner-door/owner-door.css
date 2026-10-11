@@ -411,6 +411,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 
 .owner-door .deliverable-rail .tab {
   min-height: 44px;
+  font-size: 14px;
 }
 
 .owner-door [data-owner-page="health"] .max-w-xl,
@@ -437,6 +438,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door [data-owner-page="moves"] button,
 .owner-door [data-owner-page="health"] .sphere-drill-back {
   min-height: 44px;
+  font-size: 14px;
 }
 
 .owner-door [data-owner-page="moves"] .border-dashed > button {
