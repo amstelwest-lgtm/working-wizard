@@ -10,6 +10,8 @@ import {
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
 
+export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
+
 export type OwnerTileId = "cash" | "owes" | "profit" | "answer" | "signed";
 
 export type OwnerTile = {
@@ -137,6 +139,21 @@ export function ownerAnswerTiles(books: OwnerBooks): OwnerTile[] {
       };
 
   return [cash, owes, profit, answer, signed];
+}
+
+/** One or two lines under each bot. Sign-off stays off this page. */
+export function ownerHomeLines(
+  tiles: readonly OwnerTile[],
+  topMove: string | null,
+): OwnerHomeLines {
+  const sentence = (id: OwnerTileId) => tiles.find((tile) => tile.id === id)?.sentence ?? "";
+  const cash = sentence("cash");
+  const move = topMove?.replace(/\s+/g, " ").trim() ?? "";
+  return {
+    financial_manager: [cash, sentence("answer")].filter((line) => line.length > 0),
+    analyst: [sentence("profit"), sentence("owes")].filter((line) => line.length > 0),
+    advisor: [move || (cash === CONNECT ? CONNECT : "No next move yet.")],
+  };
 }
 
 function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: string): OwnerTile {

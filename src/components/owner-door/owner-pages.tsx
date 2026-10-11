@@ -75,12 +75,14 @@ export function OwnerAccountant({
   firmName,
   invite,
   uploads,
+  signed,
   onConnect,
 }: {
   joined: boolean;
   firmName: string | null;
   invite: ReactNode;
   uploads: ReactNode;
+  signed: OwnerSignoffRow[];
   onConnect: () => void;
 }) {
   return (
@@ -93,6 +95,24 @@ export function OwnerAccountant({
       </p>
       {joined ? null : <p className="owner-free">{ownerPlanFreeLine()}</p>}
       {invite}
+      <h2 className="owner-sub">What your accountant signed</h2>
+      {signed.length ? (
+        <div className="owner-promises">
+          {signed.map((row) => (
+            <article key={row.id} className="owner-tile">
+              <div>
+                <h2>{SCOPE_LABEL[row.scope] ?? row.scope}</h2>
+                <p>
+                  {row.name} signed off on {row.when}.
+                </p>
+              </div>
+              <span className="owner-badge">Signed off ✓</span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="owner-lede">Invite your accountant to sign off.</p>
+      )}
       <h2 className="owner-sub">Uploads</h2>
       {uploads}
       <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onConnect}>

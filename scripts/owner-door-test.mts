@@ -9,6 +9,7 @@ import { emptyAgentActivity, type AgentActivitySnapshot } from "../src/lib/milon
 import {
   ownerAmount,
   ownerAnswerTiles,
+  ownerHomeLines,
   ownerTileLabel,
   type OwnerBooks,
 } from "../src/lib/owner-answers.ts";
@@ -104,6 +105,22 @@ assert(
   "only a named sign-off says so",
 );
 assert(ownerTileLabel(cash!, agentShortName).startsWith("Ask "), "ask labels use the short name");
+const homeLines = ownerHomeLines(filled, "Collect the two largest invoices");
+assert(homeLines.financial_manager.length === 2, "the financial manager has cash and the open answer");
+assert(homeLines.financial_manager[0] === cash?.sentence, "cash stays under the financial manager");
+assert(homeLines.financial_manager[1] === "Approve the payroll run.", "the waiting answer stays under the financial manager");
+assert(homeLines.analyst[0]?.startsWith("Gross profit is"), "profit stays under the analyst");
+assert(homeLines.analyst[1]?.startsWith("Customers owe"), "debtors stay under the analyst");
+assert(homeLines.advisor[0] === "Collect the two largest invoices", "the advisor carries the top next move");
+const emptyLines = ownerHomeLines(empty, null);
+assert(emptyLines.financial_manager[0] === "Connect QuickBooks or Xero.", "an empty cash line stays honest");
+assert(emptyLines.financial_manager[1] === "Nothing is waiting on you.", "an empty answer line stays honest");
+assert(emptyLines.advisor[0] === "Connect QuickBooks or Xero.", "no books does not invent a next move");
+assert(
+  ownerHomeLines(ownerAnswerTiles(books({ hasBooks: true, actionsReady: true })), null).advisor[0] ===
+    "No next move yet.",
+  "books with no ranked move stay empty",
+);
 
 const quiet = ownerPresence(emptyAgentActivity());
 assert(
@@ -228,6 +245,10 @@ assert(css.includes('--owner-sans: "Noto Sans", sans-serif'), "the owner shell u
 assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(home.includes('className="btn gold owner-ask"'), "ask entry uses the metallic gold button");
+assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "home reads the bot lines");
+assert(!home.includes("owner-promises"), "home does not render the answer tiles");
+assert(!home.includes("owner-health-hero"), "home does not render the health orb");
+assert(!home.includes("What your accountant signed"), "sign-off is not a home tile");
 assert(/\.owner-tile p \{[^}]*color: var\(--ink\)/.test(css), "tile sentences use the foreground colour");
 const shell = readFileSync("src/components/owner-door/owner-shell.tsx", "utf8");
 assert(shell.includes("<ThemeToggle />"), "the owner shell uses the shared theme toggle");
@@ -246,9 +267,11 @@ assert(
   `rail order is ${railLabels.join(" | ")}`,
 );
 const app = readFileSync("src/routes/app.tsx", "utf8");
-assert(app.includes("<SphereHero"), "home and health reuse the health orb");
-assert(app.includes("Tap to see what's behind your score"), "the home orb tells the owner to open health");
-assert(app.includes('onOrbOpen={() => go("health")}'), "the home orb opens Health");
+assert(app.includes("<OwnerHealthOrb"), "health keeps the orb");
+assert(app.includes("const OwnerHealthOrb = SphereHero"), "health reuses the sphere");
+assert(!app.includes("hero="), "home does not mount the health orb");
+assert(app.includes("onDriverClick"), "the health orb still drills into a driver");
+assert(app.includes("topMove="), "the advisor line is the top next move");
 assert(
   css.includes(".owner-door .health-orb:hover") && css.includes(".owner-door .health-orb:focus-visible"),
   "the home orb shows hover and focus",
@@ -297,14 +320,34 @@ for (const block of [darkBlock, lightBlock]) {
   const edge = mix(ink, bg, 0.55);
   assert(contrast(edge, bg) >= 3, `owner edge on background is ${contrast(edge, bg).toFixed(2)}`);
 }
-const goldDeep = token(darkBlock, "--gold-deep");
-const gold = token(darkBlock, "--gold");
-const goldBright = token(darkBlock, "--gold-bright");
 const buttonInk = "#1b1300";
 assert(portal.includes(`color:${buttonInk}`), "the metallic button keeps its dark label");
-for (const stop of [goldDeep, gold, goldBright]) {
-  assert(contrast(buttonInk, stop) >= 4.5, `gold button text on ${stop} is ${contrast(buttonInk, stop).toFixed(2)}`);
+function tokenOr(source: string, name: string, fallback: string): string {
+  const found = source.match(new RegExp(`${name}:(#[0-9a-fA-F]{6})`));
+  return found ? found[1] : fallback;
 }
+for (const [theme, block] of [
+  ["dark", darkBlock],
+  ["light", lightBlock],
+] as const) {
+  for (const name of ["--gold-deep", "--gold", "--gold-bright"] as const) {
+    const stop = tokenOr(block, name, token(darkBlock, name));
+    const ratio = contrast(buttonInk, stop);
+    assert(ratio >= 4.5, `${theme} gold button text on ${name} ${stop} is ${ratio.toFixed(2)}`);
+  }
+}
+assert(css.includes("background-image: var(--gold-grad)"), "owner gold reuses the metallic gradient");
+assert(
+  css.includes("linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.5), transparent)"),
+  "owner gold reuses the landing sheen",
+);
+assert(css.includes(".owner-door .btn.gold:hover::after"), "owner gold keeps the hover sheen");
+const avatar = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8");
+assert(!avatar.includes('d="M32 28l8 6 8-6"'), "the advisor brow is not a frown");
+assert(avatar.includes('className="smile"'), "the advisor face has a smile");
+const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
+assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");
+assert((pages.match(/What your accountant signed/g) ?? []).length >= 1, "the accountant tab names the sign-off");
 const goldInk = token(lightBlock, "--gold-ink");
 const pillarCard = token(lightBlock, "--bg-2");
 const landing = readFileSync("src/styles/landing.css", "utf8");
@@ -352,7 +395,7 @@ assert(
 );
 assert(css.includes("@keyframes owner-bot-in") && css.includes("@keyframes owner-bot-out"), "the fallback is a crossfade");
 assert(home.includes("share"), "the home avatar opts into the shared element");
-assert(door.includes('setScreen("moves")'), "what needs an answer opens Next moves");
+assert(shell.includes('screen: "moves"'), "next moves stays on the rail");
 assert(!door.includes('setScreen("actions")'), "the separate actions screen is gone");
 assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");

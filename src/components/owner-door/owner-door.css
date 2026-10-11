@@ -143,8 +143,18 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   color: var(--ink-dim);
 }
 
+.owner-door .owner-pane[data-owner-home="true"] {
+  display: flex;
+  min-height: calc(100dvh - 168px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+
 .owner-door .owner-stage {
   position: relative;
+  width: min(100%, 980px);
 }
 
 .owner-door .owner-health-hero {
@@ -187,6 +197,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   gap: 14px;
 }
 
+.owner-door [data-owner-faces] .owner-agents {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: center;
+}
+
 .owner-door .owner-agent {
   display: flex;
   flex-direction: column;
@@ -226,10 +241,18 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   text-align: center;
 }
 
+.owner-door .owner-lines {
+  display: flex;
+  min-height: 4.4em;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
 .owner-door .owner-voice,
 .owner-door .owner-motion-label {
   display: block;
-  max-width: 28ch;
+  max-width: 32ch;
   font-size: 15px;
   font-weight: 500;
   line-height: 1.35;
@@ -264,9 +287,46 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   cursor: pointer;
 }
 
-.owner-door .btn.gold.owner-ask {
-  background: var(--gold-grad);
+.owner-door .btn.gold {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--gold);
+  background-image: var(--gold-grad);
   background-size: 200% auto;
+  -webkit-text-fill-color: currentColor;
+  box-shadow: 0 6px 30px rgba(212, 175, 55, 0.35);
+  transition:
+    transform 0.3s var(--ease),
+    box-shadow 0.3s var(--ease),
+    background-position 0.5s;
+}
+
+.owner-door .btn.gold::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s var(--ease);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .owner-door .btn.gold:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 46px rgba(212, 175, 55, 0.5);
+    background-position: 120% center;
+  }
+
+  .owner-door .btn.gold:hover::after {
+    left: 130%;
+  }
+}
+
+.owner-door .btn.gold.owner-ask {
   padding: 8px 12px;
   font-size: 15px;
 }
@@ -537,8 +597,8 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-presence {
   position: relative;
   display: inline-grid;
-  width: 104px;
-  height: 104px;
+  width: 156px;
+  height: 156px;
   flex: none;
 }
 
@@ -815,7 +875,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 
 .owner-beam-track {
   position: absolute;
-  top: 52px;
+  top: 78px;
   left: calc((var(--beam-a) + 0.5) * 33.333% + 58px);
   width: calc((var(--beam-b) - var(--beam-a)) * 33.333% - 116px);
   height: 2px;
@@ -1004,6 +1064,35 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 @media (max-width: 760px) {
+  .owner-door .owner-pane[data-owner-home="true"] {
+    min-height: 0;
+    justify-content: flex-start;
+  }
+
+  .owner-door .owner-pane[data-owner-home="true"] .owner-agents {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 28px;
+  }
+
+  .owner-door .owner-pane[data-owner-home="true"] .owner-agent {
+    width: min(100%, 320px);
+  }
+
+  .owner-door [data-owner-faces] .owner-agents {
+    grid-template-columns: 1fr;
+  }
+
+  .owner-door .owner-beam-track {
+    display: none;
+  }
+
+  .owner-door .owner-beam p {
+    position: static;
+    width: auto;
+    margin-top: 12px;
+  }
+
   .owner-door.accountant-portal .topbar {
     margin: 0 0 12px;
   }
@@ -1021,12 +1110,12 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   }
 
   .owner-presence.is-lg {
-    width: 56px;
-    height: 56px;
+    width: 132px;
+    height: 132px;
   }
 
   .owner-beam-track {
-    top: 28px;
+    top: 46px;
     left: calc((var(--beam-a) + 0.5) * 33.333% + 32px);
     width: calc((var(--beam-b) - var(--beam-a)) * 33.333% - 64px);
   }
@@ -1143,8 +1232,11 @@ html[data-bot-fade="plain"] .owner-door .owner-pane {
   .owner-door .listen-bars line,
   .owner-door .eye,
   .owner-door .eyes,
-  .owner-door .owner-beam-track i {
+  .owner-door .owner-beam-track i,
+  .owner-door .btn.gold,
+  .owner-door .btn.gold::after {
     animation: none !important;
+    transition: none;
   }
 
   .owner-door .owner-presence.is-working .owner-glow {

@@ -237,7 +237,7 @@ function OrbSigil({ agent }: { agent: AgentKey }) {
   return (
     <g className="sigil">
       <circle className="sigil-ring" cx="40" cy="40" r="16" />
-      <path className="beam-mark" d="M28 40h16M36 32l8 8-8 8" />
+      <path className="smile" d="M32 42q8 7 16 0" />
     </g>
   );
 }
@@ -260,8 +260,8 @@ function Face({ agent }: { agent: AgentKey }) {
       ) : null}
       {agent === "advisor" ? (
         <>
-          <path className="shell" d="M40 16l20 10v16L40 64 20 42V26z" />
-          <path className="chev" d="M32 28l8 6 8-6" />
+          <rect className="shell" x="22" y="18" width="36" height="42" rx="16" />
+          <path className="smile" d="M31 46q9 8 18 0" />
         </>
       ) : null}
       <g className="eyes">
