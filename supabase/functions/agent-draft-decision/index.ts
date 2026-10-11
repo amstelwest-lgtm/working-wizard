@@ -274,8 +274,12 @@ function editFields(raw: unknown): { title?: string; detail?: string } | null | 
   return edits;
 }
 
+// esm.sh createClient() and ReturnType<typeof createClient> disagree, so helpers take any.
+// deno-lint-ignore no-explicit-any
+type Admin = any;
+
 async function callerIsFirmMember(
-  admin: ReturnType<typeof createClient>,
+  admin: Admin,
   userId: string,
   clientId: string,
   firmId: string | null,
@@ -302,7 +306,7 @@ async function callerIsFirmMember(
 }
 
 async function ensureActionPlan(
-  admin: ReturnType<typeof createClient>,
+  admin: Admin,
   clientId: string,
 ): Promise<{ planId: string; seq: number } | { error: string }> {
   const { data: plan, error: planError } = await admin
@@ -358,7 +362,7 @@ function decidedJson(
 }
 
 async function reread(
-  admin: ReturnType<typeof createClient>,
+  admin: Admin,
   findingId: string,
   decision: DraftDecision,
 ): Promise<Response> {
