@@ -17,6 +17,7 @@ import {
   ANALYST_MAX_ITERATIONS,
   ANALYST_TOOLS,
   ANALYST_TOOL_LABELS,
+  analystEmptyFindingStop,
   analystFailurePlan,
   analystRunCostUsd,
   analystRunOutcome,
@@ -171,6 +172,8 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       toolLabels: ANALYST_TOOL_LABELS,
       rethrowReasonerErrors: true,
       reason: async (ctx) => {
+        const emptyStop = analystEmptyFindingStop(ctx.transcript);
+        if (emptyStop) return emptyStop;
         const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL);
         const lastCall = analystRunCostUsd(
           lastInputTokens,

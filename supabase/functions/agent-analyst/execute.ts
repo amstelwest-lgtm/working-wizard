@@ -20,6 +20,7 @@ import {
   executeAnalystGate,
   FINDING_KINDS,
   findingDuplicates,
+  EMPTY_FINDING_RESULT,
   findingKindAllowed,
   findingRecordKey,
   labelHealthScore,
@@ -222,7 +223,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   const title = typeof args.title === "string" ? args.title.trim() : "";
   const kind = typeof args.kind === "string" ? args.kind.trim() : "";
   const detail = typeof args.detail === "string" ? args.detail.trim().slice(0, 2000) : "";
-  if (!title) return { error: "A finding needs a title." };
+  if (!title) return EMPTY_FINDING_RESULT;
   if (!detail) return { error: "A finding needs a detail." };
   if (!findingKindAllowed(kind)) {
     return { error: `kind must be one of: ${FINDING_KINDS.join(", ")}.` };

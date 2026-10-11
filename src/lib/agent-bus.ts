@@ -1090,7 +1090,10 @@ export type EvidenceMetricUnit = "currency" | "percent" | "days" | "count" | "ra
 
 export type EvidenceMetric = {
   metric: string;
+  /** Percentage points when unit is percent (60, 8.6). Other units keep the stored number. */
   value: number;
+  /** The stored fraction, only when value was scaled from it. */
+  value_raw?: number;
   unit: EvidenceMetricUnit;
   period: string | null;
   floor?: number;
@@ -1110,7 +1113,7 @@ export const AGENT_COPY_GUIDE = `How to write a title, detail, or summary:
 - Amounts use the client's format. South Africa: R 13 846. United States: $13,846. Cashflow amounts are $46,300 or R 46 300, never a bare 46300 or 128 450.
 - A ratio is a percentage with one decimal. 0.6 is written 60%. 0.086 is written 8.6%, not 9%.
 - Days are whole days. 43.8 is written 44 days.
-- Quote a healthy band only when that band was stored. Do not invent "30–60 day healthy band on file".
+- Quote a day band only when both numbers were stored. Do not invent "30–60 day healthy band on file" or "the stored 30–60 day band".
 - Bad: "Low R 36 154. R 13 846 under R 50 000. get emails out to 10 clients"
 - Good: "Cash is R 13 846 below your R 50 000 minimum. Send reminder emails to 10 clients."
 - A data request title is the ask itself. Bad: "Gross margin is 0.6. Debtor days are 43.8." Good: "Send the September debtors age analysis."`;
@@ -1146,9 +1149,18 @@ function cashFloor(key: string, unit: EvidenceMetricUnit, market: MoneyMarket): 
   return cashComfortThreshold(market.currency);
 }
 
+/**
+ * A percent metric stores percentage points. A stored fraction (|value| ≤ 1.5)
+ * is multiplied by 100 and rounded to one decimal. value_raw keeps that fraction.
+ */
+export function percentMetricValue(value: number): { value: number; value_raw?: number } {
+  if (Math.abs(value) > 1.5) return { value };
+  const points = Math.round(value * 1000) / 10;
+  return { value: points, value_raw: value };
+}
+
 function percentPoints(value: number): number {
-  const pct = Math.abs(value) <= 1.5 ? value * 100 : value;
-  return Math.round(pct * 10) / 10;
+  return percentMetricValue(value).value;
 }
 
 function proseForMetric(unit: EvidenceMetricUnit, value: number, market: MoneyMarket): string {
@@ -1202,12 +1214,14 @@ export function evidenceMetrics(
   return figureLeaves(figures).map((leaf) => {
     const unit = metricUnit(leaf.key, leaf.value);
     const floor = cashFloor(leaf.key, unit, market);
+    const scaled = unit === "percent" ? percentMetricValue(leaf.value) : { value: leaf.value };
     const metric: EvidenceMetric = {
       metric: leaf.key,
-      value: leaf.value,
+      value: scaled.value,
       unit,
       period: leaf.period ?? periodLabel,
     };
+    if (scaled.value_raw != null) metric.value_raw = scaled.value_raw;
     if (floor != null) metric.floor = floor;
     if (unit === "count") metric.count = metric.value;
     return metric;
@@ -1275,17 +1289,21 @@ function applyCopyReplacements(text: string, replacements: { raw: string; format
   );
 }
 
-const HEALTHY_BAND =
-  /(\d+(?:\.\d+)?)\s*(?:[\u2010-\u2015\-]|to)\s*(\d+(?:\.\d+)?)\s*day\s+healthy\s+band(?:\s+on\s+file)?/gi;
+const DAY_BAND =
+  /\b(?:(the)\s+(?:stored\s+)?)?(\d+(?:\.\d+)?)\s*(?:[\u2010-\u2015\-]|to)\s*(\d+(?:\.\d+)?)\s*day\s+(healthy\s+)?band(?:\s+on\s+file)?/gi;
 
-/** Drop a healthy-band range whose endpoints were not stored. The clause stays, without invented numbers. */
+/**
+ * Drop an N–M day band whose endpoints were not in the grounded reads.
+ * No read returns the creditor healthy band. It lives in the ratio table, not the books.
+ */
 export function stripUnstoredHealthyBand(text: string, stored: readonly number[]): string {
-  return text.replace(HEALTHY_BAND, (match, leftRaw: string, rightRaw: string) => {
+  return text.replace(DAY_BAND, (match, the: string | undefined, leftRaw: string, rightRaw: string, healthy: string | undefined) => {
     const left = Number(leftRaw);
     const right = Number(rightRaw);
     const known = (n: number) => stored.some((value) => figuresClose(n, value));
     if (known(left) && known(right)) return match;
-    return "healthy band";
+    const label = healthy ? "healthy band" : "band";
+    return the ? `the ${label}` : label;
   });
 }
 
