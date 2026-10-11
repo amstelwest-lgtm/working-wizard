@@ -777,6 +777,7 @@ export function OwnerDoor({
           billing={billing}
           subscribeBusy={subscribeBusy}
           onSubscribe={() => void subscribe()}
+          onInvite={() => go("accountant")}
           checkoutNotice={checkoutNotice}
         />
       ) : null}

@@ -1,5 +1,5 @@
 /**
- * Accountant theme toggle + settings chrome: gold icon control,
+ * Accountant theme toggle + settings chrome: pale-blue cobalt icon,
  * no leftover slate dashboard shell.
  * Run: pnpm test:settings-theme
  */
@@ -19,7 +19,11 @@ assert(!toggle.includes("Switch to light mode") || toggle.includes("aria-label")
 assert(!toggle.includes("hidden sm:inline"), "no leftover Light/Dark text chip");
 
 const prim = read("src/styles/primitives.css");
-assert(prim.includes(".milon-theme-toggle"), "shared gold-rim styles exist");
+const toggleCss = prim.slice(prim.indexOf(".milon-theme-toggle {"), prim.indexOf(".founder-app-bar__theme"));
+assert(toggleCss.includes(".milon-theme-toggle"), "shared theme toggle styles exist");
+assert(toggleCss.includes("background: var(--pale"), "the toggle background is pale blue");
+assert(toggleCss.includes("color: var(--cobalt"), "the toggle icon is cobalt");
+assert(!toggleCss.includes("--brand-gold") && !toggleCss.includes("#d4af37"), "the toggle is not gold");
 assert(prim.includes("border-radius: 50%"), "toggle is circular");
 
 const portal = read("src/styles/accountant-portal.css");

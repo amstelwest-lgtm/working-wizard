@@ -443,7 +443,7 @@ html.dark .milon-status-pill--sample,
   stroke-linejoin: round;
 }
 
-/* Gold-rimmed appearance control (accountant topbar, settings, founder bar). */
+/* Pale-blue appearance control. Cobalt icon. Gold stays on the wordmark. */
 .milon-theme-toggle {
   width: 36px;
   height: 36px;
@@ -452,28 +452,26 @@ html.dark .milon-status-pill--sample,
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1px solid var(--brand-border, var(--line, rgba(212, 175, 55, 0.28)));
-  background: color-mix(in srgb, var(--brand-gold, var(--gold, #d4af37)) 8%, transparent);
-  color: var(--brand-gold, var(--gold, #d4af37));
-  box-shadow: 0 0 0 0 transparent;
+  border: 1px solid var(--pale, #dbeafe);
+  background: var(--pale, #dbeafe);
+  color: var(--cobalt, #0b5fff);
+  box-shadow: none;
   cursor: pointer;
   transition:
     border-color 0.25s,
-    transform 0.3s var(--brand-ease, cubic-bezier(0.22, 0.9, 0.24, 1)),
-    box-shadow 0.3s,
     background 0.25s;
 }
 .milon-theme-toggle:hover {
-  border-color: var(--brand-gold, var(--gold, #d4af37));
-  background: color-mix(in srgb, var(--brand-gold, var(--gold, #d4af37)) 16%, transparent);
-  transform: rotate(18deg);
-  box-shadow: 0 0 20px rgba(212, 175, 55, 0.28);
+  border-color: var(--cobalt, #0b5fff);
+  background: var(--pale, #dbeafe);
+  color: var(--cobalt, #0b5fff);
+  box-shadow: none;
 }
 .milon-theme-toggle:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 2px var(--brand-bg, var(--bg, #050507)),
-    0 0 0 4px var(--brand-gold, var(--gold, #d4af37));
+    0 0 0 2px var(--bg, #ffffff),
+    0 0 0 4px var(--cobalt, #0b5fff);
 }
 .milon-theme-toggle__icon {
   width: 15px;

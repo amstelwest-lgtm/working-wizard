@@ -8,9 +8,8 @@ import {
 } from "@/lib/portal-theme";
 
 /**
- * Gold-rimmed icon control — same language as the landing #themeToggle
- * and the accountant topbar pills. Icon only; the title/aria-label name
- * the destination mode.
+ * Pale-blue icon control with a cobalt moon or sun. Icon only; the
+ * title and aria-label name the destination mode.
  */
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<PortalTheme>("light");

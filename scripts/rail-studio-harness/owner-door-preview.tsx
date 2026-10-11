@@ -483,10 +483,11 @@ export function OwnerDoorPreview({
       {view === "plan" ? (
         <OwnerPlan
           visitor="us"
-          accountantOnMilon={false}
-          firmName={null}
+          accountantOnMilon={bill === "firm"}
+          firmName={bill === "firm" ? "Harbour & Co" : null}
           billing={previewBilling(bill)}
           onSubscribe={() => undefined}
+          onInvite={() => undefined}
         />
       ) : null}
       {view === "settings" ? (
