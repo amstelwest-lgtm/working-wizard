@@ -137,6 +137,7 @@
     "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
     "test:owner-door": "vite-node --config scripts/vite-test.config.ts scripts/owner-door-test.mts",
     "test:owner-handoff": "vite-node --config scripts/vite-test.config.ts scripts/owner-handoff-test.mts",
+    "test:nudge-cron-vault": "vite-node --config scripts/vite-test.config.ts scripts/nudge-cron-vault-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",
