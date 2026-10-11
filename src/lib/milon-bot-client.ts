@@ -39,6 +39,7 @@ export async function invokeMilonBot(input: {
   mode?: "chat" | "agent";
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   audience: MilonBotAudience;
+  agent?: string;
 }): Promise<MilonBotResult> {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
@@ -64,6 +65,7 @@ export async function invokeMilonBot(input: {
             message: input.message,
             history: input.history,
             audience: input.audience,
+            ...(input.agent ? { agent: input.agent } : {}),
           },
     ),
   });

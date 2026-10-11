@@ -7,23 +7,64 @@ import { parseAskAiBody } from "@/lib/ask-ai-response";
 import { invokeMilonBot } from "@/lib/milon-bot-client";
 import { routeMilonIntent } from "@/lib/milon-bot-copy";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import type { OwnerAskHistoryTurn } from "@/lib/owner-chat-thread";
 
 export type OwnerAskResult = { ok: true; answer: string } | { ok: false; error: string };
+
+export function ownerAskPayload(input: {
+  clientId: string;
+  agent: AgentKey;
+  question: string;
+  history: OwnerAskHistoryTurn[];
+  route: "ask-ai" | "milon-bot";
+}): Record<string, unknown> {
+  const history = input.history
+    .filter((turn) => (turn.role === "user" || turn.role === "assistant") && turn.content.trim())
+    .slice(-8)
+    .map((turn) => ({ role: turn.role, content: turn.content.trim().slice(0, 1500) }));
+  if (input.route === "milon-bot") {
+    return {
+      clientId: input.clientId,
+      message: input.question,
+      audience: "owner",
+      agent: input.agent,
+      history,
+    };
+  }
+  return {
+    clientId: input.clientId,
+    question: input.question,
+    audience: "owner",
+    agent: input.agent,
+    history,
+  };
+}
 
 export async function askOwnerAgent(input: {
   clientId: string;
   agent: AgentKey;
   question: string;
+  history?: OwnerAskHistoryTurn[];
 }): Promise<OwnerAskResult> {
   const question = input.question.trim();
+  const history = input.history ?? [];
   if (!question) return { ok: false, error: "Type a question first." };
   if (routeMilonIntent(question) === "milon-bot") {
+    const payload = ownerAskPayload({
+      clientId: input.clientId,
+      agent: input.agent,
+      question,
+      history,
+      route: "milon-bot",
+    });
     try {
       const result = await invokeMilonBot({
         clientId: input.clientId,
         message: question,
         audience: "owner",
         mode: "chat",
+        history: payload.history as OwnerAskHistoryTurn[],
+        agent: input.agent,
       });
       const answer = result.answer.trim();
       return answer ? { ok: true, answer } : { ok: false, error: "No answer came back." };
@@ -46,12 +87,15 @@ export async function askOwnerAgent(input: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      clientId: input.clientId,
-      question,
-      audience: "owner",
-      agent: input.agent,
-    }),
+    body: JSON.stringify(
+      ownerAskPayload({
+        clientId: input.clientId,
+        agent: input.agent,
+        question,
+        history,
+        route: "ask-ai",
+      }),
+    ),
   });
   const body: unknown = await res.json().catch(() => null);
   const turn = parseAskAiBody(res.status, body, res.ok);

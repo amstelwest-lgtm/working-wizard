@@ -21,6 +21,7 @@ import {
 } from "@/components/owner-door/owner-pages";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
+import { OWNER_REPLY_BLOB, OWNER_REPLY_STRUCTURED_BOLD } from "@/lib/owner-reply-format";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines } from "@/lib/owner-answers";
 import { ownerNeedsView } from "@/lib/owner-needs";
@@ -423,11 +424,9 @@ export function OwnerDoorPreview({
           motion={view === "recording" ? "listening" : "idle"}
           sentence={chatAgent.sentence}
           messages={[
-            { role: "owner", text: "What should I look at first?" },
-            {
-              role: "agent",
-              text: "Connect QuickBooks or Xero, then I can read the 13-week line.",
-            },
+            { role: "owner", text: "How are we looking?" },
+            { role: "agent", text: OWNER_REPLY_BLOB },
+            { role: "agent", text: OWNER_REPLY_STRUCTURED_BOLD },
           ]}
           draft=""
           listening={view === "recording"}
