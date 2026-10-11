@@ -3,7 +3,7 @@ import {
 } from '@react-email/components'
 import type { TemplateEntry } from './registry'
 
-const SITE_NAME = 'Working Capital Compass'
+const SITE_NAME = 'Milōn'
 
 interface TaskAssignedProps {
   employeeName?: string

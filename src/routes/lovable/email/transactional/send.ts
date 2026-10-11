@@ -5,7 +5,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { TEMPLATES } from '@/lib/email-templates/registry'
 
 // Configuration baked in at scaffold time
-const SITE_NAME = "Working Capital Compass"
+const SITE_NAME = "Milōn"
 // Transactional mail is From noreply@milonfinance.com. The sender domain matches.
 const SENDER_DOMAIN = "milonfinance.com"
 // FROM_DOMAIN is the domain shown in the From header.

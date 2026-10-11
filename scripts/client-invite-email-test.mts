@@ -67,6 +67,27 @@ assert(!team.includes("Thandi Mokoena"), "team invite does not prefill Thandi Mo
 assert(!team.includes("thandi@practice.co.za"), "team invite does not prefill the demo email");
 assert(team.includes('useState("")'), "team invite name and email start blank");
 
+const taskAssigned = readFileSync(resolve("src/lib/email-templates/task-assigned.tsx"), "utf8");
+const transactionalSend = readFileSync(
+  resolve("src/routes/lovable/email/transactional/send.ts"),
+  "utf8",
+);
+assert(taskAssigned.includes("const SITE_NAME = 'Milōn'"), "task mail names Milōn");
+assert(!taskAssigned.includes("Working Capital Compass"), "task mail drops the old product name");
+assert(
+  transactionalSend.includes('const SITE_NAME = "Milōn"'),
+  "transactional From display name is Milōn",
+);
+assert(
+  transactionalSend.includes("noreply@${FROM_DOMAIN}"),
+  "transactional From mailbox is noreply on the finance domain",
+);
+assert(transactionalSend.includes('const FROM_DOMAIN = "milonfinance.com"'), "From domain is milonfinance.com");
+assert(
+  !transactionalSend.includes("Working Capital Compass"),
+  "transactional send drops the old product name",
+);
+
 assert(RESEND_SEND_TIMEOUT_MS <= 8_000, "Resend abort stays inside the gateway window");
 const sendSrc = readFileSync(resolve("src/lib/client-invite-email.ts"), "utf8");
 assert(sendSrc.includes("AbortSignal.timeout"), "Resend fetch is abortable");

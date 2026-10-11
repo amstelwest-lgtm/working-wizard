@@ -878,10 +878,12 @@ function LandingPage() {
     clearOwnerSignInError();
     setSiBusy(true);
     try {
-      // Secret operator handles unlock the Lighthouse console door
+      // Secret operator handles unlock the Lighthouse console door.
+      // A real staff mailbox on either product domain is a normal sign-in.
       const id = siEmail.trim().toLowerCase();
       const handle = id.split("@")[0];
-      if (["forge", "lighthouse", "keeper"].includes(handle) && !id.includes("@milon.co.za")) {
+      const internalStaff = id.includes("@milon.co.za") || id.includes("@milonfinance.com");
+      if (["forge", "lighthouse", "keeper"].includes(handle) && !internalStaff) {
         await doUnlockOps({
           data: { username: handle, passphrase: siPassword },
         });

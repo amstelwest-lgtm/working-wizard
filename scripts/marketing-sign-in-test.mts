@@ -26,6 +26,10 @@ const button = read("src/components/landing/landing-sign-in-button.tsx");
 const session = read("src/components/landing/landing-sign-in-session.tsx");
 const destination = read("src/lib/landing-sign-in-destination.ts");
 const index = read("src/routes/index.tsx");
+assert(
+  index.includes('id.includes("@milon.co.za")') && index.includes('id.includes("@milonfinance.com")'),
+  "secret operator handles skip staff mailboxes on both product domains",
+);
 const accountants = read("src/routes/for-accountants.tsx");
 const owners = read("src/routes/for-owners.tsx");
 const about = read("src/routes/about.tsx");
