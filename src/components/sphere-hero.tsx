@@ -80,6 +80,8 @@ export type SphereHeroProps = {
    * orb card), so text under the orb must be light even in light mode.
    */
   onDark?: boolean;
+  /** Owner home: the orb opens Health instead of drilling in place. */
+  onOrbOpen?: () => void;
   /** Owner Health: open the money briefing for a drilled-down driver ratio. */
   onDriverClick?: (key: string) => void;
   /** Unresolved owner questions keyed by driver ratio (debtorDays, …). */
@@ -224,6 +226,7 @@ function Sphere({
   icon: Icon,
   scoreClass,
   className,
+  ariaLabel,
   tier: tierProp,
 }: {
   score: number;
@@ -237,6 +240,7 @@ function Sphere({
   icon?: LucideIcon;
   scoreClass?: string;
   className?: string;
+  ariaLabel?: string;
   /** Overall orb follows displayStatus. Pillars fall back to the score table. */
   tier?: Tier;
 }) {
@@ -246,7 +250,7 @@ function Sphere({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      aria-label={label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`}
+      aria-label={ariaLabel ?? (label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`)}
       className={`sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-amber-400/60 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
       style={{
         width: size,
@@ -322,6 +326,7 @@ export function SphereHero({
   hideCaption = false,
   compact = false,
   onDark = false,
+  onOrbOpen,
   onDriverClick,
   queryCounts,
 }: SphereHeroProps) {
@@ -396,12 +401,21 @@ export function SphereHero({
               size={orbSize}
               glowRgb={overallGlow}
               numberClass="text-amber-300"
-              onClick={() => go(level === 1 ? 2 : 1)}
+              onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}
+              ariaLabel={
+                onOrbOpen
+                  ? `${caption ?? "Tap to see what's behind your score"}. Business Health Score ${fmtScore(overallHealth)}`
+                  : undefined
+              }
               className="health-orb"
             />
           </div>
 
-          {hideCaption ? null : (
+          {hideCaption ? null : onOrbOpen && level === 1 ? (
+            <button type="button" className="sphere-caption" onClick={onOrbOpen}>
+              {caption ?? "Tap to see what's behind your score"}
+            </button>
+          ) : (
           <p
             className={`${compact ? "mt-2.5" : "mt-4"} max-w-md text-center ${reduceMotion ? "" : "transition-opacity duration-300"} ${
               level === 1 ? "opacity-100" : "opacity-0"
