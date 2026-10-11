@@ -3,6 +3,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { agentShortName } from "@/lib/milon-team";
 import { OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import { ownerPlanFreeLine, ownerPlanLine, type OwnerVisitor } from "@/lib/owner-plan";
+import type { OwnerSubscribeView } from "@/lib/owner-subscribe";
+import { OwnerSubscribe } from "./owner-subscribe";
 
 export type OwnerActionRow = {
   id: string;
@@ -146,16 +148,29 @@ export function OwnerPlan({
   visitor,
   accountantOnMilon,
   firmName,
+  billing = { kind: "pending" },
+  subscribeBusy = false,
+  onSubscribe,
+  checkoutNotice = null,
 }: {
   visitor: OwnerVisitor | null;
   accountantOnMilon: boolean;
   firmName: string | null;
+  billing?: OwnerSubscribeView;
+  subscribeBusy?: boolean;
+  onSubscribe?: () => void;
+  checkoutNotice?: "success" | "cancel" | null;
 }) {
   return (
     <section className="owner-pane" data-owner-page="plan">
       <h1 className="owner-title">Plan</h1>
       <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
-      <p className="owner-lede">The price is on this page only.</p>
+      <OwnerSubscribe
+        view={billing}
+        busy={subscribeBusy}
+        notice={checkoutNotice}
+        onSubscribe={onSubscribe}
+      />
     </section>
   );
 }
@@ -169,6 +184,9 @@ export function OwnerSettings({
   onXero,
   onBack,
   onAccount,
+  billing = { kind: "pending" },
+  subscribeBusy = false,
+  onSubscribe,
 }: {
   visitor: OwnerVisitor | null;
   accountantOnMilon: boolean;
@@ -178,6 +196,9 @@ export function OwnerSettings({
   onXero: () => void;
   onBack: () => void;
   onAccount?: () => void;
+  billing?: OwnerSubscribeView;
+  subscribeBusy?: boolean;
+  onSubscribe?: () => void;
 }) {
   return (
     <section className="owner-pane" data-owner-page="settings">
@@ -189,6 +210,7 @@ export function OwnerSettings({
       <section className="owner-settings-block">
         <h2>Plan</h2>
         <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
+        <OwnerSubscribe view={billing} busy={subscribeBusy} onSubscribe={onSubscribe} />
       </section>
       <section className="owner-settings-block">
         <h2>Theme</h2>

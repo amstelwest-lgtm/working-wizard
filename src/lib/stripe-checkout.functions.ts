@@ -398,6 +398,7 @@ export const getCheckoutSessionStatus = createServerFn({ method: "POST" })
       ok: true as const,
       status: session.status,
       paymentStatus: session.payment_status,
+      plan: session.metadata?.milon_plan === "owner" ? ("owner" as const) : null,
     };
   });
 

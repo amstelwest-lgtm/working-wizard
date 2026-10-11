@@ -914,6 +914,22 @@ html.dark .owner-status.is-attention {
   font-variant-numeric: tabular-nums;
 }
 
+.owner-door .owner-subscribe {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.owner-door .owner-subscribe-status {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
 .owner-door .owner-first-actions {
   display: flex;
   flex-wrap: wrap;

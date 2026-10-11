@@ -3,6 +3,7 @@
  * and accountant sign-offs. Empty reads stay empty.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
@@ -45,6 +46,8 @@ import {
 } from "@/lib/owner-needs";
 import { OwnerHome } from "./owner-home";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
+import { ownerCheckoutHref, ownerSubscribeView, type OwnerSubscribeView } from "@/lib/owner-subscribe";
+import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
 
@@ -109,6 +112,7 @@ export function OwnerDoor({
   settingsOpen = false,
   openAccountant = false,
   openPlan = false,
+  checkoutNotice = null,
   focusSigned = false,
   onSignOut,
   topMove = null,
@@ -144,6 +148,8 @@ export function OwnerDoor({
   openAccountant?: boolean;
   /** Deep link: /app?screen=plan from Plan & billing. */
   openPlan?: boolean;
+  /** Checkout return: /app?screen=plan&checkout=success|cancel. */
+  checkoutNotice?: "success" | "cancel" | null;
   /** Scroll the signed-deliverables section into view. */
   focusSigned?: boolean;
   onSignOut: () => void;
@@ -190,6 +196,10 @@ export function OwnerDoor({
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
+  const [billing, setBilling] = useState<OwnerSubscribeView>({ kind: "pending" });
+  const [subscribeBusy, setSubscribeBusy] = useState(false);
+  const loadEntitlement = useServerFn(getOwnerEntitlement);
+  const beginCheckout = useServerFn(startOwnerCheckout);
   const recRef = useRef<SpeechRec | null>(null);
   const listenGen = useRef(0);
   const threadsRef = useRef(threads);
@@ -242,6 +252,38 @@ export function OwnerDoor({
   useEffect(() => {
     setVisitor(visitorCopyPack(readVisitorDraft()));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadEntitlement({ data: {} })
+      .then((entitlement) => {
+        if (!cancelled) setBilling(ownerSubscribeView({ entitlement, checkout: null }));
+      })
+      .catch(() => {
+        if (!cancelled) setBilling({ kind: "subscribe" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadEntitlement]);
+
+  async function subscribe() {
+    if (subscribeBusy) return;
+    setSubscribeBusy(true);
+    try {
+      const result = await beginCheckout({ data: { interval: "month" } });
+      const href = ownerCheckoutHref(result);
+      if (href) {
+        window.location.assign(href);
+        return;
+      }
+      setBilling(ownerSubscribeView({ entitlement: null, checkout: result }));
+    } catch {
+      setBilling({ kind: "unavailable" });
+    } finally {
+      setSubscribeBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -727,7 +769,15 @@ export function OwnerDoor({
         />
       ) : null}
       {railScreen === "plan" ? (
-        <OwnerPlan visitor={visitor} accountantOnMilon={Boolean(firmId)} firmName={firmName} />
+        <OwnerPlan
+          visitor={visitor}
+          accountantOnMilon={Boolean(firmId)}
+          firmName={firmName}
+          billing={billing}
+          subscribeBusy={subscribeBusy}
+          onSubscribe={() => void subscribe()}
+          checkoutNotice={checkoutNotice}
+        />
       ) : null}
       {railScreen === "first" ? (
         <OwnerFirst
@@ -747,6 +797,9 @@ export function OwnerDoor({
           onXero={onXero}
           onBack={leaveSettings}
           onAccount={onAccount}
+          billing={billing}
+          subscribeBusy={subscribeBusy}
+          onSubscribe={() => void subscribe()}
         />
       ) : null}
     </OwnerShell>

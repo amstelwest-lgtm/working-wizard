@@ -329,6 +329,7 @@ export const Route = createFileRoute("/app")({
     bots?: "row" | "stack";
     screen?: "settings" | "accountant" | "plan";
     section?: "signed";
+    checkout?: "success" | "cancel";
   } => {
     const out: {
       tab?: string;
@@ -340,6 +341,7 @@ export const Route = createFileRoute("/app")({
       bots?: "row" | "stack";
       screen?: "settings" | "accountant" | "plan";
       section?: "signed";
+      checkout?: "success" | "cancel";
     } = {};
     if (
       typeof search.tab === "string" &&
@@ -385,6 +387,9 @@ export const Route = createFileRoute("/app")({
     } else if (rawScreen === "accountant") {
       out.screen = "accountant";
       if (rawSection === "signed") out.section = "signed";
+    }
+    if (search.checkout === "success" || search.checkout === "cancel") {
+      out.checkout = search.checkout;
     }
     return out;
   },
@@ -3930,6 +3935,7 @@ function Index() {
                 settingsOpen={oauthReturn.screen === "settings"}
                 openAccountant={oauthReturn.screen === "accountant"}
                 openPlan={oauthReturn.screen === "plan"}
+                checkoutNotice={oauthReturn.screen === "plan" ? (oauthReturn.checkout ?? null) : null}
                 focusSigned={oauthReturn.section === "signed"}
                 onSettings={() => {
                   openOwnerSettings();

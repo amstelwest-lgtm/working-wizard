@@ -9,6 +9,7 @@ import { checkoutSessionUnlocksFirm } from "@/lib/stripe-entitlement";
 import { readVisitorDraft } from "@/lib/market/storage";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { ownerPlanPublicLine } from "@/lib/owner-plan";
+import { ownerCheckoutReturnCopy } from "@/lib/owner-subscribe";
 
 export const Route = createFileRoute("/billing/success")({
   validateSearch: (search: Record<string, unknown>): { session_id?: string } => {
@@ -30,6 +31,7 @@ function BillingSuccessPage() {
   const refreshEntitlement = useServerFn(getFirmBillingEntitlement);
   const [label, setLabel] = useState("Checking Stripe…");
   const [unlocked, setUnlocked] = useState(false);
+  const [ownerReturn, setOwnerReturn] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -45,6 +47,11 @@ function BillingSuccessPage() {
         if (!result.ok) {
           setLabel("Checkout finished. Stripe status is not available on this deploy.");
           setUnlocked(true);
+          return;
+        }
+        if (result.plan === "owner") {
+          setOwnerReturn(true);
+          setLabel(ownerCheckoutReturnCopy("success"));
           return;
         }
         if (checkoutSessionUnlocksFirm(result)) {
@@ -66,6 +73,24 @@ function BillingSuccessPage() {
       cancelled = true;
     };
   }, [sessionId, loadStatus, refreshEntitlement]);
+
+  if (ownerReturn) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-white px-4 text-[#102a43]">
+        <div className="w-full max-w-md">
+          <h1 className="text-xl font-semibold">Payment received</h1>
+          <p className="mt-2 text-base">{label}</p>
+          <Link
+            to="/app"
+            search={{ screen: "plan", checkout: "success" }}
+            className="mt-5 inline-flex h-10 items-center rounded-full bg-[#0b5fff] px-4 text-sm font-semibold text-white"
+          >
+            Back to your plan
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">

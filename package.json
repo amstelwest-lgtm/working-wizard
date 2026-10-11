@@ -137,6 +137,7 @@
     "test:precard-cap": "vite-node --config scripts/vite-test.config.ts scripts/precard-cap-test.mts",
     "test:milon-team": "vite-node --config scripts/vite-test.config.ts scripts/milon-team-test.mts",
     "test:owner-door": "vite-node --config scripts/vite-test.config.ts scripts/owner-door-test.mts",
+    "test:owner-subscribe": "vite-node --config scripts/vite-test.config.ts scripts/owner-subscribe-test.mts",
     "test:owner-chat-reply": "vite-node --config scripts/vite-test.config.ts scripts/owner-chat-reply-test.mts",
     "test:owner-handoff": "vite-node --config scripts/vite-test.config.ts scripts/owner-handoff-test.mts",
     "test:nudge-cron-vault": "vite-node --config scripts/vite-test.config.ts scripts/nudge-cron-vault-test.mts",
