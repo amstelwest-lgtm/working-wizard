@@ -31,13 +31,13 @@ function TermsPage() {
       eyebrow="Terms of use"
       title={
         <>
-          Early access, <span className="mk-gold">plain rules</span>, and what this product is not.
+          Plain <span className="mk-gold">rules</span>, and what this product is not.
         </>
       }
       lead={
         <>
           These terms cover the Milōn workspace run by {LEGAL_ENTITY}. They are a first public
-          version, written for early access. Effective {LEGAL_EFFECTIVE}.
+          version. Effective {LEGAL_EFFECTIVE}.
         </>
       }
       ctaTitle={<>Privacy and the AI notice sit next to this</>}
@@ -52,7 +52,7 @@ function TermsPage() {
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}
-        <MarketCopy za="South Africa" us="US early access" />
+        <MarketCopy za="South Africa" us="United States" />
       </p>
 
       <h2>The service</h2>
@@ -116,7 +116,7 @@ function TermsPage() {
 
       <h2>Availability</h2>
       <p>
-        Early access means the product is still being finished. We work to keep it up; we do not
+        The product is still being finished. We work to keep it up; we do not
         promise it will never break. If we have to withdraw a feature, we will say so in the product
         rather than quietly deleting it under you.
       </p>
@@ -137,7 +137,7 @@ function TermsPage() {
 
       <h2>Changes</h2>
       <p>
-        We may update these terms as the product leaves early access. The effective date on this
+        We may update these terms as the product changes. The effective date on this
         page is the date that applies. Material changes will be obvious on this page, not hidden in
         a changelog.
       </p>

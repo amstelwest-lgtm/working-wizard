@@ -47,7 +47,7 @@ function PrivacyPage() {
           }
           us={
             <>
-              {LEGAL_ENTITY} runs Milōn for US businesses in early access.
+              {LEGAL_ENTITY} runs Milōn for US businesses.
               This notice says what we keep and what the AI never sees. Effective {LEGAL_EFFECTIVE}.
             </>
           }
@@ -64,7 +64,7 @@ function PrivacyPage() {
     >
       <p className="mk-legal-updated">
         Effective {LEGAL_EFFECTIVE} ·{" "}
-        <MarketCopy za="South Africa" us="US early access" />
+        <MarketCopy za="South Africa" us="United States" />
       </p>
 
       <h2>Who we are</h2>
@@ -80,8 +80,7 @@ function PrivacyPage() {
         </p>
       </div> : <div className="mk-copy-us">
         <p>
-          {LEGAL_ENTITY} runs Milōn. US workspaces are early access, offered from the address
-          below.
+          {LEGAL_ENTITY} runs Milōn. US workspaces are offered from the address below.
         </p>
         <p>
           The privacy contact is {LEGAL_INFORMATION_OFFICER}. Email {LEGAL_PRIVACY_EMAIL}, reply to
