@@ -7,6 +7,7 @@ import {
   evidenceMetrics,
   moneyMarketFromClient,
   polishAgentCopy,
+  severityWithFloor,
   type AgentKey,
   type MoneyMarket,
 } from "./agent-bus.ts";
@@ -96,7 +97,7 @@ export function handoffFinding(input: {
   periodLabel: string | null;
   snapshotId: string | null;
   market?: MoneyMarket;
-}): { title: string; detail: string; evidence: Record<string, unknown> } | null {
+}): { title: string; detail: string; severity: string; evidence: Record<string, unknown> } | null {
   const figures: Record<string, number> = {};
   for (const [key, value] of Object.entries(input.figures ?? {})) {
     if (typeof value === "number" && Number.isFinite(value)) figures[key] = value;
@@ -111,15 +112,17 @@ export function handoffFinding(input: {
   });
   if (!polished.ok) return null;
   const metrics = evidenceMetrics(figures, input.periodLabel, market);
+  const severity = severityWithFloor("info", metrics);
   return {
     title: polished.text.slice(0, 200),
     detail: polished.text.slice(0, 2000),
+    severity,
     evidence: {
       figures,
       period_label: input.periodLabel,
       snapshot_id: input.snapshotId,
       metrics,
-      status: agentCopyStatus("info", metrics),
+      status: agentCopyStatus(severity),
     },
   };
 }

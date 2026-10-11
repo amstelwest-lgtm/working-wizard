@@ -4,6 +4,7 @@
  */
 
 import {
+  agentCopyStatus,
   canonicalEvidenceKey,
   figuresClose,
   periodEndKey,
@@ -52,7 +53,7 @@ export function higherFindingSeverity(current: string, incoming: string): string
 
 /**
  * A repeated finding keeps its id, created_at, and superseded link.
- * The new save refreshes the title, detail, and the evidence copy fields.
+ * The new save refreshes the title, detail, severity, and status together.
  */
 export function refreshedFindingUpdate(input: {
   title: string;
@@ -63,7 +64,7 @@ export function refreshedFindingUpdate(input: {
   existingEvidence: Record<string, unknown> | null;
   nextEvidence: Record<string, unknown>;
 }): Record<string, unknown> {
-  const raised = higherFindingSeverity(input.existingSeverity, input.severity);
+  const agreed = higherFindingSeverity(input.existingSeverity, input.severity) ?? input.existingSeverity;
   const existing = input.existingEvidence ?? {};
   const incoming = { ...input.nextEvidence };
   delete incoming.draft;
@@ -72,11 +73,11 @@ export function refreshedFindingUpdate(input: {
     title: input.title,
     detail: input.detail,
     last_seen: input.seenAt,
-    ...(raised ? { severity: raised } : {}),
+    severity: agreed,
     evidence: {
       ...existing,
       ...incoming,
-      status: input.nextEvidence.status,
+      status: agentCopyStatus(agreed),
       metrics: input.nextEvidence.metrics,
     },
   };

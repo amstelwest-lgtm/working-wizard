@@ -275,7 +275,7 @@ export type FindingEvidence = {
   snapshot_id: string | null;
   period_label: string | null;
   figures: EvidenceFigures;
-  /** Display numbers beside the raw figures. Percent is the quoted percent (0.6 → 60). */
+  /** Display numbers beside the raw figures. value is the stored number, not the rounded quote. */
   metrics?: EvidenceMetric[];
   /** healthy from info, attention from watch, critical from act or a cash floor breach. */
   status?: AgentCopyStatus;
@@ -608,11 +608,44 @@ function preferPeriodLabel(labels: string[]): string {
   return month ?? labels[0];
 }
 
+type PeriodHome = { label: string; rows: StoredFigures[]; stored: number };
+
+function homesByPeriod(
+  groups: Map<string, StoredFigures[]>,
+  key: string,
+  value: number,
+): Map<string, PeriodHome[]> {
+  const homes: PeriodHome[] = [];
+  for (const rows of groups.values()) {
+    let stored: number | undefined;
+    for (const row of rows) {
+      const candidate = row.figures[key];
+      if (typeof candidate === "number" && figuresClose(value, candidate)) stored = candidate;
+    }
+    if (stored == null) continue;
+    homes.push({ label: groupLabel(rows), rows, stored });
+  }
+  const byPeriod = new Map<string, PeriodHome[]>();
+  for (const home of homes) {
+    const identity = statementPeriodIdentity(home.label);
+    const list = byPeriod.get(identity) ?? [];
+    list.push(home);
+    byPeriod.set(identity, list);
+  }
+  return byPeriod;
+}
+
+function choosePeriodHome(matches: PeriodHome[]): PeriodHome {
+  const label = preferPeriodLabel(matches.map((home) => home.label));
+  return matches.find((home) => home.label === label) ?? matches[0];
+}
+
 /**
- * A flat map whose every figure lives in exactly one period is filed under
- * those periods. Score history (`score:2026-10-05` beside `score:2026-10-06`)
- * is that case. A month and the range that ends in that month are one period.
- * A figure that fits more than one period end stays a rejection.
+ * A flat map is filed under the periods its figures belong to. A figure that
+ * lives in one period is filed there. A figure that also matches another
+ * period follows the period the rest of the map already uses. A month and the
+ * range that ends in that month are one period. A figure that still fits two
+ * period ends stays a rejection.
  */
 function nestUnambiguousFlat(
   groups: Map<string, StoredFigures[]>,
@@ -620,32 +653,31 @@ function nestUnambiguousFlat(
 ): FindingEvidence | null {
   const nested: Record<string, Record<string, number>> = {};
   const rowsByLabel = new Map<string, StoredFigures[]>();
+  const chosenIdentity = new Map<string, string>();
+  const ambiguous: Array<{ key: string; byPeriod: Map<string, PeriodHome[]> }> = [];
+  const file = (key: string, home: PeriodHome, identity: string) => {
+    const bucket = nested[home.label] ?? {};
+    bucket[key] = home.stored;
+    nested[home.label] = bucket;
+    rowsByLabel.set(home.label, home.rows);
+    chosenIdentity.set(key, identity);
+  };
   for (const [key, value] of Object.entries(figures)) {
-    const homes: Array<{ label: string; rows: StoredFigures[]; stored: number }> = [];
-    for (const rows of groups.values()) {
-      let stored: number | undefined;
-      for (const row of rows) {
-        const candidate = row.figures[key];
-        if (typeof candidate === "number" && figuresClose(value, candidate)) stored = candidate;
-      }
-      if (stored == null) continue;
-      homes.push({ label: groupLabel(rows), rows, stored });
+    const byPeriod = homesByPeriod(groups, key, value);
+    if (byPeriod.size === 0) return null;
+    if (byPeriod.size === 1) {
+      const [identity, matches] = [...byPeriod.entries()][0];
+      file(key, choosePeriodHome(matches), identity);
+      continue;
     }
-    const byPeriod = new Map<string, Array<{ label: string; rows: StoredFigures[]; stored: number }>>();
-    for (const home of homes) {
-      const identity = statementPeriodIdentity(home.label);
-      const list = byPeriod.get(identity) ?? [];
-      list.push(home);
-      byPeriod.set(identity, list);
-    }
-    if (byPeriod.size !== 1) return null;
-    const matches = [...byPeriod.values()][0];
-    const label = preferPeriodLabel(matches.map((home) => home.label));
-    const chosen = matches.find((home) => home.label === label) ?? matches[0];
-    const bucket = nested[chosen.label] ?? {};
-    bucket[key] = chosen.stored;
-    nested[chosen.label] = bucket;
-    rowsByLabel.set(chosen.label, chosen.rows);
+    ambiguous.push({ key, byPeriod });
+  }
+  const anchored = new Set(chosenIdentity.values());
+  for (const item of ambiguous) {
+    const overlap = [...item.byPeriod.keys()].filter((identity) => anchored.has(identity));
+    if (overlap.length !== 1) return null;
+    const matches = item.byPeriod.get(overlap[0]) ?? [];
+    file(item.key, choosePeriodHome(matches), overlap[0]);
   }
   const labels = Object.keys(nested);
   if (labels.length === 0) return null;
@@ -1076,8 +1108,9 @@ export const AGENT_COPY_GUIDE = `How to write a title, detail, or summary:
 - A title or a home summary is 1–2 complete sentences, in sentence case, each ending with a full stop.
 - A detail is ≤4 short sentences, ≤600 chars.
 - Amounts use the client's format. South Africa: R 13 846. United States: $13,846. Cashflow amounts are $46,300 or R 46 300, never a bare 46300 or 128 450.
-- A ratio is a percentage. 0.6 is written 60%.
+- A ratio is a percentage with one decimal. 0.6 is written 60%. 0.086 is written 8.6%, not 9%.
 - Days are whole days. 43.8 is written 44 days.
+- Quote a healthy band only when that band was stored. Do not invent "30–60 day healthy band on file".
 - Bad: "Low R 36 154. R 13 846 under R 50 000. get emails out to 10 clients"
 - Good: "Cash is R 13 846 below your R 50 000 minimum. Send reminder emails to 10 clients."
 - A data request title is the ask itself. Bad: "Gross margin is 0.6. Debtor days are 43.8." Good: "Send the September debtors age analysis."`;
@@ -1105,16 +1138,6 @@ function metricUnit(key: string, value: number): EvidenceMetricUnit {
   return "count";
 }
 
-function quotedMetricValue(unit: EvidenceMetricUnit, value: number): number {
-  if (unit === "days") return Math.round(value);
-  if (unit === "percent") {
-    const pct = Math.abs(value) <= 1.5 ? value * 100 : value;
-    return Math.round(pct * 10) / 10;
-  }
-  if (unit === "count") return Math.round(value);
-  return value;
-}
-
 function cashFloor(key: string, unit: EvidenceMetricUnit, market: MoneyMarket): number | undefined {
   if (unit !== "currency") return undefined;
   const compact = compactMetricKey(key);
@@ -1123,16 +1146,33 @@ function cashFloor(key: string, unit: EvidenceMetricUnit, market: MoneyMarket): 
   return cashComfortThreshold(market.currency);
 }
 
+function percentPoints(value: number): number {
+  const pct = Math.abs(value) <= 1.5 ? value * 100 : value;
+  return Math.round(pct * 10) / 10;
+}
+
 function proseForMetric(unit: EvidenceMetricUnit, value: number, market: MoneyMarket): string {
   if (unit === "days") return `${Math.round(value)} days`;
   if (unit === "percent") {
-    const pct = quotedMetricValue("percent", value);
+    const pct = percentPoints(value);
     const body = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
     return `${body}%`;
   }
   if (unit === "currency") return formatMoney(value, market);
   if (unit === "ratio") return `${value.toFixed(2)}×`;
   return String(Math.round(value));
+}
+
+/** Whole-percent spellings that are looser than the one-decimal quote. 8.6% also replaces 9% and 8%. */
+function loosePercentSpellings(value: number): string[] {
+  const pct = percentPoints(value);
+  const body = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+  const out: string[] = [];
+  for (const whole of [Math.round(pct), Math.trunc(pct)]) {
+    const text = String(whole);
+    if (text !== body) out.push(`${text}%`);
+  }
+  return out;
 }
 
 function figureLeaves(figures: EvidenceFigures | undefined): Array<{ key: string; value: number; period: string | null }> {
@@ -1164,7 +1204,7 @@ export function evidenceMetrics(
     const floor = cashFloor(leaf.key, unit, market);
     const metric: EvidenceMetric = {
       metric: leaf.key,
-      value: quotedMetricValue(unit, leaf.value),
+      value: leaf.value,
       unit,
       period: leaf.period ?? periodLabel,
     };
@@ -1188,18 +1228,26 @@ export function displayAmounts(
   return out;
 }
 
-/** info → healthy, watch → attention, act → critical. Cash under the comfort floor is critical. */
-export function agentCopyStatus(severity: string, metrics: readonly EvidenceMetric[]): AgentCopyStatus {
-  const breach = metrics.some((metric) => metric.floor != null && metric.value < metric.floor);
-  if (breach || severity === "act") return "critical";
+/** info → healthy, watch → attention, act → critical. Status never disagrees with severity. */
+export function agentCopyStatus(severity: string): AgentCopyStatus {
+  if (severity === "act") return "critical";
   if (severity === "watch") return "attention";
   return "healthy";
+}
+
+/** A cash figure under the comfort floor is act, so its status is critical too. */
+export function severityWithFloor(severity: string, metrics: readonly EvidenceMetric[]): string {
+  const breach = metrics.some((metric) => metric.floor != null && metric.value < metric.floor);
+  if (breach) return "act";
+  return severity;
 }
 
 function rawAmountSpellings(value: number): string[] {
   const out = [String(value)];
   if (!Number.isInteger(value)) {
-    out.push(value.toFixed(1), value.toFixed(2), value.toFixed(4));
+    out.push(value.toFixed(2), value.toFixed(4));
+    const one = value.toFixed(1);
+    if (Number(one) === value) out.push(one);
   }
   const rounded = Math.round(value);
   if (Math.abs(value) >= 1000 && Math.abs(value - rounded) < 0.001) {
@@ -1227,6 +1275,30 @@ function applyCopyReplacements(text: string, replacements: { raw: string; format
   );
 }
 
+const HEALTHY_BAND =
+  /(\d+(?:\.\d+)?)\s*(?:[\u2010-\u2015\-]|to)\s*(\d+(?:\.\d+)?)\s*day\s+healthy\s+band(?:\s+on\s+file)?/gi;
+
+/** Drop a healthy-band range whose endpoints were not stored. The clause stays, without invented numbers. */
+export function stripUnstoredHealthyBand(text: string, stored: readonly number[]): string {
+  return text.replace(HEALTHY_BAND, (match, leftRaw: string, rightRaw: string) => {
+    const left = Number(leftRaw);
+    const right = Number(rightRaw);
+    const known = (n: number) => stored.some((value) => figuresClose(n, value));
+    if (known(left) && known(right)) return match;
+    return "healthy band";
+  });
+}
+
+export function storedFigureValues(rows: readonly StoredFigures[]): number[] {
+  const out: number[] = [];
+  for (const row of rows) {
+    for (const value of Object.values(row.figures)) {
+      if (typeof value === "number" && Number.isFinite(value)) out.push(value);
+    }
+  }
+  return out;
+}
+
 function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, market: MoneyMarket): string {
   const replacements: { raw: string; formatted: string }[] = [];
   for (const leaf of figureLeaves(figures)) {
@@ -1234,6 +1306,9 @@ function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, m
     if (unit === "count") continue;
     const formatted = proseForMetric(unit, leaf.value, market);
     for (const raw of rawAmountSpellings(leaf.value)) replacements.push({ raw, formatted });
+    if (unit === "percent") {
+      for (const raw of loosePercentSpellings(leaf.value)) replacements.push({ raw, formatted });
+    }
   }
   return applyCopyReplacements(text, replacements)
     .replace(/\bdays\s+days\b/gi, "days")
@@ -1301,9 +1376,13 @@ export function polishAgentCopy(input: {
   kind?: string;
   figures?: EvidenceFigures;
   market?: MoneyMarket;
+  /** Every number a read returned. A healthy band is kept only when both ends are here. */
+  storedNumbers?: readonly number[];
 }): { ok: true; text: string } | { ok: false; error: string } {
   const market = input.market ?? moneyMarketFromClient(null);
-  const formatted = formatCopyAmounts(input.text.replace(/\s+/g, " ").trim(), input.figures, market);
+  const stored = input.storedNumbers ?? figureLeaves(input.figures).map((leaf) => leaf.value);
+  const stripped = stripUnstoredHealthyBand(input.text.replace(/\s+/g, " ").trim(), stored);
+  const formatted = formatCopyAmounts(stripped, input.figures, market);
   if (!formatted) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
   const parts = splitCopySentences(formatted);
   if (parts.length === 0) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
@@ -1329,8 +1408,16 @@ export function shapeRecordedCopy(input: {
   figures: EvidenceFigures;
   periodLabel: string | null;
   market?: MoneyMarket;
+  storedNumbers?: readonly number[];
 }):
-  | { ok: true; title: string; detail: string; metrics: EvidenceMetric[]; status: AgentCopyStatus }
+  | {
+      ok: true;
+      title: string;
+      detail: string;
+      metrics: EvidenceMetric[];
+      severity: string;
+      status: AgentCopyStatus;
+    }
   | { ok: false; error: string } {
   const market = input.market ?? moneyMarketFromClient(null);
   const title = polishAgentCopy({
@@ -1339,6 +1426,7 @@ export function shapeRecordedCopy(input: {
     kind: input.kind,
     figures: input.figures,
     market,
+    storedNumbers: input.storedNumbers,
   });
   if (!title.ok) return title;
   const detail = polishAgentCopy({
@@ -1347,14 +1435,17 @@ export function shapeRecordedCopy(input: {
     kind: input.kind,
     figures: input.figures,
     market,
+    storedNumbers: input.storedNumbers,
   });
   if (!detail.ok) return detail;
   const metrics = evidenceMetrics(input.figures, input.periodLabel, market);
+  const severity = severityWithFloor(input.severity, metrics);
   return {
     ok: true,
     title: title.text,
     detail: detail.text,
     metrics,
-    status: agentCopyStatus(input.severity, metrics),
+    severity,
+    status: agentCopyStatus(severity),
   };
 }

@@ -131,6 +131,27 @@ const pool = [
   if (!stillAmbiguous.ok) {
     assert(stillAmbiguous.error.includes("more than one period"), "the draft rejection still names the periods");
   }
+  const sharedMargin = prepareDraftRecord({
+    kind: "action_point_draft",
+    allowedKinds: FM_DRAFT_KINDS,
+    severity: "watch",
+    title: "October debtor days are 43.8.",
+    detail: "Gross margin is 0.6. Opening cash is 128450.",
+    claimedFigures: { "Gross Margin": 0.6, "Debtor Days": 43.8, opening_balance: 128450 },
+    pool: [
+      { snapshotId: "snap-sep", periodLabel: "Sep 2026", figures: { "Gross Margin": 0.6, "Net Margin": 0.09 } },
+      { snapshotId: "snap-oct", periodLabel: "Oct 2026", figures: { "Gross Margin": 0.6, "Debtor Days": 43.8 } },
+      { snapshotId: null, periodLabel: "saved cashflow", figures: { opening_balance: 128450 } },
+    ],
+    recordedKeys: new Set(),
+    market: { currency: "USD", locale: "en-US" },
+  });
+  assert(sharedMargin.ok === true, "a flat draft files a shared margin under the period a unique figure already chose");
+  if (sharedMargin.ok) {
+    const byPeriod = sharedMargin.evidence.figures as Record<string, Record<string, number>>;
+    assert(byPeriod["Oct 2026"]?.["Gross Margin"] === 0.6, "the shared margin follows October");
+    assert(byPeriod["saved cashflow"]?.opening_balance === 128450, "opening cash stays on the saved cashflow");
+  }
 }
 
 // Dedupe is by kind and period end. Dismissed rows are not in the set the writer queries.

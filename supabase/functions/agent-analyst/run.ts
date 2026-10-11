@@ -375,7 +375,7 @@ async function recordHandoffFinish(
     client_id: input.clientId,
     run_id: input.runId,
     kind: "handoff",
-    severity: "info",
+    severity: finding.severity,
     title: finding.title,
     detail: finding.detail,
     evidence: finding.evidence,
