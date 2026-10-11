@@ -238,9 +238,9 @@ export const FAQ_MORE_LINK = "all questions";
 export const HOMEPAGE_COST_QUESTION = "What does it cost?";
 
 const OWNER_COST_US =
-  "Business owners: $39/mo · free when your accountant is on Milōn.";
+  "Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.";
 const OWNER_COST_ZA =
-  "Business owners: R299/mo · free when your accountant is on Milōn.";
+  "Business owners: R299/mo · free when your accountant is on Milōn. Billing opens soon.";
 
 export function withSaPricingLines(answer: string, showSaPricing: boolean): string {
   if (!showSaPricing) return answer;

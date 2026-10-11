@@ -77,12 +77,12 @@ function FaqPage() {
           <MarketCopy
             us={
               <>
-                Owner plan $39/mo · free when your accountant is on Milōn.
+                Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon.
               </>
             }
             za={
               <>
-                Owner plan R299/mo · free when your accountant is on Milōn.
+                Owner plan R299/mo · free when your accountant is on Milōn. Billing opens soon.
               </>
             }
           />{" "}

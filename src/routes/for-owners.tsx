@@ -45,7 +45,7 @@ function ForOwnersPage() {
         <>
           Owner plan <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on
           Milōn. Upload what you have and see your score before you decide whether any of this is
-          worth your time.
+          worth your time. Billing opens soon.
         </>
       }
     >
@@ -147,8 +147,8 @@ function ForOwnersPage() {
       </div>
 
       <div className="mk-note">
-        We are early, and we would rather say so. If something in the product is not finished we
-        tell you inside the product rather than hiding it.
+        We are early, and we would rather say so. Owner billing is not open yet, and if something
+        in the product is not finished we tell you inside the product rather than hiding it.
       </div>
 
       <h2>The short version</h2>

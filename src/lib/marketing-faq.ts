@@ -32,7 +32,7 @@ export const WATCHLIST_DEFINITION =
 export const FOUNDING_CALLOUT =
   "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
-const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${FIRM_CARD_TIMING} Business owners: $39/mo · free when your accountant is on Milōn.`;
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${FIRM_CARD_TIMING} Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.`;
 
 /**
  * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.
