@@ -790,9 +790,10 @@ assert(google.includes("browserAppOrigin()"), "Google redirectTo uses the allowl
 
 const taskLink = readFileSync(resolve("supabase/functions/task-link/index.ts"), "utf8");
 const nudge = readFileSync(resolve("supabase/functions/nudge-action-items/index.ts"), "utf8");
-assert(taskLink.includes("appRedirectOrigin"), "task-link emails use the allowlisted origin");
-assert(nudge.includes("appRedirectOrigin"), "nudge emails use the allowlisted origin");
-assert(taskLink.includes("noreply@notify.milon.co.za"), "task-link keeps the notify mailbox");
+assert(taskLink.includes("transactionalSiteUrl"), "task-link emails use the allowlisted origin");
+assert(nudge.includes("transactionalSiteUrl"), "nudge emails use the allowlisted origin");
+assert(taskLink.includes("transactionalFrom"), "task-link From uses the locked mailbox");
+assert(!/co\.za/i.test(taskLink) && !/co\.za/i.test(nudge), "edge mail no longer names the retired zone");
 
 assert(isSaMarketFirm({ market: { country: "ZA", regionCode: null } }), "country ZA is SA");
 assert(!isSaMarketFirm({ market: { country: "US", regionCode: "NY" } }), "country US is not SA");
