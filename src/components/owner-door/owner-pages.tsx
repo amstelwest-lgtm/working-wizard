@@ -3,7 +3,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { agentShortName } from "@/lib/milon-team";
 import { OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import { ownerPlanFreeLine, ownerPlanLine, type OwnerVisitor } from "@/lib/owner-plan";
-import type { OwnerSubscribeView } from "@/lib/owner-subscribe";
+import {
+  OWNER_PLAN_BENEFITS,
+  OWNER_PLAN_FREE_LINE,
+  OWNER_PLAN_INVITE_LABEL,
+  type OwnerSubscribeView,
+} from "@/lib/owner-subscribe";
 import { OwnerSubscribe } from "./owner-subscribe";
 
 export type OwnerActionRow = {
@@ -151,6 +156,7 @@ export function OwnerPlan({
   billing = { kind: "pending" },
   subscribeBusy = false,
   onSubscribe,
+  onInvite,
   checkoutNotice = null,
 }: {
   visitor: OwnerVisitor | null;
@@ -159,18 +165,36 @@ export function OwnerPlan({
   billing?: OwnerSubscribeView;
   subscribeBusy?: boolean;
   onSubscribe?: () => void;
+  /** Opens the Accountant portal invite. */
+  onInvite?: () => void;
   checkoutNotice?: "success" | "cancel" | null;
 }) {
   return (
     <section className="owner-pane" data-owner-page="plan">
       <h1 className="owner-title">Plan</h1>
-      <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
-      <OwnerSubscribe
-        view={billing}
-        busy={subscribeBusy}
-        notice={checkoutNotice}
-        onSubscribe={onSubscribe}
-      />
+      <article className="owner-plan-card">
+        <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
+        <h2>What you get</h2>
+        <ul className="owner-plan-benefits">
+          {OWNER_PLAN_BENEFITS.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <OwnerSubscribe
+          view={billing}
+          busy={subscribeBusy}
+          notice={checkoutNotice}
+          onSubscribe={onSubscribe}
+        />
+        {billing.kind === "subscribe" ? (
+          <p className="owner-plan-note">
+            {OWNER_PLAN_FREE_LINE}
+            <button type="button" className="owner-plan-invite" onClick={onInvite}>
+              {OWNER_PLAN_INVITE_LABEL}
+            </button>
+          </p>
+        ) : null}
+      </article>
     </section>
   );
 }

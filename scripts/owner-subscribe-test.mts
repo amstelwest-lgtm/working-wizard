@@ -104,8 +104,25 @@ assert(!subscribe.includes("role=\"alert\""), "unavailable is not an error");
 const pages = read("src/components/owner-door/owner-pages.tsx");
 assert(pages.includes("<OwnerSubscribe"), "Plan and Settings mount the subscribe control");
 assert(pages.includes('data-owner-page="plan"'), "the plan view stays on the owner door");
+assert(pages.includes("What you get"), "the plan card lists what the plan includes");
+assert(pages.includes("OWNER_PLAN_BENEFITS"), "the plan card uses the shared benefit lines");
+assert(pages.includes("OWNER_PLAN_FREE_LINE"), "the none state names the free accountant line");
+assert(pages.includes("OWNER_PLAN_INVITE_LABEL"), "the none state links to the accountant invite");
+assert(
+  labels.includes('OWNER_PLAN_FREE_LINE = "Free when your accountant joins Milōn"'),
+  "the muted line names Milōn",
+);
+assert(labels.includes("Three Milōn agents watching your books"), "the card lists the three agents");
+assert(labels.includes("Cash forecast and budget"), "the card lists the forecast and budget");
+assert(labels.includes("Next moves"), "the card lists next moves");
+assert(labels.includes("The accountant portal"), "the card lists the accountant portal");
+const planCss = read("src/components/owner-door/owner-door.css");
+assert(planCss.includes("max-width: 560px"), "the plan card stays about 560px wide");
+assert(planCss.includes(".owner-plan-card .btn.gold.owner-ask"), "the plan button is sized inside the card");
+assert(planCss.includes("width: auto") && planCss.includes("min-height: 44px"), "the subscribe button is not full-bleed");
 
 const door = read("src/components/owner-door/owner-door.tsx");
+assert(door.includes('onInvite={() => go("accountant")}'), "invite opens the accountant portal");
 assert(door.includes("startOwnerCheckout"), "Subscribe calls owner checkout");
 assert(door.includes("getOwnerEntitlement"), "the door reads owner entitlement");
 assert(door.includes('interval: "month"'), "checkout asks for the monthly plan");

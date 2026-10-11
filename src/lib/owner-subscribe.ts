@@ -10,6 +10,14 @@ export type OwnerSubscribeView =
 export const OWNER_SUBSCRIBE_LABEL = "Subscribe";
 export const OWNER_MANAGE_LABEL = "Manage billing";
 export const OWNER_UNAVAILABLE_LINE = "Subscriptions open shortly";
+export const OWNER_PLAN_FREE_LINE = "Free when your accountant joins Milōn";
+export const OWNER_PLAN_INVITE_LABEL = "Invite your accountant";
+export const OWNER_PLAN_BENEFITS = [
+  "Three Milōn agents watching your books",
+  "Cash forecast and budget",
+  "Next moves",
+  "The accountant portal",
+] as const;
 
 export function ownerCoveredLine(firmName: string): string {
   const who = firmName.trim() || "Your accountant";
