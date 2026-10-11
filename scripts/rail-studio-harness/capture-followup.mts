@@ -110,6 +110,70 @@ checks.wordmarkPractice = await page.evaluate(() => {
     textLeft,
   };
 });
+checks.practiceChrome = await page.evaluate(() => {
+  const bar = document.querySelector(".topbar");
+  const pill = document.querySelector(".topbar .firm-chip");
+  const row = document.querySelector("tr.row");
+  const table = document.querySelector(".ctable");
+  const viewport = document.querySelector(".milon-scroll-table__viewport");
+  const ring = document.querySelector(".ring");
+  const ringSvg = ring?.querySelector("svg");
+  const arc = ring?.querySelector(".fl");
+  const watch = document.querySelector(".milon-status-pill--warn");
+  const priority = document.querySelector(".prio.high, .prio.medium");
+  const trial = document.querySelector(".trial-next");
+  const trialBtn = trial?.querySelector("a");
+  const barStyle = bar ? getComputedStyle(bar) : null;
+  const pillStyle = pill ? getComputedStyle(pill) : null;
+  const ringStyle = ringSvg ? getComputedStyle(ringSvg) : null;
+  const watchStyle = watch ? getComputedStyle(watch) : null;
+  const priorityStyle = priority ? getComputedStyle(priority) : null;
+  const trialStyle = trial ? getComputedStyle(trial) : null;
+  const trialBtnStyle = trialBtn ? getComputedStyle(trialBtn) : null;
+  const text = bar?.textContent ?? "";
+  const avatars = document.querySelectorAll(".topbar .profile-chip").length;
+  const rowH = row?.getBoundingClientRect().height ?? 0;
+  const tableOverflow =
+    table && viewport ? table.scrollWidth - viewport.clientWidth : 999;
+  const pillH = pill?.getBoundingClientRect().height ?? 0;
+  const barH = bar?.getBoundingClientRect().height ?? 0;
+  return {
+    ok:
+      barH > 0 &&
+      barH <= 72 &&
+      avatars === 1 &&
+      !/\bTeam\b/.test(text) &&
+      !/Sign out/.test(text) &&
+      /Reports studio/.test(text) &&
+      pillH > 0 &&
+      pillH <= 40 &&
+      (pillStyle?.whiteSpace === "nowrap") &&
+      rowH >= 52 &&
+      rowH <= 68 &&
+      tableOverflow <= 2 &&
+      (ringStyle?.borderTopWidth === "0px" || ringStyle?.borderTopStyle === "none") &&
+      watchStyle?.color === "rgb(183, 121, 31)" &&
+      priorityStyle?.color === "rgb(183, 121, 31)" &&
+      Boolean(trial) &&
+      trialStyle?.borderTopColor === "rgb(219, 234, 254)" &&
+      trialBtnStyle?.backgroundColor === "rgb(11, 95, 255)",
+    barH,
+    avatars,
+    text: text.replace(/\s+/g, " ").trim().slice(0, 180),
+    pillH,
+    whiteSpace: pillStyle?.whiteSpace,
+    rowH,
+    tableOverflow,
+    ringBorder: ringStyle ? `${ringStyle.borderTopWidth} ${ringStyle.borderTopStyle} ${ringStyle.borderTopColor}` : null,
+    arc: arc ? getComputedStyle(arc).stroke : null,
+    watch: watchStyle?.color,
+    watchBg: watchStyle?.backgroundColor,
+    priority: priorityStyle?.color,
+    priorityBg: priorityStyle?.backgroundColor,
+    trialBorder: trialStyle?.borderTopColor,
+    trialBtn: trialBtnStyle?.backgroundColor,
+  };
+});
 await shot(page, "followup-wordmark-practice-light-1280");
 await shot(page, "followup-practice-dashboard-light-1280");
 
@@ -208,16 +272,48 @@ const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
 await prepare(phone, "light");
 await openReady(phone, "/dashboard");
 await phone.waitForSelector("#clients-table", { timeout: 15000 });
+await phone.getByText("Harbour Glass").first().waitFor({ timeout: 15000 });
 checks.phoneRail = await phone.evaluate(() => {
   const rail = document.querySelector("nav.deliverable-rail");
+  const bar = document.querySelector(".topbar");
+  const pill = document.querySelector(".topbar .firm-chip");
+  const avatars = document.querySelectorAll(".topbar .profile-chip").length;
+  const text = bar?.textContent ?? "";
   return {
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth,
     railScroll: rail?.scrollWidth ?? 0,
     railClient: rail?.clientWidth ?? 0,
+    barH: bar?.getBoundingClientRect().height ?? 0,
+    avatars,
+    pillH: pill?.getBoundingClientRect().height ?? 0,
+    hasTeam: /\bTeam\b/.test(text),
+    hasSignOut: /Sign out/.test(text),
   };
 });
 await shot(phone, "followup-practice-dashboard-light-390");
+const phoneRail = async (label: string) => {
+  const link = phone.locator('nav[aria-label="Practice"]').getByRole("link", { name: label, exact: true });
+  await link.evaluate((el) => (el as HTMLAnchorElement).click());
+  await phone.waitForTimeout(600);
+};
+await phoneRail("Clients");
+await phone.locator("#clients-table").scrollIntoViewIfNeeded();
+await shot(phone, "followup-practice-clients-light-390");
+await phoneRail("Desk");
+await phone.evaluate(() => {
+  document.querySelector("#accountant-inbox")?.scrollIntoView({ block: "center" });
+});
+await shot(phone, "followup-practice-desk-light-390");
+await phoneRail("Team");
+await phone.waitForURL("**/settings/team");
+await phone.getByRole("heading", { name: "Team & access" }).waitFor({ timeout: 15000 });
+await shot(phone, "followup-practice-team-light-390");
+await phoneRail("Billing");
+await phone.waitForURL("**/settings");
+await phone.locator("#firm-billing").waitFor({ timeout: 15000 });
+await phone.locator("#firm-billing").scrollIntoViewIfNeeded();
+await shot(phone, "followup-practice-billing-light-390");
 await phone.close();
 await browser.close();
 
@@ -235,6 +331,26 @@ const failed = [
 ].filter((row) => !row || (row as { ok?: boolean }).ok === false);
 if (desk.active !== "Desk" || !desk.open || !/asking for your review|North Quay/i.test(desk.text ?? "")) {
   failed.push(desk);
+}
+const chrome = checks.practiceChrome as { ok?: boolean };
+if (!chrome?.ok) failed.push(chrome);
+const phoneCheck = checks.phoneRail as {
+  scrollWidth?: number;
+  barH?: number;
+  avatars?: number;
+  pillH?: number;
+  hasTeam?: boolean;
+  hasSignOut?: boolean;
+};
+if (
+  (phoneCheck.scrollWidth ?? 999) > 390 ||
+  (phoneCheck.barH ?? 999) > 72 ||
+  phoneCheck.avatars !== 1 ||
+  (phoneCheck.pillH ?? 999) > 36 ||
+  phoneCheck.hasTeam ||
+  phoneCheck.hasSignOut
+) {
+  failed.push(phoneCheck);
 }
 if (failed.length) {
   throw new Error(`visual checks failed ${JSON.stringify(failed)}`);

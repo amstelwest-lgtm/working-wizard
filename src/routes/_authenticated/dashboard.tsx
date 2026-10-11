@@ -228,8 +228,8 @@ function chipFromHealth(health: OverallHealth): { cls: "ok" | "warn" | "risk"; l
 function RingSvg({
   score,
   status,
-  size = 46,
-  sw = 4,
+  size = 40,
+  sw = 3.5,
 }: {
   score: number | null;
   /** When set, drives ring colour (critical-pillar tell) instead of raw scoreTier. */
@@ -245,15 +245,23 @@ function RingSvg({
   const off = c * (1 - s / 100);
   const tier = status ?? (hasScore ? scoreTier(s) : "at_risk");
   const col = !hasScore
-    ? "var(--muted, #94a3b8)"
+    ? "var(--ink-faint, #5c7190)"
     : tier === "healthy"
-      ? "var(--ok)"
+      ? "var(--status-healthy, #16845b)"
       : tier === "at_risk"
-        ? "var(--warn)"
-        : "var(--risk)";
+        ? "var(--status-attention, #b7791f)"
+        : "var(--status-critical, #c43d4b)";
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle className="tr" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={sw} />
+      <circle
+        className="tr"
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="var(--pale, #dbeafe)"
+        strokeWidth={sw}
+      />
       {hasScore && (
         <circle
           className="fl"
@@ -1039,7 +1047,7 @@ function InviteOwnerDialog({
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export function Dashboard() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   // ── Role guard ────────────────────────────────────────────────────────────
@@ -1513,12 +1521,6 @@ export function Dashboard() {
     toast.success("Referral link copied");
   };
 
-  // ── Sign out ──────────────────────────────────────────────────────────────
-  const handleSignOut = async () => {
-    await signOut();
-    window.location.href = "/";
-  };
-
   // ── Playbook drawer ───────────────────────────────────────────────────────
   const openDrawer = (ratioKey: string, ratioName: string) => {
     setDrawerRatioKey(ratioKey);
@@ -1749,7 +1751,7 @@ export function Dashboard() {
           />
           <span className="profile-chip topbar-profile" title={greetingSource || user?.email || ""}>
             <span className="av">{profileInitials || "·"}</span>
-            {greetName}
+            <span className="profile-name">{greetName}</span>
           </span>
           <button
             type="button"
@@ -1771,7 +1773,7 @@ export function Dashboard() {
           <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
             <button
               id="wizard-dash-reports"
-              className={clientRows.length === 0 ? "tb-btn" : "tb-btn gold"}
+              className="tb-btn"
               onClick={() => {
                 setMobileNavOpen(false);
                 navigate({
@@ -1793,7 +1795,7 @@ export function Dashboard() {
             </button>
             {isItMember ? (
               <button
-                className="tb-btn gold"
+                className="tb-btn"
                 type="button"
                 onClick={() => {
                   setMobileNavOpen(false);
@@ -1803,30 +1805,7 @@ export function Dashboard() {
                 Milōn IT
               </button>
             ) : null}
-            <button
-              className="tb-btn"
-              type="button"
-              onClick={() => {
-                setMobileNavOpen(false);
-                navigate({ to: "/settings/team" });
-              }}
-            >
-              <svg viewBox="0 0 24 24">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              Team
-            </button>
             <ThemeToggle />
-            <span className="profile-chip topbar-profile-menu" title={greetingSource || user?.email || ""}>
-              <span className="av">{profileInitials || "·"}</span>
-              {greetName}
-            </span>
-            <button className="tb-btn" onClick={handleSignOut} title="Sign out">
-              <svg viewBox="0 0 24 24">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-              </svg>
-              Sign out
-            </button>
           </div>
         </div>
 
@@ -2022,14 +2001,14 @@ export function Dashboard() {
                 <tr>
                   <th>Client</th>
                   <th>Health</th>
-                  <th className="hide-sm">Trend (30d)</th>
+                  <th className="hide-sm hide-desk">Trend (30d)</th>
                   <th className="hide-sm">Priority</th>
                   <th>Runway</th>
-                  <th className="hide-sm" id="wizard-dash-queries">
+                  <th className="hide-sm hide-desk" id="wizard-dash-queries">
                     Queries
                   </th>
-                  <th className="hide-sm">Actions</th>
-                  <th className="hide-sm">Op. profit (MTD)</th>
+                  <th className="hide-sm hide-desk">Actions</th>
+                  <th className="hide-sm hide-desk">Op. profit (MTD)</th>
                   <th>Status</th>
                   <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
@@ -2088,11 +2067,11 @@ export function Dashboard() {
                         <div className="cell-health">
                           <span className="ring">
                             <RingSvg score={score} status={c.health.displayStatus} />
-                            <b>{score ?? "—"}</b>
+                            <span className="ring-score">{score ?? "—"}</span>
                           </span>
                         </div>
                       </td>
-                      <td className="hide-sm" data-label="Trend">
+                      <td className="hide-sm hide-desk" data-label="Trend">
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <SparkSvg trend={c.trend} />
                           <span
@@ -2118,11 +2097,9 @@ export function Dashboard() {
                         </span>
                       </td>
                       <td className="num" data-label="Runway" title={runwayStr(c)}>
-                        <span className="inline-block max-w-[14rem] whitespace-normal text-right leading-snug">
-                          {runwayTileValue(runwayStr(c))}
-                        </span>
+                        <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
                       </td>
-                      <td className="num hide-sm" data-label="Queries">
+                      <td className="num hide-sm hide-desk" data-label="Queries">
                         {c.openQueries > 0 ? (
                           <button
                             type="button"
@@ -2139,7 +2116,7 @@ export function Dashboard() {
                           "—"
                         )}
                       </td>
-                      <td className="num hide-sm" data-label="Actions">
+                      <td className="num hide-sm hide-desk" data-label="Actions">
                         {c.openActions > 0 ? (
                           <button
                             type="button"
@@ -2158,7 +2135,7 @@ export function Dashboard() {
                           "—"
                         )}
                       </td>
-                      <td className="num hide-sm" data-label="Op. profit">
+                      <td className="num hide-sm hide-desk" data-label="Op. profit">
                         {opMarginStr(c)}
                       </td>
                       <td data-label="Status">

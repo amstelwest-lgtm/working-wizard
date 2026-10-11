@@ -45,21 +45,14 @@ export function CheckoutAfterInsight() {
 
   return (
     <section
-      className="card"
+      className="card trial-next"
       data-funnel={FUNNEL_CHECKOUT_AFTER_INSIGHT}
       aria-label="Continue after the figures"
-      style={{ marginTop: 16 }}
     >
       <p className="kicker">Next · {planName}</p>
-      <h3 style={{ margin: "6px 0 8px" }}>The figures stay on this client.</h3>
-      <p style={{ margin: "0 0 14px", maxWidth: "62ch" }}>
-        A card starts the {FIRM_TRIAL_SENTENCE}. You can keep reading this file without one.
-      </p>
-      <Link
-        to="/billing/start"
-        search={billingStartSearch(pending)}
-        className="btn gold"
-      >
+      <h3>The figures stay on this client.</h3>
+      <p>A card starts the {FIRM_TRIAL_SENTENCE}.</p>
+      <Link to="/billing/start" search={billingStartSearch(pending)} className="btn gold">
         Add a card to start your 14-day free trial
       </Link>
     </section>

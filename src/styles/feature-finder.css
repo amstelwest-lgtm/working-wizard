@@ -106,6 +106,15 @@
 }
 
 @media (max-width: 760px) {
+  .feature-finder-trigger {
+    width: 36px;
+    max-width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .feature-finder-kbd {
+    display: none;
+  }
   .feature-finder-trigger__label {
     position: absolute;
     width: 1px;
