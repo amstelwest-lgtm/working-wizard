@@ -14,6 +14,7 @@ import {
 } from "../src/lib/owner-answers.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
+import { handoffComingOnline, ownerRunPhase } from "../src/hooks/owner-agent-ui.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
@@ -356,9 +357,35 @@ assert(!door.includes('setScreen("actions")'), "the separate actions screen is g
 assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
-assert(plan.includes("Hand to {agentDisplayName(agent)}"), "handing off names the bot");
+assert(plan.includes("Hand to ${agentDisplayName(agent)}"), "handing off names the bot");
+assert(plan.includes("Coming online soon"), "a missing runner says it is coming online");
+assert(plan.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
 assert(plan.includes("data-bot-handoff"), "the hand-off controls are in the action row");
 assert(plan.includes("requestOwnerHandoff"), "handing off calls the owner-handoff function");
+assert(
+  handoffComingOnline("No runner exists for financial_manager. supabase/functions has agent-analyst only."),
+  "the financial manager refusal is not an error",
+);
+assert(
+  handoffComingOnline("No runner exists for advisor. supabase/functions has agent-analyst only."),
+  "the advisor refusal is not an error",
+);
+assert(handoffComingOnline("no_runner"), "the no_runner code is the same quiet state");
+assert(!handoffComingOnline("The analyst runner exists at supabase/functions/agent-analyst, but agent_settings.enabled is false, so a hand-off will not start it."), "a disabled analyst stays an error");
+assert(
+  ownerRunPhase(
+    { id: "q", agent: "financial_manager", client_id: "c", status: "queued", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    [],
+  ) === "queued",
+  "queued stays queued",
+);
+assert(
+  ownerRunPhase(
+    { id: "d", agent: "advisor", client_id: "c", status: "succeeded", queued_at: "2026-10-01T00:00:00.000Z", started_at: "2026-10-01T00:00:01.000Z", finished_at: "2026-10-01T00:05:00.000Z" },
+    [],
+  ) === "done",
+  "a finish with no finding is done",
+);
 assert(!plan.includes("does not enqueue agent_runs"), "the owner view no longer describes the hand-off as a placeholder");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert agent runs itself");
 assert(app.includes("ownerView"), "Next moves renders the owner action list");

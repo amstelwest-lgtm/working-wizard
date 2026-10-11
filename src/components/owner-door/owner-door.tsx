@@ -6,12 +6,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
+import { ownerRunPhase, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDate } from "@/lib/market/format";
 import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
 import type { ResolvedMarket } from "@/lib/market/types";
-import type { AgentKey } from "@/lib/milon-team-feed";
+import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
+import { latestRunByAgent } from "@/lib/milon-team-activity";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
   ownerAnswerTiles,
@@ -260,6 +262,15 @@ export function OwnerDoor({
 
   const tiles = useMemo(() => ownerAnswerTiles(books), [books]);
   const presence = ownerPresence(activity, talk);
+  const runState = useMemo(() => {
+    const latest = latestRunByAgent(activity.runs);
+    const out: Partial<Record<AgentKey, OwnerRunPhase>> = {};
+    for (const key of AGENT_KEYS) {
+      const phase = ownerRunPhase(latest[key], activity.findings);
+      if (phase) out[key] = phase;
+    }
+    return out;
+  }, [activity]);
   const active = presence.agents.find((item) => item.agent === agent) ?? presence.agents[0];
 
   useEffect(() => {
@@ -445,6 +456,7 @@ export function OwnerDoor({
           onAsk={openChat}
           onTile={onTile}
           hero={hero?.(setScreen)}
+          runState={runState}
         />
       ) : null}
       {railScreen === "health" ? restored?.health : null}

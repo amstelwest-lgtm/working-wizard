@@ -1,3 +1,4 @@
+import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerTileLabel, type OwnerTile } from "@/lib/owner-answers";
@@ -21,10 +22,13 @@ export function OwnerHome({
   onAsk,
   onTile,
   hero,
+  runState,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
   tiles: OwnerTile[];
+  /** Live agent_runs. Missing runners stay off this line. */
+  runState?: Partial<Record<AgentKey, OwnerRunPhase | null>>;
   onOpen: (agent: AgentKey) => void;
   onAsk: (agent: AgentKey) => void;
   onTile: (tile: OwnerTile) => void;
@@ -53,6 +57,11 @@ export function OwnerHome({
                   label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
                 />
                 <span className="owner-name">{agentDisplayName(card.agent)}</span>
+                {runState?.[card.agent] ? (
+                  <span className="owner-run-state" data-run-state={runState[card.agent]}>
+                    {ownerRunPhaseLabel(runState[card.agent]!)}
+                  </span>
+                ) : null}
                 <span className="owner-voice">{card.sentence}</span>
                 <span className="owner-motion-label">{MOTION_LABEL[card.motion]}</span>
               </button>

@@ -23,6 +23,7 @@ import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName } from "@/lib/milon-team";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
+import { handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { requestOwnerHandoff } from "@/lib/owner-handoff-client";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
@@ -500,6 +501,7 @@ export default function ActionPlanPanel({
   const dragSeq = useRef<string | null>(null);
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
   const quickAddRef = useRef<HTMLInputElement>(null);
   const focusQuickAdd = useCallback(() => {
     quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1396,6 +1398,7 @@ export default function ActionPlanPanel({
                   setDrawerId(null);
                   setTeamOpen(true);
                 }}
+                comingSoon={comingSoon[it.id]}
                 onHandOff={
                   ownerView
                     ? (agent) => {
@@ -1405,6 +1408,13 @@ export default function ActionPlanPanel({
                           agent,
                         }).then((result) => {
                           if (!result.ok) {
+                            if (handoffComingOnline(result.error)) {
+                              setComingSoon((current) => ({
+                                ...current,
+                                [it.id]: { ...current[it.id], [agent]: true },
+                              }));
+                              return;
+                            }
                             toast.error(result.error);
                             return;
                           }
@@ -1891,6 +1901,7 @@ function ItemRow({
   onAddEmployee,
   onManageTeam,
   onHandOff,
+  comingSoon,
   focused,
 }: {
   item: Item & { health?: Health };
@@ -1909,6 +1920,8 @@ function ItemRow({
   onManageTeam?: () => void;
   /** Owner rail only. Asks owner-handoff. The browser does not insert agent_runs. */
   onHandOff?: (agent: AgentKey) => void;
+  /** Agents whose hand-off came back 409 no_runner. */
+  comingSoon?: Partial<Record<AgentKey, true>>;
 }) {
   const { date } = useMarketFormat();
   const h = healthMeta(item.health);
@@ -2164,16 +2177,24 @@ function ItemRow({
           data-bot-handoff="true"
           onClick={(e) => e.stopPropagation()}
         >
-          {AGENT_KEYS.map((agent) => (
-            <button
-              key={agent}
-              type="button"
-              className="rounded-md border border-amber-900/15 px-2 py-1 text-left text-[11px] font-semibold text-slate-700 hover:bg-amber-900/5 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              onClick={() => onHandOff(agent)}
-            >
-              Hand to {agentDisplayName(agent)}
-            </button>
-          ))}
+          {AGENT_KEYS.map((agent) => {
+            const waiting = Boolean(comingSoon?.[agent]);
+            return (
+              <button
+                key={agent}
+                type="button"
+                disabled={waiting}
+                data-handoff-state={waiting ? "coming-soon" : "ready"}
+                data-handoff-agent={agent}
+                className="rounded-md border border-amber-900/15 px-2 py-1 text-left text-[11px] font-semibold text-slate-700 hover:bg-amber-900/5 disabled:cursor-default disabled:opacity-80 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                onClick={() => {
+                  if (!waiting) onHandOff(agent);
+                }}
+              >
+                {waiting ? "Coming online soon" : `Hand to ${agentDisplayName(agent)}`}
+              </button>
+            );
+          })}
         </div>
       ) : null}
     </div>
