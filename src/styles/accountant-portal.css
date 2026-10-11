@@ -16,6 +16,7 @@
   --gold-ink:#7d5f0f;
   --gold-grad:linear-gradient(120deg,#ac8400,#d4af37 40%,#fdee79 60%,#d4af37 80%,#ac8400);
   --cobalt:#0b5fff; --royal:#2563eb; --ice:#38bdf8; --pale:#dbeafe; --navy:#102a43;
+  --on-cobalt:#ffffff;
   --line:#dbeafe; --line-soft:#e8f1fe;
   --card:#ffffff; --glass:#ffffff;
   --risk:#c43d4b; --warn:#b7791f; --ok:#16845b;

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
-import type { OwnerHomeLines } from "@/lib/owner-answers";
+import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 
@@ -42,10 +42,21 @@ const MOTION_LABEL: Record<OwnerMotion, string> = {
   listening: "Listening",
 };
 
+function StatusIcon() {
+  return (
+    <svg className="owner-status-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M8 4.5v4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="8" cy="11.2" r="0.8" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function OwnerHome({
   variant,
   presence,
   lines,
+  status,
   onOpen,
   onAsk,
   runState,
@@ -53,6 +64,7 @@ export function OwnerHome({
   variant: AvatarVariant;
   presence: OwnerPresence;
   lines: OwnerHomeLines;
+  status?: Partial<Record<AgentKey, OwnerCardStatus | null>>;
   /** Live agent_runs. Missing runners stay off this line. */
   runState?: Partial<Record<AgentKey, OwnerRunPhase | null>>;
   onOpen: (agent: AgentKey) => void;
@@ -76,6 +88,7 @@ export function OwnerHome({
         <div className="owner-agents">
           {presence.agents.map((card) => {
             const brief = lines[card.agent] ?? [];
+            const chip = status?.[card.agent] ?? null;
             const motion = card.motion === "idle" ? null : MOTION_LABEL[card.motion];
             return (
               <div key={card.agent} className="owner-agent" data-agent={card.agent}>
@@ -90,6 +103,12 @@ export function OwnerHome({
                     label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
                   />
                   <span className="owner-name">{agentDisplayName(card.agent)}</span>
+                  {chip ? (
+                    <span className={`owner-status is-${chip.tone}`}>
+                      <StatusIcon />
+                      {chip.word}
+                    </span>
+                  ) : null}
                   <span className="owner-lines">
                     {brief.map((line, index) => (
                       <span key={`${card.agent}-${index}`} className="owner-voice">
@@ -106,7 +125,7 @@ export function OwnerHome({
                 </button>
                 <button
                   type="button"
-                  className="btn gold owner-ask"
+                  className="owner-ask"
                   data-ask={card.agent}
                   onClick={() => onAsk(card.agent)}
                 >

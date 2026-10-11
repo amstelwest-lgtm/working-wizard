@@ -33,6 +33,8 @@ export type OwnerBooks = {
   cogs: number | null;
   priorCogs: number | null;
   receivables: number | null;
+  /** Aged overdue balance. Null when the collections snapshot is not loaded. */
+  overdueReceivables?: number | null;
   cashflow: SavedCashflowLike | null;
   openAction: string | null;
   /** False until the action-point read has finished. */
@@ -148,30 +150,78 @@ function amountsIn(sentence: string): string[] {
   return sentence.match(MONEY_TOKEN) ?? [];
 }
 
+/** A displayed line is one sentence: capital letter, one space run, closing stop. */
+export function guardOwnerLine(line: string): string {
+  const collapsed = line.replace(/[^\S\u00a0]+/g, " ").trim();
+  if (!collapsed) return "";
+  const capped = collapsed.charAt(0).toUpperCase() + collapsed.slice(1);
+  return /[.!?]$/.test(capped) ? capped : `${capped}.`;
+}
+
 /** Home cash copy. The tile sentence stays long for the hold screen. */
 function cashHomeLine(sentence: string): string {
   if (sentence === CONNECT || sentence === "The 13-week line is not on file yet.") return sentence;
   const amounts = amountsIn(sentence);
   if (sentence.includes("stays above") && amounts.length >= 2) {
     const [floor, low] = amounts;
-    return `Above the ${floor} floor. Low ${low}.`;
+    return `Cash stays above your ${floor} minimum. The low point is ${low}.`;
   }
   if (sentence.includes("under the") && amounts.length >= 3) {
-    const [low, under, floor] = amounts;
-    return `Low ${low}. ${under} under ${floor}.`;
+    const [, under, floor] = amounts;
+    return `Cash is ${under} below your ${floor} minimum.`;
   }
-  return sentence;
+  return guardOwnerLine(sentence);
 }
 
 /** Home profit copy. The tile sentence stays long for the hold screen. */
 function profitHomeLine(sentence: string): string {
   if (sentence === CONNECT || sentence === "Profit is not on file yet.") return sentence;
   const [amount] = amountsIn(sentence);
-  if (!amount) return sentence;
-  if (sentence.includes("more than the prior")) return `Profit ${amount}, up on last period.`;
-  if (sentence.includes("less than the prior")) return `Profit ${amount}, down on last period.`;
-  if (sentence.includes("the same as the prior")) return `Profit ${amount}, same as last period.`;
-  return `Profit ${amount}.`;
+  if (!amount) return guardOwnerLine(sentence);
+  if (sentence.includes("more than the prior")) return `Profit is ${amount}, up on last period.`;
+  if (sentence.includes("less than the prior")) return `Profit is ${amount}, down on last period.`;
+  if (sentence.includes("the same as the prior")) return `Profit is ${amount}, the same as last period.`;
+  return `Profit is ${amount}.`;
+}
+
+export type OwnerStatusTone = "attention" | "critical";
+
+export type OwnerCardStatus = {
+  tone: OwnerStatusTone;
+  word: "Attention" | "Critical";
+};
+
+function forecastLow(books: OwnerBooks): number | null {
+  const balances = closingBalancesFromCashflow(books.cashflow);
+  if (!balances || balances.length === 0) return null;
+  let low = balances[0];
+  for (const value of balances) if (value < low) low = value;
+  return low;
+}
+
+/**
+ * A chip only when the card's figures are a problem.
+ * Cash under the 13-week floor is Critical. A profit decline, or overdue
+ * debtors above zero, is Attention. The stronger tone wins on the analyst card.
+ */
+export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
+  const low = forecastLow(books);
+  const floor = cashComfortThreshold(books.market.currency);
+  const cash: OwnerCardStatus | null =
+    low != null && low < floor ? { tone: "critical", word: "Critical" } : null;
+
+  const gross =
+    finite(books.revenue) && finite(books.cogs) ? books.revenue - books.cogs : null;
+  const prior =
+    finite(books.priorRevenue) && finite(books.priorCogs)
+      ? books.priorRevenue - books.priorCogs
+      : null;
+  const profitDown = gross != null && prior != null && gross < prior;
+  const overdue = finite(books.overdueReceivables ?? null) && (books.overdueReceivables ?? 0) > 0;
+  const analyst: OwnerCardStatus | null =
+    profitDown || overdue ? { tone: "attention", word: "Attention" } : null;
+
+  return { financial_manager: cash, analyst, advisor: null };
 }
 
 /** One or two short lines under each bot. Sign-off stays off this page. */
@@ -183,9 +233,11 @@ export function ownerHomeLines(
   const cash = sentence("cash");
   const move = topMove?.replace(/\s+/g, " ").trim() ?? "";
   return {
-    financial_manager: [cashHomeLine(cash), sentence("answer")].filter((line) => line.length > 0),
-    analyst: [profitHomeLine(sentence("profit")), sentence("owes")].filter((line) => line.length > 0),
-    advisor: [move || (cash === CONNECT ? CONNECT : "No next move yet.")],
+    financial_manager: [cashHomeLine(cash), guardOwnerLine(sentence("answer"))].filter((line) => line.length > 0),
+    analyst: [profitHomeLine(sentence("profit")), guardOwnerLine(sentence("owes"))].filter(
+      (line) => line.length > 0,
+    ),
+    advisor: [guardOwnerLine(move || (cash === CONNECT ? CONNECT : "No next move yet."))],
   };
 }
 
