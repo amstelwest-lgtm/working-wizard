@@ -15,7 +15,8 @@ import {
   interpretDraftDecisionResponse,
   resetDraftDecisionButtonsForTests,
 } from "../src/lib/agent-draft-decision-client.ts";
-import type { AgentFindingRow } from "../src/lib/milon-team-activity.ts";
+import { findingCardCopy, formatFindingProse, type AgentFindingRow } from "../src/lib/milon-team-activity.ts";
+import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -182,5 +183,103 @@ const request = renderToStaticMarkup(
   }),
 );
 assert(request.includes("Open requests"), "an approved data request opens the accountant requests");
+
+const US = { currency: "USD" as const, locale: "en-US" };
+const realRequest: AgentFindingRow = {
+  id: "8063df10-3cdf-447e-91a5-169dda603f95",
+  agent: "financial_manager",
+  client_id: "3cc31b6a-10a6-4202-bec7-ebb32a4e1f7a",
+  kind: "data_request_draft",
+  title:
+    "QuickBooks sync is in error; Oct 2026 upload has no statement totals. Please confirm the source of the ledger data.",
+  detail:
+    "Books on file (ledger or upload, not a bank feed): QuickBooks is connected but its sync status is error and there is no last-synced time. Xero and Sage are not connected. The latest source on file is a manual upload (Oct 2026, dated 2026-10-05). The stored statement totals for that period are empty and no liabilities total or cash runway is stored, so the ratios cannot be tied back to statement lines. Please (1) reconnect or re-sync QuickBooks, or confirm the manual upload is the intended source; and (2) provide the Oct 2026 statement lines (receivables, payables, revenue, cost of sales, overheads) so debtor and creditor days can be checked. Draft only: a person approves before anything is sent.",
+  evidence: {
+    draft: true,
+    requires_human_approval: true,
+    snapshot_id: "b6e99169-94ac-4fdb-9df5-056c7cb33209",
+    period_label: "Oct 2026",
+    figures: {
+      has_upload: 1,
+      "Debtor Days": 43.8,
+      "Gross Margin": 0.6,
+      "Creditor Days": 73,
+      "Operating Margin": 0.16,
+      connected_ledgers: 1,
+    },
+  },
+  as_of: null,
+  created_at: "2026-10-11T08:00:00.000Z",
+};
+const realCopy = findingCardCopy(realRequest, US);
+assert(realCopy.lead.startsWith("QuickBooks sync is in error"), `the real request leads with the ask (${realCopy.lead})`);
+assert(!realCopy.lead.includes("0.6") && !realCopy.lead.includes("43.8"), "the ask does not keep the raw ratios");
+assert(
+  realCopy.context === "Debtor days are 44, creditor days 73, gross margin 60%, operating margin 16%",
+  `structured figures are the muted line (${realCopy.context})`,
+);
+const realCard = renderToStaticMarkup(
+  createElement(OwnerDraftCard, { layout: "moves", row: realRequest, market: US }),
+);
+assert(realCard.includes("QuickBooks sync is in error"), "the card shows the ask");
+assert(realCard.includes('data-draft-context="Debtor days are 44, creditor days 73, gross margin 60%, operating margin 16%"'), "the card shows the muted ratios");
+assert(!realCard.includes("0.6") && !realCard.includes("43.8"), "the card does not dump raw ratios");
+assert(!realCard.includes("has_upload") && !realCard.includes("connected"), "flags stay off the muted line");
+
+const dumpCopy = findingCardCopy(
+  {
+    kind: "data_request_draft",
+    title: "Gross margin is 0.6. Debtor days are 43.8.",
+    detail: "Send the September debtors age analysis",
+    evidence: {
+      draft: true,
+      requires_human_approval: true,
+      figures: { "Debtor Days": 43.8, "Gross Margin": 0.6 },
+    },
+  },
+  ZA_MARKET,
+);
+assert(dumpCopy.lead === "Send the September debtors age analysis", `a ratio title yields the ask (${dumpCopy.lead})`);
+assert(dumpCopy.context === "Debtor days are 44, gross margin 60%", `the dump becomes the muted line (${dumpCopy.context})`);
+
+const evidenceAsk = findingCardCopy(
+  {
+    kind: "data_request_draft",
+    title: "Gross margin is 0.6. Debtor days are 43.8.",
+    detail: null,
+    evidence: {
+      draft: true,
+      request_title: "Send the September debtors age analysis",
+      figures: { "Gross Margin": 0.6, "Debtor Days": 43.8 },
+    },
+  },
+  ZA_MARKET,
+);
+assert(evidenceAsk.lead === "Send the September debtors age analysis", "an evidence request title is the ask");
+
+assert(
+  formatFindingProse(
+    "Gross margin is 0.6 and net margin 0.0857 on revenue of 700,000.",
+    [
+      { key: "Gross Margin", value: 0.6 },
+      { key: "Net Margin", value: 0.08571428571428572 },
+      { key: "revenue", value: 700000 },
+    ],
+    US,
+  ) === "Gross margin is 60% and net margin 8.6% on revenue of $700,000.",
+  "free text uses the evidence metric and the client currency",
+);
+assert(
+  formatFindingProse(
+    "Debtor days are 43.8.",
+    [{ key: "Debtor Days", value: 43.8 }],
+    ZA_MARKET,
+  ) === "Debtor days are 44 days.",
+  "days in the finding text round",
+);
+assert(
+  formatFindingProse("Revenue of 700,000.", [{ key: "revenue", value: 700000 }], ZA_MARKET) === "Revenue of R 700 000.",
+  "rand amounts use the client market",
+);
 
 console.log("agent-draft-decision-client: ok");

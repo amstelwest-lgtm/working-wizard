@@ -555,7 +555,7 @@ assert(phases.includes("The books tie out."), "the financial manager finding is 
 assert(phases.includes('data-finding-agent="advisor"'), "an advisor finding is in the feed");
 assert(phases.includes("Two moves are ready."), "the advisor finding is shown");
 assert(!liveDesk.includes("0.4200"), "a finding does not keep a raw decimal");
-assert(liveDesk.includes("42.0%"), "a margin finding is a percentage");
+assert(liveDesk.includes("42%"), "a margin finding is a percentage");
 assert(
   headerFromRun(
     { id: "r", agent: "analyst", client_id: "c", status: "running", queued_at: LIVE_NOW_RUN, started_at: null, finished_at: null },
@@ -583,7 +583,7 @@ const nestedDraft = findingSentence({
   }),
   market: ZA_MARKET,
 });
-assert(nestedDraft.includes("60.0%") && nestedDraft.includes("44 days"), `nested draft figures format (${nestedDraft})`);
+assert(nestedDraft.includes("60%") && nestedDraft.includes("44 days"), `nested draft figures format (${nestedDraft})`);
 assert(!nestedDraft.includes("0.6") && !nestedDraft.includes("1.00"), `a count of 1 stays a count (${nestedDraft})`);
 const nullRecipient = html(
   api({}),
@@ -633,7 +633,7 @@ const nullRecipient = html(
     market: ZA_MARKET,
   },
 );
-assert(nullRecipient.includes("60.0%"), "a nested margin on a draft is a percentage");
+assert(nullRecipient.includes("60%") && !nullRecipient.includes("0.6"), "a nested margin on a draft is a percentage");
 assert(nullRecipient.includes("Data request"), "a data request keeps its kind");
 assert(nullRecipient.includes("Draft, needs your OK"), "a person draft needs the owner's OK");
 assert(nullRecipient.includes('data-run-state="found"'), "a succeeded run with a draft is found");

@@ -524,6 +524,13 @@
   line-height: 1.4;
 }
 
+.milon-desk-draft-context {
+  margin: 4px 0 0;
+  color: var(--desk-dim);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .milon-desk-draft-edit {
   display: flex;
   flex-direction: column;
