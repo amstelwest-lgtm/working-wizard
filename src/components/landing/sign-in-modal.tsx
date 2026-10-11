@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useId, useRef, type FormEvent } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { HERO_OWNER_LINK_US, HERO_OWNER_LINK_ZA } from "@/lib/landing-copy";
 import { t, type VisitorCopyPack } from "@/lib/market";
 import { billingStartPath, peekPendingCheckout } from "@/lib/pending-checkout";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -79,7 +80,8 @@ export function LandingSignInModal({
       : "Sign in to MILŌN";
 
   useEffect(() => {
-    restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    restoreRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const root = dialogRef.current;
     const focusables = () =>
       root
@@ -167,8 +169,8 @@ export function LandingSignInModal({
         </div>
         {!fpMode && peekPendingCheckout() ? (
           <p style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}>
-            Sign in with this email to resume Stripe Checkout for your firm. Abandoned Checkout
-            does not unlock the accountant workspace.
+            Sign in with this email to resume Stripe Checkout for your firm. Abandoned Checkout does
+            not unlock the accountant workspace.
           </p>
         ) : null}
 
@@ -290,7 +292,9 @@ export function LandingSignInModal({
                 </button>
               ) : null}
             </form>
-            <p style={{ marginTop: 18, fontSize: 12, color: "var(--ink-dim)", textAlign: "center" }}>
+            <p
+              style={{ marginTop: 18, fontSize: 12, color: "var(--ink-dim)", textAlign: "center" }}
+            >
               Accountant?{" "}
               <a href="/auth" style={{ color: "var(--gold-ink)" }}>
                 Sign in to the accountant portal →
@@ -311,7 +315,7 @@ export function LandingSignInModal({
                   textDecoration: "underline",
                 }}
               >
-                Get your own AI finance team →
+                {copyMarket.copyPack === "za" ? HERO_OWNER_LINK_ZA : HERO_OWNER_LINK_US}
               </button>
             </p>
           </>

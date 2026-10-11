@@ -19,7 +19,12 @@ function rand(amount: number): string {
   return `R${amount.toLocaleString("en-US")}`;
 }
 
-function priceLine(monthlyRands: number, annualCents: number, cap: number, interval: "month" | "year"): string {
+function priceLine(
+  monthlyRands: number,
+  annualCents: number,
+  cap: number,
+  interval: "month" | "year",
+): string {
   const per = perClientRands(monthlyRands, cap);
   const amount = interval === "year" ? rand(annualCents / 100) : rand(monthlyRands);
   const unit = interval === "year" ? "yr" : "mo";
@@ -43,7 +48,8 @@ export function loadSaPricingCopy(): SaPricingCopy {
     heroNote: "Plans from R799/mo for SA firms after day 14.",
     accountantsIntro:
       "South African pricing, in rand. One monthly price, set by how many clients you actively advise.",
-    accountantsLead: "Built for firms in South Africa and the United States.",
+    accountantsLead:
+      "Management accounts, 13-week cash and advisory drafts for South African firms on Xero and QuickBooks.",
     footerTagline:
       "for accounting firms and small businesses in South Africa and the United States.",
     footerBuilt: "Built for South Africa and the United States",

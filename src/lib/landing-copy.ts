@@ -18,8 +18,13 @@ export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
 export const HERO_OWNER_PREFIX = "Business owner?";
-export const HERO_OWNER_LINK = "Business owner? Get your own AI finance team →";
-export const OWNER_SIGNUP_LINK = "Get your own AI finance team →";
+export const HERO_OWNER_LINK_US =
+  "Business owner? $39/mo, or free when your accountant is on Milōn →";
+export const HERO_OWNER_LINK_ZA =
+  "Business owner? R299/mo, or free when your accountant is on Milōn →";
+/** US/default owner CTA. ZA visitors get `HERO_OWNER_LINK_ZA`. */
+export const HERO_OWNER_LINK = HERO_OWNER_LINK_US;
+export const OWNER_SIGNUP_LINK = HERO_OWNER_LINK_US;
 
 /**
  * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can
@@ -47,12 +52,7 @@ export const TRUST_TRAINING = "Client data isn't used to train third-party AI mo
 /** firm_name is nullable on the sign-off history row, so the strip does not claim it. */
 export const TRUST_SIGNOFF = "Every sign-off logged with name and time";
 
-export const TRUST_ITEMS = [
-  TRUST_BOOKS,
-  TRUST_IDENTIFIERS,
-  TRUST_TRAINING,
-  TRUST_SIGNOFF,
-] as const;
+export const TRUST_ITEMS = [TRUST_BOOKS, TRUST_IDENTIFIERS, TRUST_TRAINING, TRUST_SIGNOFF] as const;
 
 export const TRUST_AI_LINK = "How we handle data and AI →";
 
@@ -237,10 +237,8 @@ export const FAQ_MORE_LINK = "all questions";
 /** Must match the homepage cost question in `HOMEPAGE_FAQ_ITEMS`. */
 export const HOMEPAGE_COST_QUESTION = "What does it cost?";
 
-const OWNER_COST_US =
-  "Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon.";
-const OWNER_COST_ZA =
-  "Business owners: R299/mo · free when your accountant is on Milōn. Billing opens soon.";
+const OWNER_COST_US = "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
+const OWNER_COST_ZA = "Business owners pay R299/mo, or nothing when their accountant is on Milōn.";
 
 export function withSaPricingLines(answer: string, showSaPricing: boolean): string {
   if (!showSaPricing) return answer;

@@ -27,11 +27,11 @@ export function ownerPlanFreeLine(): string {
 export const OWNER_REGISTER_PLAN = "Business owner";
 
 /**
- * Shown under the owner signup fields. Names both prices because this one
- * form is not split by visitor. Billing is not a button.
+ * Shown under the owner signup fields. One market's price. There is no owner Checkout.
  */
-export const OWNER_REGISTER_PLAN_NOTE =
-  "Owner plan $39/mo (R299 in SA), free when your accountant is on Milōn. Billing opens soon.";
+export function ownerRegisterPlanNote(visitor: OwnerVisitor): string {
+  return `Owner plan: ${ownerPlanPublicPrice(visitor)} · free when your accountant is on Milōn`;
+}
 
 /** Display-only. R299 is for a known SA visitor. There is no owner Checkout. */
 export function ownerPlanPublicPrice(visitor: OwnerVisitor): string {

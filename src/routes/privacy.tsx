@@ -3,6 +3,7 @@ import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import {
   LEGAL_ADDRESS_LINES,
   LEGAL_EFFECTIVE,
+  LEGAL_CONTACT_EMAIL,
   LEGAL_ENTITY,
   LEGAL_INFORMATION_OFFICER,
 } from "@/lib/legal";
@@ -74,8 +75,9 @@ function PrivacyPage() {
           platform is {LEGAL_ENTITY}.
         </p>
         <p>
-          The Privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
-          reply to the email that brought you here, or write from inside the product.
+          The Privacy contact for this notice is {LEGAL_CONTACT_EMAIL}. Write to the{" "}
+          {LEGAL_INFORMATION_OFFICER} at that address, or at the address below. You can also reply
+          to the email that brought you here, or write from inside the product.
         </p>
       </div> : <div className="mk-copy-us">
         <p>
@@ -83,8 +85,9 @@ function PrivacyPage() {
           below.
         </p>
         <p>
-          The privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
-          reply to the email that brought you here, or write from inside the product.
+          The privacy contact for this notice is {LEGAL_CONTACT_EMAIL}. Write to the{" "}
+          {LEGAL_INFORMATION_OFFICER} at that address, or at the address below. You can also reply
+          to the email that brought you here, or write from inside the product.
         </p>
       </div>}
       <p className="mk-legal-address">
@@ -151,7 +154,7 @@ function PrivacyPage() {
       <ul className="mk-list">
         <li>We do not sell your figures, your email list, or your client book.</li>
         <li>
-          We do not store card details. Nothing is being billed yet, so there is nothing to store.
+          We do not store card details. Card numbers are collected by Stripe Checkout.
         </li>
         <li>We do not use your financials to train a public model of our own.</li>
       </ul>
@@ -167,9 +170,9 @@ function PrivacyPage() {
       {copyPack === "za" ? <div className="mk-copy-za">
         <p>
           If you are in South Africa, you also have rights under the Protection of Personal Information Act (POPIA). You can ask what we hold, ask us to correct it, or ask us to
-          delete it. The fastest path for deletion is Settings. For anything else, write to{" "}
-          {LEGAL_INFORMATION_OFFICER} (Privacy contact) at the address above, or reply to the email
-          that brought you. You can also lodge a complaint with the{" "}
+          delete it. The fastest path for deletion is Settings. For anything else, write to the{" "}
+          {LEGAL_INFORMATION_OFFICER} at {LEGAL_CONTACT_EMAIL}, or at the address above, or reply
+          to the email that brought you. You can also lodge a complaint with the{" "}
           <a href="https://inforegulator.org.za" target="_blank" rel="noreferrer">
             Information Regulator
           </a>
@@ -178,8 +181,9 @@ function PrivacyPage() {
       </div> : <div className="mk-copy-us">
         <p>
           You can ask what we hold, ask us to correct it, or ask us to delete it. The fastest path
-          for deletion is Settings. For anything else, write to {LEGAL_INFORMATION_OFFICER} (privacy
-          contact) at the address above, or reply to the email that brought you. We do not sell
+          for deletion is Settings. For anything else, write to the {LEGAL_INFORMATION_OFFICER} at{" "}
+          {LEGAL_CONTACT_EMAIL}, or at the address above, or reply to the email that brought you. We
+          do not sell
           personal information. If you are a California resident, the same requests go to the same
           contact — we will respond; this is not a claim that we are a CCPA “business” with a full
           statutory notice yet.

@@ -7,7 +7,7 @@ import type { DraftMarket } from "./types";
 
 export type VisitorCopyPack = "za" | "us";
 
-/** Published list prices. Owner Spark is free. Firm bands are USD catalog amounts. */
+/** Published list prices. Firm bands are USD catalog amounts. Owner display prices live in owner-plan.ts. */
 export const LIST_PRICES = {
   za: {
     orbit: "R699",

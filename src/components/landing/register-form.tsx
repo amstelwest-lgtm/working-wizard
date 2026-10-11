@@ -22,7 +22,8 @@ import {
 } from "@/lib/pending-checkout";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { setPortalIntent } from "@/lib/user-roles";
-import { AI_USE_LEAD } from "@/lib/landing-copy";
+import { AI_USE_LEAD, HERO_OWNER_LINK_US, HERO_OWNER_LINK_ZA } from "@/lib/landing-copy";
+import { ownerRegisterPlanNote } from "@/lib/owner-plan";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 
 type SignedIn = { email?: string | null } | null;
@@ -117,7 +118,9 @@ export function LandingRegisterForm({
               {inviteNeedsCode ? " You'll need the client code from the email (MLN-XXXXXX)." : ""}
             </p>
             {user ? (
-              <p style={{ fontSize: 12, color: "var(--ink-dim)", marginBottom: 16, lineHeight: 1.5 }}>
+              <p
+                style={{ fontSize: 12, color: "var(--ink-dim)", marginBottom: 16, lineHeight: 1.5 }}
+              >
                 You&apos;re signed in as {user.email}. Accepting this invite will open the owner
                 workspace
                 {user.email?.toLowerCase() !== regEmail.trim().toLowerCase() && regEmail
@@ -127,7 +130,9 @@ export function LandingRegisterForm({
               </p>
             ) : null}
             {inviteIsLegacyUuid ? (
-              <p style={{ fontSize: 12, color: "var(--ink-dim)", marginBottom: 16, lineHeight: 1.5 }}>
+              <p
+                style={{ fontSize: 12, color: "var(--ink-dim)", marginBottom: 16, lineHeight: 1.5 }}
+              >
                 Note: this is an older invite link format. It still works — for the most secure
                 link, ask your accountant to copy a fresh invite from the dashboard.
               </p>
@@ -364,13 +369,16 @@ export function LandingRegisterForm({
                 >
                   {FIRM_CARD_TIMING} After day 14 the paid band bills automatically through Stripe
                   Checkout. AI prepares the analysis; you review and sign off. By creating an
-                  account you agree to the <a href="/terms">Terms</a>. <a href="/privacy">Privacy</a>
+                  account you agree to the <a href="/terms">Terms</a>.{" "}
+                  <a href="/privacy">Privacy</a>
                   {" · "}
                   <a href="/ai">AI notice</a>
                 </p>
                 <p style={{ textAlign: "center", marginTop: 16 }}>
                   <button type="button" className="reg-owner-link" onClick={goToOwnerSpark}>
-                    Business owner? Get your own AI finance team →
+                    {visitorCopyPack(draftMarket) === "za"
+                      ? HERO_OWNER_LINK_ZA
+                      : HERO_OWNER_LINK_US}
                   </button>
                 </p>
               </>
@@ -468,11 +476,10 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  Owner plan $39/mo (R299 in SA), free when your accountant is on Milōn. Billing opens soon.
-                  Accounting firms: {FIRM_CARD_TIMING} By creating an account you agree to the{" "}
-                  <a href="/terms">Terms</a>.{" "}
-                  {AI_USE_LEAD}{" "}
-                  <a href="/ai">AI notice</a>. <a href="/privacy">Privacy</a>
+                  {ownerRegisterPlanNote(visitorCopyPack(draftMarket))}. Accounting firms:{" "}
+                  {FIRM_CARD_TIMING} By creating an account you agree to the{" "}
+                  <a href="/terms">Terms</a>. {AI_USE_LEAD} <a href="/ai">AI notice</a>.{" "}
+                  <a href="/privacy">Privacy</a>
                 </p>
               </>
             )}

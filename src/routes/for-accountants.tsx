@@ -42,7 +42,7 @@ function ForAccountantsPage() {
 
   return (
     <MarketingShell
-      eyebrow="For accounting and advisory practices"
+      eyebrow="AI finance team for accounting firms"
       title={
         <>
           Advisory work that <span className="mk-gold">scales across the whole book</span>, not one
@@ -53,7 +53,8 @@ function ForAccountantsPage() {
         <>
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
-          history rather than help. {saPricing?.accountantsLead ?? "Built for firms in the United States."}
+          history rather than help.{" "}
+          {saPricing?.accountantsLead ?? "Built for firms in the United States."}
         </>
       }
       heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: FIRM_SIGNUP_HREF }}
@@ -93,6 +94,10 @@ function ForAccountantsPage() {
       </div>
 
       <h2>An AI finance team for accountants, not instead of them</h2>
+      <p>
+        Not an AI bookkeeper or AI accountant that replaces your firm: the books stay in QuickBooks
+        Online or Xero, and you review and sign off.
+      </p>
       <ul className="mk-list">
         <li>
           <strong>Portfolio triage.</strong> Live health across every client on one screen, so the
