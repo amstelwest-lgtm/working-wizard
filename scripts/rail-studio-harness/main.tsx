@@ -202,6 +202,7 @@ const ownerDoorRoute = createRoute({
         : undefined,
     budgetCase:
       search.budgetCase === "empty" || search.budgetCase === "draft" ? search.budgetCase : "ready",
+    bots: search.bots === "stack" ? "stack" : search.bots === "row" ? "row" : undefined,
   }),
   component: function OwnerDoorHarness() {
     const search = useSearch({ strict: false }) as {
