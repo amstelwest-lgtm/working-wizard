@@ -76,6 +76,7 @@ function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
     id: row.id,
     agent: row.agent,
     client_id: typeof row.client_id === "string" ? row.client_id : "",
+    kind: textOrNull(row.kind),
     title: row.title,
     detail: textOrNull(row.detail),
     evidence: row.evidence ?? {},
@@ -117,7 +118,7 @@ export function useAgentActivity(clientId: string): AgentActivity {
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),
         table("agent_findings")
-          .select("id, agent, client_id, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason")
+          .select("id, agent, client_id, kind, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason")
           .eq("client_id", id)
           .order("created_at", { ascending: false })
           .limit(ROW_LIMIT),

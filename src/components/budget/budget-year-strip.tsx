@@ -46,7 +46,16 @@ export function BudgetYearStrip({
                 <th className="px-3 py-2 text-left font-semibold text-[#1b1608] dark:text-slate-100">{row.label}</th>
                 <td className="px-3 py-2 text-right tabular-nums">{row.thisYear == null ? "—" : money(row.thisYear)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{row.lastYear == null ? "—" : money(row.lastYear)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">
+                <td
+                  className={`px-3 py-2 text-right tabular-nums ${
+                    row.signal === "favourable"
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : row.signal === "adverse"
+                        ? "text-red-600 dark:text-red-400"
+                        : ""
+                  }`}
+                  data-year-signal={row.signal ?? "none"}
+                >
                   {row.change == null ? (
                     "—"
                   ) : (

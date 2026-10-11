@@ -23,7 +23,8 @@ import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName } from "@/lib/milon-team";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
-import { handoffComingOnline } from "@/hooks/owner-agent-ui";
+import { draftFindingLabel, handoffComingOnline } from "@/hooks/owner-agent-ui";
+import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { requestOwnerHandoff } from "@/lib/owner-handoff-client";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
@@ -502,6 +503,15 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
+  const draftActivity = useAgentActivity(ownerView ? clientId : "");
+  const draftFindings = useMemo(
+    () =>
+      draftActivity.findings.flatMap((row) => {
+        const label = draftFindingLabel(row);
+        return label ? [{ id: row.id, title: row.title, label }] : [];
+      }),
+    [draftActivity.findings],
+  );
   const quickAddRef = useRef<HTMLInputElement>(null);
   const focusQuickAdd = useCallback(() => {
     quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1429,6 +1439,26 @@ export default function ActionPlanPanel({
           {isOwner && <QuickAdd inputRef={quickAddRef} onAdd={(title) => addItem(title)} />}
         </CardContent>
       </Card>
+
+      {ownerView && draftFindings.length > 0 ? (
+        <section className="space-y-2" data-owner-drafts="readonly">
+          <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+            Drafts
+          </h2>
+          <ul className="space-y-2">
+            {draftFindings.map((draft) => (
+              <li
+                key={draft.id}
+                className="rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50"
+                data-draft={draft.id}
+              >
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{draft.title}</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{draft.label}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {ownerView && suggestedMoves.length > 0 ? (
         <section className="space-y-2" data-owner-suggestions="true">
