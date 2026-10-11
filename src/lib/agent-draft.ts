@@ -1,0 +1,264 @@
+/**
+ * Draft writes for the Financial Manager and the Advisor.
+ *
+ * Drafts are rows in agent_findings, not data_requests, proposed_next_steps,
+ * or deliverable_drafts. data_requests open as live asks and can be emailed.
+ * proposed_next_steps can be signed off. deliverable_drafts show in the
+ * studio without the cited-number, period, and dismissed checks. A finding
+ * stays a draft (evidence.draft, evidence.requires_human_approval) until a
+ * person approves it. Nothing here sends email or marks a pack signed off.
+ */
+import {
+  attachCitedEvidence,
+  groundFindingEvidence,
+  type FindingEvidence,
+  type StoredFigures,
+} from "./agent-bus.ts";
+import { findingRecordKey } from "./agent-analyst.ts";
+
+export const RUNNER_COST_CEILING_USD = 0.05;
+/** Stop before another model call once the run is already this close to the ceiling. */
+export const RUNNER_COST_STOP_USD = 0.04;
+export const RUNNER_MAX_ITERATIONS = 4;
+export const RUNNER_MAX_OUTPUT_TOKENS = 500;
+
+/**
+ * Token envelope the runners are sized for: four short rounds, one cache
+ * write, then cache reads. Priced with the Sonnet 5.5 rates in the runner test.
+ */
+export const RUNNER_TOKEN_ENVELOPE = {
+  uncachedInputTokens: 8_000,
+  outputTokens: 2_000,
+  cacheWriteTokens: 2_500,
+  cacheReadTokens: 7_500,
+} as const;
+
+export const DRAFT_SEVERITIES = ["info", "watch", "act"] as const;
+
+export const AGENT_OUTBOUND_TYPES = ["request", "handoff", "answer", "ack"] as const;
+export type AgentOutboundType = (typeof AGENT_OUTBOUND_TYPES)[number];
+
+const SIGNED_OFF = /\b(signed[\s-]*off|sign[\s-]*off)\b/i;
+
+export function draftClaimsSignedOff(parts: readonly string[]): boolean {
+  return parts.some((part) => SIGNED_OFF.test(part));
+}
+
+export function runnerShouldStopForCost(costUsd: number): boolean {
+  return costUsd >= RUNNER_COST_STOP_USD;
+}
+
+export function draftMessageType(kind: string): "request" | "handoff" {
+  if (kind === "data_request_draft") return "request";
+  return "handoff";
+}
+
+export type DraftEvidence = FindingEvidence & {
+  draft: true;
+  requires_human_approval: true;
+};
+
+export function withDraftFlags(evidence: FindingEvidence): DraftEvidence {
+  return { ...evidence, draft: true, requires_human_approval: true };
+}
+
+export function prepareDraftRecord(input: {
+  kind: string;
+  allowedKinds: readonly string[];
+  severity: string;
+  title: string;
+  detail: string;
+  claimedFigures: unknown;
+  pool: StoredFigures[];
+  recordedKeys: ReadonlySet<string>;
+}):
+  | {
+      ok: true;
+      kind: string;
+      severity: string;
+      title: string;
+      detail: string;
+      evidence: DraftEvidence;
+      warning?: string;
+      recordKeys: string[];
+    }
+  | { ok: false; error: string; tool_blocked?: boolean } {
+  const title = input.title.trim().slice(0, 200);
+  const detail = input.detail.trim().slice(0, 2000);
+  const kind = input.kind.trim();
+  const severity = input.severity.trim();
+  if (!title) return { ok: false, error: "A draft needs a title." };
+  if (!detail) return { ok: false, error: "A draft needs a detail." };
+  if (!(input.allowedKinds as readonly string[]).includes(kind)) {
+    return { ok: false, error: `kind must be one of: ${input.allowedKinds.join(", ")}.` };
+  }
+  if (draftClaimsSignedOff([kind, title, detail])) {
+    return {
+      ok: false,
+      error: "Signed off is accountant-only. This draft was not saved.",
+      tool_blocked: true,
+    };
+  }
+  if (!(DRAFT_SEVERITIES as readonly string[]).includes(severity)) {
+    return { ok: false, error: "Severity must be info, watch, or act." };
+  }
+  const grounded = groundFindingEvidence({ pool: input.pool, claimedFigures: input.claimedFigures });
+  if (!grounded.ok) return { ok: false, error: grounded.error, tool_blocked: true };
+  const cited = attachCitedEvidence({
+    title,
+    detail,
+    pool: input.pool,
+    evidence: grounded.evidence,
+  });
+  if (!cited.ok) return { ok: false, error: cited.error, tool_blocked: true };
+  const evidence = withDraftFlags(cited.evidence);
+  const recordKeys = [
+    findingRecordKey({
+      kind,
+      periodLabel: grounded.evidence.period_label,
+      snapshotId: grounded.evidence.snapshot_id,
+    }),
+    findingRecordKey({
+      kind,
+      periodLabel: evidence.period_label,
+      snapshotId: evidence.snapshot_id,
+    }),
+  ];
+  if (recordKeys.some((key) => input.recordedKeys.has(key))) {
+    return { ok: false, error: "Already recorded, call finish.", tool_blocked: true };
+  }
+  return {
+    ok: true,
+    kind,
+    severity,
+    title,
+    detail,
+    evidence,
+    recordKeys,
+    ...(cited.warning ? { warning: cited.warning } : {}),
+  };
+}
+
+export function periodsFromFindingEvidence(evidence: unknown): Array<{
+  period_label: string | null;
+  snapshot_id: string | null;
+  figures: Record<string, number>;
+}> {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return [];
+  const row = evidence as Record<string, unknown>;
+  const snapshotId = typeof row.snapshot_id === "string" ? row.snapshot_id : null;
+  const periodLabel = typeof row.period_label === "string" ? row.period_label : null;
+  const figures = row.figures;
+  if (!figures || typeof figures !== "object" || Array.isArray(figures)) return [];
+  const flat: Record<string, number> = {};
+  const nested: Array<{ period_label: string; figures: Record<string, number> }> = [];
+  for (const [key, value] of Object.entries(figures as Record<string, unknown>)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      flat[key] = value;
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const inner: Record<string, number> = {};
+    for (const [innerKey, n] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof n === "number" && Number.isFinite(n)) inner[innerKey] = n;
+    }
+    if (Object.keys(inner).length > 0) nested.push({ period_label: key, figures: inner });
+  }
+  const out: Array<{ period_label: string | null; snapshot_id: string | null; figures: Record<string, number> }> = [];
+  if (Object.keys(flat).length > 0) {
+    out.push({ period_label: periodLabel, snapshot_id: snapshotId, figures: flat });
+  }
+  for (const item of nested) {
+    out.push({ period_label: item.period_label, snapshot_id: null, figures: item.figures });
+  }
+  return out;
+}
+
+const EMPTY_SCHEMA = { type: "object", properties: {}, additionalProperties: false };
+
+const FIGURES_SCHEMA = {
+  type: "object",
+  additionalProperties: {
+    anyOf: [{ type: "number" }, { type: "object", additionalProperties: { type: "number" } }],
+  },
+  description:
+    "A flat map of numbers from one snapshot, or period labels whose values are number maps. Copy the evidence keys from the read.",
+};
+
+export function readToolSchema(name: string, description: string) {
+  return { name, description, input_schema: EMPTY_SCHEMA };
+}
+
+export function recordDraftToolSchema(kinds: readonly string[], peers: readonly string[]) {
+  return {
+    name: "record_draft",
+    description:
+      "Save one draft for a person to approve. Nothing is emailed or sent. figures must match numbers a read tool returned. Signed off is accountant-only.",
+    input_schema: {
+      type: "object",
+      properties: {
+        kind: {
+          type: "string",
+          enum: [...kinds],
+          description: kinds.join(", "),
+        },
+        severity: {
+          type: "string",
+          enum: [...DRAFT_SEVERITIES],
+          description:
+            "info: a stored fact, no action. watch: the books are drifting. act: the stored figures need a decision soon.",
+        },
+        title: { type: "string", minLength: 1, maxLength: 200 },
+        detail: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2000,
+          description: "Required. Books on file only. Do not say signed off.",
+        },
+        to_agent: {
+          type: "string",
+          enum: [...peers],
+          description: "The other bot who should see this draft. A person still approves before it goes to anyone.",
+        },
+        figures: FIGURES_SCHEMA,
+      },
+      required: ["kind", "severity", "title", "detail", "to_agent"],
+      additionalProperties: false,
+    },
+  };
+}
+
+export function sendMessageToolSchema(peers: readonly string[]) {
+  return {
+    name: "send_agent_message",
+    description:
+      "Tell one other bot about this client. Does not send email and does not create a task or a data request.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to_agent: { type: "string", enum: [...peers] },
+        type: { type: "string", enum: [...AGENT_OUTBOUND_TYPES] },
+        body: { type: "string", minLength: 1, maxLength: 2000 },
+      },
+      required: ["to_agent", "type", "body"],
+      additionalProperties: false,
+    },
+  };
+}
+
+export function finishToolSchema() {
+  return {
+    name: "finish",
+    description:
+      "Stop. reason is one of objective_complete, no_further_action, insufficient_information, tool_blocked, needs_human, safety_limit.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reason: { type: "string" },
+        summary: { type: "string" },
+      },
+      required: ["reason", "summary"],
+      additionalProperties: false,
+    },
+  };
+}

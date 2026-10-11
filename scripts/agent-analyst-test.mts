@@ -555,7 +555,8 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(joined.includes('from "../_shared/agent-core/claude.ts"'), "the analyst uses the shared model call");
   assert(joined.includes('existing.status === "partial"'), "a finished partial run is not repeated");
   assert(joined.includes('existing.status === "running"'), "a live run is not started a second time");
-  assert(dispatch.includes('p_function: "agent-analyst"'), "the dispatcher invokes agent-analyst");
+  assert(dispatch.includes('fn: "agent-analyst"'), "the dispatcher invokes agent-analyst");
+  assert(dispatch.includes("p_function: runner.fn"), "each enabled runner is the invoke target");
   assert(dispatch.includes("agent_invoke"), "the invocation goes through the pg_net SQL function");
   assert(dispatch.includes('reason: "disabled"'), "a disabled flag does not read the queue");
 
