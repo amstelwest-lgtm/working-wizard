@@ -244,7 +244,7 @@ export function BudgetSimpleView({
         onLensChange={onLensChange}
         actualMonths={actualMonths}
       />
-      {readOnly ? null : drawer}
+      {readOnly ? null : <>{drawer}</>}
       <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
         {plainBudgetWindowHeading(tpl.label, doc, market)}
       </p>

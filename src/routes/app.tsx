@@ -3740,6 +3740,7 @@ function Index() {
   }
 
   const showOwnerDoor = !searchTab && !sampleMode;
+  const OwnerHealthOrb = SphereHero;
 
   return (
     <MarketProvider selection={workspaceMarket}>
@@ -3874,7 +3875,7 @@ function Index() {
                 hero={(go) =>
                   showScoredBoard ? (
                     <div className="owner-health-hero">
-                      <SphereHero
+                      <OwnerHealthOrb
                         compact
                         overallHealth={avgHealth}
                         displayStatus={overallHealth.displayStatus}
@@ -3912,7 +3913,7 @@ function Index() {
                         )}
                       />
                       {showScoredBoard ? (
-                        <SphereHero
+                        <OwnerHealthOrb
                           overallHealth={avgHealth}
                           displayStatus={overallHealth.displayStatus}
                           pillars={spherePillars}
