@@ -16,25 +16,25 @@ import {
 } from "./agent-bus.ts";
 import { findingRecordKey } from "./agent-analyst.ts";
 
-/** Hard cap for one Financial Manager or Advisor run. */
+/** Hard cap for one Financial Manager or Advisor run. Do not start a call that would pass this. */
 export const RUNNER_COST_CEILING_USD = 0.06;
-/**
- * Stop before another model call once spend is this close to the ceiling.
- * A normal 3–4 turn run stays under this line; the ceiling is the headroom.
- */
-export const RUNNER_COST_STOP_USD = 0.055;
-export const RUNNER_MAX_OUTPUT_TOKENS = 500;
+/** A normal 2–3 turn run, including one draft, is sized to stay at or under this. */
+export const RUNNER_COST_TARGET_USD = 0.05;
+/** Per-call output cap. 500 cut record_draft off after the title. */
+export const RUNNER_MAX_OUTPUT_TOKENS = 2000;
+/** Detail the model is asked to write. Short enough to finish inside the output cap. */
+export const DRAFT_DETAIL_MAX_CHARS = 600;
 
 /**
- * Token envelope for a normal four-turn run: one cache write, then cache
- * reads, plus the uncached tool results. Priced with the Sonnet 5.5 rates
- * in the runner test. It stays under the stop line, inside the ceiling.
+ * Token envelope for a normal three-turn run: one cache write, then cache
+ * reads, plus one draft reply. Priced with the Sonnet 5.5 rates in the
+ * runner test. It stays at or under the $0.05 target.
  */
 export const RUNNER_TOKEN_ENVELOPE = {
-  uncachedInputTokens: 10_000,
-  outputTokens: 2_000,
+  uncachedInputTokens: 8_000,
+  outputTokens: 2_400,
   cacheWriteTokens: 3_000,
-  cacheReadTokens: 10_000,
+  cacheReadTokens: 6_000,
 } as const;
 
 export const DRAFT_SEVERITIES = ["info", "watch", "act"] as const;
@@ -48,8 +48,36 @@ export function draftClaimsSignedOff(parts: readonly string[]): boolean {
   return parts.some((part) => SIGNED_OFF.test(part));
 }
 
-export function runnerShouldStopForCost(costUsd: number, stopUsd = RUNNER_COST_STOP_USD): boolean {
-  return costUsd >= stopUsd;
+function roundUsd(amount: number): number {
+  return Math.round(amount * 100_000) / 100_000;
+}
+
+/**
+ * Last call's cost is the proxy for the next one. Stop before that next
+ * call would take the run over the ceiling.
+ */
+export function runnerNextCallExceedsCeiling(input: {
+  spentUsd: number;
+  lastCallUsd: number;
+  ceilingUsd?: number;
+}): boolean {
+  const ceiling = input.ceilingUsd ?? RUNNER_COST_CEILING_USD;
+  return roundUsd(input.spentUsd + Math.max(0, input.lastCallUsd)) > ceiling;
+}
+
+export const CUT_OFF_DRAFT_RESULT =
+  "The draft was cut off before detail finished. Resend record_draft with a shorter detail of at most 600 characters.";
+
+/** A max_tokens stop left record_draft without a detail. Do not treat that as a missing field. */
+export function recordDraftWasCutOff(input: {
+  stopReason: string;
+  name: string;
+  args: Record<string, unknown>;
+}): boolean {
+  if (input.stopReason !== "max_tokens") return false;
+  if (input.name !== "record_draft") return false;
+  const detail = typeof input.args.detail === "string" ? input.args.detail.trim() : "";
+  return detail.length === 0;
 }
 
 /** Draft kinds a person approves. They are not handed to another bot. */
@@ -274,16 +302,16 @@ export function recordDraftToolSchema(kinds: readonly string[], peers: readonly 
         detail: {
           type: "string",
           minLength: 1,
-          maxLength: 2000,
-          description: "Required. Books on file only. Do not say signed off.",
+          maxLength: DRAFT_DETAIL_MAX_CHARS,
+          description: "Required. At most 600 characters. Comes before figures. Books on file only. Do not say signed off.",
         },
+        figures: FIGURES_SCHEMA,
         to_agent: {
           type: "string",
           enum: [...peers],
           description:
             "Optional bot key. Never the accountant or the owner. Human approval is implied by draft=true. Omit it to use the default recipient.",
         },
-        figures: FIGURES_SCHEMA,
       },
       required: ["kind", "severity", "title", "detail"],
       additionalProperties: false,

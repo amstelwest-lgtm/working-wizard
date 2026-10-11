@@ -8,19 +8,22 @@ import { analystRunCostUsd } from "../src/lib/agent-analyst.ts";
 import { findingDuplicates } from "../src/lib/agent-analyst.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../src/lib/agent-books.ts";
 import {
+  CUT_OFF_DRAFT_RESULT,
+  DRAFT_DETAIL_MAX_CHARS,
   draftClaimsSignedOff,
   draftMessageType,
   prepareDraftRecord,
+  recordDraftWasCutOff,
   resolveDraftRecipient,
   RUNNER_COST_CEILING_USD,
-  RUNNER_COST_STOP_USD,
+  RUNNER_COST_TARGET_USD,
+  RUNNER_MAX_OUTPUT_TOKENS,
   RUNNER_TOKEN_ENVELOPE,
   runnerEarlyFinish,
-  runnerShouldStopForCost,
+  runnerNextCallExceedsCeiling,
 } from "../src/lib/agent-draft.ts";
 import {
   ADVISOR_COST_CEILING_USD,
-  ADVISOR_COST_STOP_USD,
   ADVISOR_DRAFT_KINDS,
   ADVISOR_MAX_ITERATIONS,
   ADVISOR_PEERS,
@@ -30,7 +33,6 @@ import {
 } from "../src/lib/agent-advisor.ts";
 import {
   FM_COST_CEILING_USD,
-  FM_COST_STOP_USD,
   FM_DRAFT_KINDS,
   FM_MAX_ITERATIONS,
   FM_PEERS,
@@ -189,6 +191,11 @@ function deskWritesLiveRecords(src: string): boolean {
   assert(!fmTo?.includes("financial_manager"), "the financial manager schema excludes itself");
   assert(!advisorTo?.includes("advisor"), "the advisor schema excludes itself");
   assert(!fmRequired.includes("to_agent") && !advisorRequired.includes("to_agent"), "to_agent is optional");
+  const fmProps = fmSchema?.input_schema.properties as Record<string, { maxLength?: number }>;
+  const fmKeys = Object.keys(fmProps);
+  assert(fmKeys.indexOf("detail") === fmKeys.indexOf("title") + 1, "detail comes right after title");
+  assert(fmKeys.indexOf("detail") < fmKeys.indexOf("figures"), "detail comes before figures");
+  assert(fmProps.detail?.maxLength === DRAFT_DETAIL_MAX_CHARS, "the schema caps detail at 600 characters");
 }
 
 // Stored cash and budget. Tax stays out. Closings come from the saved cashflow.
@@ -287,15 +294,20 @@ function deskWritesLiveRecords(src: string): boolean {
     RUNNER_TOKEN_ENVELOPE.cacheWriteTokens,
     RUNNER_TOKEN_ENVELOPE.cacheReadTokens,
   );
-  assert(cost <= RUNNER_COST_STOP_USD, `a normal four-turn run costs ${cost}, over the stop line`);
-  assert(cost <= RUNNER_COST_CEILING_USD && RUNNER_COST_CEILING_USD <= 0.06, "each run stays at or under $0.06");
-  assert(RUNNER_COST_STOP_USD < RUNNER_COST_CEILING_USD, "the stop line leaves headroom under the ceiling");
-  assert(runnerShouldStopForCost(RUNNER_COST_STOP_USD), "a run at the stop line does not call the model again");
-  assert(!runnerShouldStopForCost(0.04), "the turn-3 production spend can take another turn");
-  assert(!runnerShouldStopForCost(RUNNER_COST_STOP_USD - 0.01), "a cheaper run may continue");
-  assert(FM_MAX_ITERATIONS === 6 && ADVISOR_MAX_ITERATIONS === 6, "a 3–4 turn run has headroom before the cap");
+  assert(RUNNER_MAX_OUTPUT_TOKENS === 2000, "a draft call is not cut off at 500 tokens");
+  assert(cost <= RUNNER_COST_TARGET_USD, `a normal three-turn run costs ${cost}, over $0.05`);
+  assert(RUNNER_COST_CEILING_USD === 0.06, "the hard ceiling stays $0.06");
   assert(FM_COST_CEILING_USD === 0.06 && ADVISOR_COST_CEILING_USD === 0.06, "each agent ceiling is $0.06");
-  assert(FM_COST_STOP_USD === RUNNER_COST_STOP_USD && ADVISOR_COST_STOP_USD === RUNNER_COST_STOP_USD, "each agent stops on the shared line");
+  assert(!runnerNextCallExceedsCeiling({ spentUsd: 0, lastCallUsd: 0 }), "the first call runs");
+  assert(
+    !runnerNextCallExceedsCeiling({ spentUsd: 0.04, lastCallUsd: 0.02 }),
+    "a next call that lands on $0.06 still runs",
+  );
+  assert(
+    runnerNextCallExceedsCeiling({ spentUsd: 0.045, lastCallUsd: 0.02 }),
+    "a next call that would pass $0.06 does not start",
+  );
+  assert(FM_MAX_ITERATIONS === 6 && ADVISOR_MAX_ITERATIONS === 6, "later turns stay available before the cap");
   assert(runnerEarlyFinish(0) === null, "a run with no draft keeps going");
   const early = runnerEarlyFinish(1);
   assert(early?.reason === "objective_complete", "a recorded draft finishes the run");
@@ -329,7 +341,11 @@ function deskWritesLiveRecords(src: string): boolean {
     reasonBody.indexOf("runnerEarlyFinish") < reasonBody.indexOf("callClaudeRound"),
     "drafts finish before another model call",
   );
-  assert(jobSrc.includes("config.costStopUsd"), "the cost stop is the agent's own line");
+  assert(jobSrc.includes("config.costCeilingUsd"), "the cost ceiling is the agent's own cap");
+  assert(jobSrc.includes("runnerNextCallExceedsCeiling"), "the next call is priced from the last call");
+  assert(jobSrc.includes("maxTokens: RUNNER_MAX_OUTPUT_TOKENS"), "the output cap is the shared runner cap");
+  assert(jobSrc.includes("CUT_OFF_DRAFT_RESULT"), "a cut-off draft returns the resend result");
+  assert(!jobSrc.includes("costStopUsd"), "the flat stop line is gone");
 
   for (const file of [
     "supabase/functions/agent-financial-manager/index.ts",
@@ -368,6 +384,7 @@ function deskWritesLiveRecords(src: string): boolean {
     assert(prompt.includes("to_agent is a bot key"), "to_agent is a bot key");
     assert(prompt.includes("never the accountant or the owner"), "to_agent is never the accountant or the owner");
     assert(prompt.includes("draft=true"), "human approval is implied by draft=true");
+    assert(prompt.includes("at most 600 characters"), "detail guidance is about 600 characters");
   }
   const config = read("supabase/config.toml");
   assert(/\[functions\.agent-financial-manager\]\nverify_jwt = true/.test(config), "financial manager JWT is required");
@@ -472,6 +489,45 @@ function deskWritesLiveRecords(src: string): boolean {
   assert(draft.rejected_args.length <= REJECTED_TRACE_ARGS_MAX + 1, "rejected arguments are truncated");
   assert(!draft.rejected_args.includes(huge), "the long argument does not land in full");
   assert(read && !("args" in read) && !("rejected_args" in read), "a successful read keeps its arguments off the trace");
+}
+
+// A max_tokens cut after the title asks for a shorter detail. A real omission still needs a detail.
+{
+  const cut = { title: "Cash is thin", kind: "action_point_draft", severity: "watch" };
+  assert(
+    recordDraftWasCutOff({ stopReason: "max_tokens", name: "record_draft", args: cut }),
+    "max_tokens with no detail is a cut-off tool call",
+  );
+  assert(
+    !recordDraftWasCutOff({ stopReason: "end_turn", name: "record_draft", args: cut }),
+    "a finished reply with no detail is not a cut-off",
+  );
+  assert(
+    !recordDraftWasCutOff({
+      stopReason: "max_tokens",
+      name: "record_draft",
+      args: { ...cut, detail: "Week 4 closing is on file." },
+    }),
+    "a draft that already has a detail is saved",
+  );
+  assert(
+    !recordDraftWasCutOff({ stopReason: "max_tokens", name: "get_ratios", args: {} }),
+    "a read is not a cut-off draft",
+  );
+  assert(!CUT_OFF_DRAFT_RESULT.includes("A draft needs a detail"), "the resend is not the missing-field error");
+  assert(CUT_OFF_DRAFT_RESULT.includes("600"), "the resend caps detail at 600 characters");
+  assert(/shorter detail/i.test(CUT_OFF_DRAFT_RESULT), "the resend asks for a shorter detail");
+  const missing = prepareDraftRecord({
+    kind: "action_point_draft",
+    allowedKinds: FM_DRAFT_KINDS,
+    severity: "watch",
+    title: "Cash is thin",
+    detail: "",
+    claimedFigures: { cash: 40 },
+    pool: [{ figures: { cash: 40 }, periodLabel: "Oct 2026", snapshotId: "snap" }],
+    recordedKeys: new Set(),
+  });
+  assert(!missing.ok && missing.error === "A draft needs a detail.", "an ordinary omission still needs a detail");
 }
 
 console.log("agent runners ok");
