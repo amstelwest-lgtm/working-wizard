@@ -321,6 +321,7 @@ export const Route = createFileRoute("/app")({
     xero?: string;
     reason?: string;
     view?: "chart" | "table" | "13week";
+    bot?: "financial_manager" | "analyst" | "advisor";
   } => {
     const out: {
       tab?: string;
@@ -328,6 +329,7 @@ export const Route = createFileRoute("/app")({
       xero?: string;
       reason?: string;
       view?: "chart" | "table" | "13week";
+      bot?: "financial_manager" | "analyst" | "advisor";
     } = {};
     if (
       typeof search.tab === "string" &&
@@ -346,6 +348,13 @@ export const Route = createFileRoute("/app")({
     }
     if (search.view === "table" || search.view === "chart" || search.view === "13week") {
       out.view = search.view;
+    }
+    if (
+      search.bot === "financial_manager" ||
+      search.bot === "analyst" ||
+      search.bot === "advisor"
+    ) {
+      out.bot = search.bot;
     }
     return out;
   },
@@ -3828,6 +3837,19 @@ function Index() {
           <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
             {showOwnerDoor ? (
               <OwnerDoor
+                bot={oauthReturn.bot ?? null}
+                onBotChange={(next, mode) => {
+                  void navigate({
+                    to: "/app",
+                    search: (prev) => {
+                      const out = { ...prev };
+                      if (next) out.bot = next;
+                      else delete out.bot;
+                      return out;
+                    },
+                    replace: mode === "replace",
+                  });
+                }}
                 clientId={effectiveClientId}
                 businessName={
                   actingClientName ??

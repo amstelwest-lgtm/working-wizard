@@ -22,6 +22,7 @@ import {
 import { ownerPresence, type OwnerTalk } from "@/lib/owner-presence";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
+import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
 import { OwnerChat, type OwnerChatTurn } from "./owner-chat";
 import { OwnerHome } from "./owner-home";
 import {
@@ -92,6 +93,8 @@ export function OwnerDoor({
   onSignOut,
   hero,
   boards,
+  bot = null,
+  onBotChange,
 }: {
   clientId: string | null;
   businessName: string;
@@ -119,10 +122,13 @@ export function OwnerDoor({
   boards?: (
     go: (screen: OwnerScreen) => void,
   ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
+  bot?: AgentKey | null;
+  onBotChange?: (agent: AgentKey | null, mode: "push" | "replace") => void;
 }) {
   const activity = useAgentActivity(clientId ?? "");
-  const [screen, setScreen] = useState<OwnerScreen>("home");
-  const [agent, setAgent] = useState<AgentKey>("financial_manager");
+  const openedBot = ownerBotKey(bot);
+  const [screen, setScreen] = useState<OwnerScreen>(openedBot ? "chat" : "home");
+  const [agent, setAgent] = useState<AgentKey>(openedBot ?? "financial_manager");
   const [talk, setTalk] = useState<OwnerTalk>(null);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<OwnerChatTurn[]>([]);
@@ -135,6 +141,12 @@ export function OwnerDoor({
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
   const recRef = useRef<SpeechRec | null>(null);
+  const screenRef = useRef(screen);
+  const agentRef = useRef(agent);
+  const pushedRef = useRef(false);
+  const botHydrated = useRef(false);
+  screenRef.current = screen;
+  agentRef.current = agent;
 
   useEffect(() => {
     setVisitor(visitorCopyPack(readVisitorDraft()));
@@ -250,10 +262,61 @@ export function OwnerDoor({
   const presence = ownerPresence(activity, talk);
   const active = presence.agents.find((item) => item.agent === agent) ?? presence.agents[0];
 
+  useEffect(() => {
+    const next = ownerBotKey(bot);
+    if (!botHydrated.current) {
+      botHydrated.current = true;
+      return;
+    }
+    if (next) {
+      if (screenRef.current === "chat" && agentRef.current === next) return;
+      void runBotTransition(() => {
+        setAgent(next);
+        setError(null);
+        setScreen("chat");
+      });
+      return;
+    }
+    if (screenRef.current !== "chat") return;
+    void runBotTransition(() => setScreen("home"));
+  }, [bot]);
+
   function openChat(next: AgentKey) {
-    setAgent(next);
-    setError(null);
-    setScreen("chat");
+    pushedRef.current = true;
+    void runBotTransition(() => {
+      setAgent(next);
+      setError(null);
+      setScreen("chat");
+      onBotChange?.(next, "push");
+    });
+  }
+
+  function closeChat() {
+    const popped = pushedRef.current;
+    pushedRef.current = false;
+    void runBotTransition(() => setScreen("home")).then(() => {
+      if (popped && new URLSearchParams(window.location.search).has("bot")) {
+        window.history.back();
+        return;
+      }
+      onBotChange?.(null, "replace");
+    });
+  }
+
+  function go(next: OwnerScreen) {
+    if (next === "chat") return;
+    if (screenRef.current === "chat") {
+      if (next === "home") {
+        closeChat();
+        return;
+      }
+      pushedRef.current = false;
+      void runBotTransition(() => setScreen(next)).then(() => {
+        onBotChange?.(null, "replace");
+      });
+      return;
+    }
+    setScreen(next);
   }
 
   function onTile(tile: OwnerTile) {
@@ -368,7 +431,7 @@ export function OwnerDoor({
       workspaces={workspaces}
       activeClientId={clientId}
       onSwitch={onSwitch}
-      onNavigate={setScreen}
+      onNavigate={go}
       onSignOut={onSignOut}
       onSettings={onSettings}
       onProfile={onProfile}
@@ -403,7 +466,7 @@ export function OwnerDoor({
           onDraft={setDraft}
           onSend={() => void send(draft)}
           onListen={listen}
-          onBack={() => setScreen("home")}
+          onBack={closeChat}
         />
       ) : null}
       {railScreen === "accountant" ? (

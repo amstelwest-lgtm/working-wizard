@@ -9,7 +9,7 @@ import type { OwnerMotion } from "@/lib/owner-presence";
 import { avatarRhythm } from "./owner-rhythm";
 
 export type AvatarVariant = "orb" | "character";
-export type AvatarSize = "lg" | "md" | "sm";
+export type AvatarSize = "lg" | "md" | "sm" | "stage";
 
 const JUMP: Keyframe[] = [
   { transform: "translate3d(0, 0, 0) scale(1, 1)" },
@@ -30,6 +30,7 @@ export function OwnerAvatar({
   size = "lg",
   lookAt = null,
   label,
+  share = false,
 }: {
   agent: AgentKey;
   variant: AvatarVariant;
@@ -37,6 +38,8 @@ export function OwnerAvatar({
   size?: AvatarSize;
   lookAt?: AgentKey | null;
   label?: string;
+  /** Same view-transition name on the home avatar and the open stage. */
+  share?: boolean;
 }) {
   const node = useRef<HTMLSpanElement>(null);
   const prev = useRef(motion);
@@ -82,10 +85,12 @@ export function OwnerAvatar({
       data-motion={motion}
       data-look={lookAt ?? undefined}
       data-size={size}
+      data-bot-shared={share ? "true" : undefined}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
       style={{
+        viewTransitionName: share ? `owner-bot-${agent}` : undefined,
         ["--breathe" as string]: rhythm.breathe,
         ["--breathe-delay" as string]: rhythm.breatheDelay,
         ["--drift" as string]: rhythm.drift,
@@ -117,7 +122,7 @@ export function OwnerAvatar({
                 <circle className="found-ring" cx="40" cy="40" r="35" />
                 <circle className="found-dot" cx="62" cy="16" r="4.5" />
                 <WaveBars className="speak-bars" radius={36} />
-                <WaveBars className="listen-bars" radius={18} />
+                <WaveBars className="listen-bars" radius={33} />
                 <g className="mic" transform="translate(40 58)">
                   <rect x="-3" y="-10" width="6" height="9" rx="3" />
                   <path d="M-6 -3 a6 6 0 0 0 12 0 M0 3 v4 M-3 7 h6" />
@@ -187,14 +192,9 @@ function WaveBars({ className, radius }: { className: string; radius: number }) 
       {heights.map((height, index) => {
         const angle = (index / heights.length) * 360 - 90;
         return (
-          <line
-            key={index}
-            x1="40"
-            y1={40 - radius}
-            x2="40"
-            y2={40 - radius + height}
-            transform={`rotate(${angle} 40 40)`}
-          />
+          <g key={index} transform={`rotate(${angle} 40 40)`}>
+            <line x1="40" y1={40 - radius} x2="40" y2={40 - radius + height} />
+          </g>
         );
       })}
     </g>

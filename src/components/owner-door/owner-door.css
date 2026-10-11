@@ -388,10 +388,38 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   min-width: 220px;
 }
 
-.owner-door .owner-chat-head {
+.owner-door .owner-chat-stage {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
+  padding: 4px 52px 0;
+  text-align: center;
+}
+
+.owner-door .owner-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--owner-edge);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.owner-door[data-screen="chat"] .owner-pane[data-owner-chat="true"] {
+  min-height: calc(100dvh - 150px);
+}
+
+.owner-door[data-screen="chat"] .owner-composer {
+  margin-top: auto;
 }
 
 .owner-door .owner-back {
@@ -407,6 +435,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 }
 
 .owner-door .owner-back:focus-visible,
+.owner-door .owner-close:focus-visible,
 .owner-door .owner-icon-btn:focus-visible {
   outline: 2px solid var(--gold-bright);
   outline-offset: 3px;
@@ -516,6 +545,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-presence.is-md {
   width: 64px;
   height: 64px;
+}
+
+.owner-presence.is-stage {
+  width: 280px;
+  height: 280px;
 }
 
 .owner-presence.is-sm {
@@ -1011,6 +1045,89 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   }
 }
 
+@media (max-width: 767px) {
+  .owner-presence.is-stage {
+    width: 160px;
+    height: 160px;
+  }
+
+  .owner-door[data-screen="chat"] {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    overflow: auto;
+    background: var(--bg);
+    padding: 12px 16px 20px;
+  }
+
+  .owner-door[data-screen="chat"] .topbar,
+  .owner-door[data-screen="chat"] .deliverable-rail {
+    display: none;
+  }
+
+  .owner-door[data-screen="chat"] .client-workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .owner-door[data-screen="chat"] .deliverable-main {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .owner-door[data-screen="chat"] .owner-pane[data-owner-chat="true"] {
+    flex: 1;
+    min-height: 100%;
+  }
+}
+
+::view-transition-group(*) {
+  animation-duration: 520ms;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+html[data-bot-fade="cross"]::view-transition-group(*),
+html[data-bot-fade="plain"]::view-transition-group(*) {
+  animation: none;
+}
+
+html[data-bot-fade="cross"]::view-transition-old(*),
+html[data-bot-fade="plain"]::view-transition-old(*) {
+  animation: owner-bot-out 180ms ease both;
+}
+
+html[data-bot-fade="cross"]::view-transition-new(*),
+html[data-bot-fade="plain"]::view-transition-new(*) {
+  animation: owner-bot-in 180ms ease both;
+}
+
+html[data-bot-fade="plain"] .owner-door .owner-pane {
+  animation: owner-bot-in 180ms ease;
+}
+
+@keyframes owner-bot-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes owner-bot-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .owner-door .owner-drift,
   .owner-door .owner-breathe,
@@ -1041,5 +1158,17 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   .owner-door .owner-presence.is-listening .listen-bars,
   .owner-door .owner-presence.is-listening .mic {
     opacity: 1;
+  }
+
+  ::view-transition-group(*) {
+    animation: none;
+  }
+
+  ::view-transition-old(*) {
+    animation: owner-bot-out 180ms ease both;
+  }
+
+  ::view-transition-new(*) {
+    animation: owner-bot-in 180ms ease both;
   }
 }

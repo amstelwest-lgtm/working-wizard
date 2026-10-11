@@ -5,6 +5,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  useNavigate,
   useSearch,
 } from "@tanstack/react-router";
 import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
@@ -194,12 +195,34 @@ const ownerDoorRoute = createRoute({
         ? String(search.view)
         : "rest"
     ) as OwnerPreviewView,
+    bot:
+      search.bot === "financial_manager" || search.bot === "analyst" || search.bot === "advisor"
+        ? search.bot
+        : undefined,
   }),
   component: function OwnerDoorHarness() {
-    const search = useSearch({ strict: false }) as { view?: OwnerPreviewView };
+    const search = useSearch({ strict: false }) as {
+      view?: OwnerPreviewView;
+      bot?: "financial_manager" | "analyst" | "advisor";
+    };
+    const navigate = useNavigate();
     return (
       <MarketProvider selection={{ country: "US", regionCode: "NY" }}>
-        <OwnerDoorPreview view={search.view ?? "rest"} />
+        <OwnerDoorPreview
+          view={search.view ?? "rest"}
+          bot={search.bot ?? null}
+          onBot={(next, mode) => {
+            void navigate({
+              to: "/owner-door",
+              search: (prev) => {
+                const view = prev.view ?? "rest";
+                if (next) return { view, bot: next };
+                return { view };
+              },
+              replace: mode === "replace",
+            });
+          }}
+        />
       </MarketProvider>
     );
   },
