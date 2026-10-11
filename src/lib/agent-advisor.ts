@@ -1,5 +1,5 @@
 /**
- * Milōn Advisor allow-list. Drafts only. Signed off is accountant-only.
+ * Advisor allow-list. Drafts only. Signed off is accountant-only.
  * The edge function enforces the same list before it executes a tool.
  */
 import { analystRunOutcome, type AnalystToolName } from "./agent-analyst.ts";

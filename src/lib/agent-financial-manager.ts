@@ -1,5 +1,5 @@
 /**
- * Milōn Financial Manager allow-list. Drafts only. The edge function
+ * Financial Manager allow-list. Drafts only. The edge function
  * enforces the same list before it executes a tool.
  */
 import { analystRunOutcome, type AnalystToolName } from "./agent-analyst.ts";
