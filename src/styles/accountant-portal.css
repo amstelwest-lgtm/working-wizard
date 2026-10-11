@@ -1674,11 +1674,21 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   display:flex;
   align-items:center;
   gap:8px;
+  min-height:44px;
 }
 .accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
 @media (min-width:861px){
   .accountant-portal .client-workspace{align-items:stretch}
-  .accountant-portal .deliverable-rail{min-height:calc(100dvh - 140px)}
+  .accountant-portal .deliverable-rail{
+    min-height:0;
+    max-height:calc(100dvh - 168px);
+    overflow:auto;
+  }
+  .settings-portal .client-workspace{min-height:calc(100dvh - 80px)}
+  .settings-portal .deliverable-rail{
+    min-height:calc(100dvh - 96px);
+    max-height:calc(100dvh - 96px);
+  }
   .settings-portal .deliverable-rail{
     border:0;
     border-right:1px solid var(--pale);

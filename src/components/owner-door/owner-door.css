@@ -1869,6 +1869,13 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
   border-top: 1px solid var(--owner-edge);
 }
 
+@media (min-width: 861px) {
+  .owner-door.accountant-portal .deliverable-rail {
+    max-height: calc(100dvh - 66px);
+    overflow: auto;
+  }
+}
+
 .owner-door .rail-settings .tab {
   display: flex;
   align-items: center;
