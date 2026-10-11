@@ -46,6 +46,10 @@ verify_jwt = true
 [functions.agent-analyst]
 verify_jwt = true
 
+# Owner action hand-off. Caller JWT. Service role writes the queued run.
+[functions.owner-handoff]
+verify_jwt = true
+
 # Cron dispatcher. Service-role JWT. The schedule is inserted inactive.
 [functions.agent-dispatch]
 verify_jwt = true

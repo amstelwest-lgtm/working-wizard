@@ -25,6 +25,8 @@ import {
   evidenceKeysNote,
 } from "../../../src/lib/agent-analyst.ts";
 import { executeAnalystTool } from "./execute.ts";
+import { handoffFinding, handoffResultNote } from "../../../src/lib/owner-handoff.ts";
+import { agentDisplayNameFromKey } from "../../../src/lib/milon-team-names.ts";
 
 export type AnalystJob = {
   msgId: number | null;
@@ -235,6 +237,12 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       p_client_id: job.clientId,
       p_run_id: existing.run_id,
     });
+    await recordHandoffFinish(db, {
+      runId: existing.run_id,
+      clientId: job.clientId,
+      summary: result.summary,
+      pool,
+    });
     await archive(db, job.msgId);
     return { status: partial ? "partial" : "succeeded", runId: existing.run_id };
   } catch (err) {
@@ -291,4 +299,57 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
     }
     return { status: "dead", runId: existing.run_id };
   }
+}
+
+async function recordHandoffFinish(
+  db: SupabaseClient,
+  input: { runId: string; clientId: string; summary: string; pool: StoredFigures[] },
+) {
+  const { data: run, error } = await db
+    .from("agent_runs")
+    .select("action_item_id")
+    .eq("id", input.runId)
+    .maybeSingle();
+  if (error || !run?.action_item_id) return;
+  const actionItemId = run.action_item_id as string;
+  const displayName = agentDisplayNameFromKey("analyst");
+  if (!displayName) return;
+  const { error: noteError } = await db.from("action_updates").insert({
+    action_item_id: actionItemId,
+    client_id: input.clientId,
+    actor_type: "system",
+    actor_label: displayName,
+    note: handoffResultNote(displayName, input.summary),
+  });
+  if (noteError) console.warn("handoff note", noteError.message);
+
+  const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
+  const finding = handoffFinding({
+    summary: input.summary,
+    figures: stored?.figures ?? null,
+    periodLabel: stored?.periodLabel ?? null,
+    snapshotId: stored?.snapshotId ?? null,
+  });
+  if (!finding) return;
+  const { count, error: countError } = await db
+    .from("agent_findings")
+    .select("id", { count: "exact", head: true })
+    .eq("run_id", input.runId);
+  if (countError) {
+    console.warn("handoff findings", countError.message);
+    return;
+  }
+  if ((count ?? 0) > 0) return;
+  const { error: findingError } = await db.from("agent_findings").insert({
+    agent: "analyst",
+    client_id: input.clientId,
+    run_id: input.runId,
+    kind: "handoff",
+    severity: "info",
+    title: finding.title,
+    detail: finding.detail,
+    evidence: finding.evidence,
+    last_seen: new Date().toISOString(),
+  });
+  if (findingError) console.warn("handoff finding", findingError.message);
 }
