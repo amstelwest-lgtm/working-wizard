@@ -290,6 +290,7 @@ export function MilonTeamDesk({
                           layout="desk"
                           row={row}
                           sentence={sentence}
+                          market={live?.market}
                           meta={meta}
                           onOpen={onOpenApproved}
                           onInvite={onInvite}

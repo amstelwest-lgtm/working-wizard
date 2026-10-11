@@ -303,7 +303,7 @@ const DRAFT_FINDINGS = [
     client_id: "harness-client",
     kind: "data_request_draft",
     title: "Gross margin is 0.6. Debtor days are 43.8.",
-    detail: "Please confirm the source. (1) reconnect the ledger.",
+    detail: "Send the September debtors age analysis.",
     evidence: {
       draft: true,
       requires_human_approval: true,

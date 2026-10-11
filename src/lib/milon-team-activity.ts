@@ -220,10 +220,16 @@ function formatFigure(key: string, value: number, market: MoneyMarket): string {
   return value.toFixed(2);
 }
 
-function replaceExactNumber(text: string, raw: string, formatted: string): string {
-  if (!raw || raw === formatted) return text;
-  const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return text.replace(new RegExp(`(?<![\\d.])${escaped}(?!\\d)(?!\\.\\d)`, "g"), formatted);
+/** One pass, longest spelling first, so a formatted amount is not formatted again. */
+function applyReplacements(text: string, replacements: { raw: string; formatted: string }[]): string {
+  const chosen = new Map<string, string>();
+  for (const item of replacements) {
+    if (item.raw && item.raw !== item.formatted && !chosen.has(item.raw)) chosen.set(item.raw, item.formatted);
+  }
+  const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
+  if (!list.length) return text;
+  const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return text.replace(new RegExp(`(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match) => chosen.get(match) ?? match);
 }
 
 function figureEntries(
@@ -242,6 +248,20 @@ function worthReplacing(raw: string, formatted: string, value: number): boolean 
   return /%|days|R\s?\d|\$/.test(formatted);
 }
 
+/** 700000 in prose may already be written 700,000 or 700 000. */
+function rawSpellings(value: number): string[] {
+  const spellings = [String(value), value.toFixed(4), value.toFixed(2)];
+  const rounded = Math.round(value);
+  if (Math.abs(value) >= 1000 && Math.abs(value - rounded) < 0.001) {
+    const digits = String(Math.abs(rounded));
+    const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const sign = rounded < 0 ? "-" : "";
+    const body = `${sign}${grouped}`;
+    spellings.push(body, body.replace(/,/g, " "), body.replace(/,/g, "\u00a0"));
+  }
+  return spellings;
+}
+
 function scrubRawDecimals(
   text: string,
   figures: Record<string, number> | readonly { key: string; value: number }[] | null | undefined,
@@ -251,12 +271,11 @@ function scrubRawDecimals(
   const replacements: { raw: string; formatted: string }[] = [];
   for (const { key, value } of figureEntries(figures)) {
     const formatted = formatFigure(key, value, market);
-    for (const raw of [String(value), value.toFixed(4), value.toFixed(2)]) {
+    for (const raw of rawSpellings(value)) {
       if (worthReplacing(raw, formatted, value)) replacements.push({ raw, formatted });
     }
   }
-  replacements.sort((a, b) => b.raw.length - a.raw.length);
-  for (const { raw, formatted } of replacements) next = replaceExactNumber(next, raw, formatted);
+  next = applyReplacements(next, replacements);
   return next.replace(/-?\d+\.\d{3,}/g, (raw, offset: number) => {
     const window = next.slice(Math.max(0, offset - 28), offset + raw.length + 16).toLowerCase();
     const n = Number(raw);
@@ -269,6 +288,176 @@ function scrubRawDecimals(
     if (Math.abs(n) >= 100) return formatMoney(n, market);
     return n.toFixed(2);
   });
+}
+
+/** 60.0% is the ratio formatter's percent. A finding on screen says 60%. */
+function tidyRatioPercent(text: string): string {
+  return text.replace(/(\d+)\.0%/g, "$1%");
+}
+
+/** Title or detail, with the finding's own figures. 0.6 on a margin becomes 60%. */
+export function formatFindingProse(
+  text: string,
+  figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
+  market: MoneyMarket = ZA_MARKET,
+): string {
+  return tidyRatioPercent(scrubRawDecimals(text, figures ?? {}, market)).replace(/\s+/g, " ").trim();
+}
+
+const METRIC_WORD =
+  /\b(?:gross|operating|net)\s+margin\b|\b(?:debtor|creditor|inventory|working\s+capital|wip)\s+days\b|\b(?:current|fixed\s+cost)\s+ratio\b|\bdebt[-\s]to[-\s]equity\b|\brevenue\s+growth\b|\breturn\s+on\s+(?:assets|equity)\b|\b(?:tax|interest)\s+burden\b|\basset\s+turnover\b|\brevenue\b|\bcash\b/i;
+
+function isMetricSentence(sentence: string): boolean {
+  if (!/\d/.test(sentence) || !METRIC_WORD.test(sentence)) return false;
+  const rest = sentence
+    .replace(new RegExp(METRIC_WORD.source, "gi"), " ")
+    .replace(/-?\d[\d,]*(?:\.\d+)?%?/g, " ")
+    .replace(/\b(?:is|are|of|and|the|a|an|both|periods?|shows?|with|at|for|in|was|were|on|to|from|vs|versus|days)\b/gi, " ")
+    .replace(/[^A-Za-z]+/g, " ")
+    .trim();
+  return rest.length === 0;
+}
+
+/** True when the text is only metric citations, so it cannot be the ask. A decimal point stays inside the number. */
+function isMetricDump(text: string): boolean {
+  const parts = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<!\d)[.!?;]+|[.!?;]+(?!\d)/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 0 && parts.every(isMetricSentence);
+}
+
+function skipFigureKey(key: string): boolean {
+  const compact = key.toLowerCase().replace(/[\s_:-]+/g, "");
+  if (compact.startsWith("pillar") || compact.startsWith("score")) return true;
+  return /^(hasupload|connectedledgers|lowestweek|horizonweeks|cashrunwayweeks|overall|storedscore|liveoverall|invoices|snapshotid|draft)$/.test(
+    compact,
+  );
+}
+
+/** One value per metric. A period label wins when the figures are nested under it. */
+function findingDisplayFigures(evidence: unknown): { key: string; value: number }[] {
+  const record = evidenceRecord(evidence);
+  const figures = record.figures;
+  if (!figures || typeof figures !== "object" || Array.isArray(figures)) return [];
+  const period = typeof record.period_label === "string" ? record.period_label.trim() : "";
+  const flat: { key: string; value: number }[] = [];
+  const buckets: { name: string; entries: { key: string; value: number }[] }[] = [];
+  for (const [key, value] of Object.entries(figures as Record<string, unknown>)) {
+    const n = finiteNumber(value);
+    if (n != null) {
+      flat.push({ key, value: n });
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const entries: { key: string; value: number }[] = [];
+    for (const [innerKey, inner] of Object.entries(value as Record<string, unknown>)) {
+      const innerN = finiteNumber(inner);
+      if (innerN != null) entries.push({ key: innerKey, value: innerN });
+    }
+    if (entries.length) buckets.push({ name: key, entries });
+  }
+  const matched = period ? buckets.find((bucket) => bucket.name === period)?.entries : undefined;
+  const merged = new Map<string, number>();
+  for (const entry of flat) merged.set(entry.key, entry.value);
+  for (const entry of matched ?? buckets.flatMap((bucket) => bucket.entries)) merged.set(entry.key, entry.value);
+  return [...merged.entries()].map(([key, value]) => ({ key, value }));
+}
+
+const DAY_RANK: Record<string, number> = {
+  "Debtor Days": 0,
+  "Creditor Days": 1,
+  "Inventory Days": 2,
+  "WIP Days": 3,
+  "Working Capital Days": 4,
+};
+
+const MARGIN_RANK: Record<string, number> = {
+  "Gross Margin": 0,
+  "Operating Margin": 1,
+  "Net Margin": 2,
+};
+
+/** Structured figures as one muted line. Days round; a margin is a percent. */
+export function findingMetricContext(evidence: unknown, market: MoneyMarket = ZA_MARKET): string | null {
+  const clauses: { kind: number; rank: number; label: string; amount: string; days: boolean }[] = [];
+  for (const { key, value } of findingDisplayFigures(evidence)) {
+    if (skipFigureKey(key)) continue;
+    const formatted = tidyRatioPercent(formatFigure(key, value, market));
+    if (/^-?\d+\.\d+$/.test(formatted)) continue;
+    const spec = metricDirection(key);
+    const label = (spec?.name ?? key).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+    const days = /days$/.test(formatted);
+    const kind = days ? 0 : formatted.endsWith("%") ? 1 : /×/.test(formatted) ? 2 : 3;
+    const rank = days ? (DAY_RANK[spec?.name ?? ""] ?? 50) : formatted.endsWith("%") ? (MARGIN_RANK[spec?.name ?? ""] ?? 50) : 50;
+    clauses.push({
+      kind,
+      rank,
+      label,
+      amount: days ? String(Math.round(value)) : formatted,
+      days,
+    });
+  }
+  clauses.sort((a, b) => a.kind - b.kind || a.rank - b.rank || a.label.localeCompare(b.label));
+  if (!clauses.length) return null;
+  let seenDays = false;
+  const parts = clauses.map((clause) => {
+    if (clause.days && !seenDays) {
+      seenDays = true;
+      return `${clause.label} are ${clause.amount}`;
+    }
+    return `${clause.label} ${clause.amount}`;
+  });
+  const line = parts.join(", ");
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+function requestAsk(evidence: unknown): string | null {
+  const record = evidenceRecord(evidence);
+  const request = record.request;
+  const nested =
+    request && typeof request === "object" && !Array.isArray(request) ? (request as Record<string, unknown>) : null;
+  const candidates = [
+    nested?.title,
+    nested?.detail,
+    record.request_title,
+    record.requestTitle,
+    record.ask,
+    record.what_to_send,
+    record.whatToSend,
+    typeof request === "string" ? request : null,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return null;
+}
+
+export type FindingCardCopy = { lead: string; context: string | null };
+
+/**
+ * What the card shows. A data request leads with the ask. The ratios sit on
+ * a second line taken from the structured figures.
+ */
+export function findingCardCopy(
+  row: Pick<AgentFindingRow, "kind" | "title" | "detail" | "evidence">,
+  market: MoneyMarket = ZA_MARKET,
+): FindingCardCopy {
+  const figures = findingFigureEntries(row.evidence);
+  const title = formatFindingProse(row.title, figures, market);
+  const detail = formatFindingProse(row.detail ?? "", figures, market);
+  if (row.kind !== "data_request_draft") return { lead: title, context: null };
+  const asked = requestAsk(row.evidence);
+  const fromEvidence = asked ? formatFindingProse(asked, figures, market) : "";
+  let lead = "";
+  if (fromEvidence && !isMetricDump(fromEvidence)) lead = fromEvidence;
+  else if (title && !isMetricDump(row.title)) lead = title;
+  else if (detail && !isMetricDump(row.detail ?? "")) lead = detail;
+  else lead = title || detail;
+  const context = findingMetricContext(row.evidence, market);
+  return { lead, context: context && !isMetricDump(lead) ? context : null };
 }
 
 /** One sentence. Percentages and currency are formatted; 0.7795 never survives. */
@@ -285,7 +474,7 @@ export function findingSentence(input: {
   if (detail && detail !== title && !title.includes(detail)) {
     text = `${title.replace(/[.!?]$/, "")}. ${detail}`;
   }
-  text = scrubRawDecimals(text, input.figures ?? {}, market).replace(/\s+/g, " ").trim();
+  text = formatFindingProse(text, input.figures ?? {}, market);
   if (!text) return "";
   if (!/[.!?]$/.test(text)) text = `${text}.`;
   return text;

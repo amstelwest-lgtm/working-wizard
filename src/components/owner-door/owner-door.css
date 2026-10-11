@@ -1399,6 +1399,13 @@ html[data-bot-fade="plain"] .owner-door .owner-pane {
   border: 1px solid var(--owner-edge);
 }
 
+.owner-door .owner-draft-context {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+
 .owner-door .owner-draft-link {
   font: inherit;
   font-size: 14px;

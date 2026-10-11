@@ -6,6 +6,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { agentShortName } from "@/lib/milon-team";
+import { useMarket } from "@/contexts/market";
 import {
   approvedLiveLink,
   draftDecisionButtonsHidden,
@@ -15,7 +16,13 @@ import {
   subscribeDraftDecisionButtons,
   type ApprovedLiveLink,
 } from "@/lib/agent-draft-decision-client";
-import type { AgentFindingRow } from "@/lib/milon-team-activity";
+import {
+  findingCardCopy,
+  findingFigureEntries,
+  formatFindingProse,
+  type AgentFindingRow,
+} from "@/lib/milon-team-activity";
+import type { MoneyMarket } from "@/lib/market/format";
 import {
   DRAFT_NEEDS_OWNER,
   draftFindingKindLabel,
@@ -36,6 +43,7 @@ export function OwnerDraftCard({
   layout,
   sentence,
   meta,
+  market: marketProp,
   onOpen,
   onInvite,
   onRefresh,
@@ -44,6 +52,7 @@ export function OwnerDraftCard({
   layout: "moves" | "desk";
   sentence?: string;
   meta?: ReactNode;
+  market?: MoneyMarket;
   onOpen?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   onRefresh?: () => void;
@@ -51,9 +60,17 @@ export function OwnerDraftCard({
   const label = draftFindingLabel(row);
   const kindLabel = draftFindingKindLabel(row);
   const ownerOk = label === DRAFT_NEEDS_OWNER;
+  const contextMarket = useMarket().market;
+  const market = marketProp ?? contextMarket;
+  const figures = findingFigureEntries(row.evidence);
+  const copy = findingCardCopy(row, market);
+  const formattedTitle = formatFindingProse(row.title, figures, market);
+  const formattedDetail = formatFindingProse(row.detail ?? "", figures, market);
+  const seedTitle = copy.lead || formattedTitle;
+  const seedDetail = copy.lead === formattedTitle || formattedDetail !== copy.lead ? formattedDetail : "";
   const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(row.title);
-  const [detail, setDetail] = useState(row.detail ?? "");
+  const [title, setTitle] = useState(seedTitle);
+  const [detail, setDetail] = useState(seedDetail);
   const [optimistic, setOptimistic] = useState<Optimistic | null>(null);
   const [blocked, setBlocked] = useState(draftDecisionButtonsHidden);
   const [message, setMessage] = useState<string | null>(null);
@@ -73,7 +90,13 @@ export function OwnerDraftCard({
     (optimistic?.phase === "approved" ? optimistic.recordId : null) ?? row.approved_row_id ?? null;
   const link = approved ? approvedLiveLink(table) : null;
   const showActions = ownerOk && !blocked && !approved;
-  const shownTitle = approved && optimistic?.phase === "approved" ? title : row.title;
+  const shownLead =
+    approved && optimistic?.phase === "approved"
+      ? title
+      : layout === "desk" && sentence && row.kind !== "data_request_draft"
+        ? sentence
+        : copy.lead;
+  const shownContext = !approved && !editing ? copy.context : null;
 
   function fail(result: { hideButtons: boolean; message?: string; refresh?: boolean; invite?: boolean }, restoreEdit: boolean) {
     setOptimistic(null);
@@ -190,8 +213,8 @@ export function OwnerDraftCard({
             className={layout === "desk" ? "milon-desk-btn outline" : "owner-draft-dismiss"}
             onClick={() => {
               setEditing(false);
-              setTitle(row.title);
-              setDetail(row.detail ?? "");
+              setTitle(seedTitle);
+              setDetail(seedDetail);
               setMessage(null);
             }}
           >
@@ -228,7 +251,12 @@ export function OwnerDraftCard({
       <li className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent} data-finding-draft={label ? "true" : undefined} data-draft={row.id}>
         <div className="milon-desk-job-copy">
           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
-          <p className="milon-desk-figure">{sentence || shownTitle}</p>
+          <p className="milon-desk-figure">{shownLead}</p>
+          {shownContext ? (
+            <p className="milon-desk-draft-context" data-draft-context={shownContext}>
+              {shownContext}
+            </p>
+          ) : null}
           {editor}
           {status}
           {meta}
@@ -242,7 +270,12 @@ export function OwnerDraftCard({
 
   return (
     <li className="rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50" data-draft={row.id}>
-      {editing ? null : <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{shownTitle}</p>}
+      {editing ? null : <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{shownLead}</p>}
+      {shownContext ? (
+        <p className="owner-draft-context" data-draft-context={shownContext}>
+          {shownContext}
+        </p>
+      ) : null}
       {editor}
       {status}
       {actions}
