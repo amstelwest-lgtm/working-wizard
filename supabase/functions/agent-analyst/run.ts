@@ -11,7 +11,7 @@ import {
 import { callClaudeRound } from "../_shared/agent-core/claude.ts";
 import { ANALYST_SYSTEM, analystToolSchemas } from "../_shared/agent-prompts/analyst.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
-import { sanitizeAgentError, type StoredFigures } from "../../../src/lib/agent-bus.ts";
+import { moneyMarketFromClient, sanitizeAgentError, type StoredFigures } from "../../../src/lib/agent-bus.ts";
 import {
   ANALYST_MAX_ITERATIONS,
   ANALYST_TOOLS,
@@ -145,7 +145,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
 
   const { data: client } = await db
     .from("clients")
-    .select("firm_id")
+    .select("firm_id, market")
     .eq("id", job.clientId)
     .maybeSingle();
   const firmId = (client?.firm_id as string | null) ?? null;
@@ -192,6 +192,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           db,
           pool,
           recordedKeys,
+          market: client?.market,
         });
         if (name !== "record_finding") {
           const reads = collectStoredReads(payload, { snapshotId: null, periodLabel: null });
@@ -242,6 +243,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       clientId: job.clientId,
       summary: result.summary,
       pool,
+      market: client?.market,
     });
     await archive(db, job.msgId);
     return { status: partial ? "partial" : "succeeded", runId: existing.run_id };
@@ -303,7 +305,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
 
 async function recordHandoffFinish(
   db: SupabaseClient,
-  input: { runId: string; clientId: string; summary: string; pool: StoredFigures[] },
+  input: { runId: string; clientId: string; summary: string; pool: StoredFigures[]; market?: unknown },
 ) {
   const { data: run, error } = await db
     .from("agent_runs")
@@ -314,21 +316,23 @@ async function recordHandoffFinish(
   const actionItemId = run.action_item_id as string;
   const displayName = agentDisplayNameFromKey("analyst");
   if (!displayName) return;
+  const market = moneyMarketFromClient(input.market);
+  const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
   const { error: noteError } = await db.from("action_updates").insert({
     action_item_id: actionItemId,
     client_id: input.clientId,
     actor_type: "system",
     actor_label: displayName,
-    note: handoffResultNote(displayName, input.summary),
+    note: handoffResultNote(displayName, input.summary, market, stored?.figures),
   });
   if (noteError) console.warn("handoff note", noteError.message);
 
-  const stored = input.pool.find((row) => Object.keys(row.figures).length > 0) ?? null;
   const finding = handoffFinding({
     summary: input.summary,
     figures: stored?.figures ?? null,
     periodLabel: stored?.periodLabel ?? null,
     snapshotId: stored?.snapshotId ?? null,
+    market,
   });
   if (!finding) return;
   const { count, error: countError } = await db

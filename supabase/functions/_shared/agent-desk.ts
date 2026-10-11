@@ -5,7 +5,7 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAnalystTool, type AnalystExecCtx } from "../agent-analyst/execute.ts";
-import type { AgentKey } from "../../../src/lib/agent-bus.ts";
+import { moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../../../src/lib/agent-books.ts";
 import {
   AGENT_OUTBOUND_TYPES,
@@ -293,6 +293,7 @@ export async function recordAgentDraft(
     claimedFigures: args.figures,
     pool: ctx.pool,
     recordedKeys: ctx.recordedKeys,
+    market: moneyMarketFromClient(ctx.market),
   });
   if (!prepared.ok) return { error: prepared.error, ...(prepared.tool_blocked ? { tool_blocked: true } : {}) };
 

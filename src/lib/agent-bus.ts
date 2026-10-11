@@ -2,6 +2,10 @@
  * Pure rules for the agent bus. The migration's SQL mirrors these decisions.
  * Nothing here talks to the database or to a model.
  */
+import { cashComfortThreshold } from "./cash-runway.ts";
+import { formatMoney, type MoneyMarket } from "./market/format.ts";
+export type { MoneyMarket };
+import { coerceMarketSelection } from "./market/parse.ts";
 
 export const AGENT_KEYS = ["financial_manager", "analyst", "advisor"] as const;
 export type AgentKey = (typeof AGENT_KEYS)[number];
@@ -271,6 +275,10 @@ export type FindingEvidence = {
   snapshot_id: string | null;
   period_label: string | null;
   figures: EvidenceFigures;
+  /** Display numbers beside the raw figures. Percent is the quoted percent (0.6 → 60). */
+  metrics?: EvidenceMetric[];
+  /** healthy from info, attention from watch, critical from act or a cash floor breach. */
+  status?: AgentCopyStatus;
 };
 
 function poolKeySet(reads: StoredFigures[]): Set<string> {
@@ -754,6 +762,7 @@ export function stripCitationNoise(text: string): string {
       /\b(?:peer\s+median|healthy\s+band|watch\s+floor)\s+(?:of\s+)?\d+(?:\.\d+)?(?:\s*[\u2010-\u2015-]\s*\d+(?:\.\d+)?)?(?:\s+days?)?\b/gi,
       " ",
     )
+    .replace(/\b[R$£€]\s?\d{1,3}(?:[ \u00a0,]\d{3})+(?:\.\d+)?\s+(?:minimum|floor)\b/gi, " ")
     .replace(/\b\d+(?:\.\d+)?\s*-\s*days?\b/gi, " ")
     .replace(/\bscore[_: ]\d{4}-\d{2}-\d{2}\b/gi, " ")
     .replace(/\b\d+(?:\.\d+)?\s*(?:[\u2010-\u2015\-]|to)\s*\d+(?:\.\d+)?\s+days?\b/gi, " ")
@@ -780,7 +789,7 @@ export function stripCitationNoise(text: string): string {
 export type CitedNumber = { raw: string; value: number; decimals: number; scale: number };
 
 const CITED_NUMBER =
-  /(?:[R$£€]\s*)?-?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:\s*[kmb]\b)?|(?:[R$£€]\s*)?-?\d+(?:\.\d+)?(?:\s*[kmb]\b)?/gi;
+  /[R$£€]\s*-?\d{1,3}(?:[ \u00a0]\d{3})+(?:\.\d+)?|-?\d{1,3}(?:[ \u00a0]\d{3})+(?:\.\d+)?|(?:[R$£€]\s*)?-?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:\s*[kmb]\b)?|(?:[R$£€]\s*)?-?\d+(?:\.\d+)?(?:\s*[kmb]\b)?/gi;
 
 function scaleOfSuffix(suffix: string): number {
   if (suffix === "k") return 1_000;
@@ -1039,5 +1048,281 @@ export function attachCitedEvidence(input: {
     ok: true,
     evidence,
     warning: `Ignored small numbers not on the books: ${harmless.join(", ")}.`,
+  };
+}
+
+export const AGENT_COPY_STATUSES = ["healthy", "attention", "critical"] as const;
+export type AgentCopyStatus = (typeof AGENT_COPY_STATUSES)[number];
+
+export type EvidenceMetricUnit = "currency" | "percent" | "days" | "count" | "ratio";
+
+export type EvidenceMetric = {
+  metric: string;
+  value: number;
+  unit: EvidenceMetricUnit;
+  period: string | null;
+  floor?: number;
+  count?: number;
+};
+
+/** South Africa when the client market is missing. United States when the row says US. */
+export function moneyMarketFromClient(raw: unknown): MoneyMarket {
+  const sel = coerceMarketSelection(raw);
+  if (sel.country === "US") return { currency: "USD", locale: "en-US" };
+  return { currency: "ZAR", locale: "en-ZA" };
+}
+
+export const AGENT_COPY_GUIDE = `How to write a title, detail, or summary:
+- One or two complete plain sentences, in sentence case, each ending with a full stop.
+- Amounts use the client's format. South Africa: R 13 846. United States: $13,846.
+- A ratio is a percentage. 0.6 is written 60%.
+- Days are whole days. 43.8 is written 44 days.
+- Bad: "Low R 36 154. R 13 846 under R 50 000. get emails out to 10 clients"
+- Good: "Cash is R 13 846 below your R 50 000 minimum. Send reminder emails to 10 clients."
+- A data request title is the ask itself. Bad: "Gross margin is 0.6. Debtor days are 43.8." Good: "Send the September debtors age analysis."`;
+
+const COPY_VERB =
+  /\b(is|are|was|were|has|have|had|be|been|send|sends|ask|asks|connect|connects|review|reviews|check|checks|confirm|confirms|collect|collects|pay|pays|email|emails|remind|reminds|need|needs|should|can|could|will|would|do|does|did|open|opens|upload|uploads|share|shares|provide|provides|look|looks|show|shows|showed|remain|remains|stay|stays|fell|fall|falls|rose|rise|rises|drop|drops|dropped|sit|sits|call|calls|write|writes|get|gets|raise|raises|keep|keeps|make|makes|put|puts|file|files|chase|chases|follow|follows|owe|owes|see|sees|use|uses)\b/i;
+
+const METRIC_WORD =
+  /\b(?:gross|operating|net)\s+margin\b|\b(?:debtor|creditor|inventory|working\s+capital|wip)\s+days\b|\b(?:current|fixed\s+cost)\s+ratio\b|\bdebt[-\s]to[-\s]equity\b|\brevenue\s+growth\b|\breturn\s+on\s+(?:assets|equity)\b|\b(?:tax|interest)\s+burden\b|\basset\s+turnover\b|\brevenue\b|\bcash\b/i;
+
+function compactMetricKey(key: string): string {
+  return key.toLowerCase().replace(/[\s_-]/g, "");
+}
+
+function metricUnit(key: string, value: number): EvidenceMetricUnit {
+  const compact = compactMetricKey(key);
+  if (/day/.test(compact)) return "days";
+  if (/margin|percent|growth|rate|burden|costratio|returnon/.test(compact)) return "percent";
+  if (/turnover|multiplier|multiple|debttoequity|currentratio/.test(compact)) return "ratio";
+  if (/week|runway|horizon|upload|ledger|score|pillar|sync/.test(compact)) return "count";
+  if (
+    /revenue|cash|expense|asset|liabilit|balance|amount|sales|profit|wage|cogs|payable|receivable|cost/.test(compact) ||
+    Math.abs(value) >= 1000
+  ) {
+    return "currency";
+  }
+  return "count";
+}
+
+function quotedMetricValue(unit: EvidenceMetricUnit, value: number): number {
+  if (unit === "days") return Math.round(value);
+  if (unit === "percent") {
+    const pct = Math.abs(value) <= 1.5 ? value * 100 : value;
+    return Math.round(pct * 10) / 10;
+  }
+  if (unit === "count") return Math.round(value);
+  return value;
+}
+
+function cashFloor(key: string, unit: EvidenceMetricUnit, market: MoneyMarket): number | undefined {
+  if (unit !== "currency") return undefined;
+  const compact = compactMetricKey(key);
+  if (/week|runway|upload|ledger/.test(compact)) return undefined;
+  if (!/cash|closing|openingbalance|bankbalance/.test(compact)) return undefined;
+  return cashComfortThreshold(market.currency);
+}
+
+function proseForMetric(unit: EvidenceMetricUnit, value: number, market: MoneyMarket): string {
+  if (unit === "days") return `${Math.round(value)} days`;
+  if (unit === "percent") {
+    const pct = quotedMetricValue("percent", value);
+    const body = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+    return `${body}%`;
+  }
+  if (unit === "currency") return formatMoney(value, market);
+  if (unit === "ratio") return `${value.toFixed(2)}×`;
+  return String(Math.round(value));
+}
+
+function figureLeaves(figures: EvidenceFigures | undefined): Array<{ key: string; value: number; period: string | null }> {
+  if (!figures) return [];
+  const out: Array<{ key: string; value: number; period: string | null }> = [];
+  for (const [key, value] of Object.entries(figures)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out.push({ key, value, period: null });
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    for (const [innerKey, inner] of Object.entries(value)) {
+      if (typeof inner === "number" && Number.isFinite(inner)) {
+        out.push({ key: innerKey, value: inner, period: key });
+      }
+    }
+  }
+  return out;
+}
+
+/** Structured fields beside the raw figures. The figures map itself stays as stored. */
+export function evidenceMetrics(
+  figures: EvidenceFigures | undefined,
+  periodLabel: string | null,
+  market: MoneyMarket = moneyMarketFromClient(null),
+): EvidenceMetric[] {
+  return figureLeaves(figures).map((leaf) => {
+    const unit = metricUnit(leaf.key, leaf.value);
+    const floor = cashFloor(leaf.key, unit, market);
+    const metric: EvidenceMetric = {
+      metric: leaf.key,
+      value: quotedMetricValue(unit, leaf.value),
+      unit,
+      period: leaf.period ?? periodLabel,
+    };
+    if (floor != null) metric.floor = floor;
+    if (unit === "count") metric.count = metric.value;
+    return metric;
+  });
+}
+
+/** info → healthy, watch → attention, act → critical. Cash under the comfort floor is critical. */
+export function agentCopyStatus(severity: string, metrics: readonly EvidenceMetric[]): AgentCopyStatus {
+  const breach = metrics.some((metric) => metric.floor != null && metric.value < metric.floor);
+  if (breach || severity === "act") return "critical";
+  if (severity === "watch") return "attention";
+  return "healthy";
+}
+
+function rawAmountSpellings(value: number): string[] {
+  const out = [String(value)];
+  if (!Number.isInteger(value)) {
+    out.push(value.toFixed(1), value.toFixed(2), value.toFixed(4));
+  }
+  const rounded = Math.round(value);
+  if (Math.abs(value) >= 1000 && Math.abs(value - rounded) < 0.001) {
+    const digits = String(Math.abs(rounded));
+    const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const sign = rounded < 0 ? "-" : "";
+    const body = `${sign}${grouped}`;
+    out.push(body, body.replace(/,/g, " "));
+  }
+  return [...new Set(out)];
+}
+
+function applyCopyReplacements(text: string, replacements: { raw: string; formatted: string }[]): string {
+  const chosen = new Map<string, string>();
+  for (const item of replacements) {
+    if (!item.raw || item.raw === item.formatted || item.formatted.includes(item.raw)) continue;
+    if (!chosen.has(item.raw)) chosen.set(item.raw, item.formatted);
+  }
+  const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
+  if (!list.length) return text;
+  const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return text.replace(new RegExp(`(?<![R$£€\\d.])(?:${pattern})(?!\\d)`, "g"), (match) => chosen.get(match) ?? match);
+}
+
+function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, market: MoneyMarket): string {
+  const replacements: { raw: string; formatted: string }[] = [];
+  for (const leaf of figureLeaves(figures)) {
+    const unit = metricUnit(leaf.key, leaf.value);
+    if (unit === "count") continue;
+    const formatted = proseForMetric(unit, leaf.value, market);
+    for (const raw of rawAmountSpellings(leaf.value)) replacements.push({ raw, formatted });
+  }
+  return applyCopyReplacements(text, replacements)
+    .replace(/\bdays\s+days\b/gi, "days")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitCopySentences(text: string): string[] {
+  return text
+    .split(/(?<!\d)[.!?]+|[.!?]+(?!\d)/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function sentenceCase(sentence: string): string {
+  const first = sentence.charAt(0).toUpperCase() + sentence.slice(1);
+  const body = first.replace(/[.!?]+$/, "");
+  return `${body}.`;
+}
+
+function isMetricSentence(sentence: string): boolean {
+  if (!/\d|%/.test(sentence) || !METRIC_WORD.test(sentence)) return false;
+  const rest = sentence
+    .replace(new RegExp(METRIC_WORD.source, "gi"), " ")
+    .replace(/-?\d[\d\s,]*(?:\.\d+)?%?/g, " ")
+    .replace(/\b(?:is|are|of|and|the|a|an|both|periods?|shows?|with|at|for|in|was|were|on|to|from|vs|versus|days)\b/gi, " ")
+    .replace(/[R$£€]/g, " ")
+    .replace(/[^A-Za-z]+/g, " ")
+    .trim();
+  return rest.length === 0;
+}
+
+function isMetricDump(text: string): boolean {
+  const parts = splitCopySentences(text);
+  return parts.length > 0 && parts.every(isMetricSentence);
+}
+
+/**
+ * Sentence case, a full stop, and the client's amount format.
+ * A lowercase start is capitalised. A bare number or a third sentence is refused.
+ */
+export function polishAgentCopy(input: {
+  text: string;
+  role: "title" | "detail" | "summary";
+  kind?: string;
+  figures?: EvidenceFigures;
+  market?: MoneyMarket;
+}): { ok: true; text: string } | { ok: false; error: string } {
+  const market = input.market ?? moneyMarketFromClient(null);
+  const formatted = formatCopyAmounts(input.text.replace(/\s+/g, " ").trim(), input.figures, market);
+  if (!formatted) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
+  const parts = splitCopySentences(formatted);
+  if (parts.length > 2) {
+    return { ok: false, error: "Write one or two complete sentences ending with a full stop." };
+  }
+  const sentences = parts.map(sentenceCase);
+  for (const sentence of sentences) {
+    if (!COPY_VERB.test(sentence)) {
+      return { ok: false, error: `Write a complete sentence. "${sentence}" is a fragment.` };
+    }
+  }
+  const text = sentences.join(" ");
+  if (input.role === "title" && input.kind === "data_request_draft" && isMetricDump(text)) {
+    return {
+      ok: false,
+      error: 'A data request title is the ask itself. For example: "Send the September debtors age analysis."',
+    };
+  }
+  return { ok: true, text };
+}
+
+export function shapeRecordedCopy(input: {
+  title: string;
+  detail: string;
+  kind: string;
+  severity: string;
+  figures: EvidenceFigures;
+  periodLabel: string | null;
+  market?: MoneyMarket;
+}):
+  | { ok: true; title: string; detail: string; metrics: EvidenceMetric[]; status: AgentCopyStatus }
+  | { ok: false; error: string } {
+  const market = input.market ?? moneyMarketFromClient(null);
+  const title = polishAgentCopy({
+    text: input.title,
+    role: "title",
+    kind: input.kind,
+    figures: input.figures,
+    market,
+  });
+  if (!title.ok) return title;
+  const detail = polishAgentCopy({
+    text: input.detail,
+    role: "detail",
+    kind: input.kind,
+    figures: input.figures,
+    market,
+  });
+  if (!detail.ok) return detail;
+  const metrics = evidenceMetrics(input.figures, input.periodLabel, market);
+  return {
+    ok: true,
+    title: title.text.slice(0, 200),
+    detail: detail.text.slice(0, 2000),
+    metrics,
+    status: agentCopyStatus(input.severity, metrics),
   };
 }

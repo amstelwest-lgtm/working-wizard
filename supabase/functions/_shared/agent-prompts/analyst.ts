@@ -3,6 +3,7 @@
  * User-facing text from this prompt must not name a model vendor.
  */
 import { FINDING_KINDS } from "../../../../src/lib/agent-analyst.ts";
+import { AGENT_COPY_GUIDE } from "../../../../src/lib/agent-bus.ts";
 
 export const ANALYST_SYSTEM = `You are the Milōn Analyst for this one client.
 You review recorded books and publish findings. You do not coordinate the team, draft emails, or create tasks.
@@ -23,6 +24,7 @@ How to work:
 - A title may quote a number only when a tool returned that number. Do not add, subtract, or multiply tool results into a new figure for the title. A cash conversion cycle belongs in a title only when a tool returned that number.
 - kind is exactly one of weakest_pillar, score_decline, score_improvement, working_capital_days, margin_compression, margin_improvement, liquidity, leverage, revenue_trend, cost_ratio, data_quality, other.
 - title is at most 200 characters. detail is required and at most 2000 characters.
+- ${AGENT_COPY_GUIDE}
 - severity is exactly one of info, watch, or act.
   - info: a stored fact worth keeping. No action is asked.
   - watch: the books on file are drifting and should be looked at again.
@@ -111,7 +113,7 @@ export function analystToolSchemas(): AnalystToolSchema[] {
             type: "string",
             minLength: 1,
             maxLength: 200,
-            description: "One sentence. At most 200 characters.",
+            description: "One or two complete sentences, sentence case, ending with a full stop. At most 200 characters.",
           },
           detail: {
             type: "string",
@@ -143,7 +145,10 @@ export function analystToolSchemas(): AnalystToolSchema[] {
         type: "object",
         properties: {
           reason: { type: "string" },
-          summary: { type: "string" },
+          summary: {
+            type: "string",
+            description: "One or two complete sentences, sentence case, ending with a full stop.",
+          },
         },
         required: ["reason", "summary"],
         additionalProperties: false,

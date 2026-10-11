@@ -4,7 +4,15 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAgentTool } from "../milon-bot/execute.ts";
-import { attachCitedEvidence, groundFindingEvidence, type StoredFigures } from "../../../src/lib/agent-bus.ts";
+import {
+  agentCopyStatus,
+  attachCitedEvidence,
+  evidenceMetrics,
+  groundFindingEvidence,
+  moneyMarketFromClient,
+  shapeRecordedCopy,
+  type StoredFigures,
+} from "../../../src/lib/agent-bus.ts";
 import {
   dataQualityComparesPeriods,
   executeAnalystGate,
@@ -28,6 +36,8 @@ export type AnalystExecCtx = {
   db: SupabaseClient;
   pool: StoredFigures[];
   recordedKeys: Set<string>;
+  /** clients.market. Missing means South Africa. */
+  market?: unknown;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -230,14 +240,30 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     claimedFigures: args.figures,
   });
   if (!grounded.ok) return { error: grounded.error, tool_blocked: true };
-  const cited = attachCitedEvidence({
+  const market = moneyMarketFromClient(ctx.market);
+  const shaped = shapeRecordedCopy({
     title,
     detail,
+    kind,
+    severity,
+    figures: grounded.evidence.figures,
+    periodLabel: grounded.evidence.period_label,
+    market,
+  });
+  if (!shaped.ok) return { error: shaped.error };
+  const cited = attachCitedEvidence({
+    title: shaped.title,
+    detail: shaped.detail,
     pool: ctx.pool,
     evidence: grounded.evidence,
   });
   if (!cited.ok) return { error: cited.error, tool_blocked: true };
-  const evidence = cited.evidence;
+  const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
+  const evidence = {
+    ...cited.evidence,
+    metrics,
+    status: agentCopyStatus(severity, metrics),
+  };
   const warning = cited.warning;
   const recordKeys = [
     findingRecordKey({
@@ -314,8 +340,8 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
       run_id: ctx.runId,
       kind,
       severity,
-      title: title.slice(0, 200),
-      detail: detail || null,
+      title: shaped.title,
+      detail: shaped.detail,
       evidence,
       last_seen: new Date().toISOString(),
     })
@@ -336,7 +362,7 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
     payload: {
       finding_id: data.id,
       kind,
-      title: title.slice(0, 200),
+      title: shaped.title,
       severity,
     },
     correlation_id: ctx.correlationId,

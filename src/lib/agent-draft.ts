@@ -9,9 +9,13 @@
  * person approves it. Nothing here sends email or marks a pack signed off.
  */
 import {
+  agentCopyStatus,
   attachCitedEvidence,
+  evidenceMetrics,
   groundFindingEvidence,
+  shapeRecordedCopy,
   type FindingEvidence,
+  type MoneyMarket,
   type StoredFigures,
 } from "./agent-bus.ts";
 import { findingRecordKey } from "./agent-analyst.ts";
@@ -161,6 +165,7 @@ export function prepareDraftRecord(input: {
   claimedFigures: unknown;
   pool: StoredFigures[];
   recordedKeys: ReadonlySet<string>;
+  market?: MoneyMarket;
 }):
   | {
       ok: true;
@@ -194,14 +199,29 @@ export function prepareDraftRecord(input: {
   }
   const grounded = groundFindingEvidence({ pool: input.pool, claimedFigures: input.claimedFigures });
   if (!grounded.ok) return { ok: false, error: grounded.error, tool_blocked: true };
-  const cited = attachCitedEvidence({
+  const shaped = shapeRecordedCopy({
     title,
     detail,
+    kind,
+    severity,
+    figures: grounded.evidence.figures,
+    periodLabel: grounded.evidence.period_label,
+    market: input.market,
+  });
+  if (!shaped.ok) return { ok: false, error: shaped.error };
+  const cited = attachCitedEvidence({
+    title: shaped.title,
+    detail: shaped.detail,
     pool: input.pool,
     evidence: grounded.evidence,
   });
   if (!cited.ok) return { ok: false, error: cited.error, tool_blocked: true };
-  const evidence = withDraftFlags(cited.evidence);
+  const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, input.market);
+  const evidence = withDraftFlags({
+    ...cited.evidence,
+    metrics,
+    status: agentCopyStatus(severity, metrics),
+  });
   const recordKeys = [
     findingRecordKey({
       kind,
@@ -221,8 +241,8 @@ export function prepareDraftRecord(input: {
     ok: true,
     kind,
     severity,
-    title,
-    detail,
+    title: shaped.title,
+    detail: shaped.detail,
     evidence,
     recordKeys,
     ...(cited.warning ? { warning: cited.warning } : {}),
@@ -298,7 +318,13 @@ export function recordDraftToolSchema(kinds: readonly string[], peers: readonly 
           description:
             "info: a stored fact, no action. watch: the books are drifting. act: the stored figures need a decision soon.",
         },
-        title: { type: "string", minLength: 1, maxLength: 200 },
+        title: {
+          type: "string",
+          minLength: 1,
+          maxLength: 200,
+          description:
+            "One or two complete sentences, sentence case, ending with a full stop. A data request title is the ask, not the ratios.",
+        },
         detail: {
           type: "string",
           minLength: 1,
@@ -346,7 +372,10 @@ export function finishToolSchema() {
       type: "object",
       properties: {
         reason: { type: "string" },
-        summary: { type: "string" },
+        summary: {
+          type: "string",
+          description: "One or two complete sentences, sentence case, ending with a full stop.",
+        },
       },
       required: ["reason", "summary"],
       additionalProperties: false,

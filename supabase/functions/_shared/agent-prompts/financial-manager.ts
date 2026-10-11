@@ -2,6 +2,7 @@
  * Milōn Financial Manager. Drafts for one client. A person approves before
  * anything is sent. User-facing text from this prompt must not name a model vendor.
  */
+import { AGENT_COPY_GUIDE } from "../../../../src/lib/agent-bus.ts";
 import {
   finishToolSchema,
   readToolSchema,
@@ -31,6 +32,7 @@ How to work:
 - to_agent is a bot key, never the accountant or the owner. Human approval is implied by draft=true. The only bot keys are analyst and advisor. Omit to_agent on an action point, a data request, or an accountant hand-off. Those drafts go to a person. A next move with no to_agent goes to the Advisor.
 - send_agent_message is how you ask the Analyst or the Advisor to look at something. You cannot message yourself.
 - title is at most 200 characters. detail is required and at most 600 characters. Write detail immediately after title, before figures.
+- ${AGENT_COPY_GUIDE}
 - severity is exactly one of info, watch, or act.
   - info: a stored fact worth keeping. No action is asked.
   - watch: the books on file are drifting and should be looked at again.

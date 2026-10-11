@@ -2,7 +2,14 @@
  * Owner hand-off rules. The edge function and the analyst runner share these.
  * Nothing here talks to the database.
  */
-import type { AgentKey } from "./agent-bus.ts";
+import {
+  agentCopyStatus,
+  evidenceMetrics,
+  moneyMarketFromClient,
+  polishAgentCopy,
+  type AgentKey,
+  type MoneyMarket,
+} from "./agent-bus.ts";
 import { agentDisplayNameFromKey } from "./milon-team-names.ts";
 
 export const HANDOFF_TRIGGER = "on_demand";
@@ -72,9 +79,14 @@ export function handoffRequestNote(displayName: string): string {
   return `Handed to ${displayName}.`;
 }
 
-export function handoffResultNote(displayName: string, summary: string): string {
-  const clean = summary.replace(/\s+/g, " ").trim();
-  const extra = clean ? ` ${clean}` : "";
+export function handoffResultNote(
+  displayName: string,
+  summary: string,
+  market?: MoneyMarket,
+  figures?: Record<string, number>,
+): string {
+  const polished = polishAgentCopy({ text: summary, role: "summary", market, figures });
+  const extra = polished.ok ? ` ${polished.text}` : "";
   return `Handed to ${displayName}.${extra}`.slice(0, 500);
 }
 
@@ -83,21 +95,31 @@ export function handoffFinding(input: {
   figures: Record<string, number> | null;
   periodLabel: string | null;
   snapshotId: string | null;
+  market?: MoneyMarket;
 }): { title: string; detail: string; evidence: Record<string, unknown> } | null {
   const figures: Record<string, number> = {};
   for (const [key, value] of Object.entries(input.figures ?? {})) {
     if (typeof value === "number" && Number.isFinite(value)) figures[key] = value;
   }
   if (Object.keys(figures).length === 0) return null;
-  const summary = input.summary.replace(/\s+/g, " ").trim();
-  const title = (summary || "Hand-off result").slice(0, 200);
+  const market = input.market ?? moneyMarketFromClient(null);
+  const polished = polishAgentCopy({
+    text: input.summary,
+    role: "summary",
+    figures,
+    market,
+  });
+  if (!polished.ok) return null;
+  const metrics = evidenceMetrics(figures, input.periodLabel, market);
   return {
-    title,
-    detail: (summary || title).slice(0, 2000),
+    title: polished.text.slice(0, 200),
+    detail: polished.text.slice(0, 2000),
     evidence: {
       figures,
       period_label: input.periodLabel,
       snapshot_id: input.snapshotId,
+      metrics,
+      status: agentCopyStatus("info", metrics),
     },
   };
 }
