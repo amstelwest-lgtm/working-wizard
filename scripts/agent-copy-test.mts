@@ -11,9 +11,11 @@ import {
   agentCopyStatus,
   attachCitedEvidence,
   citedNumbers,
+  displayAmounts,
   evidenceMetrics,
   polishAgentCopy,
 } from "../src/lib/agent-bus.ts";
+import { refreshedFindingUpdate } from "../src/lib/agent-analyst.ts";
 import { ADVISOR_SYSTEM } from "../supabase/functions/_shared/agent-prompts/advisor.ts";
 import { ANALYST_SYSTEM } from "../supabase/functions/_shared/agent-prompts/analyst.ts";
 import { FINANCIAL_MANAGER_SYSTEM } from "../supabase/functions/_shared/agent-prompts/financial-manager.ts";
@@ -29,14 +31,22 @@ const THEO_GOOD = "Cash is R 13 846 below your R 50 000 minimum. Send reminder e
 const MARGIN_DUMP = "Gross margin is 0.6. Debtor days are 43.8.";
 
 const bad = polishAgentCopy({ text: THEO_BAD, role: "title" });
-assert(bad.ok === false, "Theo's fragment is refused");
-if (!bad.ok) {
-  assert(bad.error.includes("one or two complete sentences"), "three clipped sentences are refused");
-}
+assert(
+  bad.ok === true && bad.text === "Low R 36 154. R 13 846 under R 50 000.",
+  "a long title keeps the first two sentences",
+);
+const badDetail = polishAgentCopy({ text: THEO_BAD, role: "detail" });
+assert(
+  badDetail.ok === true &&
+    badDetail.text === "Low R 36 154. R 13 846 under R 50 000. Get emails out to 10 clients.",
+  "a three-sentence detail is kept and capitalised",
+);
 const fragment = polishAgentCopy({ text: "Low R 36 154", role: "title" });
-assert(fragment.ok === false && fragment.error.includes("fragment"), "a bare amount is a fragment");
+assert(fragment.ok === true && fragment.text === "Low R 36 154.", "a fragment gains a capital and a full stop");
 const bare = polishAgentCopy({ text: "13846", role: "summary" });
 assert(bare.ok === false, "a bare number is refused");
+const empty = polishAgentCopy({ text: "   ", role: "title" });
+assert(empty.ok === false, "an empty title is refused");
 
 const good = polishAgentCopy({
   text: THEO_GOOD,
@@ -72,6 +82,46 @@ const rands = polishAgentCopy({
   market: ZA,
 });
 assert(rands.ok === true && rands.text === "Cash is R 13 846 below the minimum.", "a ZA amount uses R 13 846");
+
+const closing = polishAgentCopy({
+  text: "Closing cash is 46300.",
+  role: "title",
+  figures: { week_1_closing: 46300 },
+  market: US,
+});
+assert(closing.ok === true && closing.text === "Closing cash is $46,300.", "a cashflow closing uses $46,300");
+const opening = polishAgentCopy({
+  text: "Opening cash is 128 450.",
+  role: "detail",
+  figures: { opening_balance: 128450 },
+  market: ZA,
+});
+assert(opening.ok === true && opening.text === "Opening cash is R 128 450.", "a spaced cashflow amount uses R 128 450");
+const already = polishAgentCopy({
+  text: "Opening cash is R 128 450.",
+  role: "title",
+  figures: { opening_balance: 128450 },
+  market: ZA,
+});
+assert(already.ok === true && already.text === "Opening cash is R 128 450.", "a formatted rand amount is not doubled");
+const display = displayAmounts({ week_1_closing: 46300, opening_balance: 128450, cash_runway_weeks: 13 }, US);
+assert(display.week_1_closing === "$46,300" && display.opening_balance === "$128,450", "cashflow display uses $46,300");
+assert(display.cash_runway_weeks == null, "runway weeks stay out of the currency display");
+const displayZa = displayAmounts({ opening_balance: 128450, week_1_closing: 46300 }, ZA);
+assert(displayZa.opening_balance === "R 128 450" && displayZa.week_1_closing === "R 46 300", "cashflow display uses R 46 300");
+
+const six = polishAgentCopy({
+  text: "Cash is 46300. The saved cashflow is on file. Week one is the low point. Send the September pack. Ask the client to confirm. Then review the budget.",
+  role: "detail",
+  figures: { week_1_closing: 46300 },
+  market: US,
+});
+assert(
+  six.ok === true &&
+    six.text ===
+      "Cash is $46,300. The saved cashflow is on file. Week one is the low point. Send the September pack.",
+  "a long detail keeps four sentences and still saves",
+);
 
 const ratios = polishAgentCopy({
   text: "Gross margin is 0.6. Debtor days are 43.8.",
@@ -195,9 +245,76 @@ for (const prompt of [ANALYST_SYSTEM, FINANCIAL_MANAGER_SYSTEM, ADVISOR_SYSTEM])
 }
 assert(AGENT_COPY_GUIDE.includes("R 13 846") && AGENT_COPY_GUIDE.includes("$13,846"), "the guide names both amount formats");
 
+const keptOpen = polishAgentCopy({
+  text: "Next move: lift Profit Drivers (58/100) — review pricing on top lines and the fixed-cost base",
+  role: "title",
+});
+assert(
+  keptOpen.ok === true &&
+    keptOpen.text === "Next move: lift Profit Drivers (58/100) — review pricing on top lines and the fixed-cost base.",
+  "an active title gains a full stop",
+);
+const keptTwo = polishAgentCopy({
+  text: "Profit Drivers is the weak pillar (50); stored health 69 vs live 67. Margin and pricing review for accountant",
+  role: "title",
+});
+assert(
+  keptTwo.ok === true &&
+    keptTwo.text ===
+      "Profit Drivers is the weak pillar (50); stored health 69 vs live 67. Margin and pricing review for accountant.",
+  "a two-sentence active title keeps both sentences and gains a full stop",
+);
+const keptDays = polishAgentCopy({
+  text: "Oct 2026: debtor days 43.8 and creditor days 73 (Sep: 25 and 37). Confirm the swing before acting",
+  role: "title",
+});
+assert(
+  keptDays.ok === true &&
+    keptDays.text ===
+      "Oct 2026: debtor days 43.8 and creditor days 73 (Sep: 25 and 37). Confirm the swing before acting.",
+  "a decimal day count is not split into a new sentence",
+);
+
+const refresh = refreshedFindingUpdate({
+  title: "Cash is $46,300.",
+  detail: "Opening cash is R 128 450.",
+  seenAt: "2026-10-11T20:00:00.000Z",
+  severity: "watch",
+  existingSeverity: "info",
+  existingEvidence: { figures: { cash: 1 }, draft: true, superseded_by: "stay-out" },
+  nextEvidence: { figures: { week_1_closing: 46300 }, status: "attention", metrics: [{ metric: "week_1_closing", value: 46300, unit: "currency", period: "saved cashflow" }] },
+});
+assert(refresh.title === "Cash is $46,300." && refresh.detail === "Opening cash is R 128 450.", "a dedupe hit stores the new copy");
+assert(refresh.severity === "watch" && refresh.last_seen === "2026-10-11T20:00:00.000Z", "a higher severity is kept with last_seen");
+const refreshedEvidence = refresh.evidence as { status: string; draft: boolean; figures: { week_1_closing: number } };
+assert(refreshedEvidence.status === "attention" && refreshedEvidence.draft === true, "status is refreshed and draft flags stay");
+assert(refreshedEvidence.figures.week_1_closing === 46300, "the new figures replace the kept figures");
+assert(!("id" in refresh) && !("created_at" in refresh) && !("superseded_by" in refresh), "id, first seen, and the superseded link stay off the patch");
+const approved = refreshedFindingUpdate({
+  title: "Cash is $46,300.",
+  detail: "Send the September debtors age analysis.",
+  seenAt: "2026-10-11T20:00:00.000Z",
+  severity: "info",
+  existingSeverity: "watch",
+  existingEvidence: { figures: { cash: 1 }, draft: false, requires_human_approval: false },
+  nextEvidence: { figures: { cash: 46300 }, draft: true, requires_human_approval: true, status: "healthy", metrics: [] },
+});
+const approvedEvidence = approved.evidence as { draft: boolean; requires_human_approval: boolean; status: string };
+assert(approved.severity == null && approvedEvidence.draft === false, "a dedupe hit does not reopen an approved draft");
+assert(approvedEvidence.requires_human_approval === false && approvedEvidence.status === "healthy", "approval flags stay and status is refreshed");
+
 const execute = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
 const desk = readFileSync(resolve("supabase/functions/_shared/agent-desk.ts"), "utf8");
+const draftSchema = readFileSync(resolve("src/lib/agent-draft.ts"), "utf8");
+const analystPrompt = readFileSync(resolve("supabase/functions/_shared/agent-prompts/analyst.ts"), "utf8");
+const backfill = readFileSync(resolve("supabase/migrations/20261012170000_agent_findings_copy_backfill.sql"), "utf8");
 assert(execute.includes("shapeRecordedCopy"), "an analyst finding is shaped before it is saved");
-assert(desk.includes("moneyMarketFromClient"), "a draft uses the client market");
+assert(desk.includes("displayAmounts"), "the cashflow read formats amounts for the model");
+assert(draftSchema.includes("1–2 complete sentences") && draftSchema.includes("≤4 short sentences, ≤600 chars"), "draft schemas name the sentence limits");
+assert(analystPrompt.includes("1–2 complete sentences") && analystPrompt.includes("≤4 short sentences, ≤600 chars"), "analyst schemas name the sentence limits");
+assert(backfill.includes("WHEN 'watch' THEN 'attention'") && backfill.includes("WHEN 'act' THEN 'critical'"), "the backfill maps severity onto evidence.status");
+assert(backfill.includes("superseded_by IS NULL") && backfill.includes("dismissed_reason IS NULL"), "the backfill touches active findings");
+assert(!/\bDELETE\b/i.test(backfill), "the backfill deletes nothing");
+assert(backfill.includes("DROP FUNCTION"), "the title polisher does not stay as an API");
 
 console.log("agent-copy: ok");

@@ -50,6 +50,38 @@ export function higherFindingSeverity(current: string, incoming: string): string
   return null;
 }
 
+/**
+ * A repeated finding keeps its id, created_at, and superseded link.
+ * The new save refreshes the title, detail, and the evidence copy fields.
+ */
+export function refreshedFindingUpdate(input: {
+  title: string;
+  detail: string;
+  seenAt: string;
+  severity: string;
+  existingSeverity: string;
+  existingEvidence: Record<string, unknown> | null;
+  nextEvidence: Record<string, unknown>;
+}): Record<string, unknown> {
+  const raised = higherFindingSeverity(input.existingSeverity, input.severity);
+  const existing = input.existingEvidence ?? {};
+  const incoming = { ...input.nextEvidence };
+  delete incoming.draft;
+  delete incoming.requires_human_approval;
+  return {
+    title: input.title,
+    detail: input.detail,
+    last_seen: input.seenAt,
+    ...(raised ? { severity: raised } : {}),
+    evidence: {
+      ...existing,
+      ...incoming,
+      status: input.nextEvidence.status,
+      metrics: input.nextEvidence.metrics,
+    },
+  };
+}
+
 export const ANALYST_READ_TOOLS = [
   "get_health",
   "get_ratios",

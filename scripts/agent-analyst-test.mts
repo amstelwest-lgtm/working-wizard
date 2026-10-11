@@ -133,8 +133,9 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(typeof props.severity?.description === "string" && String(props.severity.description).includes("watch"), "severity describes when to use each value");
   assert(JSON.stringify(props.kind?.enum) === JSON.stringify([...FINDING_KINDS]), "kind is the fixed finding enum");
   assert(props.title?.maxLength === 200, "title is capped at 200 characters");
+  assert(props.title?.description === "1–2 complete sentences.", "a title is 1–2 complete sentences");
   assert(props.detail?.minLength === 1, "detail cannot be empty");
-  assert(props.detail?.maxLength === 2000, "detail is capped at 2000 characters");
+  assert(props.detail?.maxLength === 600 && props.detail?.description === "≤4 short sentences, ≤600 chars.", "detail is ≤4 short sentences, ≤600 chars");
   const required = finding?.input_schema.required as string[] | undefined;
   assert(required?.includes("detail"), "detail is required on record_finding");
   const figureShapes = (props.figures?.additionalProperties as { anyOf?: Array<{ type?: string }> } | undefined)?.anyOf;
@@ -811,8 +812,8 @@ const DAY = 24 * 60 * 60 * 1000;
   assert(higherFindingSeverity("watch", "watch") === null, "the same severity stays");
   const executeSrc = readFileSync(resolve("supabase/functions/agent-analyst/execute.ts"), "utf8");
   assert(executeSrc.includes("deduped: true"), "a duplicate is reported as already recorded");
-  assert(executeSrc.includes("last_seen"), "a duplicate updates last_seen");
-  assert(executeSrc.includes("higherFindingSeverity"), "a duplicate raises severity when the new one is higher");
+  assert(executeSrc.includes("refreshedFindingUpdate"), "a duplicate refreshes the kept copy");
+  assert(executeSrc.includes('.is("superseded_by", null)'), "a duplicate does not rewrite a superseded row");
   assert(executeSrc.includes("findingKindAllowed"), "kind is checked against the enum");
   assert(
     executeSrc.indexOf("deduped: true") < executeSrc.indexOf('type: "finding"'),
