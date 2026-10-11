@@ -23,6 +23,14 @@ const DRAFT_KINDS = new Set([
   "advisory_deliverable_draft",
 ]);
 
+const KIND_LABEL: Record<string, string> = {
+  action_point_draft: "Action point",
+  data_request_draft: "Data request",
+  accountant_handoff_draft: "Accountant hand-off",
+  next_move_draft: "Next move",
+  advisory_deliverable_draft: "Advisory",
+};
+
 const ACCOUNTANT_DRAFTS = new Set(["accountant_handoff_draft", "advisory_deliverable_draft"]);
 
 export const DRAFT_NEEDS_OWNER = "Draft, needs your OK";
@@ -77,18 +85,36 @@ function evidenceRecord(evidence: unknown): Record<string, unknown> {
   return evidence as Record<string, unknown>;
 }
 
+/** Column kind wins. Evidence kind covers a row whose column was not selected. */
+function draftKind(row: { kind?: string | null; evidence: unknown }): string {
+  const evidence = evidenceRecord(row.evidence);
+  const fromEvidence = typeof evidence.kind === "string" ? evidence.kind : "";
+  return (row.kind ?? fromEvidence).trim();
+}
+
+function isDraftEvidence(evidence: unknown): boolean {
+  const record = evidenceRecord(evidence);
+  return record.draft === true && record.requires_human_approval === true;
+}
+
+/** Short name for a draft kind. A missing to_agent does not change it. */
+export function draftFindingKindLabel(row: { kind?: string | null; evidence: unknown }): string | null {
+  if (!isDraftEvidence(row.evidence)) return null;
+  const kind = draftKind(row);
+  if (!DRAFT_KINDS.has(kind)) return null;
+  return KIND_LABEL[kind] ?? null;
+}
+
 /**
  * A draft finding is an agent_findings row that still needs a person.
- * Nothing here applies it.
+ * A Financial Manager draft for a person has no to_agent. Nothing here applies it.
  */
 export function draftFindingLabel(row: {
   kind?: string | null;
   evidence: unknown;
 }): string | null {
-  const evidence = evidenceRecord(row.evidence);
-  const fromEvidence = typeof evidence.kind === "string" ? evidence.kind : "";
-  const kind = (row.kind ?? fromEvidence).trim();
+  if (!isDraftEvidence(row.evidence)) return null;
+  const kind = draftKind(row);
   if (!DRAFT_KINDS.has(kind)) return null;
-  if (evidence.draft !== true || evidence.requires_human_approval !== true) return null;
   return ACCOUNTANT_DRAFTS.has(kind) ? DRAFT_NEEDS_ACCOUNTANT : DRAFT_NEEDS_OWNER;
 }

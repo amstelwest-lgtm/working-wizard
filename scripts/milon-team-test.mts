@@ -17,6 +17,7 @@ import {
   deskSignoffInvite,
   deskSignoffText,
   figuresCheckedLine,
+  findingFigureEntries,
   findingSentence,
   handoffLine,
   headerFromRun,
@@ -568,6 +569,75 @@ assert(
   "finding copy drops the raw decimal",
 );
 assert(!findingSentence({ title: "Debt-to-equity is 0.7795", market: ZA_MARKET }).includes("0.7795"), "0.7795 is never shown");
+const nestedDraft = findingSentence({
+  title: "Gross margin is 0.6. Debtor days are 43.8. (1) reconnect the ledger.",
+  figures: findingFigureEntries({
+    draft: true,
+    requires_human_approval: true,
+    snapshot_id: null,
+    period_label: null,
+    figures: {
+      "Oct 2026": { "Gross Margin": 0.6, "Debtor Days": 43.8 },
+      "saved cashflow": { lowest_week: 1 },
+    },
+  }),
+  market: ZA_MARKET,
+});
+assert(nestedDraft.includes("60.0%") && nestedDraft.includes("44 days"), `nested draft figures format (${nestedDraft})`);
+assert(!nestedDraft.includes("0.6") && !nestedDraft.includes("1.00"), `a count of 1 stays a count (${nestedDraft})`);
+const nullRecipient = html(
+  api({}),
+  "all",
+  {
+    runs: [
+      {
+        id: "fm",
+        agent: "financial_manager",
+        client_id: "c",
+        status: "succeeded",
+        queued_at: "2026-10-08T11:00:00.000Z",
+        started_at: "2026-10-08T11:00:00.000Z",
+        finished_at: "2026-10-08T11:05:00.000Z",
+      },
+    ],
+    findings: [
+      {
+        id: "request",
+        agent: "financial_manager",
+        client_id: "c",
+        kind: "data_request_draft",
+        title: "Gross margin is 0.6.",
+        detail: null,
+        evidence: {
+          draft: true,
+          requires_human_approval: true,
+          snapshot_id: null,
+          period_label: null,
+          figures: { "Oct 2026": { "Gross Margin": 0.6 } },
+        },
+        as_of: null,
+        created_at: "2026-10-08T11:04:00.000Z",
+      },
+    ],
+    messages: [
+      {
+        id: "none",
+        client_id: "c",
+        from_agent: "financial_manager",
+        to_agent: null,
+        type: "handoff",
+        payload: { title: "Do not show this null recipient" },
+        created_at: "2026-10-08T11:04:01.000Z",
+      },
+    ],
+    market: ZA_MARKET,
+  },
+);
+assert(nullRecipient.includes("60.0%"), "a nested margin on a draft is a percentage");
+assert(nullRecipient.includes("Data request"), "a data request keeps its kind");
+assert(nullRecipient.includes("Draft, needs your OK"), "a person draft needs the owner's OK");
+assert(nullRecipient.includes('data-run-state="found"'), "a succeeded run with a draft is found");
+assert(!nullRecipient.includes("Do not show this null recipient"), "a draft with no to_agent is not a hand-off");
 assert(
   figuresCheckedLine("Sep 2026", "2026-10-09T08:00:00.000Z", NOW) === "Sep figures · checked 9 Oct",
   "checked line is the period and the run date",

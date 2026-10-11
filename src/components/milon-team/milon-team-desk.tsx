@@ -20,7 +20,7 @@ import {
   deskSignoffText,
   deskSourceLabel,
   figuresCheckedLine,
-  findingFigures,
+  findingFigureEntries,
   findingPeriod,
   findingSentence,
   handoffParts,
@@ -31,7 +31,7 @@ import {
   type AgentActivitySnapshot,
 } from "@/lib/milon-team-activity";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
-import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
+import { draftFindingKindLabel, draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import "./milon-team-desk.css";
 
@@ -260,10 +260,11 @@ export function MilonTeamDesk({
                     const sentence = findingSentence({
                       title: row.title,
                       detail: row.detail,
-                      figures: findingFigures(row.evidence),
+                      figures: findingFigureEntries(row.evidence),
                       market: live?.market,
                     });
                     const draft = draftFindingLabel(row);
+                    const kindLabel = draftFindingKindLabel(row);
                     const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock);
                     const when = formatAsOf(row.created_at, clock);
                     return (
@@ -271,7 +272,8 @@ export function MilonTeamDesk({
                         <div className="milon-desk-job-copy">
                           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
                           <p className="milon-desk-figure">{sentence}</p>
-                          {draft ? <p className="milon-desk-hint">{draft}</p> : null}
+                          {kindLabel ? <p className="milon-desk-hint">{kindLabel}</p> : null}
+                          {draft ? <p className="milon-desk-hint" data-draft-label={draft}>{draft}</p> : null}
                           <div className="milon-desk-meta">
                             {checked ? (
                               <span className="milon-desk-why">{checked}</span>

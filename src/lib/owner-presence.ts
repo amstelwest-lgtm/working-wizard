@@ -4,7 +4,7 @@
  */
 import { agentShortName } from "@/lib/milon-team";
 import {
-  findingFigures,
+  findingFigureEntries,
   findingSentence,
   handoffLine,
   latestRunByAgent,
@@ -63,7 +63,7 @@ function sentenceFor(
   const text = findingSentence({
     title: finding.title,
     detail: finding.detail,
-    figures: findingFigures(finding.evidence),
+    figures: findingFigureEntries(finding.evidence),
     market,
   });
   return text || "Nothing new from the books.";
