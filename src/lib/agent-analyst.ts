@@ -662,6 +662,39 @@ function keeperFinding<T extends { id: string; supersededBy?: string | null }>(
   return current;
 }
 
+/** An empty record_finding. The model should finish when it has nothing new. */
+export const EMPTY_FINDING_RESULT = {
+  recorded: false,
+  empty: true,
+  finish: "Call finish if nothing new.",
+} as const;
+
+/** True when every record_finding was empty and none was saved. */
+export function emptyFindingRun(steps: Array<{ tool: string | null; status: string }>): boolean {
+  let seen = false;
+  for (const step of steps) {
+    if (step.tool !== "record_finding") continue;
+    seen = true;
+    if (step.status !== "empty") return false;
+  }
+  return seen;
+}
+
+/**
+ * A run that only called record_finding with nothing to save finishes.
+ * One empty call after a real read still lets the model call finish.
+ * A second empty call, or a run of only empty calls, stops before another model call.
+ */
+export function analystEmptyFindingStop(
+  steps: Array<{ tool: string | null; status: string }>,
+): { kind: "stop"; reason: "no_further_action"; summary: string } | null {
+  if (!emptyFindingRun(steps)) return null;
+  const findings = steps.filter((step) => step.tool === "record_finding");
+  const onlyEmpty = steps.every((step) => step.tool === "record_finding");
+  if (!onlyEmpty && findings.length < 2) return null;
+  return { kind: "stop", reason: "no_further_action", summary: "Nothing new to record." };
+}
+
 /** A review that saved findings and then hit the turn cap is finished. */
 export function analystRunSummary(input: { stopReason: string; summary: string }): string {
   if (input.stopReason === "cap_after_findings") {
@@ -672,6 +705,7 @@ export function analystRunSummary(input: { stopReason: string; summary: string }
 
 /**
  * Hitting the iteration cap after a saved finding is a finished review.
+ * A cap of only empty record_finding calls finishes too.
  * A cap with no finding, or any earlier safety stop, stays partial.
  */
 export function analystRunOutcome(input: {
@@ -679,6 +713,9 @@ export function analystRunOutcome(input: {
   steps: Array<{ tool: string | null; status: string }>;
   maxIterations: number;
 }): { status: "succeeded" | "partial"; stopReason: string } {
+  if (input.stopReason === "safety_limit" && analystEmptyFindingStop(input.steps)) {
+    return { status: "succeeded", stopReason: "no_further_action" };
+  }
   const accepted = input.steps.filter((step) => step.tool === "record_finding" && step.status === "ok").length;
   const hitCap =
     input.stopReason === "safety_limit" &&
