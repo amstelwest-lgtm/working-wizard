@@ -87,7 +87,6 @@ import {
   PRICING_H2_USD,
   PRICING_INTRO,
   PRICING_OWNER_BAR_US,
-  PRICING_OWNER_BAR_ZA,
   PRICING_OWNER_CTA,
   PROOF_AI_LINK,
   PROOF_CARDS,
@@ -158,6 +157,7 @@ export const Route = createFileRoute("/")({
   component: LandingPage,
   head: ({ loaderData }) => {
     const showSaPricing = loaderData?.showSaPricing === true;
+    const zaOwnerCost = showSaPricing ? (loaderData?.saPricing?.ownerCost ?? null) : null;
     const copyPack = loaderData?.copyPack === "za" ? "za" : "us";
     const homeHead = pageHead(SEO_PAGES.home);
     return {
@@ -198,7 +198,7 @@ export const Route = createFileRoute("/")({
         { children: visitorMarketBootScript(copyPack) },
         {
           type: "application/ld+json",
-          children: faqPageJson(homepageFaqItems(showSaPricing)),
+          children: faqPageJson(homepageFaqItems(showSaPricing, zaOwnerCost)),
         },
       ],
     };
@@ -262,7 +262,7 @@ function applyLandingTheme(theme: "light" | "dark") {
 
 function LandingPage() {
   const { showSaPricing, saPricing, urlDraft, copyPack, geoZa } = Route.useLoaderData();
-  const homeFaq = homepageFaqItems(showSaPricing);
+  const homeFaq = homepageFaqItems(showSaPricing, saPricing?.ownerCost ?? null);
   const { user, loading } = useAuth();
   const [firmId, setFirmId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -2698,7 +2698,11 @@ function LandingPage() {
 
           <div className="owner-spark-path">
             <p>
-              <RegionCopy pack={copyMarket.copyPack} us={PRICING_OWNER_BAR_US} za={PRICING_OWNER_BAR_ZA} />
+              <RegionCopy
+                pack={copyMarket.copyPack}
+                us={PRICING_OWNER_BAR_US}
+                za={saPricing?.ownerBar ?? PRICING_OWNER_BAR_US}
+              />
             </p>
             <a
               className="btn btn-ghost"

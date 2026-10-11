@@ -5,6 +5,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
+import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import {
   HOMEPAGE_COST_QUESTION,
@@ -105,7 +106,9 @@ assert(!faq.includes("AI_IDENTIFIERS_LINE") || !HOMEPAGE_FAQ_ITEMS.some((item) =
 assert(!HOMEPAGE_FAQ_ITEMS.some((item) => /claude/i.test(item.question + item.answer)), "no Claude on homepage FAQ");
 
 const usCost = homepageFaqItems(false).find((item) => item.question === HOMEPAGE_COST_QUESTION);
-const zaCost = homepageFaqItems(true).find((item) => item.question === HOMEPAGE_COST_QUESTION);
+const zaCost = homepageFaqItems(true, loadSaPricingCopy().ownerCost).find(
+  (item) => item.question === HOMEPAGE_COST_QUESTION,
+);
 assert(usCost != null && zaCost != null, "cost answers exist");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
 assert(usCost!.answer.includes("$39/mo"), "US owners see the dollar price");

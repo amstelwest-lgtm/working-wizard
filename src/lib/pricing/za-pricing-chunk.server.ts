@@ -12,6 +12,10 @@ export type SaPricingCopy = {
   footerTagline: string;
   footerBuilt: string;
   footerLine: string;
+  /** Owner plan bar. Server-only so the US client bundle does not contain it. */
+  ownerBar: string;
+  /** Replaces the owner sentence inside the homepage cost answer. */
+  ownerCost: string;
   labels: Record<(typeof ZA_CHECKOUT_BANDS)[number], ZaBandPriceLabel>;
 };
 
@@ -49,6 +53,9 @@ export function loadSaPricingCopy(): SaPricingCopy {
     footerBuilt: "Built for South Africa and the United States",
     footerLine:
       "MILŌN — the AI finance function for accounting firms and the businesses they serve in South Africa and the United States.",
+    ownerBar: "R299/mo · free when your accountant is on Milōn",
+    ownerCost:
+      "Business owners: R299/mo · free when your accountant is on Milōn. Billing opens soon.",
     labels,
   };
 }
