@@ -71,6 +71,8 @@ function parseRun(row: Record<string, unknown>): AgentRunRow | null {
 }
 
 function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
+  if (row.superseded_by) return null;
+  if (typeof row.dismissed_reason === "string" && row.dismissed_reason.trim()) return null;
   const finding = {
     superseded_by: row.superseded_by,
     status: textOrNull(row.status),
