@@ -364,7 +364,7 @@ No unique constraint on `email` in Phase 1. Live leads can repeat an address.
 - `created_at`, `updated_at`
 
 `from_address` is fixed to `team@trymilon.com` so a campaign row cannot store a cold From
-on `milonfinance.com` or `milon.co.za`. The column stays NULL until a campaign is actually
+on `milonfinance.com`. The column stays NULL until a campaign is actually
 armed. Phase 1 does not read or write `RESEND_FROM_EMAIL`.
 
 `lighthouse_cadence_steps`
@@ -532,8 +532,8 @@ Defer playbook editing, asset management, and the global daily cap. They already
   (`resolveLighthouseFromAddress`). Reply-To stays `hello@milonfinance.com`
   (`resolveLighthouseReplyTo`). The From display name is `The MILŌN Team`.
   The future `lighthouse_campaigns.from_address` CHECK only
-  accepts `team@trymilon.com`. Do not store `hello@milonfinance.com`,
-  `team@milonfinance.com`, or `noreply@milon.co.za` as a cold From.
+  accepts `team@trymilon.com`. Do not store `hello@milonfinance.com`
+  or `team@milonfinance.com` as a cold From.
 - **`public.firms` and `public.clients`.** Product tenants. Market country stays `ZA`|`US`.
   Linking a CRM firm to a product firm, if it ever happens, is a nullable
   `product_firm_id` added after a human match — not a backfill on name.

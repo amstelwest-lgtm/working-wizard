@@ -44,7 +44,7 @@ export function invitePasteText(subject: string, body: string): string {
 
 /** Addr-spec from `Name <addr>` or a bare address. */
 export function inviteFromAddress(fromRaw?: string | null): string {
-  const raw = (fromRaw ?? "").trim() || "noreply@milon.co.za";
+  const raw = (fromRaw ?? "").trim() || "noreply@milonfinance.com";
   if (raw.includes("<")) return raw.replace(/^.*<([^>]+)>.*$/, "$1").trim();
   return raw;
 }

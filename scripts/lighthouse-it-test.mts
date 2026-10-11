@@ -27,14 +27,14 @@ assert(
   "profile path includes note and tab",
 );
 assert(
-  clientNoteProfileUrl("https://milon.co.za/", "cid", "nid", "cash").startsWith(
-    "https://milon.co.za/clients/cid?",
+  clientNoteProfileUrl("https://www.milonfinance.com/", "cid", "nid", "cash").startsWith(
+    "https://www.milonfinance.com/clients/cid?",
   ),
   "absolute url strips trailing slash",
 );
 assert(LIGHTHOUSE_IT_INBOX_PATH === "/ops?tab=it", "inbox path opens the Milōn IT section");
 assert(
-  lighthouseItInboxUrl("https://milon.co.za/") === "https://milon.co.za/ops?tab=it",
+  lighthouseItInboxUrl("https://www.milonfinance.com/") === "https://www.milonfinance.com/ops?tab=it",
   "inbox url is absolute /ops?tab=it",
 );
 assert(isOpsNext("/ops?tab=it") && isOpsNext("/ops"), "ops next accepts inbox urls");

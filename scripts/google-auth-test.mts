@@ -22,7 +22,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 assert(
-  googleOAuthRedirectTo("https://milon.co.za/") === "https://milon.co.za/auth/callback",
+  googleOAuthRedirectTo("https://www.milonfinance.com/") === "https://www.milonfinance.com/auth/callback",
   "redirect strips trailing slash",
 );
 assert(

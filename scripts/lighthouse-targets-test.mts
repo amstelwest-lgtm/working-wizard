@@ -418,7 +418,7 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
 
 {
   assert(
-    displayedLeadMarket({ country: null, email: "team@milon.co.za" }) === "SA",
+    displayedLeadMarket({ country: null, email: "team@business.co.za" }) === "SA",
     "a .co.za address is the SA filter",
   );
   assert(
@@ -435,11 +435,11 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
     "a .com site does not become US",
   );
   assert(
-    inferredTargetCountry({ country: null, email: "team@milon.co.za" }) === "SA",
+    inferredTargetCountry({ country: null, email: "team@business.co.za" }) === "SA",
     "a save can persist the inferred SA country",
   );
   assert(
-    inferredTargetCountry({ country: "US", email: "team@milon.co.za" }) === null,
+    inferredTargetCountry({ country: "US", email: "team@business.co.za" }) === null,
     "a stored country is not replaced",
   );
 }
@@ -511,19 +511,19 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
     touches: [],
   });
   const firms = [
-    dry("693c359d-b50e-4fdf-9391-f3739fc3cab4", "team@milon.co.za", true),
-    dry("11111111-1111-4111-8111-111111111111", "one@milon.co.za", false),
-    dry("22222222-2222-4222-8222-222222222222", "two@milon.co.za", false),
-    dry("33333333-3333-4333-8333-333333333333", "three@milon.co.za", false),
+    dry("693c359d-b50e-4fdf-9391-f3739fc3cab4", "team@business.co.za", true),
+    dry("11111111-1111-4111-8111-111111111111", "one@business.co.za", false),
+    dry("22222222-2222-4222-8222-222222222222", "two@business.co.za", false),
+    dry("33333333-3333-4333-8333-333333333333", "three@business.co.za", false),
   ];
   const vague = resolveChatLead("Draft a note for Milōn Dry Run", firms);
   assert(vague.status === "ambiguous", "a shared firm name is ambiguous");
   if (vague.status === "ambiguous") {
     assert(vague.firms.length === 4, "all four dry-run leads are offered");
-    assert(/team@milon.co.za/.test(ambiguousLeadReply(vague.firms)), "the ask lists the email");
+    assert(/team@business.co.za/.test(ambiguousLeadReply(vague.firms)), "the ask lists the email");
   }
-  const byEmail = resolveChatLead("Draft a note for team@milon.co.za", firms);
-  assert(byEmail.status === "one" && byEmail.firm.email === "team@milon.co.za", "email picks one lead");
+  const byEmail = resolveChatLead("Draft a note for team@business.co.za", firms);
+  assert(byEmail.status === "one" && byEmail.firm.email === "team@business.co.za", "email picks one lead");
   const byId = resolveChatLead(
     "Draft a note for 11111111-1111-4111-8111-111111111111",
     firms,
@@ -558,7 +558,7 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   assert(/which lead/i.test(ambiguousTurn.reply), "chat asks which lead");
 
   const heldTurn = await runLighthouseChatTurn({
-    message: "Draft a note for team@milon.co.za",
+    message: "Draft a note for team@business.co.za",
     snapshot: book,
     createdBy: "owner",
     persistDraft: async () => {
@@ -570,7 +570,7 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   assert(/cold emails are stopped/i.test(heldTurn.reply), "the held email is refused");
 
   const sibling = await runLighthouseChatTurn({
-    message: "Draft a note for one@milon.co.za",
+    message: "Draft a note for one@business.co.za",
     snapshot: book,
     createdBy: "owner",
     persistDraft: async (write) => {

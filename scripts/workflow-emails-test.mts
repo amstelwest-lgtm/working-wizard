@@ -258,30 +258,30 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}�
 // ── 3. Templates + links ─────────────────────────────────────────────────────
 
 {
-  const site = "https://milon.co.za/";
+  const site = "https://www.milonfinance.com/";
   eq(
     workflowEmailHref("pack_signed_off", "owner", CLIENT, site),
-    "https://milon.co.za/app?tab=next",
+    "https://www.milonfinance.com/app?tab=next",
     "owner pack link",
   );
   eq(
     workflowEmailHref("forecast_break", "owner", CLIENT, site),
-    "https://milon.co.za/app?tab=cash",
+    "https://www.milonfinance.com/app?tab=cash",
     "owner cash link",
   );
   eq(
     workflowEmailHref("cycle_restarted", "owner", CLIENT, site),
-    "https://milon.co.za/app?tab=today",
+    "https://www.milonfinance.com/app?tab=today",
     "owner restart link",
   );
   eq(
     workflowEmailHref("pack_ready_for_review", "accountant", CLIENT, site),
-    `https://milon.co.za/clients/${CLIENT}?tab=deliverables&section=pack`,
+    `https://www.milonfinance.com/clients/${CLIENT}?tab=deliverables&section=pack`,
     "accountant pack link",
   );
   eq(
     workflowEmailHref("forecast_break", "accountant", CLIENT, site),
-    `https://milon.co.za/clients/${CLIENT}?tab=cash`,
+    `https://www.milonfinance.com/clients/${CLIENT}?tab=cash`,
     "accountant cash link",
   );
 

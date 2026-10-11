@@ -221,10 +221,10 @@ const NOW = "2026-09-18T12:00:00.000Z";
     "withdrawn is silent",
   );
 
-  const site = "https://milon.co.za";
+  const site = "https://www.milonfinance.com";
   eq(
     workflowEmailHref("accountant_request_received", "requested_firm", "c", site),
-    "https://milon.co.za/dashboard#accountant-inbox",
+    "https://www.milonfinance.com/dashboard#accountant-inbox",
     "firm link lands on the inbox",
   );
   const r = renderWorkflowEmail({

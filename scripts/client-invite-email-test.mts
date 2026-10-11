@@ -16,7 +16,7 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const url = "https://milon.co.za/?invite=abc123&mode=signup";
+const url = "https://www.milonfinance.com/?invite=abc123&mode=signup";
 const draft = templateInviteDraft({
   clientName: "Karoo Traders",
   clientCode: "MLN-AB12CD",
@@ -37,14 +37,15 @@ const paste = invitePasteText(draft.subject, draft.body);
 assert(paste.startsWith("Subject: "), "paste starts with Subject");
 assert(paste.includes(url), "paste still has URL");
 
-assert(inviteFromHeader("noreply@milon.co.za") === "MILŌN <noreply@milon.co.za>", "From header");
+assert(inviteFromHeader() === "MILŌN <noreply@milonfinance.com>", "default From is noreply@milonfinance.com");
+assert(inviteFromHeader("noreply@milonfinance.com") === "MILŌN <noreply@milonfinance.com>", "From header");
 assert(
-  inviteFromWhenSendable({ apiKey: "", fromEmail: "noreply@milon.co.za" }) == null,
+  inviteFromWhenSendable({ apiKey: "", fromEmail: "noreply@milonfinance.com" }) == null,
   "From is hidden when send is not configured",
 );
 assert(
-  inviteFromWhenSendable({ apiKey: "re_test", fromEmail: "MILŌN <hello@milon.co.za>" }) ===
-    "MILŌN <hello@milon.co.za>",
+  inviteFromWhenSendable({ apiKey: "re_test", fromEmail: "MILŌN <hello@milonfinance.com>" }) ===
+    "MILŌN <hello@milonfinance.com>",
   "From shows when send is configured",
 );
 

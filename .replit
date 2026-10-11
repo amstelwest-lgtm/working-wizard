@@ -105,4 +105,4 @@ VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 VITE_SUPABASE_PROJECT_ID = "jxclnsbsqpixxqlbcapl"
 QBO_REDIRECT_URI = "https://1a73994f-b2bc-4e4b-bfc6-28296039be42-00-1a1iktfxwkhvs.janeway.replit.dev/api/qbo/callback"
 QBO_ENVIRONMENT = "sandbox"
-RESEND_FROM_EMAIL = "alerts@milon.co.za"
+RESEND_FROM_EMAIL = "alerts@milonfinance.com"

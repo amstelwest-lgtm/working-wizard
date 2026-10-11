@@ -353,7 +353,7 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
         severity: "critical",
       },
     ],
-    href: "https://milon.co.za/app?tab=today",
+    href: "https://www.milonfinance.com/app?tab=today",
   });
   eq(one.subject, "New Co: MILŌN needs your current bank balance", "single-item subject");
   assert(one.text.startsWith("Hi Thabo,"), "greets by name");
@@ -362,8 +362,8 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
     one.text.includes("pauses on recommendations rather than guess"),
     "blocking consequence stated",
   );
-  assert(one.text.includes("https://milon.co.za/app?tab=today"), "link in text");
-  assert(one.html.includes('href="https://milon.co.za/app?tab=today"'), "link in html");
+  assert(one.text.includes("https://www.milonfinance.com/app?tab=today"), "link in text");
+  assert(one.html.includes('href="https://www.milonfinance.com/app?tab=today"'), "link in html");
   assert(one.html.includes("BLOCKING"), "blocking badge in html");
   assert(!one.text.includes("has asked for"), "no requester line when MILŌN asks itself");
 

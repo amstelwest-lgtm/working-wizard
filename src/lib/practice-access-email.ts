@@ -50,7 +50,7 @@ export async function sendAccessEmail(opts: {
   idempotencyKey: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milon.co.za";
+  const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milonfinance.com";
   const fromAddr = fromRaw.includes("<")
     ? fromRaw.replace(/^.*<([^>]+)>.*$/, "$1").trim()
     : fromRaw.trim();

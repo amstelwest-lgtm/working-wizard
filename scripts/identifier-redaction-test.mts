@@ -359,7 +359,7 @@ const invite = redactForModel(
   inviteDraftPrompt(ZA_MARKET, {
     clientName: CLIENT,
     clientCode: "MLN-AB12CD",
-    inviteUrl: "https://milon.co.za/?invite=abc123",
+    inviteUrl: "https://www.milonfinance.com/?invite=abc123",
     firmName: "West & Co",
     accountantName: PERSON,
   }),
@@ -367,7 +367,7 @@ const invite = redactForModel(
 );
 assert(!invite.text.includes("Harbour"), "invite prompt still has the client");
 assert(!invite.text.includes(PERSON), "invite prompt still has the accountant");
-assert(invite.text.includes("https://milon.co.za/?invite=abc123"), "invite URL stays exact");
+assert(invite.text.includes("https://www.milonfinance.com/?invite=abc123"), "invite URL stays exact");
 assert(invite.text.includes("MLN-AB12CD"), "client code stays");
 assert(
   rehydrateModelOutput('{"subject":"[CLIENT]","body":"Hi"}', invite.session).includes(CLIENT),
