@@ -71,7 +71,9 @@
   font-weight: var(--type-body-weight);
   line-height: var(--type-body-leading);
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
   -webkit-font-smoothing: antialiased;
   color: var(--ink);
 }
@@ -388,7 +390,9 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door time,
 .owner-door .tabular-nums {
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
 }
 
 .owner-door table {
@@ -880,6 +884,28 @@ html.dark .owner-status.is-attention {
   font-weight: 600;
 }
 
+.owner-door .owner-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.owner-door .owner-crumb-link {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cobalt);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .owner-door .owner-free,
 .owner-door .owner-plan {
   margin: 8px 0 0;
@@ -947,7 +973,8 @@ html.dark .owner-status.is-attention {
 
 .owner-door .owner-back:focus-visible,
 .owner-door .owner-close:focus-visible,
-.owner-door .owner-icon-btn:focus-visible {
+.owner-door .owner-icon-btn:focus-visible,
+.owner-door .owner-crumb-link:focus-visible {
   outline: 2px solid var(--gold-bright);
   outline-offset: 3px;
 }
