@@ -37,8 +37,10 @@ export async function invokeMilonBot(input: {
   message?: string;
   objective?: string;
   mode?: "chat" | "agent";
-  history?: Array<{ role: "user" | "assistant"; content: string }>;
+  history?: Array<{ role: "user" | "assistant"; content: string; agent?: string | null }>;
   audience: MilonBotAudience;
+  /** Agent thread this chat belongs to. The server drops history from other agents. */
+  agent?: "financial_manager" | "analyst" | "advisor";
 }): Promise<MilonBotResult> {
   const { data: sess } = await supabase.auth.getSession();
   const token = sess.session?.access_token;
@@ -64,6 +66,7 @@ export async function invokeMilonBot(input: {
             message: input.message,
             history: input.history,
             audience: input.audience,
+            ...(input.agent ? { agent: input.agent } : {}),
           },
     ),
   });
