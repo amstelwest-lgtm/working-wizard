@@ -148,7 +148,7 @@ function HealthOrb({
         overallHealth={80}
         displayStatus="healthy"
         pillars={PILLARS}
-        caption="Collections are the lever."
+        caption="Tap to see what's behind your score"
         onTopPriority={() => undefined}
         onDriverClick={onDriver}
       />
