@@ -16,7 +16,7 @@ import { AccountantProfileProvider } from "@/contexts/accountant-profile";
 import { NotesProvider } from "@/contexts/notes";
 import { MarketProvider } from "@/contexts/market";
 import { AuthProvider } from "@/hooks/use-auth";
-import { applyPortalTheme } from "@/lib/portal-theme";
+import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
 import { ShareButton } from "@/components/share";
@@ -47,9 +47,8 @@ const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   },
 ];
 
-// Portal :root tokens are dark. `class="dark"` makes Tailwind use the same
-// palette, which is what a dark signed-in session does.
-applyPortalTheme("dark");
+// Light is the default. Dark only after an explicit theme_pref_v2 choice.
+applyPortalTheme(resolvePortalTheme());
 
 // The local stub rejects server calls with "harness-local". Keep those out of
 // the screenshots. App toast code is unchanged.

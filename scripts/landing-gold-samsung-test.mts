@@ -43,8 +43,10 @@ assert(
 );
 
 assert(root.includes("color-scheme:only dark"), "FOUC CSS opts the dark landing out of force-dark");
-assert(root.includes('d.style.colorScheme="only dark"'), "root boot script sets only dark");
-assert(root.includes("milon-color-scheme"), "root boot script publishes a color-scheme meta");
+assert(root.includes("THEME_BOOT_SCRIPT"), "document head injects the shared boot script");
+const boot = readFileSync(resolve("src/lib/portal-theme.ts"), "utf8");
+assert(boot.includes('d.style.colorScheme="only dark"'), "boot script sets only dark");
+assert(boot.includes("milon-color-scheme"), "boot script publishes a color-scheme meta");
 
 assert(landing.includes('colorScheme = "only dark"') || landing.includes('"only dark"'), "landing theme applies only dark");
 assert(landing.includes("syncLandingColorScheme"), "theme toggle keeps the color-scheme meta in sync");

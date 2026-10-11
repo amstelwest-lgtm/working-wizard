@@ -8,7 +8,11 @@
 
 import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { DUAL_MARKET_FOOTER, FIRM_CARD_TIMING } from "@/lib/firm-signup-copy";
+import {
+  DUAL_MARKET_FOOTER,
+  FIRM_CARD_TIMING,
+  MARKETING_COPYRIGHT_ENTITY,
+} from "@/lib/firm-signup-copy";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import { PREFERRED_SOURCE_HREF, PREFERRED_SOURCE_LABEL } from "@/lib/landing-assets";
 import {
@@ -164,6 +168,9 @@ export function MarketingShell({
 
         <footer className="mk-foot">
           <span>{footerLine ?? DUAL_MARKET_FOOTER}</span>
+          <span>
+            © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
+          </span>
           <span>{FIRM_CARD_TIMING}</span>
           <span>Works with QuickBooks Online and Xero.</span>
           <a href="/">milonfinance.com</a>
