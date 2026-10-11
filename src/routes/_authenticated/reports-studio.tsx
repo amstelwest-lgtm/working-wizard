@@ -2997,9 +2997,9 @@ const REPORTS: ReportMeta[] = [
       "FY plan versus uploaded month actuals — revenue, COGS, operating expenses, and profit, with over/under variance.",
     pages: "2–3 pages",
     category: "essential",
-    icon: <Scale className="h-4 w-4 text-[#c9962b]" />,
-    iconBg: "bg-[#c9962b]/15",
-    btnBg: "bg-[#b8851f] hover:bg-[#a8791a]",
+    icon: <Scale className="h-4 w-4 text-[#0B5FFF] dark:text-[#F4F7FB]" />,
+    iconBg: "bg-[#DBEAFE] dark:bg-[#163654]",
+    btnBg: "bg-[#0B5FFF] text-white hover:bg-[#2563EB]",
     filename: "BudgetVariance",
   },
 ];
@@ -3115,11 +3115,11 @@ function ReportCard({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
                 #{String(report.id).padStart(2, "0")}
               </span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] ${report.category === "essential" ? "bg-[#c9962b]/12 text-[#a8791a] dark:text-[#e5c66b]" : "bg-muted text-muted-foreground"}`}
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.16em] ${report.category === "essential" ? "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]" : "bg-muted text-muted-foreground"}`}
               >
                 {report.category}
               </span>
@@ -3179,7 +3179,7 @@ function ReportCard({
           className={
             downloadOutline
               ? "flex-1 border-border bg-transparent text-xs gap-1.5 text-foreground hover:bg-muted"
-              : "flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
+              : "flex-1 text-xs gap-1.5 bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
           }
           onClick={() => {
             if (gate.disabled || isGenerating) return;
@@ -3229,12 +3229,12 @@ function SettingsPanel({
   pin?: boolean;
 }) {
   const inputCls =
-    "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
+    "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#0B5FFF] focus:outline-none focus:ring-1 focus:ring-[#0B5FFF]/40";
 
   return (
     <div className={`reports-settings space-y-5${pin ? " sticky top-6" : ""}`}>
       <div className="flex items-center gap-2">
-        <Settings className="h-4 w-4 text-[#c9962b]" />
+        <Settings className="h-4 w-4 text-[#0B5FFF] dark:text-[#F4F7FB]" />
         <h2 className="text-sm font-semibold text-foreground">Report Settings</h2>
       </div>
 
@@ -3652,12 +3652,12 @@ function PlaybookRatioCard({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left rounded-lg border border-border bg-card hover:bg-muted/60 hover:border-[#c9962b]/50 transition-colors p-3 group"
+      className="w-full text-left rounded-lg border border-border bg-card hover:bg-muted/60 hover:border-[#0B5FFF]/50 transition-colors p-3 group"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-xs font-medium text-foreground leading-snug">{name}</p>
         <span
-          className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+          className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
             ratio.unscored
               ? "border border-border bg-muted text-muted-foreground"
               : TIER_CHIP[ratio.health_tier]
@@ -4219,7 +4219,7 @@ export function ReportsStudio({
     <>
       <section>
         <div className="mb-3 flex items-center gap-2">
-          <span className="rounded-full bg-[#c9962b]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a8791a] dark:text-[#e5c66b]">
+          <span className="rounded-full bg-[#DBEAFE] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]">
             Essential — {essential.length} Reports
           </span>
           <div className="flex-1 border-t border-border" />
@@ -4283,7 +4283,7 @@ export function ReportsStudio({
         className={`reports-studio flex flex-col items-center justify-center bg-background px-4 text-foreground ${embedded ? "min-h-[40vh] py-10" : "min-h-[100dvh]"}`}
       >
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
-          <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-[#c9962b]" />
+          <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-[#0B5FFF] dark:text-[#F4F7FB]" />
           <p className="text-sm font-semibold text-foreground">
             {actionParam === "download" ? "Preparing download" : "Preparing preview"}
           </p>
@@ -4339,7 +4339,7 @@ export function ReportsStudio({
         )}
 
         {embedded ? (
-          <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+          <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
             <ArapAnswerStrip
               heading="Reports"
               sentence={reportsSentence}
@@ -4408,7 +4408,7 @@ export function ReportsStudio({
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-4 w-4 text-[#c9962b]" />
+              <Zap className="h-4 w-4 text-[#0B5FFF] dark:text-[#F4F7FB]" />
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Milōn Report Suite
               </span>
@@ -4508,7 +4508,7 @@ export function ReportsStudio({
               </div>
             ) : (
               <Button
-                className="gap-2 bg-[#c9962b] hover:bg-[#b8851f] font-semibold text-white"
+                className="gap-2 bg-[#0B5FFF] hover:bg-[#2563EB] font-semibold text-white"
                 onClick={() => {
                   if (zipGate.disabled) return;
                   handleGenerateAll();

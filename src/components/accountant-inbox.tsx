@@ -30,7 +30,7 @@ type Props = {
 };
 
 const GOLD_BTN =
-  "inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50";
+  "inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50";
 const GHOST_BTN =
   "inline-flex items-center gap-1.5 rounded-lg border border-slate-300/70 px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/15 dark:text-slate-300";
 const INPUT =
@@ -151,7 +151,7 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
   const open = requests.filter((r) => r.status === "open");
   const history = requests.filter((r) => r.status !== "open");
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#0B5FFF]/25 bg-white/70 p-4 shadow-sm dark:border-[#0B5FFF]/20 dark:bg-white/[0.035]",
     className,
   ]
     .filter(Boolean)
@@ -167,11 +167,11 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
   const heading = (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+        <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
           Marketplace
         </span>
-        <h3 className="mt-0.5 flex items-center gap-1.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
-          <Inbox className="h-4 w-4 text-[#b7872a]" aria-hidden />
+        <h3 className="mt-0.5 flex items-center gap-1.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]">
+          <Inbox className="h-4 w-4 text-[#0B5FFF]" aria-hidden />
           {open.length === 0
             ? listing?.is_listed
               ? "No new requests"
@@ -203,7 +203,7 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
 
       {showListing ? (
         <form
-          className="mt-3 grid gap-2 rounded-xl border border-dashed border-[#b7872a]/35 p-3 sm:grid-cols-2"
+          className="mt-3 grid gap-2 rounded-xl border border-dashed border-[#0B5FFF]/35 p-3 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
             void saveListing();
@@ -301,11 +301,11 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
             <li
               key={r.id}
               data-request={r.id}
-              className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+              className="rounded-xl border border-[#0B5FFF]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold text-slate-900 dark:text-[#f4e7c2]">
+                  <p className="text-[14px] font-semibold text-slate-900 dark:text-[#F4F7FB]">
                     <Link
                       to="/clients/$clientId"
                       params={{ clientId: r.client_id }}

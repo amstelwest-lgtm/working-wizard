@@ -24,11 +24,12 @@
 }
 
 .milon-desk {
-  --desk-card: rgba(16, 16, 24, 0.94);
-  --desk-ink: var(--ink, #f2ecdc);
-  --desk-dim: var(--ink-dim, #9b958a);
-  --desk-gold: #d4af37;
-  --desk-plate: #101018;
+  --desk-card: #ffffff;
+  --desk-ink: #102a43;
+  --desk-dim: #3d5270;
+  --desk-accent: #0b5fff;
+  --desk-line: #dbeafe;
+  --desk-plate: #ffffff;
   font-family: "Noto Sans", "Inter", sans-serif;
   position: relative;
   display: flex;
@@ -38,6 +39,15 @@
   height: auto;
   color: var(--desk-ink);
   min-width: 0;
+}
+
+html.dark .milon-desk {
+  --desk-card: #102a43;
+  --desk-ink: #f4f7fb;
+  --desk-dim: #c5d4e4;
+  --desk-accent: #f4f7fb;
+  --desk-line: #1e3a5f;
+  --desk-plate: #0b1b2b;
 }
 
 .milon-desk-scroll {
@@ -117,7 +127,7 @@
 
 .milon-desk-card {
   background: var(--desk-card);
-  border: 1px solid rgba(212, 175, 55, 0.22);
+  border: 1px solid var(--desk-line);
   border-radius: 18px;
   padding: 16px 18px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
@@ -125,11 +135,11 @@
 
 .milon-desk-kicker {
   margin: 0 0 10px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--desk-gold);
+  color: var(--desk-accent);
 }
 
 .milon-desk-team {
@@ -161,13 +171,13 @@
   cursor: pointer;
   color: var(--desk-dim);
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--desk-line);
 }
 
 .milon-desk-all[aria-checked="true"] {
-  color: #1b1300;
-  background: var(--desk-gold);
-  border-color: var(--desk-gold);
+  color: #ffffff;
+  background: #0b5fff;
+  border-color: #0b5fff;
 }
 
 .milon-desk-agents {
@@ -187,15 +197,15 @@
   align-items: flex-start;
   min-width: 0;
   background: var(--desk-card);
-  border: 1px solid rgba(212, 175, 55, 0.22);
+  border: 1px solid var(--desk-line);
   border-radius: 18px;
   padding: 14px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
 .milon-desk-agent[aria-checked="true"] {
-  border-color: var(--desk-gold);
-  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35), 0 12px 32px rgba(0, 0, 0, 0.28);
+  border-color: var(--desk-accent);
+  box-shadow: 0 0 0 1px rgba(11, 95, 255, 0.28), 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
 .milon-desk-team:has(.milon-desk-agent[aria-checked="true"]) .milon-desk-agent[aria-checked="false"] {
@@ -234,9 +244,9 @@
   display: grid;
   place-items: center;
   border-radius: 13px;
-  color: var(--desk-gold);
-  background: rgba(212, 175, 55, 0.12);
-  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: var(--desk-accent);
+  background: rgba(11, 95, 255, 0.08);
+  border: 1px solid var(--desk-line);
   box-shadow: 0 0 18px rgba(212, 175, 55, 0.16);
 }
 
@@ -258,14 +268,14 @@
   width: 7px;
   height: 7px;
   border-radius: 99px;
-  background: #5ccf8a;
+  background: #16845b;
   box-shadow: 0 0 0 3px rgba(92, 207, 138, 0.18);
   flex: none;
 }
 
 .milon-desk-status.is-watch i {
-  background: var(--desk-gold);
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+  background: #b7791f;
+  box-shadow: 0 0 0 3px rgba(183, 121, 31, 0.2);
 }
 
 .milon-desk-status.is-idle i {
@@ -310,9 +320,9 @@
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  border: 1px solid rgba(212, 175, 55, 0.4);
-  color: var(--desk-gold);
-  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid var(--desk-line);
+  color: var(--desk-accent);
+  background: rgba(11, 95, 255, 0.08);
 }
 
 .milon-desk-tag {
@@ -337,15 +347,15 @@
   justify-content: center;
   gap: 4px;
   background: var(--desk-card);
-  border: 1px solid var(--desk-gold);
+  border: 1px solid var(--desk-accent);
   border-radius: 16px;
   padding: 12px 16px;
-  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.12), 0 10px 28px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 0 0 1px rgba(11, 95, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.22);
 }
 
 .milon-desk-signoff p {
   margin: 0;
-  color: var(--desk-gold);
+  color: var(--desk-accent);
   font-size: 15px;
   letter-spacing: 0.01em;
 }
@@ -464,16 +474,19 @@
 
 .milon-desk-btn.primary {
   border: none;
-  color: #1b1300;
-  background: linear-gradient(120deg, #ac8400, #d4af37 45%, #fdee79 70%, #d4af37);
-  box-shadow: 0 6px 18px rgba(212, 175, 55, 0.32);
+  color: #ffffff;
+  background: #0b5fff;
+  box-shadow: none;
+}
+.milon-desk-btn.primary:hover {
+  background: #2563eb;
 }
 
 .milon-desk-btn.outline,
 .milon-desk-btn.approve {
-  color: var(--desk-gold);
+  color: var(--desk-accent);
   background: transparent;
-  border: 1px solid rgba(212, 175, 55, 0.55);
+  border: 1px solid var(--desk-line);
 }
 
 .milon-desk-btn.approve {
@@ -490,7 +503,7 @@
 .milon-desk-btn:focus-visible,
 .milon-desk-all:focus-visible,
 .milon-desk-agent:focus-visible {
-  outline: 2px solid var(--desk-gold);
+  outline: 2px solid var(--desk-accent);
   outline-offset: 2px;
 }
 
@@ -551,7 +564,7 @@
   font-size: 14px;
   color: var(--desk-ink);
   background: transparent;
-  border: 1px solid rgba(212, 175, 55, 0.4);
+  border: 1px solid var(--desk-line);
   border-radius: 8px;
   padding: 8px 10px;
   width: 100%;
@@ -566,7 +579,7 @@
   font: inherit;
   font-size: 14px;
   font-weight: 700;
-  color: var(--desk-gold);
+  color: var(--desk-accent);
   background: none;
   border: 0;
   padding: 0;
@@ -579,7 +592,7 @@
   margin-top: 10px;
   border: 0;
   background: transparent;
-  color: var(--desk-gold);
+  color: var(--desk-accent);
   font: inherit;
   font-size: 13px;
   font-weight: 650;
@@ -603,7 +616,7 @@
 
 .milon-desk-draft-link {
   margin-left: 8px;
-  color: var(--desk-gold);
+  color: var(--desk-accent);
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -632,7 +645,7 @@
   flex: none;
   border-radius: 99px;
   border: 2px solid rgba(212, 175, 55, 0.25);
-  border-top-color: var(--desk-gold);
+  border-top-color: var(--desk-accent);
   animation: milon-desk-spin 0.8s linear infinite;
 }
 
@@ -646,7 +659,7 @@
   height: 72px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(11, 95, 255, 0.08);
 }
 
 .milon-desk-activity li {
@@ -750,8 +763,8 @@ html[data-theme="light"] .milon-desk {
   min-height: 0;
   height: auto;
   overflow: visible;
-  background: #101018;
-  border-top: 1px solid rgba(212, 175, 55, 0.32);
+  background: var(--desk-plate);
+  border-top: 1px solid var(--desk-line);
   padding: 8px 2px 2px;
   box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.45);
 }

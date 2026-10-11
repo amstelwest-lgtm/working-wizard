@@ -165,7 +165,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
         type="button"
         className={cn(
           chrome === "owner"
-            ? "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
+            ? "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#0B5FFF]/50 hover:bg-[#2563EB]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
             : "feature-finder-trigger",
         )}
         aria-label={`Search ${searchLabel} (${shortcut})`}

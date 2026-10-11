@@ -245,13 +245,13 @@ export function CashFromBanksDrafter({
         }
       }}
     >
-      <DialogContent className="box-border max-h-[min(92vh,100dvh-1rem)] w-full min-w-0 max-w-[min(64rem,calc(100vw-24px))] overflow-x-hidden overflow-y-auto border border-amber-900/20 bg-[#fffdf8] p-4 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
+      <DialogContent className="box-border max-h-[min(92vh,100dvh-1rem)] w-full min-w-0 max-w-[min(64rem,calc(100vw-24px))] overflow-x-hidden overflow-y-auto border border-amber-900/20 bg-[#FFFFFF] p-4 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
         <DialogClose className="absolute right-12 top-3 z-10 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50">
           Cancel
         </DialogClose>
         <DialogHeader className="pr-28 text-left">
           <DialogTitle className="flex min-w-0 items-start gap-2 text-left text-base font-semibold leading-snug tracking-tight">
-            <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-[#b8860b]" />
+            <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-[#102A43]" />
             <span className="min-w-0">Cash forecast from bank statements</span>
           </DialogTitle>
           <DialogDescription className="text-left text-xs leading-relaxed text-slate-500">
@@ -262,7 +262,7 @@ export function CashFromBanksDrafter({
         {!result && (
           <div className="space-y-4">
             <div
-              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#b7872a]/40 bg-white/70 px-4 py-8 text-center dark:bg-slate-900/40"
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#0B5FFF]/40 bg-white/70 px-4 py-8 text-center dark:bg-slate-900/40"
               onClick={() => inputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
@@ -270,7 +270,7 @@ export function CashFromBanksDrafter({
                 addFiles(e.dataTransfer.files);
               }}
             >
-              <Upload className="h-6 w-6 text-[#b8860b]" />
+              <Upload className="h-6 w-6 text-[#102A43]" />
               <p className="text-sm font-medium">Drop PDF, CSV or Excel/ODS bank statements</p>
               <p className="text-[11px] text-slate-500">
                 Up to {MAX_BANK_FILES} files · multiple accounts · 40 MB total
@@ -295,7 +295,7 @@ export function CashFromBanksDrafter({
                     key={`${f.name}-${i}`}
                     className="flex items-center gap-2 rounded-md border border-amber-900/10 bg-white/80 px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-900/50"
                   >
-                    <FileText className="h-3.5 w-3.5 text-[#b8860b]" />
+                    <FileText className="h-3.5 w-3.5 text-[#102A43]" />
                     <span className="min-w-0 flex-1 truncate">{f.name}</span>
                     <button
                       type="button"
@@ -322,7 +322,7 @@ export function CashFromBanksDrafter({
             <Button
               disabled={files.length === 0 || working}
               onClick={runDraft}
-              className="w-full max-w-full whitespace-normal bg-[#b8860b] text-white hover:bg-[#9a7209] sm:whitespace-nowrap"
+              className="w-full max-w-full whitespace-normal bg-[#0B5FFF] text-white hover:bg-[#9a7209] sm:whitespace-nowrap"
             >
               {working ? (
                 <>

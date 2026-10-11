@@ -1077,7 +1077,7 @@ export function ClientBrainSummary({
       )}
 
       <Dialog open={fillDialog != null} onOpenChange={(open) => !open && closeFill()}>
-        <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
+        <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]">
           <DialogHeader>
             <DialogTitle>
               {fillDialog?.kind === "map" ? fillDialog.label : "Answer this question"}

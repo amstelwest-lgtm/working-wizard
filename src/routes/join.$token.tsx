@@ -373,7 +373,7 @@ function AccountantJoinPage() {
                   setSignInFailure(null);
                   setResetOpen(false);
                 }}
-                className="font-medium text-[#d4a550] underline underline-offset-2"
+                className="font-medium text-[#0B5FFF] underline underline-offset-2"
               >
                 {signInMode ? "Create one" : "Sign in"}
               </button>

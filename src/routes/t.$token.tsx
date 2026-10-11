@@ -38,7 +38,7 @@ const STATUS_OPTIONS = [
   { value: "blocked", label: "I'm blocked" },
 ] as const;
 
-const GOLD = "#d4a550";
+const GOLD = "#0B5FFF";
 
 function fmtDate(d: string | null) {
   if (!d) return null;
@@ -199,7 +199,7 @@ function TaskPage() {
     <div className="min-h-screen bg-[#0a0c0b] text-[#e8ede9]" style={{ fontFeatureSettings: '"tnum"' }}>
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-14 pt-6">
         <header className="mb-6 flex items-center justify-between">
-          <span className="text-sm font-black tracking-[0.35em] text-[#d4a550]">MILŌN</span>
+          <span className="text-sm font-black tracking-[0.35em] text-[#0B5FFF]">MILŌN</span>
           {data?.plan?.period_label && (
             <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8a938c]">
               {data.plan.period_label}
@@ -264,7 +264,7 @@ function TaskPage() {
         <p className="mt-3 text-sm text-[#8a938c]">
           {dueStr && <>Due {dueStr}</>}
           {daysLeft != null && (
-            <span className={daysLeft < 0 ? "ml-2 font-bold text-[#ef4444]" : "ml-2 text-[#d4a550]"}>
+            <span className={daysLeft < 0 ? "ml-2 font-bold text-[#ef4444]" : "ml-2 text-[#0B5FFF]"}>
               {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` : `· ${daysLeft} days left`}
             </span>
           )}
@@ -328,7 +328,7 @@ function TaskPage() {
               step={5}
               value={progress}
               onChange={(e) => { setProgress(Number(e.target.value)); setSaved(false); }}
-              className="w-full accent-[#d4a550]"
+              className="w-full accent-[#0B5FFF]"
               aria-label="Progress percentage"
             />
             {expectedPct != null && (
@@ -387,7 +387,7 @@ function TaskPage() {
           onChange={(e) => { setNote(e.target.value); setSaved(false); }}
           rows={3}
           className={`mt-3 w-full rounded-[10px] border bg-[#10130f] px-4 py-3 text-sm text-[#e8ede9] placeholder:text-[#8a938c]/60 focus:outline-none ${
-            status === "blocked" && !note.trim() ? "border-[#ef4444]/50" : "border-white/10 focus:border-[#d4a550]/50"
+            status === "blocked" && !note.trim() ? "border-[#ef4444]/50" : "border-white/10 focus:border-[#0B5FFF]/50"
           }`}
           placeholder={status === "blocked" ? "e.g. Waiting on the bank statements from…" : "Optional short note"}
         />

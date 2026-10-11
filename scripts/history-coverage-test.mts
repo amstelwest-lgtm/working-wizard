@@ -117,6 +117,6 @@ assert(quintile.includes("ring-slate-300"), "industry graphic has a visible trac
 const trend = readFileSync(resolve("src/components/kpi-trendline.tsx"), "utf8");
 assert(trend.includes("placeholder"), "sparkline can show an empty-state silhouette");
 assert(trend.includes("Never invent"), "placeholder is decorative, not assumed history");
-assert(trend.includes("d4a550"), "placeholder uses the board gold so the slot still looks like a graph");
+assert(trend.includes("38BDF8"), "placeholder uses ice so the slot still looks like a graph");
 
 console.log("history-coverage-test: ok");

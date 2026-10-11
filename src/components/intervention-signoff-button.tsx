@@ -192,7 +192,7 @@ export function InterventionSignoffButton({
         </button>
 
         <Dialog open={confirmRemove} onOpenChange={setConfirmRemove}>
-          <DialogContent className="bg-[#0d1117] border-slate-800 text-slate-100">
+          <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]">
             <DialogHeader>
               <DialogTitle>Remove sign-off?</DialogTitle>
               <DialogDescription className="text-slate-400">
@@ -226,7 +226,7 @@ export function InterventionSignoffButton({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-[#0d1117] border-slate-800 text-slate-100">
+        <DialogContent className="border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB]">
           <DialogHeader>
             <DialogTitle>Sign off this step</DialogTitle>
             <DialogDescription className="text-slate-400">
@@ -244,7 +244,7 @@ export function InterventionSignoffButton({
               onChange={(e) => setNote(e.target.value)}
               placeholder="e.g. Discuss this with your operations manager first"
               rows={3}
-              className="bg-slate-950 border-slate-800 text-slate-100 text-sm resize-none"
+              className="resize-none border-[#DBEAFE] bg-white text-sm text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]"
               maxLength={500}
             />
           </div>

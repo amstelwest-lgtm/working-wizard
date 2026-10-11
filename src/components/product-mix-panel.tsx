@@ -48,8 +48,8 @@ const TITLES = [
 
 function choiceClass(on: boolean) {
   return on
-    ? "w-full rounded-xl border-2 border-[#d4a550] bg-[#d4a550]/25 p-3 text-left text-[#f3e6c4] shadow-[inset_0_0_0_1px_rgba(212,165,80,0.55)]"
-    : "w-full rounded-xl border border-slate-600 bg-slate-900/80 p-3 text-left text-slate-200 transition hover:border-[#d4a550]/70 hover:bg-[#d4a550]/10";
+    ? "w-full rounded-xl border-2 border-[#0B5FFF] bg-[#DBEAFE] p-3 text-left text-[#102A43]"
+    : "w-full rounded-xl border border-[#DBEAFE] bg-white p-3 text-left text-[#102A43] transition hover:border-[#2563EB] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]";
 }
 
 function MoneyField({
@@ -83,7 +83,7 @@ function MoneyField({
           const n = parseFloat(raw);
           onChange(Number.isFinite(n) && n >= 0 ? n : undefined);
         }}
-        className="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-2 pl-7 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-[#d4a550] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-full rounded-lg border border-[#DBEAFE] bg-white py-2 pl-7 pr-3 text-sm text-[#102A43] placeholder:text-[#3D5270] focus:border-[#0B5FFF] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
     </div>
   );
@@ -179,20 +179,20 @@ function ProductMixFunnel({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg border-slate-800 bg-slate-950 text-slate-200">
+      <DialogContent className="max-w-lg border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
         <DialogHeader>
-          <DialogTitle className="text-slate-100">Product lines</DialogTitle>
-          <DialogDescription className="text-slate-500">
+          <DialogTitle className="text-[#102A43] dark:text-[#F4F7FB]">Product lines</DialogTitle>
+          <DialogDescription className="text-[#3D5270] dark:text-[#C5D4E4]">
             Question {step + 1} of {TOTAL} · optional — skip anytime
           </DialogDescription>
         </DialogHeader>
 
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#0B5FFF] dark:text-[#F4F7FB]">
             Profitability · unit economics
           </p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-100">{TITLES[step]}</h3>
-          <p className="mt-1 text-sm text-slate-400">
+          <h3 className="mt-1 text-lg font-semibold text-[#102A43] dark:text-[#F4F7FB]">{TITLES[step]}</h3>
+          <p className="mt-1 text-sm text-[#3D5270] dark:text-[#C5D4E4]">
             {step === 0 &&
               "If one line covers the book, we skip this — the Profit tab stays simple."}
             {step === 1 && "Up to 5. Skip the long tail — just what you'd discuss in a review."}
@@ -213,12 +213,12 @@ function ProductMixFunnel({
                 onClick={() => setQ1("yes")}
               >
                 <div className="text-sm font-semibold">Yes — a few lines matter</div>
-                <div className="mt-1 text-[11px] text-slate-400">
+                <div className="mt-1 text-[11px] text-[#3D5270] dark:text-[#C5D4E4]">
                   We will take selling price, cost, and {t("currencyWord")} of total revenue for
                   each
                 </div>
                 {q1 === "yes" && (
-                  <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-[#d4a550]">
+                  <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-[#3D5270] dark:text-[#C5D4E4]">
                     Selected
                   </div>
                 )}
@@ -229,11 +229,11 @@ function ProductMixFunnel({
                 onClick={() => setQ1("no")}
               >
                 <div className="text-sm font-semibold">No — one main line covers it</div>
-                <div className="mt-1 text-[11px] text-slate-400">
+                <div className="mt-1 text-[11px] text-[#3D5270] dark:text-[#C5D4E4]">
                   We will leave the Profit tab as it is. You can add this later.
                 </div>
                 {q1 === "no" && (
-                  <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-[#d4a550]">
+                  <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-[#3D5270] dark:text-[#C5D4E4]">
                     Selected
                   </div>
                 )}
@@ -260,14 +260,14 @@ function ProductMixFunnel({
                       ? "e.g. Wholesale"
                       : `Line ${i + 1} (optional)`
                 }
-                className="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-[#d4a550] focus:outline-none"
+                className="w-full rounded-lg border border-[#DBEAFE] bg-white px-3 py-2 text-sm text-[#102A43] placeholder:text-[#3D5270] focus:border-[#0B5FFF] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] focus:outline-none"
               />
             ))}
 
           {step === 2 &&
             named.map((line) => (
-              <div key={line.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
-                <div className="mb-2 text-sm font-semibold text-slate-100">{line.name}</div>
+              <div key={line.id} className="rounded-xl border border-[#DBEAFE] bg-white p-3 dark:border-[#1e3a5f] dark:bg-[#0B1B2B]">
+                <div className="mb-2 text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]">{line.name}</div>
                 <MoneyField
                   value={line.sellPrice}
                   placeholder="0.00"
@@ -283,10 +283,10 @@ function ProductMixFunnel({
               return (
                 <div
                   key={line.id}
-                  className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"
+                  className="rounded-xl border border-[#DBEAFE] bg-white p-3 dark:border-[#1e3a5f] dark:bg-[#0B1B2B]"
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-slate-100">{line.name}</div>
+                    <div className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]">{line.name}</div>
                     <div className="text-[11px] text-slate-500">Sells {fmt(line.sellPrice)}</div>
                   </div>
                   <MoneyField
@@ -300,10 +300,10 @@ function ProductMixFunnel({
                       pct == null
                         ? "text-slate-500"
                         : pct >= 40
-                          ? "text-emerald-400"
+                          ? "text-[#0E5C40] dark:text-[#7DDEBA]"
                           : pct >= 20
-                            ? "text-[#d4a550]"
-                            : "text-red-400"
+                            ? "text-[#8A5A12] dark:text-[#F0D59A]"
+                            : "text-[#8E2430] dark:text-[#FFB4BC]"
                     }`}
                   >
                     Margin {formatMarginPct(pct)}
@@ -324,13 +324,13 @@ function ProductMixFunnel({
                 return (
                   <div
                     key={line.id}
-                    className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"
+                    className="rounded-xl border border-[#DBEAFE] bg-white p-3 dark:border-[#1e3a5f] dark:bg-[#0B1B2B]"
                   >
-                    <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-slate-200">
-                      <span className="text-slate-400">______ of</span>
-                      <span className="font-semibold text-slate-100">{totalLabel}</span>
-                      <span className="text-slate-400">is from</span>
-                      <span className="font-semibold text-slate-100">&quot;{line.name}&quot;</span>
+                    <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-[#102A43] dark:text-[#F4F7FB]">
+                      <span className="text-[#3D5270] dark:text-[#C5D4E4]">______ of</span>
+                      <span className="font-semibold text-[#102A43] dark:text-[#F4F7FB]">{totalLabel}</span>
+                      <span className="text-[#3D5270] dark:text-[#C5D4E4]">is from</span>
+                      <span className="font-semibold text-[#102A43] dark:text-[#F4F7FB]">&quot;{line.name}&quot;</span>
                     </div>
                     <MoneyField
                       value={line.revenueAmount}
@@ -339,7 +339,7 @@ function ProductMixFunnel({
                       onChange={(n) => patchLine(line.id, { revenueAmount: n })}
                     />
                     {contrast ? (
-                      <div className="mt-2 text-xs font-semibold text-[#d4a550]">{contrast}</div>
+                      <div className="mt-2 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{contrast}</div>
                     ) : (
                       <div className="mt-2 text-[11px] text-slate-500">
                         Sales share and GP share appear once this amount is in.
@@ -348,7 +348,7 @@ function ProductMixFunnel({
                   </div>
                 );
               })}
-              <div className="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-400">
+              <div className="rounded-lg border border-[#DBEAFE] bg-[#F4F8FF] px-3 py-2 text-xs text-[#3D5270] dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#C5D4E4]">
                 {statedTotal > 0 ? (
                   leftover >= 0 ? (
                     <>
@@ -372,14 +372,14 @@ function ProductMixFunnel({
 
         <div className="flex items-center gap-2 border-t border-slate-800 pt-3">
           {step > 0 ? (
-            <Button variant="ghost" size="sm" className="text-slate-300" onClick={goBack}>
+            <Button variant="ghost" size="sm" className="text-[#102A43] dark:text-[#F4F7FB]" onClick={goBack}>
               Back
             </Button>
           ) : (
             <Button
               variant="ghost"
               size="sm"
-              className="text-slate-400"
+              className="text-[#3D5270] dark:text-[#C5D4E4]"
               onClick={() => onOpenChange(false)}
             >
               Not now
@@ -390,7 +390,7 @@ function ProductMixFunnel({
               {Array.from({ length: TOTAL }).map((_, i) => (
                 <span
                   key={i}
-                  className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#d4a550]" : "bg-slate-700"}`}
+                  className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#0B5FFF]" : "bg-[#DBEAFE]"}`}
                 />
               ))}
             </div>
@@ -398,7 +398,7 @@ function ProductMixFunnel({
               <Button
                 size="sm"
                 disabled={!q1}
-                className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+                className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                 onClick={() => {
                   if (q1 === "no") {
                     onSave(declinedProductMix());
@@ -415,7 +415,7 @@ function ProductMixFunnel({
               <Button
                 size="sm"
                 disabled={!canAdvanceFromNames(nameSlots)}
-                className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+                className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                 onClick={commitNames}
               >
                 Continue
@@ -425,7 +425,7 @@ function ProductMixFunnel({
               <Button
                 size="sm"
                 disabled={!canAdvanceFromPrices(draft.lines)}
-                className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+                className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                 onClick={goNext}
               >
                 Continue
@@ -435,7 +435,7 @@ function ProductMixFunnel({
               <Button
                 size="sm"
                 disabled={!canAdvanceFromCosts(draft.lines)}
-                className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+                className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                 onClick={goNext}
               >
                 Continue
@@ -445,7 +445,7 @@ function ProductMixFunnel({
               <Button
                 size="sm"
                 disabled={!canAdvanceFromRevenue(draft.lines) || !canSaveUnitMix(draft)}
-                className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+                className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
                 onClick={finish}
               >
                 Save breakdown
@@ -469,27 +469,27 @@ function MixBars({ mix }: { mix: ProductMix }) {
   return (
     <div className="space-y-3">
       {ranked.map((row) => {
-        const tone = row.isBest ? "#4caf82" : row.isWorst ? "#e05c5c" : "#d4a550";
+        const tone = row.isBest ? "#0E5C40" : row.isWorst ? "#8E2430" : "#102A43";
         const contrast = shareContrastLabel(row.revenueSharePct, row.gpSharePct);
         return (
           <div key={row.id}>
             <div className="mb-1 flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <span className="truncate text-xs font-semibold text-slate-800 dark:text-[#102A43] dark:text-[#F4F7FB]">
                   {row.name}
                 </span>
                 {row.isBest && (
                   <span
-                    className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
-                    style={{ color: "#4caf82", background: "rgba(76,175,130,0.15)" }}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: "#0E5C40", background: "rgba(14,92,64,0.12)" }}
                   >
                     Most of GP
                   </span>
                 )}
                 {row.isWorst && (
                   <span
-                    className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
-                    style={{ color: "#e05c5c", background: "rgba(224,92,92,0.15)" }}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: "#8E2430", background: "rgba(196,61,75,0.12)" }}
                   >
                     Least of GP
                   </span>
@@ -501,18 +501,18 @@ function MixBars({ mix }: { mix: ProductMix }) {
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">
+                <span className="w-10 shrink-0 text-xs uppercase tracking-wider text-slate-500">
                   Sales
                 </span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-900/10 dark:bg-slate-800">
                   <div
-                    className="h-full rounded-full bg-[#d4a550]"
+                    className="h-full rounded-full bg-[#38BDF8]"
                     style={{ width: barWidth(row.revenueSharePct) }}
                   />
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">
+                <span className="w-10 shrink-0 text-xs uppercase tracking-wider text-slate-500">
                   GP
                 </span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-900/10 dark:bg-slate-800">
@@ -523,7 +523,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
                 </div>
               </div>
             </div>
-            <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+            <div className="mt-1 text-[10px] text-slate-500 dark:text-[#C5D4E4]">
               {fmt(row.revenueAmount)}
               {stated > 0 ? ` of ${fmt(stated)}` : ""}
               {" · "}
@@ -534,7 +534,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
         );
       })}
       {stated > 0 && leftover > 0 && (
-        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+        <p className="text-[10px] text-slate-500 dark:text-[#C5D4E4]">
           {fmt(leftover)} of {fmt(stated)} unallocated — other (no GP share)
         </p>
       )}
@@ -568,7 +568,7 @@ export function ProductMixPanel({
           !answered ? (
             <Button
               size="sm"
-              className="h-7 bg-[#d4a550] px-2.5 text-[11px] text-[#0a0e1a] hover:bg-[#c49a45]"
+              className="h-7 bg-[#0B5FFF] px-2.5 text-[11px] text-white hover:bg-[#2563EB]"
               onClick={() => setFunnelOpen(true)}
             >
               5 questions
@@ -576,7 +576,7 @@ export function ProductMixPanel({
           ) : (
             <button
               type="button"
-              className="text-[11px] font-medium text-[#b8860b] hover:underline dark:text-[#d4a550]"
+              className="text-xs font-medium text-[#0B5FFF] hover:underline dark:text-[#F4F7FB]"
               onClick={() => setFunnelOpen(true)}
             >
               Update
@@ -586,13 +586,13 @@ export function ProductMixPanel({
       >
         {!answered && (
           <div className="flex flex-col items-start gap-2">
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+            <p className="text-xs text-slate-600 dark:text-[#C5D4E4]">
               {incentive ??
                 "Optional. Of the stated total revenue, how much is from each line — then sales share vs GP share. Does not change the waterfall."}
             </p>
             <Button
               size="sm"
-              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
               onClick={() => setFunnelOpen(true)}
             >
               Break down by product line
@@ -600,14 +600,14 @@ export function ProductMixPanel({
           </div>
         )}
         {answered && !productMix.active && (
-          <p className="text-xs text-slate-600 dark:text-slate-400">
+          <p className="text-xs text-slate-600 dark:text-[#C5D4E4]">
             Marked as a single-line business. Update the breakdown if that changes.
           </p>
         )}
         {answered && productMix.active && (
           <>
             <MixBars mix={productMix} />
-            <p className="mt-3 text-[10px] text-slate-500 dark:text-slate-400">
+            <p className="mt-3 text-[10px] text-slate-500 dark:text-[#C5D4E4]">
               Sales share is {t("currencyWord")} of stated total revenue. GP share uses that amount ×
               unit margin. A high-margin line can be a small slice of sales and most of the profit.
               Does not change the waterfall figures.

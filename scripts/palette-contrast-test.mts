@@ -72,6 +72,88 @@ assert(css.toLowerCase().includes(PALETTE.ice.toLowerCase()), "ice is available 
 assert(!/--[\w-]*(ink|text|foreground)[\w-]*:\s*#38bdf8/i.test(css), "ice is not a text token");
 assert(!/color:\s*(var\(--ice\)|#38bdf8)/i.test(css), "ice is not used as a text color");
 
+const accountantFiles = [
+  "src/styles/accountant-portal.css",
+  "src/styles/settings-portal.css",
+  "src/styles/responsive-table.css",
+  "src/components/milon-team/milon-team-desk.css",
+  "src/routes/_authenticated/settings.team.tsx",
+  "src/routes/_authenticated/reports-studio.tsx",
+  "src/routes/_authenticated/clients.$clientId.tsx",
+  "src/routes/_authenticated/dashboard.tsx",
+  "src/routes/_authenticated/clients.index.tsx",
+  "src/routes/billing.required.tsx",
+  "src/components/advisory-pack-panel.tsx",
+  "src/components/portfolio-exceptions.tsx",
+  "src/components/industry-pulse.tsx",
+  "src/components/product-mix-panel.tsx",
+  "src/components/sphere-hero.tsx",
+  "src/components/cash-forecast.tsx",
+  "src/components/cash-thirteen-week.tsx",
+  "src/components/recommendations-panel.tsx",
+  "src/components/playbook-drawer.tsx",
+  "src/components/action-plan.tsx",
+  "src/components/profitability-waterfall.tsx",
+  "src/components/accountant-inbox.tsx",
+  "src/components/staff-invite-landing.tsx",
+  "src/components/ui/view-toggle.tsx",
+  "src/components/kpi-trendline.tsx",
+  "src/components/primitives/collapsible-gold-card.tsx",
+];
+const banned = [
+  "#d4a550",
+  "#d4af37",
+  "#ac8400",
+  "#fdee79",
+  "#c9962b",
+  "#b8860b",
+  "#b7872a",
+  "#fffdf8",
+  "#fffdf6",
+  "#101018",
+  "#1b1300",
+  "#1b1608",
+];
+for (const file of accountantFiles) {
+  const source = readFileSync(resolve(file), "utf8");
+  const lines = source.split("\n");
+  lines.forEach((line, index) => {
+    if (file.endsWith("accountant-portal.css")) {
+      if (/--gold/.test(line) || line.includes(".gold-text")) return;
+    }
+    const hit = banned.find((hex) => line.toLowerCase().includes(hex));
+    assert(!hit, `${file}:${index + 1} still uses ${hit}`);
+  });
+}
+
+const accountantPairs: Array<[string, string, string]> = [
+  ["navy on white", PALETTE.navy, PALETTE.white],
+  ["navy on pale", PALETTE.navy, PALETTE.pale],
+  ["cobalt on white", PALETTE.cobalt, PALETTE.white],
+  ["white on cobalt", PALETTE.white, PALETTE.cobalt],
+  ["white on royal", PALETTE.white, PALETTE.royal],
+  ["ink on dark canvas", PALETTE.inkDark, PALETTE.canvasDark],
+  ["ink on dark surface", PALETTE.inkDark, PALETTE.surfaceDark],
+  ["healthy ink on pale", PALETTE.healthyInk, PALETTE.pale],
+  ["attention ink on pale", PALETTE.attentionInk, PALETTE.pale],
+  ["critical ink on pale", PALETTE.criticalInk, PALETTE.pale],
+  ["healthy ink on dark", "#7DDEBA", PALETTE.canvasDark],
+  ["attention ink on dark", "#F0D59A", PALETTE.canvasDark],
+  ["critical ink on dark", "#FFB4BC", PALETTE.canvasDark],
+  ["healthy ink on dark surface", "#7DDEBA", PALETTE.surfaceDark],
+  ["attention ink on dark surface", "#F0D59A", PALETTE.surfaceDark],
+  ["critical ink on dark surface", "#FFB4BC", PALETTE.surfaceDark],
+];
+for (const [name, fg, bg] of accountantPairs) {
+  const ratio = contrast(fg, bg);
+  assert(ratio >= 4.5, `accountant ${name} is ${ratio.toFixed(2)}`);
+}
+const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+assert(portalCss.includes("--accent-text:#102a43"), "light accent text is navy");
+assert(portalCss.includes("--accent-text:#f4f7fb"), "dark accent text is ink");
+assert(portalCss.includes(".gold-text{background:var(--gold-grad)"), "wordmark stays gold");
+assert(!/color:\s*var\(--gold\)/.test(portalCss), "portal text does not use the gold token");
+
 console.log("palette-contrast tests passed");
 console.log(
   `exception: spec attention ${PALETTE.attention} is ${attentionOnWhite.toFixed(2)} on white and ${attentionOnPale.toFixed(2)} on pale; text uses ${PALETTE.attentionInk}`,

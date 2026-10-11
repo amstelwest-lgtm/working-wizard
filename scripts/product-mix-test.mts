@@ -186,7 +186,7 @@ assert(panelSrc.includes("of sales"), "live output contrasts sales share");
 assert(panelSrc.includes("of GP"), "live output contrasts GP share");
 assert(panelSrc.includes("choiceClass"), "selected options use a distinct class");
 assert(panelSrc.includes("Selected"), "selected options are labelled");
-assert(panelSrc.includes("border-2 border-[#d4a550]"), "selected state uses a stronger gold border");
+assert(panelSrc.includes("border-2 border-[#0B5FFF]"), "selected state uses a cobalt border");
 assert(panelSrc.includes("applyUnitEconomics"), "save stamps calculated shares");
 assert(!panelSrc.includes("SHARE_BANDS"), "Q5 does not guess sales-share bands");
 assert(!panelSrc.includes("About a quarter"), "Q5 is not band labels");

@@ -13,7 +13,7 @@ export function MovementsTrialBalancePanel({ movements }: { movements: Movements
     <div className="space-y-3 rounded-lg border border-amber-900/15 bg-amber-50/40 p-3 dark:border-slate-800 dark:bg-slate-900/60">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43]">
             Movements in balances
           </p>
           <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">

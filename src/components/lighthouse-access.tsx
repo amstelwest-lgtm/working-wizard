@@ -215,7 +215,7 @@ export function LighthouseAccessPanel() {
                   })
                   .catch((e) => toast.error(e instanceof Error ? e.message : "Could not add to firm"))
               }
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 text-[11px] font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-3 text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-50"
             >
               Grant
             </button>
@@ -255,7 +255,7 @@ export function LighthouseAccessPanel() {
                   })
                   .catch((e) => toast.error(e instanceof Error ? e.message : "Could not add to client"))
               }
-              className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 text-[11px] font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] px-3 text-[11px] font-bold uppercase tracking-wider text-white disabled:opacity-50"
             >
               Grant
             </button>
@@ -274,7 +274,7 @@ export function LighthouseAccessPanel() {
                 <div className="text-sm font-semibold text-[var(--ops-ink)]">
                   {u.name}
                   {u.itMember ? (
-                    <span className="ml-2 rounded-full bg-[var(--ops-amber-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--ops-amber)]">
+                    <span className="ml-2 rounded-full bg-[var(--ops-amber-soft)] px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)]">
                       IT
                     </span>
                   ) : null}
@@ -325,7 +325,7 @@ export function LighthouseAccessPanel() {
                         <X className="h-3 w-3" />
                       </button>
                     ) : (
-                      <span className="text-[9px] uppercase">owner</span>
+                      <span className="text-xs uppercase">owner</span>
                     )}
                   </div>
                 ))}

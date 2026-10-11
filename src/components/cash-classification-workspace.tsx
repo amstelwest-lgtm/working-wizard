@@ -294,7 +294,7 @@ export function CashClassificationWorkspace({
               key={f}
               type="button"
               onClick={() => setFilter(f)}
-              className={`rounded px-2 py-1 capitalize ${filter === f ? "bg-[#b8860b]/15 font-semibold text-[#8a651b]" : "text-slate-500"}`}
+              className={`rounded px-2 py-1 capitalize ${filter === f ? "bg-[#0B5FFF]/15 font-semibold text-[#8a651b]" : "text-slate-500"}`}
             >
               {f}
             </button>
@@ -393,7 +393,7 @@ export function CashClassificationWorkspace({
                       line.status === "excluded"
                         ? "border-slate-200 opacity-50 dark:border-slate-700"
                         : selected.has(line.id)
-                          ? "border-[#b8860b] ring-1 ring-[#b8860b]/40"
+                          ? "border-[#102A43] ring-1 ring-[#102A43]/40"
                           : "border-amber-900/10 dark:border-slate-800"
                     }`}
                   >
@@ -537,7 +537,7 @@ export function CashClassificationWorkspace({
       </div>
 
       {policyOpen && (
-        <div className="rounded-xl border border-[#b7872a]/40 bg-[#fff8e8] p-3 dark:bg-[#1a1510]">
+        <div className="rounded-xl border border-[#0B5FFF]/40 bg-[#fff8e8] p-3 dark:bg-[#1a1510]">
           {needsPolicy ? (
             <>
               <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -565,7 +565,7 @@ export function CashClassificationWorkspace({
               onClick={() => setPolicy("replace")}
               className={`rounded-lg border p-3 text-left text-xs ${
                 policy === "replace"
-                  ? "border-[#b8860b] bg-[#b8860b]/10"
+                  ? "border-[#102A43] bg-[#0B5FFF]/10"
                   : "border-amber-900/15 dark:border-slate-700"
               }`}
             >
@@ -579,7 +579,7 @@ export function CashClassificationWorkspace({
               onClick={() => setPolicy("merge")}
               className={`rounded-lg border p-3 text-left text-xs ${
                 policy === "merge"
-                  ? "border-[#b8860b] bg-[#b8860b]/10"
+                  ? "border-[#102A43] bg-[#0B5FFF]/10"
                   : "border-amber-900/15 dark:border-slate-700"
               }`}
             >
@@ -605,7 +605,7 @@ export function CashClassificationWorkspace({
             </Button>
             <Button
               size="sm"
-              className="bg-[#b8860b] text-white hover:bg-[#9a7209]"
+              className="bg-[#0B5FFF] text-white hover:bg-[#9a7209]"
               disabled={publishing}
               onClick={() => void doPublish(needsPolicy ? policy : "replace")}
             >
@@ -636,7 +636,7 @@ export function CashClassificationWorkspace({
           <Button
             disabled={publishing || activeCount === 0 || policyOpen}
             onClick={requestPublish}
-            className="w-full bg-[#b8860b] text-white hover:bg-[#9a7209] sm:w-auto"
+            className="w-full bg-[#0B5FFF] text-white hover:bg-[#9a7209] sm:w-auto"
           >
             {publishing ? "Publishing…" : "Publish to Cash Forecast"}
           </Button>

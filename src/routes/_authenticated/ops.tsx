@@ -383,7 +383,7 @@ function OwnerOpsPage() {
             <button
               type="submit"
               disabled={unlockBusy || !unlockPass.trim()}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] text-xs font-bold uppercase tracking-wider text-white disabled:opacity-50"
             >
               {unlockBusy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -846,7 +846,7 @@ function OwnerOpsPage() {
                 <button
                   type="submit"
                   disabled={payBusy}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-[#0B5FFF] hover:bg-[#2563EB] text-xs font-bold uppercase tracking-wider text-white disabled:opacity-60"
                 >
                   {payBusy ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

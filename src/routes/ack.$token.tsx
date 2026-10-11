@@ -55,7 +55,7 @@ function AckPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#0a0c0b] px-5 text-[#e8ede9]">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#10130f] p-8 text-center">
-        <p className="text-sm font-black tracking-[0.35em] text-[#d4a550]">MILŌN</p>
+        <p className="text-sm font-black tracking-[0.35em] text-[#0B5FFF]">MILŌN</p>
         <h1 className="mt-4 text-xl font-semibold tracking-tight">
           {status === "working"
             ? "Confirming…"
@@ -76,7 +76,7 @@ function AckPage() {
           <button
             type="button"
             onClick={() => void confirm()}
-            className="mt-6 rounded-lg bg-[#d4a550] px-5 py-2.5 text-sm font-semibold text-[#0a0c0b]"
+            className="mt-6 rounded-lg bg-[#0B5FFF] px-5 py-2.5 text-sm font-semibold text-[#0a0c0b]"
           >
             I received this
           </button>

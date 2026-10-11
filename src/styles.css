@@ -600,9 +600,9 @@ html:not(.dark) button .text-slate-400 { color: #475569 !important; }
 /* =====================================================================
  * Modern finance look — page surface + serif headings
  * ===================================================================== */
-html:not(.dark) body { background-color: #f8fafc !important; }
-html:not(.dark) main.bg-slate-950 { background-color: #f8fafc !important; color: #0b1220 !important; }
-.dark body { background-color: #0a0f1a; }
+html:not(.dark) body { background-color: #ffffff !important; }
+html:not(.dark) main.bg-slate-950 { background-color: #ffffff !important; color: #102a43 !important; }
+.dark body { background-color: #0b1b2b; }
 
 /* Headings use the editorial serif sparingly */
 .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
@@ -611,93 +611,89 @@ html:not(.dark) main.bg-slate-950 { background-color: #f8fafc !important; color:
    border-radius: 10px was squashing .health-orb into a square; z-index failed
    under transformed parents. The spotlight hole is drawn by WalkthroughWizard. */
 .wizard-highlight:not(.health-orb) {
-  outline: 2px solid rgba(201, 150, 43, 0.55);
+  outline: 2px solid rgba(11, 95, 255, 0.55);
   outline-offset: 4px;
   animation: wizard-pulse 1.8s ease-in-out infinite;
 }
 @keyframes wizard-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(201, 150, 43, 0.12); }
-  50%       { box-shadow: 0 0 0 10px rgba(201, 150, 43, 0.06), 0 0 28px rgba(201, 150, 43, 0.1); }
+  0%, 100% { box-shadow: 0 0 0 3px rgba(11, 95, 255, 0.14); }
+  50%       { box-shadow: 0 0 0 10px rgba(11, 95, 255, 0.06), 0 0 28px rgba(56, 189, 248, 0.16); }
 }
 
 /* ===== Health Score Orbs (main + pillar sub-orbs) — theme-aware ===== */
 /* Dark mode: the Sphere component's inline styles already handle this. */
-/* Light mode: luminous gold/pearl fill so dark ink labels stay readable. */
+/* Light mode: white to ice so navy labels stay readable. Gold stays on the wordmark. */
 html:not(.dark) .sphere-orb,
 html:not(.dark) .health-orb {
-  background: radial-gradient(circle at 50% 34%, #fffdf3 0%, #f6e6ad 40%, #ecce78 70%, #dcb046 100%) !important;
+  background: radial-gradient(circle at 50% 34%, #ffffff 0%, #e8f3ff 42%, #c7e4fe 72%, #7dd3fc 100%) !important;
   box-shadow:
-    0 22px 60px rgba(170,130,20,.28),
-    0 0 70px 6px rgba(212,175,55,.30),
+    0 22px 60px rgba(11,95,255,.16),
+    0 0 70px 6px rgba(56,189,248,.22),
     inset 0 3px 26px rgba(255,255,255,.9),
-    inset 0 -24px 55px rgba(150,110,10,.28) !important;
+    inset 0 -24px 55px rgba(11,95,255,.16) !important;
 }
 html:not(.dark) .sphere-orb .text-amber-300,
-html:not(.dark) .health-orb .text-amber-300 { color: #3f2f06 !important; }
+html:not(.dark) .health-orb .text-amber-300 { color: #8a5a12 !important; }
 html:not(.dark) .sphere-orb .text-slate-200,
-html:not(.dark) .health-orb .text-slate-200 { color: #5c4a22 !important; }
+html:not(.dark) .health-orb .text-slate-200 { color: #102a43 !important; }
 html:not(.dark) .sphere-orb .text-slate-400,
-html:not(.dark) .health-orb .text-slate-400 { color: #6b5a3a !important; }
+html:not(.dark) .health-orb .text-slate-400 { color: #3d5270 !important; }
 html:not(.dark) .sphere-orb [class*="text-amber-"],
-html:not(.dark) .health-orb [class*="text-amber-"] { color: #8a5a10 !important; }
+html:not(.dark) .health-orb [class*="text-amber-"] { color: #8a5a12 !important; }
 html:not(.dark) .sphere-orb .text-emerald-400,
-html:not(.dark) .health-orb .text-emerald-400 { color: #1f6b45 !important; }
+html:not(.dark) .health-orb .text-emerald-400 { color: #0e5c40 !important; }
 html:not(.dark) .sphere-orb .text-rose-400,
-html:not(.dark) .health-orb .text-rose-400 { color: #9b2424 !important; }
+html:not(.dark) .health-orb .text-rose-400 { color: #8e2430 !important; }
 
 /* Health drill "Back to pillars" / "Back to overview".
-   Do not use text-slate-* here: light mode remaps that scale to near-black
-   with !important, which vanishes on the accountant orb plate (#0a0e1a).
-   Light mode uses near-black ink; on that dark plate it sits in a cream chip
-   so the same control stays readable. Dark mode stays light-on-dark. */
+   Explicit navy and ink, because light mode remaps text-slate-* . */
 .sphere-drill-back {
-  color: #1b1608;
-  background: rgba(255, 253, 248, 0.88);
-  border: 1px solid rgba(27, 22, 8, 0.42);
+  color: #102a43;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .sphere-drill-back:hover {
-  color: #1b1608;
-  background: #fffdf8;
-  border-color: rgba(27, 22, 8, 0.72);
+  color: #102a43;
+  background: #f4f8ff;
+  border-color: #0b5fff;
 }
 .sphere-drill-back:focus-visible {
-  outline: 2px solid #1b1608;
+  outline: 2px solid #0b5fff;
   outline-offset: 2px;
 }
 html.dark .sphere-drill-back {
-  color: #f6f1e7;
-  background: rgba(255, 253, 248, 0.06);
-  border-color: rgba(246, 241, 231, 0.4);
+  color: #f4f7fb;
+  background: #102a43;
+  border-color: #1e3a5f;
 }
 html.dark .sphere-drill-back:hover {
-  color: #fffdf8;
-  background: rgba(255, 253, 248, 0.12);
-  border-color: rgba(246, 241, 231, 0.68);
+  color: #f4f7fb;
+  background: #163654;
+  border-color: #8cb4ff;
 }
 html.dark .sphere-drill-back:focus-visible {
-  outline-color: #f6f1e7;
+  outline-color: #8cb4ff;
 }
 /* Accountant Health plate is dark even when the page is light. */
 html:not(.dark) .sphere-drill-back--on-dark {
-  color: #1b1608;
-  background: #fffdf8;
-  border-color: rgba(27, 22, 8, 0.55);
-  box-shadow: 0 1px 2px rgba(10, 14, 26, 0.28);
+  color: #102a43;
+  background: #ffffff;
+  border-color: #dbeafe;
+  box-shadow: 0 1px 2px rgba(16, 42, 67, 0.12);
 }
 html:not(.dark) .sphere-drill-back--on-dark:hover {
-  color: #1b1608;
-  background: #fffdf8;
-  border-color: #1b1608;
+  color: #102a43;
+  background: #f4f8ff;
+  border-color: #0b5fff;
 }
 
-/* Firm-dashboard crumb on the accountant client page is gold (#d4af37) on
-   cream in light mode. Pin it to the same near-black ink. */
+/* Firm-dashboard crumb on the accountant client page. */
 html[data-theme="light"] .accountant-portal .crumb a {
-  color: #1b1608;
+  color: #102a43;
 }
 html[data-theme="light"] .accountant-portal .crumb a:hover {
-  color: #3f2d0a;
+  color: #0b5fff;
 }
 
 /* Google sign-in — accountant portal and callback pages */
@@ -854,9 +850,9 @@ html[data-theme="light"] .accountant-portal .crumb a:hover {
 }
 
 .auth-entry__input:focus {
-  border-color: color-mix(in srgb, var(--brand-gold-ui) 50%, transparent);
+  border-color: #0b5fff;
   outline: none;
-  box-shadow: 0 0 0 2px var(--brand-focus-ring);
+  box-shadow: 0 0 0 2px rgba(11, 95, 255, 0.2);
 }
 
 .auth-entry__primary-btn {
@@ -867,19 +863,17 @@ html[data-theme="light"] .accountant-portal .crumb a:hover {
   justify-content: center;
   border-radius: 0.75rem;
   border: none;
-  background: linear-gradient(
-    to right,
-    var(--brand-gold-deep),
-    var(--brand-gold),
-    var(--brand-gold-bright)
-  );
+  background: #0b5fff;
   padding: 0 1.25rem;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #1b1300;
-  transition: opacity 0.15s ease;
+  color: #ffffff;
+  transition: background-color 0.15s ease;
+}
+.auth-entry__primary-btn:hover:not(:disabled) {
+  background: #2563eb;
 }
 
 .auth-entry__primary-btn:disabled {
@@ -919,13 +913,13 @@ html[data-theme="light"] .accountant-portal .crumb a:hover {
 .auth-entry__link {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--brand-gold-ui);
+  color: #0b5fff;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 
 .auth-entry__link:hover {
-  color: var(--brand-gold-bright);
+  color: #2563eb;
 }
 
 button.auth-entry__link {
@@ -965,13 +959,8 @@ button.auth-entry__link {
 }
 
 .auth-entry__tab--active {
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--brand-gold-deep) 90%, transparent),
-    color-mix(in srgb, var(--brand-gold) 90%, transparent),
-    color-mix(in srgb, var(--brand-gold-bright) 90%, transparent)
-  );
-  color: #1b1300;
+  background: #dbeafe;
+  color: #102a43;
 }
 
 .auth-entry__terms {
@@ -1053,10 +1042,10 @@ button.auth-entry__link {
    Paint explicit surfaces. Dark is html.dark or the portal's own dark
    (anything except data-theme=light). Light stays cream with near-black ink. */
 .trial-ended-block {
-  --paywall-bg: #fffdf8;
-  --paywall-ink: #1b1608;
-  --paywall-muted: #4a4030;
-  --paywall-line: rgba(140, 110, 10, 0.28);
+  --paywall-bg: #ffffff;
+  --paywall-ink: #102a43;
+  --paywall-muted: #3d5270;
+  --paywall-line: #dbeafe;
   --border: var(--paywall-line);
   margin: 0 0 16px;
   padding: 14px 16px;
@@ -1069,14 +1058,14 @@ button.auth-entry__link {
 }
 html.dark .trial-ended-block,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block {
-  --paywall-bg: #101018;
-  --paywall-ink: #f7f1e4;
-  --paywall-muted: #e4dccb;
-  --paywall-line: rgba(212, 175, 55, 0.35);
+  --paywall-bg: #0b1b2b;
+  --paywall-ink: #f4f7fb;
+  --paywall-muted: #c5d4e4;
+  --paywall-line: #1e3a5f;
   --border: var(--paywall-line);
-  background-color: #101018 !important;
+  background-color: #0b1b2b !important;
   background-image: none !important;
-  color: #f7f1e4;
+  color: #f4f7fb;
   color-scheme: dark;
 }
 .trial-ended-block .trial-ended-title,
@@ -1096,20 +1085,22 @@ html.dark .trial-ended-block .firm-band-upgrade,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ended-title,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .text-foreground,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .firm-band-upgrade {
-  color: #f7f1e4 !important;
-  -webkit-text-fill-color: #f7f1e4 !important;
+  color: #f4f7fb !important;
+  -webkit-text-fill-color: #f4f7fb !important;
 }
 html.dark .trial-ended-block .text-muted-foreground,
 html.dark .trial-ended-block .trial-ended-note,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .text-muted-foreground,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ended-note {
-  color: #e4dccb !important;
-  -webkit-text-fill-color: #e4dccb !important;
+  color: #c5d4e4 !important;
+  -webkit-text-fill-color: #c5d4e4 !important;
 }
 .trial-ended-block .btn.gold,
 .trial-ended-block .btn.gold:hover {
-  color: #1b1300 !important;
-  -webkit-text-fill-color: #1b1300 !important;
+  background: #0b5fff !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 .trial-ended-block .btn.ghost {
   color: var(--paywall-ink);
@@ -1118,25 +1109,25 @@ html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ende
   background: transparent;
 }
 .trial-ended-block .btn.ghost:hover {
-  color: #1b1608;
-  -webkit-text-fill-color: #1b1608;
-  border-color: #8a6508;
+  color: #102a43;
+  -webkit-text-fill-color: #102a43;
+  border-color: #0b5fff;
 }
 html.dark .trial-ended-block .btn.ghost,
 html.dark .trial-ended-block .btn.ghost:hover,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .btn.ghost,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block .btn.ghost:hover {
-  color: #f7f1e4 !important;
-  -webkit-text-fill-color: #f7f1e4 !important;
-  border-color: rgba(212, 175, 55, 0.55);
+  color: #f4f7fb !important;
+  -webkit-text-fill-color: #f4f7fb !important;
+  border-color: #1e3a5f;
   background: transparent;
 }
 .trial-ended-block input,
 .trial-ended-block textarea,
 .trial-ended-block select {
-  background-color: #fffdf8;
-  color: #1b1608;
-  border: 1px solid rgba(140, 110, 10, 0.28);
+  background-color: #ffffff;
+  color: #102a43;
+  border: 1px solid #dbeafe;
 }
 html.dark .trial-ended-block input,
 html.dark .trial-ended-block textarea,
@@ -1144,10 +1135,10 @@ html.dark .trial-ended-block select,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block input,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block textarea,
 html:not([data-theme="light"]) .accountant-portal .trial-ended-block select {
-  background-color: #0a0a10 !important;
-  color: #f7f1e4 !important;
-  -webkit-text-fill-color: #f7f1e4 !important;
-  border-color: #a08436 !important;
+  background-color: #102a43 !important;
+  color: #f4f7fb !important;
+  -webkit-text-fill-color: #f4f7fb !important;
+  border-color: #8cb4ff !important;
 }
 .trial-ended-title {
   margin: 0 0 12px;
@@ -1175,17 +1166,19 @@ html:not([data-theme="light"]) .accountant-portal .trial-ended-block select {
 }
 html[data-theme="light"] .accountant-portal .firm-band-upgrade,
 html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-foreground {
-  color: #1b1608;
-  -webkit-text-fill-color: #1b1608;
+  color: #102a43;
+  -webkit-text-fill-color: #102a43;
 }
 html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreground {
-  color: #4a4030;
-  -webkit-text-fill-color: #4a4030;
+  color: #3d5270;
+  -webkit-text-fill-color: #3d5270;
 }
 .accountant-portal .firm-band-upgrade .btn.gold,
 .accountant-portal .firm-band-upgrade .btn.gold:hover {
-  color: #1b1300;
-  -webkit-text-fill-color: #1b1300;
+  background: #0b5fff;
+  background-image: none;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
 }
 .firm-band-upgrade .firm-voucher-label {
   display: block;
@@ -1210,44 +1203,44 @@ html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreg
 }
 html.dark .firm-band-upgrade .firm-voucher-input,
 html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-voucher-input {
-  background: #0a0a10;
-  color: #f7f1e4;
-  -webkit-text-fill-color: #f7f1e4;
-  border: 1px solid #a08436;
+  background: #102a43;
+  color: #f4f7fb;
+  -webkit-text-fill-color: #f4f7fb;
+  border: 1px solid #8cb4ff;
 }
 html.dark .firm-band-upgrade .firm-voucher-input::placeholder,
 html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-voucher-input::placeholder {
-  color: #a39c8c;
-  -webkit-text-fill-color: #a39c8c;
+  color: #c5d4e4;
+  -webkit-text-fill-color: #c5d4e4;
   opacity: 1;
 }
 html.dark .firm-band-upgrade .firm-voucher-input:focus,
 html:not([data-theme="light"]) .accountant-portal .firm-band-upgrade .firm-voucher-input:focus {
-  outline: 2px solid #fdee79;
+  outline: 2px solid #8cb4ff;
   outline-offset: 2px;
 }
 html[data-theme="light"] .firm-band-upgrade .firm-voucher-input {
-  background: #fffdf8 !important;
-  color: #1b1608 !important;
-  -webkit-text-fill-color: #1b1608 !important;
-  border: 1px solid #8a6508 !important;
+  background: #ffffff !important;
+  color: #102a43 !important;
+  -webkit-text-fill-color: #102a43 !important;
+  border: 1px solid #0b5fff !important;
 }
 html[data-theme="light"] .firm-band-upgrade .firm-voucher-input::placeholder {
-  color: #6b5f48 !important;
-  -webkit-text-fill-color: #6b5f48 !important;
+  color: #3d5270 !important;
+  -webkit-text-fill-color: #3d5270 !important;
   opacity: 1 !important;
 }
 html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
-  outline: 2px solid #8a6508;
+  outline: 2px solid #0b5fff;
   outline-offset: 2px;
 }
 .precard-cap-card {
   margin-top: 12px;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid rgba(140, 110, 10, 0.28);
-  background: #fffdf8;
-  color: #1b1608;
+  border: 1px solid #dbeafe;
+  background: #ffffff;
+  color: #102a43;
 }
 .precard-cap-reason { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
 .precard-cap-title { margin: 0; font-size: 15px; line-height: 1.45; font-weight: 650; }
@@ -1256,8 +1249,8 @@ html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
   margin-top: 12px;
   padding: 8px 14px;
   border-radius: 999px;
-  background: #e0b85c;
-  color: #1b1300;
+  background: #0b5fff;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
@@ -1266,9 +1259,9 @@ html[data-theme="light"] .firm-band-upgrade .firm-voucher-input:focus {
 html.dark .precard-cap-card,
 html:not([data-theme="light"]) .accountant-portal .precard-cap-card,
 .dark .ask-ai-answer.precard-cap-card {
-  background: #101018;
-  color: #f7f1e4;
-  border-color: rgba(212, 175, 55, 0.35);
+  background: #0b1b2b;
+  color: #f4f7fb;
+  border-color: #1e3a5f;
 }
 .trial-ended-action {
   margin-top: 12px;

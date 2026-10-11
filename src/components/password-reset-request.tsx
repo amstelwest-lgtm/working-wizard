@@ -78,7 +78,7 @@ export function PasswordResetRequest({
         </p>
         <button
           type="button"
-          className="mt-4 text-sm font-medium text-[#d4a550] underline underline-offset-2"
+          className="mt-4 text-sm font-medium text-[#0B5FFF] underline underline-offset-2"
           onClick={onBack}
         >
           Back to sign in
@@ -143,7 +143,7 @@ export function PasswordResetRequest({
       </div>
       <button
         type="button"
-        className="mt-4 text-sm font-medium text-[#d4a550] underline underline-offset-2"
+        className="mt-4 text-sm font-medium text-[#0B5FFF] underline underline-offset-2"
         onClick={onBack}
       >
         Back to sign in

@@ -41,7 +41,7 @@ export function CollapsibleGoldCard({
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#d4a550]/15 text-[#b8860b] dark:text-[#d4a550]">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0B5FFF]/15 text-[#102A43] dark:text-[#0B5FFF]">
               <Icon className="h-4 w-4" />
             </span>
             <span className="min-w-0">
@@ -59,7 +59,7 @@ export function CollapsibleGoldCard({
             {headerRight}
             <button
               type="button"
-              className="p-1 text-[#d4a550]"
+              className="p-1 text-[#0B5FFF]"
               onClick={() => setOpen((o) => !o)}
               aria-label={open ? "Collapse" : "Expand"}
               aria-expanded={open}

@@ -76,7 +76,7 @@ export function SimplifiedRatios({
             ) : (
               <div className="mt-1.5 flex h-9 items-center text-[10px] text-slate-500">
                 {onAddPastPeriod ? (
-                  <AddPastPeriodLink onOpen={onAddPastPeriod} className="text-[10px] font-medium text-[#d4a550] underline decoration-[#d4a550]/40 underline-offset-2" />
+                  <AddPastPeriodLink onOpen={onAddPastPeriod} className="text-[10px] font-medium text-[#0B5FFF] underline decoration-[#0B5FFF]/40 underline-offset-2" />
                 ) : (
                   "trend builds with snapshots"
                 )}

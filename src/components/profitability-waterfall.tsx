@@ -51,7 +51,7 @@ const STEP_RATIO: Record<string, string> = {
 
 const BAND_CHIP: Record<string, { color: string; bg: string }> = {
   healthy: { color: "#4caf82", bg: "rgba(76,175,130,0.15)" },
-  at_risk: { color: "#d4a550", bg: "rgba(212,165,80,0.15)" },
+  at_risk: { color: "#0B5FFF", bg: "rgba(212,165,80,0.15)" },
   critical: { color: "#e05c5c", bg: "rgba(224,92,92,0.15)" },
 };
 
@@ -392,15 +392,15 @@ export function ProfitabilityWaterfall({
   const showHeader = !hideLead || Boolean(yearToDate?.periodLabel) || Boolean(periodNote) || !hideCardExport;
 
   return (
-    <Card className="relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] text-[#0f172a] shadow-[0_20px_60px_rgba(109,79,22,0.10)] print:hidden dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:text-[#f1f5f9] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent" />
+    <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
+      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#0B5FFF] via-[#F4F7FB] to-transparent" />
       {showHeader ? (
       <CardHeader className="border-b border-amber-900/10 pb-5 dark:border-slate-800">
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1">
             {hideLead ? null : (
               <>
-                <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
+                <CardTitle className="text-xl font-semibold tracking-tight text-[#102A43] dark:text-[#F4F7FB]">
                   Profitability Waterfall
                 </CardTitle>
                 <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">{answerSentence}</p>
@@ -423,7 +423,7 @@ export function ProfitabilityWaterfall({
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#d4a550] hover:bg-[#d4a550]/20"
+              className="h-7 gap-1.5 border-[#0B5FFF]/40 bg-[#0B5FFF]/10 px-2.5 text-[10px] text-[#0B5FFF] hover:bg-[#2563EB]/20"
               disabled={exporting}
               onClick={(e) => {
                 e.stopPropagation();
@@ -522,12 +522,12 @@ export function ProfitabilityWaterfall({
                         }}
                       >
                         <div
-                          className="truncate rounded-sm bg-[#fffdf8]/90 px-0.5 text-[10px] font-extrabold tracking-tight dark:bg-[#0b1220]/85 sm:text-[11px]"
+                          className="truncate rounded-sm bg-[#FFFFFF]/90 px-0.5 text-[10px] font-extrabold tracking-tight dark:bg-[#0b1220]/85 sm:text-[11px]"
                           style={{
                             color: isDec || negNet ? "#c0392b" : undefined,
                           }}
                         >
-                          <span className={isDec || negNet ? "" : "text-[#0f172a] dark:text-[#f8fafc]"}>
+                          <span className={isDec || negNet ? "" : "text-[#102A43] dark:text-[#F4F7FB]"}>
                             {isDec
                               ? negative === "minus"
                                 ? ownerOutflow(fmtCompact(Math.abs(s.delta)))
@@ -535,7 +535,7 @@ export function ProfitabilityWaterfall({
                               : fmtCompact(s.runningEnd)}
                           </span>
                         </div>
-                        <div className="truncate text-[9px] font-medium text-[#475569] dark:text-[#94a3b8]">
+                        <div className="truncate text-xs font-medium text-[#475569] dark:text-[#94a3b8]">
                           {pct(value, revenue)}
                         </div>
                       </div>
@@ -560,7 +560,7 @@ export function ProfitabilityWaterfall({
 
                       {/* column label + badge */}
                       <div className="absolute bottom-0 left-0 right-0 flex h-[84px] flex-col items-center gap-1 pt-2">
-                        <span className="w-full truncate px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
+                        <span className="w-full truncate px-0.5 text-center text-xs font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
                           {s.label}
                         </span>
                         {isNet && taxNote ? (
@@ -570,7 +570,7 @@ export function ProfitabilityWaterfall({
                         ) : null}
                         {status && (
                           <span
-                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold tracking-wide sm:px-1.5 sm:text-[9px]"
+                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold tracking-wide sm:px-1.5 sm:text-xs"
                             style={{
                               color: status.color,
                               background: status.bg,
@@ -627,7 +627,7 @@ export function ProfitabilityWaterfall({
                       <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[#475569] dark:text-[#94a3b8]">
                         {s.label}
                       </div>
-                      <div className="truncate text-sm font-extrabold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
+                      <div className="truncate text-sm font-extrabold tracking-tight text-[#102A43] dark:text-[#F4F7FB]">
                         {fmt(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd)}
                         <span className="ml-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                           {pct(s.kind === "decrease" ? Math.abs(s.delta) : s.runningEnd, revenue)}
@@ -635,7 +635,7 @@ export function ProfitabilityWaterfall({
                       </div>
                     </div>
                     <span
-                      className="shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide"
+                      className="shrink-0 rounded border px-1.5 py-0.5 text-xs font-extrabold tracking-wide"
                       style={{
                         color: status.color,
                         background: status.bg,

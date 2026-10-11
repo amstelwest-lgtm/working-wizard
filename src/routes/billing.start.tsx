@@ -160,7 +160,7 @@ function BillingStartPage() {
                 setError("");
                 startedRef.current = false;
               }}
-              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+              className="inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]"
             >
               Try again
             </button>

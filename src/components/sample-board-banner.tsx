@@ -29,7 +29,7 @@ export function SampleBoardBanner({
         <button
           type="button"
           onClick={onUseMyFigures}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[#b7872a] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#d4a550]"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#2563EB]"
         >
           <Upload className="h-3.5 w-3.5" />
           Use my own figures

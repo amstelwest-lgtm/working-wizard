@@ -56,12 +56,12 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
                 <th
                   key={w}
                   className={`px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider ${
-                    w === currentWeek ? "text-[#b8860b] dark:text-[#d4a550]" : ""
+                    w === currentWeek ? "text-[#102A43] dark:text-[#0B5FFF]" : ""
                   }`}
                 >
                   {w}
                   {w === currentWeek ? (
-                    <span className="ml-1 text-[#b8860b] dark:text-[#d4a550]">★</span>
+                    <span className="ml-1 text-[#102A43] dark:text-[#0B5FFF]">★</span>
                   ) : null}
                 </th>
               ))}
@@ -86,7 +86,7 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
                       key={w}
                       data-label={w}
                       className={`px-2 py-2 text-right ${
-                        w === currentWeek ? "rounded bg-[#d4a550]/10" : ""
+                        w === currentWeek ? "rounded bg-[#0B5FFF]/10" : ""
                       }`}
                     >
                       <div className="relative inline-flex items-center">
@@ -100,7 +100,7 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
                           onChange={(e) =>
                             updateWeek(w, field.key, parseFloat(e.target.value) || 0)
                           }
-                          className="w-24 rounded-md border border-amber-900/15 bg-white/70 py-1.5 pl-5 pr-2 text-right text-xs font-semibold text-slate-900 focus:border-[#d4a550] focus:outline-none [appearance:textfield] dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          className="w-24 rounded-md border border-amber-900/15 bg-white/70 py-1.5 pl-5 pr-2 text-right text-xs font-semibold text-slate-900 focus:border-[#0B5FFF] focus:outline-none [appearance:textfield] dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         />
                       </div>
                     </td>

@@ -129,7 +129,7 @@ type Props = {
 };
 
 const GOLD_BTN =
-  "inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50";
+  "inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] px-3 py-1.5 text-[12px] font-bold text-white hover:bg-[#2563EB] disabled:opacity-50";
 const GHOST_BTN =
   "inline-flex items-center gap-1.5 rounded-lg border border-slate-300/70 px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 disabled:opacity-50 dark:border-white/15 dark:text-slate-300";
 
@@ -605,7 +605,7 @@ export function AdvisoryPackPanel({
   ]);
 
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]",
     className,
   ]
     .filter(Boolean)
@@ -660,9 +660,9 @@ export function AdvisoryPackPanel({
               <li
                 key={s.key}
                 data-section={s.key}
-                className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                className="rounded-xl border border-[#DBEAFE] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
               >
-                <h4 className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-[#7a5a0e] dark:text-[#f1d28b]">
+                <h4 className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
                   {s.title}
                 </h4>
                 <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-800 dark:text-slate-100/90">
@@ -838,10 +838,10 @@ export function AdvisoryPackPanel({
               <li
                 key={s.key}
                 data-section={s.key}
-                className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                className="rounded-xl border border-[#DBEAFE] bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <h4 className="flex items-center gap-1.5 text-[12.5px] font-bold uppercase tracking-[0.08em] text-[#7a5a0e] dark:text-[#f1d28b]">
+                  <h4 className="flex items-center gap-1.5 text-[12.5px] font-bold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
                     {s.key === "disclosure" ? (
                       <Lock className="h-3 w-3" aria-hidden />
                     ) : (
@@ -849,7 +849,7 @@ export function AdvisoryPackPanel({
                     )}
                     {s.title}
                     {diff?.changed ? (
-                      <span className="rounded-full border border-sky-400/50 bg-sky-500/10 px-1.5 py-[1px] text-[9px] font-bold uppercase tracking-[0.1em] text-sky-700 dark:text-sky-300">
+                      <span className="rounded-full border border-sky-400/50 bg-sky-500/10 px-1.5 py-[1px] text-xs font-bold uppercase tracking-[0.1em] text-sky-700 dark:text-sky-300">
                         edited
                       </span>
                     ) : null}
@@ -868,7 +868,7 @@ export function AdvisoryPackPanel({
                       <button
                         type="button"
                         onClick={() => startEdit(s)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#7a5a0e] dark:text-[#f1d28b]"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#102A43] dark:text-[#F4F7FB]"
                         data-edit-section={s.key}
                       >
                         <Pencil className="h-3 w-3" aria-hidden /> Edit
@@ -942,7 +942,7 @@ export function AdvisoryPackPanel({
       ) : null}
 
       {pack ? (
-        <div className="mt-4 flex flex-col gap-2 rounded-xl border border-dashed border-[#b7872a]/35 p-3">
+        <div className="mt-4 flex flex-col gap-2 rounded-xl border border-dashed border-[#DBEAFE] p-3">
           <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
             {canSignOff && !signOffBlocked && audience === "accountant"
               ? "Note (required to request changes or reject; optional on sign-off)"

@@ -76,18 +76,18 @@ export function KpiTrendline({
       className={className}
       aria-hidden
     >
-      <path d={GHOST_FILL} fill="#d4a550" fillOpacity={0.14} />
+      <path d={GHOST_FILL} fill="#38BDF8" fillOpacity={0.14} />
       <path
         d={GHOST_LINE}
         fill="none"
-        stroke="#b7872a"
+        stroke="#38BDF8"
         strokeOpacity={0.45}
         strokeWidth={1.5}
         strokeDasharray="2.8 2.2"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
-      {pts.length === 1 ? <circle cx={50.5} cy={5.8} r={2.2} fill="#b7872a" /> : null}
+      {pts.length === 1 ? <circle cx={50.5} cy={5.8} r={2.2} fill="#0B5FFF" /> : null}
     </svg>
   );
 }
