@@ -4,7 +4,10 @@
  */
 import { analystRunOutcome, type AnalystToolName } from "./agent-analyst.ts";
 
-export const FM_MAX_ITERATIONS = 4;
+/** A normal run is 3–4 turns. Two extra turns are headroom before the cap. */
+export const FM_MAX_ITERATIONS = 6;
+export const FM_COST_CEILING_USD = 0.06;
+export const FM_COST_STOP_USD = 0.055;
 
 export const FM_DRAFT_KINDS = [
   "action_point_draft",

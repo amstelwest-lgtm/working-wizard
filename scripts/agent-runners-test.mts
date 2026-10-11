@@ -11,21 +11,34 @@ import {
   draftClaimsSignedOff,
   draftMessageType,
   prepareDraftRecord,
+  resolveDraftRecipient,
   RUNNER_COST_CEILING_USD,
   RUNNER_COST_STOP_USD,
   RUNNER_TOKEN_ENVELOPE,
+  runnerEarlyFinish,
   runnerShouldStopForCost,
 } from "../src/lib/agent-draft.ts";
 import {
+  ADVISOR_COST_CEILING_USD,
+  ADVISOR_COST_STOP_USD,
   ADVISOR_DRAFT_KINDS,
+  ADVISOR_MAX_ITERATIONS,
+  ADVISOR_PEERS,
   ADVISOR_TOOLS,
+  advisorRunOutcome,
   executeAdvisorGate,
 } from "../src/lib/agent-advisor.ts";
 import {
+  FM_COST_CEILING_USD,
+  FM_COST_STOP_USD,
   FM_DRAFT_KINDS,
+  FM_MAX_ITERATIONS,
+  FM_PEERS,
   FM_TOOLS,
   executeFinancialManagerGate,
+  fmRunOutcome,
 } from "../src/lib/agent-financial-manager.ts";
+import { REJECTED_TRACE_ARGS_MAX, runAgentLoop } from "../supabase/functions/_shared/agent-core/loop.ts";
 import { handoffDecision } from "../src/lib/owner-handoff.ts";
 import { advisorToolSchemas, ADVISOR_SYSTEM } from "../supabase/functions/_shared/agent-prompts/advisor.ts";
 import {
@@ -167,6 +180,15 @@ function deskWritesLiveRecords(src: string): boolean {
   const advisorKind = (advisorSchema?.input_schema.properties as { kind?: { enum?: string[] } }).kind?.enum;
   assert(JSON.stringify(advisorKind) === JSON.stringify([...ADVISOR_DRAFT_KINDS]), "advisor kinds are the draft kinds");
   assert(!advisorKind?.some((kind) => /sign/i.test(kind)), "no signed-off kind");
+  const fmTo = (fmSchema?.input_schema.properties as { to_agent?: { enum?: string[] } }).to_agent?.enum;
+  const advisorTo = (advisorSchema?.input_schema.properties as { to_agent?: { enum?: string[] } }).to_agent?.enum;
+  const fmRequired = fmSchema?.input_schema.required as string[];
+  const advisorRequired = advisorSchema?.input_schema.required as string[];
+  assert(JSON.stringify(fmTo) === JSON.stringify([...FM_PEERS]), "financial manager to_agent is analyst or advisor");
+  assert(JSON.stringify(advisorTo) === JSON.stringify([...ADVISOR_PEERS]), "advisor to_agent is financial_manager or analyst");
+  assert(!fmTo?.includes("financial_manager"), "the financial manager schema excludes itself");
+  assert(!advisorTo?.includes("advisor"), "the advisor schema excludes itself");
+  assert(!fmRequired.includes("to_agent") && !advisorRequired.includes("to_agent"), "to_agent is optional");
 }
 
 // Stored cash and budget. Tax stays out. Closings come from the saved cashflow.
@@ -265,9 +287,49 @@ function deskWritesLiveRecords(src: string): boolean {
     RUNNER_TOKEN_ENVELOPE.cacheWriteTokens,
     RUNNER_TOKEN_ENVELOPE.cacheReadTokens,
   );
-  assert(cost <= RUNNER_COST_CEILING_USD, `the sized run costs ${cost}, over the ceiling`);
+  assert(cost <= RUNNER_COST_STOP_USD, `a normal four-turn run costs ${cost}, over the stop line`);
+  assert(cost <= RUNNER_COST_CEILING_USD && RUNNER_COST_CEILING_USD <= 0.06, "each run stays at or under $0.06");
+  assert(RUNNER_COST_STOP_USD < RUNNER_COST_CEILING_USD, "the stop line leaves headroom under the ceiling");
   assert(runnerShouldStopForCost(RUNNER_COST_STOP_USD), "a run at the stop line does not call the model again");
+  assert(!runnerShouldStopForCost(0.04), "the turn-3 production spend can take another turn");
   assert(!runnerShouldStopForCost(RUNNER_COST_STOP_USD - 0.01), "a cheaper run may continue");
+  assert(FM_MAX_ITERATIONS === 6 && ADVISOR_MAX_ITERATIONS === 6, "a 3–4 turn run has headroom before the cap");
+  assert(FM_COST_CEILING_USD === 0.06 && ADVISOR_COST_CEILING_USD === 0.06, "each agent ceiling is $0.06");
+  assert(FM_COST_STOP_USD === RUNNER_COST_STOP_USD && ADVISOR_COST_STOP_USD === RUNNER_COST_STOP_USD, "each agent stops on the shared line");
+  assert(runnerEarlyFinish(0) === null, "a run with no draft keeps going");
+  const early = runnerEarlyFinish(1);
+  assert(early?.reason === "objective_complete", "a recorded draft finishes the run");
+  const capped = fmRunOutcome({
+    stopReason: "safety_limit",
+    maxIterations: FM_MAX_ITERATIONS,
+    steps: [
+      { tool: "get_books_quality", status: "ok" },
+      { tool: "record_draft", status: "ok" },
+      { tool: "get_cash_13_week", status: "ok" },
+      { tool: "record_draft", status: "error" },
+      { tool: "get_inbox", status: "ok" },
+      { tool: "record_draft", status: "ok" },
+    ],
+  });
+  assert(capped.status === "succeeded" && capped.stopReason === "cap_after_findings", "a cap after a draft is the analyst finish");
+  const advisorCap = advisorRunOutcome({
+    stopReason: "safety_limit",
+    maxIterations: ADVISOR_MAX_ITERATIONS,
+    steps: Array.from({ length: ADVISOR_MAX_ITERATIONS }, (_, i) =>
+      i === 1 ? { tool: "record_draft", status: "ok" } : { tool: "get_health", status: "ok" },
+    ),
+  });
+  assert(
+    advisorCap.status === "succeeded" && advisorCap.stopReason === "cap_after_findings",
+    "the advisor cap after a draft is the analyst finish",
+  );
+  const jobSrc = read("supabase/functions/_shared/agent-core/job.ts");
+  const reasonBody = jobSrc.slice(jobSrc.indexOf("reason: async"));
+  assert(
+    reasonBody.indexOf("runnerEarlyFinish") < reasonBody.indexOf("callClaudeRound"),
+    "drafts finish before another model call",
+  );
+  assert(jobSrc.includes("config.costStopUsd"), "the cost stop is the agent's own line");
 
   for (const file of [
     "supabase/functions/agent-financial-manager/index.ts",
@@ -302,11 +364,114 @@ function deskWritesLiveRecords(src: string): boolean {
   assert(ADVISOR_SYSTEM.includes("Milōn Advisor"), "the advisor names itself");
   assert(/signed off is accountant-only/i.test(ADVISOR_SYSTEM), "the advisor never signs off");
   assert(FINANCIAL_MANAGER_SYSTEM.includes("action_point_draft"), "the prompt names the action-point draft");
+  for (const prompt of [FINANCIAL_MANAGER_SYSTEM, ADVISOR_SYSTEM]) {
+    assert(prompt.includes("to_agent is a bot key"), "to_agent is a bot key");
+    assert(prompt.includes("never the accountant or the owner"), "to_agent is never the accountant or the owner");
+    assert(prompt.includes("draft=true"), "human approval is implied by draft=true");
+  }
   const config = read("supabase/config.toml");
   assert(/\[functions\.agent-financial-manager\]\nverify_jwt = true/.test(config), "financial manager JWT is required");
   assert(/\[functions\.agent-advisor\]\nverify_jwt = true/.test(config), "advisor JWT is required");
   const serve = read("supabase/functions/_shared/agent-core/serve-runner.ts");
   assert(serve.includes('!== "service_role"'), "the runners are service-role only");
+}
+
+// The production rejection is normalised onto the default recipient.
+{
+  const REJECTION = "to_agent must be one of: analyst, advisor.";
+  function legacyRejection(value: unknown, peers: readonly string[]): string | null {
+    const ok = typeof value === "string" && peers.includes(value);
+    return ok ? null : `to_agent must be one of: ${peers.join(", ")}.`;
+  }
+  for (const kind of FM_DRAFT_KINDS) {
+    for (const bad of ["accountant", "owner", "financial_manager"]) {
+      assert(legacyRejection(bad, FM_PEERS) === REJECTION, `${bad} is the production rejection`);
+      const resolved = resolveDraftRecipient({
+        agent: "financial_manager",
+        kind,
+        toAgent: bad,
+        peers: FM_PEERS,
+      });
+      assert(resolved.toAgent === null, `${kind} with ${bad} has no bot recipient`);
+      assert(resolved.normalised, `${kind} with ${bad} is normalised`);
+    }
+    const omitted = resolveDraftRecipient({
+      agent: "financial_manager",
+      kind,
+      toAgent: undefined,
+      peers: FM_PEERS,
+    });
+    assert(omitted.toAgent === null && !omitted.normalised, `${kind} with no to_agent stays with the person`);
+  }
+  const nextMove = resolveDraftRecipient({
+    agent: "financial_manager",
+    kind: "next_move_draft",
+    toAgent: "owner",
+    peers: FM_PEERS,
+  });
+  assert(legacyRejection("owner", FM_PEERS) === REJECTION, "a next move used the same rejection");
+  assert(nextMove.toAgent === "advisor" && nextMove.normalised, "a financial manager next move defaults to the advisor");
+  const kept = resolveDraftRecipient({
+    agent: "financial_manager",
+    kind: "action_point_draft",
+    toAgent: "analyst",
+    peers: FM_PEERS,
+  });
+  assert(kept.toAgent === "analyst" && !kept.normalised, "a valid bot key is kept");
+  const advisorRejection = "to_agent must be one of: financial_manager, analyst.";
+  for (const kind of ADVISOR_DRAFT_KINDS) {
+    assert(legacyRejection("accountant", ADVISOR_PEERS) === advisorRejection, "the advisor rejection names its peers");
+    assert(legacyRejection("advisor", ADVISOR_PEERS) === advisorRejection, "the advisor cannot message itself");
+    const resolved = resolveDraftRecipient({
+      agent: "advisor",
+      kind,
+      toAgent: "accountant",
+      peers: ADVISOR_PEERS,
+    });
+    assert(resolved.toAgent === "financial_manager" && resolved.normalised, `${kind} defaults to the financial manager`);
+  }
+  const advisorOmit = resolveDraftRecipient({
+    agent: "advisor",
+    kind: "next_move_draft",
+    toAgent: undefined,
+    peers: ADVISOR_PEERS,
+  });
+  assert(advisorOmit.toAgent === "financial_manager" && !advisorOmit.normalised, "an omitted advisor recipient uses the default");
+}
+
+// A rejected tool call keeps a truncated copy of its arguments on the trace.
+{
+  const huge = "x".repeat(2000);
+  const rejected = await runAgentLoop({
+    objective: "Draft from the books on file.",
+    audience: "accountant",
+    maxIterations: 2,
+    allowedTools: ["record_draft", "get_books_quality"],
+    toolLabels: { record_draft: "Draft", get_books_quality: "Books" },
+    reason: async (ctx) => {
+      if (ctx.iteration === 1) {
+        return {
+          kind: "tool",
+          name: "record_draft",
+          args: { kind: "action_point_draft", to_agent: "accountant", detail: huge },
+          why: "draft",
+        };
+      }
+      return { kind: "tool", name: "get_books_quality", args: { period: "latest" }, why: "read" };
+    },
+    execute: async (name) =>
+      name === "record_draft"
+        ? { error: "to_agent must be one of: analyst, advisor." }
+        : { empty: false, figures: { revenue: 100 } },
+  });
+  const draft = rejected.trace.find((step) => step.tool === "record_draft");
+  const read = rejected.trace.find((step) => step.tool === "get_books_quality");
+  assert(draft?.status === "error", "the rejected draft is an error step");
+  assert(draft?.detail === "to_agent must be one of: analyst, advisor.", "the trace keeps the rejection");
+  assert(typeof draft?.rejected_args === "string" && draft.rejected_args.includes("accountant"), "rejected arguments include to_agent");
+  assert(draft.rejected_args.length <= REJECTED_TRACE_ARGS_MAX + 1, "rejected arguments are truncated");
+  assert(!draft.rejected_args.includes(huge), "the long argument does not land in full");
+  assert(read && !("args" in read) && !("rejected_args" in read), "a successful read keeps its arguments off the trace");
 }
 
 console.log("agent runners ok");

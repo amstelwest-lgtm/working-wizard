@@ -15,6 +15,8 @@ import { compactJson } from "../../milon-bot/logic.ts";
 
 export const AGENT_MAX_ITERATIONS = 6;
 export const AGENT_REPEAT_LIMIT = 3;
+/** Rejected tool arguments stored on the run trace, truncated. */
+export const REJECTED_TRACE_ARGS_MAX = 500;
 
 export const AGENT_STOP_REASONS = [
   "objective_complete",
@@ -184,6 +186,8 @@ export type AgentTraceStep = {
   detail: string;
   /** Set only for record_finding. */
   args?: Record<string, unknown>;
+  /** Truncated arguments when the tool was rejected or returned an error. */
+  rejected_args?: string;
 };
 
 export type AgentRun = {
@@ -401,6 +405,9 @@ function toRun(
       detail: s.detail,
     };
     if (s.tool === "record_finding" && s.args) row.args = s.args;
+    if ((s.status === "error" || s.status === "refused") && s.args) {
+      row.rejected_args = compactJson(s.args, REJECTED_TRACE_ARGS_MAX);
+    }
     return row;
   });
   return {
@@ -543,6 +550,7 @@ export async function runAgentLoop(input: {
           verified: false,
           happened: false,
           detail,
+          args: call.args,
         },
       };
     }
@@ -562,6 +570,7 @@ export async function runAgentLoop(input: {
           verified: false,
           happened: false,
           detail,
+          args: call.args,
         },
       };
     }
@@ -583,6 +592,7 @@ export async function runAgentLoop(input: {
             verified: false,
             happened: false,
             detail,
+            args: call.args,
           },
         };
       }
@@ -635,7 +645,7 @@ export async function runAgentLoop(input: {
         verified: classified.verified,
         happened: classified.happened,
         detail: classified.detail,
-        ...(requested === "record_finding" ? { args } : {}),
+        ...(requested === "record_finding" || classified.status === "error" ? { args } : {}),
       },
     };
   }

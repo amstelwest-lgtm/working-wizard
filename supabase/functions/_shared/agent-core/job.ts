@@ -18,6 +18,7 @@ import {
   evidenceKeysNote,
 } from "../../../../src/lib/agent-analyst.ts";
 import {
+  runnerEarlyFinish,
   runnerShouldStopForCost,
   RUNNER_MAX_OUTPUT_TOKENS,
   withDraftFlags,
@@ -54,6 +55,8 @@ export type QueueJobConfig = {
   toolSchemas: () => ToolSchema[];
   writeTools: readonly string[];
   fallbackDraftKind: string;
+  /** Stop before another model call once spend reaches this. At most $0.06. */
+  costStopUsd: number;
   runOutcome: (input: {
     stopReason: string;
     steps: Array<{ tool: string | null; status: string }>;
@@ -283,11 +286,13 @@ export async function runQueueJob(
       toolLabels: config.toolLabels,
       rethrowReasonerErrors: true,
       reason: async (ctx) => {
+        const drafted = runnerEarlyFinish(recordedKeys.size);
+        if (drafted) return { kind: "stop", reason: drafted.reason, summary: drafted.summary };
         const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL);
-        if (runnerShouldStopForCost(spent)) {
+        if (runnerShouldStopForCost(spent, config.costStopUsd)) {
           return {
             kind: "stop",
-            reason: recordedKeys.size > 0 ? "objective_complete" : "insufficient_information",
+            reason: "insufficient_information",
             summary: "Stopped before another model call so the run stays within its cost ceiling.",
           };
         }

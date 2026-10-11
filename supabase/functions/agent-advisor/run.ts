@@ -6,6 +6,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runQueueJob, type RunnerJob } from "../_shared/agent-core/job.ts";
 import { ADVISOR_SYSTEM, advisorToolSchemas } from "../_shared/agent-prompts/advisor.ts";
 import {
+  ADVISOR_COST_STOP_USD,
   ADVISOR_DRAFT_KINDS,
   ADVISOR_MAX_ITERATIONS,
   ADVISOR_TOOLS,
@@ -31,6 +32,7 @@ export function runAdvisorJob(db: SupabaseClient, job: RunnerJob) {
     toolSchemas: advisorToolSchemas,
     writeTools: ADVISOR_WRITE_TOOLS,
     fallbackDraftKind: ADVISOR_DRAFT_KINDS[0],
+    costStopUsd: ADVISOR_COST_STOP_USD,
     runOutcome: advisorRunOutcome,
     execute: executeAdvisorTool,
   });
