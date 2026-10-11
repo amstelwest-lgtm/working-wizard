@@ -29,10 +29,8 @@ assert(
   "spine order",
 );
 assert(
-  COACH_STEPS[0].id === "data" &&
-    COACH_STEPS[0].tab === "overview" &&
-    COACH_STEPS[0].section === "books",
-  "data lands on Overview Books",
+  COACH_STEPS[0].id === "data" && COACH_STEPS[0].tab === "portal",
+  "data lands on Client portal",
 );
 
 const none = {};
@@ -47,9 +45,7 @@ assert(nextCoachStep("actions", none) === null, "actions stays to assign");
 const fromData = coachView({ page: "data", done: none });
 assert(fromData.cta === "Continue → Health", `data CTA, got ${fromData.cta}`);
 assert(
-  fromData.destination.tab === "overview" &&
-    fromData.destination.section === "health" &&
-    fromData.destination.focus === "health",
+  fromData.destination.tab === "health" && fromData.destination.focus === "health",
   "data opens health",
 );
 assert(fromData.nextCue.includes("health score"), "next cue names the health score");
@@ -90,8 +86,8 @@ assert(
   `a new file continues to data, got ${freshOverview.cta}`,
 );
 assert(
-  freshOverview.destination.tab === "overview" && freshOverview.destination.section === "books",
-  "overview continue opens Books",
+  freshOverview.destination.tab === "portal",
+  "a new file continues to Client portal",
 );
 
 const overview = coachView({ page: null, done: { data: true, health: true } });
@@ -117,51 +113,44 @@ assert(pillarIsWeak(80) === false, "80 is healthy");
 assert(pillarIsWeak(Number.NaN) === false, "missing pillar is not a false weak");
 const cashEvidence = evidenceForPillar("cash");
 assert(
-  cashEvidence?.tab === "overview" &&
-    cashEvidence.section === "cash" &&
-    cashEvidence.coach === "liquidity",
+  cashEvidence?.tab === "cash" && cashEvidence.coach === "liquidity",
   "liquidity → cash",
 );
 const marginEvidence = evidenceForPillar("profit");
 assert(
-  marginEvidence?.tab === "overview" &&
-    marginEvidence.section === "profit" &&
-    marginEvidence.coach === "margin",
+  marginEvidence?.tab === "profit" && marginEvidence.coach === "margin",
   "margin → profitability",
 );
 
 const margin = deliverableHandoff("What's our gross margin versus peers?");
 assert(
-  margin?.tab === "overview" && margin.section === "profit" && margin.coach === "margin",
+  margin?.tab === "profit" && margin.coach === "margin",
   "bot routes margin to profitability",
 );
 assert(margin?.why.includes("gross margin"), "handoff keeps the question");
 const cashQ = deliverableHandoff("Will the 13-week cash forecast go negative?");
 assert(
-  cashQ?.tab === "overview" && cashQ.section === "cash" && cashQ.coach === "liquidity",
+  cashQ?.tab === "cash" && cashQ.coach === "liquidity",
   "bot routes cash to the forecast",
 );
 const drag = deliverableHandoff("What's the biggest drag on this client's score vs peers?");
 assert(
-  drag?.tab === "overview" && drag.section === "pillars" && drag.focus === "pillars",
+  drag?.tab === "health" && drag.section === "pillars" && drag.focus === "pillars",
   "a drag question opens pillars",
 );
 const healthQ = deliverableHandoff("What's the health score?");
 assert(
-  healthQ?.tab === "overview" && healthQ.section === "health" && healthQ.focus === "health",
+  healthQ?.tab === "health" && healthQ.focus === "health",
   "a health question still opens Health",
 );
 const syncQ = deliverableHandoff("Has Xero synced this period?");
 assert(
-  syncQ?.tab === "overview" &&
-    syncQ.section === "books" &&
-    syncQ.coach === "data" &&
-    syncQ.label === "Open Data",
+  syncQ?.tab === "portal" && syncQ.coach === "data" && syncQ.label === "Open Data",
   "bot routes sync to Data",
 );
 const uploadQ = deliverableHandoff("Can we upload the statements?");
 assert(
-  uploadQ?.tab === "overview" && uploadQ.section === "books" && uploadQ.coach === "data",
+  uploadQ?.tab === "portal" && uploadQ.coach === "data",
   "bot routes an upload to Data",
 );
 assert(
@@ -242,28 +231,26 @@ assert(!studio.includes("coachArrival"), "no per-deliverable arrival helper rema
 assert(studio.includes("<DataUpToDate"), "Client Brain opens with the data section");
 assert(studio.includes("onOpenDeliverable"), "Milōn Bot can open a deliverable with intent");
 assert(studio.includes('className="deliverable-rail"'), "left rail stays the one nav");
-assert(studio.includes('{ id: "ask", label: "Milōn Bot"'), "left rail reaches Bot");
-assert(studio.includes('{ id: "overview", label: "Overview"'), "left rail reaches Overview");
+assert(studio.includes('{ id: "home", label: "Home" }'), "left rail reaches Home");
+assert(studio.includes('label: "Overview"'), "the rail groups Overview");
 assert(
-  studio.includes('{ id: "deliverables", label: "Deliverables"'),
+  studio.includes('{ id: "deliverables", label: "Deliverables" }'),
   "left rail reaches Deliverables",
 );
-assert(studio.includes('{ id: "books", label: "Books" }'), "Overview sections reach Books");
-assert(studio.includes('{ id: "health", label: "Health" }'), "Overview sections reach Health");
-assert(studio.includes('{ id: "profit", label: "Profit" }'), "Overview sections reach Profit");
-assert(studio.includes('{ id: "cash", label: "Cash" }'), "Overview sections reach Cash");
-assert(studio.includes('{ id: "budget", label: "Budget" }'), "Overview sections reach Budget");
-assert(
-  studio.includes('{ id: "plan", label: "Action plan" }'),
-  "Deliverables sections reach Actions",
-);
+assert(studio.includes('{ id: "portal", label: "Client portal" }'), "the rail reaches Client portal");
+assert(studio.includes('{ id: "health", label: "Health" }'), "the rail reaches Health");
+assert(studio.includes('{ id: "profit", label: "Profit" }'), "the rail reaches Profit");
+assert(studio.includes('{ id: "cash", label: "Cash flow" }'), "the rail reaches Cash flow");
+assert(studio.includes('{ id: "budget", label: "Budget" }'), "the rail reaches Budget");
+assert(studio.includes('{ id: "moves", label: "Next moves" }'), "the rail reaches Next moves");
+assert(!studio.includes("SectionTabList"), "the horizontal section row is gone");
 assert(studio.includes("evidenceForPillar"), "weak pillars link to evidence");
 assert(
   studio.includes("canonicalizeAccountantSearch"),
   "?tab= aliases still resolve before the studio paints",
 );
 assert(
-  studio.includes('resolveAccountantTab(search) ?? "overview"'),
+  studio.includes('resolveAccountantTab(search) ?? "ask"'),
   "a deep link still selects its panel on first paint",
 );
 for (const step of COACH_STEPS) {

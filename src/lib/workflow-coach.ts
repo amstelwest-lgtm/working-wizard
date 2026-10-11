@@ -16,12 +16,12 @@
 import { scoreTier } from "@/lib/ratios";
 
 export const COACH_STEPS = [
-  { id: "data", label: "Data", tab: "overview", section: "books" },
-  { id: "health", label: "Health", tab: "overview", section: "health", focus: "health" },
-  { id: "pillars", label: "Pillars", tab: "overview", section: "pillars", focus: "pillars" },
-  { id: "profit", label: "Profitability", tab: "overview", section: "profit" },
-  { id: "cash", label: "Cash", tab: "overview", section: "cash" },
-  { id: "budget", label: "Budget", tab: "overview", section: "budget" },
+  { id: "data", label: "Data", tab: "portal" },
+  { id: "health", label: "Health", tab: "health", focus: "health" },
+  { id: "pillars", label: "Pillars", tab: "health", section: "pillars", focus: "pillars" },
+  { id: "profit", label: "Profitability", tab: "profit" },
+  { id: "cash", label: "Cash", tab: "cash" },
+  { id: "budget", label: "Budget", tab: "budget" },
   { id: "actions", label: "Actions", tab: "deliverables", section: "plan" },
 ] as const;
 
@@ -193,12 +193,12 @@ export type PillarEvidenceId = "profit" | "assets" | "financing" | "cash";
 
 const PILLAR_EVIDENCE: Record<
   PillarEvidenceId,
-  { coach: string; label: string; tab: string; section: string }
+  { coach: string; label: string; tab: string; section?: string }
 > = {
-  profit: { coach: "margin", label: "See it on Profitability", tab: "overview", section: "profit" },
-  assets: { coach: "assets", label: "See it on Profitability", tab: "overview", section: "profit" },
-  cash: { coach: "liquidity", label: "See it on Cash", tab: "overview", section: "cash" },
-  financing: { coach: "financing", label: "See it on Budget", tab: "overview", section: "budget" },
+  profit: { coach: "margin", label: "See it on Profitability", tab: "profit" },
+  assets: { coach: "assets", label: "See it on Profitability", tab: "profit" },
+  cash: { coach: "liquidity", label: "See it on Cash", tab: "cash" },
+  financing: { coach: "financing", label: "See it on Budget", tab: "budget" },
 };
 
 export function evidenceForPillar(id: string): (CoachDestination & { label: string }) | null {
@@ -212,15 +212,14 @@ export function evidenceForBriefingTab(
   tab: "cash" | "waterfall" | "budget",
 ): CoachDestination & { label: string } {
   if (tab === "cash")
-    return { tab: "overview", section: "cash", coach: "liquidity", label: "See it on Cash" };
+    return { tab: "cash", coach: "liquidity", label: "See it on Cash" };
   if (tab === "waterfall")
     return {
-      tab: "overview",
-      section: "profit",
+      tab: "profit",
       coach: "margin",
       label: "See it on Profitability",
     };
-  return { tab: "overview", section: "budget", coach: "budget", label: "See it on Budget" };
+  return { tab: "budget", coach: "budget", label: "See it on Budget" };
 }
 
 export function clipCoachWhy(text: string): string {
@@ -306,31 +305,14 @@ type HandoffKind =
   | "actions";
 
 const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
-  data: { tab: "overview", section: "books", coach: "data", label: "Open Data" },
-  health: {
-    tab: "overview",
-    section: "health",
-    focus: "health",
-    coach: "health",
-    label: "Open Health",
-  },
-  pillars: {
-    tab: "overview",
-    section: "pillars",
-    focus: "pillars",
-    coach: "pillars",
-    label: "Open Pillars",
-  },
-  profit: { tab: "overview", section: "profit", coach: "margin", label: "Open Profitability" },
-  cash: { tab: "overview", section: "cash", coach: "liquidity", label: "Open Cash" },
-  collections: {
-    tab: "overview",
-    section: "collections",
-    coach: "collections",
-    label: "Open Collections",
-  },
-  payables: { tab: "overview", section: "payables", coach: "payables", label: "Open Payables" },
-  budget: { tab: "overview", section: "budget", coach: "budget", label: "Open Budget" },
+  data: { tab: "portal", coach: "data", label: "Open Data" },
+  health: { tab: "health", focus: "health", coach: "health", label: "Open Health" },
+  pillars: { tab: "health", section: "pillars", focus: "pillars", coach: "pillars", label: "Open Pillars" },
+  profit: { tab: "profit", coach: "margin", label: "Open Profitability" },
+  cash: { tab: "cash", coach: "liquidity", label: "Open Cash" },
+  collections: { tab: "cash", section: "collections", coach: "collections", label: "Open Collections" },
+  payables: { tab: "cash", section: "payables", coach: "payables", label: "Open Payables" },
+  budget: { tab: "budget", coach: "budget", label: "Open Budget" },
   actions: { tab: "deliverables", section: "plan", coach: "actions", label: "Open Actions" },
 };
 

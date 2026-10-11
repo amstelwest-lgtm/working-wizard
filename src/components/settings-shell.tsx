@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { PracticeRailItems } from "@/components/practice-rail";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton } from "@/components/settings-nav-button";
 
@@ -53,8 +54,9 @@ export function SettingsShell({
           />
         </header>
         <div className="client-workspace">
-          <nav className="deliverable-rail" aria-label="Settings">
-            <RailSettingsButton active onClick={openSettings} />
+          <nav className="deliverable-rail" aria-label="Practice">
+            <PracticeRailItems />
+            <RailSettingsButton onClick={openSettings} />
           </nav>
           <div className="deliverable-main">
             <div className={`settings-portal__shell settings-portal__shell--${width}`}>{children}</div>

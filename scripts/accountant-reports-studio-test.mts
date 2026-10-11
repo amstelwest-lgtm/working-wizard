@@ -25,7 +25,7 @@ assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the cl
   assert(!header.includes("handleGenerateReport"), "client-header Reports studio is not the in-page generate action");
   const openFn = clientSrc.slice(clientSrc.indexOf("const openReportsStudio"), clientSrc.indexOf("const handleExportPDF"));
   assert(openFn.includes('to: "/clients/$clientId"'), "client-header Reports studio stays on this client");
-  assert(openFn.includes('accountantClientTabSearch(prev, "reports")'), "client-header opens Deliverables reports");
+  assert(openFn.includes('accountantClientTabSearch(prev, "reports")'), "client-header opens Reports");
   assert(!openFn.includes('to: "/reports"'), "client-header does not leave for the picker");
 }
 assert(
@@ -37,7 +37,7 @@ const routeSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.t
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");
 assert(routeSrc.includes('to: "/clients/$clientId"'), "/reports with a client redirects into that file");
-assert(routeSrc.includes('section: "reports"'), "/reports redirect keeps the reports section");
+assert(routeSrc.includes('tab: "reports"'), "/reports redirect opens the Reports item");
 assert(routeSrc.includes("search.report"), "/reports redirect carries the report deep link");
 assert(!studioSrc.includes("/reports/demo") && !routeSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");

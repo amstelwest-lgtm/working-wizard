@@ -147,15 +147,15 @@ export function BudgetVerdictStrip({
   }
   return (
     <section
-      className="answer-strip rounded-2xl border border-[#d4a550]/40 bg-[#fffdf8] px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
+      className="answer-strip rounded-2xl border border-[#DBEAFE] bg-white px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
       data-answer-strip
       data-budget-verdict
     >
       <div className="answer-strip__lead">
-      <p className="text-[11px] font-semibold leading-snug tracking-wide text-[#b8860b] text-pretty">
+      <p className="text-[11px] font-semibold leading-snug tracking-wide text-[#102A43] dark:text-[#F4F7FB] text-pretty">
         {periodLabel}
       </p>
-      <p className="answer-strip__sentence mt-1 text-[#1b1608] dark:text-slate-100">
+      <p className="answer-strip__sentence mt-1 text-[#102A43] dark:text-slate-100">
         {seeded ? (
           "Budget seeded from these figures — variance starts with the first uploaded month"
         ) : (

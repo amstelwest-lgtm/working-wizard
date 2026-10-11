@@ -28,6 +28,7 @@ import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { SettingsShell } from "@/components/settings-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PracticePreview } from "./practice-preview";
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {
@@ -261,6 +262,31 @@ const importLowsRoute = createRoute({
   },
 });
 
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/dashboard",
+  component: function DashboardHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <PracticePreview />
+      </MarketProvider>
+    );
+  },
+});
+
+const settingsTeamRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/team",
+  component: function SettingsTeamHarness() {
+    return (
+      <SettingsShell>
+        <h1 className="owner-title">Team</h1>
+        <p>People who can open this practice.</p>
+      </SettingsShell>
+    );
+  },
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -286,7 +312,9 @@ const routeTree = rootRoute.addChildren([
   inviteRoute,
   importLowsRoute,
   ownerDoorRoute,
+  dashboardRoute,
   settingsRoute,
+  settingsTeamRoute,
 ]);
 const router = createRouter({
   routeTree,

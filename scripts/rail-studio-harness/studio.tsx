@@ -80,19 +80,12 @@ import { SectionCard } from "@/components/primitives";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import {
   accountantClientTabSearch,
+  canonicalizeAccountantSearch,
   legacyHashDestination,
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
-import {
-  CLIENT_RAIL,
-  ClientRailButton,
-  DELIVERABLE_SECTION_TABS,
-  OVERVIEW_SECTION_TABS,
-  railGroup,
-  SectionTabList,
-  selectedSectionId,
-} from "@/components/client-studio-chrome";
+import { CLIENT_RAIL_GROUPS, ClientRailButton } from "@/components/client-studio-chrome";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton } from "@/components/settings-nav-button";
 
@@ -147,18 +140,8 @@ export function RailStudio() {
       replace: true,
     });
   }, [search.tab, search.section, clientId, navigate]);
-  const pane = legacyPaneForSearch(search) ?? "overview";
-  const group = railGroup(pane);
-
-  const openSection = (section: string) => {
-    const rail = group === "deliverables" ? "deliverables" : "overview";
-    void navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: (prev) => accountantClientTabSearch(prev, rail, { section }),
-      replace: true,
-    });
-  };
+  const pane = legacyPaneForSearch(search) ?? "ask";
+  const railTab = canonicalizeAccountantSearch(search).tab;
 
   return (
     <div className="accountant-portal" data-rail-harness="true" data-rail-ready="true">
@@ -193,23 +176,26 @@ export function RailStudio() {
         </div>
         <div className="client-workspace">
           <nav className="deliverable-rail" aria-label="Client workspace">
-            {CLIENT_RAIL.map((item) => (
-              <ClientRailButton
-                key={item.id}
-                id={item.id}
-                label={item.label}
-                active={group === item.id}
-                primary={item.id === "ask"}
-                onSelect={() => {
-                  const tab = item.id === "deliverables" ? "reports" : item.id;
-                  void navigate({
-                    to: "/clients/$clientId",
-                    params: { clientId },
-                    search: (prev) => accountantClientTabSearch(prev, tab),
-                    replace: true,
-                  });
-                }}
-              />
+            {CLIENT_RAIL_GROUPS.map((group) => (
+              <div key={group.id} className="rail-group">
+                <span className="rail-kicker">{group.label}</span>
+                {group.items.map((item) => (
+                  <ClientRailButton
+                    key={item.id}
+                    id={item.id}
+                    label={item.label}
+                    active={railTab === item.id || (!search.tab && item.id === "home")}
+                    onSelect={() => {
+                      void navigate({
+                        to: "/clients/$clientId",
+                        params: { clientId },
+                        search: (prev) => accountantClientTabSearch(prev, item.id),
+                        replace: true,
+                      });
+                    }}
+                  />
+                ))}
+              </div>
             ))}
             <RailSettingsButton
               onClick={() => {
@@ -218,14 +204,6 @@ export function RailStudio() {
             />
           </nav>
           <div className="deliverable-main">
-            {group !== "ask" ? (
-              <SectionTabList
-                label={group === "deliverables" ? "Deliverables" : "Overview sections"}
-                sections={group === "deliverables" ? DELIVERABLE_SECTION_TABS : OVERVIEW_SECTION_TABS}
-                selected={selectedSectionId(pane, search.section)}
-                onSelect={openSection}
-              />
-            ) : null}
             {pane === "ask" ? <BotPane /> : null}
             {pane === "overview" ? <BriefingPane /> : null}
             {pane === "moves" ? <MovesPane /> : null}

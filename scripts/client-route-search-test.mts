@@ -36,67 +36,55 @@ function lands(
   );
 }
 
-lands("ask", { tab: "ask" }, "?tab=ask is Bot");
-lands("bot", { tab: "ask" }, "?tab=bot opens Bot");
-lands("milon-bot", { tab: "ask" }, "?tab=milon-bot opens Bot");
-lands("overview", { tab: "overview" }, "?tab=overview is the briefing");
+lands("ask", { tab: "home" }, "?tab=ask opens Home");
+lands("bot", { tab: "home" }, "?tab=bot opens Home");
+lands("milon-bot", { tab: "home" }, "?tab=milon-bot opens Home");
+lands("overview", { tab: "home" }, "?tab=overview opens Home");
 assert(
-  canonicalizeAccountantSearch({}).tab === "overview" &&
+  canonicalizeAccountantSearch({}).tab === "home" &&
     canonicalizeAccountantSearch({}).section === undefined,
-  "an omitted tab is the Overview briefing",
+  "an omitted tab is Home",
 );
 
+lands("ratios", { tab: "health", focus: "health" }, "?tab=ratios opens Health");
+lands("health", { tab: "health", focus: "health" }, "?tab=health opens Health");
+lands("today", { tab: "health", focus: "health" }, "?tab=today opens Health");
+lands("today-complex", { tab: "health", focus: "health" }, "?tab=today-complex opens Health");
 lands(
   "ratios",
-  { tab: "overview", section: "health", focus: "health" },
-  "?tab=ratios opens Health",
-);
-lands(
-  "health",
-  { tab: "overview", section: "health", focus: "health" },
-  "?tab=health opens Health",
-);
-lands("today", { tab: "overview", section: "health", focus: "health" }, "?tab=today opens Health");
-lands(
-  "today-complex",
-  { tab: "overview", section: "health", focus: "health" },
-  "?tab=today-complex opens Health",
-);
-lands(
-  "ratios",
-  { tab: "overview", section: "pillars", focus: "pillars" },
+  { tab: "health", section: "pillars", focus: "pillars" },
   "?tab=ratios&focus=pillars opens Pillars",
   { focus: "pillars" },
 );
 lands(
   "pillars",
-  { tab: "overview", section: "pillars", focus: "pillars" },
+  { tab: "health", section: "pillars", focus: "pillars" },
   "?tab=pillars opens Pillars",
 );
 
-lands("profit", { tab: "overview", section: "profit" }, "?tab=profit opens Profit");
-lands("waterfall", { tab: "overview", section: "profit" }, "?tab=waterfall opens Profit");
-lands("profitability", { tab: "overview", section: "profit" }, "?tab=profitability opens Profit");
-lands("cash", { tab: "overview", section: "cash" }, "?tab=cash opens Cash");
-lands("forecast", { tab: "overview", section: "cash" }, "?tab=forecast opens Cash");
-lands("cash-forecast", { tab: "overview", section: "cash" }, "?tab=cash-forecast opens Cash");
+lands("profit", { tab: "profit" }, "?tab=profit opens Profit");
+lands("waterfall", { tab: "profit" }, "?tab=waterfall opens Profit");
+lands("profitability", { tab: "profit" }, "?tab=profitability opens Profit");
+lands("cash", { tab: "cash" }, "?tab=cash opens Cash flow");
+lands("forecast", { tab: "cash" }, "?tab=forecast opens Cash flow");
+lands("cash-forecast", { tab: "cash" }, "?tab=cash-forecast opens Cash flow");
 lands(
   "collections",
-  { tab: "overview", section: "collections" },
-  "?tab=collections opens Collections",
+  { tab: "cash", section: "collections" },
+  "?tab=collections opens Cash flow collections",
 );
-lands("payables", { tab: "overview", section: "payables" }, "?tab=payables opens Payables");
-lands("budget", { tab: "overview", section: "budget" }, "?tab=budget opens Budget");
+lands("payables", { tab: "cash", section: "payables" }, "?tab=payables opens Cash flow payables");
+lands("budget", { tab: "budget" }, "?tab=budget opens Budget");
 
-lands("summary", { tab: "overview", section: "books" }, "?tab=summary opens Books");
-lands("data", { tab: "overview", section: "books" }, "?tab=data opens Books");
-lands("brain", { tab: "overview", section: "books" }, "?tab=brain opens Books");
-lands("client-brain", { tab: "overview", section: "books" }, "?tab=client-brain opens Books");
-lands("moves", { tab: "overview", section: "moves" }, "?tab=moves opens Moves");
-lands("strategic-moves", { tab: "overview", section: "moves" }, "?tab=strategic-moves opens Moves");
+lands("summary", { tab: "portal" }, "?tab=summary opens Client portal");
+lands("data", { tab: "portal" }, "?tab=data opens Client portal");
+lands("brain", { tab: "portal" }, "?tab=brain opens Client portal");
+lands("client-brain", { tab: "portal" }, "?tab=client-brain opens Client portal");
+lands("moves", { tab: "moves" }, "?tab=moves opens Next moves");
+lands("strategic-moves", { tab: "moves" }, "?tab=strategic-moves opens Next moves");
 
-lands("reports", { tab: "deliverables", section: "reports" }, "?tab=reports opens Reports");
-lands("report", { tab: "deliverables", section: "reports" }, "?tab=report opens Reports");
+lands("reports", { tab: "reports" }, "?tab=reports opens Reports");
+lands("report", { tab: "reports" }, "?tab=report opens Reports");
 lands("advisory", { tab: "deliverables", section: "pack" }, "?tab=advisory opens the Advisory pack");
 lands("pack", { tab: "deliverables", section: "pack" }, "?tab=pack opens the Advisory pack");
 lands("plan", { tab: "deliverables", section: "plan" }, "?tab=plan opens Action Plan");
@@ -109,7 +97,7 @@ lands(
 );
 lands("tasks", { tab: "deliverables", section: "plan" }, "?tab=tasks opens Action Plan");
 
-lands("overview", { tab: "overview", section: "cash" }, "canonical cash stays cash", {
+lands("overview", { tab: "cash" }, "old overview cash opens Cash flow", {
   section: "cash",
 });
 assert(
@@ -127,30 +115,31 @@ assert(
   "?section=advisory opens the Advisory pack",
 );
 assert(
-  canonicalizeAccountantSearch({ section: "cash" }).tab === "overview" &&
-    canonicalizeAccountantSearch({ section: "cash" }).section === "cash",
-  "?section=cash stays on Overview cash",
+  canonicalizeAccountantSearch({ section: "cash" }).tab === "cash" &&
+    canonicalizeAccountantSearch({ section: "cash" }).section === undefined,
+  "?section=cash opens Cash flow",
 );
 assert(
-  canonicalizeAccountantSearch({ section: "budget" }).section === "budget",
-  "?section=budget stays on Overview budget",
+  canonicalizeAccountantSearch({ section: "budget" }).tab === "budget",
+  "?section=budget opens Budget",
 );
 assert(
-  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "ask" &&
+  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "home" &&
     canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).section === undefined,
-  "an explicit Bot tab wins over section=pack",
+  "an explicit Home tab wins over section=pack",
 );
 assert(
-  canonicalizeAccountantSearch({ tab: "deliverables", section: "reports" }).section === "reports",
-  "an explicit Deliverables tab keeps its section",
+  canonicalizeAccountantSearch({ tab: "deliverables", section: "reports" }).tab === "reports" &&
+    canonicalizeAccountantSearch({ tab: "deliverables", section: "reports" }).section === undefined,
+  "a reports section on Deliverables opens Reports",
 );
 assert(
-  railSearchForHash("#cash")?.section === "cash" && railSearchForHash("#cash")?.tab === "overview",
-  "#cash opens Overview cash",
+  railSearchForHash("#cash")?.tab === "cash" && railSearchForHash("#cash")?.section === undefined,
+  "#cash opens Cash flow",
 );
 assert(
-  railSearchForHash("#budget")?.section === "budget",
-  "#budget opens Overview budget",
+  railSearchForHash("#budget")?.tab === "budget" && railSearchForHash("#budget")?.section === undefined,
+  "#budget opens Budget",
 );
 assert(
   railSearchForHash("#advisory")?.tab === "deliverables" &&
@@ -166,12 +155,12 @@ assert(
   "an explicit Overview tab wins over #advisory",
 );
 assert(
-  legacyHashDestination({}, "#budget")?.section === "budget",
-  "a bare #budget selects the budget section",
+  legacyHashDestination({}, "#budget")?.tab === "budget",
+  "a bare #budget opens Budget",
 );
 assert(
-  legacyHashDestination({ tab: "overview" }, "#budget")?.section === "budget",
-  "#budget on Overview selects the budget section",
+  legacyHashDestination({ tab: "home" }, "#budget") === null,
+  "an explicit Home tab wins over #budget",
 );
 assert(
   legacyHashDestination({ tab: "deliverables", section: "pack" }, "#drafter")?.section === "drafter",
@@ -182,8 +171,8 @@ lands("deliverables", { tab: "deliverables", section: "pack" }, "canonical pack 
 });
 lands(
   "overview",
-  { tab: "overview", section: "pillars", focus: "pillars" },
-  "canonical pillars keep focus",
+  { tab: "health", section: "pillars", focus: "pillars" },
+  "canonical pillars keep focus on Health",
   { section: "pillars" },
 );
 
@@ -198,10 +187,7 @@ const kept = accountantClientTabSearch(
   },
   "reports",
 );
-assert(
-  kept.tab === "deliverables" && kept.section === "reports",
-  "opening Reports is deliverables/reports",
-);
+assert(kept.tab === "reports" && kept.section === undefined, "opening Reports is the Reports item");
 assert(kept.onboard === "1" && kept.qbo === "connected", "onboard and unrelated params stay");
 assert(
   kept.report === "movement" && kept.action === "preview",
@@ -226,50 +212,27 @@ const parser = route.slice(
 assert(parser.includes("canonicalizeAccountantSearch"), "alias runs inside validateSearch");
 assert(parser.includes("out.section = canonical.section"), "section is written onto the search");
 assert(
-  route.includes('resolveAccountantTab(search) ?? "overview"'),
+  route.includes('resolveAccountantTab(search) ?? "ask"'),
   "the first paint uses the parsed tab and section",
 );
-assert(route.includes('{ id: "ask", label: "Milōn Bot"'), "Milōn Bot is a rail item");
-assert(route.includes('{ id: "overview", label: "Overview"'), "Overview is a rail item");
-assert(
-  route.includes('{ id: "deliverables", label: "Deliverables"'),
-  "Deliverables is a rail item",
+const railSource = route.slice(
+  route.indexOf("export const CLIENT_RAIL_GROUPS"),
+  route.indexOf("export const CLIENT_RAIL "),
 );
-assert(route.includes("aria-label={label}"), "section strip is a named tablist");
-const overviewStrip = route.slice(
-  route.indexOf("const OVERVIEW_SECTION_TABS"),
-  route.indexOf("const DELIVERABLE_SECTION_TABS"),
-);
-const overviewOrder = [
-  "health",
-  "pillars",
-  "cash",
-  "profit",
-  "collections",
-  "payables",
-  "budget",
-  "moves",
-  "books",
-];
-let overviewAt = -1;
-for (const id of overviewOrder) {
-  const at = overviewStrip.indexOf(`id: "${id}"`);
-  assert(at > overviewAt, `Overview section ${id} is in order`);
-  overviewAt = at;
+const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "reports", "deliverables", "portal"];
+let railAt = -1;
+for (const id of railOrder) {
+  const at = railSource.indexOf(`id: "${id}"`);
+  assert(at > railAt, `rail item ${id} is in order`);
+  railAt = at;
 }
-const deliverableStrip = route.slice(
-  route.indexOf("const DELIVERABLE_SECTION_TABS"),
-  route.indexOf("function railGroup"),
-);
-const deliverableOrder = ["reports", "pack", "plan", "drafter"];
-let deliverableAt = -1;
-for (const id of deliverableOrder) {
-  const at = deliverableStrip.indexOf(`id: "${id}"`);
-  assert(at > deliverableAt, `Deliverables section ${id} is in order`);
-  deliverableAt = at;
-}
-assert(route.includes('id: "pack", label: "Advisory pack"'), "Deliverables keeps the pack");
-assert(route.includes('id: "drafter", label: "Advisory"'), "Deliverables has an Advisory section");
+assert(route.includes('label: "Overview"'), "Overview is a rail heading");
+assert(route.includes('label: "Numbers"'), "Numbers is a rail heading");
+assert(route.includes('label: "Advice"'), "Advice is a rail heading");
+assert(route.includes('label: "Client"'), "Client is a rail heading");
+assert(route.includes('{ id: "home", label: "Home" }'), "Home is a rail item");
+assert(route.includes('{ id: "deliverables", label: "Deliverables" }'), "Deliverables is a rail item");
+assert(!route.includes("<SectionTabList"), "the horizontal section row is gone");
 assert(routerHash("#drafter") === "drafter", "a single hash is not doubled");
 assert(routerHash("##drafter") === "drafter", "a doubled hash is collapsed");
 assert(routerHash("") === undefined, "an empty hash is omitted");

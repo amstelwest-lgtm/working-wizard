@@ -12,6 +12,7 @@
  * are rendered there. Billing has no standalone page — Manage billing is on
  * Settings, and only for the practice view.
  */
+import type { ClientRailTab } from "@/lib/client-route-search";
 import { OWNER_BOARD_TABS } from "@/lib/next-step";
 import { COACH_STEPS, type CoachStepId } from "@/lib/workflow-coach";
 
@@ -30,7 +31,7 @@ export type FeatureDestination =
       kind: "client";
       clientId: string;
       search: {
-        tab: "ask" | "overview" | "deliverables";
+        tab: ClientRailTab;
         section?: string;
         focus?: "health" | "pillars";
         onboard?: "1";
@@ -59,7 +60,7 @@ export type FeatureSearch = {
 };
 
 type StudioTarget = {
-  tab: "ask" | "overview" | "deliverables";
+  tab: ClientRailTab;
   section?: string;
   focus?: "health" | "pillars";
   onboard?: "1";
@@ -113,7 +114,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["overview", "briefing", "client home"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "overview" },
+    studio: { tab: "home" },
   },
   {
     id: "health",
@@ -184,7 +185,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["ar", "aged receivables", "aged debtors", "debtors", "receivables", "chase list"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "overview", section: "collections" },
+    studio: { tab: "cash", section: "collections" },
   },
   {
     id: "payables",
@@ -195,7 +196,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["ap", "aged payables", "aged creditors", "creditors", "bills", "suppliers"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "overview", section: "payables" },
+    studio: { tab: "cash", section: "payables" },
   },
   {
     id: "moves",
@@ -206,7 +207,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["moves", "strategic moves", "ranked moves"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "overview", section: "moves" },
+    studio: { tab: "moves" },
   },
   {
     id: "bot",
@@ -217,7 +218,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["drafts", "draft", "bot", "ask", "milon bot", "chat"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "ask" },
+    studio: { tab: "home" },
   },
   {
     id: "action-plan",
@@ -240,7 +241,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["reports", "report", "board pack", "scorecard"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "deliverables", section: "reports" },
+    studio: { tab: "reports" },
   },
   {
     id: "advisory-pack",

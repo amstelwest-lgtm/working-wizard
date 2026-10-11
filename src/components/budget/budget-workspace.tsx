@@ -185,7 +185,7 @@ export function BudgetScenarioPills({
           }
           className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide ${
             doc.activeScenario === id
-              ? "bg-[#d4a550] text-[#0a0e1a]"
+              ? "bg-[#0B5FFF] text-white"
               : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           }`}
         >
@@ -208,11 +208,11 @@ export function UnmappedReviewBlock({
   onClear?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-      <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+    <div className="rounded-xl border border-[#B7791F]/40 bg-[#B7791F]/10 p-4">
+      <div className="text-sm font-semibold text-[#8A5A12] dark:text-[#F0D59A]">
         Lines from the previous model
       </div>
-      <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/70">
+      <p className="mt-1 text-xs text-[#8A5A12]/80 dark:text-[#F0D59A]/80">
         These lines were on the previous model and do not match a line here. Move each one onto a
         line, or keep it as an extra line. Nothing is removed until you choose.
       </p>
@@ -220,7 +220,7 @@ export function UnmappedReviewBlock({
         {items.map((u) => (
           <li
             key={u.id}
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-white/60 px-3 py-2 dark:bg-slate-950/40"
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-[#B7791F]/20 bg-white/60 px-3 py-2 dark:bg-slate-950/40"
           >
             <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{u.name}</span>
             <select
@@ -456,7 +456,7 @@ function BudgetComplexWorkspace({
               · {budgetDaysSourceLabel(doc.wcDaysSource)}
             </span>
             {budgetDaysNeedReview(doc.wc.debtorDays) ? (
-              <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
+              <span className="ml-1 rounded-full border border-[#B7791F]/40 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-[#8A5A12]">
                 Review
               </span>
             ) : null}
@@ -482,7 +482,7 @@ function BudgetComplexWorkspace({
               · {budgetDaysSourceLabel(doc.wcDaysSource)}
             </span>
             {budgetDaysNeedReview(doc.wc.creditorDays) ? (
-              <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
+              <span className="ml-1 rounded-full border border-[#B7791F]/40 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-[#8A5A12]">
                 Review
               </span>
             ) : null}
@@ -660,7 +660,7 @@ function BudgetComplexWorkspace({
           {variance}
         </>,
       )}
-      <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
+      <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
         {plainBudgetWindowHeading(tpl.label, doc, market)}
       </p>
 
@@ -669,7 +669,7 @@ function BudgetComplexWorkspace({
         <div className={COLLAPSIBLE_GOLD_RULE} />
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#102A43] dark:text-[#F4F7FB]">
               Drivers
             </p>
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -709,7 +709,7 @@ function BudgetComplexWorkspace({
         {doc.revenueLines.map((line) => (
           <ScrollableTable
             key={line.id}
-            className="rounded-lg border border-amber-900/10 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
+            className="rounded-lg border border-[#DBEAFE] bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
           >
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
               <Input
@@ -825,14 +825,14 @@ function BudgetComplexWorkspace({
       <section className={`space-y-2 ${COLLAPSIBLE_GOLD_SHELL} p-4`}>
         <div className={COLLAPSIBLE_GOLD_RULE} />
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#102A43] dark:text-[#F4F7FB]">
             Overheads
           </p>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             Fixed overheads
           </h3>
         </div>
-        <ScrollableTable className="rounded-lg border border-amber-900/10 dark:border-slate-800">
+        <ScrollableTable className="rounded-lg border border-[#DBEAFE] dark:border-slate-800">
           <table className="milon-data-table w-full min-w-[640px] text-xs text-[#0f172a] dark:text-slate-100">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
@@ -904,7 +904,7 @@ function BudgetComplexWorkspace({
         <summary className="cursor-pointer list-none px-4 py-3 marker:content-none">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#102A43] dark:text-[#F4F7FB]">
                 Capital
               </p>
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -1118,7 +1118,7 @@ function BudgetComplexWorkspace({
                   updatedAt: new Date().toISOString(),
                 })
               }
-              className="mt-2 w-full accent-[#d4a550]"
+              className="mt-2 w-full accent-[#0B5FFF]"
             />
           </div>
           <div>
@@ -1144,7 +1144,7 @@ function BudgetComplexWorkspace({
                   updatedAt: new Date().toISOString(),
                 })
               }
-              className="mt-2 w-full accent-[#d4a550]"
+              className="mt-2 w-full accent-[#0B5FFF]"
             />
           </div>
           <div>
@@ -1172,7 +1172,7 @@ function BudgetComplexWorkspace({
                   updatedAt: new Date().toISOString(),
                 })
               }
-              className="mt-2 w-full accent-[#d4a550]"
+              className="mt-2 w-full accent-[#0B5FFF]"
             />
           </div>
         </div>
@@ -1243,7 +1243,7 @@ function BudgetComplexWorkspace({
                 <tr
                   key={r.month}
                   className={`border-b border-slate-50 dark:border-slate-900 ${
-                    r.month === focusMonth ? "bg-[#d4a550]/10" : ""
+                    r.month === focusMonth ? "bg-[#DBEAFE]/70" : ""
                   }`}
                 >
                   <td className="px-3 py-1.5 font-medium">{monthLabel(r.month)}</td>

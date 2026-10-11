@@ -156,15 +156,7 @@ import {
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
-import {
-  CLIENT_RAIL,
-  ClientRailButton,
-  DELIVERABLE_SECTION_TABS,
-  OVERVIEW_SECTION_TABS,
-  railGroup,
-  SectionTabList,
-  selectedSectionId,
-} from "@/components/client-studio-chrome";
+import { CLIENT_RAIL_GROUPS, ClientRailButton } from "@/components/client-studio-chrome";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -457,7 +449,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     why?: string;
     /** Health page sub-step: the score, or the pillar drill. */
     focus?: string;
-    /** Overview or Deliverables sub-tab (`health`, `cash`, `reports`, `pack`, …). */
+    /** Sub-view under a rail item (`pillars`, `collections`, `pack`, `plan`, `drafter`). */
     section?: string;
     /** Reports studio deep link, carried from `/reports`. */
     report?: string;
@@ -756,7 +748,7 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
-    () => resolveAccountantTab(search) ?? "overview",
+    () => resolveAccountantTab(search) ?? "ask",
   );
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const persistedCreateRef = useRef<
@@ -880,9 +872,8 @@ function ClientView() {
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
   }, [search.tab, search.section, clientId, navigate]);
-  // Landing tab: Overview — the client explanation, profile, and upload.
-  // Deliverables stay clean. Decided once per client, after load, and never
-  // over a ?tab= deep link.
+  // Landing tab: Home (Bot and the team desk). Decided once per client, after
+  // load, and never over a ?tab= deep link.
   // The tour variant is fixed at the same moment: flipping to the full tour
   // the instant the first figure is typed would yank the user mid-entry.
   // The full tour runs on the next visit once figures exist.
@@ -897,7 +888,7 @@ function ClientView() {
       const figures = FIELD_LABELS.some(({ key }) => (scalars[key] ?? "").trim() !== "");
       setTourVariant(figures ? "accountant-client" : "accountant-client-empty");
       if (resolveAccountantTab(search)) return;
-      setActiveTab("overview");
+      setActiveTab("ask");
     },
     [clientId, search],
   );
@@ -1157,7 +1148,7 @@ function ClientView() {
   useEffect(() => {
     // Mark only once Overview is showing the score. A bot tab or an import
     // in flight must not count as "figures seen" and pull the card wall.
-    if (hasFigures && activeTab === "overview") markInsightSeen(firmId);
+    if (hasFigures && (activeTab === "ask" || activeTab === "overview")) markInsightSeen(firmId);
   }, [hasFigures, activeTab, firmId]);
   const startStudioTourAfterFigures = useCallback(() => {
     markOnboardingDone(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
@@ -2239,11 +2230,11 @@ function ClientView() {
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
-      setActiveTab("overview");
+      setActiveTab("ask");
       void navigate({
         to: "/clients/$clientId",
         params: { clientId },
-        search: (prev) => accountantClientTabSearch(prev, "overview"),
+        search: (prev) => accountantClientTabSearch(prev, "home"),
         replace: true,
       });
       startStudioTourAfterFigures();
@@ -2840,19 +2831,29 @@ function ClientView() {
 
             <div className="client-workspace">
               <nav className="deliverable-rail" aria-label="Client workspace">
-                {CLIENT_RAIL.map((t) => (
-                  <ClientRailButton
-                    key={t.id}
-                    id={t.id}
-                    label={t.label}
-                    active={railGroup(activeTab) === t.id}
-                    primary={t.id === "ask"}
-                    onSelect={() => {
-                      setMobileNavOpen(false);
-                      const tab: ActiveTab = t.id === "deliverables" ? "reports" : t.id;
-                      writeAccountantTab(tab);
-                    }}
-                  />
+                {CLIENT_RAIL_GROUPS.map((group) => (
+                  <div key={group.id} className="rail-group">
+                    <span className="rail-kicker">{group.label}</span>
+                    {group.items.map((item) => (
+                      <ClientRailButton
+                        key={item.id}
+                        id={item.id}
+                        label={item.label}
+                        active={(search.tab ?? "home") === item.id}
+                        onSelect={() => {
+                          setMobileNavOpen(false);
+                          const pane = legacyPaneForSearch({ tab: item.id });
+                          if (pane) setActiveTab(pane);
+                          void navigate({
+                            to: "/clients/$clientId",
+                            params: { clientId },
+                            search: (prev) => accountantClientTabSearch(prev, item.id),
+                            replace: true,
+                          });
+                        }}
+                      />
+                    ))}
+                  </div>
                 ))}
                 <RailSettingsButton
                   onClick={() => {
@@ -2863,32 +2864,23 @@ function ClientView() {
                 />
               </nav>
               <div className="deliverable-main">
-                {railGroup(activeTab) !== "ask" ? (
-                  <SectionTabList
-                    label={
-                      railGroup(activeTab) === "deliverables" ? "Deliverables" : "Overview sections"
-                    }
-                    sections={
-                      railGroup(activeTab) === "deliverables"
-                        ? DELIVERABLE_SECTION_TABS
-                        : OVERVIEW_SECTION_TABS
-                    }
-                    selected={selectedSectionId(activeTab, search.section)}
-                    onSelect={(section) => {
-                      const rail = railGroup(activeTab) === "deliverables" ? "deliverables" : "overview";
-                      const pane = resolveAccountantTab({ tab: rail, section });
-                      if (pane) setActiveTab(pane);
-                      void navigate({
-                        to: "/clients/$clientId",
-                        params: { clientId },
-                        search: (prev) => accountantClientTabSearch(prev, rail, { section }),
-                        replace: true,
-                      });
-                    }}
-                  />
+                {!hasFigures ? (
+                  <div className="card hero-card first-figures" id="first-figures-card">
+                    <div className="ff-copy">
+                      <p className="kicker">Step 1 · Bring in this client's figures</p>
+                      <h3>Nothing is scored yet</h3>
+                      <p>
+                        The health orb, profit waterfall, cash forecast and Milōn Bot all wait on
+                        the first numbers. Home is the place to start.{" "}
+                        {isUsCopy(clientMarket)
+                          ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF."
+                          : "Fastest: about 3 months of bank statements for every account."}
+                      </p>
+                    </div>
+                  </div>
                 ) : null}
                 <div
-                  className={`tabpane${activeTab === "overview" ? " on" : ""}`}
+                  className={`tabpane${activeTab === "overview" || activeTab === "ask" ? " on" : ""}`}
                   id="pane-overview"
                 >
                 <DeliverableAnswerStrip
@@ -2955,7 +2947,6 @@ function ClientView() {
                     />
                     <button
                       type="button"
-                      id="wizard-open-queries"
                       className={portalButtonClass("secondary")}
                       onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
                     >
@@ -3135,23 +3126,6 @@ function ClientView() {
 
                 {hasFigures ? <CheckoutAfterInsight /> : null}
 
-                {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
-                {!hasFigures && (
-                  <div className="card hero-card first-figures" id="first-figures-card">
-                    <div className="ff-copy">
-                      <p className="kicker">Step 1 · Bring in this client's figures</p>
-                      <h3>Nothing is scored yet</h3>
-                      <p>
-                        The health orb, profit waterfall, cash forecast and Milōn Bot all wait on
-                        the first numbers. The next step above is the one action.{" "}
-                        {isUsCopy(clientMarket)
-                          ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF."
-                          : "Fastest: about 3 months of bank statements for every account."}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {hasFigures && needsPastPeriodPrompt({ hasLiveFigures: hasFigures, snapshots }) ? (
                   <p className="text-[12px] leading-relaxed text-[color:var(--ink-dim)]">
                     Trend lines and movement need another period.{" "}
@@ -3242,6 +3216,16 @@ function ClientView() {
                       }}
                     />
                     <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+                    <button
+                      type="button"
+                      id="wizard-open-queries"
+                      className={portalButtonClass("secondary")}
+                      onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
+                    >
+                      {openQueriesCount > 0
+                        ? `${openQueriesCount} open ${openQueriesCount === 1 ? "query" : "queries"}`
+                        : "No open queries"}
+                    </button>
                   </div>
                 </div>
 

@@ -496,7 +496,7 @@ export function BudgetPanel({
           {onRetakeProfile && (
             <Button
               type="button"
-              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
               onClick={onRetakeProfile}
             >
               Set up business profile
@@ -528,7 +528,7 @@ export function BudgetPanel({
                 type="button"
                 onClick={() => onViewModeChange(mode)}
                 className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                  on ? "bg-[#d4a550] text-[#0a0e1a]" : "border border-slate-300 text-slate-600"
+                  on ? "bg-[#0B5FFF] text-white" : "border border-slate-300 text-slate-600"
                 }`}
               >
                 {label}
@@ -579,9 +579,9 @@ export function BudgetPanel({
   return (
     <>
       {scaleBroken && !readOnly && (
-        <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
+        <div className="mb-4 rounded-xl border border-[#B7791F]/50 bg-[#B7791F]/10 px-4 py-3 text-sm text-[#8A5A12] dark:border-[#8A5A12] dark:bg-[#8A5A12]/30 dark:text-[#F0D59A]">
           <p className="font-semibold">Rebuild is a suggestion — nothing has been replaced</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
+          <p className="mt-1 text-[13px] leading-relaxed text-[#8A5A12]/90 dark:text-[#F0D59A]/90">
             The stored plan is more than ten times a full year of the saved revenue or cost of sales.
             It is still the plan on file. Rebuild only if you want it to follow the saved statement.
           </p>
@@ -605,9 +605,9 @@ export function BudgetPanel({
         </div>
       )}
       {implausible && !readOnly && (
-        <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
+        <div className="mb-4 rounded-xl border border-[#B7791F]/50 bg-[#B7791F]/10 px-4 py-3 text-sm text-[#8A5A12] dark:border-[#8A5A12] dark:bg-[#8A5A12]/30 dark:text-[#F0D59A]">
           <p className="font-semibold">This budget does not line up with the saved statement</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
+          <p className="mt-1 text-[13px] leading-relaxed text-[#8A5A12]/90 dark:text-[#F0D59A]/90">
             Cost of sales is zero while the period has a cost of sales, or a full year of revenue or
             cost of sales is more than three times a full year of the saved figures. Nothing is
             overwritten until you rebuild.

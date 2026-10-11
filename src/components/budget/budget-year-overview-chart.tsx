@@ -23,9 +23,8 @@ import {
   COLLAPSIBLE_GOLD_SHELL,
 } from "@/components/primitives/collapsible-gold-card";
 
-const GOLD = "#d4a550";
-const GOLD_DARK = "#b8860b";
-const TREND = "rgba(184, 134, 11, 0.75)";
+const CHART = "#38BDF8";
+const CHART_DEEP = "#0B5FFF";
 
 type ChartRow = {
   month: string;
@@ -97,7 +96,7 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
       <div className={COLLAPSIBLE_GOLD_RULE} />
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#102A43] dark:text-[#F4F7FB]">
             Year at a glance
           </p>
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -114,8 +113,8 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
             </span>
           ) : (
             <>
-              <span className="rounded-lg border border-[#d4a550]/35 bg-[#fffdf8] px-2.5 py-1.5 text-right dark:bg-slate-900">
-                <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#b8860b]">
+              <span className="rounded-lg border border-[#DBEAFE] bg-white px-2.5 py-1.5 text-right dark:bg-slate-900">
+                <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#102A43] dark:text-[#F4F7FB]">
                   FY revenue
                 </span>
                 <span className="text-sm font-semibold tabular-nums text-[#0f172a] dark:text-slate-100">
@@ -152,8 +151,8 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
           <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="budgetRevFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={GOLD} stopOpacity={isEmpty ? 0.08 : 0.85} />
-                <stop offset="100%" stopColor={GOLD_DARK} stopOpacity={isEmpty ? 0.04 : 0.35} />
+                <stop offset="0%" stopColor={CHART} stopOpacity={isEmpty ? 0.08 : 0.85} />
+                <stop offset="100%" stopColor={CHART_DEEP} stopOpacity={isEmpty ? 0.04 : 0.35} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
@@ -176,12 +175,12 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
             <Tooltip
               contentStyle={{
                 background: "rgba(17,24,39,0.95)",
-                border: "1px solid rgba(212,165,80,0.4)",
+                border: "1px solid rgba(11,95,255,0.35)",
                 borderRadius: 10,
                 fontSize: 12,
                 color: "#f1f5f9",
               }}
-              labelStyle={{ color: GOLD, fontWeight: 700 }}
+              labelStyle={{ color: "#F4F7FB", fontWeight: 700 }}
               formatter={(value: number, name: string) => [
                 money(value),
                 name === "revenue" ? "Revenue" : "Trend (3-mo avg)",
@@ -204,11 +203,11 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
               type="monotone"
               dataKey="trend"
               name="trend"
-              stroke={TREND}
+              stroke={CHART}
               strokeWidth={1.75}
               strokeDasharray="6 4"
               dot={false}
-              activeDot={{ r: 3, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1 }}
+              activeDot={{ r: 3, fill: CHART_DEEP, stroke: "#fff", strokeWidth: 1 }}
               isAnimationActive={!isEmpty}
               animationDuration={700}
             />
@@ -217,7 +216,7 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
 
         {isEmpty && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4">
-            <p className="max-w-sm rounded-lg border border-dashed border-[#d4a550]/35 bg-white/80 px-4 py-3 text-center text-xs leading-relaxed text-slate-600 dark:bg-slate-950/80 dark:text-slate-300">
+            <p className="max-w-sm rounded-lg border border-dashed border-[#DBEAFE] bg-white/80 px-4 py-3 text-center text-xs leading-relaxed text-slate-600 dark:bg-slate-950/80 dark:text-slate-300">
               Enter volume and price on your drivers — this chart fills in as you plan the year.
             </p>
           </div>
@@ -226,13 +225,13 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
 
       <div className="mt-2 flex flex-wrap items-center gap-4 text-[10px] uppercase tracking-wider text-slate-400">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-gradient-to-b from-[#d4a550] to-[#b8860b]" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-gradient-to-b from-[#38BDF8] to-[#0B5FFF]" />
           Revenue
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
             className="inline-block h-0.5 w-4 rounded"
-            style={{ background: TREND, borderTop: "1px dashed rgba(184,134,11,0.5)" }}
+            style={{ background: CHART, borderTop: "1px dashed rgba(56,189,248,0.7)" }}
           />
           Trend
         </span>

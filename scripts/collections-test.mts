@@ -313,9 +313,9 @@ const chosen = chooseCollections([newerEmpty, snap]);
 eq(chosen?.source, "xero", "an applied chase list beats a newer empty pull");
 
 const handoff = deliverableHandoff("Who is on the aged receivables chase list?");
-eq(handoff?.tab, "overview", "bot hands collections questions to Overview");
+eq(handoff?.tab, "cash", "bot hands collections questions to Cash flow");
 eq(handoff?.section, "collections", "bot hands collections questions to the chase list");
-eq(deliverableHandoff("Will the 13-week cash forecast go negative?")?.section, "cash", "cash questions stay on cash");
+eq(deliverableHandoff("Will the 13-week cash forecast go negative?")?.tab, "cash", "cash questions stay on cash");
 
 assert(xeroScopes().includes("accounting.reports.aged.read"), "aged scope requested");
 assert(xeroScopes().includes("accounting.contacts.read"), "contacts read requested");
@@ -335,7 +335,8 @@ assert(qboCard.includes('id="qbo-aged-ar-status"'), "qbo card shows aged receiva
 const rail =
   readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
   readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
-assert(rail.includes('label: "Collections"'), "collections is a deliverable rail item");
+assert(rail.includes('label: "Cash flow"'), "cash flow is the rail item over collections");
+assert(rail.includes('id="pane-collections"'), "collections stays its own pane under Cash flow");
 const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
 assert(propose.includes("buildCollectionsDraft"), "propose files a collections draft from the cache");
 assert(propose.includes('source: "ai", data_depth: "statement"'), "statement drafts stay statement depth");

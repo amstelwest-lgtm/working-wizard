@@ -31,7 +31,7 @@ import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
 import { formatMoneyChartTick } from "@/lib/market/format";
 import type { VarianceSignal } from "@/lib/budget.variance";
 
-const BUDGET_BAR = "#0B5FFF";
+const BUDGET_BAR = "#38BDF8";
 const BUDGET_ONLY = "#94a3b8";
 const ACTUAL_BAR = "#3d4f66";
 
@@ -218,10 +218,10 @@ function BudgetMonthChart({
               width={48}
             />
             <Tooltip
-              cursor={{ fill: "rgba(212,165,80,0.08)" }}
+              cursor={{ fill: "rgba(56,189,248,0.12)" }}
               contentStyle={{
                 background: "rgba(17,24,39,0.95)",
-                border: "1px solid rgba(212,165,80,0.4)",
+                border: "1px solid rgba(11,95,255,0.35)",
                 borderRadius: 10,
                 fontSize: 12,
                 color: "#f1f5f9",

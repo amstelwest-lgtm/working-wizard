@@ -1737,3 +1737,87 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   .accountant-portal .settings-gear{grid-area:gear;margin-left:0}
 }
 
+/* Accountant rails are flush to the screen edge, with the same item size
+   as the owner rail. Active text stays navy so it passes on the pale fill. */
+.accountant-portal:not(.owner-door) .rail-group{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.accountant-portal:not(.owner-door) .rail-group + .rail-group .rail-kicker{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--pale);
+}
+@media (min-width:861px){
+  .accountant-portal:not(.owner-door) .shell{
+    max-width:none;
+    width:100%;
+    margin:0;
+    padding:0 0 48px;
+  }
+  .accountant-portal:not(.owner-door) .topbar{
+    padding-left:20px;
+    padding-right:24px;
+  }
+  .accountant-portal:not(.owner-door) .crumb{padding:0 28px}
+  .accountant-portal:not(.owner-door) .client-workspace{
+    grid-template-columns:232px minmax(0,1fr);
+    gap:0;
+    align-items:stretch;
+    min-height:calc(100dvh - 72px);
+  }
+  .accountant-portal:not(.owner-door) .deliverable-rail{
+    position:sticky;
+    top:0;
+    align-self:stretch;
+    min-height:calc(100dvh - 72px);
+    max-height:none;
+    margin:0;
+    padding:16px 8px;
+    border:0;
+    border-right:1px solid var(--pale);
+    border-radius:0;
+    background:var(--bg);
+    box-shadow:none;
+    backdrop-filter:none;
+  }
+  .accountant-portal:not(.owner-door) .deliverable-main{
+    min-width:0;
+    padding:8px 28px 48px;
+  }
+  .accountant-portal:not(.owner-door) .deliverable-rail .tab{
+    min-height:44px;
+    font-size:14px;
+    align-items:center;
+  }
+}
+@media (max-width:767px){
+  .accountant-portal:not(.owner-door) .deliverable-rail{
+    flex-direction:row;
+    flex-wrap:nowrap;
+    align-items:stretch;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+    gap:4px;
+    width:100%;
+    max-width:100%;
+    padding:6px;
+    border-radius:999px;
+  }
+  .accountant-portal:not(.owner-door) .deliverable-rail .rail-group{display:contents}
+  .accountant-portal:not(.owner-door) .deliverable-rail .rail-kicker{display:none}
+  .accountant-portal:not(.owner-door) .deliverable-rail .tab{
+    flex:0 0 auto;
+    width:auto;
+    min-height:44px;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    white-space:nowrap;
+    padding:8px 14px;
+    font-size:14px;
+  }
+  .settings-portal .deliverable-rail{display:flex}
+}
+
