@@ -8,6 +8,7 @@ import {
   chatReplyFormatRules,
   humanDate,
   normalizeChatReply,
+  trimHeadline,
   parseChatAgent,
   scopeHistoryToAgent,
 } from "../supabase/functions/_shared/chat-reply.ts";
@@ -127,9 +128,18 @@ assert(
   "rules use the market currency",
 );
 assert(BOT_SYSTEM.includes("**Next actions**"), "milon-bot carries the reply format");
-assert(rules.includes("No paragraphs between the figures and Next actions"), "rules forbid a prose middle");
-assert(rules.includes("Hard limit of 120 words") && rules.includes("Never more than 5"), "rules cap length and figures");
-assert(rules.includes("override any other length or style rule"), "format rules win over older length rules");
+assert(
+  rules.includes("No paragraphs between the figures and Next actions"),
+  "rules forbid a prose middle",
+);
+assert(
+  rules.includes("Hard limit of 120 words") && rules.includes("Never more than 5"),
+  "rules cap length and figures",
+);
+assert(
+  rules.includes("override any other length or style rule"),
+  "format rules win over older length rules",
+);
 assert(!BOT_SYSTEM.includes("3–8 sentences"), "milon-bot drops the old sentence count");
 
 const ctx = { copyPack: "us", ratios: [] } as unknown as AskAiContext;
@@ -147,6 +157,123 @@ for (const audience of ["owner", "accountant"] as const) {
 assert(
   buildPrompt("q", ctx, "none", "accountant", "analyst").system.includes("this client's analyst"),
   "accountant persona is framed for the accountant",
+);
+
+// ── Fixed structure is enforced when figures and Next actions are both present ──
+// Verbatim Analyst reply from the prod owner smoke on ask-ai v30 (11 Oct 2026).
+const analystSample = [
+  "Operating margin is 12.6% because strong gross margin is largely absorbed by fixed operating costs.",
+  "",
+  "- Gross margin: 58.5%",
+  "- Fixed Cost Ratio: 36.4%",
+  "- Operating margin: 12.6% (Operating profit $52,000)",
+  "- Peer comparison: global SME operating margin band is 5.0%",
+  "- Weakest pillar: Profit Drivers (70/100)",
+  "",
+  "Cost of sales takes 41.5% of revenue. Fixed and operating costs then take 36.4%, leaving about a third of your gross profit as operating profit. Margin is healthy against the 5.0% band, but fixed costs are the main drag.",
+  "",
+  "Operating profit of $52,000 shrinks to $8,000 profit before tax. Interest sits at 10.7% of revenue, which is an unusually heavy drag. Check that figure, since your debt is described as small facilities only.",
+  "",
+  "**Next actions**",
+  "1. Review fixed contracts and move what you can to variable or usage-based pricing.",
+  "2. Check the interest line against actual loan balances and rates.",
+  "3. Look at refinancing any high-interest facilities.",
+].join("\n");
+const analystShaped = [
+  "Operating margin is 12.6% because strong gross margin is largely absorbed by fixed operating costs.",
+  "",
+  "- Gross margin: 58.5%",
+  "- Fixed Cost Ratio: 36.4%",
+  "- Operating margin: 12.6% (Operating profit $52,000)",
+  "- Peer comparison: global SME operating margin band is 5.0%",
+  "- Weakest pillar: Profit Drivers (70/100)",
+  "",
+  "**Next actions**",
+  "1. Review fixed contracts and move what you can to variable or usage-based pricing.",
+  "2. Check the interest line against actual loan balances and rates.",
+  "3. Look at refinancing any high-interest facilities.",
+].join("\n");
+eq(
+  normalizeChatReply(analystSample),
+  analystShaped,
+  "the Analyst prod sample loses its middle paragraphs",
+);
+assert(
+  normalizeChatReply(analystSample).split(/\s+/).length <= 120,
+  "the shaped Analyst sample is within 120 words",
+);
+eq(normalizeChatReply(analystShaped), analystShaped, "enforcing the shape twice is stable");
+
+eq(
+  normalizeChatReply(
+    [
+      "Start with fixed costs. They are the main drag on your goal.",
+      "",
+      "Here is why:",
+      "- Operating margin: 12.6%",
+      "- Gross margin: 58.5%",
+      "",
+      "**Next actions**",
+      "1. List your fixed contracts.",
+      "2. Ask suppliers about usage-based pricing.",
+      "",
+      "Let me know if you want more detail.",
+    ].join("\n"),
+  ),
+  [
+    "Start with fixed costs. They are the main drag on your goal.",
+    "",
+    "- Operating margin: 12.6%",
+    "- Gross margin: 58.5%",
+    "",
+    "**Next actions**",
+    "1. List your fixed contracts.",
+    "2. Ask suppliers about usage-based pricing.",
+  ].join("\n"),
+  "lead-in and trailing prose are dropped; a short first sentence keeps two",
+);
+
+// Headline: first sentence alone when it has 8+ words, otherwise the first two.
+eq(
+  trimHeadline(
+    "Your 13-week forecast stays in the black with no negative weeks, and closing cash ends higher than it opens. I can't show specific due dates.",
+  ),
+  "Your 13-week forecast stays in the black with no negative weeks, and closing cash ends higher than it opens.",
+  "a long first sentence stands alone",
+);
+eq(
+  trimHeadline("Cash is fine. Runway is 13+ weeks. Debt is low."),
+  "Cash is fine. Runway is 13+ weeks.",
+  "a short first sentence keeps two",
+);
+eq(
+  trimHeadline("Revenue is $4.2m this year."),
+  "Revenue is $4.2m this year.",
+  "a decimal is not a sentence break",
+);
+eq(trimHeadline("One sentence only."), "One sentence only.", "one sentence is unchanged");
+
+// Only when both blocks are present.
+const noActions =
+  "Margins are fine. Here is more detail on why that is.\n\n- Gross margin: 58.5%\n\nThat is above the band.";
+eq(normalizeChatReply(noActions), noActions, "figures without Next actions stay untouched");
+const noFigures =
+  "Happy to help. Two things.\n\n**Next actions**\n1. Upload the bank statement.\n\nThanks!";
+eq(normalizeChatReply(noFigures), noFigures, "Next actions without figures stays untouched");
+eq(
+  normalizeChatReply("Hi! I am the analyst. Ask me about profit."),
+  "Hi! I am the analyst. Ask me about profit.",
+  "small talk stays untouched",
+);
+
+const analystPersona = buildPrompt("q", ctx, "none", "owner", "analyst").system;
+assert(
+  analystPersona.includes("Do not write explanatory sentences"),
+  "the Analyst persona forbids explanatory sentences",
+);
+assert(
+  analystPersona.includes("reasoning in the figure labels"),
+  "the Analyst persona puts reasoning in the labels",
 );
 
 // ── Per-agent threads ────────────────────────────────────────────────────
