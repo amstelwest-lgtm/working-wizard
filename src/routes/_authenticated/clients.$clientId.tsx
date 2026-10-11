@@ -260,6 +260,7 @@ import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { reviewFiguresChanged, signedHealthFromHistory } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
+import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
@@ -3217,7 +3218,17 @@ function ClientView() {
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
                   <div className="milon-desk-host">
-                    <MilonTeamPane clientId={clientId} />
+                    <MilonTeamPane
+                      clientId={clientId}
+                      onOpenApproved={(target) => {
+                        if (target.screen === "accountant") {
+                          setActiveTab("overview");
+                          requestRevealDataRequests();
+                          return;
+                        }
+                        setActiveTab("plan");
+                      }}
+                    />
                     <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
                   </div>
                 </div>

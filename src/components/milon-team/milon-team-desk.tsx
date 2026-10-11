@@ -25,13 +25,15 @@ import {
   findingSentence,
   handoffParts,
   headerFromRun,
+  isVisibleAgentFinding,
   latestRunByAgent,
   ratioSentence,
   splitTodayBriefing,
   type AgentActivitySnapshot,
 } from "@/lib/milon-team-activity";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
-import { draftFindingKindLabel, draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
+import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
+import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import "./milon-team-desk.css";
 
@@ -58,12 +60,18 @@ export function MilonTeamDesk({
   now,
   initialFilter = "all",
   live = null,
+  onOpenApproved,
+  onInvite,
+  onRefreshDrafts,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
   initialFilter?: FilterKey;
   /** Latest agent_runs, findings, and hand-offs. Null keeps the feed fallback. */
   live?: AgentActivitySnapshot | null;
+  onOpenApproved?: (target: ApprovedDraftTarget) => void;
+  onInvite?: () => void;
+  onRefreshDrafts?: () => void;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
@@ -122,7 +130,7 @@ export function MilonTeamDesk({
   const activity = feed.activity.filter((event) => matches(event.agent, filter));
   const latest = latestRunByAgent(live?.runs ?? []);
   const findings = (live?.findings ?? [])
-    .filter((row) => matches(row.agent, filter) && row.created_at)
+    .filter((row) => isVisibleAgentFinding(row) && matches(row.agent, filter) && row.created_at)
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
   const handoffs = (live?.messages ?? [])
     .map((row) => {
@@ -264,23 +272,37 @@ export function MilonTeamDesk({
                       market: live?.market,
                     });
                     const draft = draftFindingLabel(row);
-                    const kindLabel = draftFindingKindLabel(row);
                     const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock);
                     const when = formatAsOf(row.created_at, clock);
+                    const meta = (
+                      <div className="milon-desk-meta">
+                        {checked ? (
+                          <span className="milon-desk-why">{checked}</span>
+                        ) : when ? (
+                          <time dateTime={row.created_at}>{when}</time>
+                        ) : null}
+                      </div>
+                    );
+                    if (draft || row.status === "approved") {
+                      return (
+                        <OwnerDraftCard
+                          key={row.id}
+                          layout="desk"
+                          row={row}
+                          sentence={sentence}
+                          meta={meta}
+                          onOpen={onOpenApproved}
+                          onInvite={onInvite}
+                          onRefresh={onRefreshDrafts}
+                        />
+                      );
+                    }
                     return (
-                      <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent} data-finding-draft={draft ? "true" : undefined}>
+                      <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent}>
                         <div className="milon-desk-job-copy">
                           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
                           <p className="milon-desk-figure">{sentence}</p>
-                          {kindLabel ? <p className="milon-desk-hint">{kindLabel}</p> : null}
-                          {draft ? <p className="milon-desk-hint" data-draft-label={draft}>{draft}</p> : null}
-                          <div className="milon-desk-meta">
-                            {checked ? (
-                              <span className="milon-desk-why">{checked}</span>
-                            ) : when ? (
-                              <time dateTime={row.created_at}>{when}</time>
-                            ) : null}
-                          </div>
+                          {meta}
                         </div>
                       </li>
                     );
