@@ -95,7 +95,7 @@ final class MilonExternalUrls {
     private static boolean isSupabaseAuth(String host, String path) {
         if (path == null) return false;
         if (host.endsWith(".supabase.co") && path.startsWith("/auth/")) return true;
-        boolean customDomain = "auth.milonfinance.com".equals(host) || "auth.milon.co.za".equals(host);
+        boolean customDomain = "auth.milonfinance.com".equals(host);
         return customDomain && path.startsWith("/auth/v1/");
     }
 

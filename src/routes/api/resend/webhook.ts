@@ -7,7 +7,7 @@
  * Signal:    email.delivered, email.clicked, email.received
  *
  * Setup in Resend → Webhooks:
- *   URL: https://www.milon.co.za/api/resend/webhook
+ *   URL: https://www.milonfinance.com/api/resend/webhook
  *   Events: those six
  * Then put the signing secret in Vercel as RESEND_WEBHOOK_SECRET.
  */

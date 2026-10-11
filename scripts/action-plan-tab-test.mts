@@ -221,7 +221,7 @@ const practiceOwner = practiceTeamRows([
   {
     id: "emp-owner",
     name: "James Fleming",
-    email: "team@trymilon.co.za",
+    email: "james@fleming.co.za",
     role: "partner",
     user_id: "d55084b0-43fe-417b-970b-37f22cee84f3",
   },

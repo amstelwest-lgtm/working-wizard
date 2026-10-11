@@ -8,7 +8,6 @@
 /** Day-0 dry-run inboxes — used when LIGHTHOUSE_DRY_RUN is on without an explicit list. */
 export const LIGHTHOUSE_DEFAULT_DRY_RUN_INBOXES = [
   "amstel.west@gmail.com",
-  "team@milon.co.za",
   "team@milonfinance.com",
   "team@trymilon.com",
   "theoamstel123@gmail.com",

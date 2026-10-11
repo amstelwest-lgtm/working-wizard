@@ -2,8 +2,7 @@
 
 Runbook for replacing the default `*.supabase.co` hostname on Google’s “Continue to …” consent screen with a Milōn-owned auth subdomain.
 
-**Custom auth hostname:** `auth.milonfinance.com` (default for all steps below).  
-**Optional later override:** `auth.milon.co.za` — only if Milōn switches regional branding; repeat DNS, Google redirect URIs, and env cutover for the new host.
+**Custom auth hostname:** `auth.milonfinance.com` (default for all steps below).
 
 **Official references**
 
@@ -44,7 +43,6 @@ Google’s consent screen shows the **Supabase Auth host** (`auth.milonfinance.c
 | Host | Use |
 |------|-----|
 | **`auth.milonfinance.com`** | Default — use for Supabase, DNS, Google, and env cutover |
-| `auth.milon.co.za` | Optional later override only; not in scope for initial rollout |
 
 Follow the `auth.example.com` pattern per [Supabase Google auth guidance](https://supabase.com/docs/guides/auth/social-login/auth-google).
 
@@ -160,5 +158,4 @@ If Google OAuth fails after deploy, temporarily revert `VITE_SUPABASE_URL` and `
 - Application code or auth flow behavior changes  
 - Committed credentials or `.env` updates in git  
 - Calculator / magic-link architecture changes  
-- Removing the legacy `*.supabase.co` Google redirect URI before cutover is proven stable  
-- Initial setup of `auth.milon.co.za` (optional later override only)
+- Removing the legacy `*.supabase.co` Google redirect URI before cutover is proven stable

@@ -46,6 +46,20 @@
       "headers": [{ "key": "Content-Type", "value": "application/json" }]
     }
   ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": { "eq": "milon.co.za" } }],
+      "destination": "https://www.milonfinance.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": { "suf": ".milon.co.za" } }],
+      "destination": "https://www.milonfinance.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/api/server" }],
   "crons": [
     {

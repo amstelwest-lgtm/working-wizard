@@ -107,10 +107,10 @@ assertAccountantLinkPurpose(ACCOUNTANT_INVITE_PURPOSE);
 const draft = templateAccountantInviteDraft({
   clientName: "Karoo Traders",
   ownerName: "Ana Owner",
-  inviteUrl: "https://milon.co.za/join/tok123",
+  inviteUrl: "https://www.milonfinance.com/join/tok123",
 });
 assert(draft.subject.includes("Karoo Traders"), "subject names the business");
-assert(draft.body.includes("https://milon.co.za/join/tok123"), "body has /join URL");
+assert(draft.body.includes("https://www.milonfinance.com/join/tok123"), "body has /join URL");
 assert(!draft.body.includes("mode=signup"), "accountant email must not use owner-handoff query");
 assert(draft.body.includes("Ana Owner"), "names the owner");
 assert(/accountant|practice/i.test(draft.body), "says they join as accountant");

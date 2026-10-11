@@ -258,7 +258,7 @@ export type LighthouseSettings = {
   autoSend: boolean;
   /** Postal or physical address shown in the cold-email footer. */
   senderAddress: string;
-  /** Mailbox replies land in. Empty, *@milon.co.za, or leftover team@ resolves to hello@milonfinance.com. */
+  /** Mailbox replies land in. Empty, a retired regional host, or leftover team@ resolves to hello@milonfinance.com. */
   replyTo: string;
 };
 

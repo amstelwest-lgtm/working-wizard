@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { flushServerErrors, reportServerError } from "./lib/monitoring.server";
+import { retiredCoZaRedirect } from "./lib/retired-coza-host";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -108,6 +109,8 @@ function withGeoVary(request: Request, response: Response): Response {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const retired = retiredCoZaRedirect(request);
+    if (retired) return retired;
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

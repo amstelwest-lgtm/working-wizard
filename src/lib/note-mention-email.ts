@@ -48,7 +48,7 @@ async function sendViaResend(opts: {
   idempotencyKey: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milon.co.za";
+  const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milonfinance.com";
   const fromAddr = fromRaw.includes("<")
     ? fromRaw.replace(/^.*<([^>]+)>.*$/, "$1").trim()
     : fromRaw.trim();
@@ -133,8 +133,8 @@ export async function dispatchNoteMentionEmails(
         payload: {
           message_id: messageId,
           to: m.email,
-          from: `Milōn <noreply@milon.co.za>`,
-          sender_domain: "notify.milon.co.za",
+          from: `Milōn <noreply@milonfinance.com>`,
+          sender_domain: "milonfinance.com",
           subject,
           html,
           text,

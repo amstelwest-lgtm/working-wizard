@@ -440,7 +440,7 @@ assert(!landing.includes("/swg/"), "home does not load the swg bundle");
 assert(!shell.includes("gstatic.com"), "collateral does not load gstatic scripts");
 assert(!shell.includes("/swg/"), "collateral does not load the swg bundle");
 assert(!existsSync(resolve("src/components/google-preferred-source-button.tsx")), "Preferred Source button component stays removed");
-assert(!shell.includes(">milon.co.za<"), "collateral footer does not lead with milon.co.za");
+assert(shell.includes(">milonfinance.com<"), "collateral footer leads with milonfinance.com");
 assert(!shell.includes("linkedin.com"), "collateral footer does not hardcode LinkedIn");
 assert(!shell.includes("x.com/milonfinance"), "collateral footer does not hardcode a dead X URL");
 

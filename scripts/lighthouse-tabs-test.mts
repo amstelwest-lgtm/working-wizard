@@ -191,7 +191,7 @@ assert(
 const teamZa = {
   name: "team",
   company: "Milōn Dry Run",
-  email: "team@milon.co.za",
+  email: "team@harbour.co.za",
 };
 const teamCom = {
   name: "team",
@@ -206,8 +206,8 @@ assert(
   leadDisplayName({
     company: null,
     firmName: "Milōn Dry Run",
-    name: "team@milon.co.za",
-    email: "team@milon.co.za",
+    name: "team@harbour.co.za",
+    email: "team@harbour.co.za",
   }) === "Milōn Dry Run",
   "the lighthouse book firm name wins over the raw email",
 );
@@ -219,7 +219,7 @@ assert(
   "a contact name is used when there is no firm",
 );
 assert(
-  leadDisplayName({ name: "team", email: "team@milon.co.za" }) === "Milon",
+  leadDisplayName({ name: "team", email: "team@harbour.co.za" }) === "Harbour",
   "the email domain is prettified before the raw address",
 );
 assert(
@@ -246,9 +246,9 @@ assert(
 );
 
 const queued = dedupeDueToday([
-  { leadId: "a", email: "team@milon.co.za", leadName: "a", stepNo: 2 },
-  { leadId: "a", email: "team@milon.co.za", leadName: "a-dup", stepNo: 2 },
-  { leadId: "b", email: "TEAM@milon.co.za", leadName: "b", stepNo: 2 },
+  { leadId: "a", email: "team@harbour.co.za", leadName: "a", stepNo: 2 },
+  { leadId: "a", email: "team@harbour.co.za", leadName: "a-dup", stepNo: 2 },
+  { leadId: "b", email: "TEAM@harbour.co.za", leadName: "b", stepNo: 2 },
   { leadId: "c", email: "team@milonfinance.com", leadName: "c", stepNo: 2 },
 ]);
 assert(
@@ -262,19 +262,19 @@ assert(
   "repeated lead ids collapse before the board",
 );
 assert(
-  emailAlreadyTouchedAtStep([{ email: "Team@milon.co.za", stepNo: 2 }], "team@milon.co.za", 2),
+  emailAlreadyTouchedAtStep([{ email: "Team@harbour.co.za", stepNo: 2 }], "team@harbour.co.za", 2),
   "same email already sent at this step is a no-op",
 );
 assert(
   !emailAlreadyTouchedAtStep(
-    [{ email: "team@milon.co.za", stepNo: 2 }],
+    [{ email: "team@harbour.co.za", stepNo: 2 }],
     "team@milonfinance.com",
     2,
   ),
   "a different mailbox at the same step can still be touched",
 );
 assert(
-  !emailAlreadyTouchedAtStep([{ email: "team@milon.co.za", stepNo: 1 }], "team@milon.co.za", 2),
+  !emailAlreadyTouchedAtStep([{ email: "team@harbour.co.za", stepNo: 1 }], "team@harbour.co.za", 2),
   "an earlier step does not block the next step",
 );
 
