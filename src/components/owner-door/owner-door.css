@@ -143,9 +143,26 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   color: var(--ink-dim);
 }
 
+.owner-door[data-screen="home"] {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
+.owner-door[data-screen="home"] .client-workspace {
+  flex: 1;
+  align-items: stretch;
+}
+
+.owner-door[data-screen="home"] .deliverable-main {
+  display: flex;
+  flex-direction: column;
+}
+
 .owner-door .owner-pane[data-owner-home="true"] {
   display: flex;
-  min-height: calc(100dvh - 168px);
+  flex: 1;
+  min-height: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -154,7 +171,7 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 
 .owner-door .owner-stage {
   position: relative;
-  width: min(100%, 980px);
+  width: 100%;
 }
 
 .owner-door .owner-health-hero {
@@ -197,6 +214,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   gap: 14px;
 }
 
+.owner-door .owner-pane[data-owner-home="true"] .owner-agents {
+  align-items: stretch;
+  gap: 22px;
+}
+
 .owner-door [data-owner-faces] .owner-agents {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   justify-items: center;
@@ -213,6 +235,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   background: transparent;
 }
 
+.owner-door .owner-pane[data-owner-home="true"] .owner-agent {
+  height: 100%;
+  padding: 4px 10px 12px;
+}
+
 .owner-door .owner-agent-open {
   display: flex;
   width: 100%;
@@ -225,6 +252,10 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-agent-open {
+  flex: 1;
 }
 
 .owner-door .owner-agent-open:focus-visible {
@@ -247,6 +278,35 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-lines {
+  flex: 1;
+  width: 100%;
+  min-height: 2.7em;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-voice {
+  width: 100%;
+  max-width: none;
+}
+
+.owner-door .owner-money {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (min-width: 761px) {
+  .owner-door .owner-pane[data-owner-home="true"] .owner-voice {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .owner-door .owner-pane[data-owner-home="true"] .owner-lines:has(.owner-voice:nth-child(2)) .owner-voice {
+    -webkit-line-clamp: 1;
+  }
 }
 
 .owner-door .owner-voice,
@@ -333,6 +393,10 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
 .owner-door .btn.gold.owner-ask {
   padding: 8px 12px;
   font-size: 15px;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .owner-ask {
+  margin-top: auto;
 }
 
 .owner-ask:focus-visible {
@@ -604,6 +668,11 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   width: 156px;
   height: 156px;
   flex: none;
+}
+
+.owner-presence.is-lg {
+  width: 172px;
+  height: 172px;
 }
 
 .owner-presence.is-md {
@@ -1067,20 +1136,30 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   }
 }
 
+@media (max-width: 860px) {
+  .owner-door[data-screen="home"] .client-workspace {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 760px) {
   .owner-door .owner-pane[data-owner-home="true"] {
-    min-height: 0;
-    justify-content: flex-start;
+    gap: 16px;
   }
 
   .owner-door .owner-pane[data-owner-home="true"] .owner-agents {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    gap: 28px;
+    gap: 8px;
   }
 
   .owner-door .owner-pane[data-owner-home="true"] .owner-agent {
-    width: min(100%, 320px);
+    padding: 2px 2px 8px;
+  }
+
+  .owner-door .owner-pane[data-owner-home="true"] .owner-ask {
+    gap: 4px;
+    min-height: 72px;
+    padding: 8px 4px;
+    font-size: 14px;
   }
 
   .owner-door [data-owner-faces] .owner-agents {
@@ -1114,8 +1193,8 @@ html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400 {
   }
 
   .owner-presence.is-lg {
-    width: 132px;
-    height: 132px;
+    width: 96px;
+    height: 96px;
   }
 
   .owner-beam-track {
