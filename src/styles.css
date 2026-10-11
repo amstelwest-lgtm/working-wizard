@@ -622,15 +622,15 @@ html:not(.dark) main.bg-slate-950 { background-color: #ffffff !important; color:
 
 /* ===== Health Score Orbs (main + pillar sub-orbs) — theme-aware ===== */
 /* Dark mode: the Sphere component's inline styles already handle this. */
-/* Light mode: white to ice so navy labels stay readable. Gold stays on the wordmark. */
+/* Light mode: luminous cobalt fill. Dark ink labels stay readable. */
 html:not(.dark) .sphere-orb,
 html:not(.dark) .health-orb {
-  background: radial-gradient(circle at 50% 34%, #ffffff 0%, #e8f3ff 42%, #c7e4fe 72%, #7dd3fc 100%) !important;
+  background: radial-gradient(circle at 50% 34%, #f8fbff 0%, #dbeafe 42%, #93c5fd 72%, #3b82f6 100%) !important;
   box-shadow:
-    0 22px 60px rgba(11,95,255,.16),
-    0 0 70px 6px rgba(56,189,248,.22),
+    0 22px 60px rgba(11,95,255,.22),
+    0 0 70px 6px rgba(11,95,255,.18),
     inset 0 3px 26px rgba(255,255,255,.9),
-    inset 0 -24px 55px rgba(11,95,255,.16) !important;
+    inset 0 -24px 55px rgba(11,95,255,.22) !important;
 }
 html:not(.dark) .sphere-orb .text-amber-300,
 html:not(.dark) .health-orb .text-amber-300 { color: #8a5a12 !important; }
@@ -1286,4 +1286,55 @@ html:not([data-theme="light"]) .accountant-portal .precard-cap-card,
   html[data-milon-fab="1"] body {
     padding-bottom: calc(11rem + env(safe-area-inset-bottom, 0px));
   }
+}
+
+/* Owner tabs: leftover gold utilities become cobalt and navy. The wordmark is outside these pages. */
+.owner-door [data-owner-page="health"] [class*="#b8860b"],
+.owner-door [data-owner-page="cash"] [class*="#b8860b"],
+.owner-door [data-owner-page="profit"] [class*="#b8860b"],
+.owner-door [data-owner-page="budget"] [class*="#b8860b"],
+.owner-door [data-owner-page="moves"] [class*="#b8860b"],
+.owner-door [data-owner-page="tasks"] [class*="#b8860b"],
+.owner-door [data-owner-page="health"] [class*="text-[#d4a550]"],
+.owner-door [data-owner-page="cash"] [class*="text-[#d4a550]"],
+.owner-door [data-owner-page="profit"] [class*="text-[#d4a550]"],
+.owner-door [data-owner-page="budget"] [class*="text-[#d4a550]"],
+.owner-door [data-owner-page="moves"] [class*="text-[#d4a550]"],
+.owner-door [data-owner-page="tasks"] [class*="text-[#d4a550]"] {
+  color: #102a43;
+}
+.owner-door [data-owner-page="health"] [class*="bg-[#b8860b]"],
+.owner-door [data-owner-page="cash"] [class*="bg-[#b8860b]"],
+.owner-door [data-owner-page="profit"] [class*="bg-[#b8860b]"],
+.owner-door [data-owner-page="budget"] [class*="bg-[#b8860b]"],
+.owner-door [data-owner-page="moves"] [class*="bg-[#b8860b]"],
+.owner-door [data-owner-page="tasks"] [class*="bg-[#b8860b]"],
+.owner-door [data-owner-page="health"] [class*="bg-[#d4a550]"],
+.owner-door [data-owner-page="cash"] [class*="bg-[#d4a550]"],
+.owner-door [data-owner-page="profit"] [class*="bg-[#d4a550]"],
+.owner-door [data-owner-page="budget"] [class*="bg-[#d4a550]"],
+.owner-door [data-owner-page="moves"] [class*="bg-[#d4a550]"],
+.owner-door [data-owner-page="tasks"] [class*="bg-[#d4a550]"],
+.owner-door [data-owner-page="health"] [class*="bg-[#d4af37]"],
+.owner-door [data-owner-page="cash"] [class*="bg-[#d4af37]"],
+.owner-door [data-owner-page="profit"] [class*="bg-[#d4af37]"],
+.owner-door [data-owner-page="budget"] [class*="bg-[#d4af37]"],
+.owner-door [data-owner-page="moves"] [class*="bg-[#d4af37]"],
+.owner-door [data-owner-page="tasks"] [class*="bg-[#d4af37]"] {
+  background-color: #0b5fff;
+  color: #fff;
+}
+.owner-door [data-owner-page="health"] [class*="border-[#d4a550]"],
+.owner-door [data-owner-page="cash"] [class*="border-[#d4a550]"],
+.owner-door [data-owner-page="profit"] [class*="border-[#d4a550]"],
+.owner-door [data-owner-page="budget"] [class*="border-[#d4a550]"],
+.owner-door [data-owner-page="moves"] [class*="border-[#d4a550]"],
+.owner-door [data-owner-page="tasks"] [class*="border-[#d4a550]"],
+.owner-door [data-owner-page="health"] [class*="border-[#d4af37]"],
+.owner-door [data-owner-page="cash"] [class*="border-[#d4af37]"],
+.owner-door [data-owner-page="profit"] [class*="border-[#d4af37]"],
+.owner-door [data-owner-page="budget"] [class*="border-[#d4af37]"],
+.owner-door [data-owner-page="moves"] [class*="border-[#d4af37]"],
+.owner-door [data-owner-page="tasks"] [class*="border-[#d4af37]"] {
+  border-color: #dbeafe;
 }

@@ -4,6 +4,7 @@
  * writes a budget.
  */
 import { useEffect, useMemo, useState } from "react";
+import { Info } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMarketFormat } from "@/contexts/market";
@@ -30,7 +31,7 @@ import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
 import { formatMoneyChartTick } from "@/lib/market/format";
 import type { VarianceSignal } from "@/lib/budget.variance";
 
-const BUDGET_BAR = "#d4a550";
+const BUDGET_BAR = "#0B5FFF";
 const BUDGET_ONLY = "#94a3b8";
 const ACTUAL_BAR = "#3d4f66";
 
@@ -120,29 +121,26 @@ export function BudgetChartTable({
 
   if (readOnly && !budgetPlanIsSet(views)) {
     return (
-      <section
-        className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#d4a550]/25 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
+      <p
+        className="budget-lens flex items-center gap-2 rounded-lg bg-[#DBEAFE] px-3 py-2 text-[13px] leading-snug text-[#102A43]"
         data-budget-lens={shown}
         data-budget-chart="draft"
-        aria-label="Budget chart and table"
       >
-        <h3 className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">Budget vs actual</h3>
-        <p className="mt-2 text-sm leading-relaxed text-[#6b6354] dark:text-slate-300">
-          Your accountant is still setting the budget
-        </p>
-      </section>
+        <Info className="h-4 w-4 shrink-0 text-[#0B5FFF]" aria-hidden />
+        Your accountant is still setting the budget
+      </p>
     );
   }
 
   return (
     <section
-      className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#d4a550]/25 bg-white/80 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
+      className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
       data-budget-lens={shown}
       aria-label="Budget chart and table"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">Budget vs actual</h3>
+          <h3 className="text-sm font-semibold text-[#102A43] dark:text-slate-100">Budget vs actual</h3>
           <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
             {sentence}
           </p>

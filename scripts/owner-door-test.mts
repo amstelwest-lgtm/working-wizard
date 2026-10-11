@@ -540,13 +540,35 @@ assert(
   `dark-gold ink on the white pillar card is ${contrast(goldInk, pillarCard).toFixed(2)}`,
 );
 assert(
-  css.includes('html[data-theme="light"] .owner-door .owner-pillar-score.text-amber-400') &&
-    css.includes("color: var(--gold-ink)"),
-  "light watch scores use the dark-gold ink token",
+  css.includes("html:not(.dark) .owner-door .owner-pillar-score.text-emerald-400") &&
+    css.includes("color: var(--ok)"),
+  "healthy pillar scores use the healthy green",
+);
+assert(
+  css.includes(
+    'html:not(.dark) .owner-door [data-owner-page="health"] .owner-pillar-score.text-amber-400',
+  ) && css.includes("color: var(--warn)"),
+  "watch pillar scores use the attention colour",
+);
+assert(
+  css.includes("html:not(.dark) .owner-door .owner-pillar-score.text-rose-400") &&
+    css.includes("color: var(--risk)"),
+  "critical pillar scores use the critical red",
+);
+assert(
+  css.includes("html:not(.dark) .owner-door .health-orb .text-slate-200") &&
+    css.includes("color: var(--navy)"),
+  "the health score label is navy",
 );
 const sphere = readFileSync("src/components/sphere-hero.tsx", "utf8");
+const ownerApp = readFileSync("src/routes/app.tsx", "utf8");
 assert(sphere.includes("onOrbOpen"), "the orb can open Health instead of drilling in place");
-assert(sphere.includes("owner-pillar-score"), "pillar numbers opt into the dark-gold ink");
+assert(sphere.includes("owner-pillar-score"), "pillar numbers carry a status class");
+assert(
+  ownerApp.includes('caption="Tap to see what\'s behind your score"'),
+  "the owner health orb uses the plain tap caption",
+);
+assert(sphere.includes("onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}"), "the health orb stays a button");
 assert(sphere.includes("bg-white"), "the pillar card is white");
 assert(shell.includes('className="brand"'), "the owner wordmark uses the accountant brand size");
 assert(shell.includes('className="gold-text">MILŌN'), "the owner wordmark uses the accountant gold colour");

@@ -50,6 +50,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
@@ -1640,6 +1641,9 @@ export function CashForecastPanel({
             onChange={patchForecastSignoff}
           />
         ) : null}
+        {readOnly ? (
+          <OwnerSignoffMark signoff={forecastSignoff} isStale={forecastStale} />
+        ) : null}
         {readOnly ? null : (
           <Button
             type="button"
@@ -1668,13 +1672,15 @@ export function CashForecastPanel({
             {stripChip}
           </span>
         ) : null}
-        <SignoffStatusChip
-          clientId={clientId}
-          scope="cash_forecast"
-          signoff={forecastSignoff}
-          isStale={forecastStale}
-          known={signoffKnown}
-        />
+        {readOnly ? null : (
+          <SignoffStatusChip
+            clientId={clientId}
+            scope="cash_forecast"
+            signoff={forecastSignoff}
+            isStale={forecastStale}
+            known={signoffKnown}
+          />
+        )}
       </div>
     </section>
   );

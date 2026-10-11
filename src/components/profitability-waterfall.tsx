@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ const STEP_RATIO: Record<string, string> = {
 
 const BAND_CHIP: Record<string, { color: string; bg: string }> = {
   healthy: { color: "#4caf82", bg: "rgba(76,175,130,0.15)" },
-  at_risk: { color: "#0B5FFF", bg: "rgba(212,165,80,0.15)" },
+  at_risk: { color: "#B7791F", bg: "rgba(183,121,31,0.12)" },
   critical: { color: "#e05c5c", bg: "rgba(224,92,92,0.15)" },
 };
 
@@ -211,6 +211,7 @@ export function ProfitabilityWaterfall({
   hideLead = false,
   hideCardExport = false,
   negative = "paren",
+  headerAside = null,
   onExportReady,
 }: {
   fallback?: WaterfallFallback;
@@ -237,6 +238,8 @@ export function ProfitabilityWaterfall({
   hideLead?: boolean;
   /** Export PDF sits on the answer strip. The card does not repeat it. */
   hideCardExport?: boolean;
+  /** Owner sign-off, aligned with this card's header. */
+  headerAside?: ReactNode;
   onExportReady?: (api: WaterfallExportApi) => void;
 }) {
   const { weeklyInputs } = useFinancialInputs();
@@ -393,9 +396,9 @@ export function ProfitabilityWaterfall({
 
   return (
     <Card className="relative overflow-hidden border border-[#DBEAFE] bg-white text-[#102A43] shadow-[0_8px_24px_rgba(16,42,67,0.06)] print:hidden dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] dark:shadow-none">
-      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#0B5FFF] via-[#F4F7FB] to-transparent" />
+      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]" />
       {showHeader ? (
-      <CardHeader className="border-b border-amber-900/10 pb-5 dark:border-slate-800">
+      <CardHeader className="border-b border-[#DBEAFE] pb-5 dark:border-slate-800">
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1">
             {hideLead ? null : (
@@ -418,12 +421,13 @@ export function ProfitabilityWaterfall({
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">{periodNote}</p>
             ) : null}
           </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {headerAside}
           {hideCardExport ? null : (
-          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
-              className="h-7 gap-1.5 border-[#0B5FFF]/40 bg-[#0B5FFF]/10 px-2.5 text-[10px] text-[#0B5FFF] hover:bg-[#2563EB]/20"
+              className="h-7 gap-1.5 border-[#0B5FFF] bg-transparent px-2.5 text-[11px] font-semibold text-[#102A43] hover:bg-[#DBEAFE]"
               disabled={exporting}
               onClick={(e) => {
                 e.stopPropagation();
@@ -433,8 +437,8 @@ export function ProfitabilityWaterfall({
               <Download className="h-3 w-3" />
               {exporting ? "Preparing…" : "Export PDF"}
             </Button>
+            )}
           </div>
-          )}
         </div>
       </CardHeader>
       ) : null}

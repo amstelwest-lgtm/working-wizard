@@ -3,6 +3,7 @@
  */
 
 import type { ReactNode } from "react";
+import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { ReviewSignoffButton } from "@/components/review-signoff";
 import { SignoffStatusChip } from "@/components/signoff-status-chip";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
@@ -25,6 +26,11 @@ function signedMoney(n: number, market: ResolvedMarket): string {
   const body = stickyMoney(n, market);
   if (n > 0) return `+${body}`;
   return body;
+}
+
+/** A zero or missing plan is not a variance. The cell says so instead. */
+export function budgetFigureMissing(budget: number): boolean {
+  return !Number.isFinite(budget) || Math.abs(budget) < 1;
 }
 
 function Delta({
@@ -69,6 +75,7 @@ export function BudgetVerdictStrip({
   onSignoffChange,
   extraActions = null,
   signoffKnown = true,
+  presentation = "strip",
 }: {
   periodLabel: string;
   revenueBudget: number;
@@ -86,6 +93,8 @@ export function BudgetVerdictStrip({
   /** False until the sign-off row has loaded. */
   signoffKnown?: boolean;
   extraActions?: ReactNode;
+  /** Owner Budget is a slim stat row. The accountant strip stays. */
+  presentation?: "owner" | "strip";
 }) {
   const money = (n: number) => stickyMoney(n, market);
   const hasActuals = revenueActual != null && chip !== "None";
@@ -96,6 +105,46 @@ export function BudgetVerdictStrip({
     ebit: profitActual ?? undefined,
     budgetEbit: profitBudget,
   });
+  if (presentation === "owner") {
+    return (
+      <section
+        className="grid w-full grid-cols-2 items-start gap-x-4 gap-y-3 border-b border-[#DBEAFE] pb-3 tabular-nums sm:grid-cols-4"
+        data-answer-strip
+        data-budget-verdict
+        data-owner-budget-summary
+      >
+        <OwnerBudgetStat label="Period" value={periodLabel} />
+        <OwnerBudgetCompare
+          label="Revenue vs budget"
+          budget={revenueBudget}
+          actual={hasActuals ? revenueActual : null}
+          higherIsBetter
+          market={market}
+          money={money}
+        />
+        <OwnerBudgetCompare
+          label="Profit vs budget"
+          budget={profitBudget}
+          actual={hasActuals && profitActual != null ? profitActual : null}
+          higherIsBetter
+          market={market}
+          money={money}
+        />
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">
+              Status
+            </p>
+            <OwnerSignoffMark signoff={signoff} isStale={isStale} align="start" className="mt-1" />
+            {showBudgetSourceChip(chip) ? (
+              <p className="mt-1 text-[12px] leading-snug text-[#3D5270]">{chip}</p>
+            ) : null}
+          </div>
+          {extraActions}
+        </div>
+      </section>
+    );
+  }
   return (
     <section
       className="answer-strip rounded-2xl border border-[#d4a550]/40 bg-[#fffdf8] px-4 py-3.5 dark:border-slate-700 dark:bg-slate-950"
@@ -190,5 +239,55 @@ export function BudgetVerdictStrip({
         />
       </div>
     </section>
+  );
+}
+
+function OwnerBudgetStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">{label}</p>
+      <p className="mt-1 text-[13px] font-medium leading-snug text-[#102A43]">{value}</p>
+    </div>
+  );
+}
+
+function OwnerBudgetCompare({
+  label,
+  budget,
+  actual,
+  higherIsBetter,
+  market,
+  money,
+}: {
+  label: string;
+  budget: number;
+  actual: number | null;
+  higherIsBetter: boolean;
+  market: ResolvedMarket;
+  money: (n: number) => string;
+}) {
+  const missing = budgetFigureMissing(budget);
+  return (
+    <div className="min-w-0" data-budget-missing={missing ? "true" : "false"}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">{label}</p>
+      {missing ? (
+        <p className="mt-1 text-[13px] font-medium text-[#102A43]">No budget yet</p>
+      ) : actual == null ? (
+        <p className="mt-1 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[#102A43]">
+          {money(budget)}
+        </p>
+      ) : (
+        <p className="mt-1 text-[13px] font-semibold leading-snug text-[#102A43]">
+          <span className="whitespace-nowrap tabular-nums">{money(actual)}</span>
+          {" vs "}
+          <span className="whitespace-nowrap tabular-nums">{money(budget)}</span>{" "}
+          <span className="whitespace-nowrap">
+            (
+            <Delta budget={budget} actual={actual} higherIsBetter={higherIsBetter} market={market} />
+            )
+          </span>
+        </p>
+      )}
+    </div>
   );
 }

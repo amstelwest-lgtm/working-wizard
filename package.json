@@ -71,6 +71,7 @@
     "test:lighthouse-agent-chat": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-agent-chat-test.mts",
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
+    "test:owner-signoff-mark": "vite-node --config scripts/vite-test.config.ts scripts/owner-signoff-mark-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
     "test:coza-host-redirect": "vite-node --config scripts/vite-test.config.ts scripts/coza-host-redirect-test.mts",
     "test:welcome-email": "vite-node --config scripts/vite-test.config.ts scripts/welcome-email-test.mts",

@@ -6,7 +6,7 @@ import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 /**
  * SphereHero — the morphing 3-level health drill-down.
  *
- * Level 1: one large golden sphere (overall Business Health Score) with a
+ * Level 1: one large cobalt sphere (overall Business Health Score) with a
  *          compact 4-stat pillar row beneath it.
  * Level 2: main sphere shrinks to the top; the four pillars morph in as
  *          glowing sphere cards in a 2×2 grid.
@@ -456,12 +456,12 @@ export function SphereHero({
                 key={p.id}
                 type="button"
                 onClick={() => go(3, p.id)}
-                className={`flex flex-col items-center rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#0B5FFF]/55 hover:shadow-[0_4px_14px_rgba(16,42,67,0.08)] dark:border-[#1e3a5f] dark:bg-[#102A43]/80 dark:shadow-none dark:hover:bg-[#163654] ${
+                className={`flex flex-col items-center rounded-xl border border-[#DBEAFE] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#0B5FFF]/55 hover:shadow-[0_4px_14px_rgba(16,42,67,0.08)] dark:border-[#1e3a5f] dark:bg-[#102A43]/80 dark:shadow-none dark:hover:bg-[#163654] ${
                   compact ? "gap-0.5 px-1 py-2" : "gap-1 px-1 py-3"
                 }`}
               >
                 <span className={`flex items-center justify-center rounded-full border border-[#DBEAFE] bg-[#DBEAFE] ${compact ? "h-7 w-7" : "h-9 w-9"}`}>
-                  <Icon className={`${compact ? "h-3.5 w-3.5" : "h-4 w-4"} text-amber-600 dark:text-amber-400`} />
+                  <Icon className={`${compact ? "h-3.5 w-3.5" : "h-4 w-4"} text-[#0B5FFF]`} />
                 </span>
                 <span className="text-xs font-semibold tracking-[0.04em] text-slate-500 dark:text-slate-400">
                   {p.label}

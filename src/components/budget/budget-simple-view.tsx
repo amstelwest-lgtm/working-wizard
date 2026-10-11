@@ -240,6 +240,7 @@ export function BudgetSimpleView({
         canSign={canSign}
         onSignoffChange={onSignoffChange}
         signoffKnown={signoffKnown}
+        presentation={role === "owner" ? "owner" : "strip"}
         extraActions={
           <BudgetPdfExportButton
             quiet
@@ -664,7 +665,7 @@ function OwnerHowBuilt({ readOnly, children }: { readOnly: boolean; children: Re
         Your accountant built this from last year's actuals plus the growth you agreed.
       </p>
       <details>
-        <summary className="w-fit cursor-pointer text-sm font-semibold text-[#8a6508] dark:text-[#e1b85e]">
+        <summary className="w-fit cursor-pointer text-sm font-semibold text-[#0B5FFF]">
           More
         </summary>
         <div className="mt-3">{children}</div>
