@@ -28,6 +28,7 @@ import { BudgetChartTable } from "@/components/budget/budget-chart-table";
 import { BudgetSimpleView, MoneyField } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
+import type { BudgetYearMoney } from "@/lib/budget-year-compare";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { BudgetVerdictStrip } from "@/components/budget/budget-verdict";
@@ -75,6 +76,8 @@ export function BudgetWorkspace({
   onLensChange,
   actualMonths,
   readOnly = false,
+  priorYear = null,
+  priorYearLabel = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -97,6 +100,8 @@ export function BudgetWorkspace({
   actualMonths?: readonly BudgetActualMonth[];
   /** View the figures. Editing controls stay in the file for the accountant. */
   readOnly?: boolean;
+  priorYear?: BudgetYearMoney | null;
+  priorYearLabel?: string | null;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -127,6 +132,8 @@ export function BudgetWorkspace({
           onLensChange={onLensChange}
           actualMonths={actualMonths}
           readOnly={readOnly}
+          priorYear={priorYear}
+          priorYearLabel={priorYearLabel}
         />
       </div>
     );
