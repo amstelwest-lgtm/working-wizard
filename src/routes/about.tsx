@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
@@ -32,9 +32,8 @@ function AboutPage() {
       ctaTitle={<>See it on your own figures</>}
       ctaBody={
         <>
-          Owner plan <MarketCopy us="$39/mo" za="R299/mo" /> · free when your accountant is on Milōn.
-          Upload what you have and read your score before you decide whether any of this is worth
-          your time.
+          Spark is free during early access and needs no card. Upload what you have and read your
+          score before you decide whether any of this is worth your time.
         </>
       }
     >

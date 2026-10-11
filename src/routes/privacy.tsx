@@ -151,7 +151,7 @@ function PrivacyPage() {
       <ul className="mk-list">
         <li>We do not sell your figures, your email list, or your client book.</li>
         <li>
-          We do not store card details. Card numbers are collected by Stripe Checkout.
+          We do not store card details. Nothing is being billed yet, so there is nothing to store.
         </li>
         <li>We do not use your financials to train a public model of our own.</li>
       </ul>
