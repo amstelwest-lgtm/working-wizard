@@ -284,7 +284,7 @@ export function BudgetSimpleView({
         id="wizard-budget-month-engine"
         className="budget-month-engine relative overflow-hidden rounded-2xl border border-[#d4a550]/30 bg-gradient-to-b from-[#fffdf8] to-white p-5 shadow-[0_18px_40px_rgba(120,90,10,0.06)] dark:from-slate-950 dark:to-slate-950 dark:border-slate-800 sm:p-6"
       >
-        <div className="pointer-events-none absolute inset-y-5 left-0 w-0.5 rounded-full bg-gradient-to-b from-[#ac8400] via-[#d4af37] to-[#fdee79]" />
+        <div className="pointer-events-none absolute inset-y-5 left-0 w-0.5 rounded-full bg-gradient-to-b from-[#2563EB] via-[#0B5FFF] to-[#38BDF8]" />
         <div className="flex flex-wrap items-start justify-between gap-3 pl-3 sm:pl-4">
           <div className="min-w-0 max-w-xl">
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b8860b]">

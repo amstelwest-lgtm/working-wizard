@@ -135,13 +135,14 @@ const TIER_LABEL: Record<Tier, string> = {
 };
 
 const TIER_GLOW: Record<Tier, string> = {
-  healthy: "16,185,129",   // emerald-500
-  watch: "245,158,11",     // amber-500
-  critical: "244,63,94",   // rose-500
-  nodata: "100,116,139",   // slate-500
+  healthy: "22,132,91",
+  watch: "183,121,31",
+  critical: "196,61,75",
+  nodata: "100,116,139",
 };
 
-const GOLD = "212,164,53";
+const ORB_GLOW = "11,95,255";
+const PILLAR_GLOW = "37,99,235";
 
 const PILLAR_ICON: Record<SpherePillar["id"], LucideIcon> = {
   profit: TrendingUp,
@@ -251,11 +252,11 @@ function Sphere({
       onClick={onClick}
       disabled={!onClick}
       aria-label={ariaLabel ?? (label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`)}
-      className={`sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-amber-400/60 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
+      className={`sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-sky-400/70 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
       style={{
         width: size,
         height: size,
-        background: `radial-gradient(circle at 32% 26%, rgba(255,255,255,0.14), rgba(0,0,0,0) 42%), radial-gradient(circle at 50% 45%, rgba(20,18,10,0.96) 58%, rgba(${glowRgb},0.55) 92%, rgba(${glowRgb},0.9) 100%)`,
+        background: `radial-gradient(circle at 32% 26%, rgba(56,189,248,0.35), rgba(0,0,0,0) 42%), radial-gradient(circle at 50% 45%, rgba(16,42,67,0.96) 58%, rgba(${glowRgb},0.55) 92%, rgba(${glowRgb},0.9) 100%)`,
         boxShadow: `0 0 ${size * 0.16}px rgba(${glowRgb},0.55), 0 0 ${size * 0.45}px rgba(${glowRgb},0.28), inset 0 0 ${size * 0.22}px rgba(${glowRgb},0.35)`,
       }}
     >
@@ -346,7 +347,7 @@ export function SphereHero({
   }, [reduceMotion]);
 
   const overallTier = tierFromDisplayStatus(displayStatus, overallHealth);
-  const overallGlow = overallTier === "healthy" || overallTier === "watch" ? GOLD : TIER_GLOW[overallTier];
+  const overallGlow = ORB_GLOW;
 
   return (
     <div
@@ -358,7 +359,7 @@ export function SphereHero({
           {[12, 28, 55, 71, 88].map((left, i) => (
             <span
               key={i}
-              className="absolute h-1 w-1 rounded-full bg-amber-300/50"
+              className="absolute h-1 w-1 rounded-full bg-sky-300/50"
               style={{ left: `${left}%`, top: `${(i * 37 + 12) % 85}%`, filter: "blur(0.5px)" }}
             />
           ))}
@@ -400,7 +401,7 @@ export function SphereHero({
               delta={overallDelta}
               size={orbSize}
               glowRgb={overallGlow}
-              numberClass="text-amber-300"
+              numberClass={TIER_TEXT[overallTier]}
               onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}
               ariaLabel={
                 onOrbOpen
@@ -509,7 +510,7 @@ export function SphereHero({
                     label={p.label}
                     delta={p.delta}
                     size={132}
-                    glowRgb={TIER_GLOW[t]}
+                    glowRgb={PILLAR_GLOW}
                     numberClass={TIER_TEXT[t]}
                     icon={PILLAR_ICON[p.id]}
                     onClick={() => go(3, p.id)}
@@ -537,7 +538,7 @@ export function SphereHero({
               label={activePillar.label}
               delta={activePillar.delta}
               size={210}
-              glowRgb={TIER_GLOW[tierOf(activePillar.health, activePillar.status)]}
+              glowRgb={ORB_GLOW}
               numberClass={TIER_TEXT[tierOf(activePillar.health, activePillar.status)]}
               icon={PILLAR_ICON[activePillar.id]}
               onClick={() => go(2)}
@@ -666,7 +667,7 @@ export function SphereHero({
                   playKlink();
                   onTopPriority();
                 }}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border-0 bg-[linear-gradient(120deg,#ac8400,#d4af37_40%,#fdee79_60%,#d4af37_80%,#ac8400)] bg-[length:200%_auto] px-4 py-2.5 text-[13px] font-semibold text-[#1b1300] shadow-[0_4px_20px_rgba(212,175,55,0.35)] transition hover:shadow-[0_8px_30px_rgba(212,175,55,0.5)] hover:brightness-105"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border-0 bg-[#0B5FFF] px-4 py-2.5 text-[13px] font-semibold text-white shadow-none transition hover:bg-[#2563EB]"
               >
                 See all recommended moves
                 <ChevronRight className="h-4 w-4" />
