@@ -303,7 +303,6 @@ export async function recordAgentDraft(
     .eq("client_id", ctx.clientId)
     .eq("agent", ctx.agent)
     .gte("last_seen", since)
-    .is("superseded_by", null)
     .is("dismissed_reason", null)
     .order("last_seen", { ascending: false })
     .limit(50);
@@ -326,6 +325,7 @@ export async function recordAgentDraft(
         snapshotId: typeof evidence?.snapshot_id === "string" ? evidence.snapshot_id : null,
         severity: typeof row.severity === "string" ? row.severity : "",
         seenAtMs: Date.parse(String(row.last_seen ?? row.created_at ?? "")),
+        supersededBy: typeof row.superseded_by === "string" ? row.superseded_by : null,
       };
     }),
   });
