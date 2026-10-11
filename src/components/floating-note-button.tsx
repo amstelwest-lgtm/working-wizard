@@ -37,7 +37,7 @@ export function FloatingNoteButton({ safeCorner = false }: { safeCorner?: boolea
               : "Notes archive"
           }
           aria-label="Open notes archive"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#d4a550]/25 bg-[#d4a550]/12 text-[#d4a550]/70 backdrop-blur-md transition-all duration-200 hover:border-[#d4a550]/60 hover:bg-[#d4a550]/25 hover:text-[#d4a550]"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-[#0B5FFF]/25 bg-[#0B5FFF]/12 text-[#0B5FFF]/70 backdrop-blur-md transition-all duration-200 hover:border-[#0B5FFF]/60 hover:bg-[#2563EB]/25 hover:text-[#0B5FFF]"
         >
           <Archive className="h-4 w-4" />
         </button>
@@ -63,13 +63,13 @@ export function FloatingNoteButton({ safeCorner = false }: { safeCorner?: boolea
           !surface?.clientId
             ? "border-slate-400/20 bg-slate-500/10 text-slate-400/50"
             : pinMode
-              ? "border-[#d4a550] bg-[#d4a550]/25 text-[#d4a550] shadow-[0_0_12px_rgba(212,165,80,0.4)]"
-              : "border-[#d4a550]/25 bg-[#d4a550]/12 text-[#d4a550]/60 hover:border-[#d4a550]/60 hover:bg-[#d4a550]/25 hover:text-[#d4a550]"
+              ? "border-[#0B5FFF] bg-[#0B5FFF]/25 text-[#0B5FFF] shadow-[0_0_12px_rgba(212,165,80,0.4)]"
+              : "border-[#0B5FFF]/25 bg-[#0B5FFF]/12 text-[#0B5FFF]/60 hover:border-[#0B5FFF]/60 hover:bg-[#2563EB]/25 hover:text-[#0B5FFF]"
         }`}
       >
         {pinMode ? <X className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
         {count > 0 && !pinMode && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#d4a550] px-1 text-[9px] font-bold text-[#0a1628]">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0B5FFF] px-1 text-xs font-bold text-white">
             {count > 9 ? "9+" : count}
           </span>
         )}

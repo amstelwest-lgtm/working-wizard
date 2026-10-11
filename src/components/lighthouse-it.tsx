@@ -235,7 +235,7 @@ export function LighthouseItPanel() {
               type="button"
               disabled={saving || !email.trim()}
               onClick={() => void submitMember()}
-              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-[#0B5FFF] hover:bg-[#2563EB] px-4 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
               {saving ? "Adding…" : "Add IT member"}

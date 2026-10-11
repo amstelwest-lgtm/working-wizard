@@ -149,13 +149,13 @@ function HeaderPreview() {
         </div>
 
         <div className="flex flex-col items-end gap-0.5">
-          <span className="text-[9px] opacity-60" style={{ color: primary }}>
+          <span className="text-xs opacity-60" style={{ color: primary }}>
             Prepared for:
           </span>
           <span className="text-[13px] font-bold" style={{ color: primary }}>
             {previewName}
           </span>
-          <span className="text-[9px] opacity-65" style={{ color: primary }}>
+          <span className="text-xs opacity-65" style={{ color: primary }}>
             Period: {previewPeriod || "Current period"}
           </span>
           {profile.accountantEmail && (

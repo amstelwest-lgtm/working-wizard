@@ -95,7 +95,7 @@ type Tier = "healthy" | "watch" | "critical" | "nodata";
 function QueryBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="ml-1 inline-flex items-center rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+    <span className="ml-1 inline-flex items-center rounded-full bg-[#0B5FFF] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
       {count === 1 ? "1 query" : `${count} queries`}
     </span>
   );
@@ -456,14 +456,14 @@ export function SphereHero({
                 key={p.id}
                 type="button"
                 onClick={() => go(3, p.id)}
-                className={`flex flex-col items-center rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#d4a550]/55 hover:shadow-[0_4px_14px_rgba(184,134,11,0.12)] dark:border-white/10 dark:bg-[#0f172a]/60 dark:shadow-none dark:hover:bg-[#d4a550]/8 ${
+                className={`flex flex-col items-center rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#0B5FFF]/55 hover:shadow-[0_4px_14px_rgba(16,42,67,0.08)] dark:border-[#1e3a5f] dark:bg-[#102A43]/80 dark:shadow-none dark:hover:bg-[#163654] ${
                   compact ? "gap-0.5 px-1 py-2" : "gap-1 px-1 py-3"
                 }`}
               >
-                <span className={`flex items-center justify-center rounded-full border border-amber-500/30 bg-[#d4a550]/10 ${compact ? "h-7 w-7" : "h-9 w-9"}`}>
+                <span className={`flex items-center justify-center rounded-full border border-[#DBEAFE] bg-[#DBEAFE] ${compact ? "h-7 w-7" : "h-9 w-9"}`}>
                   <Icon className={`${compact ? "h-3.5 w-3.5" : "h-4 w-4"} text-amber-600 dark:text-amber-400`} />
                 </span>
-                <span className="text-[9px] font-semibold tracking-[0.04em] text-slate-500 dark:text-slate-400">
+                <span className="text-xs font-semibold tracking-[0.04em] text-slate-500 dark:text-slate-400">
                   {p.label}
                 </span>
                 <QueryBadge count={q} />
@@ -562,7 +562,7 @@ export function SphereHero({
               const clickable = Boolean(onDriverClick);
               const rowClass = `w-full animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-amber-900/15 bg-white/85 p-3 text-left shadow-[0_8px_24px_rgba(121,91,27,0.07)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
                 clickable
-                  ? "cursor-pointer transition hover:border-[#d4a550]/50 hover:bg-amber-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 dark:hover:border-amber-500/40 dark:hover:bg-slate-900/80"
+                  ? "cursor-pointer transition hover:border-[#0B5FFF]/50 hover:bg-[#F4F8FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/40 dark:hover:border-[#2563EB] dark:hover:bg-[#163654]"
                   : ""
               }`;
               const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
@@ -580,7 +580,7 @@ export function SphereHero({
                     </div>
                     <div className="text-right">
                       <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>{fmtScore(d.health)}</p>
-                      <p className={`text-[9px] font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                      <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
                     </div>
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
@@ -622,7 +622,7 @@ export function SphereHero({
       {/* ── Next moves under the score (levels 1 & 3) ── */}
       {topPriority && level !== 2 && (
         <div
-          className={`w-full max-w-xl rounded-xl border border-[#d4a550]/35 bg-gradient-to-br from-amber-50/90 via-white to-white shadow-[0_8px_24px_rgba(121,91,27,0.08)] dark:from-[#d4a550]/12 dark:via-slate-950/60 dark:to-slate-950/40 dark:shadow-none ${
+          className={`w-full max-w-xl rounded-xl border border-[#DBEAFE] bg-white shadow-[0_8px_24px_rgba(16,42,67,0.06)] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:shadow-none ${
             compact ? "mt-3 p-3.5" : "mt-6 p-4"
           }`}
         >
@@ -639,7 +639,7 @@ export function SphereHero({
             <ul className="mt-2.5 space-y-1">
               {topPriority.actions.slice(0, compact ? 3 : 5).map((a) => (
                 <li key={a} className="flex items-start gap-2 text-[12px] text-slate-700 dark:text-slate-300">
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#d4a550]/20 text-[10px] font-bold text-[#b8860b] dark:text-[#d4a550]">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#DBEAFE] text-[11px] font-bold text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]">
                     ✓
                   </span>
                   <span className="min-w-0 flex-1">{a}</span>
@@ -647,9 +647,9 @@ export function SphereHero({
               ))}
             </ul>
           )}
-          <div className="mt-3 space-y-3 border-t border-[#d4a550]/20 pt-2.5">
+          <div className="mt-3 space-y-3 border-t border-[#DBEAFE] dark:border-[#1e3a5f] pt-2.5">
             <div className="min-w-0">
-              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                 Potential impact
               </p>
               {topPriority.impactLabel ? (

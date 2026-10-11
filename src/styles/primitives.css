@@ -1449,3 +1449,87 @@ html[data-theme="light"] .accountant-portal .brand-connect:focus-visible {
     animation: none;
   }
 }
+
+/* Accountant surfaces use brand v1.1. Owner plates keep their own chrome. */
+html[data-theme="light"] .accountant-portal .milon-next-step,
+html.dark .accountant-portal .milon-next-step,
+.accountant-portal .milon-next-step {
+  border: 1px solid var(--pale, #dbeafe);
+  background: var(--card, #ffffff);
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+  color: var(--ink, #102a43);
+}
+.accountant-portal .milon-next-step::before {
+  background: #0b5fff;
+}
+.accountant-portal .milon-next-step__kicker,
+html[data-theme="light"] .accountant-portal .milon-next-step__kicker,
+html.dark .accountant-portal .milon-next-step__kicker {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim, #3d5270);
+}
+.accountant-portal .milon-next-step__pill,
+html[data-theme="light"] .accountant-portal .milon-next-step__pill,
+html.dark .accountant-portal .milon-next-step__pill {
+  color: var(--ink, #102a43);
+  background: var(--bg-3, #f4f8ff);
+  border-color: var(--pale, #dbeafe);
+}
+.accountant-portal .milon-next-step__reason,
+html[data-theme="light"] .accountant-portal .milon-next-step__reason,
+html.dark .accountant-portal .milon-next-step__reason {
+  color: var(--ink-dim, #3d5270);
+}
+.accountant-portal .milon-next-step__cta,
+.accountant-portal .milon-next-step__cta:hover {
+  color: #ffffff;
+  background: #0b5fff;
+  box-shadow: none;
+  filter: none;
+}
+.accountant-portal .milon-next-step__cta:hover {
+  background: #2563eb;
+}
+html[data-theme="light"] .accountant-portal .milon-metal-bar,
+html.dark .accountant-portal .milon-metal-bar,
+.accountant-portal .milon-metal-bar {
+  border: 1px solid var(--pale, #dbeafe);
+  background: var(--card, #ffffff);
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+  color: var(--ink, #102a43);
+}
+.accountant-portal .milon-metal-bar::before {
+  background: #0b5fff;
+}
+.accountant-portal .milon-metal-bar__kicker,
+html.dark .accountant-portal .milon-metal-bar__kicker {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim, #3d5270);
+}
+.accountant-portal .milon-metal-bar__q,
+html.dark .accountant-portal .milon-metal-bar__q {
+  color: var(--ink, #102a43);
+}
+.accountant-portal .milon-metal-bar__note,
+html.dark .accountant-portal .milon-metal-bar__note {
+  color: var(--ink-dim, #3d5270);
+}
+.accountant-portal .milon-metal-bar__chevron,
+html.dark .accountant-portal .milon-metal-bar__chevron {
+  color: #0b5fff;
+}
+.accountant-portal .milon-metal-bar__answer,
+.accountant-portal .milon-metal-bar__answer:hover {
+  color: #ffffff;
+  background: #0b5fff;
+  box-shadow: none;
+  filter: none;
+}
+.accountant-portal .milon-metal-bar__answer:hover {
+  background: #2563eb;
+}
+html[data-theme="light"] .accountant-portal .brand-connect:focus-visible {
+  outline-color: #0b5fff;
+}

@@ -67,16 +67,18 @@
 }
 
 .settings-portal .settings-gold {
-  background: var(--gold-grad) !important;
-  background-size: 200% auto !important;
-  color: #1b1300 !important;
+  background: #0b5fff !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
   border: none !important;
   font-weight: 700 !important;
-  box-shadow: 0 4px 18px rgba(212, 175, 55, 0.28);
+  box-shadow: none;
 }
 .settings-portal .settings-gold:hover:not(:disabled) {
-  background-position: 120% center !important;
-  color: #1b1300 !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 .settings-portal .settings-gold:disabled {
   opacity: 0.45;

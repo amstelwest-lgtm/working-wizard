@@ -103,7 +103,7 @@ function ForecastAmountCell({
           }}
           inputMode="decimal"
           aria-label="Edit amount"
-          className="w-[4.75rem] border-0 border-b border-[#d4af37] bg-transparent p-0 text-right text-xs tabular-nums text-inherit outline-none"
+          className="w-[4.75rem] border-0 border-b border-[#0B5FFF] bg-transparent p-0 text-right text-xs tabular-nums text-inherit outline-none"
         />
       </span>
     );
@@ -117,7 +117,7 @@ function ForecastAmountCell({
         e.preventDefault();
         begin();
       }}
-      className="milon-forecast-amount w-full cursor-text border-0 bg-transparent p-0 text-right text-inherit decoration-[#d4af37]/70 decoration-dotted underline-offset-2 hover:underline"
+      className="milon-forecast-amount w-full cursor-text border-0 bg-transparent p-0 text-right text-inherit decoration-[#0B5FFF]/70 decoration-dotted underline-offset-2 hover:underline"
     >
       {display}
     </button>
@@ -128,19 +128,19 @@ function SourceChip({ source }: { source: string }) {
   const label = figureSourceChipLabel(source);
   if (!label) return null;
   return (
-    <span className="inline-flex max-w-full truncate rounded-full border border-[#d4af37]/40 bg-[#d4af37]/12 px-1.5 py-px text-[9px] font-semibold uppercase tracking-[0.08em] text-[#7a5a16] dark:text-[#e7c56a]">
+    <span className="inline-flex max-w-full truncate rounded-full border border-[#DBEAFE] bg-[#DBEAFE] px-1.5 py-px text-[11px] font-semibold uppercase tracking-[0.04em] text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#163654] dark:text-[#F4F7FB]">
       {label}
     </span>
   );
 }
 
 const TONE_BG: Record<RowTone, string> = {
-  plain: "bg-[#fbf8f1] dark:bg-[#10161f]",
-  in: "bg-[#e7f6ee] dark:bg-[#10241c]",
-  out: "bg-[#fbeeee] dark:bg-[#2a1619]",
-  net: "bg-[#fbf8f1] dark:bg-[#10161f]",
-  close: "bg-[#f6edd8] dark:bg-[#231f14]",
-  floor: "bg-[#f6f3ea] dark:bg-[#141a22]",
+  plain: "bg-[#FFFFFF] dark:bg-[#102A43] dark:text-[#F4F7FB]",
+  in: "bg-[#D7F3E6] dark:bg-[#12352A]",
+  out: "bg-[#F8D6DA] dark:bg-[#3A1820]",
+  net: "bg-[#FFFFFF] dark:bg-[#102A43] dark:text-[#F4F7FB]",
+  close: "bg-[#F8E8C8] dark:bg-[#3A2E14]",
+  floor: "bg-[#F4F8FF] dark:bg-[#102A43]",
 };
 
 const TIGHT_BG = "bg-[#c0392b]/[0.045] dark:bg-[#e05c5c]/[0.08]";
@@ -319,7 +319,7 @@ export function CashThirteenWeekGrid({
         {floorNote ? ` Floor ${floorNote}.` : ""}
       </p>
       <div
-        className="cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-amber-900/10 pe-4 max-md:pe-16 dark:border-slate-800"
+        className="cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-[#DBEAFE]/70 pe-4 max-md:pe-16 dark:border-slate-800"
         tabIndex={0}
         aria-label="13-week cash model"
       >
@@ -333,7 +333,7 @@ export function CashThirteenWeekGrid({
               <th
                 scope="col"
                 className={cn(
-                  "sticky left-0 top-0 z-40 min-w-[148px] border-b border-amber-900/15 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-700 dark:text-slate-400",
+                  "sticky left-0 top-0 z-40 min-w-[148px] border-b border-[#DBEAFE]/80 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-700 dark:text-slate-400",
                   HEAD_BG,
                 )}
               >
@@ -354,14 +354,14 @@ export function CashThirteenWeekGrid({
                           : `${label}, week ${index + 1}`
                     }
                     className={cn(
-                      "sticky top-0 z-20 min-w-[112px] whitespace-nowrap border-b border-amber-900/15 px-2 py-2 text-right dark:border-slate-700",
+                      "sticky top-0 z-20 min-w-[112px] whitespace-nowrap border-b border-[#DBEAFE]/80 px-2 py-2 text-right dark:border-slate-700",
                       flag ? HEAD_TIGHT : HEAD_BG,
                     )}
                   >
                     <span className="block text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100">
                       {label}
                     </span>
-                    <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    <span className="mt-0.5 block text-xs font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       W{index + 1}
                     </span>
                   </th>
@@ -370,7 +370,7 @@ export function CashThirteenWeekGrid({
               <th
                 scope="col"
                 className={cn(
-                  "sticky top-0 z-20 min-w-[108px] border-b border-l border-amber-900/20 px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400",
+                  "sticky top-0 z-20 min-w-[108px] border-b border-l border-[#DBEAFE] px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400",
                   HEAD_BG,
                 )}
               >
@@ -432,17 +432,17 @@ function SectionRows({
         <tr>
           <th
             scope="colgroup"
-            className="sticky left-0 z-30 bg-[#fbf8f1] px-3 pb-1 pt-3 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-[#b8860b] shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:bg-[#10161f]"
+            className="sticky left-0 z-30 bg-[#FFFFFF] px-3 pb-1 pt-3 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-[#102A43] shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:bg-[#102A43] dark:text-[#F4F7FB]"
           >
             {label}
           </th>
           {tight.map((flag, index) => (
             <td
               key={index}
-              className={flag ? TIGHT_BG : "bg-[#fbf8f1] dark:bg-[#10161f]"}
+              className={flag ? TIGHT_BG : "bg-[#FFFFFF] dark:bg-[#102A43] dark:text-[#F4F7FB]"}
             />
           ))}
-          <td className="border-l border-amber-900/10 bg-[#fbf8f1] dark:border-slate-800 dark:bg-[#10161f]" />
+          <td className="border-l border-[#DBEAFE]/70 bg-[#FFFFFF] dark:border-slate-800 dark:bg-[#102A43] dark:text-[#F4F7FB]" />
         </tr>
       ) : null}
       {rows.map((row) => (
@@ -450,7 +450,7 @@ function SectionRows({
           <th
             scope="row"
             className={cn(
-              "sticky left-0 z-30 min-w-[148px] border-b border-amber-900/10 px-3 py-1.5 text-left align-top shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-800",
+              "sticky left-0 z-30 min-w-[148px] border-b border-[#DBEAFE]/70 px-3 py-1.5 text-left align-top shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:border-slate-800",
               TONE_BG[row.tone],
               row.strong ? "font-bold" : "font-normal",
               row.rule && "border-t border-slate-300/80 dark:border-slate-600",
@@ -499,7 +499,7 @@ function SectionRows({
                         : undefined
                 }
                 className={cn(
-                  "border-b border-amber-900/10 px-2 py-1.5 text-right align-middle tabular-nums text-slate-800 dark:border-slate-800 dark:text-slate-100",
+                  "border-b border-[#DBEAFE]/70 px-2 py-1.5 text-right align-middle tabular-nums text-slate-800 dark:border-slate-800 dark:text-slate-100",
                   flag ? TIGHT_BG : TONE_BG[row.tone],
                   row.rule && "border-t border-slate-300/80 dark:border-slate-600",
                   row.strong && "font-bold",
@@ -529,7 +529,7 @@ function SectionRows({
           })}
           <td
             className={cn(
-              "border-b border-l border-amber-900/15 px-2 py-1.5 text-right align-middle font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:text-slate-50",
+              "border-b border-l border-[#DBEAFE]/80 px-2 py-1.5 text-right align-middle font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:text-slate-50",
               TONE_BG[row.tone],
               row.rule && "border-t border-slate-300/80 dark:border-slate-600",
               row.strong && "font-bold",

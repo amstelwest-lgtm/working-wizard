@@ -624,12 +624,12 @@ function FirstDataChoice({
       onClick={onClick}
       className={
         primary
-          ? "w-full rounded-xl bg-[#d4a550] px-4 py-3 text-left text-[#1b1300] shadow-[0_8px_24px_rgba(212,165,80,0.28)] hover:bg-[#e0b85c]"
-          : "w-full rounded-xl border border-slate-500 bg-slate-800 px-4 py-3 text-left text-slate-100 hover:border-[#d4a550] hover:text-[#f3e3b3]"
+          ? "w-full rounded-xl bg-[#0B5FFF] px-4 py-3 text-left text-white hover:bg-[#2563EB]"
+          : "w-full rounded-xl border border-[#DBEAFE] bg-white px-4 py-3 text-left text-[#102A43] hover:border-[#2563EB] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]"
       }
     >
       <span className="block text-sm font-semibold leading-snug">{label}</span>
-      <span className={`mt-0.5 block text-xs ${primary ? "text-[#3d2e00]" : "text-slate-300"}`}>
+      <span className={`mt-0.5 block text-xs ${primary ? "text-white/90" : "text-[#3D5270] dark:text-[#C5D4E4]"}`}>
         {hint}
       </span>
     </button>
@@ -3475,7 +3475,7 @@ function ClientView() {
                             >
                               <span className="rn">
                                 {row.label}
-                                <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+                                <span className="ml-2 inline-flex rounded-full bg-[#0B5FFF] px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                                   {row.count === 1 ? "1 query" : `${row.count} queries`}
                                 </span>
                               </span>
@@ -3912,7 +3912,7 @@ function ClientView() {
 
                 {/* ===== ACTION PLAN TAB ===== */}
                 <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
-                  <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+                  <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                   <DeliverableAnswerStrip
                     heading="Action plan"
                     sentence={planSentence}
@@ -4050,7 +4050,7 @@ function ClientView() {
                 <div className={`tabpane${activeTab === "drafter" ? " on" : ""}`} id="pane-drafter">
                   {activeTab === "drafter" ? (
                     <>
-                      <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+                      <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                         <AdvisoryDrafter
                           clientId={client.id}
                           clientName={client.name}
@@ -4214,12 +4214,12 @@ function ClientView() {
           />
 
           <Dialog open={showQboDialog} onOpenChange={setShowQboDialog}>
-            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+            <DialogContent className="max-w-2xl border border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
               <DialogHeader>
-                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-[#102A43] dark:text-[#F4F7FB]">
                   QuickBooks Integration
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-400">
+                <DialogDescription className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
                   Connect QuickBooks Online to pull this client&apos;s figures into Milōn.
                 </DialogDescription>
               </DialogHeader>
@@ -4236,12 +4236,12 @@ function ClientView() {
           </Dialog>
 
           <Dialog open={showSageDialog} onOpenChange={setShowSageDialog}>
-            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+            <DialogContent className="max-w-2xl border border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
               <DialogHeader>
-                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-[#102A43] dark:text-[#F4F7FB]">
                   Sage Accounting
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-400">
+                <DialogDescription className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
                   Connect Sage Business Cloud Accounting (South Africa). Email, password, and
                   Company ID. Sync does not change this client&apos;s figures yet.
                 </DialogDescription>
@@ -4259,12 +4259,12 @@ function ClientView() {
           </Dialog>
 
           <Dialog open={showXeroDialog} onOpenChange={setShowXeroDialog}>
-            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+            <DialogContent className="max-w-2xl border border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
               <DialogHeader>
-                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-[#102A43] dark:text-[#F4F7FB]">
                   Xero Integration
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-400">
+                <DialogDescription className="text-xs text-[#3D5270] dark:text-[#C5D4E4]">
                   Connect a Xero organisation to pull P&amp;L, the balance sheet and bank
                   balances into this client&apos;s figures. Existing connections need a reconnect
                   once the bank summary scope is enabled.
@@ -4284,15 +4284,15 @@ function ClientView() {
 
           {/* First-client: bank statements nudge */}
           <Dialog open={firstDataOpen} onOpenChange={setFirstDataOpen}>
-            <DialogContent className="max-w-md border border-slate-700 bg-slate-950 text-slate-50">
+            <DialogContent className="max-w-md border border-[#DBEAFE] bg-white text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
               <DialogHeader>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#0B5FFF] dark:text-[#F4F7FB]">
                   {client?.name ?? "First client"} · Step 1 of 2
                 </p>
-                <DialogTitle className="mt-1 text-xl text-slate-100">
+                <DialogTitle className="mt-1 text-xl text-[#102A43] dark:text-[#F4F7FB]">
                   Bring in this client's figures
                 </DialogTitle>
-                <DialogDescription className="text-slate-300">
+                <DialogDescription className="text-[#3D5270] dark:text-[#C5D4E4]">
                   {isUsCopy(clientMarket)
                     ? "One action. Fastest: the latest P&L and balance sheet as Excel, CSV or PDF. That pack drafts Health, Profit, Cash and Budget for you to review."
                     : "One action. Fastest: about 3 months of bank statements for every account. That pack drafts Health, Profit, Cash and Budget for you to review."}
@@ -4321,7 +4321,7 @@ function ClientView() {
                   />
                 )}
                 <details>
-                  <summary className="cursor-pointer pt-1 text-xs text-slate-400">
+                  <summary className="cursor-pointer pt-1 text-xs text-[#3D5270] dark:text-[#C5D4E4]">
                     Other ways
                   </summary>
                   <div className="mt-2 flex flex-col gap-2.5">
@@ -4383,7 +4383,7 @@ function ClientView() {
                 <button
                   type="button"
                   onClick={() => setFirstDataOpen(false)}
-                  className="pt-1 text-center text-xs text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+                  className="pt-1 text-center text-xs text-[#3D5270] dark:text-[#C5D4E4] underline-offset-2 hover:text-[#102A43] dark:hover:text-[#F4F7FB] hover:underline"
                   style={{ background: "none", border: "none", cursor: "pointer" }}
                 >
                   Skip for now — look around first
@@ -4471,7 +4471,7 @@ function ClientView() {
           />
 
           <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-            <DialogContent className="flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6">
+            <DialogContent className="flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-[#DBEAFE] bg-white p-4 text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB] sm:p-6">
               <DialogHeader className="sr-only">
                 <DialogTitle>Business profile</DialogTitle>
                 <DialogDescription>Ten questions that tune Milōn to this client</DialogDescription>

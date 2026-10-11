@@ -77,7 +77,7 @@ export function VerifyEmailBanner({
   return (
     <div className="mb-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white/80 px-3.5 py-2.5 text-sm dark:border-slate-700/80 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between print:hidden">
       <div className="flex min-w-0 items-start gap-2.5">
-        <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#b8860b] dark:text-[#d4a550]" />
+        <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#102A43] dark:text-[#0B5FFF]" />
         <p className="min-w-0 text-slate-600 dark:text-slate-300">
           {sentTo ? (
             <>
@@ -99,7 +99,7 @@ export function VerifyEmailBanner({
           type="button"
           disabled={busy || cooldown > 0}
           onClick={send}
-          className="inline-flex items-center rounded-lg border border-[#b7872a]/50 px-3 py-1.5 text-xs font-semibold text-[#8a6508] transition-colors hover:bg-[#d4a550]/10 disabled:cursor-default disabled:opacity-60 dark:text-[#e1b85e]"
+          className="inline-flex items-center rounded-lg border border-[#0B5FFF]/50 px-3 py-1.5 text-xs font-semibold text-[#102A43] transition-colors hover:bg-[#2563EB]/10 disabled:cursor-default disabled:opacity-60 dark:text-[#F4F7FB]"
         >
           {busy
             ? "Sending…"

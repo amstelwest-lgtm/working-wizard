@@ -351,8 +351,8 @@ export function ProfileFunnel({
   };
 
   const card =
-    "w-full rounded-xl border border-[#d4a550]/25 bg-slate-900/80 p-3 text-left transition hover:border-[#d4a550]/60 hover:bg-[#d4a550]/5";
-  const cardOn = "border-[#d4a550] bg-[#d4a550]/10";
+    "w-full rounded-xl border border-[#0B5FFF]/25 bg-slate-900/80 p-3 text-left transition hover:border-[#0B5FFF]/60 hover:bg-[#2563EB]/5";
+  const cardOn = "border-[#0B5FFF] bg-[#0B5FFF]/10";
 
   const toggleSecondary = (id: BudgetVolumeUnit) => {
     setSecondary((prev) =>
@@ -416,7 +416,7 @@ export function ProfileFunnel({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <div className="shrink-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#0B5FFF]">
           {headerLabel} · question {step + 1} of {TOTAL}
         </p>
         <h2 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{titles[q]}</h2>
@@ -499,7 +499,7 @@ export function ProfileFunnel({
             })}
             <Button
               size="sm"
-              className="mt-2 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              className="mt-2 bg-[#0B5FFF] text-white hover:bg-[#c49a45]"
               onClick={goNext}
             >
               Continue{secondary.length ? ` · ${secondary.length} selected` : ""}
@@ -659,14 +659,14 @@ export function ProfileFunnel({
             {Array.from({ length: TOTAL }).map((_, i) => (
               <span
                 key={i}
-                className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#d4a550]" : "bg-slate-700"}`}
+                className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#0B5FFF]" : "bg-slate-700"}`}
               />
             ))}
           </div>
           {isLast && (
             <Button
               disabled={!answeredCurrent || saving}
-              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              className="bg-[#0B5FFF] text-white hover:bg-[#c49a45]"
               onClick={finish}
             >
               {saving

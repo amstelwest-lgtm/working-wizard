@@ -31,8 +31,8 @@ export function BalanceSheetPrompt({
         style={{
           border: 0,
           borderRadius: 8,
-          background: "#d4a550",
-          color: "#1b1300",
+          background: "#0B5FFF",
+          color: "#102A43",
           fontWeight: 700,
           fontSize: 13,
           padding: "8px 14px",

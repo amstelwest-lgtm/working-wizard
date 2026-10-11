@@ -72,7 +72,7 @@ function BillingSuccessPage() {
         <p className="mt-2 text-sm text-slate-400">{label}</p>
         <Link
           to="/dashboard"
-          className="mt-5 inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+          className="mt-5 inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#102A43]"
         >
           {unlocked ? "Open your practice" : "Open your workspace"}
         </Link>

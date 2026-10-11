@@ -28,9 +28,9 @@ function Insight({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[#b7872a]/15 bg-white/70 p-3 dark:bg-[#0c1320]">
+    <div className="rounded-lg border border-[#0B5FFF]/15 bg-white/70 p-3 dark:bg-[#0c1320]">
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-        <span className="text-[#b7872a]">{icon}</span>
+        <span className="text-[#0B5FFF]">{icon}</span>
         {label}
       </div>
       <div className="mt-1 text-lg font-semibold text-[#172033] dark:text-slate-100">{value}</div>
@@ -83,15 +83,15 @@ function NextStepRow<K extends string>({
         isDone
           ? "border-emerald-500/25 bg-emerald-500/[0.04] opacity-65"
           : highlighted
-            ? "border-[#b7872a]/35 bg-[#fffdf7] dark:bg-[#171c29]"
-            : "border-slate-200 bg-white hover:border-[#b7872a]/30 dark:border-slate-700/70 dark:bg-[#111827]/60"
+            ? "border-[#0B5FFF]/35 bg-[#fffdf7] dark:bg-[#171c29]"
+            : "border-slate-200 bg-white hover:border-[#0B5FFF]/30 dark:border-slate-700/70 dark:bg-[#111827]/60"
       }`}
     >
       <div className="flex items-start gap-3">
         <div
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border font-mono text-xs font-bold ${
             highlighted
-              ? "border-[#b7872a] bg-[#b7872a]/10 text-[#8a651b] dark:text-[#e5be72]"
+              ? "border-[#0B5FFF] bg-[#0B5FFF]/10 text-[#8a651b] dark:text-[#e5be72]"
               : "border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
           }`}
         >
@@ -107,7 +107,7 @@ function NextStepRow<K extends string>({
               {step.title}
             </span>
             {!simplified && (
-              <span className="rounded border border-[#b7872a]/30 bg-[#b7872a]/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#9d741d] dark:text-[#d5aa58]">
+              <span className="rounded border border-[#0B5FFF]/30 bg-[#0B5FFF]/5 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-[#9d741d] dark:text-[#d5aa58]">
                 <BookOpen className="mr-1 inline h-3 w-3" />
                 Playbook
               </span>
@@ -115,7 +115,7 @@ function NextStepRow<K extends string>({
           </div>
           <p className="mt-1 text-[11px] uppercase tracking-wider text-slate-500">Lever: {step.ratioName}</p>
           {!simplified && highlighted && !isDone && (
-            <p className="mt-2 rounded-md border border-[#b7872a]/20 bg-[#b7872a]/5 p-2 text-xs italic text-slate-700 dark:text-slate-200">
+            <p className="mt-2 rounded-md border border-[#0B5FFF]/20 bg-[#0B5FFF]/5 p-2 text-xs italic text-slate-700 dark:text-slate-200">
               {step.impactLine}
             </p>
           )}
@@ -151,7 +151,7 @@ function NextStepRow<K extends string>({
             className={`flex flex-col items-center gap-1 rounded-md border-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
               isDone
                 ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                : "border-slate-300 bg-white text-slate-500 hover:border-[#b7872a] hover:text-[#9d741d] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
+                : "border-slate-300 bg-white text-slate-500 hover:border-[#0B5FFF] hover:text-[#9d741d] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
             }`}
             aria-label="Mark step done"
           >
@@ -204,9 +204,9 @@ export function NextStepsPanel<K extends string>({
     <div className="space-y-5">
       <Card
         id="wizard-moves-hero"
-        className="overflow-hidden border-[#b7872a]/25 bg-white shadow-[0_12px_40px_rgba(15,23,42,.06)] dark:bg-[#111827]/80 dark:shadow-none"
+        className="overflow-hidden border-[#0B5FFF]/25 bg-white shadow-[0_12px_40px_rgba(15,23,42,.06)] dark:bg-[#111827]/80 dark:shadow-none"
       >
-        <CardHeader className="border-b border-[#b7872a]/15 bg-[#fbf8f1] pb-5 dark:bg-[#151b28]">
+        <CardHeader className="border-b border-[#0B5FFF]/15 bg-[#FFFFFF] pb-5 dark:bg-[#151b28]">
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
               <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-[#9d741d] dark:text-[#d5aa58]">
@@ -224,7 +224,7 @@ export function NextStepsPanel<K extends string>({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="rounded-full border border-[#b7872a]/30 bg-[#b7872a]/10 px-3 py-1.5 text-xs font-semibold text-[#8a651b] dark:text-[#e5be72]">
+              <span className="rounded-full border border-[#0B5FFF]/30 bg-[#0B5FFF]/10 px-3 py-1.5 text-xs font-semibold text-[#8a651b] dark:text-[#e5be72]">
                 <Check className="mr-1 inline h-3.5 w-3.5" />
                 {completed} of {steps.length} complete
               </span>

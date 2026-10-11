@@ -24,7 +24,7 @@ export function Sparkline({ data, trend, width = 100, height = 36 }: SparklinePr
     return { x, y };
   });
 
-  const color = trend === "up" ? "#4CAF82" : trend === "down" ? "#e05c5c" : "#d4a550";
+  const color = trend === "up" ? "#16845B" : trend === "down" ? "#C43D4B" : "#38BDF8";
   const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
 
   const first = points[0];

@@ -115,7 +115,7 @@ export function FindAccountantPanel({
   };
 
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#0B5FFF]/25 bg-white/70 p-4 shadow-sm dark:border-[#0B5FFF]/20 dark:bg-white/[0.035]",
     className,
   ]
     .filter(Boolean)
@@ -123,10 +123,10 @@ export function FindAccountantPanel({
 
   return (
     <section className={shell} id="find-accountant" data-open-requests={open.length}>
-      <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+      <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
         Accountant
       </span>
-      <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
+      <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]">
         {moment.title}
       </h3>
       <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
@@ -138,7 +138,7 @@ export function FindAccountantPanel({
           {data.requests.slice(0, 5).map((r) => (
             <li
               key={r.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#b7872a]/20 bg-white/60 px-3 py-2 text-[12.5px] dark:border-white/10 dark:bg-white/[0.03]"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#0B5FFF]/20 bg-white/60 px-3 py-2 text-[12.5px] dark:border-white/10 dark:bg-white/[0.03]"
               data-request-status={r.status}
             >
               <span className="text-slate-800 dark:text-slate-100">
@@ -174,12 +174,12 @@ export function FindAccountantPanel({
                 key={f.firm_id}
                 data-firm={f.firm_id}
                 data-score={f.score}
-                className="rounded-xl border border-[#b7872a]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                className="rounded-xl border border-[#0B5FFF]/20 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 text-[14px] font-semibold text-slate-900 dark:text-[#f4e7c2]">
-                      <Building2 className="h-3.5 w-3.5 text-[#b7872a]" aria-hidden /> {f.name}
+                    <p className="flex items-center gap-1.5 text-[14px] font-semibold text-slate-900 dark:text-[#F4F7FB]">
+                      <Building2 className="h-3.5 w-3.5 text-[#0B5FFF]" aria-hidden /> {f.name}
                     </p>
                     {f.headline ? (
                       <p className="mt-0.5 text-[12.5px] text-slate-700 dark:text-slate-200/85">
@@ -201,7 +201,7 @@ export function FindAccountantPanel({
                       type="button"
                       disabled={already || !f.accepting || busy !== null}
                       onClick={() => setAskingId(f.firm_id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-2.5 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-2.5 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                       data-ask
                     >
                       <Send className="h-3.5 w-3.5" aria-hidden />
@@ -230,7 +230,7 @@ export function FindAccountantPanel({
                     <button
                       type="submit"
                       disabled={busy !== null}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#0B5FFF] hover:bg-[#2563EB] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-50"
                     >
                       {busy === f.firm_id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />

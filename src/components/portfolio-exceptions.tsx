@@ -41,7 +41,7 @@ type Props = {
 
 const SEV_CLASS: Record<1 | 2 | 3, string> = {
   1: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  2: "border-[#b7872a]/45 bg-[#d4a550]/15 text-[#7a5a0e] dark:text-[#f1d28b]",
+  2: "border-[#B7791F]/40 bg-[#B7791F]/10 text-[#8A5A12] dark:text-[#F0D59A]",
   3: "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:border-white/15 dark:text-slate-300",
 };
 
@@ -134,7 +134,7 @@ export function PortfolioExceptions({
   const visible: PortfolioRow[] = showAll ? [...attention, ...quiet] : attention;
 
   const shell = [
-    "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",
+    "rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]",
     className,
   ]
     .filter(Boolean)
@@ -144,10 +144,10 @@ export function PortfolioExceptions({
     <section className={shell} id="portfolio-exceptions" data-attention={attention.length}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
             Portfolio
           </span>
-          <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
+          <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#F4F7FB]">
             {loading && !data ? (
               "Checking every client…"
             ) : attention.length === 0 ? (
@@ -180,7 +180,7 @@ export function PortfolioExceptions({
       </div>
 
       {visible.length > 0 ? (
-        <ul className="mt-3 divide-y divide-[#b7872a]/15 dark:divide-white/10">
+        <ul className="mt-3 divide-y divide-[#DBEAFE] dark:divide-[#1e3a5f]">
           {visible.map((r) => (
             <li
               key={r.clientId}
@@ -191,7 +191,7 @@ export function PortfolioExceptions({
                 <Link
                   to="/clients/$clientId"
                   params={{ clientId: r.clientId }}
-                  className="text-[13.5px] font-semibold text-slate-900 underline-offset-2 hover:underline dark:text-[#f4e7c2]"
+                  className="text-[13.5px] font-semibold text-[#102A43] underline-offset-2 hover:underline dark:text-[#F4F7FB]"
                 >
                   {r.name}
                 </Link>

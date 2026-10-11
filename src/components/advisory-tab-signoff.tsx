@@ -35,7 +35,7 @@ export function AdvisoryTabSignoff({
     >
       {!hideLine && approved && action.line ? (
         <p
-          className="text-right text-[12px] font-semibold leading-snug text-[#3d2e00] dark:text-[#f4e7c2]"
+          className="text-right text-[12px] font-semibold leading-snug text-[#102A43] dark:text-[#F4F7FB]"
           data-signoff-line
         >
           {action.line}

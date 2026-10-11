@@ -4,19 +4,19 @@ import { resolveNewsUrl, type NewsItem, type PulseMetric } from "@/lib/industry-
 import { useMarket, useMarketFormat } from "@/contexts/market";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
-  green: { bg: "rgba(76,175,130,0.15)", color: "#2f9d6a" },
-  amber: { bg: "rgba(201,168,76,0.18)", color: "#b8860b" },
-  red: { bg: "rgba(224,92,92,0.15)", color: "#d64545" },
+  green: { bg: "rgba(14,92,64,0.12)", color: "#0E5C40" },
+  amber: { bg: "rgba(183,121,31,0.12)", color: "#8A5A12" },
+  red: { bg: "rgba(196,61,75,0.12)", color: "#8E2430" },
   blue: { bg: "rgba(100,160,220,0.15)", color: "#3b82c4" },
 };
 
 function MetricRow({ metric }: { metric: PulseMetric }) {
   const color =
     metric.sentiment === "good"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-[#0E5C40] dark:text-[#7DDEBA]"
       : metric.sentiment === "bad"
-        ? "text-rose-600 dark:text-rose-400"
-        : "text-amber-600 dark:text-amber-300";
+        ? "text-[#8E2430] dark:text-[#FFB4BC]"
+        : "text-[#8A5A12] dark:text-[#F0D59A]";
   const arrow = metric.direction === "up" ? "↑ " : metric.direction === "down" ? "↓ " : "→ ";
   const value = /^[↑↓→]/.test(metric.value.trim()) ? metric.value : `${arrow}${metric.value}`;
   return (
@@ -34,7 +34,7 @@ export function IndustryPulse({ industry, vertical }: { industry: string; vertic
   const { display, loading, lastRefresh, error, refresh } = useIndustryPulse(industry);
 
   return (
-    <div className="w-full rounded-xl border border-slate-200/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/55 dark:shadow-none">
+    <div className="w-full rounded-xl border border-slate-200/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:shadow-none">
       <div className="mb-1.5 flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
@@ -56,7 +56,7 @@ export function IndustryPulse({ industry, vertical }: { industry: string; vertic
           onClick={() => refresh()}
           disabled={loading}
           aria-label="Refresh industry pulse"
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-[#d4a550]/35 text-[#b8860b] transition-colors hover:bg-[#d4a550]/10 disabled:opacity-40 dark:text-[#d4a550]"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-[#DBEAFE] text-[#0B5FFF] transition-colors hover:bg-[#DBEAFE] disabled:opacity-40 dark:border-[#1e3a5f] dark:text-[#F4F7FB]"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -102,21 +102,21 @@ function NewsLinkCard({ item }: { item: NewsItem }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#d4a550]/50 hover:shadow-md dark:border-white/10 dark:bg-[#0f172a]/55 dark:hover:border-[#d4a550]/35"
+      className="group flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#0B5FFF]/40 hover:shadow-md dark:border-[#1e3a5f] dark:bg-[#102A43] dark:hover:border-[#2563EB]"
     >
       <span
-        className="inline-block w-fit rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]"
+        className="inline-block w-fit rounded px-1.5 py-0.5 text-[11px] font-extrabold uppercase tracking-[0.08em]"
         style={{ background: tc.bg, color: tc.color }}
       >
         {item.tag}
       </span>
-      <div className="mt-2 text-[13px] font-semibold leading-snug text-slate-900 group-hover:text-[#8a651b] dark:text-white dark:group-hover:text-[#d4a550]">
+      <div className="mt-2 text-[13px] font-semibold leading-snug text-[#102A43] group-hover:text-[#0B5FFF] dark:text-[#F4F7FB] dark:group-hover:text-white">
         {item.headline}
       </div>
       <div className="mt-1 flex-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
         {item.summary}
       </div>
-      <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[#b8860b] dark:text-[#d4a550]">
+      <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#0B5FFF] dark:text-[#F4F7FB]">
         Read article
         <ExternalLink className="h-3 w-3 opacity-80 transition group-hover:translate-x-0.5" />
       </span>

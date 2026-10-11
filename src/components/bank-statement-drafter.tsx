@@ -310,7 +310,7 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-amber-700/40 bg-amber-50/60 p-6 text-center transition-colors hover:border-amber-700/70 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+              className="flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed border-amber-700/40 bg-amber-50/60 p-6 text-center transition-colors hover:border-amber-700/70 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#0B5FFF]/60 dark:hover:bg-slate-800"
             >
               <Upload className="h-5 w-5 text-amber-800 dark:text-slate-300" />
               <span className="text-sm font-medium">Add bank statement files</span>
@@ -357,7 +357,7 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#b8860b] hover:underline"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#102A43] hover:underline"
                 >
                   <Plus className="h-3 w-3" />
                   Add another account / statement
@@ -419,13 +419,13 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
                   checked={annualise}
                   onCheckedChange={setAnnualise}
                   disabled={!draft.months_covered || draft.months_covered <= 0}
-                  className="border border-slate-500 data-[state=unchecked]:bg-slate-500 data-[state=checked]:bg-[#b8860b] [&>span]:bg-white [&>span]:shadow-md"
+                  className="border border-slate-500 data-[state=unchecked]:bg-slate-500 data-[state=checked]:bg-[#0B5FFF] [&>span]:bg-white [&>span]:shadow-md"
                 />
               </span>
             </div>
 
             <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#102A43]">
                 Profitability (feeds waterfall &amp; budget)
               </p>
               <table className="w-full text-sm">

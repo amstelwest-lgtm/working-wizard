@@ -37,9 +37,9 @@ export function AutoPopulateOptions({
     return (
       <div
         data-auto-populate="first"
-        className={`flex items-start gap-2 rounded-md border border-[#b8860b]/35 bg-[#b8860b]/8 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200 ${className}`}
+        className={`flex items-start gap-2 rounded-md border border-[#102A43]/35 bg-[#0B5FFF]/8 px-3 py-2.5 text-xs leading-relaxed text-slate-800 dark:text-slate-200 ${className}`}
       >
-        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#b8860b]" />
+        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#102A43]" />
         <span>
           {role === "accountant"
             ? "First upload for this client — Milōn drafts profitability, cash forecast and budget from these statements. Each tab then waits for your sign-off."
@@ -54,7 +54,7 @@ export function AutoPopulateOptions({
       data-auto-populate="options"
       className={`rounded-md border border-amber-900/15 bg-amber-50/40 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/60 ${className}`}
     >
-      <legend className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
+      <legend className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#102A43]">
         Also update from this upload
       </legend>
       <div className="grid gap-1.5 sm:grid-cols-3">
@@ -67,7 +67,7 @@ export function AutoPopulateOptions({
               type="checkbox"
               checked={value[t]}
               onChange={(e) => onChange({ ...value, [t]: e.target.checked })}
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#b8860b]"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#102A43]"
             />
             <span className="min-w-0">
               <span className="block font-medium text-slate-900 dark:text-slate-100">
@@ -86,7 +86,7 @@ export function AutoPopulateOptions({
             type="checkbox"
             checked={value.remember}
             onChange={(e) => onChange({ ...value, remember: e.target.checked })}
-            className="h-3 w-3 accent-[#b8860b]"
+            className="h-3 w-3 accent-[#102A43]"
           />
           Remember for next upload
         </label>

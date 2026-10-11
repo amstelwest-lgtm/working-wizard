@@ -756,7 +756,9 @@ export function WalkthroughWizard({
     Figures: "#0ea5e9",
     Overview: "#c9962b",
   };
-  const sectionColor = SECTION_COLORS[s.section ?? "Overview"] ?? "#c9962b";
+  const sectionColor = ownerChrome
+    ? (SECTION_COLORS[s.section ?? "Overview"] ?? "#c9962b")
+    : "#0B5FFF";
 
   return (
     <>
@@ -829,15 +831,15 @@ export function WalkthroughWizard({
             position: "relative",
             background: ownerChrome
               ? "linear-gradient(180deg, #141c2e 0%, #0d1525 28%, #0b1220 100%)"
-              : "#0d1525",
+              : "#FFFFFF",
             border: ownerChrome
               ? "1px solid rgba(212, 165, 80, 0.28)"
-              : `1px solid rgba(${hexToRgb(sectionColor)}, 0.35)`,
+              : "1px solid #DBEAFE",
             borderRadius: 16,
             padding: "20px 24px 22px",
             boxShadow: ownerChrome
               ? "0 36px 72px rgba(0,0,0,0.72), 0 0 0 1px rgba(255,255,255,0.05), 0 0 48px rgba(212,165,80,0.08)"
-              : "0 32px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)",
+              : "0 16px 40px rgba(16,42,67,0.12)",
             overflow: "hidden",
           }}
         >
@@ -866,11 +868,11 @@ export function WalkthroughWizard({
           >
             <span
               style={{
-                fontSize: 10,
+                fontSize: ownerChrome ? 10 : 12,
                 fontWeight: 700,
-                letterSpacing: ownerChrome ? "0.16em" : "0.13em",
+                letterSpacing: ownerChrome ? "0.16em" : "0.08em",
                 textTransform: "uppercase",
-                color: ownerChrome ? "#e5be72" : sectionColor,
+                color: ownerChrome ? "#e5be72" : "#0B5FFF",
                 background: ownerChrome
                   ? "rgba(212, 165, 80, 0.12)"
                   : `rgba(${hexToRgb(sectionColor)}, 0.12)`,
@@ -881,7 +883,7 @@ export function WalkthroughWizard({
             >
               {ownerChrome ? `Milōn · ${s.section ?? "Overview"}` : (s.section ?? "Overview")}
             </span>
-            <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 12, color: ownerChrome ? "#64748b" : "#3D5270", whiteSpace: "nowrap" }}>
               {step + 1} / {STEPS.length}
             </span>
           </div>
@@ -902,7 +904,7 @@ export function WalkthroughWizard({
                   height: 3,
                   flex: 1,
                   borderRadius: 2,
-                  background: i <= step ? (ownerChrome ? "#d4a550" : sectionColor) : "#1e293b",
+                  background: i <= step ? (ownerChrome ? "#d4a550" : "#0B5FFF") : ownerChrome ? "#1e293b" : "#DBEAFE",
                   opacity: i < step ? 0.45 : 1,
                   transition: reduceMotion ? "none" : "background var(--brand-duration) var(--brand-ease)",
                 }}
@@ -914,7 +916,7 @@ export function WalkthroughWizard({
             style={{
               fontSize: 18,
               fontWeight: 700,
-              color: "#f8fafc",
+              color: ownerChrome ? "#f8fafc" : "#102A43",
               marginBottom: ownerChrome ? 12 : 10,
               lineHeight: 1.28,
               fontFamily: "var(--font-display)",
@@ -942,7 +944,7 @@ export function WalkthroughWizard({
           <p
             style={{
               fontSize: 13.5,
-              color: ownerChrome ? "#cbd5e1" : "#94a3b8",
+              color: ownerChrome ? "#cbd5e1" : "#3D5270",
               lineHeight: 1.65,
               marginBottom: 20,
             }}
@@ -962,7 +964,7 @@ export function WalkthroughWizard({
               onClick={dismiss}
               style={{
                 fontSize: 12,
-                color: "#64748b",
+                color: ownerChrome ? "#64748b" : "#3D5270",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -980,9 +982,9 @@ export function WalkthroughWizard({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "#cbd5e1",
-                    background: "#1e293b",
-                    border: "1px solid #334155",
+                    color: ownerChrome ? "#cbd5e1" : "#102A43",
+                    background: ownerChrome ? "#1e293b" : "#FFFFFF",
+                    border: ownerChrome ? "1px solid #334155" : "1px solid #DBEAFE",
                     borderRadius: 8,
                     padding: "9px 18px",
                     cursor: "pointer",
@@ -1004,10 +1006,10 @@ export function WalkthroughWizard({
                 style={{
                   fontSize: 13,
                   fontWeight: 700,
-                  color: "#1b1300",
+                  color: ownerChrome ? "#1b1300" : "#FFFFFF",
                   background: ownerChrome
                     ? "linear-gradient(120deg, #ac8400, #d4af37 40%, #fdee79 60%, #d4af37 80%, #ac8400)"
-                    : sectionColor,
+                    : "#0B5FFF",
                   backgroundSize: ownerChrome ? "200% auto" : undefined,
                   border: "none",
                   borderRadius: 8,

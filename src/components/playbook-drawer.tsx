@@ -43,49 +43,49 @@ const TIER_STYLES: Record<
   { badge: string; stepDot: string; label: string; border: string }
 > = {
   critical: {
-    badge: "bg-red-950/80 text-red-200 border border-red-700/80",
-    stepDot: "bg-red-600 text-white",
+    badge: "bg-[#F8D6DA] text-[#8E2430] border border-[#C43D4B]/30 dark:bg-[#3A1820] dark:text-[#FFB4BC]",
+    stepDot: "bg-[#8E2430] text-white",
     label: "Critical",
-    border: "border-l-red-500",
+    border: "border-l-[#C43D4B]",
   },
   at_risk: {
-    badge: "bg-amber-950/80 text-amber-200 border border-amber-700/80",
-    stepDot: "bg-amber-600 text-white",
+    badge: "bg-[#F8E8C8] text-[#8A5A12] border border-[#B7791F]/35 dark:bg-[#3A2E14] dark:text-[#F0D59A]",
+    stepDot: "bg-[#8A5A12] text-white",
     label: healthBandLabel("at_risk"),
-    border: "border-l-amber-500",
+    border: "border-l-[#B7791F]",
   },
   healthy: {
-    badge: "bg-emerald-950/80 text-emerald-200 border border-emerald-700/80",
-    stepDot: "bg-emerald-600 text-white",
+    badge: "bg-[#D7F3E6] text-[#0E5C40] border border-[#16845B]/30 dark:bg-[#12352A] dark:text-[#7DDEBA]",
+    stepDot: "bg-[#0E5C40] text-white",
     label: "Healthy",
-    border: "border-l-emerald-500",
+    border: "border-l-[#16845B]",
   },
 };
 
 /** High-contrast chips on the dark drawer (avoid yellow-on-amber). */
 const EFFORT_STYLES: Record<string, string> = {
-  low: "bg-slate-700 text-slate-100",
-  medium: "bg-amber-800 text-amber-50",
-  high: "bg-red-800 text-red-50",
+  low: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]",
+  medium: "bg-[#F8E8C8] text-[#8A5A12] dark:bg-[#3A2E14] dark:text-[#F0D59A]",
+  high: "bg-[#F8D6DA] text-[#8E2430] dark:bg-[#3A1820] dark:text-[#FFB4BC]",
 };
 
 const IMPACT_STYLES: Record<string, string> = {
-  low: "bg-slate-700 text-slate-100",
-  medium: "bg-blue-800 text-blue-50",
-  high: "bg-emerald-800 text-emerald-50",
+  low: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]",
+  medium: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]",
+  high: "bg-[#D7F3E6] text-[#0E5C40] dark:bg-[#12352A] dark:text-[#7DDEBA]",
 };
 
 const CATEGORY_STYLES: Record<
   string,
   { cls: string; Icon: React.ComponentType<{ className?: string }> }
 > = {
-  revenue: { cls: "bg-blue-900/70 text-blue-100", Icon: TrendingUp },
-  cost: { cls: "bg-amber-900/70 text-amber-100", Icon: Scissors },
-  operations: { cls: "bg-purple-900/70 text-purple-100", Icon: Settings2 },
-  people: { cls: "bg-indigo-900/70 text-indigo-100", Icon: Users },
-  structure: { cls: "bg-slate-700 text-slate-100", Icon: Building2 },
-  cash: { cls: "bg-teal-900/70 text-teal-100", Icon: Wallet },
-  risk: { cls: "bg-red-900/70 text-red-100", Icon: ShieldAlert },
+  revenue: { cls: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]", Icon: TrendingUp },
+  cost: { cls: "bg-[#F8E8C8] text-[#8A5A12] dark:bg-[#3A2E14] dark:text-[#F0D59A]", Icon: Scissors },
+  operations: { cls: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]", Icon: Settings2 },
+  people: { cls: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]", Icon: Users },
+  structure: { cls: "bg-[#DBEAFE] text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]", Icon: Building2 },
+  cash: { cls: "bg-[#D7F3E6] text-[#0E5C40] dark:bg-[#12352A] dark:text-[#7DDEBA]", Icon: Wallet },
+  risk: { cls: "bg-[#F8D6DA] text-[#8E2430] dark:bg-[#3A1820] dark:text-[#FFB4BC]", Icon: ShieldAlert },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -209,18 +209,14 @@ export function PlaybookDrawer({
         if (!v) onClose();
       }}
     >
-      {/*
-        Force a dark surface regardless of page theme. SheetTitle defaults to
-        text-foreground (near-black in light mode) which was invisible on this drawer.
-      */}
-      <SheetContent
+            <SheetContent
         side="right"
-        className="dark flex w-full flex-col overflow-hidden border-slate-700 bg-[#0d1117] p-0 text-slate-100 sm:max-w-2xl [color-scheme:dark] [&_[data-slot=sheet-close]]:text-slate-300 [&_button.absolute]:text-slate-300 [&_button.absolute]:hover:text-white"
+        className="flex w-full flex-col overflow-hidden border-[#DBEAFE] bg-white p-0 text-[#102A43] sm:max-w-2xl dark:border-[#1e3a5f] dark:bg-[#0B1B2B] dark:text-[#F4F7FB] [&_[data-slot=sheet-close]]:text-[#3D5270] dark:[&_[data-slot=sheet-close]]:text-[#C5D4E4]"
       >
         {/* Header */}
-        <SheetHeader className="flex-shrink-0 space-y-0 border-b border-slate-700 px-6 pb-4 pt-6 text-left">
+        <SheetHeader className="flex-shrink-0 space-y-0 border-b border-[#DBEAFE] dark:border-[#1e3a5f] px-6 pb-4 pt-6 text-left">
           <div className="flex items-center gap-3">
-            <SheetTitle className="!text-slate-50 flex-1 text-left text-base font-semibold leading-tight">
+            <SheetTitle className="text-[#102A43] dark:text-[#F4F7FB] flex-1 text-left text-base font-semibold leading-tight">
               {ratioName}
             </SheetTitle>
             <span
@@ -230,7 +226,7 @@ export function PlaybookDrawer({
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-xs font-normal text-slate-400">
+            <p className="text-xs font-normal text-[#3D5270] dark:text-[#C5D4E4]">
               {steps.length > 0
                 ? `${steps.length} action steps — ordered by priority and timeframe`
                 : loading
@@ -240,7 +236,7 @@ export function PlaybookDrawer({
                     : "No playbook available for this ratio yet."}
             </p>
             {signoffEnabled && steps.length > 0 && (
-              <p className="flex-shrink-0 text-[11px] font-normal text-slate-400">
+              <p className="flex-shrink-0 text-[11px] font-normal text-[#3D5270] dark:text-[#C5D4E4]">
                 {signoffCount} of {steps.length} signed off
               </p>
             )}
@@ -255,14 +251,14 @@ export function PlaybookDrawer({
         {/* Body */}
         <div className="flex-1 space-y-7 overflow-y-auto px-6 py-5">
           {(formula || actualLine) && (
-            <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-4">
+            <div className="rounded-lg border border-[#DBEAFE] dark:border-[#1e3a5f] bg-[#F4F8FF] dark:bg-[#102A43] p-4">
               {formula && (
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#3D5270] dark:text-[#C5D4E4]">
                   {formula}
                 </p>
               )}
               {actualLine && (
-                <p className="mt-1.5 font-mono text-sm text-slate-100">{actualLine}</p>
+                <p className="mt-1.5 font-mono text-sm text-[#102A43] dark:text-[#F4F7FB]">{actualLine}</p>
               )}
             </div>
           )}
@@ -270,11 +266,11 @@ export function PlaybookDrawer({
           {ratioQueries.length > 0 && (
             <div data-ratio-queries>
               <div className="mb-3 flex items-center gap-2">
-                <MessageSquare className="h-3.5 w-3.5 text-[#d4a550]" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4a550]">
+                <MessageSquare className="h-3.5 w-3.5 text-[#0B5FFF]" />
+                <span className="text-xs font-bold uppercase tracking-widest text-[#0B5FFF]">
                   Queries from client management
                 </span>
-                <div className="flex-1 border-t border-[#d4a550]/30" />
+                <div className="flex-1 border-t border-[#0B5FFF]/30" />
               </div>
               <ul className="space-y-2">
                 {ratioQueries.map((q) => (
@@ -282,17 +278,17 @@ export function PlaybookDrawer({
                     key={q.id}
                     className={`rounded-lg border p-3 ${
                       focusNoteId === q.id
-                        ? "border-[#d4a550] bg-[#d4a550]/10"
-                        : "border-slate-700 bg-slate-900/80"
+                        ? "border-[#0B5FFF] bg-[#0B5FFF]/10"
+                        : "border-[#DBEAFE] dark:border-[#1e3a5f] bg-[#F4F8FF] dark:bg-[#102A43]"
                     }`}
                   >
-                    <p className="text-[11px] font-semibold text-slate-400">{q.author}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-100">{q.text}</p>
+                    <p className="text-[11px] font-semibold text-[#3D5270] dark:text-[#C5D4E4]">{q.author}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-[#102A43] dark:text-[#F4F7FB]">{q.text}</p>
                     {q.replies.length > 0 && (
-                      <ul className="mt-2 space-y-1 border-t border-slate-700 pt-2">
+                      <ul className="mt-2 space-y-1 border-t border-[#DBEAFE] dark:border-[#1e3a5f] pt-2">
                         {q.replies.map((r) => (
-                          <li key={r.id} className="text-[12px] text-slate-300">
-                            <span className="font-semibold text-slate-200">{r.author}</span> {r.text}
+                          <li key={r.id} className="text-[12px] text-[#3D5270] dark:text-[#C5D4E4]">
+                            <span className="font-semibold text-[#102A43] dark:text-[#C5D4E4]">{r.author}</span> {r.text}
                           </li>
                         ))}
                       </ul>
@@ -316,11 +312,11 @@ export function PlaybookDrawer({
                               value={replyDraft}
                               onChange={(e) => setReplyDraft(e.target.value)}
                               placeholder="Reply…"
-                              className="min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[12px] text-slate-100"
+                              className="min-w-0 flex-1 rounded-md border border-[#DBEAFE] dark:border-[#1e3a5f] bg-white dark:bg-[#0B1B2B] px-2 py-1 text-[12px] text-[#102A43] dark:text-[#F4F7FB]"
                             />
                             <button
                               type="submit"
-                              className="rounded-md bg-[#d4a550] px-2 py-1 text-[11px] font-semibold text-[#0a1628]"
+                              className="rounded-md bg-[#0B5FFF] px-2 py-1 text-[11px] font-semibold text-white"
                             >
                               Send
                             </button>
@@ -332,7 +328,7 @@ export function PlaybookDrawer({
                               setReplyingId(q.id);
                               setReplyDraft("");
                             }}
-                            className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#d4a550] hover:bg-[#d4a550]/10"
+                            className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#0B5FFF] hover:bg-[#2563EB]/10"
                           >
                             Reply
                           </button>
@@ -340,7 +336,7 @@ export function PlaybookDrawer({
                         <button
                           type="button"
                           onClick={() => void resolveNote(q.id)}
-                          className="rounded-full px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:text-slate-200"
+                          className="rounded-full px-2 py-0.5 text-[11px] font-medium text-[#3D5270] dark:text-[#C5D4E4] hover:text-[#102A43] dark:text-[#C5D4E4]"
                         >
                           Resolve
                         </button>
@@ -352,7 +348,7 @@ export function PlaybookDrawer({
             </div>
           )}
           {loading && (
-            <div className="flex items-center justify-center py-16 text-slate-400">
+            <div className="flex items-center justify-center py-16 text-[#3D5270] dark:text-[#C5D4E4]">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Loading…</span>
             </div>
@@ -361,18 +357,18 @@ export function PlaybookDrawer({
           {!loading && steps.length === 0 && fallbackSteps.length > 0 && (
             <div>
               <div className="mb-3 flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-widest text-[#3D5270] dark:text-[#C5D4E4]">
                   What to check
                 </span>
-                <div className="flex-1 border-t border-slate-700" />
+                <div className="flex-1 border-t border-[#DBEAFE] dark:border-[#1e3a5f]" />
               </div>
               <ol className="space-y-2">
                 {fallbackSteps.map((step, i) => (
                   <li
                     key={step}
-                    className={`rounded-lg border border-slate-700 border-l-2 ${tier.border} bg-slate-900/80 p-3 text-sm leading-relaxed text-slate-200`}
+                    className={`rounded-lg border border-[#DBEAFE] dark:border-[#1e3a5f] border-l-2 ${tier.border} bg-[#F4F8FF] dark:bg-[#102A43] p-3 text-sm leading-relaxed text-[#102A43] dark:text-[#C5D4E4]`}
                   >
-                    <span className="mr-2 font-semibold text-slate-400">{i + 1}.</span>
+                    <span className="mr-2 font-semibold text-[#3D5270] dark:text-[#C5D4E4]">{i + 1}.</span>
                     {step}
                   </li>
                 ))}
@@ -381,12 +377,12 @@ export function PlaybookDrawer({
           )}
 
           {!loading && steps.length === 0 && fallbackSteps.length === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-slate-400">
-              <AlertTriangle className="h-8 w-8 text-slate-500" />
-              <p className="text-sm text-slate-300">
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-[#3D5270] dark:text-[#C5D4E4]">
+              <AlertTriangle className="h-8 w-8 text-[#102A43] dark:text-[#F4F7FB]0" />
+              <p className="text-sm text-[#3D5270] dark:text-[#C5D4E4]">
                 No playbook steps found for this ratio and tier.
               </p>
-              <p className="text-xs text-slate-500">Check back after the next data import.</p>
+              <p className="text-xs text-[#102A43] dark:text-[#F4F7FB]0">Check back after the next data import.</p>
             </div>
           )}
 
@@ -395,10 +391,10 @@ export function PlaybookDrawer({
               <div key={timeframe}>
                 {/* Phase divider */}
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#3D5270] dark:text-[#C5D4E4]">
                     {label}
                   </span>
-                  <div className="flex-1 border-t border-slate-700" />
+                  <div className="flex-1 border-t border-[#DBEAFE] dark:border-[#1e3a5f]" />
                 </div>
 
                 <div className="space-y-3">
@@ -408,7 +404,7 @@ export function PlaybookDrawer({
                     return (
                       <div
                         key={step.step_number}
-                        className={`rounded-lg border border-slate-700 border-l-2 ${tier.border} bg-slate-900/80 p-4`}
+                        className={`rounded-lg border border-[#DBEAFE] dark:border-[#1e3a5f] border-l-2 ${tier.border} bg-[#F4F8FF] dark:bg-[#102A43] p-4`}
                       >
                         <div className="flex items-start gap-3">
                           {/* Step number */}
@@ -419,27 +415,27 @@ export function PlaybookDrawer({
                           </span>
 
                           <div className="min-w-0 flex-1">
-                            <p className="mb-1.5 text-sm font-semibold leading-snug text-slate-50">
+                            <p className="mb-1.5 text-sm font-semibold leading-snug text-[#102A43] dark:text-[#F4F7FB]">
                               {step.step_title}
                             </p>
-                            <p className="mb-3 text-xs leading-relaxed text-slate-300">
+                            <p className="mb-3 text-xs leading-relaxed text-[#3D5270] dark:text-[#C5D4E4]">
                               {step.step_description}
                             </p>
 
                             {/* Tags */}
                             <div className="flex flex-wrap gap-1.5">
                               <span
-                                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${EFFORT_STYLES[step.effort] ?? EFFORT_STYLES.medium}`}
+                                className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${EFFORT_STYLES[step.effort] ?? EFFORT_STYLES.medium}`}
                               >
                                 Effort: {step.effort}
                               </span>
                               <span
-                                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${IMPACT_STYLES[step.impact] ?? IMPACT_STYLES.medium}`}
+                                className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${IMPACT_STYLES[step.impact] ?? IMPACT_STYLES.medium}`}
                               >
                                 Impact: {step.impact}
                               </span>
                               <span
-                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${cat.cls}`}
+                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${cat.cls}`}
                               >
                                 <CatIcon className="h-2.5 w-2.5" />
                                 {step.category}

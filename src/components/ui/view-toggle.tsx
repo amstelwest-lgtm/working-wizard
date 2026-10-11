@@ -1,6 +1,6 @@
 /**
  * Segmented Chart / Table style switch shared by Budget and Cash.
- * Active segment uses gold. It is a view switch, not the page's Sign off button.
+ * Active segment uses cobalt. It is a view switch, not the page's Sign off button.
  */
 import { useRef, type KeyboardEvent } from "react";
 
@@ -55,7 +55,7 @@ export function ViewToggle({
       role="tablist"
       aria-label={ariaLabel}
       data-view-toggle=""
-      className="inline-flex max-w-full rounded-full border border-[#d4af37]/50 p-0.5"
+      className="inline-flex max-w-full rounded-full border border-[#0B5FFF]/50 p-0.5"
       onKeyDown={onKeyDown}
     >
       {options.map((option, index) => {
@@ -71,8 +71,8 @@ export function ViewToggle({
             id={`view-toggle-${option.value}`}
             aria-selected={on}
             tabIndex={on ? 0 : -1}
-            className={`rounded-full px-3 py-1 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d4af37] ${
-              on ? "bg-[#d4af37] text-[#1b1608]" : "bg-transparent text-slate-600 dark:text-slate-300"
+            className={`rounded-full px-3 py-1 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B5FFF] ${
+              on ? "bg-[#0B5FFF] text-white" : "bg-transparent text-slate-600 dark:text-slate-300"
             }`}
             onClick={() => onChange(option.value)}
           >
