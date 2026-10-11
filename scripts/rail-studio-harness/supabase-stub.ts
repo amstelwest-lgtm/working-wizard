@@ -80,19 +80,26 @@ const ACTION_PLAN = {
   outcome_goal: "Collect this month's cash before payroll",
   why_statement: "Runway is the number the owner asked about.",
   target_date: "2026-12-31",
+  created_at: "2026-10-01T00:00:00.000Z",
   is_active: true,
 };
 
 const ACTION_ITEM = {
   id: "harness-item",
   plan_id: "harness-plan",
+  client_id: "harness-client",
   title: "Call the two largest overdue accounts",
   status: "not_started",
   seq: 1,
   due_date: "2026-10-15",
+  progress_pct: 20,
+  created_at: "2026-10-01T00:00:00.000Z",
   outcome_why: "Those two invoices are most of the gap.",
+  owner_id: "harness-employee",
   owner_name: "Ada Mbeki",
-  owner_email: null,
+  owner_email: "ada@example.test",
+  source: "manual",
+  source_move_key: null,
 };
 
 const TABLES: Record<string, unknown> = {
@@ -100,7 +107,15 @@ const TABLES: Record<string, unknown> = {
   action_plans: [ACTION_PLAN],
   action_items_v: [ACTION_ITEM],
   action_items: [ACTION_ITEM],
-  client_employees: [],
+  client_employees: [
+    {
+      id: "harness-employee",
+      client_id: "harness-client",
+      name: "Ada Mbeki",
+      email: "ada@example.test",
+      role: "Operations",
+    },
+  ],
   action_milestones: [],
   action_emails: [],
   user_roles: [],
