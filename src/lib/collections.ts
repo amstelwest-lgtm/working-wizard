@@ -15,6 +15,19 @@ export type CollectionsInvoice = {
   ageBucket: string;
 };
 
+/**
+ * Sage GetSummary ages by calendar month of the invoice date, not days past due.
+ * `older` is Days120Plus. A balance in `month_2` is two months back, not overdue.
+ */
+export type CalendarMonthAgeing = {
+  basis: "calendar_month";
+  current: number;
+  month_1: number;
+  month_2: number;
+  month_3: number;
+  older: number;
+};
+
 export type CollectionsContact = {
   contactId: string;
   name: string;
@@ -22,6 +35,8 @@ export type CollectionsContact = {
   overdue: number;
   ageBucket: string;
   buckets: { label: string; amount: number }[];
+  /** Set only when that party's own row carried the month columns. */
+  monthAgeing?: CalendarMonthAgeing | null;
   invoices: CollectionsInvoice[];
 };
 
@@ -37,6 +52,13 @@ export type CollectionsSnapshot = {
   invoiceCount: number;
   totalOutstanding: number;
   totalOverdue: number;
+  /**
+   * Company month buckets when the report is calendar-month ageing.
+   * Absent for day-based Xero and QuickBooks reports.
+   */
+  monthAgeing?: CalendarMonthAgeing | null;
+  /** Sum of month_1 + month_2 + month_3 + older. Not days past due. */
+  olderThanCurrentMonth?: number | null;
   contacts: CollectionsContact[];
 };
 
@@ -93,9 +115,15 @@ function publicBuckets(buckets: BucketDraft[]): { label: string; amount: number 
   return buckets.map((bucket) => ({ label: bucket.label, amount: moneyOrZero(bucket.amount) }));
 }
 
-function totalsFromBuckets(buckets: BucketDraft[]): { outstanding: number; overdue: number; ageBucket: string } {
+function totalsFromBuckets(buckets: BucketDraft[]): {
+  outstanding: number;
+  overdue: number;
+  ageBucket: string;
+} {
   const outstanding = moneyOrZero(buckets.reduce((sum, bucket) => sum + bucket.amount, 0));
-  const current = buckets.filter((bucket) => bucket.current).reduce((sum, bucket) => sum + bucket.amount, 0);
+  const current = buckets
+    .filter((bucket) => bucket.current)
+    .reduce((sum, bucket) => sum + bucket.amount, 0);
   const overdue = moneyOrZero(outstanding - current);
   return { outstanding, overdue: overdue > 0 ? overdue : 0, ageBucket: oldestBucket(buckets) };
 }
@@ -111,7 +139,9 @@ export function finalizeCollections(input: {
     .filter((contact) => contact.name.trim() && Math.abs(contact.outstanding) >= 0.005)
     .sort((a, b) => b.overdue - a.overdue || b.outstanding - a.outstanding);
   const invoiceCount = contacts.reduce((sum, contact) => sum + contact.invoices.length, 0);
-  const totalOutstanding = moneyOrZero(contacts.reduce((sum, contact) => sum + contact.outstanding, 0));
+  const totalOutstanding = moneyOrZero(
+    contacts.reduce((sum, contact) => sum + contact.outstanding, 0),
+  );
   const totalOverdue = moneyOrZero(contacts.reduce((sum, contact) => sum + contact.overdue, 0));
   const status: CollectionsStatus = contacts.length ? "applied" : "empty";
   return {
@@ -198,6 +228,7 @@ function readContact(raw: unknown): CollectionsContact | null {
         return parsed ? [parsed] : [];
       })
     : [];
+  const monthAgeing = readCalendarMonthAgeing(row.monthAgeing);
   return {
     contactId,
     name,
@@ -205,8 +236,60 @@ function readContact(raw: unknown): CollectionsContact | null {
     overdue: numOrNull(row.overdue) ?? 0,
     ageBucket: typeof row.ageBucket === "string" ? row.ageBucket : "",
     buckets,
+    ...(monthAgeing ? { monthAgeing } : {}),
     invoices,
   };
+}
+
+export function olderThanCurrentMonth(ageing: CalendarMonthAgeing): number {
+  return Math.round((ageing.month_1 + ageing.month_2 + ageing.month_3 + ageing.older) * 100) / 100;
+}
+
+export function readCalendarMonthAgeing(value: unknown): CalendarMonthAgeing | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.basis !== "calendar_month") return null;
+  const current = numOrNull(row.current);
+  const month_1 = numOrNull(row.month_1);
+  const month_2 = numOrNull(row.month_2);
+  const month_3 = numOrNull(row.month_3);
+  const older = numOrNull(row.older);
+  if (current == null || month_1 == null || month_2 == null || month_3 == null || older == null) {
+    return null;
+  }
+  return {
+    basis: "calendar_month",
+    current,
+    month_1,
+    month_2,
+    month_3,
+    older,
+  };
+}
+
+/** Non-zero month columns, for the chase list. The stored object keeps the zeros. */
+export function calendarMonthFigures(
+  ageing: CalendarMonthAgeing | null | undefined,
+): { label: string; amount: number }[] {
+  if (!ageing) return [];
+  return [
+    { label: "Current month", amount: ageing.current },
+    { label: "1 month", amount: ageing.month_1 },
+    { label: "2 months", amount: ageing.month_2 },
+    { label: "3 months", amount: ageing.month_3 },
+    { label: "Older", amount: ageing.older },
+  ].filter((bucket) => Math.abs(bucket.amount) >= 0.005);
+}
+
+export function calendarMonthAgeingLine(ageing: CalendarMonthAgeing, older: number): string {
+  const figures = [
+    `current ${moneyPlain(ageing.current)}`,
+    `1 month ${moneyPlain(ageing.month_1)}`,
+    `2 months ${moneyPlain(ageing.month_2)}`,
+    `3 months ${moneyPlain(ageing.month_3)}`,
+    `older ${moneyPlain(ageing.older)}`,
+  ].join("; ");
+  return `Calendar months (basis calendar_month), not days past due: ${figures}. Older than the current month: ${moneyPlain(older)}.`;
 }
 
 export function readCollectionsSnapshot(raw: unknown): CollectionsSnapshot | null {
@@ -232,10 +315,24 @@ export function readCollectionsSnapshot(raw: unknown): CollectionsSnapshot | nul
     skipReason: typeof row.skipReason === "string" && row.skipReason.trim() ? row.skipReason : null,
     note: typeof row.note === "string" && row.note.trim() ? row.note : null,
     contactCount: numOrNull(row.contactCount) ?? contacts.length,
-    invoiceCount: numOrNull(row.invoiceCount) ?? contacts.reduce((sum, c) => sum + c.invoices.length, 0),
+    invoiceCount:
+      numOrNull(row.invoiceCount) ?? contacts.reduce((sum, c) => sum + c.invoices.length, 0),
     totalOutstanding: numOrNull(row.totalOutstanding) ?? 0,
     totalOverdue: numOrNull(row.totalOverdue) ?? 0,
+    ...monthAgeingFields(row),
     contacts,
+  };
+}
+
+function monthAgeingFields(row: Record<string, unknown>): {
+  monthAgeing?: CalendarMonthAgeing;
+  olderThanCurrentMonth?: number;
+} {
+  const monthAgeing = readCalendarMonthAgeing(row.monthAgeing);
+  const older = numOrNull(row.olderThanCurrentMonth);
+  return {
+    ...(monthAgeing ? { monthAgeing } : {}),
+    ...(older != null ? { olderThanCurrentMonth: older } : {}),
   };
 }
 
@@ -325,7 +422,10 @@ export function collectionsFiguresSentence(
  * name is the largest overdue row: finalizeCollections sorts that way, and this
  * does not scan or re-sum the list. There is no snapshot-level oldest bucket.
  */
-export function collectionsListSentence(snap: CollectionsSnapshot, money: (n: number) => string): string {
+export function collectionsListSentence(
+  snap: CollectionsSnapshot,
+  money: (n: number) => string,
+): string {
   const customers = `${snap.contactCount} customer${snap.contactCount === 1 ? "" : "s"}`;
   if (!(snap.totalOverdue >= 0.005)) return `Nothing is overdue across ${customers}.`;
   const head = `${money(snap.totalOverdue)} is overdue across ${customers}`;
@@ -419,7 +519,8 @@ export function parseXeroContactsPage(json: unknown): XeroContactCandidate[] {
     const contactId = typeof row.ContactID === "string" ? row.ContactID : "";
     const name = typeof row.Name === "string" ? row.Name.trim() : "";
     if (!contactId || !name) continue;
-    const status = typeof row.ContactStatus === "string" ? row.ContactStatus.toUpperCase() : "ACTIVE";
+    const status =
+      typeof row.ContactStatus === "string" ? row.ContactStatus.toUpperCase() : "ACTIVE";
     if (status === "ARCHIVED") continue;
     const isCustomer = row.IsCustomer !== false;
     if (!isCustomer) continue;
@@ -505,7 +606,9 @@ function invoiceIdFrom(cell: XeroCell | undefined): string | null {
 }
 
 function isCurrentTitle(title: string): boolean {
-  return title.trim().toLowerCase() === "current" || title.trim().toLowerCase().startsWith("current ");
+  return (
+    title.trim().toLowerCase() === "current" || title.trim().toLowerCase().startsWith("current ")
+  );
 }
 
 function isTotalTitle(title: string): boolean {
@@ -813,17 +916,33 @@ export function collectionsPromptBlock(snap: CollectionsSnapshot | null): string
     `Aged receivables (${sourceLabel(snap.source)}${snap.asOf ? `, as of ${snap.asOf}` : ""}):`,
     `Overdue total: ${moneyPlain(snap.totalOverdue)}. Outstanding total: ${moneyPlain(snap.totalOutstanding)}. Contacts: ${snap.contactCount}. Invoice lines: ${snap.invoiceCount}.`,
   ];
+  if (snap.monthAgeing) {
+    lines.push(
+      calendarMonthAgeingLine(
+        snap.monthAgeing,
+        snap.olderThanCurrentMonth ?? olderThanCurrentMonth(snap.monthAgeing),
+      ),
+    );
+  }
   for (const contact of snap.contacts.slice(0, 8)) {
     const invoices = contact.invoices
       .slice(0, 4)
-      .map((invoice) => `${invoice.reference} (${moneyPlain(invoice.amount)}${invoice.ageBucket ? `, ${invoice.ageBucket}` : ""})`)
+      .map(
+        (invoice) =>
+          `${invoice.reference} (${moneyPlain(invoice.amount)}${invoice.ageBucket ? `, ${invoice.ageBucket}` : ""})`,
+      )
       .join("; ");
+    const months = contact.monthAgeing
+      ? ` Months: ${calendarMonthAgeingLine(contact.monthAgeing, olderThanCurrentMonth(contact.monthAgeing))}`
+      : "";
     lines.push(
-      `- ${contact.name}: overdue ${moneyPlain(contact.overdue)}, outstanding ${moneyPlain(contact.outstanding)}, oldest bucket ${contact.ageBucket || "n/a"}.${invoices ? ` Invoices: ${invoices}.` : " Invoice numbers were not on this pull."}`,
+      `- ${contact.name}: overdue ${moneyPlain(contact.overdue)}, outstanding ${moneyPlain(contact.outstanding)}, oldest bucket ${contact.ageBucket || "n/a"}.${months}${invoices ? ` Invoices: ${invoices}.` : " Invoice numbers were not on this pull."}`,
     );
   }
   if (snap.note) lines.push(snap.note);
-  lines.push("Do not invent customers or invoices beyond this list. Milōn does not send the chase or record the receipt.");
+  lines.push(
+    "Do not invent customers or invoices beyond this list. Milōn does not send the chase or record the receipt.",
+  );
   return lines.join("\n");
 }
 
@@ -841,7 +960,10 @@ export function buildCollectionsDraft(snap: CollectionsSnapshot | null): Collect
         .slice(0, 4);
       const refs = invoices.length
         ? ` Invoices: ${invoices
-            .map((invoice) => `${invoice.reference} (${moneyPlain(invoice.amount)}${invoice.ageBucket ? `, ${invoice.ageBucket}` : ""})`)
+            .map(
+              (invoice) =>
+                `${invoice.reference} (${moneyPlain(invoice.amount)}${invoice.ageBucket ? `, ${invoice.ageBucket}` : ""})`,
+            )
             .join("; ")}.`
         : " Invoice numbers were not on this report — name the contact and the age bucket only.";
       lines.push(
@@ -890,7 +1012,10 @@ export function buildCollectionsDraft(snap: CollectionsSnapshot | null): Collect
     problem: `${books} aged receivables${asOf} show ${moneyPlain(snap.totalOverdue)} overdue across ${snap.contacts.filter((c) => c.overdue >= 0.005).length} contacts.`,
     rationale,
     assumptions: [
-      `Read from the ${books} aged receivables report${asOf}. Milōn does not send chase emails or record receipts.`.slice(0, 300),
+      `Read from the ${books} aged receivables report${asOf}. Milōn does not send chase emails or record receipts.`.slice(
+        0,
+        300,
+      ),
       depth.slice(0, 300),
       ...(snap.note ? [snap.note.slice(0, 300)] : []),
     ],

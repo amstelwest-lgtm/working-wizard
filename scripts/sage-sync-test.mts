@@ -11,7 +11,12 @@ import {
 } from "../src/lib/ledger-sync-financials";
 import { decryptSagePassword, encryptSagePassword } from "../src/lib/sage-password";
 import { SAGE_EMPTY_COMPANY_MESSAGE, sageSyncWriteDecision } from "../src/lib/sage";
-import { agedArProofLine } from "../src/lib/collections";
+import {
+  agedArProofLine,
+  collectionsPromptBlock,
+  readCollectionsSnapshot,
+} from "../src/lib/collections";
+import { payablesPromptBlock } from "../src/lib/payables";
 import { agedApProofLine } from "../src/lib/payables";
 import {
   fetchSageLedgerStatement,
@@ -25,6 +30,7 @@ import {
   parseSageSupplierAgeing,
   sageAgeingBody,
   sageMappingIssue,
+  sageMonthAgeingFinancialFields,
   SAGE_SA_API_BASE,
   SAGE_SA_TIME_ZONE,
   sageBasicAuthHeader,
@@ -214,6 +220,9 @@ assert(aged.status === "applied", "a named customer is applied");
 assert(aged.contacts[0]?.name === "Northwind", "customer name");
 assert(aged.contacts[0]?.outstanding === 800, "customer total");
 assert(aged.totalOverdue === 0, "a previous calendar month is not days overdue");
+assert(aged.monthAgeing?.month_1 === 500, "a named ageing row keeps its month split");
+assert(aged.contacts[0]?.monthAgeing?.month_1 === 500, "the party's own row supplies the split");
+assert(aged.olderThanCurrentMonth === 500, "older than the current month is not overdue");
 assert(aged.contacts[0]?.buckets[1]?.label === "1 month", "Days30 is one month back");
 assert(aged.contacts[0]?.buckets[1]?.amount === 500, "previous month keeps its amount");
 
@@ -983,6 +992,8 @@ assert(sandboxCustomers.status === "applied", "a summary total is applied");
 assert(sandboxCustomers.contactCount === 0, "summary ageing has no customer names");
 assert(sandboxCustomers.totalOutstanding === 5000, "customer ageing total");
 assert(sandboxCustomers.totalOverdue === 0, "summary month buckets are not overdue");
+assert(sandboxCustomers.monthAgeing?.month_1 === 3000, "summary Days30 is month 1");
+assert(sandboxCustomers.olderThanCurrentMonth === 3000, "summary months are not stored as overdue");
 assert(
   !agedArProofLine(sandboxCustomers).includes("nothing outstanding"),
   "a non-zero customer summary is not empty",
@@ -1161,6 +1172,8 @@ near(seededMtd.operatingExpenses, 31833.33, "October expenses");
 near(seededMtd.ebt, -4233.33, "October profit before tax");
 near(seededMtd.netIncome, -14700.33, "October profit after tax");
 assert(seededMtd.periodMonths === 1, "an 11-day month is still periodMonths 1");
+assert(seededMtd.ebit === -4233.33, "October EBIT is rounded to cents");
+assert(seededMtd.ebitda === 9600, "October EBITDA is rounded to cents");
 assert(
   sageMappingIssue(seededMtd, parseSageBalanceSheet(loadSageFixture("balance-sheet.json"))) ===
     null,
@@ -1247,10 +1260,31 @@ const seededAged = parseSageCustomerAgeing(
 assert(seededAged.contactCount === 2, "debtors are named from Customer/Get");
 near(seededAged.totalOutstanding, 71300, "debtor total comes from the ageing totals row");
 assert(seededAged.totalOverdue === 0, "month buckets are not overdue");
+assert(seededAged.monthAgeing?.basis === "calendar_month", "debtor buckets are calendar months");
+assert(seededAged.monthAgeing?.current === 34500, "current month debtors");
+assert(seededAged.monthAgeing?.month_2 === 36800, "36,800 sits in month 2");
 assert(
-  seededAged.contacts.every((contact) => contact.buckets.length === 0),
-  "party rows are not given invented month buckets",
+  seededAged.olderThanCurrentMonth === 36800,
+  "older than the current month is its own figure",
 );
+assert(
+  seededAged.contacts.every((contact) => contact.monthAgeing == null),
+  "Customer/Get has a balance, not a month split",
+);
+const agedRoundTrip = readCollectionsSnapshot(seededAged);
+assert(agedRoundTrip?.monthAgeing?.month_2 === 36800, "month buckets survive a snapshot read");
+assert(
+  agedRoundTrip?.olderThanCurrentMonth === 36800,
+  "older-than-current survives a snapshot read",
+);
+assert(agedRoundTrip?.totalOverdue === 0, "a reread does not turn months into overdue");
+const agedPrompt = collectionsPromptBlock(seededAged);
+assert(agedPrompt.includes("2 months 36,800.00"), "the Analyst sees 36,800 at 2 months");
+assert(
+  agedPrompt.includes("Older than the current month: 36,800.00"),
+  "the Analyst sees the separate older-month total",
+);
+assert(agedPrompt.includes("Overdue total: 0.00"), "overdue stays the days-past-due total");
 assert(seededAged.note?.includes("Current month"), "the totals row keeps the month buckets");
 assert(seededAged.note?.includes("2 months"), "Days60 is two months");
 
@@ -1273,6 +1307,30 @@ assert(
 );
 near(seededAp.totalOutstanding, 20700, "creditor total");
 assert(seededAp.totalOverdue === 0, "a 13-day-old bill in Days30 is not overdue");
+assert(seededAp.monthAgeing?.month_1 === 20700, "the creditor bill is one month back");
+assert(seededAp.olderThanCurrentMonth === 20700, "creditor months are not called overdue");
+assert(seededAp.suppliers[0]?.monthAgeing == null, "Supplier/Get has a balance, not a month split");
+const apPrompt = payablesPromptBlock(seededAp, null);
+assert(apPrompt.includes("1 month 20,700.00"), "the Analyst sees 20,700 at 1 month");
+assert(apPrompt.includes("Overdue total: 0.00"), "creditor overdue stays zero");
+const ageingFields = sageMonthAgeingFinancialFields(seededAged, seededAp);
+assert(
+  ageingFields.sageArMonthBuckets &&
+    typeof ageingFields.sageArMonthBuckets === "object" &&
+    ageingFields.sageArMonthBuckets.month_2 === 36800,
+  "financials keep the debtor month object",
+);
+assert(ageingFields.sageArOlderThanCurrentMonth === 36800, "financials keep the older-month total");
+assert(
+  ageingFields.sageApMonthBuckets &&
+    typeof ageingFields.sageApMonthBuckets === "object" &&
+    ageingFields.sageApMonthBuckets.month_1 === 20700,
+  "financials keep the creditor month object",
+);
+assert(
+  read("src/lib/sage-sync.server.ts").includes("sageMonthAgeingFinancialFields"),
+  "sync writes the month buckets onto the financials blob",
+);
 assert(seededAp.note?.includes("1 month"), "Days30 is labelled as one month");
 
 const seededWhen = new Date("2026-10-11T08:00:00.000Z");
@@ -1367,6 +1425,8 @@ const seededMapped = mapSageToFinancialInputs(
   seededLedger.cash,
 );
 assert(seededMapped.periodMonths === "1", "stored month count matches Xero and QuickBooks");
+assert(seededMapped.ebit === -4233.33, "stored EBIT is cents, not a float");
+assert(seededMapped.ebitda === 9600, "stored EBITDA is cents, not a float");
 assert(seededMapped.ytdPeriodMonths === "8", "stored year count is March to October");
 assert(
   seededMapped.periodStart === "2026-10-01" && seededMapped.periodEnd === "2026-10-11",

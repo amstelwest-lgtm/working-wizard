@@ -16,7 +16,12 @@ import {
   supplierMove,
   type PayablesSnapshot,
 } from "@/lib/payables";
-import { COLLECTIONS_UPLOAD_CTA, hasStatementWorkingCapital, type StatementWorkingCapital } from "@/lib/collections";
+import {
+  calendarMonthFigures,
+  COLLECTIONS_UPLOAD_CTA,
+  hasStatementWorkingCapital,
+  type StatementWorkingCapital,
+} from "@/lib/collections";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { createRecommendation } from "@/lib/recommendations.functions";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
@@ -114,6 +119,7 @@ export function PayablesPanel({
   const fromStatements = hasStatementWorkingCapital(position);
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.suppliers.length > 0;
+  const monthBuckets = calendarMonthFigures(snapshot?.monthAgeing);
   const pack = copyPackOf(market);
   const tileMoney = (n: number) => statementArApMoney(n, market);
   const sentence = loading ? "" : payablesAnswerSentence(snapshot, position, tileMoney);
@@ -171,7 +177,12 @@ export function PayablesPanel({
         {filed ? "Draft added" : filing ? "Adding…" : "Add payables draft"}
       </button>
     ) : !namedList && onUploadAged ? (
-      <button type="button" className={ARAP_GOLD_BTN} id="payables-upload-aged" onClick={onUploadAged}>
+      <button
+        type="button"
+        className={ARAP_GOLD_BTN}
+        id="payables-upload-aged"
+        onClick={onUploadAged}
+      >
         {COLLECTIONS_UPLOAD_CTA}
       </button>
     ) : null;
@@ -231,6 +242,16 @@ export function PayablesPanel({
               id="payables-statement-position"
               lead="creditors"
             />
+          ) : null}
+          {monthBuckets.length > 0 ? (
+            <div className="collections-buckets" id="payables-age-buckets">
+              {monthBuckets.map((bucket) => (
+                <span key={bucket.label}>
+                  {bucket.label}
+                  <strong>{money(bucket.amount, market)}</strong>
+                </span>
+              ))}
+            </div>
           ) : null}
           <div className="payables-scroll">
             <table className="payables-table">
