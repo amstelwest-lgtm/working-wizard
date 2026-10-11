@@ -1239,15 +1239,17 @@ function Dashboard() {
     // Attach legacy null-firm practice clients to the active firm so they stay visible.
     if (!isIt && activeFirmId && rawClients.some((c) => !c.firm_id)) {
       const orphanIds = rawClients.filter((c) => !c.firm_id).map((c) => c.id);
-      const { error: attachErr } = await supabase
-        .from("clients")
-        .update({ firm_id: activeFirmId, firm_connected_at: new Date().toISOString() })
-        .in("id", orphanIds)
-        .eq("owner_user_id", userId)
-        .is("firm_id", null);
-      if (!attachErr) {
+      const linked: string[] = [];
+      for (const id of orphanIds) {
+        const { error: attachErr } = await supabase.rpc(
+          "link_client_firm" as never,
+          { p_client_id: id, p_firm_id: activeFirmId } as never,
+        );
+        if (!attachErr) linked.push(id);
+      }
+      if (linked.length) {
         rawClients = rawClients.map((c) =>
-          orphanIds.includes(c.id) ? { ...c, firm_id: activeFirmId } : c,
+          linked.includes(c.id) ? { ...c, firm_id: activeFirmId } : c,
         );
       }
     }

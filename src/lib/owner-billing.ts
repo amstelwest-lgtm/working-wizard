@@ -100,6 +100,31 @@ export function storedOwnerMarket(clients: Array<{ market: unknown }>): unknown 
   return null;
 }
 
+export type PracticeGrantEvidence = {
+  firmId: string;
+  status: string | null;
+  /** requested_by or accountant_approved_by is a member of that firm. */
+  grantedByMember: boolean;
+};
+
+/**
+ * A firm plan covers the owner only after the firm accepted the link.
+ * firm_id alone does not. Acceptance is the server-side marker from invite,
+ * join, or firm-created clients, or an active practice grant by a firm member.
+ */
+export function firmLinkCoversOwner(input: {
+  firmId: string | null;
+  acceptedAt: string | null;
+  grants?: PracticeGrantEvidence[];
+}): boolean {
+  const firmId = input.firmId?.trim() ?? "";
+  if (!firmId) return false;
+  if (input.acceptedAt?.trim()) return true;
+  return (input.grants ?? []).some(
+    (grant) => grant.firmId === firmId && grant.status === "active" && grant.grantedByMember,
+  );
+}
+
 export function isFirmBandBillingSubscription(input: {
   lookupKey?: string | null;
   plan?: string | null;
@@ -230,6 +255,14 @@ export async function planOwnerCheckout(input: {
   const found = await findOwnerCatalogPrice(input.stripe, charge.priceMarket, input.interval);
   if (!found || !isOwnerLookupKey(found.lookupKey)) {
     return { status: OWNER_PRICE_UNAVAILABLE };
+  }
+  // A non-ZA billing country swaps a rand session onto the USD owner price.
+  // Without that USD price, refuse the rand session instead of leaving it.
+  if (charge.priceMarket === "za") {
+    const usd = await findOwnerCatalogPrice(input.stripe, "us", input.interval);
+    if (!usd || !isOwnerLookupKey(usd.lookupKey)) {
+      return { status: OWNER_PRICE_UNAVAILABLE };
+    }
   }
   const params = ownerCheckoutSessionParams({
     priceId: found.price.id,

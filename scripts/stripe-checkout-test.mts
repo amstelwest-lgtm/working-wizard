@@ -52,6 +52,7 @@ import { resolveOwnerCheckoutMarket } from "../src/lib/billing-market";
 import {
   applyOwnerStripeEvent,
   emptyOwnerStripeSnapshot,
+  firmLinkCoversOwner,
   firmSubscriptionCoversOwner,
   getOwnerEntitlement,
   OWNER_FIRM_GRACE_DAYS,
@@ -848,6 +849,63 @@ const missingAnnual = await planOwnerCheckout({
 assert(
   missingAnnual.status === OWNER_PRICE_UNAVAILABLE,
   "a missing annual price is a typed error, not a firm price",
+);
+
+const zarWithoutUsd = ownerPriceStripe({
+  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+});
+const refusedZar = await planOwnerCheckout({
+  stripe: zarWithoutUsd,
+  interval: "month",
+  requestedMarket: "za",
+  ownerMarket: { country: "ZA" },
+  billingCountry: "ZA",
+  userId: "user_za",
+  email: "za-owner@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: null,
+});
+assert(
+  refusedZar.status === OWNER_PRICE_UNAVAILABLE,
+  "ZAR checkout is refused when the USD owner price is missing",
+);
+assert(zarWithoutUsd.created.length === 0, "a refused ZAR checkout does not open a session");
+
+assert(
+  !firmLinkCoversOwner({ firmId: "firm_paid", acceptedAt: null, grants: [] }),
+  "a firm_id the owner wrote does not cover the owner",
+);
+assert(
+  firmLinkCoversOwner({
+    firmId: "firm_paid",
+    acceptedAt: "2026-10-11T00:00:00.000Z",
+    grants: [],
+  }),
+  "an invite or firm-created link with the acceptance marker covers the owner",
+);
+assert(
+  firmLinkCoversOwner({
+    firmId: "firm_paid",
+    acceptedAt: null,
+    grants: [{ firmId: "firm_paid", status: "active", grantedByMember: true }],
+  }),
+  "an active practice grant from a firm member covers the owner",
+);
+assert(
+  !firmLinkCoversOwner({
+    firmId: "firm_paid",
+    acceptedAt: null,
+    grants: [{ firmId: "firm_paid", status: "active", grantedByMember: false }],
+  }),
+  "a practice row granted by someone outside the firm does not cover the owner",
+);
+assert(
+  !firmLinkCoversOwner({
+    firmId: "firm_paid",
+    acceptedAt: null,
+    grants: [{ firmId: "firm_paid", status: "revoked", grantedByMember: true }],
+  }),
+  "a revoked practice grant does not cover the owner",
 );
 
 const now = 1_700_000_000;

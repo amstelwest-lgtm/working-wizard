@@ -841,4 +841,61 @@ assert(
   "entitlement source is stripe or firm",
 );
 
+const linkGuard = readFileSync(
+  resolve("supabase/migrations/20261013150000_owner_firm_link_guard.sql"),
+  "utf8",
+);
+assert(
+  linkGuard.includes("clients.firm_id cannot be set by the owner"),
+  "an owner who sets firm_id is rejected",
+);
+assert(
+  linkGuard.includes("AND firm_id IS NULL"),
+  "owner insert cannot include a firm_id",
+);
+assert(
+  linkGuard.includes("NEW.firm_id IS NULL AND OLD.firm_id IS NOT NULL"),
+  "an owner may clear firm_id to leave the firm",
+);
+assert(linkGuard.includes("firm_link_accepted_at"), "acceptance is stored on the client");
+assert(
+  linkGuard.includes("CREATE OR REPLACE FUNCTION public.link_client_firm"),
+  "invite and firm attach go through link_client_firm",
+);
+assert(
+  linkGuard.includes("firm_link_accepted_at,\n    firm_link_accepted_by"),
+  "a firm-created client stamps acceptance",
+);
+assert(
+  linkGuard.includes("PERFORM public.link_client_firm"),
+  "marketplace accept links through the same function",
+);
+assert(
+  linkGuard.includes("lower(email) = lower(trim(p_email))"),
+  "webhook email match is exact and case-insensitive",
+);
+assert(!linkGuard.includes("ilike"), "the email lookup is not a LIKE pattern");
+
+const inviteServer = readFileSync(resolve("src/lib/accountant-invite.server.ts"), "utf8");
+assert(inviteServer.includes('rpc("link_client_firm"'), "accountant invite links through the RPC");
+assert(
+  !inviteServer.includes("firm_connected_at: new Date()"),
+  "accountant invite does not write firm_id with the user client",
+);
+const dashboard = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+assert(dashboard.includes('rpc(\n          "link_client_firm"'), "orphan clients attach through the RPC");
+assert(
+  !dashboard.includes("firm_id: activeFirmId, firm_connected_at"),
+  "the dashboard does not update clients.firm_id directly",
+);
+const disconnect = readFileSync(resolve("src/lib/practice-access.functions.ts"), "utf8");
+assert(
+  disconnect.includes("firm_link_accepted_at: null"),
+  "leaving a firm clears the acceptance marker",
+);
+const ownerServer = readFileSync(resolve("src/lib/owner-billing.server.ts"), "utf8");
+assert(ownerServer.includes("firmLinkCoversOwner"), "coverage requires an accepted firm link");
+assert(ownerServer.includes('rpc("user_id_by_email"'), "webhook email fallback uses the exact match");
+assert(!ownerServer.includes('.ilike("email"'), "webhook email fallback does not use ilike");
+
 console.log("firm-billing-gate ok");

@@ -80,4 +80,23 @@ for (const col of ["id", "created_at", "owner_user_id", "firm_id", "last_login_a
   assert(!firmMayChangeColumn(col), `firm may NOT change ${col}`);
 }
 
+/** Owners may clear firm_id. They cannot set or swap it. */
+function ownerFirmIdWrite(
+  op: "insert" | "update",
+  oldFirm: string | null,
+  newFirm: string | null,
+): "allow" | "reject" {
+  if (op === "insert") return newFirm ? "reject" : "allow";
+  if (newFirm === oldFirm) return "allow";
+  if (newFirm === null) return "allow";
+  return "reject";
+}
+
+assert(ownerFirmIdWrite("insert", null, "firm-a") === "reject", "owner insert with firm_id is rejected");
+assert(ownerFirmIdWrite("insert", null, null) === "allow", "owner insert without a firm is allowed");
+assert(ownerFirmIdWrite("update", null, "firm-a") === "reject", "owner cannot attach a firm directly");
+assert(ownerFirmIdWrite("update", "firm-a", "firm-b") === "reject", "owner cannot swap firm_id");
+assert(ownerFirmIdWrite("update", "firm-a", null) === "allow", "owner may clear firm_id to leave");
+assert(ownerFirmIdWrite("update", "firm-a", "firm-a") === "allow", "owner may update other fields");
+
 console.log("firm-update-rls-test: ok");

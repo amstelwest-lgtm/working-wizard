@@ -16,8 +16,10 @@ import {
 import {
   applyOwnerStripeEvent,
   emptyOwnerStripeSnapshot,
+  firmLinkCoversOwner,
   getOwnerEntitlement,
   isFirmBandBillingSubscription,
+  type PracticeGrantEvidence,
   OWNER_PRICE_UNAVAILABLE,
   ownerBillingEventSignal,
   pickCoveringFirmSubscription,
@@ -124,21 +126,148 @@ async function writeOwnerSubscription(row: Record<string, unknown>): Promise<voi
   if (error) throw new Error(error.message || "Owner entitlement could not be saved.");
 }
 
-type OwnedClient = { id: string; firm_id: string | null; market: unknown };
+type OwnedClient = {
+  id: string;
+  firm_id: string | null;
+  market: unknown;
+  firm_link_accepted_at: string | null;
+};
+
+type ClientQuery = {
+  from: (table: "clients") => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        limit: (n: number) => Promise<{
+          data: Array<Record<string, unknown>> | null;
+          error: { message: string } | null;
+        }>;
+      };
+      in: (
+        column: string,
+        values: string[],
+      ) => Promise<{
+        data: Array<Record<string, unknown>> | null;
+        error: { message: string } | null;
+      }>;
+    };
+  };
+};
+
+function clientDb(admin: NonNullable<ReturnType<typeof getSupabaseAdminOrNull>>): ClientQuery {
+  return admin as unknown as ClientQuery;
+}
+
+function asOwnedClient(row: Record<string, unknown>): OwnedClient {
+  return {
+    id: String(row.id ?? ""),
+    firm_id: typeof row.firm_id === "string" ? row.firm_id : null,
+    market: row.market,
+    firm_link_accepted_at:
+      typeof row.firm_link_accepted_at === "string" ? row.firm_link_accepted_at : null,
+  };
+}
 
 async function loadOwnedClients(userId: string): Promise<OwnedClient[]> {
   const admin = getSupabaseAdminOrNull();
   if (!admin) return [];
-  const { data, error } = await admin
+  const db = clientDb(admin);
+  const full = await db
+    .from("clients")
+    .select("id, firm_id, market, firm_link_accepted_at")
+    .eq("owner_user_id", userId)
+    .limit(50);
+  if (!full.error) return (full.data ?? []).map(asOwnedClient);
+  if (!/firm_link_accepted_at/i.test(full.error.message)) {
+    console.warn("[owner-billing] client read skipped", full.error.message);
+    return [];
+  }
+  const legacy = await db
     .from("clients")
     .select("id, firm_id, market")
     .eq("owner_user_id", userId)
     .limit(50);
-  if (error) {
-    console.warn("[owner-billing] client read skipped", error.message);
+  if (legacy.error) {
+    console.warn("[owner-billing] client read skipped", legacy.error.message);
     return [];
   }
-  return (data ?? []) as OwnedClient[];
+  return (legacy.data ?? []).map(asOwnedClient);
+}
+
+type InSelect = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      in: (
+        column: string,
+        values: string[],
+      ) => Promise<{
+        data: Array<Record<string, unknown>> | null;
+        error: { message: string } | null;
+      }>;
+    };
+  };
+};
+
+async function loadPracticeGrants(
+  clientIds: string[],
+): Promise<Map<string, PracticeGrantEvidence[]>> {
+  const out = new Map<string, PracticeGrantEvidence[]>();
+  if (!clientIds.length) return out;
+  const admin = getSupabaseAdminOrNull();
+  if (!admin) return out;
+  const loose = admin as unknown as InSelect;
+  const { data, error } = await loose
+    .from("client_practice_access")
+    .select("client_id, firm_id, status, requested_by, accountant_approved_by")
+    .in("client_id", clientIds);
+  if (error || !data?.length) return out;
+  const firmIds = [
+    ...new Set(
+      data.map((row) => (typeof row.firm_id === "string" ? row.firm_id : "")).filter(Boolean),
+    ),
+  ];
+  const members = new Map<string, Set<string>>();
+  if (firmIds.length) {
+    const firms = await loose.from("firms").select("id, owner_user_id").in("id", firmIds);
+    for (const firm of firms.data ?? []) {
+      const id = typeof firm.id === "string" ? firm.id : "";
+      if (!id) continue;
+      const set = members.get(id) ?? new Set<string>();
+      if (typeof firm.owner_user_id === "string") set.add(firm.owner_user_id);
+      members.set(id, set);
+    }
+    const mems = await loose
+      .from("firm_memberships")
+      .select("firm_id, user_id")
+      .in("firm_id", firmIds);
+    for (const mem of mems.data ?? []) {
+      const firmId = typeof mem.firm_id === "string" ? mem.firm_id : "";
+      const userId = typeof mem.user_id === "string" ? mem.user_id : "";
+      if (!firmId || !userId) continue;
+      const set = members.get(firmId) ?? new Set<string>();
+      set.add(userId);
+      members.set(firmId, set);
+    }
+  }
+  for (const row of data) {
+    const clientId = typeof row.client_id === "string" ? row.client_id : "";
+    const firmId = typeof row.firm_id === "string" ? row.firm_id : "";
+    if (!clientId || !firmId) continue;
+    const set = members.get(firmId) ?? new Set<string>();
+    const requested = typeof row.requested_by === "string" ? row.requested_by : "";
+    const approved =
+      typeof row.accountant_approved_by === "string" ? row.accountant_approved_by : "";
+    const list = out.get(clientId) ?? [];
+    list.push({
+      firmId,
+      status: typeof row.status === "string" ? row.status : null,
+      grantedByMember: (requested !== "" && set.has(requested)) || (approved !== "" && set.has(approved)),
+    });
+    out.set(clientId, list);
+  }
+  return out;
 }
 
 function subscriptionLookup(sub: {
@@ -205,8 +334,16 @@ export async function findOwnerFirmCoverage(
 ): Promise<OwnerFirmCoverage | null> {
   if (!stripeConfigured()) return null;
   const rows = clients ?? (await loadOwnedClients(userId));
+  const grants = await loadPracticeGrants(rows.map((row) => row.id).filter(Boolean));
+  const linked = rows.filter((row) =>
+    firmLinkCoversOwner({
+      firmId: row.firm_id,
+      acceptedAt: row.firm_link_accepted_at,
+      grants: grants.get(row.id) ?? [],
+    }),
+  );
   const firmIds = [
-    ...new Set(rows.map((row) => row.firm_id).filter((id): id is string => Boolean(id))),
+    ...new Set(linked.map((row) => row.firm_id).filter((id): id is string => Boolean(id))),
   ];
   if (!firmIds.length) return null;
   const admin = getSupabaseAdminOrNull();
@@ -389,8 +526,16 @@ async function userIdForSignal(
     if (customer.deleted) return null;
     const email = customer.email?.trim() ?? "";
     if (!email) return null;
-    const { data } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
-    return data?.id ? String(data.id) : null;
+    const { data, error } = await (
+      admin as unknown as {
+        rpc: (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("user_id_by_email", { p_email: email });
+    if (error || typeof data !== "string" || !data) return null;
+    return data;
   } catch {
     return null;
   }
