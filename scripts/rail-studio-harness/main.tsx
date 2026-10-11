@@ -26,6 +26,8 @@ import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
+import { SettingsShell } from "@/components/settings-shell";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {
@@ -191,6 +193,7 @@ const ownerDoorRoute = createRoute({
         "profit",
         "moves",
         "faces",
+        "settings",
       ].includes(String(search.view))
         ? String(search.view)
         : "rest"
@@ -245,6 +248,24 @@ const importLowsRoute = createRoute({
   },
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: function SettingsHarness() {
+    return (
+      <SettingsShell>
+        <h1 className="owner-title">Settings</h1>
+        <p>Profile, practice preferences, and account controls.</p>
+        <div className="settings-theme-row">
+          <span className="settings-label">Theme</span>
+          <ThemeToggle />
+        </div>
+        <p>Signed in as harbour@example.com</p>
+      </SettingsShell>
+    );
+  },
+});
+
 const routeTree = rootRoute.addChildren([
   clientRoute,
   ownerRoute,
@@ -252,6 +273,7 @@ const routeTree = rootRoute.addChildren([
   inviteRoute,
   importLowsRoute,
   ownerDoorRoute,
+  settingsRoute,
 ]);
 const router = createRouter({
   routeTree,

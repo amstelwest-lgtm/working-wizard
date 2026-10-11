@@ -325,6 +325,7 @@ export const Route = createFileRoute("/app")({
     view?: "chart" | "table" | "13week";
     bot?: "financial_manager" | "analyst" | "advisor";
     bots?: "row" | "stack";
+    screen?: "settings";
   } => {
     const out: {
       tab?: string;
@@ -334,6 +335,7 @@ export const Route = createFileRoute("/app")({
       view?: "chart" | "table" | "13week";
       bot?: "financial_manager" | "analyst" | "advisor";
       bots?: "row" | "stack";
+      screen?: "settings";
     } = {};
     if (
       typeof search.tab === "string" &&
@@ -361,6 +363,7 @@ export const Route = createFileRoute("/app")({
       out.bot = search.bot;
     }
     if (search.bots === "row" || search.bots === "stack") out.bots = search.bots;
+    if (search.screen === "settings") out.screen = "settings";
     return out;
   },
   pendingComponent: AppBootSpinner,
@@ -3891,9 +3894,29 @@ function Index() {
                 onQuickBooks={() => setShowQboDialog(true)}
                 onXero={() => setShowXeroDialog(true)}
                 onProfile={() => openProfileDialog("retake")}
+                settingsOpen={oauthReturn.screen === "settings"}
                 onSettings={() => {
                   openOwnerSettings();
-                  navigate({ to: "/settings" });
+                  void navigate({
+                    to: "/app",
+                    search: (prev) => ({ ...prev, screen: "settings" as const }),
+                    replace: oauthReturn.screen === "settings",
+                  });
+                }}
+                onLeaveSettings={() => {
+                  void navigate({
+                    to: "/app",
+                    search: (prev) => {
+                      const next = { ...prev };
+                      delete next.screen;
+                      return next;
+                    },
+                    replace: true,
+                  });
+                }}
+                onAccount={() => {
+                  openOwnerSettings();
+                  void navigate({ to: "/settings" });
                 }}
                 onSignOut={() => {
                   void signOut().then(() => {

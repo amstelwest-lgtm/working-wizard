@@ -477,8 +477,12 @@ function SettingsPage() {
             Preferences
           </span>
         }
-        description="Theme lives in the header on every page. Use this to replay the guided tour on this device."
+        description="Light or dark. The same control sits in the header on every page."
       >
+        <div className="settings-theme-row">
+          <span className="settings-label">Theme</span>
+          <ThemeToggle />
+        </div>
         <button type="button" className="settings-row" onClick={handleRestartTour}>
           <RotateCcw className="h-4 w-4" />
           Restart guided onboarding tour

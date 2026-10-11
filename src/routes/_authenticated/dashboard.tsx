@@ -1731,6 +1731,18 @@ function Dashboard() {
           <FirmSwitcher />
           <FeatureFinder audience="accountant" clientId={null} />
           <span className="spacer" />
+          <SettingsNavButton
+            className="tb-btn settings-gear"
+            onClick={() => {
+              setMobileNavOpen(false);
+              openPracticeSettings();
+              navigate({ to: "/settings" });
+            }}
+          />
+          <span className="profile-chip topbar-profile" title={greetingSource || user?.email || ""}>
+            <span className="av">{profileInitials || "·"}</span>
+            {greetName}
+          </span>
           <button
             type="button"
             className="topbar-menu-btn"
@@ -1797,15 +1809,7 @@ function Dashboard() {
               Team
             </button>
             <ThemeToggle />
-            <SettingsNavButton
-              className="tb-btn"
-              onClick={() => {
-                setMobileNavOpen(false);
-                openPracticeSettings();
-                navigate({ to: "/settings" });
-              }}
-            />
-            <span className="profile-chip" title={greetingSource || user?.email || ""}>
+            <span className="profile-chip topbar-profile-menu" title={greetingSource || user?.email || ""}>
               <span className="av">{profileInitials || "·"}</span>
               {greetName}
             </span>

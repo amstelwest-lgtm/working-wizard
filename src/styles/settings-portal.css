@@ -28,10 +28,17 @@
   transition: border-color 0.25s, background 0.25s, transform 0.25s var(--ease);
 }
 .settings-portal .settings-row:hover {
-  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-  background: color-mix(in srgb, var(--gold) 8%, transparent);
+  border-color: var(--pale, var(--line));
+  background: color-mix(in srgb, var(--cobalt, var(--gold)) 8%, transparent);
 }
-.settings-portal .settings-row svg { color: var(--gold); flex-shrink: 0; }
+.settings-portal .settings-theme-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin-bottom: 12px;
+}
+.settings-portal .settings-row svg { color: var(--cobalt, var(--gold)); flex-shrink: 0; }
 
 .settings-portal .settings-label {
   display: block;

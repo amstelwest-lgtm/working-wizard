@@ -1644,3 +1644,75 @@ html[data-theme="light"] .accountant-portal .data-fresh{
 }
 .accountant-portal .topbar .brand img{filter:none}
 
+/* Settings stays in the top-right, and pinned under the desktop rail. */
+.accountant-portal .settings-gear{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:44px;
+  flex:none;
+}
+.accountant-portal .settings-gear svg{width:18px;height:18px}
+.accountant-portal .topbar-profile-menu{display:none}
+@media (min-width:761px){
+  .accountant-portal .topbar .topbar-actions{order:1}
+  .accountant-portal .topbar .settings-gear{order:2}
+  .accountant-portal .topbar .topbar-profile{order:3}
+  .accountant-portal .topbar .topbar-menu-btn{order:4}
+}
+@media (max-width:760px){
+  .accountant-portal .topbar-profile{display:none}
+  .accountant-portal .topbar-actions.open .topbar-profile-menu{display:inline-flex}
+}
+.accountant-portal .rail-settings{
+  margin-top:auto;
+  padding-top:8px;
+  border-top:1px solid var(--pale);
+}
+.accountant-portal .rail-settings .tab{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
+@media (min-width:861px){
+  .accountant-portal .client-workspace{align-items:stretch}
+  .accountant-portal .deliverable-rail{min-height:calc(100dvh - 140px)}
+  .settings-portal .deliverable-rail{
+    border:0;
+    border-right:1px solid var(--pale);
+    border-radius:0;
+    box-shadow:none;
+    background:var(--bg);
+  }
+}
+@media (max-width:767px){
+  .accountant-portal .settings-gear{
+    width:44px;
+    min-width:44px;
+    height:44px;
+    padding:0;
+  }
+  .accountant-portal .settings-gear .gear-label{
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+  .accountant-portal .rail-settings,
+  .settings-portal .deliverable-rail{display:none}
+}
+@media (max-width:480px){
+  .accountant-portal .topbar{
+    grid-template-columns:minmax(0,1fr) auto auto;
+    grid-template-areas:"brand gear menu""firm gear menu""actions actions";
+  }
+  .accountant-portal .settings-gear{grid-area:gear;margin-left:0}
+}
+
