@@ -8,9 +8,9 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const COLLAPSIBLE_GOLD_SHELL =
-  "relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] shadow-[0_20px_60px_rgba(109,79,22,0.10)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]";
+  "relative overflow-hidden border border-[#DBEAFE] bg-white shadow-[0_8px_24px_rgba(16,42,67,0.06)] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:shadow-none";
 export const COLLAPSIBLE_GOLD_RULE =
-  "pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent";
+  "pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#2563EB] via-[#38BDF8] to-transparent";
 
 export function CollapsibleGoldCard({
   id,
