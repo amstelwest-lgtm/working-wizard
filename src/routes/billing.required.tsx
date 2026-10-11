@@ -1,5 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { readVisitorDraft } from "@/lib/market/storage";
+import { visitorCopyPack } from "@/lib/market/marketing";
+import { ownerPlanPublicLine } from "@/lib/owner-plan";
 import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
@@ -70,6 +73,10 @@ export function BillingRequiredCard({
   backClientId?: string | null;
   checkout: PendingCheckout;
 }) {
+  const [ownerLine, setOwnerLine] = useState(ownerPlanPublicLine("us"));
+  useEffect(() => {
+    setOwnerLine(ownerPlanPublicLine(visitorCopyPack(readVisitorDraft())));
+  }, []);
   const resumeClass =
     backClientId && backLabel
       ? "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
@@ -84,7 +91,7 @@ export function BillingRequiredCard({
           {clientName ? ` ${clientName} is still open. The firm dashboard and reports need a card. ` : " "}
           Checkout for {planName} ({priceLabel}) starts the subscription. A card is required. A first
           subscription includes a {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing resumes on
-          the paid band without another trial. Owner Spark stays free.
+          the paid band without another trial. Owner plan is {ownerLine}. Billing opens soon.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {backClientId && backLabel ? (

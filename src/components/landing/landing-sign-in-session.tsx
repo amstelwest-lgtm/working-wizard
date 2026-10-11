@@ -37,7 +37,7 @@ async function landingSupabase() {
 
 export function LandingSignInSession({
   onClose,
-  createAccountHref = "/#register",
+  createAccountHref = "/?signup=owner#register",
   copyPack = "us",
 }: {
   onClose: () => void;

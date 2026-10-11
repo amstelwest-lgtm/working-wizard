@@ -17,12 +17,12 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Accounting firms: ${FIRM_CARD_TIMING} Then they subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
+      answer: `Business owners: $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms: ${FIRM_CARD_TIMING} Then they pay on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} Enterprise is a custom quote.`,
     },
     {
-      question: "So what is the catch with free?",
+      question: "What does a business owner pay?",
       answer:
-        "You are early, and early users shape what gets built. Spark stays free during early access. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.",
+        "Owner plan $39/mo · free when your accountant is on Milōn. Billing opens soon. Accounting firms see their first client's figures with no card, then add a card to start a 14-day free trial (up to 3 clients). After day 14 they pay a flat USD band by active client count through Stripe Checkout.",
     },
     {
       question: "What happens if I stop using it?",

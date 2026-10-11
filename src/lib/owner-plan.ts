@@ -22,3 +22,22 @@ export function ownerPlanLine(input: {
 export function ownerPlanFreeLine(): string {
   return "Free when your accountant is on Milōn.";
 }
+
+/** Register <option> value. Not a Stripe price. Checkout for owners does not exist yet. */
+export const OWNER_REGISTER_PLAN = "Business owner";
+
+/**
+ * Shown under the owner signup fields. Names both prices because this one
+ * form is not split by visitor. Billing is not a button.
+ */
+export const OWNER_REGISTER_PLAN_NOTE =
+  "Owner plan $39/mo (R299 in SA), free when your accountant is on Milōn. Billing opens soon.";
+
+/** Display-only. R299 is for a known SA visitor. There is no owner Checkout. */
+export function ownerPlanPublicPrice(visitor: OwnerVisitor): string {
+  return visitor === "za" ? "R299/mo" : "$39/mo";
+}
+
+export function ownerPlanPublicLine(visitor: OwnerVisitor): string {
+  return `${ownerPlanPublicPrice(visitor)} · free when your accountant is on Milōn`;
+}
