@@ -10,6 +10,7 @@ import {
   agentShortName,
   formatAgo,
   formatAsOf,
+  formatLastRun,
   teamAgentHeaderStatus,
 } from "@/lib/milon-team";
 import {
@@ -30,6 +31,7 @@ import {
   type AgentActivitySnapshot,
 } from "@/lib/milon-team-activity";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
+import { ownerRunPhase, ownerRunPhaseLabel } from "@/hooks/owner-agent-ui";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import "./milon-team-desk.css";
 
@@ -184,8 +186,20 @@ export function MilonTeamDesk({
               <div className="milon-desk-agents">
                 {AGENT_ORDER.map((agent) => {
                   const run = latest[agent];
+                  const phase = ownerRunPhase(run, live?.findings ?? []);
                   const fromRun = run ? headerFromRun(run, clock) : null;
-                  const header = fromRun ?? teamAgentHeaderStatus(agent, feed.agents[agent], feed.briefing, clock);
+                  const fallback = teamAgentHeaderStatus(agent, feed.agents[agent], feed.briefing, clock);
+                  const header = phase
+                    ? {
+                        label: ownerRunPhaseLabel(phase),
+                        tone: "clear" as const,
+                        lastRun:
+                          phase === "done" || phase === "found"
+                            ? formatLastRun(run?.finished_at || run?.started_at || run?.queued_at || null, clock)
+                            : null,
+                        pulse: phase === "queued" || phase === "working",
+                      }
+                    : (fromRun ?? fallback);
                   const ranText =
                     header.lastRun ??
                     (header.label.startsWith("Last run") ||
@@ -218,6 +232,7 @@ export function MilonTeamDesk({
                         {ranText ? <span className="milon-desk-ran">{ranText}</span> : null}
                         <span
                           className={`milon-desk-status is-${header.tone}${header.pulse ? " is-live" : ""}${header.muted ? " is-muted" : ""}`}
+                          data-run-state={phase ?? undefined}
                         >
                           <i />
                           <span>{header.label}</span>
@@ -250,7 +265,7 @@ export function MilonTeamDesk({
                     const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock);
                     const when = formatAsOf(row.created_at, clock);
                     return (
-                      <li key={row.id} className="milon-desk-row" data-finding={row.id}>
+                      <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent}>
                         <div className="milon-desk-job-copy">
                           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
                           <p className="milon-desk-figure">{sentence}</p>

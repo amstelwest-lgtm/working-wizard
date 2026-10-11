@@ -466,7 +466,10 @@ const liveDesk = html(api({}), "all", {
   ],
   market: ZA_MARKET,
 });
-assert(liveDesk.includes("Working…"), "a running agent says it is working");
+assert(liveDesk.includes('data-run-state="working"'), "a running agent is working");
+assert(liveDesk.includes(">Working<"), "the working state is the word Working");
+assert(liveDesk.includes('data-run-state="done"'), "a finished run with no new finding is done");
+assert(liveDesk.includes(">Done<"), "the done state is the word Done");
 assert(liveDesk.includes("is-live"), "a running agent pulses");
 assert(liveDesk.includes("Last run 5m ago"), "a finished run says how long ago");
 assert(
@@ -481,6 +484,75 @@ assert(liveDesk.indexOf('data-finding="f1"') < liveDesk.indexOf('data-handoff="h
 const findingHtml = liveDesk.slice(liveDesk.indexOf('data-finding="f1"'), liveDesk.indexOf("</li>"));
 assert(findingHtml.includes("Sep figures · checked 8 Oct"), "the finding keeps the checked line");
 assert((findingHtml.match(/8 Oct/g) ?? []).length === 1, "a finding has one date line");
+assert(findingHtml.includes('data-finding-agent="analyst"'), "a finding names its agent");
+
+const phases = html(
+  api({}),
+  "all",
+  {
+    runs: [
+      {
+        id: "q",
+        agent: "financial_manager",
+        client_id: "c",
+        status: "queued",
+        queued_at: "2026-10-08T11:50:00.000Z",
+        started_at: null,
+        finished_at: null,
+      },
+      {
+        id: "d",
+        agent: "analyst",
+        client_id: "c",
+        status: "succeeded",
+        queued_at: "2026-10-08T11:10:00.000Z",
+        started_at: "2026-10-08T11:10:00.000Z",
+        finished_at: "2026-10-08T11:20:00.000Z",
+      },
+      {
+        id: "f",
+        agent: "advisor",
+        client_id: "c",
+        status: "succeeded",
+        queued_at: "2026-10-08T11:30:00.000Z",
+        started_at: "2026-10-08T11:30:00.000Z",
+        finished_at: "2026-10-08T11:40:00.000Z",
+      },
+    ],
+    findings: [
+      {
+        id: "books",
+        agent: "financial_manager",
+        client_id: "c",
+        title: "The books tie out.",
+        detail: null,
+        evidence: {},
+        as_of: null,
+        created_at: "2026-10-08T11:40:00.000Z",
+      },
+      {
+        id: "moves",
+        agent: "advisor",
+        client_id: "c",
+        title: "Two moves are ready.",
+        detail: null,
+        evidence: {},
+        as_of: null,
+        created_at: "2026-10-08T11:35:00.000Z",
+      },
+    ],
+    messages: [],
+    market: ZA_MARKET,
+  },
+);
+assert(phases.includes('data-run-state="queued"'), "a queued run says queued");
+assert(phases.includes(">Queued<"), "queued is the word Queued");
+assert(phases.includes('data-run-state="found"'), "a finding after the run is found");
+assert(phases.includes(">Found<"), "found is the word Found");
+assert(phases.includes('data-finding-agent="financial_manager"'), "a financial manager finding is in the feed");
+assert(phases.includes("The books tie out."), "the financial manager finding is shown");
+assert(phases.includes('data-finding-agent="advisor"'), "an advisor finding is in the feed");
+assert(phases.includes("Two moves are ready."), "the advisor finding is shown");
 assert(!liveDesk.includes("0.4200"), "a finding does not keep a raw decimal");
 assert(liveDesk.includes("42.0%"), "a margin finding is a percentage");
 assert(
