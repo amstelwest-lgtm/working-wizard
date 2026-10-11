@@ -150,7 +150,7 @@ export function BudgetAdvancedPanel({
     >
       <div className="space-y-6">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#F4F7FB]">
             Industry check
           </p>
           <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -161,8 +161,8 @@ export function BudgetAdvancedPanel({
               ? "Compares this budget’s gross margin and debtor days to the sector median. Use it to challenge an optimistic GP% or slow collections — not as a second place to type the month."
               : "Shows how your margin and customer payment days sit against a typical business in this sector."}
           </p>
-          <div className="mt-3 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/5 p-3 text-xs">
-            <div className="font-semibold text-[#b8860b]">
+          <div className="mt-3 rounded-lg border border-[#DBEAFE] bg-[#DBEAFE]/40 p-3 text-xs">
+            <div className="font-semibold text-[#102A43] dark:text-[#F4F7FB]">
               {isUsCopy(market) ? "Global SME bands" : "Industry benchmarks"}{" "}
               {bench ? `(${bench.sector})` : ""}
             </div>
@@ -188,7 +188,7 @@ export function BudgetAdvancedPanel({
                 <div className="tabular-nums text-slate-900 dark:text-slate-100">
                   {bench?.debtorP50 != null ? `${bench.debtorP50}d` : "—"}
                   {ddDelta != null && (
-                    <span className={ddDelta > 0 ? " text-amber-700" : " text-emerald-600"}>
+                    <span className={ddDelta > 0 ? " text-[#8A5A12]" : " text-emerald-600"}>
                       {" "}
                       · budget {doc.wc.debtorDays}d ({ddDelta >= 0 ? "+" : ""}
                       {ddDelta}d)
@@ -198,12 +198,12 @@ export function BudgetAdvancedPanel({
               </div>
             </div>
             {gpDelta != null && gpDelta > 10 && (
-              <p className="mt-2 text-amber-800 dark:text-amber-200">
+              <p className="mt-2 text-[#8A5A12] dark:text-[#F0D59A]">
                 GP% is well above sector median — confirm the mix or cost assumptions.
               </p>
             )}
             {ddDelta != null && ddDelta > 20 && (
-              <p className="mt-2 text-amber-800 dark:text-amber-200">
+              <p className="mt-2 text-[#8A5A12] dark:text-[#F0D59A]">
                 Debtor days look long vs sector — cash trough risk rises quickly.
               </p>
             )}
@@ -211,7 +211,7 @@ export function BudgetAdvancedPanel({
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#F4F7FB]">
             Cost of goods
           </p>
           <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -268,7 +268,7 @@ export function BudgetAdvancedPanel({
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#F4F7FB]">
             Connections
           </p>
           <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -305,7 +305,7 @@ export function BudgetAdvancedPanel({
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#F4F7FB]">
             File notes
           </p>
           <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -361,7 +361,7 @@ export function BudgetAdvancedPanel({
                 key={n.id}
                 className={`rounded-lg border px-3 py-2 text-xs ${
                   n.kind === "challenge"
-                    ? "border-amber-500/40 bg-amber-500/10"
+                    ? "border-[#B7791F]/40 bg-[#B7791F]/10"
                     : "border-slate-200 dark:border-slate-800"
                 }`}
               >

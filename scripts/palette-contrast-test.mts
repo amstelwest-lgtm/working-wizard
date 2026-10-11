@@ -99,6 +99,17 @@ const accountantFiles = [
   "src/components/ui/view-toggle.tsx",
   "src/components/kpi-trendline.tsx",
   "src/components/primitives/collapsible-gold-card.tsx",
+  "src/components/budget/budget-panel.tsx",
+  "src/components/budget/budget-simple-view.tsx",
+  "src/components/budget/budget-workspace.tsx",
+  "src/components/budget/budget-funnel.tsx",
+  "src/components/budget/budget-verdict.tsx",
+  "src/components/budget/budget-advanced.tsx",
+  "src/components/budget/budget-pdf-export.tsx",
+  "src/components/budget/budget-variance-panel.tsx",
+  "src/components/budget/budget-year-overview-chart.tsx",
+  "src/components/budget/budget-chart-table.tsx",
+  "src/components/budget/budget-year-strip.tsx",
 ];
 const banned = [
   "#d4a550",

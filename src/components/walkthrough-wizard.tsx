@@ -198,14 +198,14 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
  */
 const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
   {
-    tab: "overview",
+    tab: "ask",
     targetId: "first-figures-card, .health-orb",
     section: "This file",
     title: "Nothing is in this file yet",
     body: "You are looking at an empty client workspace. There is no health score, no profit picture, and no forecast until someone puts numbers in. That is normal on a new file — it is not broken.",
   },
   {
-    tab: "overview",
+    tab: "ask",
     targetId: "first-figures-card",
     section: "Figures",
     title: "Start with one upload",
@@ -215,8 +215,8 @@ const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
 
 const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
-    tab: "overview",
-    targetId: "overview-health",
+    tab: "ratios",
+    targetId: ".health-orb",
     section: "Figures",
     title: "These are the figures",
     body: "The health score is on screen, from the statement you imported. Review it here. A card starts the 14-day free trial when you want it.",
@@ -229,7 +229,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     body: "Ask against the drafted deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
   },
   {
-    tab: "overview",
+    tab: "ask",
     targetId: "wizard-open-queries",
     section: "Queries",
     title: "Questions from client management",
@@ -254,14 +254,14 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: ".health-orb",
     section: "Business Health",
     title: "The health score",
-    body: "The gold orb is this business’s health score — one number built from the ratios underneath. Click through the rings to see what is pulling the score up or down, so you can explain it to client management in plain language.",
+    body: "The health orb is this business’s health score — one number built from the ratios underneath. Click through the rings to see what is pulling the score up or down, so you can explain it to client management in plain language.",
   },
   {
     tab: "profit",
     targetId: "wizard-profit-walk",
     section: "Profit",
     title: "Profit is drafted — review it",
-    body: "MILŌN built this waterfall from the first upload. Check the lines, then sign off Profitability with the gold button. Until you do, client management sees a draft with no stamp.",
+    body: "MILŌN built this waterfall from the first upload. Check the lines, then sign off Profitability. Until you do, client management sees a draft with no stamp.",
   },
   {
     tab: "cash",

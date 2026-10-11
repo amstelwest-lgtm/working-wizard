@@ -20,20 +20,20 @@ const indexSrc = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "ut
 
 assert(/type ActiveTab =[\s\S]{0,80}"ask"/.test(clientSrc), "Milōn Bot is an accountant studio tab");
 assert(
-  clientSrc.includes('{ id: "ask", label: "Milōn Bot"') &&
-    clientSrc.indexOf('{ id: "ask", label: "Milōn Bot"') <
-      clientSrc.indexOf('{ id: "overview", label: "Overview"') &&
-    clientSrc.indexOf('{ id: "overview", label: "Overview"') <
-      clientSrc.indexOf('{ id: "deliverables", label: "Deliverables"'),
-  "the rail is Bot, Overview, Deliverables",
+  clientSrc.includes('{ id: "home", label: "Home" }') &&
+    clientSrc.indexOf('{ id: "home", label: "Home" }') <
+      clientSrc.indexOf('{ id: "health", label: "Health" }') &&
+    clientSrc.indexOf('{ id: "health", label: "Health" }') <
+      clientSrc.indexOf('{ id: "deliverables", label: "Deliverables" }'),
+  "the rail is Home, then Health, then Deliverables",
 );
 assert(
-  clientSrc.includes('resolveAccountantTab(search) ?? "overview"'),
-  "studio lands on Overview unless a deep link names a tab",
+  clientSrc.includes('resolveAccountantTab(search) ?? "ask"'),
+  "studio lands on Home unless a deep link names a tab",
 );
 assert(
-  clientSrc.includes('setActiveTab("overview")'),
-  "opening a client without a deep link lands on Overview",
+  clientSrc.includes('setActiveTab("ask")'),
+  "opening a client without a deep link lands on Home",
 );
 assert(
   clientSrc.includes('id="pane-overview"') &&
@@ -42,7 +42,7 @@ assert(
   "the client briefing lives only in the Overview pane",
 );
 assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
-assert(clientSrc.includes('{ id: "ask", label: "Milōn Bot"'), "Bot appears in the rail");
+assert(clientSrc.includes('{ id: "home", label: "Home" }'), "Home appears in the rail");
 assert(clientSrc.includes('className="deliverable-rail"'), "deliverables are a left stacked rail");
 assert(!clientSrc.includes('className="tabs"'), "horizontal mid-page tab strip is gone");
 assert(

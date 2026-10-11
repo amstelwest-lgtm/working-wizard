@@ -386,27 +386,26 @@ assert(
 );
 assert(client.includes("<CheckoutAfterInsight />"), "client studio offers Checkout after figures");
 assert(
-  client.includes('if (hasFigures && activeTab === "overview") markInsightSeen(firmId)'),
-  "Overview showing the figures marks this firm's insight",
+  client.includes('if (hasFigures && (activeTab === "ask" || activeTab === "overview")) markInsightSeen(firmId)'),
+  "Home showing the figures marks this firm's insight",
 );
 const imported = client.slice(
   client.indexOf("const handleConfirmFinancials"),
   client.indexOf("Deliverables bar actions"),
 );
 assert(
-  imported.includes('accountantClientTabSearch(prev, "overview")'),
-  "a successful import lands on Overview",
+  imported.includes('accountantClientTabSearch(prev, "home")'),
+  "a successful import lands on Home",
 );
-assert(!imported.includes('"ask"'), "a successful import does not open the bot tab");
 const wizard = read("src/components/walkthrough-wizard.tsx");
 const tour = wizard.slice(
   wizard.indexOf("const ACCOUNTANT_CLIENT_STEPS: Step[] = ["),
   wizard.indexOf("function stepsFor"),
 );
 assert(
-  tour.indexOf('tab: "overview"') !== -1 &&
-    tour.indexOf('tab: "overview"') < tour.indexOf('tab: "ask"'),
-  "the studio tour opens Overview before the bot",
+  tour.indexOf('tab: "ratios"') !== -1 &&
+    tour.indexOf('tab: "ask"') !== -1,
+  "the studio tour opens Health and Home",
 );
 assert(client.includes("Other ways"), "upload/sync alternatives are folded");
 assert(dash.includes("<CheckoutAfterInsight />"), "a scored book offers Checkout");

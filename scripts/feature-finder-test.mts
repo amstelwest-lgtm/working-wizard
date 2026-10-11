@@ -74,40 +74,37 @@ assert(ids("sign-off", studio)[0] === "action-plan", "sign-off opens Action Plan
 assert(ids("paybles", studio)[0] === "payables", "fuzzy paybles opens Payables");
 
 assert(
-  href("health", studio) ===
-    `/clients/${CLIENT}?tab=${coach("health").tab}&section=${coach("health").section}&focus=health`,
-  "Health uses the Overview health section",
+  href("health", studio) === `/clients/${CLIENT}?tab=health&focus=health`,
+  "Health is its own rail item",
 );
 assert(
   href("pillars", studio) ===
     `/clients/${CLIENT}?tab=${coach("pillars").tab}&section=${coach("pillars").section}&focus=pillars`,
-  "Pillars uses the Overview pillars section",
+  "Pillars stay on Health",
 );
-assert(href("profitability", studio).includes("section=profit"), "Profitability section");
-assert(href("cash", studio).includes("section=cash"), "Cash section");
-assert(href("budget", studio).includes("section=budget"), "Budget section");
-assert(href("collections", studio).includes("section=collections"), "Collections section");
-assert(href("payables", studio).includes("section=payables"), "Payables section");
-assert(href("bot", studio).endsWith("tab=ask"), "Bot tab");
-assert(href("overview", studio).endsWith("tab=overview"), "Overview briefing");
-assert(href("moves", studio).includes("section=moves"), "Moves section");
-assert(href("reports", studio).includes("section=reports"), "Reports section");
-assert(href("advisory pack", studio).includes("section=pack"), "Advisory pack section");
-assert(href("drafter", studio).includes("section=drafter"), "Advisory drafter has its own section");
+assert(href("profitability", studio).includes("tab=profit"), "Profit is its own rail item");
+assert(href("cash", studio).includes("tab=cash"), "Cash flow is its own rail item");
+assert(href("budget", studio).includes("tab=budget"), "Budget is its own rail item");
+assert(href("collections", studio).includes("section=collections"), "Collections stays under Cash flow");
+assert(href("payables", studio).includes("section=payables"), "Payables stay under Cash flow");
+assert(href("bot", studio).endsWith("tab=home"), "Bot opens Home");
+assert(href("overview", studio).endsWith("tab=home"), "the briefing opens Home");
+assert(href("moves", studio).includes("tab=moves"), "Next moves is its own rail item");
+assert(href("reports", studio).includes("tab=reports"), "Reports is its own rail item");
+assert(href("advisory pack", studio).includes("section=pack"), "Advisory pack stays under Deliverables");
+assert(href("drafter", studio).includes("section=drafter"), "Advisory drafter stays under Deliverables");
 assert(
   href("actions", studio) ===
     `/clients/${CLIENT}?tab=${coach("actions").tab}&section=${coach("actions").section}`,
   "Action Plan uses the Deliverables plan section",
 );
 assert(
-  href("sync", studio) ===
-    `/clients/${CLIENT}?tab=${coach("data").tab}&section=${coach("data").section}`,
-  "Data & sync uses Overview Books",
+  href("sync", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}`,
+  "Data & sync opens Client portal",
 );
 assert(
-  href("upload", studio) ===
-    `/clients/${CLIENT}?tab=${coach("data").tab}&section=${coach("data").section}&onboard=1`,
-  "Upload reuses the onboard deep link on Books",
+  href("upload", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}&onboard=1`,
+  "Upload reuses the onboard deep link on Client portal",
 );
 assert(href("clients", studio) === "/dashboard", "Clients opens the practice list");
 assert(href("billing", studio) === "/settings", "Billing opens Settings");
@@ -254,7 +251,7 @@ assert(
   "cash lists a jump for every client on the firm dashboard",
 );
 assert(
-  cashJumps.every((row) => row.label.startsWith("Cash for ") && row.href.includes("section=cash")),
+  cashJumps.every((row) => row.label.startsWith("Cash for ") && row.href.includes("tab=cash")),
   "cash jumps open that client's Cash tab",
 );
 assert(
@@ -272,7 +269,7 @@ assert(
 );
 assert(
   budgetJumps.every(
-    (row) => row.href.includes("section=budget") && row.label.startsWith("Budget for "),
+    (row) => row.href.includes("tab=budget") && row.label.startsWith("Budget for "),
   ),
   "budget jumps deep-link to the Budget tab",
 );
@@ -282,7 +279,7 @@ assert(
   "a client name after the section narrows the jump",
 );
 assert(
-  searchClientSectionJumps("yankees budget", BOOK)[0]?.href.includes("section=budget"),
+  searchClientSectionJumps("yankees budget", BOOK)[0]?.href.includes("tab=budget"),
   "section word can follow the client name",
 );
 assert(
@@ -291,7 +288,7 @@ assert(
 );
 const healthJumps = searchClientSectionJumps("health", BOOK);
 assert(
-  healthJumps[0]?.href.includes("section=health") && healthJumps[0]?.href.includes("focus=health"),
+  healthJumps[0]?.href.includes("tab=health") && healthJumps[0]?.href.includes("focus=health"),
   "health jumps keep the coach focus",
 );
 assert(
@@ -305,7 +302,7 @@ assert(
 assert(searchClientSectionJumps("", BOOK).length === 0, "an empty query does not expand sections");
 assert(searchClientSectionJumps("budget", []).length === 0, "an empty book has no section jumps");
 assert(
-  searchClientSectionJumps("13 week cash", BOOK).every((row) => row.href.includes("section=cash")),
+  searchClientSectionJumps("13 week cash", BOOK).every((row) => row.href.includes("tab=cash")),
   "cash synonyms still open Cash for each client",
 );
 

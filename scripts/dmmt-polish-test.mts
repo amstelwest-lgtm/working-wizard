@@ -32,7 +32,7 @@ const fromPlan = accountantClientTabSearch(
   "reports",
 );
 assert(
-  fromPlan.tab === "deliverables" && fromPlan.section === "reports",
+  fromPlan.tab === "reports" && fromPlan.section === undefined,
   "Reports replaces ?tab=plan",
 );
 assert(!("filter" in fromPlan), "an Action Plan filter does not stick to Reports");
@@ -42,12 +42,13 @@ assert(
 );
 assert(fromPlan.qbo === "connected", "unrelated search keys stay");
 assert(
-  accountantClientTabSearch({ tab: "plan" }, "report").section === "reports",
-  "report alias sticks as reports",
+  accountantClientTabSearch({ tab: "plan" }, "report").tab === "reports" &&
+    accountantClientTabSearch({ tab: "plan" }, "report").section === undefined,
+  "report alias opens the Reports item",
 );
 assert(
-  normalizeAccountantClientTab("reports") === "deliverables",
-  "direct ?tab=reports is Deliverables",
+  normalizeAccountantClientTab("reports") === "reports",
+  "direct ?tab=reports is the Reports item",
 );
 assert(
   accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan").filter === "overdue",

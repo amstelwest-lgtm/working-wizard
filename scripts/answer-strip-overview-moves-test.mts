@@ -12,7 +12,7 @@ import { formatMoneyCompact } from "../src/lib/market/format";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 import { overviewCashTileFigure } from "../src/lib/cash-forecast-parity";
 import { figureSourceChipLabel } from "../src/lib/ledger-link-copy";
-import { OVERVIEW_SECTION_TABS } from "../src/components/client-studio-chrome";
+import { CLIENT_RAIL } from "../src/components/client-studio-chrome";
 import { rankStrategicMoves } from "../src/lib/strategic-moves";
 import {
   MOVES_EMPTY_SENTENCE,
@@ -109,9 +109,9 @@ assert.deepEqual(
   "a card shows the figure it was given and omits a blank one",
 );
 assert.deepEqual(
-  OVERVIEW_SECTION_TABS.map((row) => row.id),
-  ["health", "pillars", "cash", "profit", "collections", "payables", "budget", "moves", "books"],
-  "the section tab list still includes pillars",
+  CLIENT_RAIL.map((row) => row.id),
+  ["home", "health", "cash", "profit", "budget", "moves", "reports", "deliverables", "portal"],
+  "the client rail lists the new items, including Health",
 );
 
 assert(movesAnswerSentence([]) === MOVES_EMPTY_SENTENCE, "an empty move list keeps its sentence");

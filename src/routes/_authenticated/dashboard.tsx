@@ -111,6 +111,7 @@ import {
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
 import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
+import { PracticeRail } from "@/components/practice-rail";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -1829,6 +1830,9 @@ function Dashboard() {
           </div>
         </div>
 
+        <div className="client-workspace">
+          <PracticeRail />
+          <div className="deliverable-main">
         {/* ===== GREETING ===== */}
         <PageHeader
           compact
@@ -2405,6 +2409,8 @@ function Dashboard() {
 
         <div className="footer-note">
           MILŌN Practice Portal · <span className="serif gold-text">The passion to perform.</span>
+        </div>
+          </div>
         </div>
       </main>
 

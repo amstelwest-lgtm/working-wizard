@@ -276,7 +276,7 @@ export function BudgetVariancePanel({
     >
       <div className="space-y-4">
         {role === "accountant" && (
-          <div className="rounded-xl border border-amber-900/15 bg-white/55 px-4 py-3 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200">
+          <div className="rounded-xl border border-[#DBEAFE] bg-white/55 px-4 py-3 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200">
             <p>
               <strong className="font-semibold text-slate-900 dark:text-slate-50">
                 What you do here:
@@ -340,7 +340,7 @@ export function BudgetVariancePanel({
       </div>
 
       {migrationRequired && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+        <div className="rounded-lg border border-[#B7791F]/40 bg-[#B7791F]/10 px-3 py-2 text-xs text-[#8A5A12] dark:text-[#F0D59A]">
           Run migration <code className="font-mono">20260813120000_budget_month_actuals.sql</code>{" "}
           in Supabase to enable monthly actuals.
         </div>
@@ -372,7 +372,7 @@ export function BudgetVariancePanel({
       </div>
 
       {!focusActual && (
-        <div className="rounded-lg border border-dashed border-amber-900/20 bg-white/40 px-3 py-4 text-sm leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+        <div className="rounded-lg border border-dashed border-[#DBEAFE] bg-white/40 px-3 py-4 text-sm leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
           {statementPace ? (
             <>
               No uploaded month for{" "}
@@ -406,7 +406,7 @@ export function BudgetVariancePanel({
           <p
             className={`text-sm ${
               report.hasMaterialVariance
-                ? "text-amber-800 dark:text-amber-200"
+                ? "text-[#8A5A12] dark:text-[#F0D59A]"
                 : "text-slate-600 dark:text-slate-300"
             }`}
           >
@@ -484,7 +484,7 @@ export function BudgetVariancePanel({
 
           <div className="space-y-3 py-1">
             {draftWarnings.length > 0 && (
-              <ul className="list-disc space-y-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 pl-5 text-xs text-amber-900 dark:text-amber-100">
+              <ul className="list-disc space-y-1 rounded-lg border border-[#B7791F]/30 bg-[#B7791F]/10 px-3 py-2 pl-5 text-xs text-[#8A5A12] dark:text-[#F0D59A]">
                 {draftWarnings.map((w) => (
                   <li key={w}>{w}</li>
                 ))}

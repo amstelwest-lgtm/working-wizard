@@ -274,7 +274,7 @@ export function BudgetSimpleView({
         />
       ) : null}
       {readOnly ? null : (
-      <p className="text-sm font-semibold text-[#1b1608] dark:text-slate-100">
+      <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
         {plainBudgetWindowHeading(tpl.label, doc, market)}
       </p>
       )}
@@ -283,40 +283,40 @@ export function BudgetSimpleView({
       {/* Month engine — volume × price, then margin and overheads */}
       <section
         id="wizard-budget-month-engine"
-        className="budget-month-engine relative overflow-hidden rounded-2xl border border-[#d4a550]/30 bg-gradient-to-b from-[#fffdf8] to-white p-5 shadow-[0_18px_40px_rgba(120,90,10,0.06)] dark:from-slate-950 dark:to-slate-950 dark:border-slate-800 sm:p-6"
+        className="budget-month-engine relative overflow-hidden rounded-2xl border border-[#DBEAFE] bg-gradient-to-b from-white to-white p-5 shadow-[0_18px_40px_rgba(16,42,67,0.06)] dark:from-slate-950 dark:to-slate-950 dark:border-slate-800 sm:p-6"
       >
         <div className="pointer-events-none absolute inset-y-5 left-0 w-0.5 rounded-full bg-gradient-to-b from-[#2563EB] via-[#0B5FFF] to-[#38BDF8]" />
         <div className="flex flex-wrap items-start justify-between gap-3 pl-3 sm:pl-4">
           <div className="min-w-0 max-w-xl">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b8860b]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
               {role === "accountant" ? "Month engine" : "This month"}
             </p>
-            <h3 className="serif mt-1 text-[22px] font-semibold tracking-tight text-[#1b1608] dark:text-slate-100">
+            <h3 className="serif mt-1 text-[22px] font-semibold tracking-tight text-[#102A43] dark:text-slate-100">
               How {monthLabel(focusMonth)} is built
             </h3>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-[#6b6354] dark:text-slate-400">
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[#3D5270] dark:text-slate-400">
               {role === "accountant"
                 ? "How many they sell × the price they charge becomes revenue. Gross profit % takes cost of sales. Overheads are the rest. The strip above scores those four numbers."
                 : "How many you sell × the price you charge becomes this month’s revenue. Set the margin, then overheads — leftover is what the month keeps."}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center rounded-full border border-[#d4a550]/35 bg-white/80 p-0.5 dark:border-slate-700 dark:bg-slate-900">
+            <div className="inline-flex items-center rounded-full border border-[#DBEAFE] bg-white/80 p-0.5 dark:border-slate-700 dark:bg-slate-900">
               <button
                 type="button"
-                className="grid h-8 w-8 place-items-center rounded-full text-[#8a6508] disabled:opacity-30 dark:text-[#e1b85e]"
+                className="grid h-8 w-8 place-items-center rounded-full text-[#102A43] disabled:opacity-30 dark:text-[#F4F7FB]"
                 disabled={focusIdx <= 0}
                 onClick={() => setFocusMonth(months[Math.max(0, focusIdx - 1)])}
                 aria-label="Previous month"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className="min-w-[7.5rem] px-1 text-center text-[13px] font-semibold tabular-nums text-[#1b1608] dark:text-slate-100">
+              <div className="min-w-[7.5rem] px-1 text-center text-[13px] font-semibold tabular-nums text-[#102A43] dark:text-slate-100">
                 {monthLabel(focusMonth)}
               </div>
               <button
                 type="button"
-                className="grid h-8 w-8 place-items-center rounded-full text-[#8a6508] disabled:opacity-30 dark:text-[#e1b85e]"
+                className="grid h-8 w-8 place-items-center rounded-full text-[#102A43] disabled:opacity-30 dark:text-[#F4F7FB]"
                 disabled={focusIdx >= months.length - 1}
                 onClick={() => setFocusMonth(months[Math.min(months.length - 1, focusIdx + 1)])}
                 aria-label="Next month"
@@ -334,8 +334,8 @@ export function BudgetSimpleView({
               }}
               className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors ${
                 sameEveryMonth
-                  ? "border-[#d4a550] bg-[#d4a550] text-[#1b1300]"
-                  : "border-[#d4a550]/40 bg-transparent text-[#8a6508] hover:border-[#d4a550] dark:text-[#e1b85e]"
+                  ? "border-[#0B5FFF] bg-[#0B5FFF] text-white"
+                  : "border-[#DBEAFE] bg-transparent text-[#102A43] hover:border-[#0B5FFF] dark:text-[#F4F7FB]"
               }`}
             >
               {sameEveryMonth ? "Same every month · on" : "Same every month"}
@@ -370,7 +370,7 @@ export function BudgetSimpleView({
             hint={`Per unit, ${symbol}`}
           >
             <div className="mt-2 flex items-baseline gap-1.5">
-              <span className="text-lg font-medium text-[#b8860b]">{symbol}</span>
+              <span className="text-lg font-medium text-[#102A43] dark:text-[#F4F7FB]">{symbol}</span>
               {readOnly ? (
                 <span className="text-2xl font-semibold tabular-nums text-[var(--ink)]">{cell.price}</span>
               ) : (
@@ -392,13 +392,13 @@ export function BudgetSimpleView({
             hint="Volume × price — not typed"
             result
           >
-            <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-[#1b1608] dark:text-slate-100">
+            <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-[#102A43] dark:text-slate-100">
               {money(focus?.revenue ?? 0)}
             </p>
           </DriverPad>
         </div>
 
-        <div className="mt-4 space-y-0 overflow-hidden rounded-xl border border-[#d4a550]/20 bg-white/70 pl-3 dark:bg-slate-950/40 sm:pl-4">
+        <div className="mt-4 space-y-0 overflow-hidden rounded-xl border border-[#DBEAFE] bg-white/70 pl-3 dark:bg-slate-950/40 sm:pl-4">
           <CascadeRow
             kicker="Keep as gross profit"
             label="Gross profit %"
@@ -417,8 +417,8 @@ export function BudgetSimpleView({
                 onChange={(e) => setGp(parseFloat(e.target.value) || 0)}
               />
               )}
-              <span className="text-sm font-semibold text-[#b8860b]">%</span>
-              <span className="hidden text-[13px] tabular-nums text-[#6b6354] sm:inline dark:text-slate-400">
+              <span className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]">%</span>
+              <span className="hidden text-[13px] tabular-nums text-[#3D5270] sm:inline dark:text-slate-400">
                 → {money(focus?.grossProfit ?? 0)}
               </span>
             </div>
@@ -429,7 +429,7 @@ export function BudgetSimpleView({
             hint="The rest of revenue after that margin"
             muted
           >
-            <span className="text-[15px] font-semibold tabular-nums text-[#6b6354] dark:text-slate-300">
+            <span className="text-[15px] font-semibold tabular-nums text-[#3D5270] dark:text-slate-300">
               {money(focus?.cogs ?? 0)}
             </span>
           </CascadeRow>
@@ -458,7 +458,7 @@ export function BudgetSimpleView({
             hint="After cost of sales and overheads — before interest, tax, cash timing"
             emphasis
           >
-            <span className="text-lg font-semibold tabular-nums text-[#1b1608] dark:text-slate-100">
+            <span className="text-lg font-semibold tabular-nums text-[#102A43] dark:text-slate-100">
               {money(focus?.ebitda ?? 0)}
             </span>
           </CascadeRow>
@@ -488,7 +488,7 @@ export function BudgetSimpleView({
                 onClick={() => setFocusMonth(r.month)}
                 className={`flex flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 ${
                   active
-                    ? "bg-[#d4a550]/20 ring-1 ring-[#d4a550]"
+                    ? "bg-[#DBEAFE] ring-1 ring-[#0B5FFF]"
                     : "hover:bg-slate-100 dark:hover:bg-slate-900"
                 }`}
                 title={`${monthLabel(r.month)} · ${money(r.revenue)}`}
@@ -496,7 +496,7 @@ export function BudgetSimpleView({
                 <div className="flex h-14 w-full items-end justify-center">
                   <div
                     className={`w-2/3 max-w-[10px] rounded-sm ${
-                      r.closingCash < 0 ? "bg-red-400/80" : "bg-[#d4a550]/80"
+                      r.closingCash < 0 ? "bg-red-400/80" : "bg-[#38BDF8]"
                     }`}
                     style={{ height: h }}
                   />
@@ -522,7 +522,7 @@ export function BudgetSimpleView({
             { l: "Net cash movement", v: fyTotals.netCash },
             { l: "Closing cash (FY end)", v: fyTotals.closingEnd },
           ].map((t) => (
-            <div key={t.l} className="bg-[#fffdf8] px-3 py-2.5 dark:bg-slate-950">
+            <div key={t.l} className="bg-white px-3 py-2.5 dark:bg-slate-950">
               <div className="text-[10px] uppercase tracking-wider text-slate-500">{t.l}</div>
               <div
                 className={`mt-0.5 text-sm font-semibold tabular-nums ${
@@ -586,7 +586,7 @@ export function BudgetSimpleView({
                 · {budgetDaysSourceLabel(doc.wcDaysSource)}
               </span>
               {budgetDaysNeedReview(doc.wc.debtorDays) ? (
-                <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
+                <span className="ml-1 rounded-full border border-[#B7791F]/40 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-[#8A5A12]">
                   Review
                 </span>
               ) : null}
@@ -621,7 +621,7 @@ export function BudgetSimpleView({
                 · {budgetDaysSourceLabel(doc.wcDaysSource)}
               </span>
               {budgetDaysNeedReview(doc.wc.creditorDays) ? (
-                <span className="ml-1 rounded-full border border-amber-300 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-700">
+                <span className="ml-1 rounded-full border border-[#B7791F]/40 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-[#8A5A12]">
                   Review
                 </span>
               ) : null}
@@ -660,8 +660,8 @@ function OwnerHowBuilt({ readOnly, children }: { readOnly: boolean; children: Re
   if (!readOnly) return children;
   return (
     <section data-budget-how="short" className="space-y-2">
-      <h3 className="text-base font-semibold text-[#1b1608] dark:text-slate-100">How the budget is built</h3>
-      <p className="max-w-xl text-sm leading-relaxed text-[#6b6354] dark:text-slate-300">
+      <h3 className="text-base font-semibold text-[#102A43] dark:text-slate-100">How the budget is built</h3>
+      <p className="max-w-xl text-sm leading-relaxed text-[#3D5270] dark:text-slate-300">
         Your accountant built this from last year's actuals plus the growth you agreed.
       </p>
       <details>
@@ -691,13 +691,13 @@ function DriverPad({
     <div
       className={`rounded-xl border px-4 py-3.5 ${
         result
-          ? "border-[#d4a550]/45 bg-[linear-gradient(160deg,rgba(212,175,55,0.12),rgba(255,253,248,0.95))] dark:bg-slate-900"
-          : "border-[#d4a550]/22 bg-[#fffdf8] dark:border-slate-700 dark:bg-slate-900"
+          ? "border-[#DBEAFE] bg-[linear-gradient(160deg,rgba(219,234,254,0.9),rgba(255,255,255,0.95))] dark:bg-slate-900"
+          : "border-[#DBEAFE] bg-white dark:border-slate-700 dark:bg-slate-900"
       }`}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">{kicker}</p>
-      <p className="mt-0.5 text-[13px] font-semibold text-[#1b1608] dark:text-slate-100">{label}</p>
-      <p className="text-[11px] text-[#98917f] dark:text-slate-500">{hint}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#102A43] dark:text-[#F4F7FB]">{kicker}</p>
+      <p className="mt-0.5 text-[13px] font-semibold text-[#102A43] dark:text-slate-100">{label}</p>
+      <p className="text-[11px] text-[#3D5270] dark:text-slate-500">{hint}</p>
       {children}
     </div>
   );
@@ -706,7 +706,7 @@ function DriverPad({
 function EquationOp({ symbol, label }: { symbol: string; label: string }) {
   return (
     <div
-      className="flex items-center justify-center self-center text-xl font-semibold text-[#d4a550]"
+      className="flex items-center justify-center self-center text-xl font-semibold text-[#102A43] dark:text-[#F4F7FB]"
       aria-label={label}
     >
       {symbol}
@@ -731,20 +731,20 @@ function CascadeRow({
 }) {
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 border-b border-[#d4a550]/12 py-3 last:border-b-0 ${
-        emphasis ? "bg-[rgba(212,175,55,0.06)] pr-3" : ""
+      className={`flex flex-wrap items-center justify-between gap-3 border-b border-[#DBEAFE] py-3 last:border-b-0 ${
+        emphasis ? "bg-[rgba(219,234,254,0.65)] pr-3" : ""
       } ${muted ? "opacity-90" : ""}`}
     >
       <div className="min-w-[12rem] pr-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b]">{kicker}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43] dark:text-[#F4F7FB]">{kicker}</p>
         <p
           className={`text-[13.5px] font-semibold ${
-            muted ? "text-[#6b6354] dark:text-slate-400" : "text-[#1b1608] dark:text-slate-100"
+            muted ? "text-[#3D5270] dark:text-slate-400" : "text-[#102A43] dark:text-slate-100"
           }`}
         >
           {label}
         </p>
-        <p className="max-w-md text-[11px] leading-snug text-[#98917f] dark:text-slate-500">{hint}</p>
+        <p className="max-w-md text-[11px] leading-snug text-[#3D5270] dark:text-slate-500">{hint}</p>
       </div>
       <div className="ml-auto">{children}</div>
     </div>

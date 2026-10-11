@@ -150,8 +150,8 @@ export function BudgetFunnel({
   };
 
   const card =
-    "w-full rounded-xl border border-[#d4a550]/25 bg-white/80 p-3 text-left transition hover:border-[#d4a550]/60 hover:bg-[#d4a550]/5 dark:bg-slate-950/60 dark:hover:bg-slate-900";
-  const cardOn = "border-[#d4a550] bg-[#d4a550]/10 dark:bg-[#d4a550]/10";
+    "w-full rounded-xl border border-[#DBEAFE] bg-white/80 p-3 text-left transition hover:border-[#0B5FFF]/50 hover:bg-[#0B5FFF]/5 dark:bg-slate-950/60 dark:hover:bg-slate-900";
+  const cardOn = "border-[#0B5FFF] bg-[#DBEAFE]/70 dark:bg-[#DBEAFE]/70";
 
   const toggleSecondary = (id: BudgetVolumeUnit) => {
     setSecondary((prev) =>
@@ -162,7 +162,7 @@ export function BudgetFunnel({
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#102A43] dark:text-[#F4F7FB]">
           Budget setup · step {step + 1} of {TOTAL_STEPS}
         </p>
         <h2 className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">
@@ -270,7 +270,7 @@ export function BudgetFunnel({
             </Button>
             <Button
               size="sm"
-              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]"
               onClick={() => setStep(3)}
             >
               Continue{secondary.length ? ` (${secondary.length} secondary)` : ""}
@@ -346,9 +346,9 @@ export function BudgetFunnel({
       )}
 
       {step === 6 && primary && (
-        <div className="space-y-4 rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/5 p-4">
+        <div className="space-y-4 rounded-xl border border-[#DBEAFE] bg-[#DBEAFE]/40 p-4">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#102A43] dark:text-[#F4F7FB]">
               Your budget model
             </div>
             <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -428,7 +428,7 @@ export function BudgetFunnel({
             <Button variant="ghost" onClick={() => setStep(5)}>
               Back
             </Button>
-            <Button className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]" onClick={finish}>
+            <Button className="bg-[#0B5FFF] text-white hover:bg-[#2563EB]" onClick={finish}>
               Build my budget
             </Button>
           </div>

@@ -18,8 +18,7 @@ export const Route = createFileRoute("/_authenticated/reports/")({
       to: "/clients/$clientId",
       params: { clientId },
       search: {
-        tab: "deliverables",
-        section: "reports",
+        tab: "reports",
         ...(search.report ? { report: search.report } : {}),
         ...(search.action ? { action: search.action } : {}),
       },

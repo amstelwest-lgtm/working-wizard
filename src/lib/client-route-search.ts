@@ -1,38 +1,41 @@
 /**
  * Accountant client deep links.
  *
- * The studio rail is Bot (`tab=ask`), Overview (`tab=overview` plus `section`),
- * and Deliverables (`tab=deliverables` plus `section`). Old emails, Bot
- * answers, and PDFs still use `?tab=actions`, `?tab=health`, and the other
- * aliases below. Rewrite them here so a refresh lands on the same pane.
- * The rewrite is idempotent: a canonical URL comes back unchanged.
+ * The studio rail is grouped: Home, Health, Cash flow, Profit, Budget,
+ * Next moves, Reports, Deliverables, and Client portal. Old emails, Bot
+ * answers, and PDFs still use `?tab=actions`, `?tab=overview&section=cash`,
+ * and the other aliases below. Rewrite them here so a refresh lands on the
+ * new item. The rewrite is idempotent: a canonical URL comes back unchanged.
  *
- * `focus=pillars` stays on the pillars section so the Health pane can keep
- * its existing heading check. Other params (`coach`, `filter`, `onboard`,
- * `report`, `action`, …) are preserved by the route parser.
+ * `focus=pillars` stays on Health so that pane can keep its heading check.
+ * Collections and payables stay a section of Cash flow. Pack, plan, and the
+ * drafter stay a section of Deliverables. Those are not their own rail items,
+ * and the horizontal sub-tab row is gone. Other params (`coach`, `filter`,
+ * `onboard`, `report`, `action`, …) are preserved by the route parser.
  */
 
-export const OVERVIEW_SECTIONS = [
+export const CLIENT_RAIL_TABS = [
+  "home",
   "health",
-  "pillars",
   "cash",
   "profit",
-  "collections",
-  "payables",
   "budget",
   "moves",
-  "books",
+  "reports",
+  "deliverables",
+  "portal",
 ] as const;
 
-export const DELIVERABLE_SECTIONS = ["reports", "pack", "plan", "drafter"] as const;
+export type ClientRailTab = (typeof CLIENT_RAIL_TABS)[number];
 
-export type OverviewSection = (typeof OVERVIEW_SECTIONS)[number];
-export type DeliverableSection = (typeof DELIVERABLE_SECTIONS)[number];
-export type ClientRailTab = "ask" | "overview" | "deliverables";
+/** Sub-views that still open their own pane, under a rail item. */
+export const RAIL_SUBSECTIONS = ["pillars", "collections", "payables", "pack", "plan", "drafter"] as const;
+
+export type RailSubsection = (typeof RAIL_SUBSECTIONS)[number];
 
 export type CanonicalClientSearch = {
   tab: ClientRailTab;
-  section?: OverviewSection | DeliverableSection;
+  section?: RailSubsection;
   focus?: "health" | "pillars";
 };
 
@@ -52,36 +55,37 @@ export type LegacyPaneId =
   | "summary"
   | "moves";
 
-const OVERVIEW_SECTION_SET = new Set<string>(OVERVIEW_SECTIONS);
-const DELIVERABLE_SECTION_SET = new Set<string>(DELIVERABLE_SECTIONS);
+const RAIL_SET = new Set<string>(CLIENT_RAIL_TABS);
 
 const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
-  ask: { tab: "ask" },
-  bot: { tab: "ask" },
-  "milon-bot": { tab: "ask" },
-  overview: { tab: "overview" },
-  ratios: { tab: "overview", section: "health", focus: "health" },
-  health: { tab: "overview", section: "health", focus: "health" },
-  today: { tab: "overview", section: "health", focus: "health" },
-  "today-complex": { tab: "overview", section: "health", focus: "health" },
-  pillars: { tab: "overview", section: "pillars", focus: "pillars" },
-  profit: { tab: "overview", section: "profit" },
-  waterfall: { tab: "overview", section: "profit" },
-  profitability: { tab: "overview", section: "profit" },
-  cash: { tab: "overview", section: "cash" },
-  forecast: { tab: "overview", section: "cash" },
-  "cash-forecast": { tab: "overview", section: "cash" },
-  collections: { tab: "overview", section: "collections" },
-  payables: { tab: "overview", section: "payables" },
-  budget: { tab: "overview", section: "budget" },
-  summary: { tab: "overview", section: "books" },
-  data: { tab: "overview", section: "books" },
-  brain: { tab: "overview", section: "books" },
-  "client-brain": { tab: "overview", section: "books" },
-  moves: { tab: "overview", section: "moves" },
-  "strategic-moves": { tab: "overview", section: "moves" },
-  reports: { tab: "deliverables", section: "reports" },
-  report: { tab: "deliverables", section: "reports" },
+  ask: { tab: "home" },
+  bot: { tab: "home" },
+  "milon-bot": { tab: "home" },
+  home: { tab: "home" },
+  overview: { tab: "home" },
+  ratios: { tab: "health", focus: "health" },
+  health: { tab: "health", focus: "health" },
+  today: { tab: "health", focus: "health" },
+  "today-complex": { tab: "health", focus: "health" },
+  pillars: { tab: "health", section: "pillars", focus: "pillars" },
+  profit: { tab: "profit" },
+  waterfall: { tab: "profit" },
+  profitability: { tab: "profit" },
+  cash: { tab: "cash" },
+  forecast: { tab: "cash" },
+  "cash-forecast": { tab: "cash" },
+  collections: { tab: "cash", section: "collections" },
+  payables: { tab: "cash", section: "payables" },
+  budget: { tab: "budget" },
+  summary: { tab: "portal" },
+  data: { tab: "portal" },
+  brain: { tab: "portal" },
+  "client-brain": { tab: "portal" },
+  books: { tab: "portal" },
+  moves: { tab: "moves" },
+  "strategic-moves": { tab: "moves" },
+  reports: { tab: "reports" },
+  report: { tab: "reports" },
   pack: { tab: "deliverables", section: "pack" },
   advisory: { tab: "deliverables", section: "pack" },
   plan: { tab: "deliverables", section: "plan" },
@@ -89,25 +93,85 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   action: { tab: "deliverables", section: "plan" },
   "action-plan": { tab: "deliverables", section: "plan" },
   tasks: { tab: "deliverables", section: "plan" },
+  drafter: { tab: "deliverables", section: "drafter" },
+  deliverables: { tab: "deliverables" },
+  portal: { tab: "portal" },
 };
 
 function asFocus(value: string | null | undefined): "health" | "pillars" | undefined {
   return value === "health" || value === "pillars" ? value : undefined;
 }
 
-function overviewSection(
+/** A `section` value that names a rail item or a sub-view of one. */
+function destinationForSection(
   section: string,
   focus: "health" | "pillars" | undefined,
 ): CanonicalClientSearch | null {
-  if (!OVERVIEW_SECTION_SET.has(section)) return null;
-  if (section === "pillars" || (section === "health" && focus === "pillars")) {
-    return { tab: "overview", section: "pillars", focus: "pillars" };
+  if (section === "reports" || section === "report") return { tab: "reports" };
+  if (section === "pack" || section === "advisory") return { tab: "deliverables", section: "pack" };
+  if (
+    section === "plan" ||
+    section === "actions" ||
+    section === "action" ||
+    section === "action-plan" ||
+    section === "tasks"
+  ) {
+    return { tab: "deliverables", section: "plan" };
   }
-  if (section === "health") return { tab: "overview", section: "health", focus: "health" };
-  return { tab: "overview", section: section as OverviewSection };
+  if (section === "drafter") return { tab: "deliverables", section: "drafter" };
+  if (section === "pillars" || (section === "health" && focus === "pillars")) {
+    return { tab: "health", section: "pillars", focus: "pillars" };
+  }
+  if (section === "health" || section === "ratios" || section === "today" || section === "today-complex") {
+    return { tab: "health", focus: "health" };
+  }
+  if (section === "collections") return { tab: "cash", section: "collections" };
+  if (section === "payables") return { tab: "cash", section: "payables" };
+  if (section === "cash" || section === "forecast" || section === "cash-forecast") return { tab: "cash" };
+  if (section === "profit" || section === "waterfall" || section === "profitability") return { tab: "profit" };
+  if (section === "budget") return { tab: "budget" };
+  if (section === "moves" || section === "strategic-moves") return { tab: "moves" };
+  if (
+    section === "books" ||
+    section === "summary" ||
+    section === "data" ||
+    section === "brain" ||
+    section === "client-brain"
+  ) {
+    return { tab: "portal" };
+  }
+  return null;
 }
 
-/** Old or new client search → rail tab + section. Safe to run twice. */
+function explicitRail(
+  tab: ClientRailTab,
+  section: string,
+  focus: "health" | "pillars" | undefined,
+): CanonicalClientSearch {
+  if (tab === "health") {
+    if (section === "pillars" || focus === "pillars") {
+      return { tab: "health", section: "pillars", focus: "pillars" };
+    }
+    return { tab: "health", focus: "health" };
+  }
+  if (tab === "cash") {
+    if (section === "collections") return { tab: "cash", section: "collections" };
+    if (section === "payables") return { tab: "cash", section: "payables" };
+    return { tab: "cash" };
+  }
+  if (tab === "deliverables") {
+    if (section === "pack") return { tab: "deliverables", section: "pack" };
+    if (section === "plan") return { tab: "deliverables", section: "plan" };
+    if (section === "drafter") return { tab: "deliverables", section: "drafter" };
+    if (section === "reports" || section === "report") return { tab: "reports" };
+    const fromSection = section ? destinationForSection(section, focus) : null;
+    if (fromSection?.tab === "deliverables") return fromSection;
+    return { tab: "deliverables" };
+  }
+  return { tab };
+}
+
+/** Old or new client search → rail item. Safe to run twice. */
 export function canonicalizeAccountantSearch(input: {
   tab?: string | null;
   section?: string | null;
@@ -117,49 +181,34 @@ export function canonicalizeAccountantSearch(input: {
   const section = (input.section ?? "").trim();
   const focus = asFocus(input.focus);
 
-  if (!tab && !section) return { tab: "overview" };
+  if (!tab && !section) return { tab: "home" };
 
-  // An explicit Bot tab wins over a section or hash default.
-  if (tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "ask" };
+  // An explicit Home / Bot tab wins over a section or hash default.
+  if (tab === "home" || tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "home" };
 
-  // `pack` is a Deliverables section. `?section=pack` and the old
-  // `?section=pack&tab=overview` redirect both mean the Advisory pack.
-  // `tab=overview` there is the default, not a request to drop the section.
-  if (
-    DELIVERABLE_SECTION_SET.has(section) &&
-    (tab === "" || tab === "overview" || tab === "deliverables")
-  ) {
-    return { tab: "deliverables", section: section as DeliverableSection };
+  if (RAIL_SET.has(tab)) {
+    return explicitRail(tab as ClientRailTab, section, focus);
   }
 
-  if (tab === "overview" || tab === "deliverables" || (!tab && section)) {
-    const rail: ClientRailTab = tab === "deliverables" ? "deliverables" : "overview";
-    if (rail === "deliverables") {
-      if (DELIVERABLE_SECTION_SET.has(section)) {
-        return { tab: "deliverables", section: section as DeliverableSection };
-      }
-      const fromSection = LEGACY_DESTINATIONS[section];
-      if (fromSection?.tab === "deliverables") return fromSection;
-      return { tab: "deliverables" };
-    }
-    const overview = overviewSection(section, focus);
-    if (overview) return overview;
-    if (!tab) {
-      const legacy = LEGACY_DESTINATIONS[section];
-      if (legacy) return legacy;
-    }
-    if (focus === "pillars") return { tab: "overview", section: "pillars", focus: "pillars" };
-    return { tab: "overview" };
+  // `?tab=overview&section=cash` and a bare `?section=pack` name the new item.
+  // `tab=overview` there is the old group, not a request to drop the section.
+  if (section && (tab === "" || tab === "overview" || tab === "deliverables")) {
+    const fromSection = destinationForSection(section, focus);
+    if (fromSection) return fromSection;
   }
 
   if (
     (tab === "ratios" || tab === "health" || tab === "today" || tab === "today-complex") &&
     focus === "pillars"
   ) {
-    return { tab: "overview", section: "pillars", focus: "pillars" };
+    return { tab: "health", section: "pillars", focus: "pillars" };
   }
 
-  return LEGACY_DESTINATIONS[tab] ?? { tab: "overview" };
+  if (!tab && section) {
+    return destinationForSection(section, focus) ?? LEGACY_DESTINATIONS[section] ?? { tab: "home" };
+  }
+
+  return LEGACY_DESTINATIONS[tab] ?? { tab: "home" };
 }
 
 /** Canonical rail tab for a raw `?tab=` value. Section lives on the full search. */
@@ -173,43 +222,41 @@ export function legacyPaneForSearch(search: {
   section?: string | null;
   focus?: string | null;
 }): LegacyPaneId | null {
-  if (!search.tab) return null;
+  if (!search.tab && !search.section) return null;
   const canonical = canonicalizeAccountantSearch(search);
-  if (canonical.tab === "ask") return "ask";
-  if (canonical.tab === "deliverables") {
-    if (canonical.section === "pack") return "advisory";
-    if (canonical.section === "plan") return "plan";
-    if (canonical.section === "drafter") return "drafter";
-    return "reports";
-  }
-  switch (canonical.section) {
+  switch (canonical.tab) {
+    case "home":
+      return "ask";
     case "health":
-    case "pillars":
       return "ratios";
+    case "cash":
+      if (canonical.section === "collections") return "collections";
+      if (canonical.section === "payables") return "payables";
+      return "cash";
     case "profit":
       return "profit";
-    case "cash":
-      return "cash";
-    case "collections":
-      return "collections";
-    case "payables":
-      return "payables";
     case "budget":
       return "budget";
     case "moves":
       return "moves";
-    case "books":
+    case "reports":
+      return "reports";
+    case "deliverables":
+      if (canonical.section === "plan") return "plan";
+      if (canonical.section === "drafter") return "drafter";
+      return "advisory";
+    case "portal":
       return "summary";
     default:
-      return "overview";
+      return null;
   }
 }
 
 /**
- * Search to write when the accountant opens a rail item or a section.
- * `tab` may be a rail id (`overview`) or a legacy pane id (`cash`, `reports`).
+ * Search to write when the accountant opens a rail item or a legacy pane.
+ * `tab` may be a rail id (`cash`) or a legacy pane id (`ask`, `plan`).
  * Coach crumbs do not stick. An Action Plan filter sticks only on the plan
- * section. A Reports deep link (`report`, `action`) sticks only on reports.
+ * section. A Reports deep link (`report`, `action`) sticks only on Reports.
  */
 export function accountantClientTabSearch<T extends object>(
   prev: T,
@@ -228,7 +275,7 @@ export function accountantClientTabSearch<T extends object>(
   if (canonical.focus) next.focus = canonical.focus;
   else delete next.focus;
   if (canonical.section !== "plan") delete next.filter;
-  if (canonical.section !== "reports") {
+  if (canonical.tab !== "reports") {
     delete next.report;
     delete next.action;
   }
@@ -241,9 +288,6 @@ const DRAFTER_HASHES = new Set(["drafter", "sent", "sent-history", "advisory-dra
 /**
  * Hash to hand the router. `window.location.hash` already includes `#`.
  * Passing that string through again writes `##drafter`.
- *
- * `section=pack#drafter` and a sent-history hash land on the drafter section.
- * A hash that is already on that section stays put.
  */
 export function routerHash(hash: string | null | undefined): string | undefined {
   const bare = (hash ?? "").replace(/^#+/, "").split("?")[0].trim();
@@ -261,8 +305,8 @@ export function drafterSectionForHash(
 }
 
 const HASH_DESTINATIONS: Record<string, CanonicalClientSearch> = {
-  cash: { tab: "overview", section: "cash" },
-  budget: { tab: "overview", section: "budget" },
+  cash: { tab: "cash" },
+  budget: { tab: "budget" },
   advisory: { tab: "deliverables", section: "pack" },
   pack: { tab: "deliverables", section: "pack" },
 };
@@ -277,9 +321,8 @@ export function railSearchForHash(hash: string | null | undefined): CanonicalCli
 
 /**
  * Where a legacy hash should navigate, given the search already on the URL.
- * An explicit rail tab on a different rail wins (`?tab=ask#budget` stays on Bot).
- * A hash that names a section of the current rail is selected.
- * Drafter hashes still leave the pack for the drafter, unless Bot was explicit.
+ * An explicit rail item on a different item wins (`?tab=home#budget` stays on Home).
+ * Drafter hashes still leave the pack for the drafter, unless Home was explicit.
  */
 export function legacyHashDestination(
   search: { tab?: string | null; section?: string | null },
@@ -290,15 +333,16 @@ export function legacyHashDestination(
   const tab = (search.tab ?? "").trim();
   const section = (search.section ?? "").trim();
   if (DRAFTER_HASHES.has(id)) {
-    if (tab === "ask") return null;
+    if (tab === "ask" || tab === "home" || tab === "bot" || tab === "milon-bot") return null;
     if (section === "drafter") return null;
     return { tab: "deliverables", section: "drafter" };
   }
   const mapped = HASH_DESTINATIONS[id];
   if (!mapped) return null;
-  const explicit = tab === "ask" || tab === "overview" || tab === "deliverables";
-  if (explicit && tab !== mapped.tab) return null;
-  if (section && section !== mapped.section) return null;
-  if (tab === mapped.tab && section === mapped.section) return null;
+  if (!tab && !section) return mapped;
+  const current = canonicalizeAccountantSearch(search);
+  if (current.tab !== mapped.tab) return null;
+  if (current.section && current.section !== mapped.section) return null;
+  if (current.tab === mapped.tab && (current.section ?? undefined) === mapped.section) return null;
   return mapped;
 }

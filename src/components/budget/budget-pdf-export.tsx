@@ -173,7 +173,7 @@ export function BudgetPdfExportButton({
       type="button"
       size="sm"
       variant="outline"
-      className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+      className="h-7 gap-1.5 border-[#DBEAFE] bg-[#DBEAFE]/70 px-2.5 text-[10px] text-[#102A43] dark:text-[#F4F7FB] hover:bg-[#DBEAFE] dark:text-[#F4F7FB]"
       disabled={exporting}
       onClick={() => void exportPDF()}
     >
