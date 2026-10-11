@@ -10,6 +10,8 @@ export type BudgetYearMoney = {
 
 export type BudgetYearKey = keyof BudgetYearMoney;
 
+export type BudgetYearSignal = "favourable" | "adverse" | null;
+
 export type BudgetYearRow = {
   key: BudgetYearKey;
   label: string;
@@ -18,6 +20,8 @@ export type BudgetYearRow = {
   change: number | null;
   changePct: number | null;
   direction: "up" | "down" | "flat";
+  /** Cost lines only. A fall is favourable. A rise in COGS or expenses is adverse. */
+  signal: BudgetYearSignal;
 };
 
 const LINES: { key: BudgetYearKey; label: string }[] = [
@@ -35,6 +39,16 @@ function finite(value: number | null | undefined): value is number {
 function directionOf(change: number | null): "up" | "down" | "flat" {
   if (change == null || Math.abs(change) < 1) return "flat";
   return change > 0 ? "up" : "down";
+}
+
+function yearChangeSignal(
+  key: BudgetYearKey,
+  direction: "up" | "down" | "flat",
+): BudgetYearSignal {
+  if (key !== "cogs" && key !== "expenses") return null;
+  if (direction === "down") return "favourable";
+  if (direction === "up") return "adverse";
+  return null;
 }
 
 export function yearMoneyFromFinancials(
@@ -105,6 +119,7 @@ function blankRows(thisYear: BudgetYearMoney | null): BudgetYearRow[] {
         change: null,
         changePct: null,
         direction: "flat" as const,
+        signal: null,
       },
     ];
   });
@@ -163,6 +178,7 @@ export function budgetYearCompare(
         change,
         changePct,
         direction: directionOf(change),
+        signal: yearChangeSignal(line.key, directionOf(change)),
       },
     ];
   });

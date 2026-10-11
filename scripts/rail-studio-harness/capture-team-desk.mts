@@ -214,7 +214,7 @@ async function assertClearIsClear(page: Page) {
 await shot("desk-live-1280", 1280, 1440, "/milon-team-desk?fixture=live", async (page) => {
   await page.getByText("Working…").waitFor();
   await page.getByText("Last run 5m ago").waitFor();
-  await page.getByText("Couldn't finish — will retry").waitFor();
+  await page.getByText("Couldn't finish, we're on it").waitFor();
   const handoff = page.locator(".milon-desk-handoff");
   await handoff.getByText("Review the cash floor before the next meeting.").waitFor();
   await handoff.getByText("Analyst").waitFor();
@@ -246,7 +246,7 @@ await shot("desk-live-1280", 1280, 1440, "/milon-team-desk?fixture=live", async 
 await shot("desk-live-390", 390, 900, "/milon-team-desk?fixture=live", async (page) => {
   await page.getByText("Working…").waitFor();
   await page.getByText("Financial Manager", { exact: true }).waitFor();
-  await page.getByText("Couldn't finish — will retry").waitFor();
+  await page.getByText("Couldn't finish, we're on it").waitFor();
   await assertClearIsClear(page);
   const fit = await page.locator(".milon-desk-agents").evaluate((el) => {
     const chips = [...el.querySelectorAll<HTMLElement>(".milon-desk-agent")];

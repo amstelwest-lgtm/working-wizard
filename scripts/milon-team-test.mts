@@ -473,8 +473,8 @@ assert(liveDesk.includes(">Done<"), "the done state is the word Done");
 assert(liveDesk.includes("is-live"), "a running agent pulses");
 assert(liveDesk.includes("Last run 5m ago"), "a finished run says how long ago");
 assert(
-  liveDesk.includes("Couldn&#x27;t finish — will retry"),
-  "a failed run stays muted and says it will retry",
+  liveDesk.includes("Couldn&#x27;t finish, we&#x27;re on it"),
+  "a failed run stays muted and says we are on it",
 );
 assert(liveDesk.includes("is-muted"), "the failed line is muted");
 assert(liveDesk.includes("milon-desk-handoff"), "a hand-off is not a finding row");

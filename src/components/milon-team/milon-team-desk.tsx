@@ -31,7 +31,7 @@ import {
   type AgentActivitySnapshot,
 } from "@/lib/milon-team-activity";
 import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
-import { ownerRunPhase, ownerRunPhaseLabel } from "@/hooks/owner-agent-ui";
+import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
 import "./milon-team-desk.css";
 
@@ -192,12 +192,13 @@ export function MilonTeamDesk({
                   const header = phase
                     ? {
                         label: ownerRunPhaseLabel(phase),
-                        tone: "clear" as const,
+                        tone: ownerRunPhaseMuted(phase) ? ("idle" as const) : ("clear" as const),
                         lastRun:
                           phase === "done" || phase === "found"
                             ? formatLastRun(run?.finished_at || run?.started_at || run?.queued_at || null, clock)
                             : null,
                         pulse: phase === "queued" || phase === "working",
+                        muted: ownerRunPhaseMuted(phase),
                       }
                     : (fromRun ?? fallback);
                   const ranText =
@@ -262,13 +263,15 @@ export function MilonTeamDesk({
                       figures: findingFigures(row.evidence),
                       market: live?.market,
                     });
+                    const draft = draftFindingLabel(row);
                     const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock);
                     const when = formatAsOf(row.created_at, clock);
                     return (
-                      <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent}>
+                      <li key={row.id} className="milon-desk-row" data-finding={row.id} data-finding-agent={row.agent} data-finding-draft={draft ? "true" : undefined}>
                         <div className="milon-desk-job-copy">
                           <span className="milon-desk-tag">{agentShortName(row.agent)}</span>
                           <p className="milon-desk-figure">{sentence}</p>
+                          {draft ? <p className="milon-desk-hint">{draft}</p> : null}
                           <div className="milon-desk-meta">
                             {checked ? (
                               <span className="milon-desk-why">{checked}</span>

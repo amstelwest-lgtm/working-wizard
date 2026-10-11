@@ -186,6 +186,7 @@ export function BudgetVerdictStrip({
           signoff={signoff}
           isStale={isStale}
           known={signoffKnown}
+          hideDraft={Math.abs(revenueBudget) >= 1 || Math.abs(profitBudget) >= 1}
         />
       </div>
     </section>

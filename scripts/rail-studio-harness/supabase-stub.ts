@@ -296,7 +296,39 @@ function clientRow() {
   return CLIENT_ROW;
 }
 
+const DRAFT_FINDINGS = [
+  {
+    id: "draft-move",
+    agent: "advisor",
+    client_id: "harness-client",
+    kind: "next_move_draft",
+    title: "Collect the two largest invoices",
+    detail: null,
+    evidence: { draft: true, requires_human_approval: true, figures: { invoices: 2 } },
+    as_of: null,
+    created_at: "2026-10-09T11:28:00.000Z",
+    superseded_by: null,
+    dismissed_reason: null,
+  },
+  {
+    id: "draft-handoff",
+    agent: "financial_manager",
+    client_id: "harness-client",
+    kind: "accountant_handoff_draft",
+    title: "Ask the accountant to confirm payroll.",
+    detail: null,
+    evidence: { draft: true, requires_human_approval: true, figures: { payroll: 12000 } },
+    as_of: null,
+    created_at: "2026-10-09T11:30:00.000Z",
+    superseded_by: null,
+    dismissed_reason: null,
+  },
+];
+
 function materialize(table: string, mode: Mode): { data: unknown; error: null } {
+  if (table === "agent_findings") {
+    return { data: mode === "list" ? DRAFT_FINDINGS : DRAFT_FINDINGS[0], error: null };
+  }
   if (table === "advisory_deliveries") {
     const rows = deliveryRows();
     if (mode === "list") return { data: rows, error: null };

@@ -36,6 +36,7 @@ export type AgentFindingRow = {
   id: string;
   agent: AgentKey;
   client_id: string;
+  kind?: string | null;
   title: string;
   detail: string | null;
   evidence: unknown;
@@ -101,7 +102,7 @@ export function headerFromRun(run: AgentRunRow, now: Date = new Date()): AgentHe
     return { label: "Working…", tone: "clear", lastRun: null, pulse: true };
   }
   if (FAILED.has(run.status)) {
-    return { label: "Couldn't finish — will retry", tone: "idle", lastRun: null, muted: true };
+    return { label: "Couldn't finish, we're on it", tone: "idle", lastRun: null, muted: true };
   }
   if (DONE.has(run.status)) {
     const at = run.finished_at || run.started_at || run.queued_at;

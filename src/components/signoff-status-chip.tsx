@@ -20,6 +20,7 @@ export function SignoffStatusChip({
   signoff,
   isStale,
   known = true,
+  hideDraft = false,
 }: {
   clientId?: string;
   scope: ReviewScope;
@@ -27,6 +28,8 @@ export function SignoffStatusChip({
   isStale: boolean;
   /** False until the sign-off row has loaded. Draft is not the loading state. */
   known?: boolean;
+  /** A priced budget is not a draft chip. Signed and ready lines still show. */
+  hideDraft?: boolean;
 }) {
   const { market } = useMarketFormat();
   const loadWorkflow = useServerFn(getDeliverableWorkflow);
@@ -62,6 +65,7 @@ export function SignoffStatusChip({
     isStale,
     readyForReview,
   });
+  if (hideDraft && kind === "draft") return null;
   const when = shown?.signed_off_at ? formatReviewDateTime(shown.signed_off_at, market) : "";
 
   return (

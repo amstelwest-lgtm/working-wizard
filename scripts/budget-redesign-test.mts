@@ -103,6 +103,10 @@ assert(matchedRevenue?.thisYear === 420000, "this year is the statement actual")
 assert(matchedRevenue?.change === 30000, "matched revenue change is this year minus last year");
 assert(Math.round(matchedRevenue?.changePct ?? 0) === 8, "matched revenue percent uses the same months");
 assert(matched.summary === "Revenue is up 8% on last year.", matched.summary);
+assert(matched.rows.find((row) => row.key === "expenses")?.signal === "favourable", "a fall in expenses is favourable");
+assert(matched.rows.find((row) => row.key === "cogs")?.signal === "adverse", "a rise in COGS is adverse");
+assert(matched.rows.find((row) => row.key === "revenue")?.signal === null, "revenue change stays uncoloured");
+assert(read("src/components/budget/budget-verdict.tsx").includes("hideDraft"), "a priced budget hides the draft chip");
 
 assert(simple.includes("ownerYearFromStatement"), "the owner strip uses the statement, not the plan");
 const stripBlock = simple.slice(simple.indexOf("<BudgetYearStrip"));

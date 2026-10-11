@@ -15,7 +15,13 @@ import {
 } from "../src/lib/owner-answers.ts";
 import { ZA_MARKET } from "../src/lib/market/resolve.ts";
 import { ownerPlanFreeLine, ownerPlanLine } from "../src/lib/owner-plan.ts";
-import { handoffComingOnline, ownerRunPhase } from "../src/hooks/owner-agent-ui.ts";
+import {
+  draftFindingLabel,
+  DRAFT_NEEDS_ACCOUNTANT,
+  DRAFT_NEEDS_OWNER,
+  handoffComingOnline,
+  ownerRunPhase,
+} from "../src/hooks/owner-agent-ui.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
@@ -414,7 +420,20 @@ assert(
   "the advisor refusal is not an error",
 );
 assert(handoffComingOnline("no_runner"), "the no_runner code is the same quiet state");
-assert(!handoffComingOnline("The analyst runner exists at supabase/functions/agent-analyst, but agent_settings.enabled is false, so a hand-off will not start it."), "a disabled analyst stays an error");
+assert(handoffComingOnline("runner_disabled"), "a switched-off runner is coming online");
+assert(
+  handoffComingOnline(
+    "Milōn Financial Manager has a runner at supabase/functions/agent-financial-manager, but agent_settings.financial_manager_enabled is false, so a hand-off will not start it.",
+  ),
+  "the runner_disabled sentence is not an error",
+);
+assert(
+  handoffComingOnline(
+    "The analyst runner exists at supabase/functions/agent-analyst, but agent_settings.enabled is false, so a hand-off will not start it.",
+  ),
+  "a disabled runner stays quiet",
+);
+assert(!handoffComingOnline("Not signed in."), "a real hand-off error still shows");
 assert(
   ownerRunPhase(
     { id: "q", agent: "financial_manager", client_id: "c", status: "queued", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
@@ -429,6 +448,40 @@ assert(
   ) === "done",
   "a finish with no finding is done",
 );
+assert(
+  ownerRunPhase(
+    { id: "s", agent: "advisor", client_id: "c", status: "skipped", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    [],
+  ) === "skipped",
+  "skipped is nothing to do",
+);
+assert(
+  ownerRunPhase(
+    { id: "f", agent: "advisor", client_id: "c", status: "failed", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    [],
+  ) === "stalled",
+  "failed stays a quiet stall",
+);
+assert(
+  ownerRunPhase(
+    { id: "x", agent: "advisor", client_id: "c", status: "cancelled", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    [],
+  ) === null,
+  "cancelled returns to idle",
+);
+const draftEvidence = { draft: true, requires_human_approval: true, figures: { cash: 1 } };
+assert(
+  draftFindingLabel({ kind: "next_move_draft", evidence: draftEvidence }) === DRAFT_NEEDS_OWNER,
+  "a next-move draft needs the owner's OK",
+);
+assert(
+  draftFindingLabel({ kind: "accountant_handoff_draft", evidence: draftEvidence }) === DRAFT_NEEDS_ACCOUNTANT,
+  "an accountant hand-off draft needs the accountant",
+);
+assert(draftFindingLabel({ kind: "next_move_draft", evidence: { figures: { cash: 1 } } }) === null, "a published finding is not a draft");
+assert(plan.includes('data-owner-drafts="readonly"'), "draft findings on Next moves are read-only");
+const draftBlock = plan.slice(plan.indexOf('data-owner-drafts="readonly"'), plan.indexOf("data-owner-suggestions"));
+assert(!/Approve|Dismiss/.test(draftBlock), "draft findings have no approve or dismiss control");
 assert(!plan.includes("does not enqueue agent_runs"), "the owner view no longer describes the hand-off as a placeholder");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert agent runs itself");
 assert(app.includes("ownerView"), "Next moves renders the owner action list");
