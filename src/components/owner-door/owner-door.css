@@ -999,7 +999,7 @@ html.dark .owner-status.is-attention {
 
 .owner-door .owner-turn.is-owner {
   align-self: flex-end;
-  background: color-mix(in srgb, var(--gold) 16%, var(--bg));
+  background: var(--pale);
   color: var(--ink);
 }
 
@@ -1081,17 +1081,31 @@ html.dark .owner-status.is-attention {
   line-height: var(--type-label-leading);
 }
 
-.owner-door .owner-reply-list,
-.owner-door .owner-reply-actions {
+.owner-door ul.owner-reply-list,
+.owner-door ol.owner-reply-list,
+.owner-door ol.owner-reply-actions {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: 1.75rem;
   max-width: 70ch;
   color: var(--ink);
   font-size: var(--type-body-size);
   line-height: var(--type-body-leading);
 }
 
-.owner-door .owner-reply-actions {
+.owner-door ul.owner-reply-list {
+  list-style: disc outside;
+}
+
+.owner-door ol.owner-reply-list,
+.owner-door ol.owner-reply-actions {
+  list-style: decimal outside;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.owner-door ul.owner-reply-list > li::marker,
+.owner-door ol.owner-reply-list > li::marker,
+.owner-door ol.owner-reply-actions > li::marker {
+  color: var(--cobalt);
   font-variant-numeric: tabular-nums lining-nums;
 }
 
