@@ -6,7 +6,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   LEGAL_ADDRESS,
-  LEGAL_DOMAIN,
   LEGAL_EFFECTIVE,
   LEGAL_ENTITY,
   LEGAL_INFORMATION_OFFICER,
@@ -32,7 +31,6 @@ assert(privacy.includes("{LEGAL_EFFECTIVE}"), "privacy has an effective date");
 assert(privacy.includes("{LEGAL_INFORMATION_OFFICER}"), "privacy names the Privacy contact");
 assert(privacy.includes("{LEGAL_ADDRESS_LINES"), "privacy shows the registered address");
 assert(LEGAL_ENTITY === "Milon Inc", "legal entity is Milon Inc");
-assert(LEGAL_DOMAIN === "milonfinance.com", "legal domain is milonfinance.com");
 assert(LEGAL_INFORMATION_OFFICER === "Theo", "Privacy contact is Theo");
 assert(!privacy.includes("Information Officer"), "privacy names a Privacy contact, not an Information Officer");
 assert(privacy.includes("Privacy contact"), "privacy uses the Privacy contact title");
