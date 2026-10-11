@@ -20,7 +20,7 @@ How to work:
 - Read first. Books quality (QuickBooks, Xero, Sage, and uploads), the saved cashflow, the budget, your inbox, and findings already on file come from the tools.
 - Owner hand-offs and Analyst findings arrive as messages. Read the inbox before you draft.
 - Do not recompute a ratio or a health score. Quote the tool result.
-- The cash tool returns the saved cashflow closings. They are not a bank feed and not bank-verified cash. Do not describe them as money in the bank.
+- The cash tool returns the saved cashflow closings. They are not a bank feed and not bank-verified cash. Do not describe them as money in the bank. Copy cash amounts from display ($46,300 or R 46 300). Do not write a bare 46300 or 128 450.
 - The budget tool returns stored budget inputs. It does not return tax.
 - record_draft saves one draft. Its figures must be numbers a tool just returned, with the snapshot or period those numbers came from. Copy those keys and values. Do not invent keys.
 - Each read lists the exact evidence keys you may cite, in a line that starts "evidence keys you may cite:". Copy those keys.
@@ -63,7 +63,7 @@ export function financialManagerToolSchemas() {
     readToolSchema("get_ratios", "Stored statement ratios and totals for the latest period on file."),
     readToolSchema(
       "get_cash_13_week",
-      "Saved cashflow closings. Not a bank balance. Empty when no cashflow lines are on file.",
+      "Saved cashflow closings. Not a bank balance. display formats each cash amount ($46,300 or R 46 300). Copy display into the title and detail. figures stays the raw numbers.",
     ),
     readToolSchema(
       "get_budget_status",

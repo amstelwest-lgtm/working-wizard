@@ -20,8 +20,8 @@ import {
   findingDuplicates,
   findingKindAllowed,
   findingRecordKey,
-  higherFindingSeverity,
   labelHealthScore,
+  refreshedFindingUpdate,
   numericFigures,
   statementVariance,
   type AnalystToolName,
@@ -316,11 +316,20 @@ async function recordFinding(args: Record<string, unknown>, ctx: AnalystExecCtx)
   });
   if (duplicate) {
     const seenAt = new Date().toISOString();
-    const raised = higherFindingSeverity(duplicate.severity, severity);
+    const kept = ((recent ?? []) as Array<Record<string, unknown>>).find((row) => String(row.id) === duplicate.id);
     const { error: touchError } = await ctx.db
       .from("agent_findings")
-      .update(raised ? { last_seen: seenAt, severity: raised } : { last_seen: seenAt })
-      .eq("id", duplicate.id);
+      .update(refreshedFindingUpdate({
+        title: shaped.title,
+        detail: shaped.detail,
+        seenAt,
+        severity,
+        existingSeverity: duplicate.severity,
+        existingEvidence: asRecord(kept?.evidence),
+        nextEvidence: evidence as Record<string, unknown>,
+      }))
+      .eq("id", duplicate.id)
+      .is("superseded_by", null);
     if (touchError) return { error: touchError.message };
     for (const key of recordKeys) ctx.recordedKeys.add(key);
     return {

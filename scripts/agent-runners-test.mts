@@ -352,7 +352,11 @@ const pool = [
   assert(!lookup.includes('.is("superseded_by", null)'), "dedupe compares superseded rows");
   assert(desk.includes('.is("dismissed_reason", null)'), "dismissed findings are not revived");
   assert(desk.includes('.is("superseded_by", null)'), "the last_seen bump does not rewrite a superseded row");
-  assert(desk.includes("last_seen: seenAt"), "a duplicate draft bumps last_seen on the existing row");
+  assert(desk.includes("refreshedFindingUpdate"), "a duplicate draft refreshes the kept copy");
+  assert(
+    read("src/lib/agent-analyst.ts").includes("last_seen: input.seenAt"),
+    "a duplicate draft bumps last_seen on the existing row",
+  );
 }
 
 // Drafts only. Signed off is refused. No live records.
@@ -601,6 +605,16 @@ function deskWritesLiveRecords(src: string): boolean {
   );
   assert(jobSrc.includes("config.costCeilingUsd"), "the cost ceiling is the agent's own cap");
   assert(jobSrc.includes("runnerNextCallExceedsCeiling"), "the next call is priced from the last call");
+  const analystRunSrc = read("supabase/functions/agent-analyst/run.ts");
+  const analystReason = analystRunSrc.slice(analystRunSrc.indexOf("reason: async"));
+  assert(
+    analystReason.includes("runnerNextCallExceedsCeiling") && analystReason.includes("RUNNER_COST_CEILING_USD"),
+    "the analyst uses the same $0.06 predictive cost stop",
+  );
+  assert(
+    analystReason.indexOf("runnerNextCallExceedsCeiling") < analystReason.indexOf("callClaudeRound"),
+    "the analyst prices the next call before it starts",
+  );
   assert(jobSrc.includes("maxTokens: RUNNER_MAX_OUTPUT_TOKENS"), "the output cap is the shared runner cap");
   assert(jobSrc.includes("CUT_OFF_DRAFT_RESULT"), "a cut-off draft returns the resend result");
   assert(!jobSrc.includes("costStopUsd"), "the flat stop line is gone");

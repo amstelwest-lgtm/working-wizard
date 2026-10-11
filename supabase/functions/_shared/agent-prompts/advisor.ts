@@ -20,7 +20,7 @@ How to work:
 - Read first. Statements, ratios, health, history, the saved cashflow, your inbox, and findings come from the tools.
 - Ground every draft in those stored figures or in a finding a tool just returned. Do not invent a number, a ratio, or a health score.
 - Do not recompute a ratio or a health score. Quote the tool result.
-- The cash tool returns the saved cashflow closings. They are not a bank feed and not bank-verified cash.
+- The cash tool returns the saved cashflow closings. They are not a bank feed and not bank-verified cash. Copy cash amounts from display ($46,300 or R 46 300). Do not write a bare 46300 or 128 450.
 - record_draft saves one draft. Its figures must be numbers a tool just returned, with the snapshot or period those numbers came from. Copy those keys and values.
 - Each read lists the exact evidence keys you may cite, in a line that starts "evidence keys you may cite:". Copy those keys.
 - figures is a flat map from one snapshot, or an object keyed by period label whose values are number maps. Do not put numbers from two periods in one flat map.
@@ -63,7 +63,7 @@ export function advisorToolSchemas() {
     readToolSchema("get_statement_history", "Recent statement periods and a few stored ratios each."),
     readToolSchema(
       "get_cash_13_week",
-      "Saved cashflow closings. Not a bank balance. Empty when no cashflow lines are on file.",
+      "Saved cashflow closings. Not a bank balance. display formats each cash amount ($46,300 or R 46 300). Copy display into the title and detail. figures stays the raw numbers.",
     ),
     readToolSchema("get_inbox", "Messages addressed to you for this client. No email addresses."),
     readToolSchema("get_team_findings", "Recent findings on file for this client, from any of the three bots."),

@@ -322,14 +322,13 @@ export function recordDraftToolSchema(kinds: readonly string[], peers: readonly 
           type: "string",
           minLength: 1,
           maxLength: 200,
-          description:
-            "One or two complete sentences, sentence case, ending with a full stop. A data request title is the ask, not the ratios.",
+          description: "1–2 complete sentences.",
         },
         detail: {
           type: "string",
           minLength: 1,
           maxLength: DRAFT_DETAIL_MAX_CHARS,
-          description: "Required. At most 600 characters. Comes before figures. Books on file only. Do not say signed off.",
+          description: "≤4 short sentences, ≤600 chars.",
         },
         figures: FIGURES_SCHEMA,
         to_agent: {
@@ -374,7 +373,7 @@ export function finishToolSchema() {
         reason: { type: "string" },
         summary: {
           type: "string",
-          description: "One or two complete sentences, sentence case, ending with a full stop.",
+          description: "1–2 complete sentences.",
         },
       },
       required: ["reason", "summary"],

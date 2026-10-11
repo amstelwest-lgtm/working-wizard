@@ -5,7 +5,7 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { executeAnalystTool, type AnalystExecCtx } from "../agent-analyst/execute.ts";
-import { moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
+import { displayAmounts, moneyMarketFromClient, type AgentKey } from "../../../src/lib/agent-bus.ts";
 import { booksQualityFigures, savedBudgetFigures, savedCashflowFigures } from "../../../src/lib/agent-books.ts";
 import {
   AGENT_OUTBOUND_TYPES,
@@ -15,7 +15,7 @@ import {
   resolveDraftRecipient,
   type AgentOutboundType,
 } from "../../../src/lib/agent-draft.ts";
-import { findingDuplicates, higherFindingSeverity, numericFigures } from "../../../src/lib/agent-analyst.ts";
+import { findingDuplicates, numericFigures, refreshedFindingUpdate } from "../../../src/lib/agent-analyst.ts";
 
 export type AgentToolCtx = AnalystExecCtx & {
   agent: "financial_manager" | "advisor";
@@ -43,8 +43,9 @@ export async function readCash13Week(ctx: AgentToolCtx): Promise<unknown> {
   const runway = data?.cash_runway_weeks;
   const figures = { ...saved.figures };
   if (typeof runway === "number" && Number.isFinite(runway)) figures.cash_runway_weeks = runway;
+  const market = moneyMarketFromClient(ctx.market);
   if (saved.empty && figures.cash_runway_weeks == null) {
-    return { empty: true, note: saved.note, figures: {} };
+    return { empty: true, note: saved.note, figures: {}, display: {} };
   }
   return {
     empty: false,
@@ -52,6 +53,7 @@ export async function readCash13Week(ctx: AgentToolCtx): Promise<unknown> {
     note: saved.note,
     period_label: saved.periodLabel,
     figures,
+    display: displayAmounts(figures, market),
   };
 }
 
@@ -332,10 +334,18 @@ export async function recordAgentDraft(
   });
   if (duplicate) {
     const seenAt = new Date().toISOString();
-    const raised = higherFindingSeverity(duplicate.severity, prepared.severity);
+    const kept = ((recent ?? []) as Array<Record<string, unknown>>).find((row) => String(row.id) === duplicate.id);
     const { error: touchError } = await ctx.db
       .from("agent_findings")
-      .update(raised ? { last_seen: seenAt, severity: raised } : { last_seen: seenAt })
+      .update(refreshedFindingUpdate({
+        title: prepared.title,
+        detail: prepared.detail,
+        seenAt,
+        severity: prepared.severity,
+        existingSeverity: duplicate.severity,
+        existingEvidence: asRecord(kept?.evidence),
+        nextEvidence: prepared.evidence as Record<string, unknown>,
+      }))
       .eq("id", duplicate.id)
       .is("dismissed_reason", null)
       .is("superseded_by", null);

@@ -113,13 +113,13 @@ export function analystToolSchemas(): AnalystToolSchema[] {
             type: "string",
             minLength: 1,
             maxLength: 200,
-            description: "One or two complete sentences, sentence case, ending with a full stop. At most 200 characters.",
+            description: "1–2 complete sentences.",
           },
           detail: {
             type: "string",
             minLength: 1,
-            maxLength: 2000,
-            description: "Required. At most 2000 characters. Books on file only.",
+            maxLength: 600,
+            description: "≤4 short sentences, ≤600 chars.",
           },
           figures: {
             type: "object",
@@ -147,7 +147,7 @@ export function analystToolSchemas(): AnalystToolSchema[] {
           reason: { type: "string" },
           summary: {
             type: "string",
-            description: "One or two complete sentences, sentence case, ending with a full stop.",
+            description: "1–2 complete sentences.",
           },
         },
         required: ["reason", "summary"],

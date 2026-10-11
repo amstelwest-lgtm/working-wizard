@@ -12,6 +12,7 @@ import { callClaudeRound } from "../_shared/agent-core/claude.ts";
 import { ANALYST_SYSTEM, analystToolSchemas } from "../_shared/agent-prompts/analyst.ts";
 import { CLAUDE_MODEL } from "../_shared/claude-model.ts";
 import { moneyMarketFromClient, sanitizeAgentError, type StoredFigures } from "../../../src/lib/agent-bus.ts";
+import { RUNNER_COST_CEILING_USD, runnerNextCallExceedsCeiling } from "../../../src/lib/agent-draft.ts";
 import {
   ANALYST_MAX_ITERATIONS,
   ANALYST_TOOLS,
@@ -155,6 +156,10 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
   let outputTokens = 0;
   let cacheWriteTokens = 0;
   let cacheReadTokens = 0;
+  let lastInputTokens = 0;
+  let lastOutputTokens = 0;
+  let lastCacheWriteTokens = 0;
+  let lastCacheReadTokens = 0;
 
   try {
     const result = await runAgentLoop({
@@ -166,6 +171,23 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       toolLabels: ANALYST_TOOL_LABELS,
       rethrowReasonerErrors: true,
       reason: async (ctx) => {
+        const spent = analystRunCostUsd(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, CLAUDE_MODEL);
+        const lastCall = analystRunCostUsd(
+          lastInputTokens,
+          lastOutputTokens,
+          lastCacheWriteTokens,
+          lastCacheReadTokens,
+          CLAUDE_MODEL,
+        );
+        // Same predictor as the Financial Manager and Advisor. $0.06 is the ceiling.
+        // A call that would pass it does not start, so a run stops near $0.055.
+        if (runnerNextCallExceedsCeiling({ spentUsd: spent, lastCallUsd: lastCall, ceilingUsd: RUNNER_COST_CEILING_USD })) {
+          return {
+            kind: "stop",
+            reason: "insufficient_information",
+            summary: "Stopped before another model call so the run stays within its cost ceiling.",
+          };
+        }
         await db.rpc("heartbeat_agent_lease", {
           p_agent: "analyst",
           p_client_id: job.clientId,
@@ -177,6 +199,10 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
           analystToolSchemas(),
           { toolChoice: { type: "any" }, maxTokens: 700, cachePrompt: true },
         );
+        lastInputTokens = round.inputTokens;
+        lastOutputTokens = round.outputTokens;
+        lastCacheWriteTokens = round.cacheCreationTokens;
+        lastCacheReadTokens = round.cacheReadTokens;
         inputTokens += round.inputTokens;
         outputTokens += round.outputTokens;
         cacheWriteTokens += round.cacheCreationTokens;

@@ -1073,16 +1073,14 @@ export function moneyMarketFromClient(raw: unknown): MoneyMarket {
 }
 
 export const AGENT_COPY_GUIDE = `How to write a title, detail, or summary:
-- One or two complete plain sentences, in sentence case, each ending with a full stop.
-- Amounts use the client's format. South Africa: R 13 846. United States: $13,846.
+- A title or a home summary is 1–2 complete sentences, in sentence case, each ending with a full stop.
+- A detail is ≤4 short sentences, ≤600 chars.
+- Amounts use the client's format. South Africa: R 13 846. United States: $13,846. Cashflow amounts are $46,300 or R 46 300, never a bare 46300 or 128 450.
 - A ratio is a percentage. 0.6 is written 60%.
 - Days are whole days. 43.8 is written 44 days.
 - Bad: "Low R 36 154. R 13 846 under R 50 000. get emails out to 10 clients"
 - Good: "Cash is R 13 846 below your R 50 000 minimum. Send reminder emails to 10 clients."
 - A data request title is the ask itself. Bad: "Gross margin is 0.6. Debtor days are 43.8." Good: "Send the September debtors age analysis."`;
-
-const COPY_VERB =
-  /\b(is|are|was|were|has|have|had|be|been|send|sends|ask|asks|connect|connects|review|reviews|check|checks|confirm|confirms|collect|collects|pay|pays|email|emails|remind|reminds|need|needs|should|can|could|will|would|do|does|did|open|opens|upload|uploads|share|shares|provide|provides|look|looks|show|shows|showed|remain|remains|stay|stays|fell|fall|falls|rose|rise|rises|drop|drops|dropped|sit|sits|call|calls|write|writes|get|gets|raise|raises|keep|keeps|make|makes|put|puts|file|files|chase|chases|follow|follows|owe|owes|see|sees|use|uses)\b/i;
 
 const METRIC_WORD =
   /\b(?:gross|operating|net)\s+margin\b|\b(?:debtor|creditor|inventory|working\s+capital|wip)\s+days\b|\b(?:current|fixed\s+cost)\s+ratio\b|\bdebt[-\s]to[-\s]equity\b|\brevenue\s+growth\b|\breturn\s+on\s+(?:assets|equity)\b|\b(?:tax|interest)\s+burden\b|\basset\s+turnover\b|\brevenue\b|\bcash\b/i;
@@ -1096,6 +1094,7 @@ function metricUnit(key: string, value: number): EvidenceMetricUnit {
   if (/day/.test(compact)) return "days";
   if (/margin|percent|growth|rate|burden|costratio|returnon/.test(compact)) return "percent";
   if (/turnover|multiplier|multiple|debttoequity|currentratio/.test(compact)) return "ratio";
+  if (/closing|openingbalance|openingcash|bankbalance/.test(compact)) return "currency";
   if (/week|runway|horizon|upload|ledger|score|pillar|sync/.test(compact)) return "count";
   if (
     /revenue|cash|expense|asset|liabilit|balance|amount|sales|profit|wage|cogs|payable|receivable|cost/.test(compact) ||
@@ -1175,6 +1174,20 @@ export function evidenceMetrics(
   });
 }
 
+/** Currency figures in the client's format, for a read tool to show beside the raw numbers. */
+export function displayAmounts(
+  figures: Record<string, number> | undefined,
+  market: MoneyMarket = moneyMarketFromClient(null),
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(figures ?? {})) {
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    if (metricUnit(key, value) !== "currency") continue;
+    out[key] = formatMoney(value, market);
+  }
+  return out;
+}
+
 /** info → healthy, watch → attention, act → critical. Cash under the comfort floor is critical. */
 export function agentCopyStatus(severity: string, metrics: readonly EvidenceMetric[]): AgentCopyStatus {
   const breach = metrics.some((metric) => metric.floor != null && metric.value < metric.floor);
@@ -1202,13 +1215,16 @@ function rawAmountSpellings(value: number): string[] {
 function applyCopyReplacements(text: string, replacements: { raw: string; formatted: string }[]): string {
   const chosen = new Map<string, string>();
   for (const item of replacements) {
-    if (!item.raw || item.raw === item.formatted || item.formatted.includes(item.raw)) continue;
+    if (!item.raw || item.raw === item.formatted) continue;
     if (!chosen.has(item.raw)) chosen.set(item.raw, item.formatted);
   }
   const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
   if (!list.length) return text;
   const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  return text.replace(new RegExp(`(?<![R$£€\\d.])(?:${pattern})(?!\\d)`, "g"), (match) => chosen.get(match) ?? match);
+  return text.replace(
+    new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?![\\d×%])`, "g"),
+    (match) => chosen.get(match) ?? match,
+  );
 }
 
 function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, market: MoneyMarket): string {
@@ -1255,9 +1271,29 @@ function isMetricDump(text: string): boolean {
   return parts.length > 0 && parts.every(isMetricSentence);
 }
 
+const COPY_SENTENCE_LIMIT = { title: 2, summary: 2, detail: 4 } as const;
+const COPY_CHAR_LIMIT = { title: 200, summary: 500, detail: 600 } as const;
+
+function isBareNumber(text: string): boolean {
+  const compact = text.replace(/[.!?]+$/g, "").trim();
+  if (!compact) return false;
+  return /^(?:[R$£€]\s*)?-?\d[\d\s,\u00a0]*(?:\.\d+)?%?$/.test(compact);
+}
+
+function fitCopyChars(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, Math.max(1, max - 1));
+  const last = cut.lastIndexOf(". ");
+  if (last >= 40) return cut.slice(0, last + 1).trim();
+  const body = cut.replace(/[.!?\s]+$/g, "").trim();
+  const sentence = body ? `${body}.` : "";
+  return sentence.length <= max ? sentence : `${sentence.slice(0, max - 1)}.`;
+}
+
 /**
  * Sentence case, a full stop, and the client's amount format.
- * A lowercase start is capitalised. A bare number or a third sentence is refused.
+ * A long title or summary keeps the first two sentences. A detail keeps four.
+ * Only an empty string or a bare number is refused.
  */
 export function polishAgentCopy(input: {
   text: string;
@@ -1270,16 +1306,12 @@ export function polishAgentCopy(input: {
   const formatted = formatCopyAmounts(input.text.replace(/\s+/g, " ").trim(), input.figures, market);
   if (!formatted) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
   const parts = splitCopySentences(formatted);
-  if (parts.length > 2) {
-    return { ok: false, error: "Write one or two complete sentences ending with a full stop." };
+  if (parts.length === 0) return { ok: false, error: `A ${input.role} needs a complete sentence.` };
+  const sentences = parts.slice(0, COPY_SENTENCE_LIMIT[input.role]).map(sentenceCase);
+  const text = fitCopyChars(sentences.join(" "), COPY_CHAR_LIMIT[input.role]);
+  if (!text || isBareNumber(text)) {
+    return { ok: false, error: `A ${input.role} needs a complete sentence, not a bare number.` };
   }
-  const sentences = parts.map(sentenceCase);
-  for (const sentence of sentences) {
-    if (!COPY_VERB.test(sentence)) {
-      return { ok: false, error: `Write a complete sentence. "${sentence}" is a fragment.` };
-    }
-  }
-  const text = sentences.join(" ");
   if (input.role === "title" && input.kind === "data_request_draft" && isMetricDump(text)) {
     return {
       ok: false,
@@ -1320,8 +1352,8 @@ export function shapeRecordedCopy(input: {
   const metrics = evidenceMetrics(input.figures, input.periodLabel, market);
   return {
     ok: true,
-    title: title.text.slice(0, 200),
-    detail: detail.text.slice(0, 2000),
+    title: title.text,
+    detail: detail.text,
     metrics,
     status: agentCopyStatus(input.severity, metrics),
   };
