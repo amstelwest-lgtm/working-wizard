@@ -58,6 +58,10 @@ verify_jwt = true
 [functions.owner-handoff]
 verify_jwt = true
 
+# Approve or dismiss one agent draft. Caller JWT. Service role writes the live row.
+[functions.agent-draft-decision]
+verify_jwt = true
+
 # Cron dispatcher. Service-role JWT. The schedule is inserted inactive.
 [functions.agent-dispatch]
 verify_jwt = true
