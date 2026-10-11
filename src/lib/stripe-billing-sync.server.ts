@@ -18,8 +18,16 @@ import {
   zarCentsFromPrice,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
-import { readFirmSetupUpgrade, resolveFirmCatalogPrice } from "@/lib/stripe-checkout.core";
-import { priceMarketForFirm, readStripeCustomerCountry, zarBillingCountryOk } from "@/lib/pricing/za-checkout";
+import {
+  isOwnerLookupKey,
+  readFirmSetupUpgrade,
+  resolveFirmCatalogPrice,
+} from "@/lib/stripe-checkout.core";
+import {
+  priceMarketForFirm,
+  readStripeCustomerCountry,
+  zarBillingCountryOk,
+} from "@/lib/pricing/za-checkout";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 import {
   isSaMarketFirm,
@@ -213,6 +221,14 @@ export async function syncFirmSubscriptionBand(
   const sub = await retrieveFirmSubscription(stripe, subscriptionId);
   const price = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
   const metadata = { ...(sub.metadata ?? {}) };
+  if (metadata.milon_plan === "owner" || isOwnerLookupKey(price.lookupKey)) {
+    const { syncOwnerBillingEvent } = await import("@/lib/owner-billing.server");
+    await syncOwnerBillingEvent({
+      type: "customer.subscription.updated",
+      data: { object: sub },
+    });
+    return { band: null, cancelledReplaced: false, downgradeBlocked: false };
+  }
   const replacesFromSession = options?.replacesSubscriptionId?.trim();
   if (replacesFromSession && !metadata.milon_replaces_subscription) {
     metadata.milon_replaces_subscription = replacesFromSession;
@@ -590,6 +606,12 @@ export async function syncCheckoutSessionSubscription(
   stripe?: StripeLike,
 ): Promise<{ band: string | null; cancelledReplaced: boolean } | null> {
   if (session.mode && session.mode !== "subscription") return null;
+  const lookupKey = session.metadata?.milon_lookup_key ?? "";
+  if (session.metadata?.milon_plan === "owner" || isOwnerLookupKey(lookupKey)) {
+    const { syncOwnerCheckoutSession } = await import("@/lib/owner-billing.server");
+    await syncOwnerCheckoutSession(session);
+    return { band: "owner", cancelledReplaced: false };
+  }
   const subscriptionId =
     typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
   if (!subscriptionId) return null;
@@ -629,6 +651,9 @@ export const FIRM_BILLING_WEBHOOK_EVENTS = [
 export function isFirmBillingWebhookEvent(type: string | undefined): boolean {
   return (FIRM_BILLING_WEBHOOK_EVENTS as readonly string[]).includes(type ?? "");
 }
+
+export { syncOwnerBillingEvent, syncOwnerCheckoutSession } from "@/lib/owner-billing.server";
+export { ownerBillingEventSignal } from "@/lib/owner-billing";
 
 /** Signature helper so the route stays a thin wrapper. */
 export function constructFirmBillingEvent(

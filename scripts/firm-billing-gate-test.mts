@@ -615,7 +615,10 @@ const layout = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
 const gate = readFileSync(resolve("src/routes/_authenticated.gate.tsx"), "utf8");
 const shell = `${layout}\n${gate}`;
 assert(layout.includes("codeSplitGroupings: []"), "auth shell is not a split chunk");
-assert(layout.includes('import("./_authenticated.gate")'), "auth gate loads after the shell hydrates");
+assert(
+  layout.includes('import("./_authenticated.gate")'),
+  "auth gate loads after the shell hydrates",
+);
 assert(gate.includes("getFirmBillingEntitlement"), "authenticated shell calls the Stripe gate");
 assert(gate.includes("isFirmProductPath"), "authenticated shell gates firm product paths");
 assert(gate.includes("/billing/required"), "unpaid firms redirect to billing required");
@@ -624,7 +627,10 @@ assert(
   !shell.includes("firmSignupCheckoutIntent"),
   "shell does not default an existing firm to a US signup intent",
 );
-assert(layout.includes("pendingComponent: FirmShellLoading"), "auth shell pending paint matches SSR");
+assert(
+  layout.includes("pendingComponent: FirmShellLoading"),
+  "auth shell pending paint matches SSR",
+);
 assert(gate.includes("loadFirmClientGateContext"), "shell loads the first-client count");
 assert(gate.includes("firmClientCount"), "shell passes the first-client count into the gate");
 assert(
@@ -642,7 +648,10 @@ assert(appSrc.includes("shouldBounceFromOwnerApp"), "owner bounce helper still u
 
 const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
 assert(required.includes("Continue on"), "required page is Checkout after the figures");
-assert(required.includes("The figures stay."), "required page does not pretend the workspace never opened");
+assert(
+  required.includes("The figures stay."),
+  "required page does not pretend the workspace never opened",
+);
 assert(required.includes("Resume Checkout"), "required page resumes Checkout");
 assert(required.includes('href="/#pricing"'), "back to pricing shows pricing, not Checkout");
 assert(!required.includes('to="/"'), "back to pricing does not link at /");
@@ -650,17 +659,17 @@ assert(required.includes("BillingSignOutButton"), "billing wall can sign out");
 assert(required.includes('createFileRoute("/billing/required")'), "required route");
 assert(required.includes("readFirmBillingQuote"), "wall price comes from the firm quote");
 assert(required.includes("billingIntentForResolvedMarket"), "wall checkout ignores the URL market");
-assert(
-  required.includes('quote?.market === "us"'),
-  "USD copy is only shown for a US firm quote",
-);
+assert(required.includes('quote?.market === "us"'), "USD copy is only shown for a US firm quote");
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
 assert(start.includes("BillingSignOutButton"), "billing start can sign out");
 const signOut = readFileSync(resolve("src/components/billing-sign-out.tsx"), "utf8");
 assert(signOut.includes("Sign out"), "sign out label is visible");
-assert(start.includes("readFirmBillingQuote"), "billing start loads the firm quote, not the URL market");
+assert(
+  start.includes("readFirmBillingQuote"),
+  "billing start loads the firm quote, not the URL market",
+);
 assert(
   !start.includes("readSaPricingCopy"),
   "billing start does not paint geo rand copy for a signed-in firm",
@@ -745,10 +754,7 @@ const staleSignup = decideAccountantAuthLanding({
   next: "/billing/start?plan=solo&interval=month&market=us",
   insightSeen: true,
 });
-assert(
-  staleSignup.kind === "workspace",
-  "a new firm signup ignores a stored insight flag",
-);
+assert(staleSignup.kind === "workspace", "a new firm signup ignores a stored insight flag");
 const earlyResume = decideAccountantAuthLanding({
   flow: "signin",
   hadFirmBefore: false,
@@ -756,10 +762,7 @@ const earlyResume = decideAccountantAuthLanding({
   pending: null,
   next: "/billing/start?plan=solo&interval=month&market=us",
 });
-assert(
-  earlyResume.kind === "workspace",
-  "before an insight, a billing next opens the practice",
-);
+assert(earlyResume.kind === "workspace", "before an insight, a billing next opens the practice");
 const resume = decideAccountantAuthLanding({
   flow: "signin",
   hadFirmBefore: false,
@@ -794,6 +797,48 @@ assert(
 assert(
   authPage.includes('landAfterAccountantAuth(signInData.user.id, "signin")'),
   "password sign-in does not reuse the Create firm landing",
+);
+
+const ownerFns = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
+assert(
+  ownerFns.includes("export const startOwnerCheckout"),
+  "owner Checkout is a signed-in server function",
+);
+assert(
+  ownerFns.includes("export const getOwnerEntitlement"),
+  "owner entitlement helper is exported for the plan UI",
+);
+assert(ownerFns.includes("requireSupabaseAuth"), "owner Checkout requires a signed-in user");
+const ownerWebhook = readFileSync(resolve("src/routes/api/stripe/webhook.ts"), "utf8");
+assert(
+  ownerWebhook.includes("ownerBillingEventSignal"),
+  "webhook separates owner events from firm bands",
+);
+assert(
+  ownerWebhook.includes("customer.subscription.deleted"),
+  "owner cancellation is a webhook event",
+);
+const ownerMigration = readFileSync(
+  resolve("supabase/migrations/20261013140000_owner_subscriptions.sql"),
+  "utf8",
+);
+assert(ownerMigration.includes("enable row level security"), "owner entitlement table enables RLS");
+assert(ownerMigration.includes("owner_subscriptions read own"), "the owner can read their own row");
+assert(ownerMigration.includes("user_id = auth.uid()"), "the read policy is the signed-in owner");
+assert(
+  ownerMigration.includes("grant select on table public.owner_subscriptions to authenticated"),
+  "authenticated can select",
+);
+assert(
+  !/for insert/i.test(ownerMigration) &&
+    !/for update/i.test(ownerMigration) &&
+    !/for delete/i.test(ownerMigration),
+  "writes are not granted by an owner policy",
+);
+assert(ownerMigration.includes("service_role"), "service role can write the entitlement");
+assert(
+  ownerMigration.includes("source in ('stripe', 'firm')"),
+  "entitlement source is stripe or firm",
 );
 
 console.log("firm-billing-gate ok");

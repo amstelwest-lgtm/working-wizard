@@ -15,8 +15,12 @@ import {
   pendingCheckoutFromNext,
   registerLabelForPlan,
 } from "../src/lib/pending-checkout";
-import { STRIPE_SAAS_BUSINESS_TAX_CODE, firmLookupKey } from "../src/lib/stripe-plans";
-import { zaLookupKey } from "../src/lib/pricing/za-ladder";
+import {
+  STRIPE_SAAS_BUSINESS_TAX_CODE,
+  bandIdFromLookupKey,
+  firmLookupKey,
+} from "../src/lib/stripe-plans";
+import { parseZaLookupKey, zaLookupKey } from "../src/lib/pricing/za-ladder";
 import {
   billingIntentForResolvedMarket,
   firmBillingResumeIntent,
@@ -31,16 +35,40 @@ import {
   firmIntegrationIdentifier,
   firmUpgradeCheckoutSessionParams,
   foundingRejectedOnYearly,
+  findOwnerCatalogPrice,
+  isOwnerLookupKey,
+  OWNER_MONTHLY_USD_CENTS,
+  OWNER_MONTHLY_ZA_CENTS,
+  ownerAnnualCents,
+  ownerCheckoutCharge,
+  ownerCheckoutSessionParams,
+  ownerIntegrationIdentifier,
+  ownerLookupKey,
+  ownerZarNeedsUsdFallback,
   resolveFirmCheckoutMarket,
   resolvePriceByLookupKey,
 } from "../src/lib/stripe-checkout.core";
+import { resolveOwnerCheckoutMarket } from "../src/lib/billing-market";
+import {
+  applyOwnerStripeEvent,
+  emptyOwnerStripeSnapshot,
+  firmSubscriptionCoversOwner,
+  getOwnerEntitlement,
+  OWNER_FIRM_GRACE_DAYS,
+  OWNER_PRICE_UNAVAILABLE,
+  ownerBillingEventSignal,
+  planOwnerCheckout,
+} from "../src/lib/owner-billing";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
 assert(firmLookupKey("solo", "month") === "milon_solo_monthly", "resolve solo monthly lookup_key");
-assert(firmLookupKey("growing", "year") === "milon_growing_yearly", "resolve growing yearly lookup_key");
+assert(
+  firmLookupKey("growing", "year") === "milon_growing_yearly",
+  "resolve growing yearly lookup_key",
+);
 
 const fakeStripe = {
   prices: {
@@ -48,7 +76,9 @@ const fakeStripe = {
       const key = lookup_keys[0];
       if (key === "milon_solo_monthly") {
         return {
-          data: [{ id: "price_test_solo_month", lookup_key: key, recurring: { interval: "month" } }],
+          data: [
+            { id: "price_test_solo_month", lookup_key: key, recurring: { interval: "month" } },
+          ],
         };
       }
       return { data: [] };
@@ -91,7 +121,10 @@ assert(
   monthly.line_items?.[0] && !("price_data" in monthly.line_items[0]),
   "does not use inline price_data",
 );
-assert(!("managed_payments" in monthly) || monthly.managed_payments == null, "MP not force-disabled");
+assert(
+  !("managed_payments" in monthly) || monthly.managed_payments == null,
+  "MP not force-disabled",
+);
 assert(!("automatic_tax" in monthly) || monthly.automatic_tax == null, "automatic_tax omitted");
 assert(monthly.billing_address_collection === "required", "billing address required");
 assert(monthly.allow_promotion_codes === true, "monthly paid allows FOUNDING box");
@@ -117,7 +150,10 @@ assert(yearly.adaptive_pricing?.enabled === false, "US yearly Checkout does not 
 assert(!yearly.discounts, "US yearly Checkout has no SA coupon");
 assert(yearly.allow_promotion_codes !== true, "yearly Checkout hides promotion codes");
 assert(yearly.payment_method_collection === "always", "yearly trial still collects a card");
-assert(yearly.subscription_data?.trial_period_days === 14, "chosen yearly band also trials 14 days");
+assert(
+  yearly.subscription_data?.trial_period_days === 14,
+  "chosen yearly band also trials 14 days",
+);
 
 const resumed = firmCheckoutSessionParams({
   priceId: "price_test_solo_month",
@@ -142,7 +178,10 @@ assert(
   "parse solo yearly",
 );
 assert(parsePendingCheckout({ plan: "spark", market: "us" }) === null, "spark is not a paid plan");
-assert(parsePendingCheckout({ plan: "orbit", market: "us" }) === null, "legacy orbit is not a firm band");
+assert(
+  parsePendingCheckout({ plan: "orbit", market: "us" }) === null,
+  "legacy orbit is not a firm band",
+);
 assert(
   parsePendingCheckoutFromSearch("?checkout=constellation&market=za") === null,
   "legacy constellation query is ignored",
@@ -189,7 +228,10 @@ assert(paidPlanFromRegisterLabel("Spark — Free early access") === null, "spark
 
 const checkoutFn = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
 assert(checkoutFn.includes("getFirmBillingEntitlement"), "firm shell entitlement export");
-assert(checkoutFn.includes("customerHasEntitlingSubscription"), "active/trialing helper used for Checkout and the gate");
+assert(
+  checkoutFn.includes("customerHasEntitlingSubscription"),
+  "active/trialing helper used for Checkout and the gate",
+);
 assert(checkoutFn.includes("createOwnerStripeCheckout = createStripeCheckout"), "ops alias kept");
 assert(checkoutFn.includes("createBillingPortalSession"), "portal session export");
 assert(checkoutFn.includes("requireSupabaseAuth"), "checkout requires a signed-in user");
@@ -229,7 +271,10 @@ assert(
 assert(resolveFirmCheckoutMarket(null, "us") === "us", "no firm row and a US request stays USD");
 assert(resolveFirmCheckoutMarket(null, "za") === "us", "no firm row ignores a za request");
 assert(resolveFirmCheckoutMarket(null, "za", "ZA") === "za", "no firm row in ZA uses the edge");
-assert(resolveFirmCheckoutMarket(null, "us", "ZA") === "za", "no firm row in ZA does not follow a us URL");
+assert(
+  resolveFirmCheckoutMarket(null, "us", "ZA") === "za",
+  "no firm row in ZA does not follow a us URL",
+);
 const usFirmZaBill = firmCheckoutCharge({
   firmMarket: { country: "US", regionCode: "CA" },
   requested: "za",
@@ -238,7 +283,10 @@ const usFirmZaBill = firmCheckoutCharge({
   interval: "month",
 });
 assert(usFirmZaBill.priceMarket === "us", "US firm with a ZA billing country stays USD");
-assert(usFirmZaBill.lookupKey === firmLookupKey("solo", "month"), "US firm never uses the ZAR lookup");
+assert(
+  usFirmZaBill.lookupKey === firmLookupKey("solo", "month"),
+  "US firm never uses the ZAR lookup",
+);
 assert(usFirmZaBill.firmMarket === "us", "a ?market=za request does not flip a US firm");
 const zaFirmUsBill = firmCheckoutCharge({
   firmMarket: { country: "ZA", regionCode: null },
@@ -248,7 +296,10 @@ const zaFirmUsBill = firmCheckoutCharge({
   interval: "month",
 });
 assert(zaFirmUsBill.firmMarket === "za", "ZA firm market stays ZA");
-assert(zaFirmUsBill.priceMarket === "us", "ZA firm with a non-ZA billing country falls back to USD");
+assert(
+  zaFirmUsBill.priceMarket === "us",
+  "ZA firm with a non-ZA billing country falls back to USD",
+);
 assert(
   zaFirmUsBill.lookupKey === firmLookupKey("solo", "month"),
   "that fallback uses the USD lookup",
@@ -322,8 +373,14 @@ const zaWithCoupon = firmCheckoutSessionParams({
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
   includeTrial: false,
 });
-assert(zaWithCoupon.adaptive_pricing?.enabled === false, "a rand session does not use Adaptive Pricing");
-assert(zaWithCoupon.automatic_tax?.enabled === false, "a rand session does not enable automatic tax");
+assert(
+  zaWithCoupon.adaptive_pricing?.enabled === false,
+  "a rand session does not use Adaptive Pricing",
+);
+assert(
+  zaWithCoupon.automatic_tax?.enabled === false,
+  "a rand session does not enable automatic tax",
+);
 assert(zaWithCoupon.allow_promotion_codes !== true, "a rand session hides the promotion box");
 assert(
   !zaWithCoupon.discounts?.some((entry) => "coupon" in entry && entry.coupon === "MILON_ZA_50"),
@@ -355,7 +412,10 @@ assert(!core.includes("payment_method_types"), "dynamic payment methods in core"
 
 const checkoutDocs = readFileSync(resolve("docs/STRIPE_CHECKOUT.md"), "utf8");
 assert(checkoutDocs.includes("managed_payments"), "docs explain Managed Payments");
-assert(checkoutDocs.includes("txcd_10103001") || checkoutDocs.includes("STRIPE_FIRM_BANDS"), "docs name tax / catalog");
+assert(
+  checkoutDocs.includes("txcd_10103001") || checkoutDocs.includes("STRIPE_FIRM_BANDS"),
+  "docs name tax / catalog",
+);
 assert(checkoutDocs.includes("Milon, Inc."), "docs say Milon, Inc.");
 assert(checkoutDocs.includes("FOUNDING"), "docs mention FOUNDING");
 
@@ -364,8 +424,14 @@ assert(bandDocs.includes("milon_starter_monthly"), "band docs list starter looku
 assert(bandDocs.includes("FOUNDING applies to monthly"), "band docs: FOUNDING monthly-only");
 assert(bandDocs.includes("adaptive_pricing"), "band docs: Adaptive Pricing");
 assert(bandDocs.includes("Wilmington"), "band docs: tax head office");
-assert(bandDocs.includes("Do not") && bandDocs.includes("managed_payments"), "band docs: do not force-disable MP");
-assert(bandDocs.includes("Accountant product gate"), "band docs: firm product requires an active Stripe subscription");
+assert(
+  bandDocs.includes("Do not") && bandDocs.includes("managed_payments"),
+  "band docs: do not force-disable MP",
+);
+assert(
+  bandDocs.includes("Accountant product gate"),
+  "band docs: firm product requires an active Stripe subscription",
+);
 
 const landing = [
   readFileSync(resolve("src/routes/index.tsx"), "utf8"),
@@ -374,10 +440,22 @@ const landing = [
 assert(landing.includes("FirmBandPricingTable"), "landing accountant path shows the band table");
 assert(landing.includes("startFirmPlan"), "landing firm CTAs share one checkout starter");
 assert(landing.includes("goToFirmSignup"), "landing has a direct firm signup helper");
-assert(landing.includes("promptSignInToFinishFirmBilling"), "already-registered firm signup opens billing sign-in");
-assert(landing.includes("FIRM_BILLING_SIGNIN_MESSAGE"), "firm already-registered copy mentions finishing billing");
-assert(landing.includes("signupLooksAlreadyRegistered"), "register treats User already registered as sign-in, not a dead-end");
-assert(landing.includes('useState("Accountant / Advisory firm")'), "register defaults to accountant");
+assert(
+  landing.includes("promptSignInToFinishFirmBilling"),
+  "already-registered firm signup opens billing sign-in",
+);
+assert(
+  landing.includes("FIRM_BILLING_SIGNIN_MESSAGE"),
+  "firm already-registered copy mentions finishing billing",
+);
+assert(
+  landing.includes("signupLooksAlreadyRegistered"),
+  "register treats User already registered as sign-in, not a dead-end",
+);
+assert(
+  landing.includes('useState("Accountant / Advisory firm")'),
+  "register defaults to accountant",
+);
 assert(landing.includes("Create firm account"), "landing has a create-firm CTA");
 assert(landing.includes("Get your own AI finance team"), "owner signup is a secondary path");
 assert(!landing.includes("accountant pricing — shown via body class set by quiz"), "firm prices are not quiz-gated in markup");
@@ -393,12 +471,23 @@ assert(landing.includes("register-error"), "register errors render in the form, 
 assert(!landing.includes("${window.location.origin}${billingStartPath"), "signup does not emailRedirectTo /billing/start");
 const heroCta = landing.slice(landing.indexOf("hero-cta"), landing.indexOf("dash-stage"));
 assert(heroCta.includes("HERO_CTA_LABEL"), "hero primary CTA uses the shared trial label");
-assert(heroCta.includes('goToFirmSignup({ scrollTo: "register" })'), "hero primary still routes to firm signup");
-assert(!heroCta.includes("see MILŌN for my clients"), "old accountant secondary CTA is gone from the hero");
-assert(!heroCta.includes("__mq_start"), "hero primary does not launch the quiz");
-assert(landing.includes("FIRM_CARD_TIMING"), "landing states when the first figures and the card happen");
 assert(
-  readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("FIRM_TRIAL_SENTENCE"),
+  heroCta.includes('goToFirmSignup({ scrollTo: "register" })'),
+  "hero primary still routes to firm signup",
+);
+assert(
+  !heroCta.includes("see MILŌN for my clients"),
+  "old accountant secondary CTA is gone from the hero",
+);
+assert(!heroCta.includes("__mq_start"), "hero primary does not launch the quiz");
+assert(
+  landing.includes("FIRM_CARD_TIMING"),
+  "landing states when the first figures and the card happen",
+);
+assert(
+  readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes(
+    "FIRM_TRIAL_SENTENCE",
+  ),
   "pricing bar still uses the locked trial sentence",
 );
 assert(!landing.includes("3 free clients"), "landing never says 3 free clients");
@@ -413,12 +502,21 @@ assert(
   !landingCss.includes('html[data-landing="1"] section{'),
   "unscoped landing section rule would tuck toasts under the nav",
 );
-assert(landingCss.includes("[data-sonner-toaster]"), "landing pins toaster above the page and below the header");
+assert(
+  landingCss.includes("[data-sonner-toaster]"),
+  "landing pins toaster above the page and below the header",
+);
 assert(landingCss.includes("scroll-margin-top:88px"), "register hash scroll clears the sticky nav");
 assert(landingCss.includes(".reg-error"), "register form has an in-flow error banner");
 assert(landingCss.includes(".firm-bands-table"), "landing styles the firm band table");
-assert(landingCss.includes(".acc-pricing{display:block"), "firm band table is visible without a quiz");
-assert(!landingCss.includes("body.persona-accountant .acc-pricing"), "persona CSS does not gate firm prices");
+assert(
+  landingCss.includes(".acc-pricing{display:block"),
+  "firm band table is visible without a quiz",
+);
+assert(
+  !landingCss.includes("body.persona-accountant .acc-pricing"),
+  "persona CSS does not gate firm prices",
+);
 assert(landingCss.includes(".owner-spark-path"), "owner Spark is styled as a secondary path");
 
 const root = readFileSync(resolve("src/components/app-chrome.tsx"), "utf8");
@@ -432,9 +530,15 @@ assert(start.includes('role="alert"'), "checkout-start failure is an accessible 
 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
 assert(!success.includes("waitlist"), "success page is not waitlist copy");
-assert(success.includes("subscription is active") || success.includes("Payment received"), "success tells the truth");
+assert(
+  success.includes("subscription is active") || success.includes("Payment received"),
+  "success tells the truth",
+);
 assert(success.includes('to="/dashboard"'), "success returns to the practice portal");
-assert(success.includes("checkoutSessionUnlocksFirm"), "success treats completed trial Checkout as unlock");
+assert(
+  success.includes("checkoutSessionUnlocksFirm"),
+  "success treats completed trial Checkout as unlock",
+);
 
 const cancel = readFileSync(resolve("src/routes/billing.cancel.tsx"), "utf8");
 assert(!cancel.includes("Lighthouse"), "cancel is not a Lighthouse-only test page");
@@ -448,11 +552,456 @@ assert(
   "paid Checkout resume runs before generic /app landing",
 );
 assert(callback.includes("readInsightSeen"), "Google return opens Checkout only after an insight");
-assert(callback.includes("firmSignupCheckoutIntent"), "fresh accountant Google signup still stashes Solo");
+assert(
+  callback.includes("firmSignupCheckoutIntent"),
+  "fresh accountant Google signup still stashes Solo",
+);
 
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
-assert(settings.includes("createBillingPortalSession"), "practice settings can open Customer Portal");
+assert(
+  settings.includes("createBillingPortalSession"),
+  "practice settings can open Customer Portal",
+);
 
 assert(existsSync(resolve("src/routes/billing.start.tsx")), "billing start route exists");
+
+assert(OWNER_MONTHLY_USD_CENTS === 3900, "owner monthly USD is $39");
+assert(OWNER_MONTHLY_ZA_CENTS === 29900, "owner monthly ZA amount is 29900 cents");
+assert(
+  ownerAnnualCents(OWNER_MONTHLY_USD_CENTS) === 37440,
+  "owner annual USD is monthly x 12 x 0.8",
+);
+assert(
+  ownerAnnualCents(OWNER_MONTHLY_ZA_CENTS) === 287040,
+  "owner annual ZA amount is monthly x 12 x 0.8",
+);
+assert(ownerLookupKey("us", "month") === "milon_owner_monthly", "USD owner monthly lookup");
+assert(ownerLookupKey("za", "month") === "milon_za_owner_monthly", "ZA owner monthly lookup");
+assert(ownerLookupKey("us", "year") === "milon_owner_annual", "USD owner annual lookup");
+assert(ownerLookupKey("za", "year") === "milon_za_owner_annual", "ZA owner annual lookup");
+assert(bandIdFromLookupKey("milon_owner_monthly") === null, "owner monthly key is not a firm band");
+assert(bandIdFromLookupKey("milon_za_owner_monthly") === null, "ZA owner key is not a firm band");
+assert(
+  parseZaLookupKey("milon_za_owner_monthly") === null,
+  "firm ZA parser does not claim the owner price",
+);
+assert(isOwnerLookupKey("milon_solo_monthly") === false, "a firm lookup is not an owner price");
+
+const usOwner = ownerCheckoutCharge({
+  ownerMarket: { country: "US", regionCode: "CA" },
+  requested: "za",
+  billingCountry: "ZA",
+  interval: "month",
+});
+assert(usOwner.ownerMarket === "us", "a US owner stays USD");
+assert(
+  usOwner.priceMarket === "us",
+  "a US owner with ?market=za and ZA billing never gets the rand price",
+);
+assert(usOwner.lookupKey === "milon_owner_monthly", "a US owner uses the USD owner lookup");
+assert(!usOwner.billingFallback, "a US owner is not a billing-country fallback");
+
+const zaOwnerZaBill = ownerCheckoutCharge({
+  ownerMarket: { country: "ZA" },
+  requested: "us",
+  billingCountry: "ZA",
+  interval: "month",
+});
+assert(zaOwnerZaBill.priceMarket === "za", "ZA owner with ZA billing uses the rand price");
+assert(
+  zaOwnerZaBill.lookupKey === "milon_za_owner_monthly",
+  "ZA owner lookup is the owner rand key",
+);
+
+const zaOwnerUsBill = ownerCheckoutCharge({
+  ownerMarket: { country: "ZA" },
+  requested: "za",
+  billingCountry: "US",
+  interval: "month",
+});
+assert(zaOwnerUsBill.ownerMarket === "za", "ZA owner market stays ZA");
+assert(zaOwnerUsBill.priceMarket === "us", "ZA owner with non-ZA billing falls back to USD");
+assert(
+  zaOwnerUsBill.lookupKey === "milon_owner_monthly",
+  "that fallback uses the USD owner lookup",
+);
+assert(zaOwnerUsBill.billingFallback, "the owner fallback is recorded");
+assert(
+  ownerCheckoutCharge({
+    ownerMarket: { country: "ZA" },
+    requested: "us",
+    billingCountry: null,
+    interval: "month",
+  }).lookupKey === "milon_za_owner_monthly",
+  "ZA owner with an unknown billing country stays on the rand lookup",
+);
+assert(
+  resolveOwnerCheckoutMarket(null, "za", "US") === "us",
+  "no owner row outside ZA ignores ?market=za",
+);
+assert(
+  resolveOwnerCheckoutMarket({ country: "US", regionCode: "NY" }, "za", "ZA") === "us",
+  "a stored US owner ignores ?market=za",
+);
+assert(
+  ownerZarNeedsUsdFallback("milon_za_owner_monthly", "US"),
+  "non-ZA billing drops the rand owner price",
+);
+assert(
+  !ownerZarNeedsUsdFallback("milon_za_owner_monthly", "ZA"),
+  "ZA billing keeps the rand owner price",
+);
+assert(
+  !ownerZarNeedsUsdFallback("milon_owner_monthly", "US"),
+  "a USD owner price is not a fallback",
+);
+
+function ownerPriceStripe(
+  keys: Record<string, { id: string; currency: string; interval: "month" | "year" }>,
+) {
+  const created: Array<{
+    line_items?: Array<{ price?: string }>;
+    metadata?: Record<string, string>;
+  }> = [];
+  let lists = 0;
+  return {
+    created,
+    lists: () => lists,
+    prices: {
+      list: async ({ lookup_keys }: { lookup_keys: string[] }) => {
+        lists += 1;
+        const key = lookup_keys[0] ?? "";
+        const row = keys[key];
+        if (!row) return { data: [] };
+        return {
+          data: [
+            {
+              id: row.id,
+              lookup_key: key,
+              currency: row.currency,
+              unit_amount: key.includes("_za_") ? 29900 : 3900,
+              recurring: { interval: row.interval },
+            },
+          ],
+        };
+      },
+    },
+    checkout: {
+      sessions: {
+        create: async (params: {
+          line_items?: Array<{ price?: string }>;
+          metadata?: Record<string, string>;
+        }) => {
+          created.push(params);
+          return { url: "https://checkout.stripe.test/c/pay_owner" };
+        },
+      },
+    },
+  };
+}
+
+const monthlyOnly = ownerPriceStripe({
+  milon_owner_monthly: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
+  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+  milon_solo_monthly: { id: "price_firm_solo", currency: "usd", interval: "month" },
+});
+const skippedAnnual = await findOwnerCatalogPrice(monthlyOnly, "us", "year");
+assert(skippedAnnual === null, "a missing annual owner price is skipped");
+const usdMonthly = await findOwnerCatalogPrice(monthlyOnly, "us", "month");
+assert(usdMonthly?.price.id === "price_owner_usd_month", "monthly owner price still resolves");
+
+const usCheckout = await planOwnerCheckout({
+  stripe: monthlyOnly,
+  interval: "month",
+  requestedMarket: "za",
+  ownerMarket: { country: "US", regionCode: "CA" },
+  billingCountry: "ZA",
+  userId: "user_us",
+  email: "owner@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: null,
+});
+assert(usCheckout.status === "checkout", "US owner opens Checkout");
+if (usCheckout.status === "checkout") {
+  assert(usCheckout.lookupKey === "milon_owner_monthly", "US Checkout uses the USD owner price");
+  assert(usCheckout.priceMarket === "us", "US Checkout price market is USD");
+}
+assert(
+  monthlyOnly.created[0]?.line_items?.[0]?.price === "price_owner_usd_month",
+  "US session line is the USD owner price",
+);
+assert(
+  monthlyOnly.created[0]?.metadata?.milon_lookup_key === "milon_owner_monthly",
+  "US session metadata does not use a firm price",
+);
+
+const zaCheckoutStripe = ownerPriceStripe({
+  milon_owner_monthly: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
+  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+});
+const zaCheckout = await planOwnerCheckout({
+  stripe: zaCheckoutStripe,
+  interval: "month",
+  requestedMarket: "us",
+  ownerMarket: { country: "ZA" },
+  billingCountry: "ZA",
+  userId: "user_za",
+  email: "za-owner@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: null,
+});
+assert(
+  zaCheckout.status === "checkout" && zaCheckout.lookupKey === "milon_za_owner_monthly",
+  "ZA billing uses the rand owner price",
+);
+const zaParams = ownerCheckoutSessionParams({
+  priceId: "price_owner_za_month",
+  lookupKey: "milon_za_owner_monthly",
+  interval: "month",
+  origin: "https://www.milonfinance.com",
+  userId: "user_za",
+  email: "za-owner@example.com",
+  market: "za",
+  integrationIdentifier: ownerIntegrationIdentifier("month", "abcdefgh"),
+});
+assert(zaParams.adaptive_pricing?.enabled === false, "owner Checkout leaves adaptive pricing off");
+assert(
+  zaParams.automatic_tax?.enabled === false,
+  "rand owner Checkout does not enable automatic tax",
+);
+assert(zaParams.allow_promotion_codes !== true, "owner Checkout hides the promotion box");
+assert(!zaParams.discounts, "owner Checkout attaches no coupon");
+assert(
+  !JSON.stringify(zaParams).includes("MILON_ZA_50"),
+  "owner Checkout does not stack the firm coupon",
+);
+assert(!/vat/i.test(JSON.stringify(zaParams)), "owner Checkout has no VAT wording");
+assert(!zaParams.subscription_data?.trial_period_days, "owner Checkout has no trial");
+assert(zaParams.metadata?.milon_plan === "owner", "owner session is marked owner");
+assert(zaParams.payment_method_collection === "always", "owner Checkout collects a card");
+
+const fallbackStripe = ownerPriceStripe({
+  milon_owner_monthly: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
+  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+});
+const fallback = await planOwnerCheckout({
+  stripe: fallbackStripe,
+  interval: "month",
+  requestedMarket: "za",
+  ownerMarket: { country: "ZA" },
+  billingCountry: "GB",
+  userId: "user_za",
+  email: "za-owner@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: null,
+});
+assert(
+  fallback.status === "checkout" && fallback.lookupKey === "milon_owner_monthly",
+  "ZA owner with non-ZA billing checks out on USD",
+);
+
+const coveredStripe = ownerPriceStripe({});
+const covered = await planOwnerCheckout({
+  stripe: coveredStripe,
+  interval: "month",
+  requestedMarket: "za",
+  ownerMarket: { country: "ZA" },
+  billingCountry: "ZA",
+  userId: "user_covered",
+  email: "covered@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: { firmName: "Northline" },
+});
+assert(
+  covered.status === "covered_by_firm" && covered.firm_name === "Northline",
+  "a firm-covered owner skips Checkout",
+);
+assert(coveredStripe.lists() === 0, "firm coverage does not list Stripe prices");
+assert(coveredStripe.created.length === 0, "firm coverage does not create a session");
+
+const missingStripe = ownerPriceStripe({
+  milon_solo_monthly: { id: "price_firm_solo", currency: "usd", interval: "month" },
+});
+const missingOwner = await planOwnerCheckout({
+  stripe: missingStripe,
+  interval: "month",
+  requestedMarket: "us",
+  ownerMarket: { country: "US", regionCode: "NY" },
+  billingCountry: "US",
+  userId: "user_us",
+  email: "owner@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: null,
+});
+assert(missingOwner.status === OWNER_PRICE_UNAVAILABLE, "a missing owner price is a typed error");
+assert(missingStripe.created.length === 0, "a missing owner price does not open Checkout");
+const missingAnnual = await planOwnerCheckout({
+  stripe: monthlyOnly,
+  interval: "year",
+  requestedMarket: "us",
+  ownerMarket: { country: "US", regionCode: "NY" },
+  userId: "user_us",
+  email: "owner@example.com",
+  origin: "https://www.milonfinance.com",
+  firmCoverage: null,
+});
+assert(
+  missingAnnual.status === OWNER_PRICE_UNAVAILABLE,
+  "a missing annual price is a typed error, not a firm price",
+);
+
+const now = 1_700_000_000;
+assert(
+  firmSubscriptionCoversOwner({ status: "active", metadata: { milon_plan: "solo" } }, now).covered,
+  "an active firm plan covers the owner",
+);
+assert(
+  firmSubscriptionCoversOwner({ status: "trialing", metadata: { milon_plan: "solo" } }, now)
+    .covered,
+  "a trialing firm plan covers the owner",
+);
+assert(
+  firmSubscriptionCoversOwner(
+    { status: "canceled", canceled_at: now - 3 * 86400, current_period_end: now - 3 * 86400 },
+    now,
+  ).covered,
+  "three days after the firm churns is inside the 14-day grace",
+);
+assert(
+  !firmSubscriptionCoversOwner(
+    { status: "canceled", canceled_at: now - 15 * 86400, current_period_end: now - 15 * 86400 },
+    now,
+  ).covered,
+  "fifteen days after the firm churns is outside the grace",
+);
+assert(OWNER_FIRM_GRACE_DAYS === 14, "firm grace is the 14-day CoS default");
+assert(
+  !firmSubscriptionCoversOwner({ status: "past_due", current_period_end: now - 86400 }, now)
+    .covered,
+  "past_due is not the post-churn grace",
+);
+
+let entitlement = getOwnerEntitlement({ stripe: null, firm: null });
+assert(!entitlement.entitled && entitlement.source === "none", "no subscription is not entitled");
+const createdSignal = ownerBillingEventSignal({
+  type: "customer.subscription.created",
+  data: {
+    object: {
+      id: "sub_owner",
+      status: "active",
+      customer: "cus_owner",
+      metadata: {
+        milon_plan: "owner",
+        milon_user_id: "user_us",
+        milon_lookup_key: "milon_owner_monthly",
+        milon_market: "us",
+        milon_interval: "month",
+      },
+      items: {
+        data: [{ price: { id: "price_owner_usd_month", lookup_key: "milon_owner_monthly" } }],
+      },
+      current_period_end: now + 30 * 86400,
+    },
+  },
+});
+assert(createdSignal.owner, "owner subscription.created is an owner event");
+let snapshot = applyOwnerStripeEvent(emptyOwnerStripeSnapshot(), {
+  type: createdSignal.type,
+  lookupKey: createdSignal.lookupKey,
+  plan: "owner",
+  status: createdSignal.status,
+  market: createdSignal.market,
+  interval: createdSignal.interval,
+  currentPeriodEnd: createdSignal.currentPeriodEnd,
+  customerId: createdSignal.customerId,
+  subscriptionId: createdSignal.subscriptionId,
+  priceId: createdSignal.priceId,
+  userId: createdSignal.userId,
+});
+entitlement = getOwnerEntitlement({ stripe: snapshot, firm: null });
+assert(
+  entitlement.entitled && entitlement.source === "stripe",
+  "an active owner subscription entitles",
+);
+assert(
+  entitlement.plan === "owner" && entitlement.market === "us",
+  "entitlement records the owner plan and market",
+);
+const pastDue = applyOwnerStripeEvent(snapshot, {
+  type: "customer.subscription.updated",
+  plan: "owner",
+  lookupKey: "milon_owner_monthly",
+  status: "past_due",
+  subscriptionId: "sub_owner",
+});
+entitlement = getOwnerEntitlement({ stripe: pastDue, firm: null });
+assert(
+  !entitlement.entitled && entitlement.status === "past_due",
+  "past_due owner subscription does not entitle",
+);
+const deleted = applyOwnerStripeEvent(pastDue, {
+  type: "customer.subscription.deleted",
+  plan: "owner",
+  lookupKey: "milon_owner_monthly",
+  subscriptionId: "sub_owner",
+});
+entitlement = getOwnerEntitlement({ stripe: deleted, firm: null });
+assert(
+  !entitlement.entitled && entitlement.status === "canceled",
+  "subscription.deleted cancels the owner entitlement",
+);
+entitlement = getOwnerEntitlement({ stripe: deleted, firm: { firmName: "Northline" } });
+assert(
+  entitlement.entitled && entitlement.source === "firm",
+  "firm coverage still entitles after the owner subscription is deleted",
+);
+assert(entitlement.firmName === "Northline", "firm coverage names the firm");
+assert(
+  !ownerBillingEventSignal({
+    type: "customer.subscription.updated",
+    data: {
+      object: {
+        id: "sub_firm",
+        status: "active",
+        metadata: { milon_plan: "solo", milon_lookup_key: "milon_solo_monthly" },
+      },
+    },
+  }).owner,
+  "a firm subscription is not an owner event",
+);
+const firmLeak = applyOwnerStripeEvent(snapshot, {
+  type: "customer.subscription.updated",
+  plan: "solo",
+  lookupKey: "milon_solo_monthly",
+  status: "active",
+});
+assert(
+  firmLeak?.lookupKey === snapshot?.lookupKey,
+  "a firm price does not overwrite the owner entitlement",
+);
+
+const checkoutFnOwner = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
+assert(
+  checkoutFnOwner.includes("startOwnerCheckout"),
+  "owner Checkout server function is exported",
+);
+assert(
+  checkoutFnOwner.includes("getOwnerEntitlement"),
+  "owner entitlement server function is exported",
+);
+assert(
+  checkoutFnOwner.includes("owner_price_unavailable") ||
+    checkoutFnOwner.includes("startOwnerCheckoutForUser"),
+  "missing owner price stays on the owner path",
+);
+const webhookSrc = readFileSync(resolve("src/routes/api/stripe/webhook.ts"), "utf8");
+assert(webhookSrc.includes("syncOwnerBillingEvent"), "webhook syncs owner subscriptions");
+assert(
+  webhookSrc.includes("customer.subscription.deleted"),
+  "webhook documents owner subscription.deleted",
+);
+const syncSrc = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf8");
+assert(syncSrc.includes("syncOwnerBillingEvent"), "billing sync handles owner subscriptions");
+assert(syncSrc.includes('milon_plan === "owner"'), "firm band sync does not apply an owner price");
 
 console.log("stripe-checkout ok");
