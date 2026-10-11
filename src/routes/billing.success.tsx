@@ -6,6 +6,9 @@ import {
   getFirmBillingEntitlement,
 } from "@/lib/stripe-checkout.functions";
 import { checkoutSessionUnlocksFirm } from "@/lib/stripe-entitlement";
+import { readVisitorDraft } from "@/lib/market/storage";
+import { visitorCopyPack } from "@/lib/market/marketing";
+import { ownerPlanPublicLine } from "@/lib/owner-plan";
 
 export const Route = createFileRoute("/billing/success")({
   validateSearch: (search: Record<string, unknown>): { session_id?: string } => {
@@ -46,7 +49,7 @@ function BillingSuccessPage() {
         }
         if (checkoutSessionUnlocksFirm(result)) {
           setLabel(
-            "Checkout is complete and your card is on file. A first firm subscription is a 14-day free trial · up to 3 clients, then the paid band bills automatically. Owner Spark stays free.",
+            `Checkout is complete and your card is on file. A first firm subscription is a 14-day free trial · up to 3 clients, then the paid band bills automatically. Owner plan: ${ownerPlanPublicLine(visitorCopyPack(readVisitorDraft()))}.`,
           );
           setUnlocked(true);
           void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
