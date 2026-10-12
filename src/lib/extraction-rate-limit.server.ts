@@ -8,7 +8,7 @@
 
 export const EXTRACTION_HOURLY_LIMIT = 20;
 
-export type ExtractionKind = "statement-pdf" | "owner-pdf" | "bank-pnl" | "bank-cash";
+export type ExtractionKind = "statement-pdf" | "owner-pdf" | "bank-pnl" | "bank-cash" | "source-document";
 
 export const EXTRACTION_LIMIT_MESSAGE =
   `You've reached the hourly limit for document uploads (${EXTRACTION_HOURLY_LIMIT} an hour). ` +

@@ -32,6 +32,11 @@ const OWNER_SIDE = new Set<string>(OWNER_SIDE_DRAFT_KINDS);
 const DECISION_KINDS = new Set<string>(DRAFT_DECISION_KINDS);
 const SIGNED_OFF = /\b(signed[\s-]*off|sign[\s-]*off)\b/i;
 
+/** True when copy uses sign-off wording. Approving a ledger posting is not a sign-off. */
+export function refusesSignOffWording(text: string | null | undefined): boolean {
+  return SIGNED_OFF.test(text ?? "");
+}
+
 export type DraftSeat = "owner" | "firm";
 
 export function draftDecisionAccess(input: {

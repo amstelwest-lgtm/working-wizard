@@ -65,3 +65,7 @@ verify_jwt = true
 # Cron dispatcher. Service-role JWT. The schedule is inserted inactive.
 [functions.agent-dispatch]
 verify_jwt = true
+
+# Source document extraction. Caller JWT. Writes a proposal only. Does not post.
+[functions.extract-source-document]
+verify_jwt = true

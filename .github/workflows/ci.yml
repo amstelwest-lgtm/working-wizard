@@ -67,6 +67,8 @@ jobs:
         run: deno check --no-lock supabase/functions/owner-handoff/index.ts
       - name: deno check agent-draft-decision
         run: deno check --no-lock supabase/functions/agent-draft-decision/index.ts
+      - name: deno check extract-source-document
+        run: deno check --no-lock supabase/functions/extract-source-document/index.ts
 
   # Blocking: every test:* script that runs without a database.
   tests:
@@ -81,6 +83,40 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:ci
+
+  # Blocking: apply the source-document migration on a fresh database. Postgres
+  # checks SQL function bodies at CREATE time, so a function that names a table
+  # created later in the same file fails here. The older migration files are
+  # not replayed; 20260522100000 references clients.accountant_id, which the
+  # files before it never create.
+  sql-migrations:
+    name: Source-document SQL migration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migration and SQL tests
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+          bash scripts/apply-source-documents-sql.sh
 
   # Reporting for the existing typing and Prettier backlog, except undefined
   # names. `tsc` still carries long-standing PostgREST / vite-plugin errors, and
