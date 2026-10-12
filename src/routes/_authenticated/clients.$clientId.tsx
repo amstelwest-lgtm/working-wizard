@@ -2862,6 +2862,10 @@ function ClientView() {
     [homeBooks, strategicMoves],
   );
   const homeStatus = useMemo(() => ownerCardStatuses(homeBooks), [homeBooks]);
+  // Declared before the memo. A const after the loading return is still in
+  // the temporal dead zone here, and the minified chunk throws
+  // "Cannot access '…' before initialization" on every /clients/:id render.
+  const reportsIssued = client?.reports_issued_count ?? 0;
   const homeNeeds = useMemo(() => {
     const open = overviewNextStep?.outstanding.openActions ?? 0;
     const overdue = overviewNextStep?.outstanding.overdueActions ?? 0;
@@ -2955,8 +2959,6 @@ function ClientView() {
       </div>
     );
   }
-
-  const reportsIssued = client.reports_issued_count ?? 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
 

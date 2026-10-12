@@ -192,6 +192,7 @@
     "test:accountant-identity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-identity-test.mts",
     "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts",
     "test:client-route-search": "vite-node --config scripts/vite-test.config.ts scripts/client-route-search-test.mts",
+    "test:client-route-init": "vite-node --config scripts/vite-test.config.ts scripts/client-route-init-test.mts",
     "test:dmmt-polish": "vite-node --config scripts/vite-test.config.ts scripts/dmmt-polish-test.mts",
     "test:dmmt-chrome": "vite-node --config scripts/vite-test.config.ts scripts/dmmt-chrome-test.mts",
     "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",

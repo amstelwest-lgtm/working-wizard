@@ -31,6 +31,8 @@ jobs:
           if grep -rl "@sentry/node\|@opentelemetry" dist/client >/dev/null 2>&1; then
             echo "::error::Server-only monitoring code leaked into the client bundle"; exit 1
           fi
+      - name: Production /clients/:id chunk has no initialization crash
+        run: node scripts/client-route-build-render.mjs
 
   # Blocking: ask-ai, milon-bot, brain-propose, and brain-deliverable-draft
   # prod are one-liners that import these entries from raw.githubusercontent.com
