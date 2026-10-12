@@ -36,10 +36,15 @@ function silence(video: HTMLVideoElement) {
   video.setAttribute("playsinline", "");
 }
 
-/** Safari has no WebM. Asking it to try WebM first can fire an error and clear the element. */
+/**
+ * Safari has no WebM. Asking it to try WebM first can fire an error and
+ * clear the element. Only skip WebM when MP4 is actually supported, so a
+ * browser with neither codec stays on the source list.
+ */
 function webmUnsupported(): boolean {
   try {
-    return document.createElement("video").canPlayType("video/webm") === "";
+    const probe = document.createElement("video");
+    return probe.canPlayType("video/webm") === "" && probe.canPlayType("video/mp4") !== "";
   } catch {
     return false;
   }
