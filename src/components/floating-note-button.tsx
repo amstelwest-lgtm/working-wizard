@@ -16,7 +16,7 @@ export function FloatingNoteButton({ safeCorner = false }: { safeCorner?: boolea
       className={`${
         safeCorner
           ? "landing-safe fixed z-50 flex flex-col items-end gap-2"
-          : "fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2"
+          : "notes-fab fixed bottom-24 left-4 z-40 flex flex-col items-start gap-2 md:bottom-20 md:left-auto md:right-4 md:items-end"
       } transition-[transform,opacity] duration-200 ${
         scrolledAway ? "pointer-events-none opacity-0" : ""
       }`}
@@ -63,7 +63,7 @@ export function FloatingNoteButton({ safeCorner = false }: { safeCorner?: boolea
           !surface?.clientId
             ? "border-slate-400/20 bg-slate-500/10 text-slate-400/50"
             : pinMode
-              ? "border-[#0B5FFF] bg-[#0B5FFF]/25 text-[#0B5FFF] shadow-[0_0_12px_rgba(212,165,80,0.4)]"
+              ? "border-[#0B5FFF] bg-[#0B5FFF]/25 text-[#0B5FFF] shadow-[0_0_12px_rgba(11,95,255,0.28)]"
               : "border-[#0B5FFF]/25 bg-[#0B5FFF]/12 text-[#0B5FFF]/60 hover:border-[#0B5FFF]/60 hover:bg-[#2563EB]/25 hover:text-[#0B5FFF]"
         }`}
       >

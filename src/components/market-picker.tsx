@@ -180,7 +180,7 @@ export function MarketPicker({
 
   const idle = "border-[var(--line,#DBEAFE)] bg-transparent text-[var(--ink,#102A43)]";
   const on =
-    "border-[var(--gold,#0B5FFF)] bg-[color-mix(in_srgb,var(--gold,#0B5FFF)_12%,transparent)] text-[var(--ink,inherit)]";
+    "border-[#0B5FFF] bg-[#DBEAFE] text-[#102A43]";
   const labelCls = "text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]";
   const helpCls = "text-xs text-[var(--ink-dim,#9b958a)]";
 

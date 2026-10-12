@@ -36,9 +36,10 @@ function lands(
   );
 }
 
-lands("ask", { tab: "home" }, "?tab=ask opens Home");
-lands("bot", { tab: "home" }, "?tab=bot opens Home");
-lands("milon-bot", { tab: "home" }, "?tab=milon-bot opens Home");
+lands("ask", { tab: "desk" }, "?tab=ask opens the Bot desk");
+lands("bot", { tab: "desk" }, "?tab=bot opens the Bot desk");
+lands("milon-bot", { tab: "desk" }, "?tab=milon-bot opens the Bot desk");
+lands("desk", { tab: "desk" }, "?tab=desk opens the Bot desk");
 lands("overview", { tab: "home" }, "?tab=overview opens Home");
 assert(
   canonicalizeAccountantSearch({}).tab === "home" &&
@@ -124,9 +125,14 @@ assert(
   "?section=budget opens Budget",
 );
 assert(
-  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "home" &&
-    canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).section === undefined,
+  canonicalizeAccountantSearch({ tab: "home", section: "pack" }).tab === "home" &&
+    canonicalizeAccountantSearch({ tab: "home", section: "pack" }).section === undefined,
   "an explicit Home tab wins over section=pack",
+);
+assert(
+  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "desk" &&
+    canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).section === undefined,
+  "an explicit Bot desk tab wins over section=pack",
 );
 assert(
   canonicalizeAccountantSearch({ tab: "deliverables", section: "reports" }).tab === "reports" &&
@@ -212,14 +218,14 @@ const parser = route.slice(
 assert(parser.includes("canonicalizeAccountantSearch"), "alias runs inside validateSearch");
 assert(parser.includes("out.section = canonical.section"), "section is written onto the search");
 assert(
-  route.includes('resolveAccountantTab(search) ?? "ask"'),
+  route.includes('resolveAccountantTab(search) ?? "overview"'),
   "the first paint uses the parsed tab and section",
 );
 const railSource = route.slice(
   route.indexOf("export const CLIENT_RAIL_GROUPS"),
   route.indexOf("export const CLIENT_RAIL "),
 );
-const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "reports", "deliverables", "portal"];
+const railOrder = ["home", "desk", "health", "cash", "profit", "budget", "moves", "reports", "deliverables", "portal"];
 let railAt = -1;
 for (const id of railOrder) {
   const at = railSource.indexOf(`id: "${id}"`);

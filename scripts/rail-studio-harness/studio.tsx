@@ -38,6 +38,9 @@ import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
+import { NoteLayer } from "@/components/note-layer";
+import { DESK_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 import {
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
@@ -68,7 +71,6 @@ import {
   storedAmountFigure,
 } from "@/lib/overview-moves-copy";
 import { NextStepCard } from "@/components/next-step-card";
-import { NoteLayer } from "@/components/note-layer";
 import { OverviewSectionCards } from "@/components/overview-section-cards";
 import { currencySymbol, formatMoneyCompact, ZA_MARKET } from "@/lib/market";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
@@ -140,11 +142,12 @@ export function RailStudio() {
       replace: true,
     });
   }, [search.tab, search.section, clientId, navigate]);
-  const pane = legacyPaneForSearch(search) ?? "ask";
+  const pane = legacyPaneForSearch(search) ?? "overview";
   const railTab = canonicalizeAccountantSearch(search).tab;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="accountant-portal" data-rail-harness="true" data-rail-ready="true">
+    <div className={`accountant-portal${menuOpen ? " nav-open" : ""}`} data-rail-harness="true" data-rail-ready="true">
       <div id="atmos">
         <div className="glow g1" />
         <div className="glow g2" />
@@ -160,12 +163,43 @@ export function RailStudio() {
           <SettingsMenu
             className="tb-btn settings-gear"
             onSettings={() => {
+              setMenuOpen(false);
               void navigate({ to: "/settings" });
             }}
             onPlan={() => {
+              setMenuOpen(false);
               void navigate({ to: "/settings", hash: "firm-billing" });
             }}
           />
+          <button
+            type="button"
+            className="topbar-backdrop"
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+          />
+          <button
+            type="button"
+            className="topbar-menu-btn"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {menuOpen ? <path d="M18 6L6 18M6 6l12 12" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+          </button>
+          <div className={`topbar-actions${menuOpen ? " open" : ""}`}>
+            <button
+              type="button"
+              className="tb-btn"
+              onClick={() => {
+                setMenuOpen(false);
+                void navigate({ to: "/reports" });
+              }}
+            >
+              Reports studio
+            </button>
+          </div>
         </div>
         <div className="crumb">
           <FirmDashboardCrumb linked={false} onBack={() => {}} />
@@ -204,6 +238,7 @@ export function RailStudio() {
             />
           </nav>
           <div className="deliverable-main">
+            <div data-notes-tray-slot="" className="notes-tray-slot" />
             {pane === "ask" ? <BotPane /> : null}
             {pane === "overview" ? <BriefingPane /> : null}
             {pane === "moves" ? <MovesPane /> : null}
@@ -225,17 +260,26 @@ export function RailStudio() {
             {pane === "drafter" ? <DrafterPane clientId={clientId} /> : null}
           </div>
         </div>
+        <NoteLayer
+          clientId={clientId}
+          tab={pane === "overview" ? "overview" : pane}
+          workspace="accountant"
+          clientName="Harbour Glass"
+          authorName="Harbour & Co"
+        />
       </div>
     </div>
   );
 }
 
 function BotPane() {
+  const feed = useMilonTeamFeedStub("harbour-glass");
   return (
     <div className="tabpane on" id="pane-ask">
-      <SectionCard className="card hero-card ask-ai-studio-shell">
-        <div id="ask-ai-accountant" />
-      </SectionCard>
+      <div className="milon-desk-host">
+        <MilonTeamDesk feed={feed} now={DESK_NOW} />
+        <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+      </div>
     </div>
   );
 }
@@ -375,13 +419,6 @@ function BriefingPane() {
         hasFigures
         figuresPeriodLabel="September 2026"
       />
-      <NoteLayer
-        clientId={CLIENT_ID}
-        tab="overview"
-        workspace="accountant"
-        authorName="Harbour & Co"
-        clientName="Harbour Glass"
-      />
     </div>
   );
 }
@@ -480,9 +517,8 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
       <PaneBoundary label="Health score">
         <div style={{ marginBottom: 32 }}>
           {pillars ? null : (
-          <div style={{ background: "#0a0e1a", borderRadius: 20, padding: "16px 8px", marginBottom: 20 }}>
+          <div className="health-plate">
             <SphereHero
-              onDark
               hideCaption
               overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
               displayStatus={overall.displayStatus}
@@ -490,7 +526,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
             />
           </div>
           )}
-          <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
+          <div className="health-plate">
             <SimplifiedRatios sections={sections} />
           </div>
         </div>

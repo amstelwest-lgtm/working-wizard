@@ -67,7 +67,7 @@ function ColorSwatch({
 function HeaderPreview() {
   const { profile, firmId } = useAccountantProfile();
   const accent = profile.accentColor || "#0f3460";
-  const primary = profile.primaryColor || "#1a1a2e";
+  const primary = profile.primaryColor || "#102A43";
   const [previewName, setPreviewName] = useState("Client");
   const [previewPeriod, setPreviewPeriod] = useState("");
 

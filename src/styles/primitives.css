@@ -1030,23 +1030,23 @@ html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="op
   scroll-margin-top: 88px;
 }
 #data-requests:focus {
-  outline: 3px solid #d4a550;
+  outline: 3px solid #0b5fff;
   outline-offset: 4px;
 }
 #data-requests[data-called="true"] {
-  outline: 3px solid #d4a550;
+  outline: 3px solid #0b5fff;
   outline-offset: 4px;
   box-shadow:
-    0 0 0 6px rgba(212, 165, 80, 0.55),
-    0 0 36px rgba(212, 165, 80, 0.65);
+    0 0 0 6px rgba(11, 95, 255, 0.28),
+    0 0 36px rgba(11, 95, 255, 0.22);
   animation: data-requests-call 0.8s ease-in-out infinite;
 }
 .data-requests-callout {
   margin: 0 0 12px;
   border-radius: 10px;
-  border: 1px solid #b7872a;
-  background: #f3d98a;
-  color: #1b1300;
+  border: 1px solid #dbeafe;
+  background: #f4f8ff;
+  color: #102a43;
   padding: 8px 12px;
   font-size: 13px;
   font-weight: 700;
@@ -1056,13 +1056,13 @@ html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="op
   0%,
   100% {
     box-shadow:
-      0 0 0 4px rgba(212, 165, 80, 0.4),
-      0 0 18px rgba(212, 165, 80, 0.35);
+      0 0 0 4px rgba(11, 95, 255, 0.28),
+      0 0 18px rgba(11, 95, 255, 0.2);
   }
   50% {
     box-shadow:
-      0 0 0 10px rgba(212, 165, 80, 0.22),
-      0 0 42px rgba(212, 165, 80, 0.75);
+      0 0 0 10px rgba(11, 95, 255, 0.14),
+      0 0 42px rgba(11, 95, 255, 0.28);
   }
 }
 @media (prefers-reduced-motion: reduce) {

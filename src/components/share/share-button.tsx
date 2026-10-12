@@ -29,12 +29,11 @@ export function ShareButton() {
         type="button"
         onClick={handleShare}
         aria-label="Share Milōn"
-        className={`fixed z-50 hidden h-[52px] w-[52px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/20 transition-[transform,opacity] duration-200 active:scale-95 max-md:flex ${
+        className={`share-fab fixed right-6 z-50 hidden h-[52px] w-[52px] items-center justify-center rounded-full bg-[#0B5FFF] text-white shadow-lg shadow-[#0B5FFF]/25 transition-[transform,opacity] duration-200 active:scale-95 max-md:left-4 max-md:right-auto max-md:flex ${
           scrolledAway ? "pointer-events-none opacity-0" : ""
         }`}
         style={{
-          bottom: "max(env(safe-area-inset-bottom), 1.5rem)",
-          right: "max(env(safe-area-inset-right), 1.5rem)",
+          bottom: "max(env(safe-area-inset-bottom), 1rem)",
           transform: scrolledAway ? "translateY(160%)" : undefined,
         }}
       >

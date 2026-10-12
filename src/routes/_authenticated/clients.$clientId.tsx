@@ -157,6 +157,7 @@ import {
   routerHash,
 } from "@/lib/client-route-search";
 import { CLIENT_RAIL_GROUPS, ClientRailButton } from "@/components/client-studio-chrome";
+import { rememberDeskClient } from "@/lib/desk-client";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -408,6 +409,7 @@ function HealthRing({
           cy={size / 2}
           r={r}
           fill="none"
+          stroke="var(--pale, #dbeafe)"
           strokeWidth={strokeWidth}
         />
         {hasScore ? (
@@ -748,7 +750,7 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
-    () => resolveAccountantTab(search) ?? "ask",
+    () => resolveAccountantTab(search) ?? "overview",
   );
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const persistedCreateRef = useRef<
@@ -888,7 +890,7 @@ function ClientView() {
       const figures = FIELD_LABELS.some(({ key }) => (scalars[key] ?? "").trim() !== "");
       setTourVariant(figures ? "accountant-client" : "accountant-client-empty");
       if (resolveAccountantTab(search)) return;
-      setActiveTab("ask");
+      setActiveTab("overview");
     },
     [clientId, search],
   );
@@ -1109,6 +1111,21 @@ function ClientView() {
   const [drawerActual, setDrawerActual] = useState<string | null>(null);
   const [drawerFallbackSteps, setDrawerFallbackSteps] = useState<string[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    rememberDeskClient(clientId);
+  }, [clientId]);
+  useEffect(() => {
+    const next = resolveAccountantTab(search);
+    if (next) setActiveTab(next);
+  }, [search]);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
   const [drawerTier, setDrawerTier] = useState<HealthTier>("at_risk");
@@ -2230,7 +2247,7 @@ function ClientView() {
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
-      setActiveTab("ask");
+      setActiveTab("overview");
       void navigate({
         to: "/clients/$clientId",
         params: { clientId },
@@ -2731,7 +2748,7 @@ function ClientView() {
       selection={parseMarketSelection(client.market) ?? coerceMarketSelection(client.market)}
     >
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-        <div className="accountant-portal milon-page-enter">
+        <div className={`accountant-portal milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
           {/* Two honest steps while the client has no figures; the full studio
               tour runs once a real score exists, so "Start with Milōn Bot" and
               the seeded budget are never promised over an empty book. */}
@@ -2785,6 +2802,13 @@ function ClientView() {
                   openPracticeSettings();
                   void navigate({ to: "/settings", hash: "firm-billing" });
                 }}
+              />
+              <button
+                type="button"
+                className="topbar-backdrop"
+                aria-label="Close menu"
+                tabIndex={mobileNavOpen ? 0 : -1}
+                onClick={() => setMobileNavOpen(false)}
               />
               <button
                 type="button"
@@ -2864,6 +2888,7 @@ function ClientView() {
                 />
               </nav>
               <div className="deliverable-main">
+                <div data-notes-tray-slot="" className="notes-tray-slot" />
                 {!hasFigures ? (
                   <div className="card hero-card first-figures" id="first-figures-card">
                     <div className="ff-copy">
@@ -2880,7 +2905,7 @@ function ClientView() {
                   </div>
                 ) : null}
                 <div
-                  className={`tabpane${activeTab === "overview" || activeTab === "ask" ? " on" : ""}`}
+                  className={`tabpane${activeTab === "overview" ? " on" : ""}`}
                   id="pane-overview"
                 >
                 <DeliverableAnswerStrip
@@ -3407,16 +3432,8 @@ function ClientView() {
                   <div style={{ marginBottom: 32 }}>
                       {/* Orb stays on Health. Pillars leads with the cards. */}
                       {search.focus === "pillars" ? null : (
-                      <div
-                        style={{
-                          background: "#0a0e1a",
-                          borderRadius: 20,
-                          padding: "16px 8px",
-                          marginBottom: 20,
-                        }}
-                      >
+                      <div className="health-plate">
                         <SphereHero
-                          onDark
                           hideCaption
                           overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
                           displayStatus={overallHealth.displayStatus}
@@ -3443,7 +3460,7 @@ function ClientView() {
                       </div>
                       )}
                       {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
-                      <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
+                      <div className="health-plate">
                         <SimplifiedRatios
                           sections={simplifiedSections}
                           onAddPastPeriod={() => setPastPeriodOpen(true)}
@@ -4061,7 +4078,7 @@ function ClientView() {
 
             <div className="footer-note">
               MILŌN Practice Portal ·{" "}
-              <span className="serif gold-text">The passion to perform.</span>
+              <span className="serif footer-tagline">The passion to perform.</span>
             </div>
           </div>
 

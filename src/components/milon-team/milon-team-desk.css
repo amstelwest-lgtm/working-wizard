@@ -828,7 +828,17 @@ html[data-theme="light"] .milon-desk {
 }
 
 html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell {
-  background: #f6f3ea;
+  background: #f4f8ff;
+}
+
+/* The desk stays mounted on every client tab. The viewport lock applies
+   only while that pane is the one on screen. */
+.accountant-portal:has(#pane-ask:not(.on)) .shell,
+.accountant-portal:has(#pane-ask:not(.on)) .client-workspace,
+.accountant-portal:has(#pane-ask:not(.on)) .deliverable-main {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 @media (max-width: 767px) {

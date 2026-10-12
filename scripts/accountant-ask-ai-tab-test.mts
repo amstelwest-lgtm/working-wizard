@@ -28,13 +28,14 @@ assert(
   "the rail is Home, then Health, then Deliverables",
 );
 assert(
-  clientSrc.includes('resolveAccountantTab(search) ?? "ask"'),
+  clientSrc.includes('resolveAccountantTab(search) ?? "overview"'),
   "studio lands on Home unless a deep link names a tab",
 );
 assert(
-  clientSrc.includes('setActiveTab("ask")'),
+  clientSrc.includes('setActiveTab("overview")'),
   "opening a client without a deep link lands on Home",
 );
+assert(clientSrc.includes('{ id: "desk", label: "Desk" }'), "the rail reaches the Bot desk");
 assert(
   clientSrc.includes('id="pane-overview"') &&
     clientSrc.indexOf('id="pane-overview"') < clientSrc.indexOf("<ClientBriefing") &&

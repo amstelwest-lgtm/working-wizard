@@ -208,7 +208,7 @@ export function AdvisorySentHistory({
                   </button>
                 ) : null}
                 <span
-                  className={`chip chip-sentence ${r.acknowledged_at ? "ok" : "warn"}`}
+                  className={`chip chip-sentence ${r.acknowledged_at ? "ok" : "receipt"}`}
                   style={{ alignSelf: "center" }}
                 >
                   {channelHonestyLabel(r.channel, !!r.acknowledged_at)}

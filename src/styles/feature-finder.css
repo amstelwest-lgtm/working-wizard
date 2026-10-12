@@ -22,8 +22,8 @@
 }
 
 .feature-finder-trigger:hover {
-  border-color: var(--gold, var(--milon-gold));
-  color: var(--gold, var(--milon-gold));
+  border-color: #0b5fff;
+  color: #0b5fff;
 }
 
 .feature-finder-trigger svg {
@@ -81,8 +81,8 @@
 }
 
 .feature-finder [cmdk-item][data-selected="true"] {
-  background: color-mix(in srgb, var(--gold, var(--milon-gold)) 18%, transparent);
-  color: var(--ink, var(--milon-ink));
+  background: #dbeafe;
+  color: #102a43;
 }
 
 .feature-finder-hint {

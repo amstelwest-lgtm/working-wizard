@@ -59,7 +59,7 @@ function Frame({
                     key={item.id}
                     id={item.id}
                     label={item.label}
-                    active={item.id === "home"}
+                    active={item.id === "desk"}
                     onSelect={() => undefined}
                   />
                 ))}

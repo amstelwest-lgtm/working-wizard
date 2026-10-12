@@ -1184,6 +1184,14 @@ function Dashboard() {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
   const [isItMember, setIsItMember] = useState(false);
 
   // Only known after mount — reading window.location.origin during render would
@@ -1713,7 +1721,7 @@ function Dashboard() {
   }
 
   return (
-    <div className="accountant-portal practice-home milon-page-enter">
+    <div className={`accountant-portal practice-home milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
       <WalkthroughWizard
         variant={clientRows.length > 0 ? "accountant-dashboard" : "accountant-dashboard-empty"}
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
@@ -1753,6 +1761,13 @@ function Dashboard() {
             <span className="av">{profileInitials || "·"}</span>
             <span className="profile-name">{greetName}</span>
           </span>
+          <button
+            type="button"
+            className="topbar-backdrop"
+            aria-label="Close menu"
+            tabIndex={mobileNavOpen ? 0 : -1}
+            onClick={() => setMobileNavOpen(false)}
+          />
           <button
             type="button"
             className="topbar-menu-btn"
@@ -2370,7 +2385,7 @@ function Dashboard() {
                         </span>
                       </div>
                       <div className="bar">
-                        <i style={{ width: "60%", background: "var(--gold)" }} />
+                        <i style={{ width: "60%", background: "var(--ice, #38BDF8)" }} />
                       </div>
                       <div className="m">
                         <span>{cat}</span>
@@ -2385,7 +2400,7 @@ function Dashboard() {
         </details>
 
         <div className="footer-note">
-          MILŌN Practice Portal · <span className="serif gold-text">The passion to perform.</span>
+          MILŌN Practice Portal · <span className="serif footer-tagline">The passion to perform.</span>
         </div>
           </div>
         </div>

@@ -89,10 +89,10 @@
 
   .milon-scroll-table--cards .milon-data-table tbody tr {
     display: block;
-    border: 1px solid var(--brand-border, var(--milon-border, rgba(212, 175, 55, 0.16)));
+    border: 1px solid #dbeafe;
     border-radius: 14px;
-    background: var(--brand-surface, var(--milon-surface, rgba(255, 255, 255, 0.024)));
-    overflow: hidden;
+    background: #ffffff;
+    overflow: visible;
   }
 
   .milon-scroll-table--cards .milon-data-table tbody td {
@@ -158,6 +158,29 @@
   .accountant-portal .milon-scroll-table--cards .hide-sm,
   .accountant-portal .milon-scroll-table--cards .hide-desk {
     display: flex !important;
+  }
+
+  .accountant-portal .milon-scroll-table--cards .ctable tbody td {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .accountant-portal .milon-scroll-table--cards .row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .accountant-portal .milon-scroll-table--cards .row-actions .icon-btn {
+    white-space: normal;
+  }
+
+  .accountant-portal .milon-scroll-table--cards .cell-health,
+  .accountant-portal .milon-scroll-table--cards .milon-status-pill,
+  .accountant-portal .milon-scroll-table--cards .prio {
+    max-width: 100%;
   }
 }
 

@@ -96,7 +96,7 @@ function SignoffCertificate({
       <div
         data-signoff-corner
         data-signoff-scope={scope}
-        className="flex max-w-[210px] shrink-0 flex-col items-end rounded-lg border border-[#d4a550]/40 bg-white/90 px-2.5 py-1.5 shadow-[0_6px_18px_rgba(109,79,22,0.10)] dark:bg-[#0f172a]/90"
+        className="flex max-w-[210px] shrink-0 flex-col items-end rounded-lg border border-[#DBEAFE] bg-white/90 px-2.5 py-1.5 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]/90"
         title={title}
       >
         <span className="text-right text-[10px] font-semibold leading-snug text-[#8a6508] dark:text-[#e1b85e]">
@@ -126,19 +126,19 @@ function SignoffCertificate({
   if (placement === "compact") {
     return (
       <div
-        className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#d4a550]/45 bg-gradient-to-r from-[#d4a550]/15 to-[#fdee79]/10 px-2.5 py-1"
+        className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#16845B]/40 bg-[#16845B]/10 px-2.5 py-1"
         title={title}
       >
         <span
           className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-black"
           style={{
-            background: "linear-gradient(145deg,#fdee79,#ac8400)",
-            color: "#1b1300",
+            background: "#16845B",
+            color: "#ffffff",
           }}
         >
           {isStale ? "!" : initials.slice(0, 2)}
         </span>
-        <span className="truncate text-[11px] font-semibold text-[#8a6508] dark:text-[#e1b85e]">
+        <span className="truncate text-[11px] font-semibold text-[#0e5c40] dark:text-[#8dccb0]">
           {line}
         </span>
       </div>
@@ -148,19 +148,19 @@ function SignoffCertificate({
   return (
     <div
       data-signoff-certificate
-      className="relative overflow-hidden rounded-2xl border border-[#d4a550]/40 p-4 shadow-[0_16px_40px_rgba(109,79,22,0.12)]"
+      className="relative overflow-hidden rounded-2xl border border-[#DBEAFE] p-4 shadow-sm"
       style={{
         background:
-          "radial-gradient(circle at 100% 0%, rgba(253,238,121,0.22), transparent 42%), linear-gradient(135deg, rgba(212,165,80,0.14), rgba(255,253,248,0.92) 38%, rgba(248,241,222,0.95))",
+          "radial-gradient(circle at 100% 0%, rgba(56,189,248,0.18), transparent 42%), linear-gradient(135deg, #f4f8ff, #ffffff 42%)",
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#ac8400,#fdee79,#ac8400)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#0B5FFF,#38BDF8,transparent)]" />
       <div className="flex items-start gap-3">
         <div
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-xs font-black tracking-wide shadow-[0_0_0_4px_rgba(212,165,80,0.18)]"
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-xs font-black tracking-wide shadow-[0_0_0_4px_rgba(22,132,91,0.16)]"
           style={{
-            background: "linear-gradient(145deg,#fdee79,#d4af37 45%,#ac8400)",
-            color: "#1b1300",
+            background: "#16845B",
+            color: "#ffffff",
           }}
         >
           {isStale ? <AlertTriangle className="h-5 w-5" /> : initials.slice(0, 2)}
@@ -383,7 +383,7 @@ export function OwnerTabSignoffRow({
 }) {
   return (
     <div id={id} className="mb-4 flex items-center gap-3 pb-3">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#16845B] dark:text-[#8dccb0]">
         {label}
       </span>
       <span className="h-px min-w-4 flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />

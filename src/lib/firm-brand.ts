@@ -15,7 +15,7 @@ export type FirmBrandProfile = {
 const DEFAULT_BRAND: FirmBrandProfile = {
   firmName: "",
   logoUrl: null,
-  primaryColor: "#1a1a2e",
+  primaryColor: "#102A43",
   secondaryColor: "#16213e",
   accentColor: "#0f3460",
   accountantName: "",

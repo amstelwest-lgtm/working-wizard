@@ -20,6 +20,7 @@ import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
 import { ShareButton } from "@/components/share";
+import { FloatingNoteButton } from "@/components/floating-note-button";
 import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
@@ -29,10 +30,12 @@ import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as SettingsRoute } from "@/routes/_authenticated/settings.index";
 import { Route as TeamRoute } from "@/routes/_authenticated/settings.team";
+import { Route as BrandRoute } from "@/routes/_authenticated/settings.brand";
 
 const Dashboard = DashboardRoute.options.component as ComponentType;
 const SettingsPage = SettingsRoute.options.component as ComponentType;
 const TeamAccessPage = TeamRoute.options.component as ComponentType;
+const BrandPage = BrandRoute.options.component as ComponentType;
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {
@@ -88,6 +91,7 @@ const rootRoute = createRootRoute({
         <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
           <Outlet />
           <ShareButton />
+          <FloatingNoteButton />
           <Toaster />
         </NotesProvider>
       </AccountantProfileProvider>
@@ -290,6 +294,18 @@ const settingsTeamRoute = createRoute({
   },
 });
 
+const settingsBrandRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/brand",
+  component: function SettingsBrandHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <BrandPage />
+      </MarketProvider>
+    );
+  },
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -311,6 +327,7 @@ const routeTree = rootRoute.addChildren([
   ownerDoorRoute,
   dashboardRoute,
   settingsRoute,
+  settingsBrandRoute,
   settingsTeamRoute,
 ]);
 const router = createRouter({
