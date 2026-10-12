@@ -1,12 +1,18 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { PracticeBoard } from "@/components/practice-board";
 
 /**
  * Exact /clients only. This must stay an index route.
- * A clients.tsx layout would run this redirect for /clients/:id as well,
+ * A clients.tsx layout would run for /clients/:id as well,
  * and the client bundle rebuilds that parent link from the file name.
  */
 export const Route = createFileRoute("/_authenticated/clients/")({
-  beforeLoad: () => {
-    throw redirect({ to: "/dashboard", hash: "clients-table" });
-  },
+  component: PracticeClientsPage,
+  head: () => ({
+    meta: [{ title: "Clients — Milōn" }],
+  }),
 });
+
+function PracticeClientsPage() {
+  return <PracticeBoard view="clients" />;
+}

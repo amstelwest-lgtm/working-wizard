@@ -452,9 +452,9 @@ export function firmOpenQueriesClient(
  */
 export function firmOpenQueriesDestination(
   rows: readonly { id: string; name?: string | null; openQueries: number }[],
-): { to: "/dashboard"; hash: "clients-table" } | null {
+): { to: "/clients"; hash: "clients-table" } | null {
   if (!firmOpenQueriesClient(rows)) return null;
-  return { to: "/dashboard", hash: "clients-table" };
+  return { to: "/clients", hash: "clients-table" };
 }
 
 /** Rule-based portfolio insight chips. */

@@ -35,7 +35,7 @@ const capped = buildFollowUpQueue(
 );
 assert(capped.length === 8, "follow-up queue is capped");
 
-const dashSrc = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dashSrc.includes('id="follow-up"'), "dashboard has follow-up panel");
 assert(dashSrc.includes("buildFollowUpQueue"), "dashboard uses follow-up queue");
 assert(dashSrc.includes('tab: "plan"'), "Chase opens Action Plan tab");
@@ -43,13 +43,16 @@ assert(dashSrc.includes('filter: "overdue"'), "overdue Chase deep-links filter=o
 assert(dashSrc.includes("Follow up on Action Plan"), "client row has follow-up action");
 assert(dashSrc.includes("openClientPlan"), "attention cards can open the plan");
 
-const clientsAt = dashSrc.indexOf('id="clients-table"');
+const practiceAt = dashSrc.indexOf('view === "practice"');
+const clientsAt = dashSrc.indexOf('view === "clients"');
 const followAt = dashSrc.indexOf('id="follow-up"');
 const insightsAt = dashSrc.indexOf('id="portfolio-insights"');
 const playAt = dashSrc.indexOf('id="playbooks"');
-assert(clientsAt > 0 && followAt > clientsAt, "follow-up sits below the client list");
-assert(insightsAt > clientsAt, "portfolio insights sit below the client list");
-assert(playAt > clientsAt, "playbooks sit below the client list");
+assert(practiceAt > 0 && clientsAt > practiceAt, "practice and clients are separate pages");
+assert(followAt > practiceAt && followAt < clientsAt, "follow-up is on the practice overview");
+assert(insightsAt > practiceAt && insightsAt < clientsAt, "portfolio insights are on the practice overview");
+assert(playAt > practiceAt && playAt < clientsAt, "playbooks are on the practice overview");
+assert(dashSrc.indexOf('id="clients-table"') > clientsAt, "the client table is on the clients page");
 assert(dashSrc.includes("hideWhenClear"), "clear portfolio does not render an empty card");
 assert(!dashSrc.includes("nice work"), "empty needs-attention does not celebrate");
 const exceptionsSrc = readFileSync(resolve("src/components/portfolio-exceptions.tsx"), "utf8");

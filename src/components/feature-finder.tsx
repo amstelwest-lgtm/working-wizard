@@ -145,6 +145,10 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
       void navigate({ to: "/dashboard" });
       return;
     }
+    if (dest.kind === "clients") {
+      void navigate({ to: "/clients" });
+      return;
+    }
     if (audience === "owner") openOwnerSettings();
     else openPracticeSettings();
     void navigate({ to: "/settings" });

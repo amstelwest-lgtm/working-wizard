@@ -58,12 +58,13 @@ assert(studio.includes("openDrawerFromUiKey"), "clicking a query opens that rati
 assert(studio.includes("1 query"), "ratio rows badge an open query");
 assert(studio.includes('queries === "open"'), "dashboard can deep-link into open queries");
 
-const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 const portfolio = readFileSync(resolve("src/lib/portfolio-dashboard.ts"), "utf8");
 assert(dash.includes('data-label="Queries"'), "Queries stays a column on the practice list");
 assert(!dash.includes("openClientQueries"), "the queries count does not open a client");
 assert(dash.includes("firmOpenQueriesDestination"), "Queries navigation comes from the shared destination");
-assert(portfolio.includes('hash: "clients-table"'), "Open queries opens the practice client list");
+assert(portfolio.includes('to: "/clients"'), "Open queries opens the client list");
+assert(portfolio.includes('hash: "clients-table"'), "Open queries scrolls to the client table");
 assert(!portfolio.includes('search: { queries: "open" }'), "Open queries does not open a client file");
 
 const hero = readFileSync(resolve("src/components/sphere-hero.tsx"), "utf8");

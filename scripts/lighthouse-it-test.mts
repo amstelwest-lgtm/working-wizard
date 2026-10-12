@@ -93,7 +93,7 @@ const client = readFileSync(resolve("src/routes/_authenticated/clients.$clientId
 assert(client.includes("search.note"), "client profile reads note deep-link");
 assert(client.includes("requestOpenNote"), "client profile opens the tagged note");
 
-const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dash.includes('search: { tab: "it" }'), "firm dashboard links IT members to the inbox");
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");

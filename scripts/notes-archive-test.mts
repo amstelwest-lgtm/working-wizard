@@ -75,7 +75,7 @@ const fab = readFileSync(resolve("src/components/floating-note-button.tsx"), "ut
 assert(fab.includes("Open notes archive"), "pin button cluster includes the archive");
 assert(fab.includes('id="wizard-notes-pin"'), "owner tour can spotlight the notes pin");
 
-const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(!dash.includes("openClientQueries"), "the practice queries count does not open a client file");
 assert(dash.includes("firmOpenQueriesDestination"), "the Open queries tile stays on the practice list");
 

@@ -108,7 +108,7 @@ assert(
   href("upload", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}&onboard=1`,
   "Upload reuses the onboard deep link on Client portal",
 );
-assert(href("clients", studio) === "/dashboard", "Clients opens the practice list");
+assert(href("clients", studio) === "/clients", "Clients opens the client list");
 assert(href("billing", studio) === "/settings", "Billing opens Settings");
 assert(href("stripe", firm) === "/settings", "Billing is available without a client");
 

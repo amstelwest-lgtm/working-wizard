@@ -86,7 +86,7 @@ assert(!profileSrc.includes("cached.accountantName ||"), "cached accountant name
 assert(!profileSrc.includes("cached.firmName ||"), "cached firm name cannot win");
 assert(profileSrc.includes("greetingSource"), "provider exposes the greeting chain");
 
-const dashSrc = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dashSrc.includes("practiceGreeting(greetingSource)"), "dashboard greets from the name chain");
 assert(
   !dashSrc.includes('profile.accountantName || user?.email?.split("@")[0]'),

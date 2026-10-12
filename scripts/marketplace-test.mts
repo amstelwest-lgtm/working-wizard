@@ -360,10 +360,16 @@ const NOW = "2026-09-18T12:00:00.000Z";
     app.includes("!clientMeta?.firm_id ? (\n                  <FindAccountantPanel"),
     "owner board mounts the panel only without a firm",
   );
-  const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+  const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+  const practiceAt = dash.indexOf('view === "practice"');
+  const clientsAt = dash.indexOf('view === "clients"');
   assert(
-    dash.indexOf("<AccountantInbox") > dash.indexOf('id="clients-table"'),
-    "inbox sits below the clients table",
+    practiceAt > 0 &&
+      clientsAt > practiceAt &&
+      dash.indexOf("<AccountantInbox") > practiceAt &&
+      dash.indexOf("<AccountantInbox") < clientsAt &&
+      dash.indexOf('id="clients-table"') > clientsAt,
+    "the inbox is on the practice overview and the table is on the clients page",
   );
 }
 

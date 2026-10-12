@@ -703,10 +703,16 @@ const S_SEP = snap(
     studio.indexOf("<OutcomesPanel") > studio.indexOf("<RecommendationsPanel"),
     "studio: outcomes under recommendations",
   );
-  const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+  const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+  const practiceAt = dash.indexOf('view === "practice"');
+  const clientsAt = dash.indexOf('view === "clients"');
   assert(
-    dash.indexOf("<PortfolioExceptions") < dash.indexOf('id="clients-table"'),
-    "portfolio sits above the clients table",
+    practiceAt > 0 &&
+      clientsAt > practiceAt &&
+      dash.indexOf("<PortfolioExceptions") > practiceAt &&
+      dash.indexOf("<PortfolioExceptions") < clientsAt &&
+      dash.indexOf('id="clients-table"') > clientsAt,
+    "needs attention is on the practice overview and the table is on the clients page",
   );
   const pf = readFileSync(resolve("src/lib/portfolio.functions.ts"), "utf8");
   assert(

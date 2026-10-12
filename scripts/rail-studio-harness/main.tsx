@@ -30,12 +30,16 @@ import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { ProofLandingPreview } from "./proof-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
+import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
+import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
 import { ReportsStudio } from "@/routes/_authenticated/reports-studio";
 import { Route as SettingsRoute } from "@/routes/_authenticated/settings.index";
 import { Route as TeamRoute } from "@/routes/_authenticated/settings.team";
 import { Route as BrandRoute } from "@/routes/_authenticated/settings.brand";
 
 const Dashboard = DashboardRoute.options.component as ComponentType;
+const ClientsIndex = ClientsIndexRoute.options.component as ComponentType;
+const PracticePage = PracticeRoute.options.component as ComponentType;
 const SettingsPage = SettingsRoute.options.component as ComponentType;
 const TeamAccessPage = TeamRoute.options.component as ComponentType;
 const BrandPage = BrandRoute.options.component as ComponentType;
@@ -291,6 +295,30 @@ const dashboardRoute = createRoute({
   },
 });
 
+const clientsIndexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/clients",
+  component: function ClientsHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <ClientsIndex />
+      </MarketProvider>
+    );
+  },
+});
+
+const practiceOverviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/practice",
+  component: function PracticeHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <PracticePage />
+      </MarketProvider>
+    );
+  },
+});
+
 const settingsTeamRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings/team",
@@ -382,6 +410,8 @@ const routeTree = rootRoute.addChildren([
   importLowsRoute,
   ownerDoorRoute,
   dashboardRoute,
+  clientsIndexRoute,
+  practiceOverviewRoute,
   deskRoute,
   reportsRoute,
   settingsRoute,

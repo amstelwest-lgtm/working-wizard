@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { SettingsGear } from "@/components/settings-nav-button";
 
 export type NavDestination = {
-  to: "/dashboard" | "/settings" | "/clients" | "/clients/$clientId";
+  to: "/dashboard" | "/practice" | "/settings" | "/clients" | "/clients/$clientId";
   params?: { clientId: string };
   hash?: string;
   search?: (prev: Record<string, unknown>) => Record<string, unknown>;

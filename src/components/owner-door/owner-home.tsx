@@ -7,6 +7,7 @@ import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
+import "./owner-door.css";
 
 const MONEY_TOKEN =
   /(\$(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|R[\u00a0 ](?:\d{1,3}(?:[,\u00a0 ]\d{3})+|\d+)(?:\.\d+)?)/g;
@@ -108,10 +109,16 @@ export function OwnerHome({
   onMoves,
   onDeliverables,
   inviteClientId,
+  title = "Your finance team",
+  showInvite = true,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
   lines: OwnerHomeLines;
+  /** Accountant practice Home uses "Your whole finance team". */
+  title?: string;
+  /** Owner home invites an accountant. Practice Home does not. */
+  showInvite?: boolean;
   status?: Partial<Record<AgentKey, OwnerCardStatus | null>>;
   /** Live agent_runs. Missing runners stay off this line. */
   runState?: Partial<Record<AgentKey, OwnerRunPhase | null>>;
@@ -134,7 +141,7 @@ export function OwnerHome({
   return (
     <div className="owner-pane" data-owner-home="true" data-bots={bots}>
       <div className="owner-head">
-        <h1 className="owner-title">Your finance team</h1>
+        <h1 className="owner-title">{title}</h1>
       </div>
       <div className="owner-stage">
         <div className="owner-agents">
@@ -199,7 +206,7 @@ export function OwnerHome({
       {needs && onMoves && onDeliverables ? (
         <OwnerNeedsStrip needs={needs} onMoves={onMoves} onDeliverables={onDeliverables} />
       ) : null}
-      <OwnerInviteNudge variant="app" clientId={inviteClientId} />
+      {showInvite ? <OwnerInviteNudge variant="app" clientId={inviteClientId} /> : null}
     </div>
   );
 }

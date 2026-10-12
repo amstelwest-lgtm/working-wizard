@@ -318,6 +318,61 @@ function profitTile(
   };
 }
 
+export type PracticeBook = {
+  clientCount: number;
+  avgHealth: number | null;
+  needAttention: number;
+  /** Clients whose attention row is "review now", the stronger of the two tones. */
+  reviewNow: number;
+  openQueries: number;
+  followUps: number;
+};
+
+/** Book-level lines for practice Home. Same shape as the owner cards. */
+export function practiceHomeLines(book: PracticeBook): OwnerHomeLines {
+  const clients =
+    book.clientCount === 1 ? "1 client on the book." : `${book.clientCount} clients on the book.`;
+  const queries =
+    book.openQueries === 0
+      ? "No open queries."
+      : book.openQueries === 1
+        ? "1 open query."
+        : `${book.openQueries} open queries.`;
+  const health =
+    book.avgHealth == null ? "No scored clients yet." : `Average health is ${book.avgHealth} out of 100.`;
+  const attention =
+    book.needAttention === 0
+      ? "No client needs attention."
+      : book.needAttention === 1
+        ? "1 client needs attention."
+        : `${book.needAttention} clients need attention.`;
+  const follow =
+    book.followUps === 0
+      ? "No follow-up waiting."
+      : book.followUps === 1
+        ? "1 client to follow up."
+        : `${book.followUps} clients to follow up.`;
+  return {
+    financial_manager: [clients, queries],
+    analyst: [health, attention],
+    advisor: [follow],
+  };
+}
+
+/** A chip only when the book has a problem. Review-now is Critical. */
+export function practiceCardStatuses(book: PracticeBook): Record<AgentKey, OwnerCardStatus | null> {
+  return {
+    financial_manager: book.openQueries > 0 ? { tone: "attention", word: "Attention" } : null,
+    analyst:
+      book.reviewNow > 0
+        ? { tone: "critical", word: "Critical" }
+        : book.needAttention > 0
+          ? { tone: "attention", word: "Attention" }
+          : null,
+    advisor: book.followUps > 0 ? { tone: "attention", word: "Attention" } : null,
+  };
+}
+
 /** Button copy. Agent names come from the caller, never from a hardcoded title. */
 export function ownerTileLabel(tile: OwnerTile, shortName: (agent: AgentKey) => string): string {
   if (tile.step === "Ask" && tile.ask) return `Ask ${shortName(tile.ask)}`;

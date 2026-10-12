@@ -147,7 +147,7 @@ assert(
 );
 assert(!clientSrc.includes('viewMode === "complex"'), "health complex mode is gone");
 
-const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dash.includes("practiceGreeting"), "the practice home uses the greeting helper");
 assert(dash.includes("dash-trial-banner"), "an ended trial is a thin banner");
 assert(dash.includes('to="/settings"'), "the thin banner links to Settings");

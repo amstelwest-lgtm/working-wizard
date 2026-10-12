@@ -150,7 +150,7 @@ const busyRows = [
 ];
 const busyDest = firmOpenQueriesDestination(busyRows);
 assert(firmOpenQueriesClient(busyRows) != null, "the book has a client with open queries");
-assert(busyDest?.to === "/dashboard", "open queries stays on the practice list");
+assert(busyDest?.to === "/clients", "open queries stays on the client list");
 assert(busyDest?.hash === "clients-table", "open queries opens the client list");
 assert(
   firmOpenQueriesDestination([
@@ -209,7 +209,7 @@ const ended = formatFirmPlanStatus({
 });
 assert(ended.headline === "Trial — ends today", "elapsed trial says it ends today");
 
-const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dash.includes("practiceNeedsAttention"), "dashboard tile and list share one attention queue");
 assert(dash.includes("queue={attentionBook.items}"), "the strip renders that same queue");
 assert(dash.includes("needAttention: attention.needAttention"), "greeting uses the shared count");
@@ -307,12 +307,12 @@ const built = router.buildLocation({
   to: routed.to,
   hash: routed.hash,
 });
-assert(built.pathname === "/dashboard", "the helper stays on the practice list");
+assert(built.pathname === "/clients", "the helper stays on the client list");
 assert(built.hash === "clients-table", "the helper opens the client list");
-assert(built.href === "/dashboard#clients-table", "the address is the practice client list");
-assert(!built.pathname.startsWith("/clients"), "the helper does not open a client");
+assert(built.href === "/clients#clients-table", "the address is the client list");
+assert(!built.pathname.startsWith("/clients/"), "the helper does not open a client file");
 const routeIds = router.matchRoutes(built.pathname).map((match) => match.routeId);
-assert(routeIds.includes("/_authenticated/dashboard"), "that pathname is the practice list");
+assert(routeIds.includes("/_authenticated/clients/"), "that pathname is the client list");
 assert(!routeIds.includes("/_authenticated/clients/$clientId"), "that pathname is not a client file");
 
 console.log("accountant-qa-medium-test: ok");

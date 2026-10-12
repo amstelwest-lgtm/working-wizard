@@ -56,7 +56,7 @@ const demoSrc = readFileSync(resolve("src/routes/_authenticated/reports.demo.tsx
 assert(demoSrc.includes('to: "/reports"'), "legacy /reports/demo redirects to studio");
 assert(!demoSrc.includes("MOCK_RATIO_RESULTS"), "demo mock UI is deleted, not overlaid");
 
-const dashSrc = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dashSrc.includes('search: { tab: "reports" }'), "dashboard report icon opens the client Reports tab");
 assert(dashSrc.includes('to: "/reports"'), "dashboard Reports studio still opens standalone studio");
 assert(dashSrc.includes("clientId: undefined"), "firm Reports studio nav stays unscoped");

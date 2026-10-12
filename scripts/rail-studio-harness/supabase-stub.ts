@@ -45,6 +45,10 @@ function onPracticeRoute(): boolean {
   return (
     path === "/dashboard" ||
     path.startsWith("/dashboard/") ||
+    path === "/practice" ||
+    path.startsWith("/practice/") ||
+    path === "/clients" ||
+    path.startsWith("/clients/") ||
     path === "/settings" ||
     path.startsWith("/settings/") ||
     path === "/desk" ||

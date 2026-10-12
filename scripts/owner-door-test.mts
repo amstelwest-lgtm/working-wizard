@@ -13,6 +13,8 @@ import {
   ownerAnswerTiles,
   ownerCardStatuses,
   ownerHomeLines,
+  practiceCardStatuses,
+  practiceHomeLines,
   ownerTileLabel,
   type OwnerBooks,
 } from "../src/lib/owner-answers.ts";
@@ -847,5 +849,56 @@ const appRoute = readFileSync("src/routes/app.tsx", "utf8");
 assert(appRoute.includes("ownerDeliverablesRedirectTarget"), "the owner app redirects old deliverables URLs");
 const server = readFileSync("src/server.ts", "utf8");
 assert(server.includes("ownerDeliverablesRedirectTarget"), "full page loads redirect old deliverables URLs");
+
+const quietBook = {
+  clientCount: 4,
+  avgHealth: 72,
+  needAttention: 0,
+  reviewNow: 0,
+  openQueries: 0,
+  followUps: 0,
+};
+const quietLines = practiceHomeLines(quietBook);
+assert(quietLines.financial_manager[0] === "4 clients on the book.", "practice Home counts the book");
+assert(quietLines.financial_manager[1] === "No open queries.", "a clear book has no open queries");
+assert(quietLines.analyst[0] === "Average health is 72 out of 100.", "practice Home states average health");
+assert(quietLines.analyst[1] === "No client needs attention.", "a clear book needs no attention");
+assert(quietLines.advisor[0] === "No follow-up waiting.", "a clear book has no follow-up");
+const quietStatus = practiceCardStatuses(quietBook);
+assert(
+  quietStatus.financial_manager === null && quietStatus.analyst === null && quietStatus.advisor === null,
+  "a clear book has no status chip",
+);
+const busyLines = practiceHomeLines({
+  clientCount: 1,
+  avgHealth: null,
+  needAttention: 2,
+  reviewNow: 1,
+  openQueries: 3,
+  followUps: 1,
+});
+assert(busyLines.financial_manager.join(" ") === "1 client on the book. 3 open queries.", "one client and open queries");
+assert(busyLines.analyst[0] === "No scored clients yet.", "unscored book does not invent a health number");
+assert(busyLines.advisor[0] === "1 client to follow up.", "one follow-up is singular");
+const busyStatus = practiceCardStatuses({
+  clientCount: 1,
+  avgHealth: null,
+  needAttention: 2,
+  reviewNow: 1,
+  openQueries: 3,
+  followUps: 1,
+});
+assert(busyStatus.financial_manager?.word === "Attention", "open queries are Attention");
+assert(busyStatus.analyst?.word === "Critical", "review now is Critical");
+assert(busyStatus.advisor?.word === "Attention", "follow-up is Attention");
+const watching = practiceCardStatuses({
+  clientCount: 2,
+  avgHealth: 40,
+  needAttention: 1,
+  reviewNow: 0,
+  openQueries: 0,
+  followUps: 0,
+});
+assert(watching.analyst?.word === "Attention", "watching without review now is Attention");
 
 console.log("owner-door tests passed");

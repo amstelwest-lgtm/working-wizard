@@ -111,11 +111,19 @@ export function isFirmProductPath(pathname: string): boolean {
   return (
     pathname === "/dashboard" ||
     pathname.startsWith("/dashboard/") ||
+    pathname === "/practice" ||
+    pathname.startsWith("/practice/") ||
     pathname.startsWith("/clients") ||
     pathname.startsWith("/reports") ||
     pathname === "/settings/team" ||
     pathname.startsWith("/settings/team/")
   );
+}
+
+/** Home, the client list, and the practice overview. Not a client file. */
+export function isPracticeShellPath(pathname: string): boolean {
+  const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  return path === "/dashboard" || path === "/practice" || path === "/clients";
 }
 
 /** `/clients/:id` — Overview and the scored figures live on this file. */
@@ -306,10 +314,11 @@ export function decideFirmBillingPathGate(input: {
   ) {
     return "allow";
   }
-  // Practice Home is where Open Milōn lands. A client on the book does not
-  // send that landing to Checkout. null and omitted counts are not a book.
+  // Practice Home, the client list, and the practice overview stay open
+  // without a card. A later client file still redirects. null and omitted
+  // counts are not a book.
   if (
-    pathname === "/dashboard" &&
+    isPracticeShellPath(pathname) &&
     typeof input.firmClientCount === "number" &&
     input.firmClientCount >= 1
   ) {
