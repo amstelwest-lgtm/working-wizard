@@ -153,8 +153,9 @@ assert(dash.includes("dash-trial-banner"), "an ended trial is a thin banner");
 assert(dash.includes('to="/settings"'), "the thin banner links to Settings");
 assert(dash.includes("practiceNeedsAttention"), "health alerts and the tile share one queue");
 assert(dash.includes("queue={attentionBook.items}"), "the strip renders the counted queue");
-assert(dash.includes('aria-label="Enter as client"'), "Enter as client is named");
-assert(dash.includes(">Enter as client<"), "Enter as client has a visible label");
+assert(!dash.includes('aria-label="Enter as client"'), "the clients table does not offer Enter as client");
+assert(!dash.includes(">Enter as client<"), "Enter as client is not a row label");
+assert(dash.includes("data-client-row"), "a client row is still the way in");
 
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 assert(settings.includes("TrialEndedPlanBlock"), "Settings mounts the trial-ended plan card");

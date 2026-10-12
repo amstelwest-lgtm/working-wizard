@@ -54,7 +54,8 @@ assert(demoSrc.includes('to: "/reports"'), "legacy /reports/demo redirects to st
 assert(!demoSrc.includes("MOCK_RATIO_RESULTS"), "demo mock UI is deleted, not overlaid");
 
 const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
-assert(dashSrc.includes('search: { tab: "reports" }'), "dashboard report icon opens the client Reports tab");
+assert(!dashSrc.includes('aria-label="Generate report"'), "the clients table has no report button");
+assert(dashSrc.includes("data-client-row"), "the row opens the client");
 assert(!dashSrc.includes('to: "/reports"'), "practice has no standalone Reports studio");
 assert(!dashSrc.includes("Reports studio"), "practice has no Reports studio button");
 
