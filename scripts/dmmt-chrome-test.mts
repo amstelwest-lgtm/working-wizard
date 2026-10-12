@@ -40,18 +40,18 @@ assert(header.includes("headerShortcutClass()"), "the header shortcut uses the q
 assert(!header.includes("tb-btn gold"), "Reports studio is not a gold primary");
 
 const overview = client.slice(client.indexOf('id="pane-overview"'), client.indexOf('id="pane-summary"'));
-assert(overview.includes("<NextStepCard"), "Next Step stays the Overview primary");
-assert(overview.includes("data-ask-bot"), "Ask Milōn Bot stays on Overview");
-assert(overview.includes("Ask Milōn Bot"), "the Bot entry keeps its label");
-assert(overview.includes("Generate report"), "Generate report stays reachable");
-assert(overview.includes("Export PDF"), "Export PDF stays reachable");
-assert(overview.includes("deliverables-more"), "deliverable tools are tucked");
-assert(!overview.includes("btn gold"), "Overview chrome has no gold button");
-assert(!overview.includes('portalButtonClass("primary")'), "Overview does not mint a second primary");
-assert(
-  overview.includes('portalButtonClass("secondary")'),
-  "Overview strips use the secondary weight",
-);
+const books = client.slice(client.indexOf('id="pane-summary"'), client.indexOf('id="pane-moves"'));
+assert(overview.includes("<OwnerHome"), "Home is the three agent cards");
+assert(overview.includes("<NextStepCard"), "Home still resolves the next step");
+assert(overview.includes('title="Your whole finance team"'), "the client title matches practice Home");
+assert(!overview.includes("btn gold"), "Home has no gold button");
+assert(!overview.includes('portalButtonClass("primary")'), "Home does not mint a primary button");
+assert(books.includes("data-ask-bot"), "Ask Milōn Bot stays on Books");
+assert(books.includes("Ask Milōn Bot"), "the Bot entry keeps its label");
+assert(books.includes("Generate report"), "Generate report stays reachable");
+assert(books.includes("Export PDF"), "Export PDF stays reachable");
+assert(books.includes("deliverables-more"), "deliverable tools are tucked on Books");
+assert(books.includes('portalButtonClass("secondary")'), "Books tools use the secondary weight");
 
 const brain = read("src/components/client-brain-summary.tsx");
 const hero = brain.slice(brain.indexOf('id="wizard-brain-hero"'), brain.indexOf("brain-stack"));

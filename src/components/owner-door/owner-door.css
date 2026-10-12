@@ -2330,6 +2330,15 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
   cursor: default;
 }
 
+.owner-door .owner-signoff {
+  margin: 12px 0 0;
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .owner-door .owner-needs-item b {
   font-size: 14px;
   font-weight: 700;

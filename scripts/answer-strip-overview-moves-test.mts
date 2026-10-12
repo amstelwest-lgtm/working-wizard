@@ -159,24 +159,21 @@ const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf
 const overviewPane = sliceBetween(route, 'id="pane-overview"', 'id="pane-summary"');
 const movesPane = sliceBetween(route, 'id="pane-moves"', 'id="pane-ask"');
 
-assert(overviewPane.includes("<DeliverableAnswerStrip"), "overview has one answer strip");
-assert(count(overviewPane, "<DeliverableAnswerStrip") === 1, "overview does not add a second strip");
-assert(overviewPane.includes('scope="financials"'), "overview uses the existing financials sign-off");
-assert(!overviewPane.includes("canSign"), "overview does not put Sign off on the strip");
+assert(overviewPane.includes("<OwnerHome"), "Home mounts the owner cards");
+assert(!overviewPane.includes("<DeliverableAnswerStrip"), "Home does not keep the overview strip");
+assert(!overviewPane.includes("canSign"), "Home does not put Sign off on a strip");
+assert(overviewPane.includes("signoffLine={homeSignoffLine}"), "Home shows the advisory sign-off sentence");
+assert(route.includes("signoffStatusLine({"), "that sentence is the shared sign-off line");
 assert(deliverable.includes("<SignoffStatusChip"), "the financials strip shows the shared status");
 assert(statusChip.includes("data-signoff-status"), "the shared status uses the one vocabulary");
-assert(overviewPane.includes("chip={healthChip}"), "overview chips the statement source");
-assert(!overviewPane.includes('figureSourceChipLabel("statement")'), "overview does not invent a Statement chip");
-assert(overviewPane.includes("sentence={overviewSentence}"), "the overview sentence is the existing what-matters line");
-assert(route.includes("overviewAnswerSentence({"), "that sentence is what matters, or the health headline");
-assert(overviewPane.includes("data-next-step-cta={overviewNextStep.key}"), "the primary is the existing next step");
+assert(!overviewPane.includes('figureSourceChipLabel("statement")'), "Home does not invent a Statement chip");
 assert(overviewPane.includes("hideCta"), "the next-step card does not keep a second gold button");
-assert(overviewPane.includes("<ReviewInputsDrawer"), "secondary links sit in the closed drawer");
-assert(overviewPane.includes("<OverviewSectionCards"), "overview keeps the jump cards");
-assert(overviewPane.includes("hideWhatMatters"), "the briefing does not repeat the strip sentence");
-assert(!overviewPane.includes("client management"), "overview does not say client management");
+assert(!overviewPane.includes("<ReviewInputsDrawer"), "the inputs drawer is off Home");
+assert(!overviewPane.includes("<OverviewSectionCards"), "Home does not keep the jump cards");
+assert(!overviewPane.includes("client management"), "Home does not say client management");
 assert(!overviewPane.includes(">Audited<"), "the overview pane does not say Audited");
 assert(!route.includes('className="aud">Audited'), "the crumb no longer says Audited");
+assert(route.includes("hideWhatMatters"), "the briefing does not repeat the strip sentence");
 
 assert(movesPane.includes("<StrategicMovesPanel"), "moves still renders the ranked list");
 assert(!movesPane.includes("From strategic moves"), "the moves pane drops that label");

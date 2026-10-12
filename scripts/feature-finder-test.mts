@@ -87,7 +87,7 @@ assert(href("cash", studio).includes("tab=cash"), "Cash flow is its own rail ite
 assert(href("budget", studio).includes("tab=budget"), "Budget is its own rail item");
 assert(href("collections", studio).includes("section=collections"), "Collections stays under Cash flow");
 assert(href("payables", studio).includes("section=payables"), "Payables stay under Cash flow");
-assert(href("bot", studio).endsWith("tab=desk"), "Bot inside a client file still opens that desk");
+assert(href("bot", studio).endsWith("tab=home"), "Bot inside a client file opens that client's Home");
 assert(href("bot", firm) === "/dashboard", "Bot from practice opens practice Home");
 assert(href("drafts", firm) === "/dashboard", "Drafts from practice open practice Home");
 assert(href("overview", studio).endsWith("tab=home"), "the briefing opens Home");

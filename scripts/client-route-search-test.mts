@@ -38,10 +38,10 @@ function lands(
   );
 }
 
-lands("ask", { tab: "desk" }, "?tab=ask opens the Bot desk");
-lands("bot", { tab: "desk" }, "?tab=bot opens the Bot desk");
-lands("milon-bot", { tab: "desk" }, "?tab=milon-bot opens the Bot desk");
-lands("desk", { tab: "desk" }, "?tab=desk opens the Bot desk");
+lands("ask", { tab: "home" }, "?tab=ask opens Home");
+lands("bot", { tab: "home" }, "?tab=bot opens Home");
+lands("milon-bot", { tab: "home" }, "?tab=milon-bot opens Home");
+lands("desk", { tab: "home" }, "?tab=desk opens Home");
 lands("overview", { tab: "home" }, "?tab=overview opens Home");
 assert(
   canonicalizeAccountantSearch({}).tab === "home" &&
@@ -132,9 +132,9 @@ assert(
   "an explicit Home tab wins over section=pack",
 );
 assert(
-  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "desk" &&
+  canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).tab === "home" &&
     canonicalizeAccountantSearch({ tab: "ask", section: "pack" }).section === undefined,
-  "an explicit Bot desk tab wins over section=pack",
+  "an explicit Ask tab lands on Home",
 );
 assert(
   canonicalizeAccountantSearch({ tab: "deliverables", section: "reports" }).tab === "reports" &&

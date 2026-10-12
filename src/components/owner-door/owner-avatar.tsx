@@ -247,20 +247,20 @@ function Face({ agent }: { agent: AgentKey }) {
     <g className="face">
       {agent === "financial_manager" ? (
         <>
-          <rect className="shell" x="22" y="18" width="36" height="42" rx="12" />
+          <rect className="owner-body" x="22" y="18" width="36" height="42" rx="12" />
           <rect className="visor" x="26" y="30" width="28" height="14" rx="4" />
         </>
       ) : null}
       {agent === "analyst" ? (
         <>
-          <circle className="shell" cx="40" cy="40" r="20" />
+          <circle className="owner-body" cx="40" cy="40" r="20" />
           <circle className="monocle" cx="50" cy="38" r="8" />
           <line className="monocle-scan" x1="42" y1="38" x2="58" y2="38" />
         </>
       ) : null}
       {agent === "advisor" ? (
         <>
-          <rect className="shell" x="22" y="18" width="36" height="42" rx="16" />
+          <rect className="owner-body" x="22" y="18" width="36" height="42" rx="16" />
           <circle className="eye" cx="34" cy="34" r="2.6" />
           <circle className="eye" cx="46" cy="34" r="2.6" />
           <line className="mark" x1="32" y1="46" x2="48" y2="46" />

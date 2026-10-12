@@ -17,8 +17,9 @@ const pack = read("src/components/advisory-pack-panel.tsx");
 const css = read("src/styles/accountant-portal.css");
 
 const slotAt = client.indexOf('data-notes-tray-slot=""');
-const cardsAt = client.indexOf("<OverviewSectionCards");
-assert(slotAt !== -1 && cardsAt !== -1 && slotAt < cardsAt, "the notes slot sits above the overview cards");
+const homeAt = client.indexOf('data-client-home="true"');
+assert(slotAt !== -1 && homeAt !== -1 && slotAt < homeAt, "the notes slot sits above the client Home cards");
+assert(!client.includes("<OverviewSectionCards"), "Home no longer renders the jump cards");
 assert(client.includes('workspace="accountant"'), "the accountant notes layer stays marked");
 
 assert(layer.includes("[data-notes-tray-slot]"), "overview looks up the in-flow slot");

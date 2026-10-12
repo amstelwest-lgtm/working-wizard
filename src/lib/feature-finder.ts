@@ -225,7 +225,7 @@ const FEATURES: readonly FeatureDef[] = [
     audiences: ["accountant"],
     requiresClient: true,
     practiceWhenNoClient: "dashboard",
-    studio: { tab: "desk" },
+    studio: { tab: "home" },
   },
   {
     id: "action-plan",
