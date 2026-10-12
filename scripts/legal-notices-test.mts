@@ -106,7 +106,7 @@ assert(marketingFaq.split(disclosure).length - 1 === 1, "FAQ copy defines the di
 assert(privacyText.split(disclosure).length - 1 === 1, "privacy contains the disclosure once");
 assert(!/claude/i.test(landing), "landing source does not name Claude");
 assert(!/claude/i.test(readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8")), "for-accountants source does not name Claude");
-assert(faq.includes("dollar sign glued on"), "FAQ has US invert of the SA-built line");
+assert(!faq.includes("dollar sign glued on"), "FAQ does not claim a regional product");
 assert(readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
 
 assert(landing.includes('href="/privacy"'), "landing footer links to privacy");

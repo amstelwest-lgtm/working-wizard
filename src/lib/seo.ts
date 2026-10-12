@@ -259,7 +259,7 @@ export function organizationGraphJson(): string {
           "Your AI finance team. You sign off. Milōn Financial Manager keeps the books data clean from QuickBooks, Xero or Sage, the 13-week cash view and the budget. Milōn Analyst diagnoses why margins moved and where cash is leaking. Milōn Advisor drafts the next moves. A qualified accountant reviews and approves.",
         featureList: [
           "Milōn Financial Manager: clean books data from QuickBooks, Xero or Sage, 13-week cash view, budget, action points and accountant hand-off",
-          "Milōn Analyst: health score, ratios and variances explained as a diagnosis",
+          "Milōn Analyst: health score, 19 financial ratios and variances explained as a diagnosis",
           "Milōn Advisor: next moves and advisory deliverables ready for accountant sign-off",
           "Connect QuickBooks, Xero or Sage, or upload PDF, Excel, CSV or a bank statement",
           "Source documents post to the books only after a named person approves",

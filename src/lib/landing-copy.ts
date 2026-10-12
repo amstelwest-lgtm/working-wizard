@@ -213,7 +213,7 @@ export const PROOF_SECURITY_FACTS = [
   "Advisory deliverables are ready to send once you sign off.",
   "QuickBooks, Xero and Sage connect into the same workspace.",
   "Invoices, bills and receipts can come in from the client. A named person approves before anything is posted to the books. Nothing posts on its own.",
-  "Firms lead the move to AI, and help their clients adopt it in the finance work they already trust the firm to do.",
+  "Firms lead the move to AI, and help their clients adopt it in the finance work they already trust you to do.",
 ] as const;
 
 export const FAQ_MORE_LEAD = "More questions: ";

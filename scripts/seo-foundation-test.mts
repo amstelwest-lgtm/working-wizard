@@ -283,8 +283,8 @@ assert(
   "landing states both ledgers in crawlable text",
 );
 assert(
-  landing.includes("Connect QuickBooks Online or Xero"),
-  "landing tells visitors they can connect either ledger",
+  landing.includes("Connect QuickBooks, Xero or Sage"),
+  "landing tells visitors they can connect QuickBooks, Xero or Sage",
 );
 assert(!landing.includes("certified"), "landing does not claim certification");
 assert(!landing.includes("Intuit"), "landing does not claim an Intuit relationship");
@@ -340,7 +340,7 @@ assert(
 assert(!faqPageJson(publicFaqUsItems()).includes("https://milonfinance.com"), "faq schema does not use the apex host");
 assert(faqPageJson(publicFaqUsItems()).includes("https://www.milonfinance.com/ai"), "faq schema points the AI notice at www");
 assert(
-  HOMEPAGE_FAQ_ITEMS[0].answer.includes("reviews and signs off every advisory pack"),
+  HOMEPAGE_FAQ_ITEMS[0].answer.includes("reviews and approves every advisory pack"),
   "homepage FAQ keeps the accountant sign-off answer",
 );
 
@@ -355,9 +355,9 @@ assert(!firms.includes("Drafted advisory reports."), "firm page drops the drafte
 assert(
   FIRM_TEAM_BULLETS.map((bullet) => bullet.title).join("|") ===
     [
-      "Milōn Financial Manager, data quality for QuickBooks, Xero and Sage.",
-      "Milōn Analyst, health score and ratios.",
-      "Milōn Advisor, next moves and the advisory.",
+      "Milōn Financial Manager runs the team.",
+      "Milōn Analyst diagnoses the numbers.",
+      "Milōn Advisor prepares the next move.",
     ].join("|"),
   "firm page names three distinct agents",
 );
