@@ -55,8 +55,7 @@ export const SCOPE_SHORT_LABEL: Record<ReviewScope, string> = {
 export const SIGNOFF_GOLD_BTN =
   "signoff-primary inline-flex items-center gap-2 bg-[#0B5FFF] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-none transition hover:bg-[#2563EB]";
 
-const GOLD = "#d4a550";
-const GOLD_DEEP = "#b8860b";
+const GOLD_DEEP = "#102A43";
 
 function signerLine(signoff: ClientReviewSignoff): string {
   const initials = signoff.signed_off_by_initials?.trim();
@@ -265,7 +264,7 @@ function SignaturePad({
         <Label className="text-xs text-slate-300">Your signature</Label>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-400 hover:text-[#d4a550]"
+          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-400 hover:text-[#0B5FFF]"
           onClick={() => {
             const canvas = canvasRef.current;
             const ctx = canvas?.getContext("2d");
@@ -283,7 +282,7 @@ function SignaturePad({
       </div>
       <canvas
         ref={canvasRef}
-        className="h-[110px] w-full cursor-crosshair touch-none rounded-lg border border-[#d4a550]/35 bg-[#fffdf8]"
+        className="h-[110px] w-full cursor-crosshair touch-none rounded-lg border border-[#DBEAFE] bg-white"
         onPointerDown={(e) => {
           drawing.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -386,7 +385,7 @@ export function OwnerTabSignoffRow({
       <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#16845B] dark:text-[#8dccb0]">
         {label}
       </span>
-      <span className="h-px min-w-4 flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
+      <span className="h-px min-w-4 flex-1 bg-[#DBEAFE]" />
       <ReviewSignoffBadge signoff={signoff} scope={scope} isStale={isStale} placement="corner" />
     </div>
   );

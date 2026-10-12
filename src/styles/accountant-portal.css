@@ -114,7 +114,7 @@ html[data-theme="light"] .accountant-portal .card.hero-card{box-shadow:0 8px 24p
 .accountant-portal .status-tag.ok{color:var(--ok-ink)}
 .accountant-portal .status-tag.faint{color:var(--ink-faint)}
 .accountant-portal .status-tag.gold{color:var(--accent-text)}
-.accountant-portal .brain-highlight{border:1px solid var(--gold);border-radius:14px;padding:14px 16px;margin-bottom:14px;background:color-mix(in srgb,var(--gold) 8%,transparent)}
+.accountant-portal .brain-highlight{border:1px solid var(--pale);border-radius:14px;padding:14px 16px;margin-bottom:14px;background:#f4f8ff}
 .accountant-portal .brain-highlight .prompt{font-size:14.5px;margin-top:4px}
 .accountant-portal .brain-profile{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:baseline}
 .accountant-portal .brain-profile-name{font-size:16px;font-weight:700}
@@ -739,6 +739,9 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 /* metric card sparkline — legacy .stat + MetricTile (.milon-metric-tile__foot) */
 .accountant-portal .stat .stat-foot,
 .accountant-portal .milon-metric-tile__foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.accountant-portal .milon-metric-tile__foot .attention-mix{color:#102a43}
+html.dark .accountant-portal .milon-metric-tile__foot .attention-mix{color:#f4f7fb}
+.accountant-portal .milon-status-pill--neutral{color:#3d5270;background:#ffffff;border:1px solid #dbeafe}
 .accountant-portal .stat .stat-spark,
 .accountant-portal .milon-metric-tile__foot .stat-spark{width:72px;height:22px;flex-shrink:0}
 .accountant-portal .stat .stat-spark path,
@@ -1886,8 +1889,12 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
   background-image:linear-gradient(45deg,transparent 50%,#0b5fff 50%),linear-gradient(135deg,#0b5fff 50%,transparent 50%);
 }
 
+.share-fab,
+.notes-fab{z-index:20 !important}
+.accountant-portal.nav-open{position:relative;z-index:40}
 @media (max-width:767px){
   .share-fab{right:auto;left:max(1rem, env(safe-area-inset-left))}
+  .notes-fab{bottom:max(5.25rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))}
   .accountant-portal .topbar .firm-chip,
   .accountant-portal .topbar .firm-switcher{
     flex:1 1 100%;
@@ -1901,8 +1908,10 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
     width:100%;
     white-space:normal;
   }
-  .accountant-portal .shell{padding-bottom:8.5rem}
-  .accountant-portal .deliverable-main{padding-bottom:6.5rem}
+  .accountant-portal .shell{padding-bottom:12rem}
+  .accountant-portal .deliverable-main{padding-bottom:11rem}
+  .accountant-portal .brain-hero,
+  .accountant-portal .h-sec{scroll-margin-bottom:11rem}
   .accountant-portal .topbar-backdrop{display:none}
   .accountant-portal.nav-open .topbar-backdrop{
     display:block;
@@ -1972,5 +1981,40 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
     mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 36px),transparent);
     -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 36px),transparent);
   }
+}
+
+/* Old gold and cream utilities on accountant surfaces. Attention stays #B7791F
+   on the status pill and health ring only. */
+html[data-theme="light"] .accountant-portal [class*="bg-amber-50"],
+html[data-theme="light"] .accountant-portal [class*="bg-amber-100"],
+html[data-theme="light"] .accountant-portal [class*="bg-amber-900"],
+html[data-theme="light"] .accountant-portal [class*="bg-amber-950"],
+html[data-theme="light"] .accountant-portal [class*="fffdf"],
+html[data-theme="light"] .accountant-portal [class*="fff8e8"],
+html[data-theme="light"] .accountant-portal [class*="f6f3ea"],
+html[data-theme="light"] .accountant-portal [class*="fbf3e2"],
+html[data-theme="light"] .accountant-portal [class*="fffef8"]{
+  background-color:#ffffff !important;
+  background-image:none !important;
+}
+html[data-theme="light"] .accountant-portal [class*="border-amber"]{
+  border-color:#dbeafe !important;
+}
+html[data-theme="light"] .accountant-portal [class*="text-amber"]{
+  color:#102a43 !important;
+}
+html[data-theme="light"] .accountant-portal [class*="bg-amber-400"],
+html[data-theme="light"] .accountant-portal [class*="bg-amber-500"],
+html[data-theme="light"] .accountant-portal [class*="bg-amber-600"]{
+  background-color:#0b5fff !important;
+  background-image:none !important;
+  color:#ffffff !important;
+}
+html[data-theme="light"] .accountant-portal .milon-status-pill--warn,
+html[data-theme="light"] .accountant-portal .milon-status-pill--warn *{
+  color:#b7791f !important;
+}
+@media (max-width:767px){
+  .reports-studio{padding-bottom:12rem}
 }
 

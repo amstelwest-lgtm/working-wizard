@@ -29,7 +29,7 @@ const FIRM_ROW = {
   referral_code: "HARBOUR",
   logo_url: null,
   accent_color: "#0B5FFF",
-  primary_color: "#102A43",
+  primary_color: "#1A1A2E",
   secondary_color: "#DBEAFE",
   tagline: "The passion to perform.",
   brand_contact_name: "Ada Mbeki",
@@ -42,7 +42,16 @@ const FIRM_ROW = {
 function onPracticeRoute(): boolean {
   if (typeof location === "undefined") return false;
   const path = location.pathname;
-  return path === "/dashboard" || path.startsWith("/dashboard/") || path === "/settings" || path.startsWith("/settings/");
+  return (
+    path === "/dashboard" ||
+    path.startsWith("/dashboard/") ||
+    path === "/settings" ||
+    path.startsWith("/settings/") ||
+    path === "/desk" ||
+    path.startsWith("/desk/") ||
+    path === "/reports" ||
+    path.startsWith("/reports/")
+  );
 }
 
 const CLIENT_ROW = {

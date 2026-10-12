@@ -192,7 +192,19 @@ export function createServerFn() {
 
 export function useServerFn(fn?: { __harnessId?: string }) {
   const id = fn?.__harnessId ?? "";
-  return (...args: unknown[]) => fixtureFor(id || String(args));
+  return (payload?: { data?: { scope?: string } }) => {
+    // Staff cycle on the action plan: submit, without the partner sign-off.
+    if (id.includes("loadDeliverableState") && payload?.data?.scope === "action_plan") {
+      return Promise.resolve({
+        status: "draft",
+        changeComment: null,
+        canSubmit: true,
+        canReview: false,
+        canSignOff: false,
+      });
+    }
+    return fixtureFor(id || String(payload));
+  };
 }
 
 export function createMiddleware() {

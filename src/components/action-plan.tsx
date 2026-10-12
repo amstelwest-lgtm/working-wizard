@@ -11,7 +11,6 @@
  * today — is the signature element and appears on every progress bar.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { PanelSkeleton } from "@/components/primitives";
 import { browserAppUrl } from "@/lib/app-origin";
 import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 import { supabase } from "@/integrations/supabase/client";
@@ -232,7 +231,7 @@ function expectedPct(it: Pick<Item, "due_date" | "created_at">): number | null {
 
 const HEALTH_META: Record<Health, { label: string; color: string; bg: string }> = {
   on_track: { label: "On track", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
-  at_risk: { label: "At risk", color: "#f5a524", bg: "rgba(245,165,36,0.12)" },
+  at_risk: { label: "At risk", color: "#B7791F", bg: "rgba(183,121,31,0.12)" },
   off_track: { label: "Off track", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
   overdue: { label: "Overdue", color: "#ef4444", bg: "rgba(239,68,68,0.16)" },
   complete: { label: "Done", color: "#8a938c", bg: "rgba(138,147,140,0.15)" },
@@ -1158,12 +1157,16 @@ export default function ActionPlanPanel({
   };
 
   if (loading) {
-    return <PanelSkeleton rows={5} className="mx-0 bg-transparent" />;
+    return (
+      <div className="rounded-xl border border-[#DBEAFE] bg-white p-8 text-sm font-semibold text-[#102A43]">
+        Loading the plan…
+      </div>
+    );
   }
   if (!plan) {
     if (!isOwner) {
       return (
-        <div className="rounded-xl border border-amber-900/10 bg-white/60 p-8 text-center dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="rounded-xl border border-[#DBEAFE] bg-white p-8 text-center text-[#102A43] dark:border-slate-800 dark:bg-slate-900/50 dark:text-white">
           <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
             No action plan yet
           </p>
@@ -1173,7 +1176,11 @@ export default function ActionPlanPanel({
         </div>
       );
     }
-    return <div className="p-6 text-sm text-slate-500">Couldn't load the plan.</div>;
+    return (
+      <div className="rounded-xl border border-[#DBEAFE] bg-white p-6 text-sm text-[#102A43]">
+        Couldn't load the plan.
+      </div>
+    );
   }
 
   const drawerItem = drawerId ? (enriched.find((i) => i.id === drawerId) ?? null) : null;
@@ -1230,7 +1237,7 @@ export default function ActionPlanPanel({
                 {pendingRecs.length > 0 && (
                   <Button
                     size="sm"
-                    className="bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                    className="bg-[#0B5FFF] text-white hover:bg-[#2563EB] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#2563EB]"
                     onClick={() => setRecOpen(true)}
                     data-add-from-recommendations={pendingRecs.length}
                   >
@@ -1795,7 +1802,7 @@ function GoalHeader({
                 <div>
                   <Button
                     size="sm"
-                    className="bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950"
+                    className="bg-[#0B5FFF] text-white hover:bg-[#2563EB] dark:bg-[#0B5FFF] dark:text-white"
                     onClick={() => {
                       onChange(draft);
                       setEditing(false);
@@ -1808,22 +1815,14 @@ function GoalHeader({
             )}
           </div>
           {confidence != null && (
-            <div className="shrink-0 rounded-xl border border-amber-900/10 bg-white/60 px-5 py-3 text-center dark:border-slate-800 dark:bg-slate-900/50">
+            <div className="shrink-0 rounded-xl border border-[#DBEAFE] bg-white px-5 py-3 text-center dark:border-slate-800 dark:bg-slate-900/50">
               <div className={LABEL_CLS}>Plan confidence</div>
               {(() => {
                 const shown = planConfidenceDisplay(confidence);
                 return (
                   <>
                     <div
-                      className={`mt-0.5 text-3xl font-black tabular-nums tracking-tight ${shown.hint ? "text-slate-400 dark:text-slate-500" : ""}`}
-                      style={
-                        shown.hint
-                          ? undefined
-                          : {
-                              color:
-                                confidence >= 75 ? "#22c55e" : confidence >= 50 ? "#f5a524" : "#ef4444",
-                            }
-                      }
+                      className={`mt-0.5 text-3xl font-black tabular-nums tracking-tight text-[#102A43] dark:text-white ${shown.hint ? "text-slate-400 dark:text-slate-500" : ""}`}
                     >
                       {shown.value}
                     </div>
@@ -1901,13 +1900,13 @@ function DriversStrip({
             : score >= HEALTH_BAND_TABLE.healthyMin
               ? "#22c55e"
               : score >= HEALTH_BAND_TABLE.watchMin
-                ? "#f5a524"
+                ? "#B7791F"
                 : "#ef4444";
         return (
           <button
             key={m.key}
             onClick={() => onView?.(m.key)}
-            className="group rounded-xl border border-amber-900/10 bg-white/60 px-3.5 py-3 text-left transition-colors hover:border-[#0B5FFF]/40 dark:border-slate-800 dark:bg-slate-900/50"
+            className="group rounded-xl border border-[#DBEAFE] bg-white px-3.5 py-3 text-left transition-colors hover:border-[#0B5FFF]/40 dark:border-slate-800 dark:bg-slate-900/50"
           >
             <div className="flex items-center justify-between gap-2">
               <span className={LABEL_CLS}>{m.ratioName}</span>
@@ -2185,7 +2184,7 @@ function ItemRow({
           )}
           {lastNudge ? (
             <span
-              className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+              className={`inline-flex items-center gap-1 text-[10px] font-semibold dark:text-[#F4F7FB] ${lastNudge.email_type === "nudge" ? "text-[#102A43]" : "text-[#C43D4B]"}`}
               title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? date(lastNudge.sent_at, { day: "numeric", month: "short", year: "numeric" }) : ""}`}
             >
               <Mail className="h-3 w-3" />
@@ -2307,7 +2306,7 @@ function OwnerPicker({
                     {e.role.replaceAll("_", " ")}
                   </span>
                 ) : null}
-                {!e.email && <span className="ml-1 text-[10px] text-amber-600">no email</span>}
+                {!e.email && <span className="ml-1 text-[10px] text-[#3D5270]">no email</span>}
               </button>
             ))}
             {list.length === 0 && <p className="px-2 py-1.5 text-xs text-slate-400">No matches</p>}
@@ -2416,7 +2415,7 @@ function QuickAdd({
         size="sm"
         disabled={!v.trim()}
         onClick={submit}
-        className="h-8 shrink-0 bg-[#0B5FFF] px-3 text-xs text-white hover:bg-[#9a7009] disabled:opacity-40 dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
+        className="h-8 shrink-0 bg-[#0B5FFF] px-3 text-xs text-white hover:bg-[#2563EB] disabled:opacity-40 dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#2563EB]"
       >
         Add
       </Button>
@@ -2516,7 +2515,7 @@ function ImportPanel({
               setBusy(false);
             }
           }}
-          className="mt-4 w-full bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
+          className="mt-4 w-full bg-[#0B5FFF] text-white hover:bg-[#2563EB] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#2563EB]"
         >
           {busy
             ? "Adding…"
@@ -2618,7 +2617,7 @@ function FromRecommendationsPanel({
               setBusy(false);
             }
           }}
-          className="mt-4 w-full bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
+          className="mt-4 w-full bg-[#0B5FFF] text-white hover:bg-[#2563EB] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#2563EB]"
         >
           {busy ? (
             <>
@@ -2755,7 +2754,7 @@ function TeamPanel({
                       {e.name}
                     </span>
                     <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
-                      {e.email || <span className="text-amber-600">no email</span>}
+                      {e.email || <span className="text-[#3D5270]">no email</span>}
                       {e.practiceUserId ? (
                         <span className="ml-1 uppercase tracking-wide text-slate-400">
                           · Practice {e.role ? e.role.replaceAll("_", " ") : "member"}
@@ -2810,7 +2809,7 @@ function TeamPanel({
           <Button
             disabled={!name.trim() || saving}
             onClick={submit}
-            className="w-full bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
+            className="w-full bg-[#0B5FFF] text-white hover:bg-[#2563EB] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#2563EB]"
           >
             <UserPlus className="mr-1 h-3.5 w-3.5" />
             {saving ? "Adding…" : "Add team member"}
@@ -3088,7 +3087,7 @@ function ItemDrawer({
                 className={`mt-5 w-full ${
                   item.health === "overdue"
                     ? "bg-[#ef4444] text-white hover:bg-[#dc2626]"
-                    : "bg-[#0B5FFF] text-white hover:bg-[#9a7009] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                    : "bg-[#0B5FFF] text-white hover:bg-[#2563EB] dark:bg-[#0B5FFF] dark:text-slate-950 dark:hover:bg-[#2563EB]"
                 }`}
               >
                 {chasing ? (

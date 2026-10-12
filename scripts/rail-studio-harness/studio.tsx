@@ -10,6 +10,8 @@ import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ReportsStudio } from "@/routes/_authenticated/reports-studio";
+import { SourceDocumentsView } from "@/components/source-documents-panel";
+import type { SourceDocumentsModel } from "@/lib/source-documents-ui";
 import ActionPlanPanel from "@/components/action-plan";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
@@ -322,17 +324,43 @@ const HARNESS_STEP: NextStep = {
   openDataRequestKinds: [],
 };
 
-function BooksPane({ clientId }: { clientId: string }) {
+const HARNESS_DOCUMENTS: SourceDocumentsModel = {
+  heading: "Documents",
+  lede: "Source documents for this client. Approve a draft before anything posts to the ledger.",
+  showUpload: false,
+  duplicate: false,
+  empty: null,
+  primaryId: "doc-karoo",
+  cards: [
+    {
+      id: "doc-karoo",
+      fileName: "karoo-invoice.pdf",
+      answer: "Karoo Traders invoice",
+      detail: "Held for review.",
+      holding: "Held in Milōn",
+      progress: null,
+      rows: [{ label: "Supplier", value: "Karoo Traders" }],
+      lines: [],
+      notes: [],
+      approval: null,
+      action: { kind: "quiet" },
+    },
+  ],
+};
+
+function BooksPane({ clientId: _clientId }: { clientId: string }) {
   return (
     <div className="tabpane on" id="pane-summary">
-      <DataUpToDate
-        clientId={clientId}
-        returnPath={`/clients/${clientId}`}
-        onUpload={() => {}}
-        freshness={HARNESS_BOOKS_FRESHNESS}
-        chip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
-        fixtureOpenKinds={["bank_statement"]}
-      />
+      <SourceDocumentsView model={HARNESS_DOCUMENTS} />
+      <div id="wizard-brain-hero" className="card hero-card pad brain-hero">
+        <span className="eyebrow">Client brain</span>
+        <h2 className="h-sec" style={{ marginBottom: 6 }}>
+          The background on Harbour Glass
+        </h2>
+        <p className="sub">
+          This is the collection of context around this client. Source documents sit above it.
+        </p>
+      </div>
     </div>
   );
 }
@@ -1088,7 +1116,7 @@ function ReportsPane({ clientId }: { clientId: string }) {
 function DrafterPane({ clientId }: { clientId: string }) {
   return (
     <div className="tabpane on" id="pane-drafter">
-      <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+      <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
         <PaneBoundary label="Advisory drafter">
           <AdvisoryDrafter clientId={clientId} clientName="Harbour Glass" />
         </PaneBoundary>
@@ -1124,7 +1152,7 @@ function PlanPane({ clientId, planView }: { clientId: string; planView?: string 
       : null;
   return (
     <div className="tabpane on" id="pane-plan">
-      <section className="mb-5 rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]">
+      <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
       <DeliverableAnswerStrip
         heading="Action plan"
         sentence={sentence}

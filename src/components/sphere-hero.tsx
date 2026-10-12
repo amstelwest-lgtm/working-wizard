@@ -122,7 +122,7 @@ function tierFromDisplayStatus(
 
 const TIER_TEXT: Record<Tier, string> = {
   healthy: "text-emerald-400",
-  watch: "text-amber-400",
+  watch: "text-[#B7791F]",
   critical: "text-rose-400",
   nodata: "text-slate-400",
 };
@@ -492,7 +492,7 @@ export function SphereHero({
       {/* ── LEVEL 2: pillar sphere grid ── */}
       {level === 2 && (
         <>
-          <p className="mb-3 mt-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-400/90">
+          <p className="mb-3 mt-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-[#102A43] dark:text-[#F4F7FB]">
             Health by pillar
           </p>
           <div className="grid w-full max-w-md grid-cols-2 gap-3">
@@ -501,7 +501,7 @@ export function SphereHero({
               return (
                 <div
                   key={p.id}
-                  className={`flex flex-col items-center rounded-2xl border border-amber-900/15 bg-white/80 p-4 shadow-[0_12px_30px_rgba(121,91,27,0.08)] dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
+                  className={`flex flex-col items-center rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-[0_12px_30px_rgba(16,42,67,0.06)] dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
                   style={reduceMotion ? undefined : { animationDelay: `${i * morphMs / 7}ms`, animationFillMode: "both" }}
                 >
                   <Sphere
@@ -518,7 +518,7 @@ export function SphereHero({
                   {p.blurb && (
                     <div className="mt-3 flex w-full items-center justify-between gap-1">
                       <p className="text-xs leading-snug text-slate-400">{p.blurb}</p>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-amber-500/70" />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[#0B5FFF]" />
                     </div>
                   )}
                 </div>
@@ -545,7 +545,7 @@ export function SphereHero({
             />
           </div>
 
-          <p className="mb-3 mt-5 text-[11px] font-semibold tracking-[0.04em] text-amber-400/90">
+          <p className="mb-3 mt-5 text-[11px] font-semibold tracking-[0.04em] text-[#102A43] dark:text-[#F4F7FB]">
             {activePillar.label} drivers
           </p>
 
@@ -560,7 +560,7 @@ export function SphereHero({
               const t = tierOf(d.health);
               const pct = isFinite(d.health) ? Math.max(2, Math.min(100, d.health)) : 0;
               const clickable = Boolean(onDriverClick);
-              const rowClass = `w-full animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-amber-900/15 bg-white/85 p-3 text-left shadow-[0_8px_24px_rgba(121,91,27,0.07)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
+              const rowClass = `w-full animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-[#DBEAFE] bg-white p-3 text-left shadow-[0_8px_24px_rgba(16,42,67,0.06)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
                 clickable
                   ? "cursor-pointer transition hover:border-[#0B5FFF]/50 hover:bg-[#F4F8FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/40 dark:hover:border-[#2563EB] dark:hover:bg-[#163654]"
                   : ""

@@ -28,6 +28,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDeskRouteImport } from './routes/_authenticated/desk'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
@@ -155,6 +156,11 @@ const UnsubscribeRoute = UnsubscribeRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDeskRoute = AuthenticatedDeskRouteImport.update({
+  id: '/desk',
+  path: '/desk',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
@@ -358,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/desk': typeof AuthenticatedDeskRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
@@ -412,6 +419,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/desk': typeof AuthenticatedDeskRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
@@ -468,6 +476,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/desk': typeof AuthenticatedDeskRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
@@ -524,6 +533,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/unsubscribe'
     | '/dashboard'
+    | '/desk'
     | '/ops'
     | '/access/$token'
     | '/ack/$token'
@@ -578,6 +588,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/unsubscribe'
     | '/dashboard'
+    | '/desk'
     | '/ops'
     | '/access/$token'
     | '/ack/$token'
@@ -633,6 +644,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/unsubscribe'
     | '/_authenticated/dashboard'
+    | '/_authenticated/desk'
     | '/_authenticated/ops'
     | '/access/$token'
     | '/ack/$token'
@@ -848,6 +860,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/desk': {
+      id: '/_authenticated/desk'
+      path: '/desk'
+      fullPath: '/desk'
+      preLoaderRoute: typeof AuthenticatedDeskRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ops': {
@@ -1093,6 +1112,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDeskRoute: typeof AuthenticatedDeskRoute
   AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
   AuthenticatedFounderMetricsRoute: typeof AuthenticatedFounderMetricsRoute
@@ -1106,6 +1126,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDeskRoute: AuthenticatedDeskRoute,
   AuthenticatedOpsRoute: AuthenticatedOpsRoute,
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
   AuthenticatedFounderMetricsRoute: AuthenticatedFounderMetricsRoute,

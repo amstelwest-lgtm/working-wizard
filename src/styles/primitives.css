@@ -733,15 +733,14 @@ html.dark .milon-status-pill--sample,
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step {
-  border-color: rgba(183, 135, 42, 0.42);
-  background:
-    radial-gradient(120% 160% at 100% -10%, rgba(241, 210, 139, 0.42), transparent 46%),
-    linear-gradient(180deg, #fffef8 0%, #f7ecd2 52%, #efe0b6 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    inset 0 -1px 0 rgba(140, 98, 18, 0.14),
-    0 10px 28px rgba(109, 79, 22, 0.12);
-  color: #3f2d0a;
+  border-color: #dbeafe;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+  color: #102a43;
+}
+
+html[data-theme="light"] .accountant-portal .milon-next-step::before {
+  background: #0b5fff;
 }
 
 .milon-next-step__head {
@@ -766,7 +765,7 @@ html[data-theme="light"] .accountant-portal .milon-next-step {
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__kicker {
-  color: #5b420e;
+  color: #3d5270;
 }
 
 .milon-next-step__pill {
@@ -790,9 +789,9 @@ html[data-theme="light"] .accountant-portal .milon-next-step__kicker {
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__pill {
-  color: #3f2d0a;
-  background: rgba(255, 252, 245, 0.86);
-  border-color: rgba(111, 78, 16, 0.38);
+  color: #102a43;
+  background: #f4f8ff;
+  border-color: #dbeafe;
 }
 
 .milon-next-step[data-urgency="blocking"] .milon-next-step__pill {
@@ -809,9 +808,9 @@ html[data-theme="light"] .accountant-portal .milon-next-step__pill {
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step[data-urgency="blocking"] .milon-next-step__pill {
-  color: #7a1d15;
-  background: rgba(255, 252, 245, 0.88);
-  border-color: rgba(179, 38, 30, 0.4);
+  color: #c43d4b;
+  background: #ffffff;
+  border-color: rgba(196, 61, 75, 0.35);
 }
 
 .milon-next-step[data-urgency="info"] .milon-next-step__pill,
@@ -841,7 +840,7 @@ html[data-theme="light"] .accountant-portal .milon-next-step[data-urgency="block
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__reason {
-  color: rgba(88, 64, 18, 0.8);
+  color: #3d5270;
 }
 
 .milon-next-step__title--skeleton,
@@ -934,9 +933,15 @@ html[data-theme="light"] .accountant-portal .milon-next-step__reason {
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__secondary {
-  color: #3f2d0a;
-  background: rgba(255, 252, 245, 0.78);
-  border-color: rgba(111, 78, 16, 0.35);
+  color: #102a43;
+  background: #ffffff;
+  border-color: #dbeafe;
+}
+
+html[data-theme="light"] .accountant-portal .milon-next-step__cta {
+  color: #ffffff;
+  background: #0b5fff;
+  box-shadow: none;
 }
 
 .milon-next-step__secondary:disabled {
@@ -980,13 +985,13 @@ html[data-theme="light"] .accountant-portal .milon-next-step__secondary {
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__chip {
-  color: #3f2d0a;
-  background: rgba(255, 252, 245, 0.86);
-  border-color: rgba(111, 78, 16, 0.34);
+  color: #102a43;
+  background: #ffffff;
+  border-color: #dbeafe;
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__chip:hover {
-  background: #fffef8;
+  background: #dbeafe;
 }
 
 .milon-next-step__chip[data-chip="overdueActions"],
@@ -1008,12 +1013,16 @@ html[data-theme="light"] .accountant-portal .milon-next-step__chip:hover {
   border-color: rgba(240, 100, 80, 0.36);
 }
 
-html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="overdueActions"],
-html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="blockedActions"],
 html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="openDataRequests"] {
-  color: #7a1d15;
-  background: rgba(255, 252, 245, 0.9);
-  border-color: rgba(179, 38, 30, 0.38);
+  color: #3d5270;
+  background: #ffffff;
+  border-color: #dbeafe;
+}
+html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="overdueActions"],
+html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="blockedActions"] {
+  color: #c43d4b;
+  background: #ffffff;
+  border-color: rgba(196, 61, 75, 0.35);
 }
 
 .milon-next-step__foot {
@@ -1072,7 +1081,7 @@ html[data-theme="light"] .accountant-portal .milon-next-step__chip[data-chip="op
 }
 
 html[data-theme="light"] .accountant-portal .milon-next-step__foot {
-  color: #3f2d0a;
+  color: #3d5270;
   opacity: 1;
 }
 
