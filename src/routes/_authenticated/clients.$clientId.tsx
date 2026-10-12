@@ -3664,34 +3664,6 @@ function ClientView() {
                       id="ratios-statement-position"
                     />
                   ) : null}
-                  {/* Accounting connections — visible on Health & Ratios without opening Financials */}
-                  <div
-                    id="accounting-connect"
-                    style={{ marginBottom: 16, display: "grid", gap: 10 }}
-                  >
-                    <QboConnectCard
-                      clientId={clientId}
-                      returnPath={`/clients/${clientId}`}
-                      refreshToken={qboRefresh}
-                      onSyncComplete={onQboSyncComplete}
-                      financials={financials}
-                      market={clientMarket}
-                    />
-                    <XeroConnectCard
-                      clientId={clientId}
-                      returnPath={`/clients/${clientId}`}
-                      refreshToken={xeroRefresh}
-                      onSyncComplete={onXeroSyncComplete}
-                      financials={financials}
-                      market={clientMarket}
-                    />
-                    <SageConnectCard
-                      clientId={clientId}
-                      refreshToken={sageRefresh}
-                      onConnectionChange={() => setSageRefresh((n) => n + 1)}
-                      onSyncComplete={onSageSyncComplete}
-                    />
-                  </div>
                 </div>
 
                 {/* ===== PROFIT TAB ===== */}
