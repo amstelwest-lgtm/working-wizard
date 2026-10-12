@@ -43,6 +43,29 @@ assert(css.includes("#c43d4b"), "sign out uses Critical #C43D4B");
 assert(css.includes("var(--cobalt"), "the menu uses cobalt for focus");
 assert(css.includes("var(--ink"), "the menu uses navy text");
 assert(css.includes("max-width: 767px"), "the menu stays on screen at phone width");
+assert(css.includes("position: fixed"), "the phone menu is pinned to the viewport");
+assert(css.includes("left: 8px"), "the phone menu keeps a margin inside the viewport");
+assert(css.includes("overflow-wrap: anywhere"), "menu labels wrap long text");
+assert(css.includes("white-space: normal"), "menu labels are allowed to wrap");
+
+const ownerCss = read("src/components/owner-door/owner-door.css");
+assert(ownerCss.includes("--owner-menu-top"), "the owner account menu is placed under its trigger");
+assert(ownerCss.includes("overflow-wrap: anywhere"), "owner practice names wrap");
+assert(
+  ownerCss.includes('[data-screen="settings"]') && ownerCss.includes('[data-screen="plan"]'),
+  "owner Settings and Plan tabs can wrap",
+);
+
+const portalCss = read("src/styles/accountant-portal.css");
+assert(portalCss.includes(".settings-portal:not(.owner-door) .deliverable-rail"), "settings tabs wrap");
+assert(portalCss.includes("overflow-wrap:anywhere"), "practice names wrap on the phone top bar");
+
+const settingsCss = read("src/styles/settings-portal.css");
+assert(settingsCss.includes("overflow-wrap: anywhere"), "settings emails and values wrap");
+
+const team = read("src/routes/_authenticated/settings.team.tsx");
+assert(!team.includes("flex-1 truncate"), "team client names are not ellipsized");
+assert(team.includes("overflow-wrap:anywhere"), "team client names wrap");
 
 const shell = read("src/components/owner-door/owner-shell.tsx");
 assert(shell.includes("<SettingsMenu"), "the owner top-right Settings control opens the menu");

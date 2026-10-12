@@ -68,7 +68,22 @@
 
 @media (max-width: 767px) {
   .settings-menu {
-    right: 0;
+    position: fixed;
+    top: var(--settings-menu-top, 64px);
+    right: 8px;
+    left: 8px;
+    width: auto;
     max-width: calc(100vw - 16px);
+    max-height: min(70dvh, calc(100dvh - var(--settings-menu-top, 64px) - 8px));
+    overflow: auto;
+    box-sizing: border-box;
+  }
+
+  .settings-menu-item {
+    height: auto;
+    min-width: 0;
+    align-items: flex-start;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
