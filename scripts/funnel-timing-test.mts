@@ -339,8 +339,8 @@ assert(
     pathname: PRECARD_ONBOARDING_HREF,
     insightSeen: true,
     firmClientCount: 1,
-  }) === "require_billing",
-  "add-client query does not keep the board open after an insight",
+  }) === "allow",
+  "practice Home stays open after an insight when the firm has a client",
 );
 
 assert(

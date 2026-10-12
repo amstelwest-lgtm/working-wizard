@@ -87,7 +87,9 @@ assert(href("cash", studio).includes("tab=cash"), "Cash flow is its own rail ite
 assert(href("budget", studio).includes("tab=budget"), "Budget is its own rail item");
 assert(href("collections", studio).includes("section=collections"), "Collections stays under Cash flow");
 assert(href("payables", studio).includes("section=payables"), "Payables stay under Cash flow");
-assert(href("bot", studio).endsWith("tab=desk"), "Bot opens the client desk");
+assert(href("bot", studio).endsWith("tab=desk"), "Bot inside a client file still opens that desk");
+assert(href("bot", firm) === "/dashboard", "Bot from practice opens practice Home");
+assert(href("drafts", firm) === "/dashboard", "Drafts from practice open practice Home");
 assert(href("overview", studio).endsWith("tab=home"), "the briefing opens Home");
 assert(href("moves", studio).includes("tab=moves"), "Next moves is its own rail item");
 assert(href("reports", studio).includes("tab=reports"), "Reports is its own rail item");
@@ -304,6 +306,14 @@ assert(searchClientSectionJumps("budget", []).length === 0, "an empty book has n
 assert(
   searchClientSectionJumps("13 week cash", BOOK).every((row) => row.href.includes("tab=cash")),
   "cash synonyms still open Cash for each client",
+);
+assert(
+  searchClientSectionJumps("bot", BOOK).length === 0,
+  "practice Bot does not open a client desk",
+);
+assert(
+  searchClientSectionJumps("drafts", BOOK).length === 0,
+  "practice drafts do not open a client desk",
 );
 
 assert(includeClientGroup("accountant"), "accountants get the Clients group");

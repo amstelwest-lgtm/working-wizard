@@ -5,6 +5,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
   useNavigate,
   useSearch,
 } from "@tanstack/react-router";
@@ -29,14 +30,12 @@ import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { ProofLandingPreview } from "./proof-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
-import { Route as DeskRoute } from "@/routes/_authenticated/desk";
 import { ReportsStudio } from "@/routes/_authenticated/reports-studio";
 import { Route as SettingsRoute } from "@/routes/_authenticated/settings.index";
 import { Route as TeamRoute } from "@/routes/_authenticated/settings.team";
 import { Route as BrandRoute } from "@/routes/_authenticated/settings.brand";
 
 const Dashboard = DashboardRoute.options.component as ComponentType;
-const PracticeDesk = DeskRoute.options.component as ComponentType;
 const SettingsPage = SettingsRoute.options.component as ComponentType;
 const TeamAccessPage = TeamRoute.options.component as ComponentType;
 const BrandPage = BrandRoute.options.component as ComponentType;
@@ -319,12 +318,8 @@ const settingsBrandRoute = createRoute({
 const deskRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/desk",
-  component: function DeskHarness() {
-    return (
-      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
-        <PracticeDesk />
-      </MarketProvider>
-    );
+  beforeLoad: () => {
+    throw redirect({ to: "/dashboard" });
   },
 });
 

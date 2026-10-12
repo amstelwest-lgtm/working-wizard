@@ -224,8 +224,20 @@ assert(
     insightSeen: true,
     firmClientCount: 1,
     firstClientId: "abc",
-  }) === "require_billing",
-  "the practice board still redirects after an insight (second client stays gated)",
+  }) === "allow",
+  "practice Home stays open without a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/dashboard",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 2,
+    firstClientId: "first",
+  }) === "allow",
+  "practice Home stays open when a second client exists",
 );
 assert(
   decideFirmBillingPathGate({

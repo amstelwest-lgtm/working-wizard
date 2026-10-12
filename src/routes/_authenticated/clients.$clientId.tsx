@@ -157,7 +157,6 @@ import {
 } from "@/lib/client-route-search";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
-import { rememberDeskClient } from "@/lib/desk-client";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -1121,9 +1120,6 @@ function ClientView() {
   const [drawerActual, setDrawerActual] = useState<string | null>(null);
   const [drawerFallbackSteps, setDrawerFallbackSteps] = useState<string[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  useEffect(() => {
-    rememberDeskClient(clientId);
-  }, [clientId]);
   useEffect(() => {
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);

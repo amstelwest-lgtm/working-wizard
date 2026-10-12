@@ -76,7 +76,8 @@ assert(fab.includes("Open notes archive"), "pin button cluster includes the arch
 assert(fab.includes('id="wizard-notes-pin"'), "owner tour can spotlight the notes pin");
 
 const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
-assert(dash.includes("openClientQueries"), "Queries column opens the client query list");
+assert(!dash.includes("openClientQueries"), "the practice queries count does not open a client file");
+assert(dash.includes("firmOpenQueriesDestination"), "the Open queries tile stays on the practice list");
 
 const briefing = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
 assert(briefing.includes('id="wizard-open-queries"'), "accountant tour can spotlight open queries");

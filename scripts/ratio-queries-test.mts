@@ -60,9 +60,11 @@ assert(studio.includes('queries === "open"'), "dashboard can deep-link into open
 
 const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
 const portfolio = readFileSync(resolve("src/lib/portfolio-dashboard.ts"), "utf8");
-assert(dash.includes("openClientQueries"), "Queries column is clickable");
+assert(dash.includes('data-label="Queries"'), "Queries stays a column on the practice list");
+assert(!dash.includes("openClientQueries"), "the queries count does not open a client");
 assert(dash.includes("firmOpenQueriesDestination"), "Queries navigation comes from the shared destination");
-assert(portfolio.includes('search: { queries: "open" }'), "Queries opens the query list");
+assert(portfolio.includes('hash: "clients-table"'), "Open queries opens the practice client list");
+assert(!portfolio.includes('search: { queries: "open" }'), "Open queries does not open a client file");
 
 const hero = readFileSync(resolve("src/components/sphere-hero.tsx"), "utf8");
 assert(hero.includes("queryCounts"), "orb drivers can show a query badge");
