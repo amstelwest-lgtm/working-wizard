@@ -34,6 +34,8 @@ DECLARE
   v_sha text := repeat('a', 64);
   v_sha2 text := repeat('b', 64);
   v_sha3 text := repeat('c', 64);
+  v_received timestamptz;
+  v_until timestamptz;
 BEGIN
   SELECT final_unlock_after_clean_drafts INTO v_saved_n
   FROM public.ledger_posting_config
@@ -132,6 +134,44 @@ BEGIN
     RAISE EXCEPTION 'another firm must not upload to a client with no firm';
   END IF;
 
+  PERFORM set_config('request.jwt.claim.sub', v_outsider::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_outsider::text, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  IF public.source_doc_can_read(v_member, v_firm_client) THEN
+    RAISE EXCEPTION 'an authenticated caller must not probe another user''s read access';
+  END IF;
+  IF public.source_doc_can_upload(v_owner, v_firm_client) THEN
+    RAISE EXCEPTION 'an authenticated caller must not probe another user''s upload access';
+  END IF;
+  v_raised := NULL;
+  BEGIN
+    PERFORM public.ledger_post_approver_role(v_firm_client);
+  EXCEPTION WHEN OTHERS THEN
+    v_raised := SQLERRM;
+  END;
+  RESET ROLE;
+  IF v_raised IS NULL OR v_raised NOT ILIKE '%permission denied%' THEN
+    RAISE EXCEPTION 'authenticated must not probe the approver role, got %', v_raised;
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+  PERFORM set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  IF NOT public.source_doc_can_read(v_member, v_firm_client) THEN
+    RAISE EXCEPTION 'service role should check the user id it was given';
+  END IF;
+  IF public.source_doc_can_read(v_outsider, v_firm_client) THEN
+    RAISE EXCEPTION 'service role should still reject an outsider';
+  END IF;
+  IF NOT public.source_doc_can_upload(v_owner, v_firm_client) THEN
+    RAISE EXCEPTION 'service role should honour the upload user id';
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claims', '', true);
+
   INSERT INTO public.source_documents (
     client_id, uploaded_by, channel, storage_path, sha256, mime, size_bytes, status, received_at
   )
@@ -144,6 +184,29 @@ BEGIN
   IF v_text::timestamptz <> timestamptz '2026-10-11 00:00:00+00' + interval '5 years' THEN
     RAISE EXCEPTION 'retention should be 5 years from upload, got %', v_text;
   END IF;
+
+  UPDATE public.source_documents
+    SET received_at = timestamptz '1999-01-01 00:00:00+00',
+        uploaded_by = v_staff,
+        client_id = v_solo_client,
+        sha256 = repeat('f', 64),
+        storage_path = v_solo_client::text || '/changed.pdf',
+        status = 'extracted'
+    WHERE id = v_doc;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.source_documents
+    WHERE id = v_doc
+      AND received_at = timestamptz '2026-10-11 00:00:00+00'
+      AND uploaded_by = v_owner
+      AND client_id = v_firm_client
+      AND sha256 = v_sha
+      AND storage_path = v_firm_client::text || '/invoice.pdf'
+      AND status = 'extracted'
+  ) THEN
+    RAISE EXCEPTION 'received_at, uploaded_by, client_id, sha256 and storage_path should stay immutable';
+  END IF;
+  UPDATE public.source_documents SET status = 'received' WHERE id = v_doc;
 
   PERFORM set_config('request.jwt.claim.sub', v_member::text, true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_member::text, 'role', 'authenticated')::text, true);
@@ -181,6 +244,39 @@ BEGIN
   RESET ROLE;
   IF v_raised IS NULL OR v_raised NOT ILIKE '%row-level security%' THEN
     RAISE EXCEPTION 'member upload should be blocked, got %', v_raised;
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner::text, 'role', 'authenticated')::text, true);
+  SET LOCAL ROLE authenticated;
+  INSERT INTO public.source_documents (
+    client_id, uploaded_by, channel, storage_path, sha256, mime, size_bytes, status, received_at
+  )
+  VALUES (
+    v_firm_client, v_owner, 'upload', v_firm_client::text || '/backdated.pdf', repeat('1', 64),
+    'application/pdf', 1100, 'received', timestamptz '2000-01-01 00:00:00+00'
+  )
+  RETURNING received_at, retention_until INTO v_received, v_until;
+  IF v_received < now() - interval '5 minutes'
+     OR v_until <> v_received + interval '5 years'
+     OR v_until < timestamptz '2024-01-01 00:00:00+00' THEN
+    RAISE EXCEPTION 'a backdated received_at should be stored as now, retention % from %', v_until, v_received;
+  END IF;
+  INSERT INTO public.source_documents (
+    client_id, uploaded_by, channel, storage_path, sha256, mime, size_bytes, status, received_at
+  )
+  VALUES (
+    v_firm_client, v_owner, 'upload', v_firm_client::text || '/status.pdf', repeat('2', 64),
+    'application/pdf', 1100, 'extracted', now()
+  )
+  RETURNING status, received_at INTO v_text, v_received;
+  RESET ROLE;
+  IF v_text <> 'received' THEN
+    RAISE EXCEPTION 'a direct status insert should be stored as received, got %', v_text;
+  END IF;
+  IF v_received < now() - interval '5 minutes' THEN
+    RAISE EXCEPTION 'a direct insert should not keep a caller-supplied received_at, got %', v_received;
   END IF;
 
   PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
@@ -506,12 +602,7 @@ BEGIN
     SET final_unlock_after_clean_drafts = v_saved_n
     WHERE singleton;
 
-  DELETE FROM storage.objects
-    WHERE bucket_id = 'source-docs'
-      AND (
-        name LIKE v_firm_client::text || '/%'
-        OR name LIKE v_solo_client::text || '/%'
-      );
+  -- storage.protect_delete refuses a delete on storage.objects, so this test leaves that table alone. It does not insert objects.
   DELETE FROM public.ledger_post_proposals WHERE client_id IN (v_firm_client, v_solo_client);
   DELETE FROM public.document_extractions WHERE client_id IN (v_firm_client, v_solo_client);
   DELETE FROM public.supplier_trust WHERE client_id IN (v_firm_client, v_solo_client);

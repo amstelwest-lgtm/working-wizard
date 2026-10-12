@@ -89,6 +89,8 @@ AS $$
   SELECT upper(regexp_replace(COALESCE(p_number, ''), '[^A-Za-z0-9]+', '', 'g'));
 $$;
 
+-- Authenticated callers are checked as auth.uid(). The user-id argument is
+-- only honoured for service_role (extract-source-document) and SQL sessions.
 CREATE OR REPLACE FUNCTION public.source_doc_can_read(p_user_id uuid, p_client_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -96,7 +98,14 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT p_client_id IS NOT NULL AND public.has_client_access(p_user_id, p_client_id);
+  SELECT p_client_id IS NOT NULL AND public.has_client_access(
+    CASE
+      WHEN coalesce(auth.role(), '') = 'service_role' THEN p_user_id
+      WHEN coalesce(auth.role(), '') = 'authenticated' THEN auth.uid()
+      ELSE p_user_id
+    END,
+    p_client_id
+  );
 $$;
 
 CREATE OR REPLACE FUNCTION public.source_doc_can_upload(p_user_id uuid, p_client_id uuid)
@@ -106,13 +115,21 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
+  WITH actor AS (
+    SELECT CASE
+      WHEN coalesce(auth.role(), '') = 'service_role' THEN p_user_id
+      WHEN coalesce(auth.role(), '') = 'authenticated' THEN auth.uid()
+      ELSE p_user_id
+    END AS user_id
+  )
   SELECT EXISTS (
     SELECT 1
     FROM public.clients c
+    CROSS JOIN actor
     WHERE c.id = p_client_id
       AND (
-        c.owner_user_id = p_user_id
-        OR (c.firm_id IS NOT NULL AND public.is_firm_member(p_user_id, c.firm_id))
+        c.owner_user_id = actor.user_id
+        OR (c.firm_id IS NOT NULL AND public.is_firm_member(actor.user_id, c.firm_id))
       )
   );
 $$;
@@ -134,6 +151,8 @@ BEGIN
 END;
 $$;
 
+-- Not granted to authenticated. A signed-in session only sees the role for a
+-- client auth.uid() can already access, so a client id cannot be probed.
 CREATE OR REPLACE FUNCTION public.ledger_post_approver_role(p_client_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -146,7 +165,11 @@ AS $$
     ELSE 'owner'
   END
   FROM public.clients c
-  WHERE c.id = p_client_id;
+  WHERE c.id = p_client_id
+    AND (
+      coalesce(auth.role(), '') IS DISTINCT FROM 'authenticated'
+      OR public.has_client_access(auth.uid(), c.id)
+    );
 $$;
 
 CREATE OR REPLACE FUNCTION public.ledger_post_caller_may_decide(p_user_id uuid, p_client_id uuid)
@@ -162,23 +185,6 @@ AS $$
   END
   FROM public.clients c
   WHERE c.id = p_client_id;
-$$;
-
-CREATE OR REPLACE FUNCTION public.supplier_final_unlocked(p_client_id uuid, p_supplier_key text)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT COALESCE((
-    SELECT COALESCE(t.clean_approved_drafts, 0) >= c.final_unlock_after_clean_drafts
-    FROM public.ledger_posting_config c
-    LEFT JOIN public.supplier_trust t
-      ON t.client_id = p_client_id
-     AND t.supplier_key = p_supplier_key
-    WHERE c.singleton
-  ), false);
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -270,6 +276,7 @@ CREATE TABLE IF NOT EXISTS public.document_extractions (
     OR (
       vat_claimable = true
       AND tax_treatment = 'claimable'
+      AND supplier_vat_number IS NOT NULL
       AND supplier_vat_number ~ '^4[0-9]{9}$'
     )
   )
@@ -364,6 +371,27 @@ COMMENT ON TABLE public.ledger_post_proposals IS
 COMMENT ON COLUMN public.ledger_post_proposals.draft_holding IS
   'Xero can hold a real ledger draft. QuickBooks and Sage stay held in Milōn until a final post.';
 
+-- Created after supplier_trust. A SQL function body is checked at CREATE time.
+CREATE OR REPLACE FUNCTION public.supplier_final_unlocked(p_client_id uuid, p_supplier_key text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT COALESCE((
+    SELECT COALESCE(t.clean_approved_drafts, 0) >= c.final_unlock_after_clean_drafts
+    FROM public.ledger_posting_config c
+    LEFT JOIN public.supplier_trust t
+      ON t.client_id = p_client_id
+     AND t.supplier_key = p_supplier_key
+    WHERE c.singleton
+  ), false);
+$$;
+
+REVOKE ALL ON FUNCTION public.supplier_final_unlocked(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) TO authenticated, service_role;
+
 -- ---------------------------------------------------------------------------
 -- Guards
 -- ---------------------------------------------------------------------------
@@ -383,7 +411,21 @@ BEGIN
   IF v_years IS NULL OR v_years < 5 THEN
     v_years := 5;
   END IF;
-  NEW.sha256 := lower(NEW.sha256);
+  IF TG_OP = 'INSERT' THEN
+    -- auth.role() <> 'service_role' is unknown when there is no JWT, so a SQL
+    -- session can still set received_at. Signed-in users cannot.
+    IF auth.role() <> 'service_role' THEN
+      NEW.received_at := now();
+      NEW.status := 'received';
+    END IF;
+    NEW.sha256 := lower(NEW.sha256);
+  ELSIF TG_OP = 'UPDATE' THEN
+    NEW.received_at := OLD.received_at;
+    NEW.uploaded_by := OLD.uploaded_by;
+    NEW.client_id := OLD.client_id;
+    NEW.sha256 := OLD.sha256;
+    NEW.storage_path := OLD.storage_path;
+  END IF;
   NEW.retention_until := COALESCE(NEW.received_at, now()) + make_interval(years => v_years);
   NEW.updated_at := now();
   RETURN NEW;
@@ -936,9 +978,8 @@ REVOKE ALL ON FUNCTION public.normalise_document_number(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.source_doc_can_read(uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.source_doc_can_upload(uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.source_doc_client_id_from_path(text) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.ledger_post_approver_role(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.ledger_post_approver_role(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.ledger_post_caller_may_decide(uuid, uuid) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.supplier_final_unlocked(uuid, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.find_source_document_duplicates(uuid, text, text, text, numeric, date, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.register_source_document(uuid, text, text, text, bigint, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.decide_ledger_post_proposal(uuid, text, text) FROM PUBLIC, anon;
@@ -946,8 +987,7 @@ REVOKE ALL ON FUNCTION public.decide_ledger_post_proposal(uuid, text, text) FROM
 GRANT EXECUTE ON FUNCTION public.source_doc_can_read(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.source_doc_can_upload(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.source_doc_client_id_from_path(text) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.ledger_post_approver_role(uuid) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.ledger_post_approver_role(uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.register_source_document(uuid, text, text, text, bigint, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.decide_ledger_post_proposal(uuid, text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.find_source_document_duplicates(uuid, text, text, text, numeric, date, uuid) TO service_role;

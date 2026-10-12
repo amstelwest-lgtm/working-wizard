@@ -578,6 +578,13 @@ assert(migration.includes("abs(p.issued_on - p_issued_on) <= 3"), "the semantic 
 assert(migration.includes("abs(p.amount - p_amount) <= 0.01"), "the semantic duplicate amount tolerance is one cent");
 assert(migration.includes("supplier_vat_number_missing_or_invalid") === false, "the VAT default reason lives in the app, not as a SQL string");
 assert(migration.includes("vat_claimable = false"), "VAT claimable defaults off unless the number is valid");
+assert(migration.includes("supplier_vat_number IS NOT NULL"), "claimable VAT requires a supplier VAT number");
+const supplierTrustAt = migration.indexOf("CREATE TABLE IF NOT EXISTS public.supplier_trust");
+const unlockedAt = migration.indexOf("CREATE OR REPLACE FUNCTION public.supplier_final_unlocked");
+assert(supplierTrustAt !== -1 && unlockedAt > supplierTrustAt, "supplier_final_unlocked is created after supplier_trust");
+assert(!/check_function_bodies\s*=\s*off/i.test(migration), "function body checks stay on");
+assert(migration.includes("NEW.received_at := now()"), "a signed-in insert cannot backdate received_at");
+assert(migration.includes("NEW.status := 'received'"), "a signed-in insert cannot choose a status");
 assert(migration.includes("supplier_bank_details_locked"), "a document cannot overwrite supplier bank details");
 
 assert(edge.includes("claudeRequestFields"), "extraction uses the shared Claude request helper");
@@ -598,6 +605,10 @@ assert(sqlTest.includes("payload_hash_mismatch"), "the SQL test covers the hash 
 assert(sqlTest.includes("source_doc_can_upload"), "the SQL test covers upload rights");
 assert(sqlTest.includes("vat_claimable"), "the SQL test covers the VAT default");
 assert(sqlTest.includes("find_source_document_duplicates"), "the SQL test covers duplicate checks");
+assert(sqlTest.includes("2000-01-01"), "the SQL test covers a backdated received_at");
+assert(sqlTest.includes("direct status insert"), "the SQL test covers a direct status insert");
+assert(sqlTest.includes("protect_delete"), "the SQL test records why storage rows are left in place");
+assert(!/DELETE\s+FROM\s+storage\.objects/i.test(sqlTest), "the SQL test does not delete storage.objects");
 
 assert(sourceDocumentHooks.upload.bucket === "source-docs", "upload uses the source-docs bucket");
 assert(sourceDocumentHooks.upload.registerRpc === "register_source_document", "upload registers the file through the RPC");
