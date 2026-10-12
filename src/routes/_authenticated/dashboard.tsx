@@ -111,6 +111,7 @@ import {
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
 import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
+import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -1192,6 +1193,7 @@ function Dashboard() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
+  useAccountantDrawer(mobileNavOpen);
   const [isItMember, setIsItMember] = useState(false);
 
   // Only known after mount — reading window.location.origin during render would
@@ -1768,23 +1770,10 @@ function Dashboard() {
             tabIndex={mobileNavOpen ? 0 : -1}
             onClick={() => setMobileNavOpen(false)}
           />
-          <button
-            type="button"
-            className="topbar-menu-btn"
-            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileNavOpen}
+          <AccountantMenuButton
+            open={mobileNavOpen}
             onClick={() => setMobileNavOpen((o) => !o)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              {mobileNavOpen ? (
-                <path d="M18 6L6 18M6 6l12 12" />
-              ) : (
-                <>
-                  <path d="M4 7h16M4 12h16M4 17h16" />
-                </>
-              )}
-            </svg>
-          </button>
+          />
           <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
             <button
               id="wizard-dash-reports"

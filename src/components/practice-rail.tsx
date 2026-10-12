@@ -1,76 +1,98 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
+import { AccountantNav, type NavSection } from "@/components/accountant-nav";
+import { agentDisplayName } from "@/lib/milon-team";
+import { openPracticeSettings } from "@/lib/user-roles";
 
-export type PracticeRailId = "dashboard" | "clients" | "desk" | "team" | "billing";
+const dash = (hash = "") => ({ to: "/dashboard" as const, hash });
 
-const ITEMS: {
-  id: Exclude<PracticeRailId, "desk">;
-  label: string;
-  to: "/dashboard" | "/settings/team" | "/settings";
-  hash?: string;
-}[] = [
-  { id: "dashboard", label: "Dashboard", to: "/dashboard" },
-  { id: "clients", label: "Clients", to: "/dashboard", hash: "clients-table" },
-  { id: "team", label: "Team", to: "/settings/team" },
-  { id: "billing", label: "Billing", to: "/settings", hash: "firm-billing" },
+const SECTIONS: NavSection[] = [
+  {
+    id: "team",
+    label: "Team",
+    headings: [
+      {
+        id: "home",
+        label: "Home",
+        to: dash(),
+        bot: true,
+        items: [
+          { id: "financial_manager", label: agentDisplayName("financial_manager"), to: dash("ask-financial-manager") },
+          { id: "analyst", label: agentDisplayName("analyst"), to: dash("ask-analyst") },
+          { id: "advisor", label: agentDisplayName("advisor"), to: dash("ask-advisor") },
+        ],
+      },
+    ],
+  },
+  {
+    id: "book",
+    label: "Book",
+    headings: [
+      {
+        id: "clients",
+        label: "Clients",
+        to: dash("clients-table"),
+        items: [
+          { id: "all", label: "All clients", to: dash("clients-table") },
+          { id: "queries", label: "Open queries", to: dash("wizard-dash-open-queries") },
+          { id: "add", label: "Add client", to: dash("wizard-add-client") },
+        ],
+      },
+      {
+        id: "practice",
+        label: "Practice",
+        to: dash("needs-attention"),
+        items: [
+          { id: "attention", label: "Needs attention", to: dash("needs-attention") },
+          { id: "follow", label: "Follow up", to: dash("follow-up") },
+          { id: "insights", label: "Insights", to: dash("portfolio-insights") },
+          { id: "marketplace", label: "Marketplace", to: dash("accountant-inbox") },
+          { id: "playbooks", label: "Playbooks", to: dash("playbooks") },
+        ],
+      },
+    ],
+  },
 ];
 
-function activePracticeItem(pathname: string, hash: string): PracticeRailId | null {
+const PRACTICE_HASH: Record<string, { headingId: string; subId: string | null }> = {
+  "ask-financial-manager": { headingId: "home", subId: "financial_manager" },
+  "ask-analyst": { headingId: "home", subId: "analyst" },
+  "ask-advisor": { headingId: "home", subId: "advisor" },
+  "clients-table": { headingId: "clients", subId: "all" },
+  "wizard-dash-open-queries": { headingId: "clients", subId: "queries" },
+  "wizard-add-client": { headingId: "clients", subId: "add" },
+  "needs-attention": { headingId: "practice", subId: "attention" },
+  "follow-up": { headingId: "practice", subId: "follow" },
+  "portfolio-insights": { headingId: "practice", subId: "insights" },
+  "accountant-inbox": { headingId: "practice", subId: "marketplace" },
+  playbooks: { headingId: "practice", subId: "playbooks" },
+};
+
+function practiceSelection(pathname: string, hash: string) {
   const bare = hash.replace(/^#/, "");
-  if (pathname === "/desk" || pathname === "/desk/") return "desk";
-  if (pathname === "/settings/team" || pathname.startsWith("/settings/team/")) return "team";
-  if (pathname === "/settings" || pathname === "/settings/") {
-    return bare === "firm-billing" ? "billing" : null;
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+    return { headingId: null, subId: null, settings: true };
   }
-  if (pathname === "/dashboard" || pathname === "/dashboard/") {
-    if (bare === "clients-table") return "clients";
-    return "dashboard";
+  const fromHash = PRACTICE_HASH[bare];
+  if (fromHash) return { ...fromHash, settings: false };
+  if (pathname === "/dashboard" || pathname === "/dashboard/" || pathname === "/desk" || pathname === "/desk/") {
+    return { headingId: "home", subId: null, settings: false };
   }
-  return null;
+  return { headingId: null, subId: null, settings: false };
 }
 
-export function PracticeRailItems({ onNavigate }: { onNavigate?: () => void }) {
+/** Practice nav: Team (Home) and Book (Clients, Practice), with Settings pinned. */
+export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hash = useRouterState({ select: (s) => s.location.hash });
-  const active = activePracticeItem(pathname, hash ?? "");
-
-  const linkFor = (item: (typeof ITEMS)[number]) => {
-    const on = active === item.id;
-    return (
-      <Link
-        key={item.id}
-        to={item.to}
-        hash={item.hash}
-        className={`tab${on ? " on" : ""}`}
-        aria-current={on ? "page" : undefined}
-        onClick={onNavigate}
-      >
-        {item.label}
-      </Link>
-    );
-  };
-
+  const selection = practiceSelection(pathname, hash ?? "");
   return (
-    <>
-      {ITEMS.filter((item) => item.id === "dashboard" || item.id === "clients").map(linkFor)}
-      <Link
-        key="desk"
-        to="/desk"
-        className={`tab${active === "desk" ? " on" : ""}`}
-        aria-current={active === "desk" ? "page" : undefined}
-        onClick={onNavigate}
-      >
-        Desk
-      </Link>
-      {ITEMS.filter((item) => item.id === "team" || item.id === "billing").map(linkFor)}
-    </>
-  );
-}
-
-/** Practice nav. Same flush rail as the client workspace. */
-export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
-  return (
-    <nav className="deliverable-rail" aria-label="Practice">
-      <PracticeRailItems onNavigate={onNavigate} />
-    </nav>
+    <AccountantNav
+      label="Practice"
+      sections={SECTIONS}
+      selection={selection}
+      settingsActive={selection.settings}
+      onNavigate={onNavigate}
+      onSettings={() => openPracticeSettings()}
+    />
   );
 }

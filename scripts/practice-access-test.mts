@@ -162,7 +162,7 @@ assert(ownerUi.includes("ownerDisconnectFirm"), "owner can disconnect the firm")
 
 const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
 const practiceRail = readFileSync(resolve("src/components/practice-rail.tsx"), "utf8");
-assert(practiceRail.includes('to: "/settings/team"'), "practice rail links to Team");
+assert(!practiceRail.includes('to: "/settings/team"'), "Team stays inside Settings, off the daily rail");
 assert(!dash.includes('to: "/settings/team"'), "Team is not duplicated in the dashboard top bar");
 
 const index = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");

@@ -5,7 +5,7 @@
  */
 import { useEffect, type ReactNode } from "react";
 import { useSearch } from "@tanstack/react-router";
-import { CLIENT_RAIL_GROUPS, ClientRailButton } from "@/components/client-studio-chrome";
+import { ClientRail } from "@/components/client-studio-chrome";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
 import "../../public/ask-ai.css";
 import { DESK_NOW, EMPTY_ACTIVITY, LIVE_ACTIVITY, LIVE_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
@@ -50,22 +50,7 @@ function Frame({
           >
             pin
           </button>
-          <nav className="deliverable-rail" aria-label="Client workspace">
-            {CLIENT_RAIL_GROUPS.map((group) => (
-              <div key={group.id} className="rail-group">
-                <span className="rail-kicker">{group.label}</span>
-                {group.items.map((item) => (
-                  <ClientRailButton
-                    key={item.id}
-                    id={item.id}
-                    label={item.label}
-                    active={item.id === "desk"}
-                    onSelect={() => undefined}
-                  />
-                ))}
-              </div>
-            ))}
-          </nav>
+          <ClientRail clientId="harness-client" search={{ tab: "desk" }} />
           <div className="deliverable-main">{children}</div>
         </div>
       </div>

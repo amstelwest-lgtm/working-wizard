@@ -34,7 +34,8 @@ const shell = read("src/components/settings-shell.tsx");
 assert(shell.includes("accountant-portal"), "settings sit on portal chrome");
 assert(shell.includes('id="atmos"'), "settings have the gold atmos");
 assert(shell.includes("settings-gear"), "settings keeps a top-right control");
-assert(shell.includes("RailSettingsButton"), "settings pins a sidebar item");
+assert(shell.includes("<PracticeRail"), "settings pins the practice rail");
+assert(read("src/components/accountant-nav.tsx").includes(">Settings<") || read("src/components/accountant-nav.tsx").includes("Settings"), "the rail pins Settings");
 
 for (const page of [
   "src/routes/_authenticated/settings.index.tsx",

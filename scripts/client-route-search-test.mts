@@ -7,6 +7,8 @@ import { resolve } from "node:path";
 import {
   accountantClientTabSearch,
   canonicalizeAccountantSearch,
+  clientNavSearch,
+  clientRailSelection,
   drafterSectionForHash,
   legacyHashDestination,
   railSearchForHash,
@@ -221,23 +223,27 @@ assert(
   route.includes('resolveAccountantTab(search) ?? "overview"'),
   "the first paint uses the parsed tab and section",
 );
-const railSource = route.slice(
-  route.indexOf("export const CLIENT_RAIL_GROUPS"),
-  route.indexOf("export const CLIENT_RAIL "),
-);
-const railOrder = ["home", "desk", "health", "cash", "profit", "budget", "moves", "reports", "deliverables", "portal"];
+const railSource = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
+const railOrder = ["home", "health", "cash", "profit", "budget", "moves", "plan", "reports", "books"];
 let railAt = -1;
 for (const id of railOrder) {
   const at = railSource.indexOf(`id: "${id}"`);
   assert(at > railAt, `rail item ${id} is in order`);
   railAt = at;
 }
-assert(route.includes('label: "Overview"'), "Overview is a rail heading");
-assert(route.includes('label: "Numbers"'), "Numbers is a rail heading");
-assert(route.includes('label: "Advice"'), "Advice is a rail heading");
-assert(route.includes('label: "Client"'), "Client is a rail heading");
+assert(route.includes('label: "Team"'), "Team is a rail kicker");
+assert(route.includes('label: "Numbers"'), "Numbers is a rail kicker");
+assert(route.includes('label: "Work"'), "Work is a rail kicker");
+assert(route.includes('label: "File"'), "File is a rail kicker");
 assert(route.includes('{ id: "home", label: "Home" }'), "Home is a rail item");
-assert(route.includes('{ id: "deliverables", label: "Deliverables" }'), "Deliverables is a rail item");
+assert(route.includes('label: "Action plan"'), "Action plan is a rail item");
+assert(route.includes('label: "Books"'), "Books is a rail item");
+const drafts = clientNavSearch({ tab: "home" }, "reports", "drafts");
+assert(drafts.tab === "deliverables" && drafts.section === "pack", "Drafts opens the pack that already exists");
+const sent = clientRailSelection({ tab: "reports", section: "sent" });
+assert(sent.headingId === "reports" && sent.subId === "sent", "Sent stays under Reports");
+const scorecard = clientRailSelection({ tab: "reports", report: "scorecard" });
+assert(scorecard.subId === "scorecard", "the health scorecard is the Reports sub-item");
 assert(!route.includes("<SectionTabList"), "the horizontal section row is gone");
 assert(routerHash("#drafter") === "drafter", "a single hash is not doubled");
 assert(routerHash("##drafter") === "drafter", "a doubled hash is collapsed");

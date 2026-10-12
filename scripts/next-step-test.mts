@@ -526,7 +526,7 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   const studioCard = studio.indexOf("<NextStepCard");
   const studioBriefing = studio.indexOf("<ClientBriefing");
   const studioSections = studio.indexOf("{/* ===== SUMMARY TAB ===== */}");
-  const studioRail = studio.indexOf('className="deliverable-rail"');
+  const studioRail = studio.indexOf("<ClientRail");
   assert(studioCard > 0, "accountant studio renders NextStepCard");
   assert(studioRail > 0, "studio lists deliverables in a left rail");
   const studioOverview = studio.indexOf('id="pane-overview"');

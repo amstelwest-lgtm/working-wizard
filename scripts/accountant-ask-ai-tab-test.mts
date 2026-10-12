@@ -19,13 +19,12 @@ const tourSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "
 const indexSrc = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "utf8");
 
 assert(/type ActiveTab =[\s\S]{0,80}"ask"/.test(clientSrc), "Milōn Bot is an accountant studio tab");
+const railSrc = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 assert(
-  clientSrc.includes('{ id: "home", label: "Home" }') &&
-    clientSrc.indexOf('{ id: "home", label: "Home" }') <
-      clientSrc.indexOf('{ id: "health", label: "Health" }') &&
-    clientSrc.indexOf('{ id: "health", label: "Health" }') <
-      clientSrc.indexOf('{ id: "deliverables", label: "Deliverables" }'),
-  "the rail is Home, then Health, then Deliverables",
+  railSrc.includes('{ id: "home", label: "Home" }') &&
+    railSrc.indexOf('{ id: "home", label: "Home" }') < railSrc.indexOf('{ id: "health", label: "Health" }') &&
+    railSrc.indexOf('{ id: "health", label: "Health" }') < railSrc.indexOf('label: "Reports"'),
+  "the rail is Home, then Health, then Reports",
 );
 assert(
   clientSrc.includes('resolveAccountantTab(search) ?? "overview"'),
@@ -35,7 +34,8 @@ assert(
   clientSrc.includes('setActiveTab("overview")'),
   "opening a client without a deep link lands on Home",
 );
-assert(clientSrc.includes('{ id: "desk", label: "Desk" }'), "the rail reaches the Bot desk");
+assert(clientSrc.includes('id: "home"') && clientSrc.includes("bot: true"), "Home stays the Bot rail item");
+assert(clientSrc.includes('id="ask-ai-accountant"') || clientSrc.includes('id="pane-ask"') || clientSrc.includes('"ask"'), "the Bot pane stays mounted");
 assert(
   clientSrc.includes('id="pane-overview"') &&
     clientSrc.indexOf('id="pane-overview"') < clientSrc.indexOf("<ClientBriefing") &&
@@ -44,10 +44,13 @@ assert(
 );
 assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
 assert(clientSrc.includes('{ id: "home", label: "Home" }'), "Home appears in the rail");
-assert(clientSrc.includes('className="deliverable-rail"'), "deliverables are a left stacked rail");
+assert(
+  readFileSync(resolve("src/components/accountant-nav.tsx"), "utf8").includes('className="deliverable-rail accountant-nav"'),
+  "deliverables are a left stacked rail",
+);
 assert(!clientSrc.includes('className="tabs"'), "horizontal mid-page tab strip is gone");
 assert(
-  clientSrc.indexOf('className="deliverable-rail"') < clientSrc.indexOf("<NextStepCard"),
+  clientSrc.indexOf("<ClientRail") < clientSrc.indexOf("<NextStepCard"),
   "the rail sits at the top of the client workspace, beside the header",
 );
 assert(clientSrc.includes('id="pane-ask"'), "Milōn Bot pane exists");

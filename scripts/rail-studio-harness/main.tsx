@@ -117,6 +117,12 @@ const clientRoute = createRoute({
       tab: canonical?.tab,
       section: canonical?.section,
       focus: canonical?.focus,
+      report: typeof search.report === "string" ? search.report : undefined,
+      filter: search.filter === "overdue" ? "overdue" : undefined,
+      agent:
+        search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
+          ? search.agent
+          : undefined,
       aged: search.aged === 1 || search.aged === "1" ? 1 : undefined,
       packView:
         search.packView === "draft" ||

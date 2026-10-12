@@ -85,15 +85,14 @@ assert(dashboard.includes('hash: "firm-billing"'), "accountant plan opens firm b
 
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(client.includes("<SettingsMenu"), "the accountant client Settings control opens the menu");
-assert(
-  /<RailSettingsButton[\s\S]*navigate\(\{ to: "\/settings" \}\)/.test(client),
-  "the accountant sidebar Settings item stays a direct link",
-);
+const nav = read("src/components/accountant-nav.tsx");
+assert(client.includes("<ClientRail"), "the client file uses the shared rail");
+assert(nav.includes('to: "/settings"'), "the accountant sidebar Settings item stays a direct link");
 
 const settings = read("src/components/settings-shell.tsx");
 assert(settings.includes("<SettingsMenu"), "settings keeps a top-right menu");
 assert(settings.includes("settings-gear"), "settings keeps the gear control");
-assert(settings.includes("<RailSettingsButton"), "settings pins a sidebar item");
+assert(settings.includes("<PracticeRail"), "settings pins the practice rail");
 assert(settings.includes('id="firm-billing"') === false, "the shell does not invent the billing card");
 
 const plan = read("src/routes/_authenticated/settings.index.tsx");

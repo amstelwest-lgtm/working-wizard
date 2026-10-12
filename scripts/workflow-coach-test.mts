@@ -230,14 +230,14 @@ assert(!studio.includes("You're here because"), "client shell has no duplicate l
 assert(!studio.includes("coachArrival"), "no per-deliverable arrival helper remains");
 assert(studio.includes("<DataUpToDate"), "Client Brain opens with the data section");
 assert(studio.includes("onOpenDeliverable"), "Milōn Bot can open a deliverable with intent");
-assert(studio.includes('className="deliverable-rail"'), "left rail stays the one nav");
-assert(studio.includes('{ id: "home", label: "Home" }'), "left rail reaches Home");
-assert(studio.includes('label: "Overview"'), "the rail groups Overview");
 assert(
-  studio.includes('{ id: "deliverables", label: "Deliverables" }'),
-  "left rail reaches Deliverables",
+  readFileSync(resolve("src/components/accountant-nav.tsx"), "utf8").includes('className="deliverable-rail accountant-nav"'),
+  "left rail stays the one nav",
 );
-assert(studio.includes('{ id: "portal", label: "Client portal" }'), "the rail reaches Client portal");
+assert(studio.includes('{ id: "home", label: "Home" }'), "left rail reaches Home");
+assert(studio.includes('label: "Team"'), "the rail groups Team");
+assert(studio.includes('label: "Action plan"'), "left rail reaches Action plan");
+assert(studio.includes('label: "Books"'), "the rail reaches Books");
 assert(studio.includes('{ id: "health", label: "Health" }'), "the rail reaches Health");
 assert(studio.includes('{ id: "profit", label: "Profit" }'), "the rail reaches Profit");
 assert(studio.includes('{ id: "cash", label: "Cash flow" }'), "the rail reaches Cash flow");
@@ -253,9 +253,10 @@ assert(
   studio.includes('resolveAccountantTab(search) ?? "overview"'),
   "a deep link still selects its panel on first paint",
 );
+const searchSrc = readFileSync(resolve("src/lib/client-route-search.ts"), "utf8");
 for (const step of COACH_STEPS) {
   assert(
-    studio.includes(`"${step.tab}"`),
+    studio.includes(`"${step.tab}"`) || searchSrc.includes(`"${step.tab}"`),
     `${step.label} still resolves to a studio tab (${step.tab})`,
   );
 }

@@ -84,14 +84,13 @@ import { SectionCard } from "@/components/primitives";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import {
   accountantClientTabSearch,
-  canonicalizeAccountantSearch,
   legacyHashDestination,
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
-import { CLIENT_RAIL_GROUPS, ClientRailButton } from "@/components/client-studio-chrome";
+import { ClientRail } from "@/components/client-studio-chrome";
+import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { SettingsMenu } from "@/components/settings-menu";
-import { RailSettingsButton } from "@/components/settings-nav-button";
 
 const CLIENT_ID = "harness-client";
 /** Same freshness line the Books pane already shows. */
@@ -130,6 +129,9 @@ export function RailStudio() {
     planView?: string;
     drafterView?: string;
     view?: string;
+    report?: string;
+    filter?: string;
+    agent?: string;
   };
   const navigate = useNavigate();
   useLayoutEffect(() => {
@@ -145,8 +147,8 @@ export function RailStudio() {
     });
   }, [search.tab, search.section, clientId, navigate]);
   const pane = legacyPaneForSearch(search) ?? "overview";
-  const railTab = canonicalizeAccountantSearch(search).tab;
   const [menuOpen, setMenuOpen] = useState(false);
+  useAccountantDrawer(menuOpen);
 
   return (
     <div className={`accountant-portal${menuOpen ? " nav-open" : ""}`} data-rail-harness="true" data-rail-ready="true">
@@ -179,17 +181,7 @@ export function RailStudio() {
             aria-label="Close menu"
             onClick={() => setMenuOpen(false)}
           />
-          <button
-            type="button"
-            className="topbar-menu-btn"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              {menuOpen ? <path d="M18 6L6 18M6 6l12 12" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-            </svg>
-          </button>
+          <AccountantMenuButton open={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
           <div className={`topbar-actions${menuOpen ? " open" : ""}`}>
             <button
               type="button"
@@ -211,35 +203,7 @@ export function RailStudio() {
           </span>
         </div>
         <div className="client-workspace">
-          <nav className="deliverable-rail" aria-label="Client workspace">
-            {CLIENT_RAIL_GROUPS.map((group) => (
-              <div key={group.id} className="rail-group">
-                <span className="rail-kicker">{group.label}</span>
-                {group.items.map((item) => (
-                  <ClientRailButton
-                    key={item.id}
-                    id={item.id}
-                    label={item.label}
-                    active={railTab === item.id || (!search.tab && item.id === "home")}
-                    onSelect={() => {
-                      setMenuOpen(false);
-                      void navigate({
-                        to: "/clients/$clientId",
-                        params: { clientId },
-                        search: (prev) => accountantClientTabSearch(prev, item.id),
-                        replace: true,
-                      });
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-            <RailSettingsButton
-              onClick={() => {
-                void navigate({ to: "/settings" });
-              }}
-            />
-          </nav>
+          <ClientRail clientId={clientId} search={search} onNavigate={() => setMenuOpen(false)} />
           <div className="deliverable-main">
             <div data-notes-tray-slot="" className="notes-tray-slot" />
             {pane === "ask" ? <BotPane /> : null}

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
 import { emptyMilonTeamFeed } from "@/lib/milon-team-feed";
@@ -30,6 +31,15 @@ function PracticeDeskPage() {
   const { profile } = useAccountantProfile();
   const [menuOpen, setMenuOpen] = useState(false);
   const practice = profile.firmName.trim() || "Practice";
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+  useAccountantDrawer(menuOpen);
 
   return (
     <div className={`accountant-portal practice-home${menuOpen ? " nav-open" : ""}`}>
@@ -51,17 +61,7 @@ function PracticeDeskPage() {
             tabIndex={menuOpen ? 0 : -1}
             onClick={() => setMenuOpen(false)}
           />
-          <button
-            type="button"
-            className="topbar-menu-btn"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              {menuOpen ? <path d="M18 6L6 18M6 6l12 12" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-            </svg>
-          </button>
+          <AccountantMenuButton open={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
           <div className={`topbar-actions${menuOpen ? " open" : ""}`}>
             <button
               type="button"

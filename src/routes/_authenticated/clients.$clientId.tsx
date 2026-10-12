@@ -99,7 +99,6 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
-import { RailSettingsButton } from "@/components/settings-nav-button";
 import { FeatureFinder } from "@/components/feature-finder";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -156,7 +155,8 @@ import {
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
-import { CLIENT_RAIL_GROUPS, ClientRailButton } from "@/components/client-studio-chrome";
+import { ClientRail } from "@/components/client-studio-chrome";
+import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { rememberDeskClient } from "@/lib/desk-client";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
@@ -456,6 +456,8 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     /** Reports studio deep link, carried from `/reports`. */
     report?: string;
     action?: "preview" | "download";
+    /** Which practice agent Home should ask. The thread itself is unchanged. */
+    agent?: string;
     /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
     profile?: number;
     /**
@@ -479,6 +481,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       focus?: string;
       report?: string;
       action?: "preview" | "download";
+      agent?: string;
       profile?: number;
       view?: "chart" | "table" | "13week";
     } = {};
@@ -501,6 +504,13 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
     if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
+    if (
+      search.agent === "financial_manager" ||
+      search.agent === "analyst" ||
+      search.agent === "advisor"
+    ) {
+      out.agent = search.agent;
+    }
     if (search.action === "preview" || search.action === "download") out.action = search.action;
     if (search.profile === 1 || search.profile === "1") out.profile = 1;
     if (search.view === "table" || search.view === "chart" || search.view === "13week") {
@@ -1126,6 +1136,7 @@ function ClientView() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
+  useAccountantDrawer(mobileNavOpen);
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
   const [drawerTier, setDrawerTier] = useState<HealthTier>("at_risk");
@@ -2810,21 +2821,7 @@ function ClientView() {
                 tabIndex={mobileNavOpen ? 0 : -1}
                 onClick={() => setMobileNavOpen(false)}
               />
-              <button
-                type="button"
-                className="topbar-menu-btn"
-                aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
-                aria-expanded={mobileNavOpen}
-                onClick={() => setMobileNavOpen((o) => !o)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  {mobileNavOpen ? (
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  ) : (
-                    <path d="M4 7h16M4 12h16M4 17h16" />
-                  )}
-                </svg>
-              </button>
+              <AccountantMenuButton open={mobileNavOpen} onClick={() => setMobileNavOpen((o) => !o)} />
               <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
                 <ThemeToggle />
                 <button type="button" className={headerShortcutClass()} onClick={openReportsStudio}>
@@ -2854,39 +2851,11 @@ function ClientView() {
             </div>
 
             <div className="client-workspace">
-              <nav className="deliverable-rail" aria-label="Client workspace">
-                {CLIENT_RAIL_GROUPS.map((group) => (
-                  <div key={group.id} className="rail-group">
-                    <span className="rail-kicker">{group.label}</span>
-                    {group.items.map((item) => (
-                      <ClientRailButton
-                        key={item.id}
-                        id={item.id}
-                        label={item.label}
-                        active={(search.tab ?? "home") === item.id}
-                        onSelect={() => {
-                          setMobileNavOpen(false);
-                          const pane = legacyPaneForSearch({ tab: item.id });
-                          if (pane) setActiveTab(pane);
-                          void navigate({
-                            to: "/clients/$clientId",
-                            params: { clientId },
-                            search: (prev) => accountantClientTabSearch(prev, item.id),
-                            replace: true,
-                          });
-                        }}
-                      />
-                    ))}
-                  </div>
-                ))}
-                <RailSettingsButton
-                  onClick={() => {
-                    setMobileNavOpen(false);
-                    openPracticeSettings();
-                    navigate({ to: "/settings" });
-                  }}
-                />
-              </nav>
+              <ClientRail
+                clientId={clientId}
+                search={search}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
               <div className="deliverable-main">
                 <div data-notes-tray-slot="" className="notes-tray-slot" />
                 {!hasFigures && activeTab === "overview" ? (
