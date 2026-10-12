@@ -1,4 +1,5 @@
 import { AccountantNav, type NavDestination, type NavSection } from "@/components/accountant-nav";
+import { CLIENT_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
 import { clientNavSearch, clientRailSelection } from "@/lib/client-route-search";
 import { agentDisplayName } from "@/lib/milon-team";
 import { openPracticeSettings } from "@/lib/user-roles";
@@ -28,10 +29,8 @@ function clientSections(clientId: string): NavSection[] {
     params: { clientId },
     search: (prev) => clientNavSearch(prev, headingId, subId) as Record<string, unknown>,
   });
-  const subs = (
-    headingId: string,
-    items: { id: string; label: string }[],
-  ) => items.map((item) => ({ ...item, to: go(headingId, item.id) }));
+  const subs = (headingId: string, items: { id: string; label: string }[]) =>
+    items.map((item) => ({ ...item, to: go(headingId, item.id) }));
 
   return [
     {
@@ -162,6 +161,7 @@ export function ClientRail({
       label="Client workspace"
       sections={clientSections(clientId)}
       selection={selection}
+      storageKey={CLIENT_NAV_OPEN_KEY}
       back={{ label: "All clients", to: { to: "/clients" } }}
       onNavigate={onNavigate}
       onSettings={() => openPracticeSettings()}

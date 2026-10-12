@@ -1,5 +1,6 @@
 import { useRouterState } from "@tanstack/react-router";
 import { AccountantNav, type NavSection } from "@/components/accountant-nav";
+import { PRACTICE_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
 import { agentDisplayName } from "@/lib/milon-team";
 import { openPracticeSettings } from "@/lib/user-roles";
 
@@ -18,7 +19,11 @@ const SECTIONS: NavSection[] = [
         to: home(),
         bot: true,
         items: [
-          { id: "financial_manager", label: agentDisplayName("financial_manager"), to: home("ask-financial-manager") },
+          {
+            id: "financial_manager",
+            label: agentDisplayName("financial_manager"),
+            to: home("ask-financial-manager"),
+          },
           { id: "analyst", label: agentDisplayName("analyst"), to: home("ask-analyst") },
           { id: "advisor", label: agentDisplayName("advisor"), to: home("ask-advisor") },
         ],
@@ -111,6 +116,7 @@ export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
       label="Practice"
       sections={SECTIONS}
       selection={selection}
+      storageKey={PRACTICE_NAV_OPEN_KEY}
       settingsActive={selection.settings}
       onNavigate={onNavigate}
       onSettings={() => openPracticeSettings()}
