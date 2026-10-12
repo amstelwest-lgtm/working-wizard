@@ -605,9 +605,9 @@ export function BudgetPanel({
         </div>
       )}
       {implausible && !readOnly && (
-        <div className="mb-4 rounded-xl border border-[#B7791F]/50 bg-[#B7791F]/10 px-4 py-3 text-sm text-[#8A5A12] dark:border-[#8A5A12] dark:bg-[#8A5A12]/30 dark:text-[#F0D59A]">
+        <div className="budget-lineup mb-4 rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43] dark:border-[#1e3a5f] dark:bg-[#102A43] dark:text-[#F4F7FB]">
           <p className="font-semibold">This budget does not line up with the saved statement</p>
-          <p className="mt-1 text-[13px] leading-relaxed text-[#8A5A12]/90 dark:text-[#F0D59A]/90">
+          <p className="mt-1 text-[13px] leading-relaxed text-[#3D5270] dark:text-[#C5D4E4]">
             Cost of sales is zero while the period has a cost of sales, or a full year of revenue or
             cost of sales is more than three times a full year of the saved figures. Nothing is
             overwritten until you rebuild.
@@ -615,7 +615,7 @@ export function BudgetPanel({
           <Button
             type="button"
             variant="outline"
-            className="mt-3"
+            className="mt-3 border-[#0B5FFF] text-[#0B5FFF] hover:bg-[#DBEAFE]"
             onClick={rebuildFromActuals}
           >
             Rebuild from the saved statement

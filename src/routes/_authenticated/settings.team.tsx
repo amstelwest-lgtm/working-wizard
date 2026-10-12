@@ -317,9 +317,11 @@ function TeamAccessPage() {
       />
 
         {!view && (rosterBusy || accessBusy) ? (
-          <p className="flex items-center gap-2 text-sm text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin text-[#102A43] dark:text-[#F4F7FB]" /> Loading…
-          </p>
+          <div className="team-skeleton" aria-busy="true" aria-label="Loading team">
+            <div className="milon-skeleton team-skeleton__bar" />
+            <div className="milon-skeleton team-skeleton__bar" />
+            <div className="milon-skeleton team-skeleton__bar" />
+          </div>
         ) : null}
         {err ? (
           <div className="mb-4 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">

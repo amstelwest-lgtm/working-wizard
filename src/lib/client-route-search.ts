@@ -16,6 +16,7 @@
 
 export const CLIENT_RAIL_TABS = [
   "home",
+  "desk",
   "health",
   "cash",
   "profit",
@@ -58,9 +59,10 @@ export type LegacyPaneId =
 const RAIL_SET = new Set<string>(CLIENT_RAIL_TABS);
 
 const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
-  ask: { tab: "home" },
-  bot: { tab: "home" },
-  "milon-bot": { tab: "home" },
+  ask: { tab: "desk" },
+  bot: { tab: "desk" },
+  "milon-bot": { tab: "desk" },
+  desk: { tab: "desk" },
   home: { tab: "home" },
   overview: { tab: "home" },
   ratios: { tab: "health", focus: "health" },
@@ -183,8 +185,11 @@ export function canonicalizeAccountantSearch(input: {
 
   if (!tab && !section) return { tab: "home" };
 
-  // An explicit Home / Bot tab wins over a section or hash default.
-  if (tab === "home" || tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "home" };
+  // Home is the briefing. Ask / Bot is the team desk, not Home.
+  // `?tab=overview&section=cash` still names the section, so a bare overview
+  // is the only one that collapses to Home here.
+  if (tab === "home" || (tab === "overview" && !section)) return { tab: "home" };
+  if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "desk" };
 
   if (RAIL_SET.has(tab)) {
     return explicitRail(tab as ClientRailTab, section, focus);
@@ -226,6 +231,8 @@ export function legacyPaneForSearch(search: {
   const canonical = canonicalizeAccountantSearch(search);
   switch (canonical.tab) {
     case "home":
+      return "overview";
+    case "desk":
       return "ask";
     case "health":
       return "ratios";

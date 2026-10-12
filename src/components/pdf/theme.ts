@@ -31,18 +31,18 @@ export const C = {
   blueSoft: "#e6eef7", // blue tint fills
 
   // Signals
-  green: "#0f9d6b",
+  green: "#16845B",
   greenSoft: "#e7f6ef",
-  greenDeep: "#0a6b4a",
-  red: "#d64550",
+  greenDeep: "#0e5c40",
+  red: "#C43D4B",
   redSoft: "#fbecee",
-  redDeep: "#a32b35",
-  amber: "#d98a06",
-  amberSoft: "#fbf3e2",
-  amberDeep: "#92600a",
+  redDeep: "#8e2430",
+  amber: "#B7791F",
+  amberSoft: "#fbf6ee",
+  amberDeep: "#8A5A12",
 
-  // Minimal gold — hairlines and small flourishes only, never large fills
-  gold: "#b2913f",
+  // Hairlines follow cobalt. Gold stays off the report canvas.
+  gold: "#0B5FFF",
 } as const;
 
 // ── Milōn default brand ────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ export const MILON = {
 } as const;
 
 /** Legacy default accents that should be treated as "no client brand chosen". */
-const LEGACY_DEFAULT_ACCENTS = ["#0f3460", "#1a1a2e", "#16213e"];
+const LEGACY_DEFAULT_ACCENTS = ["#0f3460", "#1a1a2e", "#16213e", "#102a43"];
 
 export type ReportTheme = {
   /** Accent used for brand touches (header rule, table headers, emphasis). */

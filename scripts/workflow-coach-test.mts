@@ -250,7 +250,7 @@ assert(
   "?tab= aliases still resolve before the studio paints",
 );
 assert(
-  studio.includes('resolveAccountantTab(search) ?? "ask"'),
+  studio.includes('resolveAccountantTab(search) ?? "overview"'),
   "a deep link still selects its panel on first paint",
 );
 for (const step of COACH_STEPS) {

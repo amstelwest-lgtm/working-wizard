@@ -194,22 +194,16 @@ checks.clientsRoute = await page.evaluate(() => ({
 await shot(page, "followup-practice-clients-light-1280");
 
 await rail("Desk");
-await page.waitForFunction(() => location.hash === "#accountant-inbox");
-await page.waitForFunction(() => {
-  const el = document.querySelector("#accountant-inbox");
-  return el instanceof HTMLDetailsElement && el.open;
-});
-await page.evaluate(() => {
-  document.querySelector("#accountant-inbox")?.scrollIntoView({ block: "center" });
-});
+await page.waitForFunction(() => location.pathname.startsWith("/clients/") && location.search.includes("tab=desk"));
+await page.waitForSelector(".milon-desk");
 await page.waitForTimeout(300);
 checks.deskRoute = await page.evaluate(() => {
-  const el = document.querySelector("#accountant-inbox");
-  const active = document.querySelector('nav[aria-label="Practice"] a.tab.on')?.textContent ?? "";
+  const el = document.querySelector(".milon-desk");
+  const active = document.querySelector('nav[aria-label="Client workspace"] .tab.on')?.textContent ?? "";
   const rect = el?.getBoundingClientRect();
   return {
-    path: location.pathname + location.hash,
-    open: el instanceof HTMLDetailsElement ? el.open : false,
+    path: location.pathname + location.search,
+    open: Boolean(el),
     active,
     top: rect?.top ?? null,
     text: el?.textContent?.slice(0, 220) ?? "",
@@ -301,9 +295,8 @@ await phoneRail("Clients");
 await phone.locator("#clients-table").scrollIntoViewIfNeeded();
 await shot(phone, "followup-practice-clients-light-390");
 await phoneRail("Desk");
-await phone.evaluate(() => {
-  document.querySelector("#accountant-inbox")?.scrollIntoView({ block: "center" });
-});
+await phone.waitForFunction(() => location.pathname.startsWith("/clients/") && location.search.includes("tab=desk"));
+await phone.waitForSelector(".milon-desk");
 await shot(phone, "followup-practice-desk-light-390");
 await phoneRail("Team");
 await phone.waitForURL("**/settings/team");
@@ -329,7 +322,7 @@ const failed = [
   checks.signoff,
   checks.signoffDialog,
 ].filter((row) => !row || (row as { ok?: boolean }).ok === false);
-if (desk.active !== "Desk" || !desk.open || !/asking for your review|North Quay/i.test(desk.text ?? "")) {
+if (desk.active !== "Desk" || !desk.open || !/Team|Activity/i.test(desk.text ?? "")) {
   failed.push(desk);
 }
 const chrome = checks.practiceChrome as { ok?: boolean };

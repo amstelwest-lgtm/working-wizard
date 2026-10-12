@@ -64,7 +64,7 @@ function storageKeyFor(userId: string): string {
 export const DEFAULT_PROFILE: AccountantProfile = {
   firmName: "",
   logoUrl: null,
-  primaryColor: "#1a1a2e",
+  primaryColor: "#102A43",
   secondaryColor: "#16213e",
   accentColor: "#0f3460",
   accountantName: "",

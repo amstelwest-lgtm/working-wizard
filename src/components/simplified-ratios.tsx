@@ -27,9 +27,9 @@ function statusLabel(health: number, status?: HealthTier): string {
 function statusColor(health: number, status?: HealthTier): string {
   if (!isFinite(health)) return "rgb(100 116 139)";
   const tier = status ?? scoreTier(health);
-  if (tier === "healthy") return "#4CAF82";
-  if (tier === "at_risk") return "#f59e0b";
-  return "#e05c5c";
+  if (tier === "healthy") return "#16845B";
+  if (tier === "at_risk") return "#B7791F";
+  return "#C43D4B";
 }
 
 function trendDir(series: number[]): "up" | "down" | "flat" {
@@ -57,12 +57,12 @@ export function SimplifiedRatios({
         return (
           <div
             key={card.id}
-            className="flex flex-col gap-1 rounded-2xl border border-white/8 bg-white/[0.04] px-4 pb-3 pt-4"
+            className="flex flex-col gap-1 rounded-2xl border border-[#DBEAFE] bg-white px-4 pb-3 pt-4 dark:border-[#1e3a5f] dark:bg-[#0b1b2b]"
           >
-            <span className="text-[10px] font-bold tracking-[0.12em] text-slate-400">
+            <span className="text-[10px] font-bold tracking-[0.12em] text-[#3D5270] dark:text-slate-400">
               {card.label}
             </span>
-            <span className="text-[28px] font-bold leading-none text-white">
+            <span className="text-[28px] font-bold leading-none text-[#102A43] dark:text-white">
               {displayHealth}
             </span>
             <span

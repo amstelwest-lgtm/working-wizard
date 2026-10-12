@@ -252,10 +252,7 @@ export function NoteLayer({
   }, []);
 
   useLayoutEffect(() => {
-    if (!mounted || tab !== "overview") {
-      setTraySlot(null);
-      return;
-    }
+    if (!mounted) return;
     setTraySlot(document.querySelector<HTMLElement>("[data-notes-tray-slot]"));
   }, [mounted, tab]);
 

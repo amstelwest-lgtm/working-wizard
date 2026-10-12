@@ -354,7 +354,7 @@ export function SphereHero({
       className={`sphere-reduced-motion relative flex w-full flex-col items-center ${compact ? "px-0 pb-0 pt-0" : "px-4 pb-6 pt-2"}`}
     >
       {/* ambient motes */}
-      {!compact && !reduceMotion && (
+      {onDark && !compact && !reduceMotion && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           {[12, 28, 55, 71, 88].map((left, i) => (
             <span

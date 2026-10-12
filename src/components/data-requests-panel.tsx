@@ -239,7 +239,7 @@ export function DataRequestsPanel({
       ) : null}
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#5b420e] dark:text-[#F4F7FB]">
+          <span className="block text-xs font-bold uppercase tracking-[0.22em] text-[#102A43] dark:text-[#F4F7FB]">
             {audience === "owner" ? "MILŌN needs" : "Data requests"}
           </span>
           <h3

@@ -1,5 +1,6 @@
 export type ClientRailId =
   | "home"
+  | "desk"
   | "health"
   | "cash"
   | "profit"
@@ -19,6 +20,7 @@ export const CLIENT_RAIL_GROUPS: {
     label: "Overview",
     items: [
       { id: "home", label: "Home" },
+      { id: "desk", label: "Desk" },
       { id: "health", label: "Health" },
     ],
   },
@@ -66,7 +68,7 @@ export function ClientRailButton({
       type="button"
       className={`tab${active ? " on" : ""}`}
       data-tab={id}
-      data-bot-rail={id === "home" ? "true" : undefined}
+      data-bot-rail={id === "desk" ? "true" : undefined}
       aria-current={active ? "page" : undefined}
       aria-label={id === "portal" ? "Client portal, documents" : label}
       title={id === "portal" ? "Client portal and documents" : label}

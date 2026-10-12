@@ -128,12 +128,12 @@ export function LogoUploader() {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={!canEditBrand || busy}
-          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--line)] bg-[color-mix(in_srgb,var(--gold)_6%,transparent)] px-6 py-8 text-[var(--ink-dim)] transition-colors hover:border-[var(--gold)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#DBEAFE] bg-[#F4F8FF] px-6 py-8 text-[#3D5270] transition-colors hover:border-[#0B5FFF] hover:text-[#102A43] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? (
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : (
-            <Upload className="h-6 w-6 text-[var(--gold)]" />
+            <Upload className="h-6 w-6 text-[#0B5FFF]" />
           )}
           <span className="text-sm font-medium">Click to upload logo</span>
           <span className="text-xs text-[var(--ink-faint)]">PNG, JPG, SVG — max 2 MB</span>

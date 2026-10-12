@@ -20,6 +20,7 @@ import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
 import { ShareButton } from "@/components/share";
+import { FloatingNoteButton } from "@/components/floating-note-button";
 import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
@@ -88,6 +89,7 @@ const rootRoute = createRootRoute({
         <NotesProvider previewNotes={HARNESS_PREVIEW_NOTES}>
           <Outlet />
           <ShareButton />
+          <FloatingNoteButton />
           <Toaster />
         </NotesProvider>
       </AccountantProfileProvider>

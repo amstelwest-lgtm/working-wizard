@@ -218,7 +218,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["drafts", "draft", "bot", "ask", "milon bot", "chat"],
     audiences: ["accountant"],
     requiresClient: true,
-    studio: { tab: "home" },
+    studio: { tab: "desk" },
   },
   {
     id: "action-plan",
