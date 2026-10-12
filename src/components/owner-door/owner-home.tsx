@@ -59,22 +59,39 @@ export function OwnerNeedsStrip({
   needs,
   onMoves,
   onDeliverables,
+  onActions,
+  onDrafts,
+  onBooks,
 }: {
   needs: OwnerNeedsView;
   onMoves: () => void;
   onDeliverables: () => void;
+  /** Client Home sends each cell to its rail item. Owner Home keeps the shared handlers. */
+  onActions?: () => void;
+  onDrafts?: () => void;
+  onBooks?: () => void;
 }) {
+  const openActions = onActions ?? onMoves;
+  const openDrafts = onDrafts ?? onMoves;
+  const books = (
+    <>
+      <b>{needs.syncHeading}</b>
+      {needs.syncLines.map((line) => (
+        <span key={line}>{line}</span>
+      ))}
+    </>
+  );
   return (
     <section className="owner-needs" aria-label="What needs you">
       <h2>What needs you</h2>
       <div className="owner-needs-grid">
-        <button type="button" className="owner-needs-item" onClick={onMoves}>
+        <button type="button" className="owner-needs-item" onClick={openActions}>
           <b>{needs.actionsHeading}</b>
           {needs.actionLines.map((line) => (
             <span key={line}>{line}</span>
           ))}
         </button>
-        <button type="button" className="owner-needs-item" onClick={onMoves}>
+        <button type="button" className="owner-needs-item" onClick={openDrafts}>
           <b>{needs.draftsHeading}</b>
           {needs.draftLines.map((line) => (
             <span key={line}>{line}</span>
@@ -86,12 +103,13 @@ export function OwnerNeedsStrip({
             <span key={line}>{line}</span>
           ))}
         </button>
-        <div className="owner-needs-item owner-needs-sync">
-          <b>{needs.syncHeading}</b>
-          {needs.syncLines.map((line) => (
-            <span key={line}>{line}</span>
-          ))}
-        </div>
+        {onBooks ? (
+          <button type="button" className="owner-needs-item" onClick={onBooks}>
+            {books}
+          </button>
+        ) : (
+          <div className="owner-needs-item owner-needs-sync">{books}</div>
+        )}
       </div>
     </section>
   );
@@ -108,6 +126,10 @@ export function OwnerHome({
   needs,
   onMoves,
   onDeliverables,
+  onActions,
+  onDrafts,
+  onBooks,
+  signoffLine,
   inviteClientId,
   title = "Your finance team",
   showInvite = true,
@@ -127,6 +149,11 @@ export function OwnerHome({
   needs?: OwnerNeedsView;
   onMoves?: () => void;
   onDeliverables?: () => void;
+  onActions?: () => void;
+  onDrafts?: () => void;
+  onBooks?: () => void;
+  /** Advisory sign-off sentence on a client file. Owner Home leaves this off. */
+  signoffLine?: string | null;
   inviteClientId?: string | null;
 }) {
   const handoff = presence.handoff;
@@ -204,7 +231,19 @@ export function OwnerHome({
         ) : null}
       </div>
       {needs && onMoves && onDeliverables ? (
-        <OwnerNeedsStrip needs={needs} onMoves={onMoves} onDeliverables={onDeliverables} />
+        <OwnerNeedsStrip
+          needs={needs}
+          onMoves={onMoves}
+          onDeliverables={onDeliverables}
+          onActions={onActions}
+          onDrafts={onDrafts}
+          onBooks={onBooks}
+        />
+      ) : null}
+      {signoffLine ? (
+        <p className="owner-signoff" data-signoff-line>
+          {signoffLine}
+        </p>
       ) : null}
       {showInvite ? <OwnerInviteNudge variant="app" clientId={inviteClientId} /> : null}
     </div>

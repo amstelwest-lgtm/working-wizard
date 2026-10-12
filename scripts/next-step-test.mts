@@ -525,15 +525,14 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
   const studioCard = studio.indexOf("<NextStepCard");
   const studioBriefing = studio.indexOf("<ClientBriefing");
-  const studioSections = studio.indexOf("{/* ===== SUMMARY TAB ===== */}");
   const studioRail = studio.indexOf("<ClientRail");
   assert(studioCard > 0, "accountant studio renders NextStepCard");
   assert(studioRail > 0, "studio lists deliverables in a left rail");
   const studioOverview = studio.indexOf('id="pane-overview"');
-  assert(studioOverview > 0 && studioOverview < studioCard, "overview pane holds the Next Step");
+  assert(studioOverview > 0 && studioOverview < studioCard, "Home still resolves the next step");
   assert(
-    studioCard < studioBriefing && studioBriefing < studioSections,
-    "studio: Next Step and briefing sit in Overview, above Client Brain",
+    studio.indexOf('id="pane-ratios"') < studioBriefing && studioBriefing < studio.indexOf('id="pane-profit"'),
+    "the briefing sits on Health",
   );
   assert(studio.includes('audience="accountant"'), "studio uses accountant audience");
   assert(

@@ -251,8 +251,17 @@ import { needsPastPeriodPrompt } from "@/lib/history-coverage";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
-import { reviewFiguresChanged, signedHealthFromHistory } from "@/lib/signoff-status";
+import { reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
+import { OwnerHome } from "@/components/owner-door/owner-home";
+import { useAgentActivity } from "@/hooks/use-agent-activity";
+import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
+import { ownerPresence } from "@/lib/owner-presence";
+import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { booksSyncCopy, type BooksLink } from "@/lib/owner-needs";
+import type { AgentKey } from "@/lib/milon-team-feed";
+import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
@@ -973,9 +982,11 @@ function ClientView() {
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
   const [xeroLink, setXeroLink] = useState<XeroStatus>(null);
+  const [xeroChecked, setXeroChecked] = useState(false);
   const [xeroRefresh, setXeroRefresh] = useState(0);
   const fetchXeroLink = useServerFn(getXeroStatus);
   const [qboLink, setQboLink] = useState<QboStatus>(null);
+  const [qboChecked, setQboChecked] = useState(false);
   const [qboRefresh, setQboRefresh] = useState(0);
   const [sageRefresh, setSageRefresh] = useState(0);
   const fetchQboLink = useServerFn(getQboStatus);
@@ -990,10 +1001,16 @@ function ClientView() {
     let cancelled = false;
     void fetchXeroLink({ data: { clientId } })
       .then((status) => {
-        if (!cancelled) setXeroLink(status);
+        if (!cancelled) {
+          setXeroLink(status);
+          setXeroChecked(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setXeroLink(null);
+        if (!cancelled) {
+          setXeroLink(null);
+          setXeroChecked(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1007,10 +1024,16 @@ function ClientView() {
     let cancelled = false;
     void fetchQboLink({ data: { clientId } })
       .then((status) => {
-        if (!cancelled) setQboLink(status);
+        if (!cancelled) {
+          setQboLink(status);
+          setQboChecked(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setQboLink(null);
+        if (!cancelled) {
+          setQboLink(null);
+          setQboChecked(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1544,8 +1567,10 @@ function ClientView() {
     books: booksLines.figure,
   }, booksLines.detail ? { books: booksLines.detail } : undefined);
   const [overviewNextStep, setOverviewNextStep] = useState<NextStep | null>(null);
+  const [nextStepKnown, setNextStepKnown] = useState(false);
   const onOverviewNextStep = useCallback((step: NextStep | null) => {
     setOverviewNextStep(step);
+    setNextStepKnown(true);
   }, []);
   const workflowCtx: WorkflowContext = {
     clientName: client?.name ?? "",
@@ -2724,6 +2749,166 @@ function ClientView() {
     [clientId, hasFigures, revealTab],
   );
 
+  const homeActivity = useAgentActivity(clientId);
+  const homePresence = useMemo(() => ownerPresence(homeActivity), [homeActivity]);
+  const homeAgent: AgentKey | null =
+    search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
+      ? search.agent
+      : null;
+  const showHomeThread = activeTab === "overview" && homeAgent != null;
+  const openHomeAgent = useCallback(
+    (agent: AgentKey) => {
+      setActiveTab("overview");
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = accountantClientTabSearch(prev, "home") as Record<string, unknown>;
+          next.agent = agent;
+          return next;
+        },
+        replace: true,
+      });
+    },
+    [clientId, navigate],
+  );
+  const closeHomeThread = useCallback(() => {
+    setActiveTab("overview");
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => accountantClientTabSearch(prev, "home"),
+      replace: true,
+    });
+  }, [clientId, navigate]);
+  const openHomeSection = useCallback(
+    (tab: string, section?: string) => {
+      const pane = resolveAccountantTab({ tab, section }) ?? "overview";
+      setActiveTab(pane);
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => accountantClientTabSearch(prev, tab, section ? { section } : undefined),
+        replace: true,
+      });
+    },
+    [clientId, navigate],
+  );
+  const homeBooks = useMemo<OwnerBooks>(() => {
+    const priorFin =
+      priorSnapshot?.financials && typeof priorSnapshot.financials === "object"
+        ? (priorSnapshot.financials as Record<string, unknown>)
+        : null;
+    const amount = (value: unknown): number | null => {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value !== "string" || !value.trim()) return null;
+      const parsed = Number(value.replace(/,/g, ""));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    return {
+      hasBooks: hasFigures || Boolean(qboLink || xeroLink),
+      ledger: qboLink ? "QuickBooks" : xeroLink ? "Xero" : null,
+      revenue: amount(financials.revenue),
+      priorRevenue: amount(priorFin?.revenue),
+      cogs: amount(financials.cogs),
+      priorCogs: amount(priorFin?.cogs),
+      receivables: statementPosition.receivables ?? null,
+      cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
+      openAction: overviewNextStep?.title ?? null,
+      actionsReady: nextStepKnown,
+      signedBy: null,
+      signedOn: null,
+      market: clientMarket,
+    };
+  }, [
+    priorSnapshot,
+    hasFigures,
+    qboLink,
+    xeroLink,
+    financials,
+    statementPosition.receivables,
+    client?.cashflow,
+    overviewNextStep,
+    nextStepKnown,
+    clientMarket,
+  ]);
+  const homeLines = useMemo(
+    () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null),
+    [homeBooks, strategicMoves],
+  );
+  const homeStatus = useMemo(() => ownerCardStatuses(homeBooks), [homeBooks]);
+  const homeNeeds = useMemo(() => {
+    const open = overviewNextStep?.outstanding.openActions ?? 0;
+    const overdue = overviewNextStep?.outstanding.overdueActions ?? 0;
+    const actionsHeading = !nextStepKnown
+      ? "Action plan"
+      : open > 0
+        ? overdue > 0
+          ? `${open} open, ${overdue} overdue`
+          : `${open} open`
+        : "Action plan";
+    const actionLines = !nextStepKnown
+      ? ["Checking the action plan."]
+      : [overviewNextStep?.title ?? "No open work."];
+    const waiting = homeActivity.findings.filter(
+      (row) =>
+        row.status !== "approved" &&
+        isVisibleAgentFinding(row) &&
+        draftFindingLabel(row) === DRAFT_NEEDS_ACCOUNTANT,
+    );
+    const draftsHeading = homeActivity.loading ? "Drafts" : waiting.length ? "Drafts" : "Drafts";
+    const draftLines = homeActivity.loading
+      ? ["Checking drafts."]
+      : homeActivity.error
+        ? ["Drafts aren't available yet."]
+        : waiting.length
+          ? [waiting[0]?.title ?? "A draft is waiting."]
+          : ["No draft waiting."];
+    const linkOf = (link: { lastSyncedAt?: string | null } | null, checked: boolean): BooksLink => {
+      if (!checked) return { state: "unknown" };
+      if (!link) return { state: "absent" };
+      return { state: "linked", at: link.lastSyncedAt ?? null };
+    };
+    const sync = booksSyncCopy({
+      quickBooks: linkOf(qboLink, qboChecked),
+      xero: linkOf(xeroLink, xeroChecked),
+      when: (iso) => formatDate(iso, clientMarket),
+    });
+    const booksHeading = sync.heading === "Books" ? "Books" : sync.heading;
+    const booksLine =
+      sync.lines[0] === "Books are not connected yet." ? "No books connected." : (sync.lines[0] ?? "No books connected.");
+    return {
+      actionsHeading,
+      actionLines,
+      draftsHeading,
+      draftLines,
+      deliverablesHeading: "Reports",
+      deliverableLines: [reportsIssued > 0 ? "Ready to send." : "Nothing ready to send."],
+      syncHeading: booksHeading,
+      syncLines: [booksLine],
+    };
+  }, [
+    overviewNextStep,
+    nextStepKnown,
+    homeActivity,
+    qboLink,
+    xeroLink,
+    qboChecked,
+    xeroChecked,
+    clientMarket,
+    reportsIssued,
+  ]);
+  const homeSignoffLine = signoffStatusLine({
+    kind: signoffStatusKind({
+      hasSignoff: Boolean(advisorySignoff),
+      isStale: pageSignoffStale(advisorySignoff, client?.financials_updated_at ?? null),
+      readyForReview: false,
+    }),
+    name: advisorySignoff?.signed_off_by_name,
+    date: advisorySignoff ? formatDate(advisorySignoff.signed_off_at, clientMarket) : null,
+    scopeLabel: "Advisory",
+  });
+
   // ── Loading / error states ────────────────────────────────────────────────
 
   if (loading) {
@@ -2854,14 +3039,14 @@ function ClientView() {
               />
               <div className="deliverable-main">
                 <div data-notes-tray-slot="" className="notes-tray-slot" />
-                {!hasFigures && activeTab === "overview" ? (
+                {!hasFigures && activeTab === "summary" ? (
                   <div className="card hero-card first-figures" id="first-figures-card">
                     <div className="ff-copy">
                       <p className="kicker">Step 1 · Bring in this client's figures</p>
                       <h3>Nothing is scored yet</h3>
                       <p>
                         The health orb, profit waterfall, cash forecast and Milōn Bot all wait on
-                        the first numbers. Home is the place to start.{" "}
+                        the first numbers. Books is where the first numbers come in.{" "}
                         {isUsCopy(clientMarket)
                           ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF."
                           : "Fastest: about 3 months of bank statements for every account."}
@@ -2870,43 +3055,53 @@ function ClientView() {
                   </div>
                 ) : null}
                 <div
-                  className={`tabpane${activeTab === "overview" ? " on" : ""}`}
+                  className={`tabpane${activeTab === "overview" && !showHomeThread ? " on" : ""}`}
                   id="pane-overview"
                 >
-                <DeliverableAnswerStrip
-                  heading="Overview"
-                  sentence={overviewSentence}
-                  chip={healthChip}
-                  scope="financials"
-                  clientId={clientId}
-                  clientName={client?.name}
-                  signoff={financialsSignoff}
-                  isStale={pageSignoffStale(
-                    financialsSignoff,
-                    client?.financials_updated_at ?? null,
-                  )}
-                  onSignoffChange={patchSignoff("financials")}
-                  signoffKnown={signoffsKnown}
-                  extraActions={
-                    overviewNextStep ? (
-                      <button
-                        type="button"
-                        className={ARAP_GOLD_BTN}
-                        data-next-step-cta={overviewNextStep.key}
-                        onClick={() => handleNextStepAct(overviewNextStep)}
-                      >
-                        {overviewNextStep.cta.label}
-                      </button>
-                    ) : null
-                  }
+                <div className="owner-door" data-client-home="true">
+                  <OwnerHome
+                    title="Your whole finance team"
+                    variant="character"
+                    showInvite={false}
+                    presence={homePresence}
+                    lines={homeLines}
+                    status={homeStatus}
+                    onOpen={openHomeAgent}
+                    onAsk={openHomeAgent}
+                    needs={homeNeeds}
+                    onMoves={() => openHomeSection("plan")}
+                    onActions={() => openHomeSection("plan")}
+                    onDrafts={() => openHomeSection("deliverables", "pack")}
+                    onDeliverables={() => openHomeSection("reports")}
+                    onBooks={() => openHomeSection("portal")}
+                    signoffLine={homeSignoffLine}
+                  />
+                </div>
+                <div hidden>
+                <NextStepCard
+                  className="mb-4"
+                  clientId={client.id}
+                  audience="accountant"
+                  surface="accountant_portal"
+                  refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
+                  onAct={handleNextStepAct}
+                  hideCta
+                  onResolved={onOverviewNextStep}
                 />
+                </div>
+                </div>
+
+                {/* ===== SUMMARY TAB ===== */}
+                <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
+                  {activeTab === "summary" && (
+                    <>
                 <ReviewInputsDrawer hint="Connections, exports">
                   <div className="briefing-actions deliverables-more" data-bot-entry>
                     <button
                       type="button"
                       className={portalButtonClass("secondary")}
                       data-ask-bot
-                      onClick={() => writeAccountantTab("ask")}
+                      onClick={() => openHomeAgent("financial_manager")}
                     >
                       Ask Milōn Bot
                     </button>
@@ -2981,19 +3176,141 @@ function ClientView() {
                     ) : null}
                   </div>
                 </ReviewInputsDrawer>
-                <div data-notes-tray-slot="" />
-                <OverviewSectionCards cards={overviewCards} onOpen={openOverviewCard} />
-                {/* ===== NEXT STEP — one CTA, on Overview only (P0.4) ===== */}
-                <NextStepCard
-                  className="mb-4"
-                  clientId={client.id}
-                  audience="accountant"
-                  surface="accountant_portal"
-                  refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
-                  onAct={handleNextStepAct}
-                  hideCta
-                  onResolved={onOverviewNextStep}
-                />
+                      <StatementFigures facts={statementFigureFacts} />
+                      <ClientBrainSummary
+                        clientId={client.id}
+                        clientName={client.name}
+                        firmId={client.firm_id ?? null}
+                        operatingProfile={client.operating_profile}
+                        market={client.market}
+                        businessType={client.business_type}
+                        onOpenUpload={() => setUploadOpen(true)}
+                        onOpenTab={(tab) => setActiveTab(tab)}
+                        onAnswerProfile={() => setProfileOpen(true)}
+                        figureFacts={statementFigureFacts}
+                        renderFrame={({ inputs, body }) => (
+                          <>
+                            {body}
+                            <DataUpToDate
+                              clientId={clientId}
+                              returnPath={`/clients/${clientId}`}
+                              xeroRefresh={xeroRefresh}
+                              qboRefresh={qboRefresh}
+                              sageRefresh={sageRefresh}
+                              onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
+                              onXeroSyncComplete={onXeroSyncComplete}
+                              onQboSyncComplete={onQboSyncComplete}
+                              onSageSyncComplete={onSageSyncComplete}
+                              onUpload={() => setUploadOpen(true)}
+                              freshness={dataFreshness}
+                              chip={healthChip}
+                              openQueries={openQueriesCount}
+                              onOpenQueries={() =>
+                                openArchive(openQueriesCount > 0 ? "open" : "resolved")
+                              }
+                            >
+                              <DeliverableInputConfig
+                                className="mb-5"
+                                clientId={clientId}
+                                deliverableId="summary"
+                                context={deliverableInputContext}
+                              />
+                              {inputs}
+                            </DataUpToDate>
+                          </>
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+
+                {/* ===== MOVES ===== */}
+                <div className={`tabpane${activeTab === "moves" ? " on" : ""}`} id="pane-moves">
+                  {activeTab === "moves" && (
+                    <StrategicMovesPanel
+                      moves={strategicMoves}
+                      clientId={client.id}
+                      onOpenPlan={(moveKey) => {
+                        setPlanFocusMove(moveKey);
+                        setActiveTab("plan");
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* ===== MILŌN BOT TAB ===== */}
+                <div className={`tabpane${activeTab === "ask" || showHomeThread ? " on" : ""}`} id="pane-ask">
+                  <div className="milon-desk-host">
+                    {showHomeThread ? (
+                      <button
+                        type="button"
+                        className={portalButtonClass("secondary")}
+                        onClick={closeHomeThread}
+                      >
+                        Back to the team
+                      </button>
+                    ) : null}
+                    <MilonTeamPane
+                      key={homeAgent ?? "team"}
+                      clientId={clientId}
+                      agent={homeAgent}
+                      onOpenApproved={(target) => {
+                        if (target.screen === "accountant") {
+                          setActiveTab("overview");
+                          requestRevealDataRequests();
+                          return;
+                        }
+                        setActiveTab("plan");
+                      }}
+                    />
+                    <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+                    <button
+                      type="button"
+                      id="wizard-open-queries"
+                      className={portalButtonClass("secondary")}
+                      onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
+                    >
+                      {openQueriesCount > 0
+                        ? `${openQueriesCount} open ${openQueriesCount === 1 ? "query" : "queries"}`
+                        : "No open queries"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ===== RATIOS TAB ===== */}
+                <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
+                  <DeliverableAnswerStrip
+                    heading={search.focus === "pillars" ? "Where it hurts" : "Health score"}
+                    sentence={healthSentence}
+                    chip={healthChip}
+                    scope="financials"
+                    clientId={clientId}
+                    clientName={client?.name}
+                    signoff={financialsSignoff}
+                    isStale={pageSignoffStale(
+                      financialsSignoff,
+                      client?.financials_updated_at ?? null,
+                    )}
+                    onSignoffChange={patchSignoff("financials")}
+                  signoffKnown={signoffsKnown}
+                    canSign
+                    extraActions={
+                      <button
+                        type="button"
+                        className="answer-strip__icon"
+                        aria-label="Export PDF"
+                        title="Export PDF"
+                        onClick={() => void handleExportPDF()}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                        </svg>
+                      </button>
+                    }
+                  />
+                  {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
+                    <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
+                  ) : null}
                 {needsBalanceSheetPrompt(financials) ? (
                   <BalanceSheetPrompt onUpload={() => setUploadOpen(true)} />
                 ) : null}
@@ -3008,10 +3325,6 @@ function ClientView() {
                   onOpenForecast={() => setActiveTab("cash")}
                   onChanged={() => setAdvisoryBump((n) => n + 1)}
                 />
-
-                {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
-                  <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
-                ) : null}
 
                 {generationTrialOpen ? (
                   <TrialEndedPlanBlock firmId={client.firm_id ?? null} />
@@ -3123,136 +3436,6 @@ function ClientView() {
                   </p>
                 ) : null}
 
-                </div>
-
-                {/* ===== SUMMARY TAB ===== */}
-                <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
-                  {activeTab === "summary" && (
-                    <>
-                      <StatementFigures facts={statementFigureFacts} />
-                      <ClientBrainSummary
-                        clientId={client.id}
-                        clientName={client.name}
-                        firmId={client.firm_id ?? null}
-                        operatingProfile={client.operating_profile}
-                        market={client.market}
-                        businessType={client.business_type}
-                        onOpenUpload={() => setUploadOpen(true)}
-                        onOpenTab={(tab) => setActiveTab(tab)}
-                        onAnswerProfile={() => setProfileOpen(true)}
-                        figureFacts={statementFigureFacts}
-                        renderFrame={({ inputs, body }) => (
-                          <>
-                            {body}
-                            <DataUpToDate
-                              clientId={clientId}
-                              returnPath={`/clients/${clientId}`}
-                              xeroRefresh={xeroRefresh}
-                              qboRefresh={qboRefresh}
-                              sageRefresh={sageRefresh}
-                              onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
-                              onXeroSyncComplete={onXeroSyncComplete}
-                              onQboSyncComplete={onQboSyncComplete}
-                              onSageSyncComplete={onSageSyncComplete}
-                              onUpload={() => setUploadOpen(true)}
-                              freshness={dataFreshness}
-                              chip={healthChip}
-                              openQueries={openQueriesCount}
-                              onOpenQueries={() =>
-                                openArchive(openQueriesCount > 0 ? "open" : "resolved")
-                              }
-                            >
-                              <DeliverableInputConfig
-                                className="mb-5"
-                                clientId={clientId}
-                                deliverableId="summary"
-                                context={deliverableInputContext}
-                              />
-                              {inputs}
-                            </DataUpToDate>
-                          </>
-                        )}
-                      />
-                    </>
-                  )}
-                </div>
-
-                {/* ===== MOVES ===== */}
-                <div className={`tabpane${activeTab === "moves" ? " on" : ""}`} id="pane-moves">
-                  {activeTab === "moves" && (
-                    <StrategicMovesPanel
-                      moves={strategicMoves}
-                      clientId={client.id}
-                      onOpenPlan={(moveKey) => {
-                        setPlanFocusMove(moveKey);
-                        setActiveTab("plan");
-                      }}
-                    />
-                  )}
-                </div>
-
-                {/* ===== MILŌN BOT TAB ===== */}
-                <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-                  <div className="milon-desk-host">
-                    <MilonTeamPane
-                      clientId={clientId}
-                      onOpenApproved={(target) => {
-                        if (target.screen === "accountant") {
-                          setActiveTab("overview");
-                          requestRevealDataRequests();
-                          return;
-                        }
-                        setActiveTab("plan");
-                      }}
-                    />
-                    <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
-                    <button
-                      type="button"
-                      id="wizard-open-queries"
-                      className={portalButtonClass("secondary")}
-                      onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
-                    >
-                      {openQueriesCount > 0
-                        ? `${openQueriesCount} open ${openQueriesCount === 1 ? "query" : "queries"}`
-                        : "No open queries"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* ===== RATIOS TAB ===== */}
-                <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
-                  <DeliverableAnswerStrip
-                    heading={search.focus === "pillars" ? "Where it hurts" : "Health score"}
-                    sentence={healthSentence}
-                    chip={healthChip}
-                    scope="financials"
-                    clientId={clientId}
-                    clientName={client?.name}
-                    signoff={financialsSignoff}
-                    isStale={pageSignoffStale(
-                      financialsSignoff,
-                      client?.financials_updated_at ?? null,
-                    )}
-                    onSignoffChange={patchSignoff("financials")}
-                  signoffKnown={signoffsKnown}
-                    canSign
-                    extraActions={
-                      <button
-                        type="button"
-                        className="answer-strip__icon"
-                        aria-label="Export PDF"
-                        title="Export PDF"
-                        onClick={() => void handleExportPDF()}
-                      >
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-                        </svg>
-                      </button>
-                    }
-                  />
-                  {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
-                    <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
-                  ) : null}
                   <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", deliverableInputContext)}>
                   <DeliverableInputConfig
                     className="mb-5"

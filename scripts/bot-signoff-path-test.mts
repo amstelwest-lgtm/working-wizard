@@ -126,7 +126,7 @@ assert(widget.includes("lastQuestion"), "the link keeps the question that produc
 assert(widget.includes('err.role = "alert"'), "reply failures stay visible");
 assert(studio.includes("data-ask-bot"), "Overview has a Bot entry");
 assert(studio.includes("Ask Milōn Bot"), "the entry is labelled Ask Milōn Bot");
-assert(studio.includes('writeAccountantTab("ask")'), "the entry opens the Bot tab for this client");
+assert(studio.includes('openHomeAgent("financial_manager")'), "Ask opens that agent's thread on Home");
 assert(studio.includes("data-bot-entry"), "the entry is marked");
 assert(
   readFileSync(resolve("src/components/accountant-nav.tsx"), "utf8").includes("data-bot-rail"),

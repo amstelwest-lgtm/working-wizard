@@ -20,7 +20,6 @@ import { finalizeCollections } from "@/lib/collections";
 import { finalizePayables } from "@/lib/payables";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { BudgetActualMonth } from "@/lib/budget-chart-table";
-import { ClientBriefing } from "@/components/client-briefing";
 import { DataUpToDate } from "@/components/data-up-to-date";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
@@ -67,13 +66,16 @@ import {
 import type { BudgetQualification } from "@/lib/budget.types";
 import type { NextStep } from "@/lib/next-step";
 import {
-  overviewAnswerSentence,
   overviewSectionCards,
   snapshotFigure,
   storedAmountFigure,
 } from "@/lib/overview-moves-copy";
-import { NextStepCard } from "@/components/next-step-card";
-import { OverviewSectionCards } from "@/components/overview-section-cards";
+import { OwnerHome } from "@/components/owner-door/owner-home";
+import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { ownerPresence } from "@/lib/owner-presence";
+import { emptyAgentActivity } from "@/lib/milon-team-activity";
+import { signoffStatusLine } from "@/lib/signoff-status";
+import type { AgentKey } from "@/lib/milon-team-feed";
 import { currencySymbol, formatMoneyCompact, ZA_MARKET } from "@/lib/market";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { preferStatementPeriod, readStatementMeta } from "@/lib/statement-period";
@@ -206,8 +208,10 @@ export function RailStudio() {
           <ClientRail clientId={clientId} search={search} onNavigate={() => setMenuOpen(false)} />
           <div className="deliverable-main">
             <div data-notes-tray-slot="" className="notes-tray-slot" />
-            {pane === "ask" ? <BotPane /> : null}
-            {pane === "overview" ? <BriefingPane /> : null}
+            {pane === "ask" || (pane === "overview" && search.agent) ? (
+              <BotPane agent={search.agent} />
+            ) : null}
+            {pane === "overview" && !search.agent ? <BriefingPane /> : null}
             {pane === "moves" ? <MovesPane /> : null}
             {pane === "summary" ? <BooksPane clientId={clientId} /> : null}
             {pane === "ratios" ? (
@@ -239,12 +243,28 @@ export function RailStudio() {
   );
 }
 
-function BotPane() {
+function BotPane({ agent }: { agent?: string }) {
   const feed = useMilonTeamFeedStub("harbour-glass");
+  const navigate = useNavigate();
+  const selected =
+    agent === "financial_manager" || agent === "analyst" || agent === "advisor" ? agent : "all";
   return (
     <div className="tabpane on" id="pane-ask">
       <div className="milon-desk-host">
-        <MilonTeamDesk feed={feed} now={DESK_NOW} />
+        <button
+          type="button"
+          className="btn ghost mini"
+          onClick={() => {
+            void navigate({
+              to: "/clients/$clientId",
+              params: { clientId: CLIENT_ID },
+              search: { tab: "home" },
+            });
+          }}
+        >
+          Back to the team
+        </button>
+        <MilonTeamDesk feed={feed} now={DESK_NOW} initialFilter={selected} />
         <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
       </div>
     </div>
@@ -339,79 +359,66 @@ function MovesPane() {
 }
 
 function BriefingPane() {
-  const snapshot = [
-    { key: "cash", label: "Cash", value: "R186k" },
-    { key: "revenue", label: "Revenue", value: "R420k" },
-    { key: "runway", label: "Runway", value: "11 weeks" },
-  ];
-  const matters = "Collections are the gap before payroll.";
-  const cards = harnessOverviewCards(snapshot).map((card) =>
-    card.id === "health" ? { ...card, figure: healthHeadline(67, "Watch") } : card,
-  );
+  const navigate = useNavigate();
+  const books: OwnerBooks = {
+    hasBooks: true,
+    ledger: null,
+    revenue: 420000,
+    priorRevenue: null,
+    cogs: 80000,
+    priorCogs: null,
+    receivables: null,
+    cashflow: null,
+    openAction: HARNESS_STEP.title,
+    actionsReady: true,
+    signedBy: null,
+    signedOn: null,
+    market: ZA_MARKET,
+  };
+  const open = (agent: AgentKey) => {
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId: CLIENT_ID },
+      search: (prev) => ({ ...prev, tab: "home", agent }),
+    });
+  };
+  const go = (tab: string, section?: string) => {
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId: CLIENT_ID },
+      search: section ? { tab, section } : { tab },
+    });
+  };
   return (
     <div className="tabpane on" id="pane-overview">
-      <DeliverableAnswerStrip
-        heading="Overview"
-        sentence={overviewAnswerSentence({ whatMatters: matters, score: 72, label: "Stable" })}
-        chip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
-        scope="financials"
-        clientId={CLIENT_ID}
-        clientName="Harbour Glass"
-        signoff={null}
-        signoffKnown={false}
-        isStale={false}
-        onSignoffChange={() => {}}
-        extraActions={
-          <button type="button" className={ARAP_GOLD_BTN} data-next-step-cta={HARNESS_STEP.key}>
-            {HARNESS_STEP.cta.label}
-          </button>
-        }
-      />
-      <ReviewInputsDrawer hint="Connections, exports">
-        <div className="briefing-actions">
-          <button type="button" className="btn ghost mini">
-            Ask Milōn Bot
-          </button>
-          <button type="button" className="btn ghost mini">
-            Upload
-          </button>
-          <button type="button" className="btn ghost mini">
-            Generate report
-          </button>
-        </div>
-      </ReviewInputsDrawer>
-      <div data-notes-tray-slot="" />
-      <OverviewSectionCards cards={cards} onOpen={() => {}} />
-      <NextStepCard
-        clientId={CLIENT_ID}
-        audience="accountant"
-        surface="accountant_portal"
-        fixtureStep={HARNESS_STEP}
-        hideCta
-        onAct={() => {}}
-      />
-      <ClientBriefing
-        clientName="Harbour Glass"
-        clientCode="HG-14"
-        industryLabel="Manufacturing"
-        ring={<span className="briefing-kicker">72</span>}
-        healthScore={72}
-        healthLabel="Stable"
-        healthStatus="healthy"
-        snapshot={snapshot}
-        about="A small glass workshop. These figures are local fixture data."
-        profile={null}
-        whatMatters={matters}
-        hideWhatMatters
-        hideConnectionActions
-        workflow={null}
-        workflowLoading={false}
-        openQueries={1}
-        reportsIssued={0}
-        movementReportAvailable={false}
-        hasFigures
-        figuresPeriodLabel="September 2026"
-      />
+      <div className="owner-door" data-client-home="true">
+        <OwnerHome
+          title="Your whole finance team"
+          variant="character"
+          showInvite={false}
+          presence={ownerPresence(emptyAgentActivity())}
+          lines={ownerHomeLines(ownerAnswerTiles(books), harnessMoves()[0]?.title ?? null)}
+          status={ownerCardStatuses(books)}
+          onOpen={open}
+          onAsk={open}
+          needs={{
+            actionsHeading: "Action plan",
+            actionLines: [HARNESS_STEP.title],
+            draftsHeading: "Drafts",
+            draftLines: ["No draft waiting."],
+            deliverablesHeading: "Reports",
+            deliverableLines: ["Nothing ready to send."],
+            syncHeading: "Books",
+            syncLines: ["No books connected."],
+          }}
+          onMoves={() => go("deliverables", "plan")}
+          onActions={() => go("deliverables", "plan")}
+          onDrafts={() => go("deliverables", "pack")}
+          onDeliverables={() => go("reports")}
+          onBooks={() => go("portal")}
+          signoffLine={signoffStatusLine({ kind: "draft", scopeLabel: "Advisory" })}
+        />
+      </div>
     </div>
   );
 }

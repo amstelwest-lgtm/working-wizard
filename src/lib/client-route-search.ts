@@ -16,7 +16,6 @@
 
 export const CLIENT_RAIL_TABS = [
   "home",
-  "desk",
   "health",
   "cash",
   "profit",
@@ -73,10 +72,10 @@ export type LegacyPaneId =
 const RAIL_SET = new Set<string>(CLIENT_RAIL_TABS);
 
 const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
-  ask: { tab: "desk" },
-  bot: { tab: "desk" },
-  "milon-bot": { tab: "desk" },
-  desk: { tab: "desk" },
+  ask: { tab: "home" },
+  bot: { tab: "home" },
+  "milon-bot": { tab: "home" },
+  desk: { tab: "home" },
   home: { tab: "home" },
   overview: { tab: "home" },
   ratios: { tab: "health", focus: "health" },
@@ -221,11 +220,11 @@ export function canonicalizeAccountantSearch(input: {
 
   if (!tab && !section) return { tab: "home" };
 
-  // Home is the briefing. Ask / Bot is the team desk, not Home.
-  // `?tab=overview&section=cash` still names the section, so a bare overview
-  // is the only one that collapses to Home here.
+  // Home is the three cards. Ask, Bot, and the old desk land there too.
+  // A named agent stays on the search and opens that thread. `?tab=overview&section=cash`
+  // still names the section, so a bare overview is the only one that collapses here.
   if (tab === "home" || (tab === "overview" && !section)) return { tab: "home" };
-  if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "desk" };
+  if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "home" };
   if (tab === "books") {
     return section === "connections"
       ? { tab: "portal", section: "connections" }
@@ -273,8 +272,6 @@ export function legacyPaneForSearch(search: {
   switch (canonical.tab) {
     case "home":
       return "overview";
-    case "desk":
-      return "ask";
     case "health":
       return "ratios";
     case "cash":
@@ -352,7 +349,6 @@ export function clientRailSelection(input: {
   const report = (input.report ?? "").trim();
   const agent = (input.agent ?? "").trim();
   switch (canonical.tab) {
-    case "desk":
     case "home":
       return {
         headingId: "home",

@@ -743,10 +743,13 @@ const refreshUi = read("src/components/trial-balance-refresh-prompt.tsx");
 assert(refreshUi.includes("TRIAL_BALANCE_REFRESH_COPY"), "prompt uses the shared sentence");
 assert(refreshUi.includes("Re-import trial balance"), "prompt has an import button");
 assert(clientSrc.includes("needsTrialBalanceRefresh"), "client file detects a stale trial balance");
-assert(
-  (clientSrc.match(/TrialBalanceRefreshPrompt/g) ?? []).length >= 3,
-  "Overview and Health both offer the re-import",
+const overviewPane = clientSrc.slice(
+  clientSrc.indexOf('id="pane-overview"'),
+  clientSrc.indexOf('id="pane-summary"'),
 );
+const healthPane = clientSrc.slice(clientSrc.indexOf('id="pane-ratios"'), clientSrc.indexOf('id="pane-profit"'));
+assert(!overviewPane.includes("TrialBalanceRefreshPrompt"), "Home does not keep the re-import prompt");
+assert(healthPane.includes("TrialBalanceRefreshPrompt"), "Health still offers the re-import");
 const ownerSrc = read("src/routes/app.tsx");
 assert(ownerSrc.includes("needsTrialBalanceRefresh"), "owner health detects a stale trial balance");
 assert(ownerSrc.includes('setFirstRunStep("first-data")'), "owner re-import opens the statement upload");
