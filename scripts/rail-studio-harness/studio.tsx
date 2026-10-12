@@ -441,6 +441,13 @@ const HARNESS_FINANCIALS = {
 };
 
 function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean }) {
+  useEffect(() => {
+    if (!pillars) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById("coach-pillars")?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [pillars]);
   const overall = scorecardHealthFromFinancials({
     financials: HARNESS_FINANCIALS,
     cashBalance: 186000,
@@ -486,7 +493,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
   return (
     <div className="tabpane on" id="pane-ratios">
       <DeliverableAnswerStrip
-        heading={pillars ? "Where it hurts" : "Health score"}
+        heading="Health score"
         sentence={sentence}
         chip={chip}
         scope="financials"
@@ -524,7 +531,6 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
       </ReviewInputsDrawer>
       <PaneBoundary label="Health score">
         <div style={{ marginBottom: 32 }}>
-          {pillars ? null : (
           <div className="health-plate">
             <SphereHero
               hideCaption
@@ -533,7 +539,6 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
               pillars={spherePillars}
             />
           </div>
-          )}
           <div className="health-plate">
             <SimplifiedRatios sections={sections} />
           </div>

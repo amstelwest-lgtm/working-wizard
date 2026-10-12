@@ -876,6 +876,14 @@ function ClientView() {
     }, 60);
     return () => window.clearTimeout(timer);
   }, [activeTab, search.section]);
+  useEffect(() => {
+    if (activeTab !== "ratios") return;
+    if (search.section !== "pillars" && search.focus !== "pillars") return;
+    const timer = window.setTimeout(() => {
+      document.getElementById("coach-pillars")?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, search.section, search.focus]);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const apply = () => {
@@ -3297,7 +3305,7 @@ function ClientView() {
                 {/* ===== RATIOS TAB ===== */}
                 <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
                   <DeliverableAnswerStrip
-                    heading={search.focus === "pillars" ? "Where it hurts" : "Health score"}
+                    heading="Health score"
                     sentence={healthSentence}
                     chip={healthChip}
                     scope="financials"
@@ -3595,8 +3603,6 @@ function ClientView() {
                   </ReviewInputsDrawer>
                   {/* One Health view — orb and pillar cards. No Simplified/Complex switch. */}
                   <div style={{ marginBottom: 32 }}>
-                      {/* Orb stays on Health. Pillars leads with the cards. */}
-                      {search.focus === "pillars" ? null : (
                       <div className="health-plate">
                         <SphereHero
                           hideCaption
@@ -3623,7 +3629,6 @@ function ClientView() {
                           })()}
                         />
                       </div>
-                      )}
                       {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
                       <div className="health-plate">
                         <SimplifiedRatios
