@@ -36,24 +36,38 @@ function silence(video: HTMLVideoElement) {
   video.setAttribute("playsinline", "");
 }
 
+/** Safari has no WebM. Asking it to try WebM first can fire an error and clear the element. */
+function webmUnsupported(): boolean {
+  try {
+    return document.createElement("video").canPlayType("video/webm") === "";
+  } catch {
+    return false;
+  }
+}
+
 /** Swap sources only on a clip that is not the one on screen. */
 function loadHiddenClip(video: HTMLVideoElement, clip: FmAvatarClip) {
   if (video.dataset.clip === clip && video.dataset.ready === "1") return;
   const sources = fmClipSources(clip);
   video.dataset.clip = clip;
   video.dataset.ready = "0";
-  video.dataset.fallback = "";
   video.preload = "auto";
   silence(video);
   while (video.firstChild) video.removeChild(video.firstChild);
   video.removeAttribute("src");
-  const webm = document.createElement("source");
-  webm.src = sources.webm;
-  webm.type = "video/webm";
-  const mp4 = document.createElement("source");
-  mp4.src = sources.mp4;
-  mp4.type = "video/mp4";
-  video.append(webm, mp4);
+  if (video.dataset.fallback === "mp4" || webmUnsupported()) {
+    video.dataset.fallback = "mp4";
+    video.src = sources.mp4;
+  } else {
+    video.dataset.fallback = "";
+    const webm = document.createElement("source");
+    webm.src = sources.webm;
+    webm.type = "video/webm";
+    const mp4 = document.createElement("source");
+    mp4.src = sources.mp4;
+    mp4.type = "video/mp4";
+    video.append(webm, mp4);
+  }
   video.load();
 }
 
@@ -229,10 +243,6 @@ export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
       if (!video) continue;
       silence(video);
       video.preload = "none";
-      video.addEventListener("error", () => {
-        if (revealed && video === videos[visibleSlot]) return;
-        forceMp4(video);
-      });
     }
 
     function plan(from: FmAvatarClip): FmAvatarClip {
