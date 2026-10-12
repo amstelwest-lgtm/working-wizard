@@ -28,15 +28,12 @@ const href = botSignoffHref("client 1", plan[0], "Propose next steps from what's
 const url = new URL(href, "https://milon.test");
 assert(url.pathname === "/clients/client%201", "href keeps the client id");
 const planSearch = canonicalizeAccountantSearch({ tab: url.searchParams.get("tab") ?? "" });
-assert(
-  planSearch.tab === "deliverables" && planSearch.section === "plan",
-  "tab=plan opens the plan section",
-);
+assert(planSearch.tab === "plan" && planSearch.section === undefined, "tab=plan opens Action plan");
 assert(url.searchParams.get("coach") === "actions", "coach intent is actions");
 const actionsSearch = canonicalizeAccountantSearch({ tab: "actions" });
 assert(
-  actionsSearch.tab === "deliverables" && actionsSearch.section === "plan",
-  "legacy ?tab=actions still opens the plan",
+  actionsSearch.tab === "plan" && actionsSearch.section === undefined,
+  "legacy ?tab=actions still opens Action plan",
 );
 
 const tasks = botSignoffCtas({

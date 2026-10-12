@@ -246,13 +246,13 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   );
   eq(
     acct(facts({ state: "client_decision", approvedWithoutAction: 1 })).cta.route.tab,
-    "deliverables",
-    "accountant starts actions from Deliverables",
+    "plan",
+    "accountant starts actions on Action plan",
   );
   eq(
     acct(facts({ state: "client_decision", approvedWithoutAction: 1 })).cta.route.search.section,
-    "plan",
-    "accountant starts actions from the plan section",
+    undefined,
+    "Action plan is not a section",
   );
   eq(
     owner(facts({ state: "client_decision", hasFirm: true, proposedRecommendations: 1 })).key,
@@ -277,13 +277,13 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   );
   eq(
     acct(facts({ state: "action_execution", openActions: 4 })).cta.route.tab,
-    "deliverables",
+    "plan",
     "accountant plan tab",
   );
   eq(
     acct(facts({ state: "action_execution", openActions: 4 })).cta.route.search.section,
-    "plan",
-    "accountant plan section",
+    undefined,
+    "Action plan is the rail tab, not a section",
   );
   eq(
     owner(facts({ state: "action_execution", approvedWithoutAction: 2 })).key,
@@ -419,8 +419,8 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   const r = nextStepRoute("chase", "accountant", CLIENT);
   eq(
     r.href,
-    `/clients/${CLIENT}?tab=deliverables&section=plan&filter=overdue`,
-    "href includes tab, section, and filter",
+    `/clients/${CLIENT}?tab=plan&filter=overdue`,
+    "href includes the plan tab and the overdue filter",
   );
   const o = nextStepRoute("chase", "owner", CLIENT);
   eq(o.href, "/app", "owner href is the board");

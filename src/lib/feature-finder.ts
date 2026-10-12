@@ -108,7 +108,6 @@ const PILLARS = coachTarget("pillars");
 const PROFIT = coachTarget("profit");
 const CASH = coachTarget("cash");
 const BUDGET = coachTarget("budget");
-const ACTIONS = coachTarget("actions");
 
 const FEATURES: readonly FeatureDef[] = [
   {
@@ -236,7 +235,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["actions", "tasks", "work list", "assign", "sign-off", "signoff", "sign off"],
     audiences: ["accountant", "owner"],
     requiresClient: true,
-    studio: ACTIONS,
+    studio: { tab: "plan" },
     ownerTab: "tasks",
   },
   {

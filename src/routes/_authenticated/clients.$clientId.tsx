@@ -459,7 +459,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     why?: string;
     /** Health page sub-step: the score, or the pillar drill. */
     focus?: string;
-    /** Sub-view under a rail item (`pillars`, `collections`, `pack`, `plan`, `drafter`). */
+    /** Sub-view under a rail item (`pillars`, `collections`, `pack`, `drafter`). */
     section?: string;
     /** Reports studio deep link, carried from `/reports`. */
     report?: string;
@@ -525,11 +525,12 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       out.view = search.view;
     }
     if (
-      search.filter === "overdue" ||
-      search.filter === "at_risk" ||
-      search.filter === "blocked" ||
-      search.filter === "done" ||
-      search.filter === "all"
+      out.tab === "plan" &&
+      (search.filter === "overdue" ||
+        search.filter === "at_risk" ||
+        search.filter === "blocked" ||
+        search.filter === "done" ||
+        search.filter === "all")
     ) {
       out.filter = search.filter;
     }
@@ -4113,13 +4114,21 @@ function ClientView() {
                     >
                       {activeTab === "plan" && (
                         <ActionPlanPanel
-                          key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
+                          key={`${client.id}-${search.filter ?? "all"}`}
                           clientId={client.id}
                           clientName={client.name}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
                           simplified={viewMode === "simplified"}
                           isOwner
-                          initialFilter={search.filter === "overdue" ? "overdue" : undefined}
+                          initialFilter={
+                            search.filter === "overdue" ||
+                            search.filter === "at_risk" ||
+                            search.filter === "blocked" ||
+                            search.filter === "done" ||
+                            search.filter === "all"
+                              ? search.filter
+                              : undefined
+                          }
                           moves={strategicMoves.map((move) => ({
                             key: move.key,
                             title: move.title,

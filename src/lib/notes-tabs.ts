@@ -6,7 +6,7 @@
  * Pairs:
  *   Health        today | today-complex | ratios | health | pillars
  *   Profit        waterfall | profit
- *   Action plan   tasks | plan | actions | action-plan
+ *   Action plan   tasks | plan | actions | action-plan  (accountant rail tab is `plan`)
  *   Cash          cash
  *   Collections   collections (accountant only)
  *   Payables      payables (accountant only)

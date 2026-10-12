@@ -1306,27 +1306,20 @@ export default function ActionPlanPanel({
           </div>
           {ownerView ? null : (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {(
-              [
-                ["all", "All"],
-                ["overdue", "Overdue"],
-                ["at_risk", "At risk"],
-                ["blocked", "Blocked"],
-                ["done", "Done"],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setFilter(k)}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                  filter === k
-                    ? "bg-[#0B5FFF] text-white dark:bg-[#0B5FFF] dark:text-slate-950"
-                    : "border border-amber-900/15 text-slate-600 hover:bg-amber-900/5 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                }`}
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#102A43] dark:text-slate-200">
+              Show
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as ActionPlanFilter)}
+                className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${INPUT_CLS}`}
               >
-                {label}
-              </button>
-            ))}
+                <option value="all">All</option>
+                <option value="overdue">Overdue</option>
+                <option value="at_risk">At risk</option>
+                <option value="blocked">Blocked</option>
+                <option value="done">Done</option>
+              </select>
+            </label>
             <span className="mx-1 h-4 w-px bg-amber-900/15 dark:bg-slate-700" />
             <select
               value={ownerFilter ?? ""}
