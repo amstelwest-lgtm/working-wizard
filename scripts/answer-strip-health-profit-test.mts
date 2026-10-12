@@ -136,7 +136,9 @@ assert(
   "a missing period does not tell the user to sync",
 );
 assert(!profitPane.includes("Sync QuickBooks again"), "profit does not ask for another sync");
-assert(ratiosPane.includes('search.focus === "pillars" ? null'), "pillars skip the orb");
+assert(!ratiosPane.includes('search.focus === "pillars" ? null'), "pillars keep the orb");
+assert(route.includes('getElementById("coach-pillars")'), "a pillars link scrolls to the cards");
+assert(!ratiosPane.includes('"Where it hurts"'), "pillars does not retitle Health");
 assert(profitPane.includes('aria-label="Export PDF"'), "profit export sits on the strip");
 assert(profitPane.includes("hideCardExport"), "the waterfall card does not repeat export");
 assert(!waterfall.includes("ChevronUp"), "the chart collapse chevron is gone");
