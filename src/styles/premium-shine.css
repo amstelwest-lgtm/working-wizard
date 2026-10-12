@@ -179,7 +179,15 @@ html:not(.dark) .accountant-portal .topbar .feature-finder-kbd {
   color: #8e97a8;
 }
 html:not(.dark) .owner-door .owner-biz {
-  color: var(--pp-frame-dim);
+  color: var(--pp-frame-ink);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 99px;
+  padding: 5px 14px;
+  font-size: 13px;
+}
+/* Owner rail settings row: gear and label sit together, not split apart. */
+html:not(.dark) .owner-door .rail-settings .tab {
+  justify-content: flex-start;
 }
 
 /* Breadcrumb row sits on the frame, above the light canvas. */
