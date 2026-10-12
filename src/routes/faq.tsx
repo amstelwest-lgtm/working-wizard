@@ -94,8 +94,8 @@ function FaqPage() {
 
       <Qa q="What happens if I stop using it?">
         <p>
-          Nothing is held hostage. You can delete your account and its data from Settings, and
-          deleting is immediate rather than a support ticket.
+          You can leave whenever you want. The workspace stays available through the end of the
+          period you have already paid for, including the packs your accountant has approved.
         </p>
       </Qa>
 
@@ -119,10 +119,6 @@ function FaqPage() {
 
       <Qa q="What does the AI see?">
         <p>{ai?.answer}</p>
-      </Qa>
-
-      <Qa q="Do you store card details?">
-        <p>No. Card numbers are collected by Stripe Checkout. Milōn does not store card details.</p>
       </Qa>
 
       <Qa q="Do you track how I use the product?">
@@ -160,9 +156,7 @@ function FaqPage() {
       <Qa q="How accurate is the score?">
         <p>
           It is arithmetic on the figures you give it, so it is exactly as good as those figures.
-          Every ratio shows the numbers behind it, so you can check any part of it yourself. Where
-          the platform is guessing or a number is missing, it says so rather than quietly filling in
-          a plausible value.
+          Every ratio shows the numbers behind it, so you can check any part of it yourself.
         </p>
       </Qa>
 
@@ -172,17 +166,6 @@ function FaqPage() {
           minutes, not a new system to run alongside your existing one.
         </p>
       </Qa>
-
-      {copyPack === "us" ? <div className="mk-copy-us">
-        <Qa q="Is this a South African product with a dollar sign glued on?">
-          <p>
-            No. Choosing the United States switches currency, dates, sales tax (not VAT), and the
-            advice pack. It is not a rand product with the symbol swapped. US industry medians are
-            still being built, so we show days and percentages rather than pretending SA bands are
-            Texas ones.
-        </p>
-      </Qa>
-      </div> : null}
 
       <h2>The cold email</h2>
 

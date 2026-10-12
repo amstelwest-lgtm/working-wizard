@@ -35,7 +35,7 @@ export const SEO_PAGES = {
       "Milōn gives accounting firms an AI finance team: health score, 13-week cash forecast and advisory drafts from QuickBooks, Xero or Sage. You sign off.",
     ogTitle: "Your AI finance team. You sign off. | MILŌN",
     ogDescription:
-      "Milōn Financial Manager, Analyst and Advisor work in Milōn Bot from QuickBooks, Xero or Sage. Your accountant signs off. 14-day free trial · up to 3 clients.",
+      "Milōn Financial Manager, Analyst and Advisor prepare the work from QuickBooks, Xero or Sage. Your accountant signs off. 14-day free trial.",
     image: HOME_OG,
     imageAlt: HOME_OG_ALT,
   },
@@ -46,7 +46,7 @@ export const SEO_PAGES = {
       "Not an AI accountant or bookkeeper that replaces your firm. Three agents draft from QuickBooks, Xero or Sage. Your firm signs off.",
     ogTitle: "An AI finance team for accounting firms | MILŌN",
     ogDescription:
-      "Milōn Financial Manager, Analyst and Advisor draft the cash forecast and advisory pack from QuickBooks, Xero or Sage. Your firm signs off. 14-day free trial · up to 3 clients.",
+      "Milōn Financial Manager, Analyst and Advisor prepare the cash view and advisory pack from QuickBooks, Xero or Sage. Your firm signs off.",
     image: "/og/og-accountants-v11.png",
     imageAlt:
       "Milōn: An AI finance team for accounting firms. Milōn Financial Manager, Milōn Analyst, Milōn Advisor.",
@@ -232,7 +232,6 @@ export function organizationGraphJson(): string {
         },
         // Omit sameAs until the LinkedIn company page and X profile are live.
         // Pointing crawlers at 404 / unverified URLs is worse than omitting the field.
-        areaServed: [{ "@type": "Country", name: "United States" }],
         knowsAbout: [
           "AI finance team",
           "AI CFO",
@@ -250,7 +249,6 @@ export function organizationGraphJson(): string {
         "@type": "SoftwareApplication",
         "@id": `${SITE_ORIGIN}/#software`,
         name: "Milōn",
-        alternateName: "Milōn Bot",
         applicationCategory: "BusinessApplication",
         applicationSubCategory: "AI finance team for accounting firms and small businesses",
         operatingSystem: "Web",
@@ -258,14 +256,14 @@ export function organizationGraphJson(): string {
         image: `${SITE_ORIGIN}/og/og-home-v11.png`,
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         description:
-          "Your AI finance team. You sign off. Three AI agents work in Milōn Bot from QuickBooks, Xero, Sage or uploaded statements: Milōn Financial Manager (data quality, 13-week cash and budget, action points, accountant hand-off), Milōn Analyst (health score, ratios, variances, diagnosis) and Milōn Advisor (next moves and advisory deliverables). A qualified accountant reviews and signs off.",
+          "Your AI finance team. You sign off. Milōn Financial Manager keeps the books data clean from QuickBooks, Xero or Sage, the 13-week cash view and the budget. Milōn Analyst diagnoses why margins moved and where cash is leaking. Milōn Advisor drafts the next moves. A qualified accountant reviews and approves.",
         featureList: [
-          "Milōn Financial Manager: data quality from QuickBooks, Xero or Sage, 13-week cash forecast and budget, action points and accountant hand-off",
-          "Milōn Analyst: financial health score, 19 financial ratios with workings, budget vs actual variances and diagnosis",
-          "Milōn Advisor: next moves and client-ready advisory deliverables for accountant sign-off",
-          "Connect QuickBooks Online, Xero or Sage, or upload PDF, Excel, CSV or a bank statement",
-          "Every sign-off logged with the accountant's name and time",
-          "Assignable action plans with email-based task completion",
+          "Milōn Financial Manager: clean books data from QuickBooks, Xero or Sage, 13-week cash view, budget, action points and accountant hand-off",
+          "Milōn Analyst: health score, ratios and variances explained as a diagnosis",
+          "Milōn Advisor: next moves and advisory deliverables ready for accountant sign-off",
+          "Connect QuickBooks, Xero or Sage, or upload PDF, Excel, CSV or a bank statement",
+          "Source documents post to the books only after a named person approves",
+          "Assignable action plans the accountant reviews with the client",
         ],
         offers: [
           {
@@ -335,15 +333,16 @@ Sitemap: ${SITE_ORIGIN}/sitemap.xml
 export const LLMS_TXT = `# Milōn
 
 > Your AI finance team. You sign off. Milōn gives accounting firms and the
-> small businesses they advise three AI agents that work in Milōn Bot from
-> QuickBooks, Xero, Sage or uploaded statements. A qualified accountant
-> reviews and signs off every advisory pack.
+> small businesses they advise a Financial Manager, an Analyst and an Advisor.
+> They prepare the work from QuickBooks, Xero, Sage or uploaded statements.
+> A qualified accountant reviews and approves every advisory pack.
 
 ## The AI finance team
-- Milōn Financial Manager: checks data quality from QuickBooks Online, Xero or Sage, runs the 13-week cash forecast and budget, sets action points and hands the pack to the accountant
-- Milōn Analyst: financial health score across four pillars (profit, assets, financing, cash), 19 ratios with workings, budget vs actual variances and diagnosis
-- Milōn Advisor: next moves and client-ready advisory deliverables for accountant sign-off
+- Milōn Financial Manager: keeps books data clean from QuickBooks Online, Xero or Sage, runs the 13-week cash view and budget, sets action points and hands the pack to the accountant
+- Milōn Analyst: health score, ratios and variances explained as a diagnosis of why margins moved and where cash is leaking
+- Milōn Advisor: next moves and advisory deliverables ready for accountant sign-off
 - Milōn is not a ledger and does not file returns or make payments
+- Source documents post to the books only after a named person approves
 
 ## Pricing (USD)
 - Accounting firms: flat bands by active client count, Solo $99/mo to Scale $999/mo; 14-day free trial · up to 3 clients
@@ -361,9 +360,6 @@ export const LLMS_TXT = `# Milōn
 - FAQ: ${SITE_ORIGIN}/faq
 - Privacy: ${SITE_ORIGIN}/privacy
 - AI notice: ${SITE_ORIGIN}/ai
-
-## Markets
-Primary: United States. Also serving South Africa.
 `;
 
 export function sitemapXml(lastmod: string): string {

@@ -4,7 +4,7 @@ import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { LIST_PRICES, visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
-import { AI_IDENTIFIERS_LINE, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
+import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -69,13 +69,13 @@ function TermsPage() {
       ) : null}
       <p>
         Business owners pay {saPricing?.ownerMonthly ?? "$39/mo"}, or nothing when their accountant
-        is on Milōn. Accounting firms are billed through Stripe after a 14-day trial.
+        is on Milōn. Accounting firms are billed after a 14-day trial.
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">
         US list prices: Solo {LIST_PRICES.us.firmSolo}/mo after a 14-day free trial · up to 3
-        clients, Scale {LIST_PRICES.us.firmScale}/mo, billed through Stripe Checkout. Annual is
-        about 20% off. Enterprise is a custom quote. {WATCHLIST_DEFINITION}
+        clients, Scale {LIST_PRICES.us.firmScale}/mo. Annual is
+        about 20% off. Enterprise is a custom quote.
       </p>
       ) : null}
 
@@ -90,8 +90,7 @@ function TermsPage() {
       <h2>Your figures</h2>
       <p>
         The numbers you enter or upload remain yours. You are responsible for their accuracy. The
-        score is arithmetic on those figures — it is exactly as good as what you give it. Where the
-        platform is guessing or a number is missing, it says so.
+        score is arithmetic on those figures — it is exactly as good as what you give it.
       </p>
 
       <h2>AI</h2>

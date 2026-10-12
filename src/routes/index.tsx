@@ -70,7 +70,6 @@ import {
   HERO_H1_GOLD,
   HERO_H1_LEAD,
   HERO_LEDE,
-  MILON_BOT_LINE,
   HERO_OWNER_LINK,
   HERO_POINTS,
   OWNER_REGISTER_NOTE_US,
@@ -87,13 +86,10 @@ import {
   PRICING_INTRO,
   PRICING_OWNER_BAR_US,
   PRICING_OWNER_CTA,
-  PROOF_AI_LINK,
   PROOF_CARDS,
   PROOF_EYEBROW,
   PROOF_H2,
-  PROOF_PRIVACY_LINK,
   PROOF_SECURITY_FACTS,
-  TRUST_AI_LINK,
   TRUST_ITEMS,
   WALKTHROUGH_URL,
   WATCH_EYEBROW,
@@ -399,7 +395,11 @@ function LandingPage() {
   useEffect(() => {
     const stored = readVisitorDraft();
     const allowed = geoZa || stored.country !== "ZA" ? stored : { country: null, regionCode: null };
-    setDraftMarket((current) => (current.country ? current : allowed.country ? allowed : current));
+    setDraftMarket((current) => {
+      if (current.country) return current;
+      if (allowed.country) return allowed;
+      return { country: "US", regionCode: null };
+    });
     marketReady.current = true;
   }, [geoZa]);
 
@@ -1282,7 +1282,7 @@ function LandingPage() {
           const { forcePortal } = await import("@/lib/user-roles");
           forcePortal("accountant");
           // This firm was just created. It has not shown figures, so Checkout
-          // waits. A flag stored for another firm must not send them to Stripe.
+          // waits. A flag stored for another firm must not start their checkout.
           navigate({ to: "/dashboard" });
           return;
         }
@@ -1966,7 +1966,6 @@ function LandingPage() {
               {HERO_H1_LEAD} <span className="gold-text">{HERO_H1_GOLD}</span>
             </h1>
             <p className="hero-lede">{HERO_LEDE}</p>
-            <p className="hero-bot">{MILON_BOT_LINE}</p>
             <ul className="integrations-chips" id="integrations" aria-label="Works with">
               <li>QuickBooks Online</li>
               <li>Xero</li>
@@ -2191,9 +2190,6 @@ function LandingPage() {
               <span>{item}</span>
             </div>
           ))}
-          <a className="trust-link" href="/ai">
-            {TRUST_AI_LINK}
-          </a>
         </div>
       </div>
 
@@ -2334,7 +2330,7 @@ function LandingPage() {
               <span className="n">01</span>
               <h3>Bring in the financials</h3>
               <p>
-                Connect QuickBooks Online or Xero, or upload the P&amp;L and balance sheet you
+                Connect QuickBooks, Xero or Sage, or upload the P&amp;L and balance sheet you
                 already have as a PDF, Excel file, or CSV — or simply upload a bank statement.
               </p>
             </div>
@@ -2420,10 +2416,6 @@ function LandingPage() {
               </li>
             ))}
           </ul>
-          <p className="proof-links">
-            <a href="/ai">{PROOF_AI_LINK}</a>
-            <a href="/privacy">{PROOF_PRIVACY_LINK}</a>
-          </p>
         </div>
       </section>
 
@@ -2578,7 +2570,7 @@ function LandingPage() {
           <p className="sub" style={{ marginTop: 18 }}>
             Milōn gives accountants a way to install that capability for their clients: an AI
             finance team that does the heavy analytical work, while the accountant stays in control
-            of the advice. {MILON_BOT_LINE}
+            of the advice.
           </p>
           <p className="sub" style={{ marginTop: 18 }}>
             One shared workspace: AI prepares the analysis, and the accountant reviews and signs
@@ -2733,7 +2725,7 @@ function LandingPage() {
           <div>
             <span className="logo-word gold-text">MILŌN</span>
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-              The AI-powered finance function
+              An AI finance team
               <br />
               {saPricing?.footerTagline ?? DUAL_MARKET_TAGLINE}
             </span>

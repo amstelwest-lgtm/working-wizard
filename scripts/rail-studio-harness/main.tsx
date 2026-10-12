@@ -27,6 +27,7 @@ import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
+import { ProofLandingPreview } from "./proof-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as DeskRoute } from "@/routes/_authenticated/desk";
 import { ReportsStudio } from "@/routes/_authenticated/reports-studio";
@@ -354,6 +355,12 @@ const reportsRoute = createRoute({
   },
 });
 
+const proofLandingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/proof-landing",
+  component: ProofLandingPreview,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -379,6 +386,7 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   settingsBrandRoute,
   settingsTeamRoute,
+  proofLandingRoute,
 ]);
 const router = createRouter({
   routeTree,

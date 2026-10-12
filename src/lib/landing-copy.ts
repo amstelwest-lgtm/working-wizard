@@ -10,7 +10,6 @@ export const HERO_H1_LEAD = "Your AI finance team.";
 export const HERO_H1_GOLD = "You sign off.";
 export const HERO_LEDE =
   "Plug in QuickBooks, Xero or Sage. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
-export const MILON_BOT_LINE = "Milōn Bot is where you talk to your three agents.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
 /** Hero note and the pricing section. Nowhere else. */
@@ -42,27 +41,16 @@ export const HERO_POINTS = [
   HERO_SIGNOFF_POINT,
 ] as const;
 
-export const TRUST_BOOKS = "The books stay in QuickBooks Online, Xero or Sage";
-/**
- * VERIFY-3 fallback. ask-ai sanitises the question text, but brain-propose,
- * brain-deliverable-draft, advisory drafts, client briefings, and statement
- * extraction send the client name (and, for uploads, the file) unstripped.
- */
-export const TRUST_IDENTIFIERS =
-  "The in-app assistant filters tax IDs and account numbers from questions; amounts stay so the workings are real";
-/** VERIFY-4: confirmed. Cite the /ai notice (SEO_PAGES.ai plus the public page). */
-export const TRUST_TRAINING = "Client data isn't used to train third-party AI models";
-/** firm_name is nullable on the sign-off history row, so the strip does not claim it. */
-export const TRUST_SIGNOFF = "Every sign-off logged with name and time";
+export const TRUST_PREP =
+  "Less time on each client. The finance team prepares the file before you sit down.";
+export const TRUST_HANDOFF =
+  "The AI team prepares the work and your accountant reviews and approves it, so the client gets advice they can trust and the firm keeps control.";
+export const TRUST_FEE =
+  "A Financial Manager, an Analyst and an Advisor, for a small monthly fee.";
+export const TRUST_BOOKS =
+  "QuickBooks, Xero and Sage stay the books. Invoices, bills and receipts post only after a named person approves.";
 
-export const TRUST_ITEMS = [
-  TRUST_BOOKS,
-  TRUST_IDENTIFIERS,
-  TRUST_TRAINING,
-  TRUST_SIGNOFF,
-] as const;
-
-export const TRUST_AI_LINK = "How we handle data and AI →";
+export const TRUST_ITEMS = [TRUST_PREP, TRUST_HANDOFF, TRUST_FEE, TRUST_BOOKS] as const;
 
 export const HOW_STEP_03 =
   "Your Milōn finance team turns the analysis and business context into clear recommendations, a 13-week cash forecast, and an action plan.";
@@ -78,45 +66,45 @@ export const BRIDGE_DRAFT_BODY =
 export const FIRM_NOT_A_BOOKKEEPER =
   "Not an AI bookkeeper or AI accountant that replaces your firm: the books stay in QuickBooks Online, Xero or Sage, and you review and sign off every advisory pack.";
 
-/** Three distinct agents on /for-accountants. Same <strong> + body pattern as the old single bullet. */
+/** Three people on /for-accountants. What they do, what leaves the accountant's plate, and what the client gets. */
 export const FIRM_TEAM_BULLETS = [
   {
-    title: "Milōn Financial Manager, data quality for QuickBooks, Xero and Sage.",
-    body: "Checks the books, the 13-week cash and the budget, and prepares action points and the hand-off to your firm.",
+    title: "Milōn Financial Manager runs the team.",
+    body: "Keeps the books data clean from QuickBooks, Xero or Sage, holds the 13-week cash view and the budget, lines up the action points, and hands the pack to you. The month-end pull and the first draft come off your plate, so the time you used to spend assembling the file goes back to the client. They get a cash picture they can act on while there is still time.",
   },
   {
-    title: "Milōn Analyst, health score and ratios.",
-    body: "Calculates the health score and the ratios, and explains variances in plain words.",
+    title: "Milōn Analyst diagnoses the numbers.",
+    body: "Reads the health score, the ratios and the variances as a diagnosis: why margins moved, and where cash is leaking. You stop rebuilding that story by hand for every client. The workings become a review, and the client finally hears the reason behind the number.",
   },
   {
-    title: "Milōn Advisor, next moves and the advisory.",
-    body: "Drafts the next moves and the advisory deliverables. You correct, sign off and send. The judgement stays yours.",
+    title: "Milōn Advisor prepares the next move.",
+    body: "Turns the diagnosis into the next moves and the advisory deliverables, ready for your sign-off. You edit and approve instead of starting from a blank page. The client leaves with advice they can trust, because someone at the firm approved it.",
   },
 ] as const;
 
-/** Role strip in #problem. Reuses .bridge-facts / .bridge-fact; no new CSS. */
+/** Role strip on the homepage. Same three people, told as benefits. */
 export const FINANCE_TEAM = [
   {
     name: "Milōn Financial Manager",
-    body: "Data quality from QuickBooks, Xero or Sage, the 13-week cash and budget, and action points.",
-    bold: "Hands the pack to your accountant.",
+    body: "Runs the team. Keeps the books data clean from QuickBooks, Xero or Sage, holds the 13-week cash view and the budget, and lines up the action points. The month-end pull and the hand-off pack come off the accountant's plate, so the review starts from a prepared file. Clients see the cash picture while they can still use it.",
+    bold: "You review and approve the hand-off.",
   },
   {
     name: "Milōn Analyst",
-    body: "Health score, ratios, and variances from the figures on file.",
-    bold: "Says what moved.",
+    body: "Explains the health score, the ratios and the variances as a diagnosis: why margins moved, and where cash is leaking. The accountant no longer rebuilds that story for every client. The time in the workings becomes a review the client can follow.",
+    bold: "The client hears why the numbers moved.",
   },
   {
     name: "Milōn Advisor",
-    body: "Next moves and the advisory deliverables.",
-    bold: "You review and sign off.",
+    body: "Writes the next moves and the advisory deliverables so they are ready for sign-off. The accountant edits and approves instead of drafting from scratch, and the client gets advice they can trust because the firm stayed in control.",
+    bold: "Ready for your sign-off.",
   },
 ] as const;
 
 export const WATCH_EYEBROW = "See it in 30 seconds";
 export const WATCH_TITLE = "Two seats. One workspace.";
 export const WATCH_SUB =
-  "The accountant runs the analysis and signs off every advisory pack. The owner uses the same workspace to see what to do next.";
+  "The accountant runs the analysis and signs off every advisory pack. The owner sees exactly what to do next to grow the business, protect cash and improve margins.";
 
 export const ACCOUNTANT_TEASER = {
   label: "For accounting firms",
@@ -142,7 +130,8 @@ export const OWNER_TEASER = {
 
 export const OWNER_TEASER_LINK = OWNER_SIGNUP_LINK;
 
-export const AI_USE_LEAD = "How we use AI is set out in our";
+/** Kept for older imports. The register form no longer prints it. */
+export const AI_USE_LEAD = "";
 
 export const DASH_ARIA_LABEL =
   "Sample client dashboard: health score 78 with four pillar scores and a 13-week cash forecast showing a dip in week 6";
@@ -153,11 +142,9 @@ export const PRICING_INTRO =
 /**
  * VERIFY-2 confirmed. Checkout creates a subscription on the chosen band price
  * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
- * Stripe bills that price when the trial ends and a card is on file.
+ * The paid band bills that price when the trial ends and a card is on file.
  */
 export const PRICING_TRIAL_AFTER = FIRM_TRIAL_EXPLORE;
-export const PRICING_WATCHLIST_NOTE =
-  "Watchlist clients are free: clients you monitor but haven't opened a full workspace for.";
 export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
 export const OWNER_OFFER_LABEL = "For business owners";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;
@@ -171,55 +158,40 @@ export const NAV_TRIAL_ARIA = "Start my 14-day free trial";
 export const PROOF_EYEBROW = "Proof, not promises";
 export const PROOF_H2 = "Every number shows its workings. Every sign-off leaves a trail.";
 
-/**
- * VERIFY-12 confirmed. `ratioActualLine` leaves the calculation blank and
- * `ratioFormulaLine` prints `Need: …` when an input is missing. Blank fields
- * stay NaN in `computeRatios` rather than becoming 0.
- */
 export const PROOF_RATIO_BODY =
-  "Each of the 19 ratios shows the figures behind it. Where a number is missing, Milōn says so instead of guessing.";
-/**
- * VERIFY-11 confirmed: the PDF footer prints `signedOffByName` and the formatted
- * `signedOffAt` (`report-footer.tsx`). Firm is omitted when `firm_name` is null.
- * VERIFY-5 confirmed: `signoffStampFor` / `stampFromSignoff` drop the stamp when
- * the figures' freshness timestamp is later than `signed_off_at`.
- */
+  "Gross profit to labour, sales per employee and revenue growth each show the figures behind them, so you can see how the number was built.";
 export const PROOF_SIGNOFF_BODY =
-  "Signed-off reports carry the accountant's name and the sign-off date. If the figures change, the old sign-off no longer applies.";
-/**
- * VERIFY-9 confirmed. The bot prompt refuses invented figures, and `request_human`
- * stops the loop for a decision. No email claim (forecast_break can mail early).
- */
+  "The AI team prepares the pack. Your accountant reviews and approves it, so the client gets advice they can trust and the firm keeps control.";
 export const PROOF_BOT_BODY =
-  "Each Milōn agent works only from what's on file. None invents figures, and each stops when a decision needs you.";
+  "The Advisor's next moves sit ready for review. You request changes or sign off, then send the pack the firm has approved.";
 
 export const PROOF_CARDS = [
   {
     id: "ratio",
     title: "Workings on every ratio",
     body: PROOF_RATIO_BODY,
-    alt: "Ratio detail showing days sales outstanding with the receivables and revenue figures used to calculate it",
+    alt: "Sample client ratios filled in: days sales outstanding 45 days, gross profit to labour 1.82 times, sales per employee $128k per head, and revenue growth 12.7 percent, each with the figures used",
     base: "ratio-dso",
     width: 1600,
-    height: 1000,
+    height: 956,
   },
   {
     id: "signoff",
-    title: "Sign-off on the deliverable",
+    title: "Your accountant approves it",
     body: PROOF_SIGNOFF_BODY,
-    alt: "Advisory report footer with the accountant's sign-off stamp showing name and date",
+    alt: "Advisory pack for Harbour Glass signed off by Ada Mbeki of Harbour & Co on Oct 2, 2026",
     base: "signoff-stamp",
     width: 1600,
-    height: 1109,
+    height: 444,
   },
   {
     id: "plan",
-    title: "Agents that know their limits",
+    title: "Ready for the client",
     body: PROOF_BOT_BODY,
-    alt: "Action plan ready for review with Request changes and Sign off action plan for Sample Co.",
+    alt: "Action plan for Harbour Glass ready for review, with Request changes and Sign off action plan",
     base: "action-plan-review",
     width: 1600,
-    height: 694,
+    height: 410,
   },
 ] as const;
 
@@ -233,26 +205,18 @@ export function proofImageSrcSet(base: string): string {
     .join(", ");
 }
 
-/**
- * VERIFY-6 is not confirmed as a blanket claim. `has_client_access` also admits
- * Milōn IT to every client, and firm staff need a named assignment rather than
- * seeing the whole firm. The RLS bullet and homepage FAQ item are omitted.
- * VERIFY-7 confirmed: Checkout collects the card (`payment_method_collection:
- * "always"`); no card number, expiry, or CVC column exists in the schema.
- * VERIFY-8 confirmed: Settings calls `deleteOwnAccount` → `delete_own_account()`,
- * which deletes the login and owned client/firm rows.
- * The sign-off log line was verified in #302 (SELECT + INSERT only).
- */
 export const PROOF_SECURITY_FACTS = [
-  "Card details are collected by Stripe Checkout. Milōn never stores them.",
-  "You can delete your account and its data from Settings.",
-  "Every sign-off is logged with the accountant's name and time, and log entries can't be edited afterwards.",
+  "Less time per client: the team pulls the figures and writes the first draft, and you keep the judgement.",
+  "Better accuracy: the health score, the ratios and the cash view all come from the same QuickBooks, Xero or Sage file.",
+  "A Financial Manager, an Analyst and an Advisor, for a small monthly fee.",
+  "Clients' figures come alive as a diagnosis: why margins moved, and where cash is leaking.",
+  "Advisory deliverables are ready to send once you sign off.",
+  "QuickBooks, Xero and Sage connect into the same workspace.",
+  "Invoices, bills and receipts can come in from the client. A named person approves before anything is posted to the books. Nothing posts on its own.",
+  "Firms lead the move to AI, and help their clients adopt it in the finance work they already trust the firm to do.",
 ] as const;
 
-export const PROOF_AI_LINK = "Read the AI notice →";
-export const PROOF_PRIVACY_LINK = "Privacy →";
-
-export const FAQ_MORE_LEAD = "More on cost, data and AI: ";
+export const FAQ_MORE_LEAD = "More questions: ";
 export const FAQ_MORE_LINK = "all questions";
 
 /** Must match the homepage cost question in `HOMEPAGE_FAQ_ITEMS`. */

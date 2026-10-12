@@ -9,7 +9,6 @@ import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
-import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -53,7 +52,8 @@ function ForAccountantsPage() {
         <>
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
-          history rather than help. {saPricing?.accountantsLead ?? "Built for firms in the United States."}
+          history rather than help. {saPricing?.accountantsLead ??
+            "Management accounts, 13-week cash and advisory drafts from QuickBooks, Xero or Sage."}
         </>
       }
       heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: FIRM_SIGNUP_HREF }}
@@ -112,6 +112,16 @@ function ForAccountantsPage() {
         <li>
           <strong>A recurring reason to talk.</strong> A monthly number and a monthly conversation
           is what turns compliance work into a retainer.
+        </li>
+        <li>
+          <strong>Lead the move to AI.</strong> The firm puts an AI finance team in front of
+          clients, and helps those clients adopt AI in the finance work they already trust you to
+          do.
+        </li>
+        <li>
+          <strong>Source documents, with your approval.</strong> Clients can send invoices, bills
+          and receipts. A named person approves before anything is posted to QuickBooks, Xero or
+          Sage. Nothing posts on its own.
         </li>
       </ul>
 
@@ -186,8 +196,7 @@ function ForAccountantsPage() {
       <p>
         {saPricing
           ? saPricing.accountantsIntro
-          : "Flat USD monthly or annual bands by active client count."}{" "}
-        {WATCHLIST_DEFINITION}
+          : "Flat USD monthly or annual bands by active client count. Less time per client, and a Financial Manager, Analyst and Advisor for a small monthly fee."}
       </p>
       <FirmBandPricingTable
         interval={interval}

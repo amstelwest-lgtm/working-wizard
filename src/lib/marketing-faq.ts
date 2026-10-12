@@ -13,7 +13,7 @@ export const LEDGER_CONNECT_ANSWER =
   "Yes. Connect QuickBooks Online or Xero, or Sage, and Milōn reads the profit and loss and balance sheet. You do not need either system — a PDF, Excel file, CSV, or bank statement still works. Milōn is not a ledger and does not replace QuickBooks Online, Xero or Sage.";
 
 /**
- * Ask-AI sanitizer strips identifiers (VAT/tax IDs, account numbers, company-name
+ * Ask-AI sanitizer strips identifiers (tax IDs, account numbers, company-name
  * heuristics) — not monetary amounts. Marketing must not claim amounts are removed.
  */
 export const AI_IDENTIFIERS_LINE =
@@ -23,11 +23,7 @@ export const AI_IDENTIFIERS_LINE =
 export const AI_MODEL_DISCLOSURE =
   "Milōn Bot prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
 
-/** Monitoring seat, not a billed advisory client. Stripe does not line-item these. */
-export const WATCHLIST_DEFINITION =
-  "Watchlist clients stay on your radar at no charge — they don't count toward billed seats until you activate a full workspace.";
-
-/** Live Stripe promo FOUNDING / FOUNDING50. Monthly paid Solo+ after the trial; does not stack with annual. */
+/** Live promo FOUNDING / FOUNDING50. Monthly paid Solo+ after the trial; does not stack with annual. */
 export const FOUNDING_CALLOUT =
   "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
@@ -38,7 +34,7 @@ export const FAQ_OWNER_PLAN_US =
 export const FAQ_NOT_A_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
 
 export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
-  "No. Milōn is an AI finance team that works alongside your accountant. The books stay in QuickBooks Online, Xero or Sage. Milōn Financial Manager checks the data quality, the 13-week cash and the budget, Milōn Analyst explains the health score, ratios and variances, and Milōn Advisor drafts the next moves. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and signs off every advisory pack.";
+  "No. Milōn is an AI finance team that works alongside your accountant. The books stay in QuickBooks, Xero or Sage. Milōn Financial Manager keeps the books data clean, the 13-week cash view and the budget, and hands the pack to the accountant. Milōn Analyst explains why margins moved and where cash is leaking. Milōn Advisor drafts the next moves for sign-off. It does not keep the ledger, file returns or make payments. A qualified accountant reviews and approves every advisory pack.";
 
 /** Last sentence of the homepage cost answer. USD only. ZA replaces this from the server chunk. */
 export const HOMEPAGE_OWNER_COST_US =
@@ -57,17 +53,12 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Does Milōn replace the accountant?",
     answer:
-      "No, Milōn works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off every advisory pack. Milōn is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
-  },
-  {
-    question: "Is client data used to train AI models?",
-    answer:
-      "No. Client financial information isn't used to train third-party AI models. Amounts stay as they are, so the workings and your sign-off use real figures. The AI notice explains how AI is used in Milōn.",
+      "No. Milōn works alongside your accountant. The AI team prepares the analysis, the cash view and the recommendations, and a qualified accountant reviews and approves every advisory pack. The client gets advice they can trust, and the firm keeps control. Milōn is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
   },
   {
     question: "Do I need QuickBooks or Xero to use Milōn?",
     answer:
-      "No, you do not need QuickBooks or Xero to use Milōn. When the books are already there, connect QuickBooks Online or Xero, or Sage, and Milōn reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
+      "No, you do not need QuickBooks or Xero to use Milōn. When the books are already there, connect QuickBooks, Xero or Sage, and Milōn reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
   },
   {
     question: "What does it cost?",
@@ -76,11 +67,11 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "What does the AI finance team do, and what's left to me?",
     answer:
-      "Three AI agents work in Milōn Bot from the client's QuickBooks Online, Xero, Sage or uploaded figures. Milōn Financial Manager checks data quality, the 13-week cash and the budget, and prepares action points and the hand-off to you. Milōn Analyst calculates the health score, the ratios and the variances. Milōn Advisor drafts the next moves and the advisory deliverables. Each works only from what's on file and stops when a decision needs you. You review, edit and sign off every advisory pack.",
+      "Milōn Financial Manager runs the team: clean books data from QuickBooks, Xero or Sage, the 13-week cash view, the budget, the action points, and the hand-off to you. Milōn Analyst turns the health score, ratios and variances into a diagnosis of why margins moved and where cash is leaking. Milōn Advisor writes the next moves and the advisory deliverables, ready for sign-off. That prep comes off your plate. You review, edit and approve every pack, so the client gets advice they can trust.",
   },
   {
     question: "What happens when the trial ends?",
     answer:
-      "After day 14 your chosen band bills automatically through Stripe Checkout. Milōn never stores card details, and you can delete your account and its data from Settings.",
+      "After day 14 the band you chose starts billing. You keep the same workspace, the same clients, and the packs your accountant has already approved.",
   },
 ];

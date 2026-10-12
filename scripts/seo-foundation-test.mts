@@ -25,7 +25,6 @@ import {
   HOMEPAGE_FAQ_ITEMS,
   LEDGER_CONNECT_ANSWER,
   LEDGER_CONNECT_QUESTION,
-  WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
 import { publicFaqItems, publicFaqUsItems } from "../src/lib/public-faq";
 import {
@@ -37,7 +36,7 @@ import {
   HERO_LEDE,
   PRICING_H2_USD,
   homepageFaqItems,
-  TRUST_IDENTIFIERS,
+  TRUST_HANDOFF,
 } from "../src/lib/landing-copy";
 import { visitorCopyPack } from "../src/lib/market";
 
@@ -126,18 +125,19 @@ assert(LLMS_TXT.includes("QuickBooks Online"), "llms.txt names QuickBooks Online
 assert(LLMS_TXT.includes("Xero"), "llms.txt names Xero");
 assert(LLMS_TXT.includes("/for-accountants"), "llms.txt keeps existing firm URL");
 assert(LLMS_TXT.includes("/about"), "llms.txt includes about");
-assert(LLMS_TXT.includes("Primary: United States"), "llms.txt US-first");
+assert(!LLMS_TXT.includes("Primary: United States"), "llms.txt makes no market claim");
+assert(!LLMS_TXT.includes("South Africa"), "llms.txt names no country");
 assert(!LLMS_TXT.includes("photographed"), "llms.txt does not claim photo ingest");
 assert(!LLMS_TXT.includes("Canada"), "llms.txt does not claim Canada");
 assert(!/white-label/i.test(LLMS_TXT), "llms.txt has no white-label");
 assert(
-  LLMS_TXT.includes("client-ready advisory deliverables"),
+  LLMS_TXT.includes("advisory deliverables ready for accountant sign-off"),
   "llms.txt describes client-ready advisory packs",
 );
 assert(!/white-label/i.test(graph), "schema graph has no white-label");
 assert(
-  graph.includes("client-ready advisory deliverables"),
-  "schema feature list names client-ready advisory packs",
+  graph.includes("advisory deliverables ready for accountant sign-off"),
+  "schema feature list names advisory deliverables",
 );
 assert(!graph.includes("Canada"), "org schema does not claim Canada");
 assert(!graph.includes("photographed"), "schema does not claim photo ingest");
@@ -310,8 +310,8 @@ assert(landing.includes("Tax Burden"), "marquee lists Tax Burden");
 assert(landing.includes("Inventory Days"), "marquee lists Inventory Days");
 assert(landing.includes("Gross Profit / Labor"), "marquee lists Gross Profit / Labor");
 assert(landing.includes("TRUST_ITEMS"), "trust strip uses the shared fact list");
-assert(TRUST_IDENTIFIERS.includes("amounts stay"), "trust line keeps amounts");
-assert(!/claude/i.test(TRUST_IDENTIFIERS), "trust line does not name a model vendor");
+assert(TRUST_HANDOFF.includes("reviews and approves"), "trust line is the hand-off benefit");
+assert(!/claude/i.test(TRUST_HANDOFF), "trust line does not name a model vendor");
 assert(landing.includes("showSaPricing"), "landing gates SA pricing on server geo");
 assert(landing.includes("FirmBandPricingTable"), "landing pricing uses the shared band table");
 assert(!landing.includes("FOUNDING_CALLOUT"), "landing does not render the ungated founding callout");
@@ -322,14 +322,16 @@ assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
 assert(landing.includes("faqPageJson(homepageFaqItems(false))"), "landing FAQ schema stays on the US answers");
-assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ is six questions after the VERIFY-6 fallback");
+assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
+const ledgerFaq = HOMEPAGE_FAQ_ITEMS.find((item) => item.question.startsWith("Do I need QuickBooks"));
+assert(ledgerFaq != null, "homepage FAQ still has the ledger question");
 assert(
-  HOMEPAGE_FAQ_ITEMS[2].answer.includes("you do not need QuickBooks or Xero"),
+  ledgerFaq!.answer.includes("you do not need QuickBooks or Xero"),
   "homepage FAQ still says neither ledger is required",
 );
 assert(
-  HOMEPAGE_FAQ_ITEMS[2].answer.includes("connect QuickBooks Online or Xero"),
-  "homepage FAQ also says both ledgers can be connected",
+  ledgerFaq!.answer.includes("connect QuickBooks, Xero or Sage"),
+  "homepage FAQ connects QuickBooks, Xero or Sage",
 );
 assert(
   faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does Milōn replace the accountant?"),
@@ -396,10 +398,17 @@ assert(
   "home role strip names financial manager, analyst, and advisor",
 );
 assert(
-  HOMEPAGE_FAQ_ITEMS[4].answer.includes("work in Milōn Bot"),
-  "homepage FAQ places the team in Milōn Bot",
+  HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes("Milōn Financial Manager runs the team")),
+  "homepage FAQ explains the financial manager",
 );
-assert(!HOMEPAGE_FAQ_ITEMS[4].answer.includes("Milōn Accountant"), "homepage FAQ drops Milōn Accountant");
+assert(
+  !HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes("Milōn Bot")),
+  "homepage FAQ does not send people to a bot line",
+);
+assert(
+  !HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes("Milōn Accountant")),
+  "homepage FAQ drops Milōn Accountant",
+);
 assert(firms.includes("Works with QuickBooks Online and Xero"), "firm page names both ledgers");
 assert(firms.includes("Connect QuickBooks Online or Xero"), "firm page says connect either ledger");
 assert(!firms.includes("certified"), "firm page does not claim certification");
@@ -518,11 +527,11 @@ assert(
   "about states the ledger wedge once",
 );
 assert(
-  about.includes("MILON_BOT_LINE") &&
-    readFileSync(resolve("src/lib/landing-copy.ts"), "utf8").includes(
+  !about.includes("MILON_BOT_LINE") &&
+    !readFileSync(resolve("src/lib/landing-copy.ts"), "utf8").includes(
       "Milōn Bot is where you talk to your three agents.",
     ),
-  "about introduces Milōn Bot as the place you talk to the three agents",
+  "the bot line is gone from about and the shared copy",
 );
 assert(aboutText.includes("The accountant reviews and signs off."), "about keeps accountant sign-off");
 assert(about.includes("19 financial ratios"), "about keeps the ratio claim");
@@ -555,8 +564,8 @@ assert(
   "faq uses the identifier-only anonymisation line",
 );
 assert(
-  publicFaqUsItems().some((item) => item.answer.includes(WATCHLIST_DEFINITION)),
-  "faq defines watchlist clients",
+  !publicFaqUsItems().some((item) => /watchlist/i.test(item.question + item.answer)),
+  "public FAQ does not mention a watchlist",
 );
 assert(
   !publicFaqUsItems().some((item) => /FOUNDING|ZAR|Adaptive Pricing/i.test(item.answer)),
@@ -568,16 +577,16 @@ assert(
   "homepage FAQ does not use the identifiers-stripped line",
 );
 assert(
-  HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes("isn't used to train third-party AI models")),
-  "homepage FAQ keeps the confirmed training answer",
+  !HOMEPAGE_FAQ_ITEMS.some((item) => /train third-party|AI notice/i.test(item.answer)),
+  "homepage FAQ does not sell the AI notice",
 );
 assert(
   HOMEPAGE_FAQ_ITEMS.every((item) => !item.answer.includes("raw amounts")),
   "homepage FAQ does not claim raw amounts are removed",
 );
 assert(
-  publicFaqUsItems().some((item) => item.answer.includes(WATCHLIST_DEFINITION)),
-  "public FAQ defines watchlist",
+  !publicFaqUsItems().some((item) => /watchlist/i.test(item.answer)),
+  "public FAQ has no watchlist sentence",
 );
 assert(
   publicFaqItems(true).every((item) => !item.answer.includes("R799")),
@@ -602,7 +611,8 @@ assert(!pricingTable.includes("firm-bands-founding"), "US HTML stylesheet does n
 assert(pricingTable.includes("saLabels"), "firm pricing renders the server rand lines");
 assert(!pricingTable.includes("SA_FOUNDING_LINE"), "firm pricing drops the founding line");
 assert(pricingTable.includes("showSaPricing = false"), "firm pricing hides the SA discount by default");
-assert(pricingTable.includes("PRICING_WATCHLIST_NOTE"), "firm pricing defines watchlist");
+assert(!pricingTable.includes("PRICING_WATCHLIST_NOTE"), "firm pricing drops the watchlist note");
+assert(!pricingTable.includes("watchlist"), "firm pricing does not mention a watchlist");
 
 const marqueeBlock = landing.split('id="marquee"')[1]?.split("</div>")[0] ?? "";
 const marqueeChips = marqueeBlock.match(/<span[>\s]/g) ?? [];

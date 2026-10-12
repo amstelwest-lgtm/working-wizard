@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { MILON_BOT_LINE, OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
+import { OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
@@ -87,8 +87,8 @@ function AboutPage() {
       </p>
       <p>
         QuickBooks Online and Xero, plug-and-play. Sage connects the same way. Milōn Financial
-        Manager, Milōn Analyst and Milōn Advisor work in Milōn Bot. {MILON_BOT_LINE} The accountant
-        reviews and signs off.
+        Manager, Milōn Analyst and Milōn Advisor prepare the work. The accountant reviews and
+        signs off.
       </p>
       <p>Milōn does not provide licensed financial advice.</p>
       <p>

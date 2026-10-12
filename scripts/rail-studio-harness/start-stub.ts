@@ -190,9 +190,27 @@ export function createServerFn() {
   return tagged("unmatched");
 }
 
+const serverFnCache = new Map<string, (payload?: { data?: { scope?: string } }) => Promise<unknown>>();
+
 export function useServerFn(fn?: { __harnessId?: string }) {
   const id = fn?.__harnessId ?? "";
-  return (payload?: { data?: { scope?: string } }) => {
+  const cached = serverFnCache.get(id);
+  if (cached) return cached;
+  const call = (payload?: { data?: { scope?: string } }) => {
+    // Landing proof shots: the action plan is ready for a named person to review.
+    if (
+      typeof location !== "undefined" &&
+      location.pathname === "/proof-landing" &&
+      id.includes("loadDeliverableState")
+    ) {
+      return Promise.resolve({
+        status: "ready_for_review",
+        changeComment: null,
+        canSubmit: false,
+        canReview: true,
+        canSignOff: true,
+      });
+    }
     // Staff cycle on the action plan: submit, without the partner sign-off.
     if (id.includes("loadDeliverableState") && payload?.data?.scope === "action_plan") {
       return Promise.resolve({
@@ -205,6 +223,8 @@ export function useServerFn(fn?: { __harnessId?: string }) {
     }
     return fixtureFor(id || String(payload));
   };
+  serverFnCache.set(id, call);
+  return call;
 }
 
 export function createMiddleware() {
