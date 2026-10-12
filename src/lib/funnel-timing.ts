@@ -60,6 +60,8 @@ export function isPreInsightWorkspacePath(pathname: string): boolean {
   return (
     path === "/dashboard" ||
     path.startsWith("/dashboard/") ||
+    path === "/practice" ||
+    path.startsWith("/practice/") ||
     path === "/clients" ||
     path.startsWith("/clients/")
   );

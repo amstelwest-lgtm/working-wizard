@@ -178,7 +178,7 @@ assert(
   "in review still waits",
 );
 
-const dashboard = read("src/routes/_authenticated/dashboard.tsx");
+const dashboard = read("src/components/practice-board.tsx");
 assert(dashboard.includes("scorecardHealthFromFinancials"), "dashboard health uses the scorecard");
 assert(dashboard.includes("periodMonthsOf"), "dashboard health uses the statement cover");
 assert(!dashboard.includes("healthFromFlatFinancials"), "dashboard does not use the unannualised score");

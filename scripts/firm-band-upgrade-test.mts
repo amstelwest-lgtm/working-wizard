@@ -724,7 +724,7 @@ assert(ASK_FIRM_OWNER_TO_UPGRADE === "Ask your firm owner to upgrade", "non-owne
 assert(UPGRADE_CANCELLED_MESSAGE.includes("Nothing was charged"), "cancel copy");
 assert(UPGRADE_FAILED_MESSAGE.includes("not changed"), "failure copy");
 
-const dashboard = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dashboard = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dashboard.includes("FirmBandUpgrade"), "client-limit panel lists bands");
 assert(
   dashboard.includes("Ask your firm owner to upgrade"),

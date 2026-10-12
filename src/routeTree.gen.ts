@@ -30,6 +30,7 @@ import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDeskRouteImport } from './routes/_authenticated/desk'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
+import { Route as AuthenticatedPracticeRouteImport } from './routes/_authenticated/practice'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
@@ -166,6 +167,11 @@ const AuthenticatedDeskRoute = AuthenticatedDeskRouteImport.update({
 const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
   id: '/ops',
   path: '/ops',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedPracticeRoute = AuthenticatedPracticeRouteImport.update({
+  id: '/practice',
+  path: '/practice',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AccessTokenRoute = AccessTokenRouteImport.update({
@@ -366,6 +372,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/desk': typeof AuthenticatedDeskRoute
   '/ops': typeof AuthenticatedOpsRoute
+  '/practice': typeof AuthenticatedPracticeRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
@@ -421,6 +428,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/desk': typeof AuthenticatedDeskRoute
   '/ops': typeof AuthenticatedOpsRoute
+  '/practice': typeof AuthenticatedPracticeRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
@@ -478,6 +486,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/desk': typeof AuthenticatedDeskRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
+  '/_authenticated/practice': typeof AuthenticatedPracticeRoute
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
@@ -535,6 +544,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/desk'
     | '/ops'
+    | '/practice'
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
@@ -590,6 +600,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/desk'
     | '/ops'
+    | '/practice'
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
@@ -646,6 +657,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/desk'
     | '/_authenticated/ops'
+    | '/_authenticated/practice'
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
@@ -874,6 +886,13 @@ declare module '@tanstack/react-router' {
       path: '/ops'
       fullPath: '/ops'
       preLoaderRoute: typeof AuthenticatedOpsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/practice': {
+      id: '/_authenticated/practice'
+      path: '/practice'
+      fullPath: '/practice'
+      preLoaderRoute: typeof AuthenticatedPracticeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/access/$token': {
@@ -1114,6 +1133,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDeskRoute: typeof AuthenticatedDeskRoute
   AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
+  AuthenticatedPracticeRoute: typeof AuthenticatedPracticeRoute
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
   AuthenticatedFounderMetricsRoute: typeof AuthenticatedFounderMetricsRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
@@ -1128,6 +1148,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDeskRoute: AuthenticatedDeskRoute,
   AuthenticatedOpsRoute: AuthenticatedOpsRoute,
+  AuthenticatedPracticeRoute: AuthenticatedPracticeRoute,
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
   AuthenticatedFounderMetricsRoute: AuthenticatedFounderMetricsRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,

@@ -292,7 +292,7 @@ assert(
   "accountant /auth tells SME-only users they are on the wrong door",
 );
 
-const dashSrc = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(
   !dashSrc.includes("isAccountantDoor()"),
   "dashboard must not skip the role check for accountant-door sessions",

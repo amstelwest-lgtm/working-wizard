@@ -49,7 +49,7 @@ assert(
   "From shows when send is configured",
 );
 
-const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 const openStart = dash.indexOf("const openOwnerInvite");
 const copyStart = dash.indexOf("const copyInviteDraft");
 assert(openStart > 0 && copyStart > openStart, "invite open and copy are separate");

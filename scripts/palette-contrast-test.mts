@@ -81,6 +81,8 @@ const accountantFiles = [
   "src/routes/_authenticated/reports-studio.tsx",
   "src/routes/_authenticated/clients.$clientId.tsx",
   "src/routes/_authenticated/dashboard.tsx",
+  "src/routes/_authenticated/practice.tsx",
+  "src/components/practice-board.tsx",
   "src/routes/_authenticated/clients.index.tsx",
   "src/routes/billing.required.tsx",
   "src/components/advisory-pack-panel.tsx",

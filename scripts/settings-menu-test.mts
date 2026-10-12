@@ -79,7 +79,7 @@ assert(
   "the owner sidebar Settings item is still a direct link",
 );
 
-const dashboard = read("src/routes/_authenticated/dashboard.tsx");
+const dashboard = read("src/components/practice-board.tsx");
 assert(dashboard.includes("<SettingsMenu"), "the accountant dashboard Settings control opens the menu");
 assert(dashboard.includes('hash: "firm-billing"'), "accountant plan opens firm billing");
 

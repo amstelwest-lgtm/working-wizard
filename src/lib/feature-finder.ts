@@ -39,6 +39,7 @@ export type FeatureDestination =
     }
   | { kind: "owner"; tab: OwnerTab }
   | { kind: "dashboard" }
+  | { kind: "clients" }
   | { kind: "settings" };
 
 export type FeatureResult = {
@@ -83,7 +84,7 @@ type FeatureDef = {
   practiceWhenNoClient?: "dashboard";
   studio?: StudioTarget;
   ownerTab?: OwnerTab;
-  practice?: "dashboard" | "settings";
+  practice?: "dashboard" | "clients" | "settings";
 };
 
 function coachTarget(id: CoachStepId): StudioTarget {
@@ -315,7 +316,7 @@ const FEATURES: readonly FeatureDef[] = [
     scope: "practice",
     synonyms: ["practice", "portfolio", "firm dashboard", "dashboard", "client list"],
     audiences: ["accountant"],
-    practice: "dashboard",
+    practice: "clients",
   },
   {
     id: "billing",
@@ -385,6 +386,7 @@ function scoreFeature(query: string, def: FeatureDef, audience: FeatureAudience)
 
 function destinationFor(def: FeatureDef, ctx: FeatureFinderContext): FeatureDestination | null {
   if (def.practice === "dashboard") return { kind: "dashboard" };
+  if (def.practice === "clients") return { kind: "clients" };
   if (def.practice === "settings") return { kind: "settings" };
   if (ctx.audience === "owner" && def.ownerTab) return { kind: "owner", tab: def.ownerTab };
   if (ctx.audience === "accountant" && def.studio) {
@@ -400,6 +402,7 @@ function destinationFor(def: FeatureDef, ctx: FeatureFinderContext): FeatureDest
 
 export function featureHref(dest: FeatureDestination): string {
   if (dest.kind === "dashboard") return "/dashboard";
+  if (dest.kind === "clients") return "/clients";
   if (dest.kind === "settings") return "/settings";
   if (dest.kind === "owner") return `/app?tab=${encodeURIComponent(dest.tab)}`;
   const params = new URLSearchParams();

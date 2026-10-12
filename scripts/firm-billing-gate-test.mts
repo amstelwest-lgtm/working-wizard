@@ -15,6 +15,7 @@ import {
   emailHasEntitlingSubscription,
   isBillingExemptPath,
   isFirmProductPath,
+  isPracticeShellPath,
   isOpsPath,
   isOwnerSparkPath,
   subscriptionStatusEntitles,
@@ -44,6 +45,12 @@ assert(
 );
 
 assert(isFirmProductPath("/dashboard"), "dashboard is firm product");
+assert(isFirmProductPath("/practice"), "practice overview is firm product");
+assert(isPracticeShellPath("/dashboard"), "Home is a practice shell path");
+assert(isPracticeShellPath("/practice"), "Practice is a practice shell path");
+assert(isPracticeShellPath("/clients"), "the client list is a practice shell path");
+assert(isPracticeShellPath("/clients/"), "a trailing slash does not leave the client list");
+assert(!isPracticeShellPath("/clients/second"), "a client file is not the practice shell");
 assert(isFirmProductPath("/clients/abc"), "client workspace is firm product");
 assert(isFirmProductPath("/reports"), "reports is firm product");
 assert(isFirmProductPath("/settings/team"), "team settings is firm product");
@@ -238,6 +245,41 @@ assert(
     firstClientId: "first",
   }) === "allow",
   "practice Home stays open when a second client exists",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/practice",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 1,
+    firstClientId: "abc",
+  }) === "allow",
+  "practice overview stays open without a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/clients",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: 2,
+    firstClientId: "first",
+  }) === "allow",
+  "the client list stays open without a card",
+);
+assert(
+  decideFirmBillingPathGate({
+    pathname: "/practice",
+    isAccountantFirmUser: true,
+    isMilonItMember: false,
+    entitled: false,
+    insightSeen: true,
+    firmClientCount: null,
+  }) === "require_billing",
+  "unknown client count does not open the practice overview",
 );
 assert(
   decideFirmBillingPathGate({
@@ -1004,7 +1046,7 @@ assert(
   !inviteServer.includes("firm_connected_at: new Date()"),
   "accountant invite does not write firm_id with the user client",
 );
-const dashboard = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+const dashboard = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(
   dashboard.includes('rpc(\n          "link_own_client_to_firm"'),
   "orphan clients attach through link_own_client_to_firm",

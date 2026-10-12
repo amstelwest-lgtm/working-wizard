@@ -3,7 +3,9 @@ import { AccountantNav, type NavSection } from "@/components/accountant-nav";
 import { agentDisplayName } from "@/lib/milon-team";
 import { openPracticeSettings } from "@/lib/user-roles";
 
-const dash = (hash = "") => ({ to: "/dashboard" as const, hash });
+const home = (hash = "") => ({ to: "/dashboard" as const, hash });
+const clients = (hash = "") => ({ to: "/clients" as const, hash });
+const practice = (hash = "") => ({ to: "/practice" as const, hash });
 
 const SECTIONS: NavSection[] = [
   {
@@ -13,12 +15,12 @@ const SECTIONS: NavSection[] = [
       {
         id: "home",
         label: "Home",
-        to: dash(),
+        to: home(),
         bot: true,
         items: [
-          { id: "financial_manager", label: agentDisplayName("financial_manager"), to: dash("ask-financial-manager") },
-          { id: "analyst", label: agentDisplayName("analyst"), to: dash("ask-analyst") },
-          { id: "advisor", label: agentDisplayName("advisor"), to: dash("ask-advisor") },
+          { id: "financial_manager", label: agentDisplayName("financial_manager"), to: home("ask-financial-manager") },
+          { id: "analyst", label: agentDisplayName("analyst"), to: home("ask-analyst") },
+          { id: "advisor", label: agentDisplayName("advisor"), to: home("ask-advisor") },
         ],
       },
     ],
@@ -30,52 +32,71 @@ const SECTIONS: NavSection[] = [
       {
         id: "clients",
         label: "Clients",
-        to: dash("clients-table"),
+        to: clients(),
         items: [
-          { id: "all", label: "All clients", to: dash("clients-table") },
-          { id: "queries", label: "Open queries", to: dash("wizard-dash-open-queries") },
-          { id: "add", label: "Add client", to: dash("wizard-add-client") },
+          { id: "all", label: "All clients", to: clients("clients-table") },
+          { id: "queries", label: "Open queries", to: practice("wizard-dash-open-queries") },
+          { id: "add", label: "Add client", to: clients("wizard-add-client") },
         ],
       },
       {
         id: "practice",
         label: "Practice",
-        to: dash("needs-attention"),
+        to: practice(),
         items: [
-          { id: "attention", label: "Needs attention", to: dash("needs-attention") },
-          { id: "follow", label: "Follow up", to: dash("follow-up") },
-          { id: "insights", label: "Insights", to: dash("portfolio-insights") },
-          { id: "marketplace", label: "Marketplace", to: dash("accountant-inbox") },
-          { id: "playbooks", label: "Playbooks", to: dash("playbooks") },
+          { id: "attention", label: "Needs attention", to: practice("needs-attention") },
+          { id: "follow", label: "Follow up", to: practice("follow-up") },
+          { id: "insights", label: "Insights", to: practice("portfolio-insights") },
+          { id: "marketplace", label: "Marketplace", to: practice("accountant-inbox") },
+          { id: "playbooks", label: "Playbooks", to: practice("playbooks") },
         ],
       },
     ],
   },
 ];
 
-const PRACTICE_HASH: Record<string, { headingId: string; subId: string | null }> = {
-  "ask-financial-manager": { headingId: "home", subId: "financial_manager" },
-  "ask-analyst": { headingId: "home", subId: "analyst" },
-  "ask-advisor": { headingId: "home", subId: "advisor" },
-  "clients-table": { headingId: "clients", subId: "all" },
-  "wizard-dash-open-queries": { headingId: "clients", subId: "queries" },
-  "wizard-add-client": { headingId: "clients", subId: "add" },
-  "needs-attention": { headingId: "practice", subId: "attention" },
-  "follow-up": { headingId: "practice", subId: "follow" },
-  "portfolio-insights": { headingId: "practice", subId: "insights" },
-  "accountant-inbox": { headingId: "practice", subId: "marketplace" },
-  playbooks: { headingId: "practice", subId: "playbooks" },
+const HOME_HASH: Record<string, string> = {
+  "ask-financial-manager": "financial_manager",
+  "ask-analyst": "analyst",
+  "ask-advisor": "advisor",
 };
+
+const CLIENT_HASH: Record<string, string> = {
+  "clients-table": "all",
+  "wizard-add-client": "add",
+};
+
+const PRACTICE_HASH: Record<string, string> = {
+  "needs-attention": "attention",
+  "follow-up": "follow",
+  "portfolio-insights": "insights",
+  "accountant-inbox": "marketplace",
+  playbooks: "playbooks",
+};
+
+function barePath(pathname: string): string {
+  if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
+  return pathname;
+}
 
 function practiceSelection(pathname: string, hash: string) {
   const bare = hash.replace(/^#/, "");
-  if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+  const path = barePath(pathname);
+  if (path === "/settings" || pathname.startsWith("/settings/")) {
     return { headingId: null, subId: null, settings: true };
   }
-  const fromHash = PRACTICE_HASH[bare];
-  if (fromHash) return { ...fromHash, settings: false };
-  if (pathname === "/dashboard" || pathname === "/dashboard/" || pathname === "/desk" || pathname === "/desk/") {
-    return { headingId: "home", subId: null, settings: false };
+  if (path === "/clients") {
+    return { headingId: "clients", subId: CLIENT_HASH[bare] ?? "all", settings: false };
+  }
+  if (path === "/practice") {
+    if (bare === "wizard-dash-open-queries") {
+      return { headingId: "clients", subId: "queries", settings: false };
+    }
+    return { headingId: "practice", subId: PRACTICE_HASH[bare] ?? null, settings: false };
+  }
+  if (path === "/dashboard" || path === "/desk") {
+    const subId = HOME_HASH[bare] ?? null;
+    return { headingId: "home", subId, settings: false };
   }
   return { headingId: null, subId: null, settings: false };
 }

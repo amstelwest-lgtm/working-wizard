@@ -75,6 +75,7 @@ assert(
   "add-client step is the pre-insight workspace",
 );
 assert(routePathname(PRECARD_ONBOARDING_HREF) === "/dashboard", "add-client href is the dashboard path");
+assert(isPreInsightWorkspacePath("/practice"), "practice overview is the pre-insight workspace");
 assert(isPreInsightWorkspacePath("/clients/abc"), "client studio is the pre-insight workspace");
 assert(!isPreInsightWorkspacePath("/reports"), "reports is not the aha path");
 assert(!isPreInsightWorkspacePath("/settings/team"), "team settings is not the aha path");
@@ -367,7 +368,7 @@ const pricing = read("src/components/firm-band-pricing.tsx");
 const picker = read("src/components/firm-band-upgrade.tsx");
 const prompt = read("src/components/checkout-after-insight.tsx");
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
-const dash = read("src/routes/_authenticated/dashboard.tsx");
+const dash = read("src/components/practice-board.tsx");
 
 assert(signup.includes(`data-funnel={FUNNEL_SOLO_FIRST}`), "signup leads Solo");
 assert(signup.includes("<strong>Solo</strong>"), "signup names Solo as the start plan");

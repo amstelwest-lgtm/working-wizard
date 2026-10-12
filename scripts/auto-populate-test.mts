@@ -240,7 +240,7 @@ assert((acct.match(/runAutoPopulate\(/g) ?? []).length >= 2, "accountant: bank +
 assert(acct.includes("shouldReopenFirstDataAfterEmptyTour(hasFigures)"), "empty tour does not reopen upload after figures");
 assert(acct.includes("startStudioTourAfterFigures"), "figures promote the full studio tour");
 assert(acct.includes("FirstDataChoice"), "first-data dialog uses labelled choices");
-const dash = read("src/routes/_authenticated/dashboard.tsx");
+const dash = read("src/components/practice-board.tsx");
 assert(dash.includes("accountant-dashboard-empty"), "empty book gets a practice-board tour");
 assert(dash.includes('onFinish={clientRows.length === 0 ? () => setFirstClientOpen(true) : undefined}'), "empty tour opens add-client");
 assert(acct.includes('role: "accountant"'), "accountant copy");
