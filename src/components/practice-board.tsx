@@ -1768,28 +1768,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             onClick={() => setMobileNavOpen((o) => !o)}
           />
           <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
-            <button
-              id="wizard-dash-reports"
-              className="tb-btn"
-              onClick={() => {
-                setMobileNavOpen(false);
-                navigate({
-                  to: "/reports",
-                  search: {
-                    client: undefined,
-                    clientId: undefined,
-                    report: undefined,
-                    action: undefined,
-                  },
-                });
-              }}
-            >
-              <svg viewBox="0 0 24 24">
-                <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                <path d="M14 3v6h6" />
-              </svg>
-              Reports studio
-            </button>
             {isItMember ? (
               <button
                 className="tb-btn"

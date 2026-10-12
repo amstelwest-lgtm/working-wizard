@@ -21,12 +21,9 @@ assert(!clientSrc.includes("rep-grid"), "old report gallery markup is gone");
 assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the client Reports tab and scrolls to it");
 {
   const header = clientSrc.slice(clientSrc.indexOf("topbar-actions"), clientSrc.indexOf("BREADCRUMB"));
-  assert(header.includes("openReportsStudio"), "client-header Reports studio opens reports");
-  assert(!header.includes("handleGenerateReport"), "client-header Reports studio is not the in-page generate action");
-  const openFn = clientSrc.slice(clientSrc.indexOf("const openReportsStudio"), clientSrc.indexOf("const handleExportPDF"));
-  assert(openFn.includes('to: "/clients/$clientId"'), "client-header Reports studio stays on this client");
-  assert(openFn.includes('accountantClientTabSearch(prev, "reports")'), "client-header opens Reports");
-  assert(!openFn.includes('to: "/reports"'), "client-header does not leave for the picker");
+  assert(!header.includes("Reports studio"), "the client header has no Reports studio button");
+  assert(!header.includes("openReportsStudio"), "the client header does not leave for a studio");
+  assert(!clientSrc.includes("const openReportsStudio"), "the studio opener is gone");
 }
 assert(
   !clientSrc.includes("data-view-mode-toggle"),
@@ -36,8 +33,8 @@ assert(
 const routeSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");
-assert(!routeSrc.includes("beforeLoad"), "/reports stays on the studio");
-assert(routeSrc.includes("ReportsPage"), "/reports renders the studio");
+assert(routeSrc.includes("beforeLoad"), "/reports redirects");
+assert(!routeSrc.includes("ReportsPage"), "/reports does not render a studio");
 assert(studioSrc.includes("search.report") || routeSrc.includes("search.report"), "report deep links stay on the studio search");
 assert(!studioSrc.includes("/reports/demo") && !routeSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
@@ -58,8 +55,8 @@ assert(!demoSrc.includes("MOCK_RATIO_RESULTS"), "demo mock UI is deleted, not ov
 
 const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dashSrc.includes('search: { tab: "reports" }'), "dashboard report icon opens the client Reports tab");
-assert(dashSrc.includes('to: "/reports"'), "dashboard Reports studio still opens standalone studio");
-assert(dashSrc.includes("clientId: undefined"), "firm Reports studio nav stays unscoped");
+assert(!dashSrc.includes('to: "/reports"'), "practice has no standalone Reports studio");
+assert(!dashSrc.includes("Reports studio"), "practice has no Reports studio button");
 
 const walkSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 {

@@ -116,14 +116,15 @@ assert.equal(
 );
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+const draftsAt = clientSrc.indexOf('id="reports-drafts"');
+const pdfsAt = clientSrc.indexOf('id="reports-pdfs"');
+const sentAt = clientSrc.indexOf('id="reports-sent"');
 const planAt = clientSrc.indexOf('id="pane-plan"');
-const advisoryAt = clientSrc.indexOf('id="pane-advisory"');
-assert.ok(planAt > 0 && advisoryAt > planAt, "plan and pack panes are in the route");
-const planPane = clientSrc.slice(planAt, advisoryAt);
-const drafterAt = clientSrc.indexOf('id="pane-drafter"');
-const footerAt = clientSrc.indexOf('className="footer-note"', advisoryAt);
-assert.ok(drafterAt > advisoryAt && footerAt > drafterAt, "the drafter pane sits after the pack");
-const advisoryPane = clientSrc.slice(advisoryAt, drafterAt);
+const footerAt = clientSrc.indexOf('className="footer-note"', planAt);
+assert.ok(draftsAt > 0 && pdfsAt > draftsAt && sentAt > pdfsAt && planAt > sentAt && footerAt > planAt);
+const planPane = clientSrc.slice(planAt, footerAt);
+const advisoryPane = clientSrc.slice(draftsAt, pdfsAt);
+const sentPane = clientSrc.slice(sentAt, planAt);
 
 assert.ok(planPane.includes("signoffVerbOnly"), "the plan strip says Sign off");
 assert.ok(planPane.includes("planCount > 0"), "an empty plan hides Sign off");
@@ -138,8 +139,9 @@ assert.equal(planPane.includes("PrecardCapCard"), false, "the plan pane does not
 
 assert.ok(advisoryPane.includes("AdvisoryPackPanel"), "the pack path still mounts the pack");
 assert.ok(advisoryPane.includes("RecommendationsPanel"), "recommendations stay stacked on the pack");
-assert.equal(advisoryPane.includes("AdvisoryDrafter"), false, "the pack page does not stack the drafter");
-assert.equal(advisoryPane.includes("AdvisorySentHistory"), false, "sent history leaves the pack page");
+assert.ok(advisoryPane.includes("AdvisoryDrafter"), "the drafter joins Drafts");
+assert.equal(advisoryPane.includes("AdvisorySentHistory"), false, "sent history leaves Drafts");
+assert.ok(sentPane.includes("AdvisorySentHistory"), "sent history is the Sent region");
 assert.ok(advisoryPane.includes("AdvisoryTabSignoff"), "the pack path keeps the one sign-off control");
 assert.ok(advisoryPane.includes("onSignoffAction={setPackSignoff}"), "that control signs the pack");
 assert.equal(/ReviewSignoffButton/.test(advisoryPane), false, "the pack path has no second sign-off");

@@ -266,13 +266,14 @@ function facts(over: Partial<NextStepFacts>): NextStepFacts {
 
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
   const sPanel = studio.indexOf("<RecommendationsPanel");
-  const sAdvisory = studio.indexOf('id="pane-advisory"');
+  const draftsAt = studio.indexOf('id="reports-drafts"');
+  const pdfsAt = studio.indexOf('id="reports-pdfs"');
   assert(
-    sPanel > sAdvisory,
-    "studio mounts the panel on the Advisory tab (where Next Step routes review)",
+    sPanel > draftsAt && sPanel < pdfsAt,
+    "studio mounts recommendations in Reports drafts",
   );
   assert(
-    studio.includes('audience="accountant"\n                    canPropose={hasFigures}'),
+    /audience="accountant"\s+canPropose=\{hasFigures\}/.test(studio),
     "studio panel uses accountant audience",
   );
 

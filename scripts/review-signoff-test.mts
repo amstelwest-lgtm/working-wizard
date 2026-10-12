@@ -170,8 +170,10 @@ assert(
 );
 assert(clientSrc.includes("AdvisoryTabSignoff"), "advisory tab reads the pack sign-off");
 assert(
-  !/id="pane-advisory"[\s\S]{0,700}ReviewSignoffButton/.test(clientSrc),
-  "advisory tab does not keep a second page-level sign-off",
+  !clientSrc
+    .slice(clientSrc.indexOf('id="reports-drafts"'), clientSrc.indexOf('id="reports-pdfs"'))
+    .includes("ReviewSignoffButton"),
+  "Reports drafts do not keep a second page-level sign-off",
 );
 assert(!clientSrc.includes("Report sign-offs"), "reports tab no longer hosts every sign-off");
 

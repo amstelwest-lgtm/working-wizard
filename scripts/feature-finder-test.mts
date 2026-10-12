@@ -93,8 +93,12 @@ assert(href("drafts", firm) === "/dashboard", "Drafts from practice open practic
 assert(href("overview", studio).endsWith("tab=home"), "the briefing opens Home");
 assert(href("moves", studio).includes("tab=moves"), "Next moves is its own rail item");
 assert(href("reports", studio).includes("tab=reports"), "Reports is its own rail item");
-assert(href("advisory pack", studio).includes("section=pack"), "Advisory pack stays under Deliverables");
-assert(href("drafter", studio).includes("section=drafter"), "Advisory drafter stays under Deliverables");
+assert(
+  href("advisory pack", studio).includes("tab=reports") &&
+    href("advisory pack", studio).includes("section=drafts"),
+  "Advisory pack opens Reports drafts",
+);
+assert(href("drafter", studio).includes("section=drafts"), "Advisory drafter opens Reports drafts");
 assert(
   href("actions", studio) === `/clients/${CLIENT}?tab=plan`,
   "Action Plan is its own rail item",

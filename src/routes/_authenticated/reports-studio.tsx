@@ -1,4 +1,4 @@
-import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
@@ -23,7 +23,6 @@ import {
 import { BackLink } from "@/components/back-link";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
-import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -59,9 +58,7 @@ import {
 } from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
 import {
-  NOT_SCORED_LABEL,
   scorecardHealthFromFinancials,
-  scorePlaybookCatalogue,
   scoreRatio,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -89,7 +86,6 @@ import {
 } from "@/lib/advisory-deliveries";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
-import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -138,7 +134,6 @@ import {
   laborProductivityFileStem,
   laborProductivityTitle,
   localizeCopy,
-  spellLabor,
   parseMarketSelection,
   resolveMarket,
   t,
@@ -3452,234 +3447,6 @@ function PreviewModal({
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
-
-// ── Playbook catalogue ──────────────────────────────────────────────────────
-
-const PLAYBOOK_PILLARS = [
-  { key: "profit", name: "Profitability", color: "#b45309" },
-  { key: "financing", name: "Leverage & Financing", color: "#7c3aed" },
-  { key: "cash", name: "Cash & Working Capital", color: "#047857" },
-  { key: "assets", name: "Asset Productivity", color: "#1d4ed8" },
-  { key: "labour", name: "Labour Productivity", color: "#0e7490" },
-  { key: "risk", name: "Business Risk", color: "#dc2626" },
-] as const;
-
-type PlaybookPillarKey = (typeof PLAYBOOK_PILLARS)[number]["key"];
-
-interface PlaybookRatio {
-  ratio_key: string;
-  ratio_name: string;
-  pillar: PlaybookPillarKey;
-  health_tier: "critical" | "at_risk" | "healthy";
-  health_score: number;
-  /** Live client has no scored value for this catalogue ratio. */
-  unscored?: boolean;
-}
-
-const PLAYBOOK_RATIOS: PlaybookRatio[] = [
-  // Profitability
-  {
-    ratio_key: "grossMargin",
-    ratio_name: "Gross Profit Margin",
-    pillar: "profit",
-    health_tier: "at_risk",
-    health_score: 62,
-  },
-  {
-    ratio_key: "directCostsRatio",
-    ratio_name: "Direct Cost Burden",
-    pillar: "profit",
-    health_tier: "at_risk",
-    health_score: 58,
-  },
-  {
-    ratio_key: "fixedCostRatio",
-    ratio_name: "Fixed Cost Burden",
-    pillar: "profit",
-    health_tier: "healthy",
-    health_score: 71,
-  },
-  {
-    ratio_key: "netMargin",
-    ratio_name: "Net Margin",
-    pillar: "profit",
-    health_tier: "at_risk",
-    health_score: 68,
-  },
-  {
-    ratio_key: "revenueGrowth",
-    ratio_name: "Revenue Growth",
-    pillar: "profit",
-    health_tier: "at_risk",
-    health_score: 41,
-  },
-  {
-    ratio_key: "dol",
-    ratio_name: "Operating Leverage",
-    pillar: "profit",
-    health_tier: "at_risk",
-    health_score: 50,
-  },
-  // Financing
-  {
-    ratio_key: "interestBurden",
-    ratio_name: "Interest Burden",
-    pillar: "financing",
-    health_tier: "healthy",
-    health_score: 72,
-  },
-  {
-    ratio_key: "debtToEquity",
-    ratio_name: "Debt-to-Equity",
-    pillar: "financing",
-    health_tier: "at_risk",
-    health_score: 67,
-  },
-  {
-    ratio_key: "debtToAssets",
-    ratio_name: "Debt-to-Assets",
-    pillar: "financing",
-    health_tier: "at_risk",
-    health_score: 61,
-  },
-  // Cash & Working Capital
-  {
-    ratio_key: "currentRatio",
-    ratio_name: "Current Ratio",
-    pillar: "cash",
-    health_tier: "critical",
-    health_score: 28,
-  },
-  {
-    ratio_key: "debtorDays",
-    ratio_name: "Debtor Days",
-    pillar: "cash",
-    health_tier: "at_risk",
-    health_score: 40,
-  },
-  {
-    ratio_key: "creditorDays",
-    ratio_name: "Creditor Days",
-    pillar: "cash",
-    health_tier: "healthy",
-    health_score: 75,
-  },
-  {
-    ratio_key: "wipDays",
-    ratio_name: "WIP Days",
-    pillar: "cash",
-    health_tier: "healthy",
-    health_score: 68,
-  },
-  {
-    ratio_key: "workingCapitalFunding",
-    ratio_name: "WC Funding Intensity",
-    pillar: "cash",
-    health_tier: "critical",
-    health_score: 32,
-  },
-  {
-    ratio_key: "ocfToEbitda",
-    ratio_name: "Cash Quality",
-    pillar: "cash",
-    health_tier: "at_risk",
-    health_score: 60,
-  },
-  // Assets
-  {
-    ratio_key: "assetReinvestmentRatio",
-    ratio_name: "Asset Reinvestment",
-    pillar: "assets",
-    health_tier: "healthy",
-    health_score: 68,
-  },
-  {
-    ratio_key: "capexIntensity",
-    ratio_name: "Capex Intensity",
-    pillar: "assets",
-    health_tier: "healthy",
-    health_score: 71,
-  },
-  // Labour
-  {
-    ratio_key: "gpToLabor",
-    ratio_name: "Labour ROI",
-    pillar: "labour",
-    health_tier: "at_risk",
-    health_score: 64,
-  },
-  {
-    ratio_key: "salesPerEmployee",
-    ratio_name: "Revenue per Employee",
-    pillar: "labour",
-    health_tier: "healthy",
-    health_score: 72,
-  },
-  // Risk
-  {
-    ratio_key: "customerConcentration",
-    ratio_name: "Customer Dependency",
-    pillar: "risk",
-    health_tier: "at_risk",
-    health_score: 52,
-  },
-];
-
-const TIER_CHIP: Record<string, string> = {
-  critical: "bg-white text-[#C43D4B] border border-[#DBEAFE]",
-  at_risk: "bg-white text-[#B7791F] border border-[#DBEAFE]",
-  healthy: "bg-white text-[#16845B] border border-[#DBEAFE]",
-};
-
-const TIER_DOT: Record<string, string> = {
-  critical: "bg-[#C43D4B]",
-  at_risk: "bg-[#B7791F]",
-  healthy: "bg-[#16845B]",
-};
-
-// ── Playbook ratio card ─────────────────────────────────────────────────────
-
-function PlaybookRatioCard({
-  ratio,
-  name,
-  onClick,
-}: {
-  ratio: PlaybookRatio;
-  name: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left rounded-lg border border-border bg-card hover:bg-muted/60 hover:border-[#0B5FFF]/50 transition-colors p-3 group"
-    >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-xs font-medium text-foreground leading-snug">{name}</p>
-        <span
-          className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide ${
-            ratio.unscored
-              ? "border border-border bg-muted text-muted-foreground"
-              : TIER_CHIP[ratio.health_tier]
-          }`}
-        >
-          {ratio.unscored ? NOT_SCORED_LABEL : healthBandLabel(ratio.health_tier)}
-        </span>
-      </div>
-      {/* Score bar */}
-      <div className="h-1 rounded-full bg-muted mb-2">
-        <div
-          className={`h-1 rounded-full transition-all ${ratio.unscored ? "bg-slate-400" : TIER_DOT[ratio.health_tier]}`}
-          style={{ width: `${ratio.unscored ? 0 : ratio.health_score}%` }}
-        />
-      </div>
-      <p className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">
-        {ratio.unscored ? NOT_SCORED_LABEL : `Score ${ratio.health_score}`} · View steps →
-      </p>
-    </button>
-  );
-}
-
 // ── Main page ───────────────────────────────────────────────────────────────
 
 /**
@@ -3756,8 +3523,6 @@ export function ReportsStudio({
     return null;
   });
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
-  const [playbookOpen, setPlaybookOpen] = useState(false);
-  const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookRatio | null>(null);
   const [clientData, setClientData] = useState<ClientReportData | null>(null);
   const [dataLoading, setDataLoading] = useState(Boolean(clientId));
   const deepLinkHandled = useRef<string | null>(null);
@@ -3856,11 +3621,6 @@ export function ReportsStudio({
     };
   }
 
-  function openPlaybook(ratio: PlaybookRatio) {
-    setSelectedPlaybook(ratio);
-    setPlaybookOpen(true);
-  }
-
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -3928,16 +3688,6 @@ export function ReportsStudio({
 
   // Build the GEN map from real client data (or null = demo data)
   const GEN = useMemo(() => buildGEN(clientData), [clientData]);
-  const playbookRatios = useMemo(() => {
-    // A linked client never shows the no-client demo scores (Creditor Days 75, …).
-    if (!clientId) {
-      return PLAYBOOK_RATIOS.map((row) => ({ ...row, health_tier: scoreTier(row.health_score) }));
-    }
-    if (!clientData?.hasData) {
-      return PLAYBOOK_RATIOS.map((row) => ({ ...row, health_score: 0, unscored: true }));
-    }
-    return scorePlaybookCatalogue(PLAYBOOK_RATIOS, clientData.rawRatios, clientData.market);
-  }, [clientId, clientData]);
 
   // Clean up blob URL on close
   const closePreview = useCallback(() => {
@@ -4325,7 +4075,7 @@ export function ReportsStudio({
         {embedded ? (
           <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
             <ArapAnswerStrip
-              heading="Reports"
+              heading="PDFs"
               sentence={reportsSentence}
               chip={sourceChip}
               primary={
@@ -4363,13 +4113,6 @@ export function ReportsStudio({
               <p className="mt-3 text-xs text-muted-foreground">
                 Generating {zipProgress.done}/{zipProgress.total} reports…
               </p>
-            ) : null}
-            {clientId ? (
-              <AdvisorySentHistory
-                variant="reports"
-                clientId={clientId}
-                statementPeriodLabel={clientData?.dataPeriodLabel ?? null}
-              />
             ) : null}
             {reportCatalogue}
             <ReviewInputsDrawer hint="Settings, exports">
@@ -4517,55 +4260,9 @@ export function ReportsStudio({
         </div>
         ) : null}
 
-        {/* Main layout */}
+        {embedded ? null : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          {/* Card grid */}
-          <div className="space-y-6">
-            {embedded ? null : reportCatalogue}
-
-            {/* Playbooks */}
-            <section>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-violet-900/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-400">
-                  Playbooks — {playbookRatios.length} Action Plans
-                </span>
-                <div className="flex-1 border-t border-border" />
-              </div>
-              <p className="text-xs text-muted-foreground mb-5">
-                Step-by-step recovery and optimisation plans for every ratio, tailored to the
-                current health tier. Click any ratio to open its 10-step playbook.
-              </p>
-              <div className="space-y-5">
-                {PLAYBOOK_PILLARS.map((pillar) => {
-                  const ratios = playbookRatios.filter((r) => r.pillar === pillar.key);
-                  if (!ratios.length) return null;
-                  const playbookMarket = clientData?.market ?? firmMarket;
-                  return (
-                    <div key={pillar.key}>
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-widest mb-2"
-                        style={{ color: pillar.color }}
-                      >
-                        {spellLabor(pillar.name, playbookMarket)}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {ratios.map((ratio) => (
-                          <PlaybookRatioCard
-                            key={ratio.ratio_key}
-                            ratio={ratio}
-                            name={spellLabor(ratio.ratio_name, playbookMarket)}
-                            onClick={() => openPlaybook(ratio)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-
-          {!embedded ? (
+          <div className="space-y-6">{reportCatalogue}</div>
           <SettingsPanel
             settings={settings}
             onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
@@ -4574,18 +4271,9 @@ export function ReportsStudio({
             statementPeriod={clientData?.dataPeriodLabel ?? null}
             nameExample={t("entityExample", clientData?.market ?? firmMarket)}
           />
-          ) : null}
         </div>
+        )}
       </div>
-
-      {/* Playbook drawer */}
-      <PlaybookDrawer
-        ratioKey={selectedPlaybook?.ratio_key ?? null}
-        ratioName={spellLabor(selectedPlaybook?.ratio_name ?? "", clientData?.market ?? firmMarket)}
-        healthTier={selectedPlaybook?.health_tier ?? "at_risk"}
-        open={playbookOpen}
-        onClose={() => setPlaybookOpen(false)}
-      />
 
       {/* Preview modal */}
       <PreviewModal
@@ -4608,10 +4296,4 @@ export function ReportsStudio({
       />
     </main>
   );
-}
-
-const reportsRoute = getRouteApi("/_authenticated/reports/");
-
-export function ReportsPage() {
-  return <ReportsStudio {...reportsRoute.useSearch()} />;
 }
