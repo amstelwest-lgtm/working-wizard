@@ -285,8 +285,6 @@ export function legacyPaneForSearch(search: {
     case "health":
       return "ratios";
     case "cash":
-      if (canonical.section === "collections") return "collections";
-      if (canonical.section === "payables") return "payables";
       return "cash";
     case "profit":
       return "profit";
