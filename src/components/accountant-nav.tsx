@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link } from "@tanstack/react-router";
+import { RailIcon } from "@/components/chrome-icons";
 import { SettingsGear } from "@/components/settings-nav-button";
 import {
   closeNavGroup,
@@ -283,7 +284,10 @@ export function AccountantNav({
           tabIndex={tabId === "back" ? 0 : -1}
           onClick={() => onNavigate?.()}
         >
-          {back.label}
+          <span className="nav-ic" aria-hidden="true">
+            <RailIcon id="back" />
+          </span>
+          <span className="nav-text">{back.label}</span>
         </NavLink>
       ) : null}
       {sections.map((section) => (
@@ -310,7 +314,10 @@ export function AccountantNav({
                     bot={heading.bot}
                     onClick={() => closeIfLeaving(heading)}
                   >
-                    {heading.label}
+                    <span className="nav-ic" aria-hidden="true">
+                      <RailIcon id={heading.id} />
+                    </span>
+                    <span className="nav-text">{heading.label}</span>
                   </NavLink>
                   {heading.items?.length ? (
                     <button

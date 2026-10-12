@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
+import { PeriodPill } from "@/components/chrome-icons";
 import { openPracticeSettings } from "@/lib/user-roles";
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
@@ -2940,6 +2941,7 @@ function ClientView() {
                 <span className="gold-text">MILŌN</span>
               </span>
               <FirmSwitcher />
+              <PeriodPill />
               <FeatureFinder audience="accountant" clientId={clientId} />
               <span className="spacer" />
               <SettingsMenu
