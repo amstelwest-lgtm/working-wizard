@@ -9,7 +9,7 @@ import {
   useNavigate,
   useSearch,
 } from "@tanstack/react-router";
-import { canonicalizeAccountantSearch } from "@/lib/client-route-search";
+import { accountantValidatedSearch } from "@/lib/client-route-search";
 import { StrictMode, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import { toast, Toaster } from "sonner";
@@ -109,19 +109,13 @@ const clientRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/clients/$clientId",
   validateSearch: (search: Record<string, unknown>) => {
-    const rawTab = typeof search.tab === "string" ? search.tab : undefined;
-    const rawSection = typeof search.section === "string" ? search.section : undefined;
-    const rawFocus = typeof search.focus === "string" ? search.focus : undefined;
-    const canonical =
-      rawTab || rawSection
-        ? canonicalizeAccountantSearch({ tab: rawTab, section: rawSection, focus: rawFocus })
-        : null;
+    const shaped = accountantValidatedSearch(search);
     return {
-      tab: canonical?.tab,
-      section: canonical?.section,
-      focus: canonical?.focus,
-      report: typeof search.report === "string" ? search.report : undefined,
-      filter: search.filter === "overdue" ? "overdue" : undefined,
+      tab: shaped.tab,
+      section: shaped.section,
+      focus: shaped.focus,
+      report: shaped.report,
+      filter: shaped.tab ? shaped.filter : search.filter === "overdue" ? "overdue" : undefined,
       agent:
         search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
           ? search.agent

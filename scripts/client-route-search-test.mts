@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   accountantClientTabSearch,
+  accountantValidatedSearch,
   canonicalizeAccountantSearch,
   clientNavSearch,
   clientRailSelection,
@@ -92,6 +93,34 @@ lands("advisory", { tab: "reports", section: "drafts" }, "?tab=advisory opens Re
 lands("pack", { tab: "reports", section: "drafts" }, "?tab=pack opens Reports drafts");
 lands("drafter", { tab: "reports", section: "drafts" }, "?tab=drafter opens Reports drafts");
 lands("reports", { tab: "plan" }, "?tab=reports&section=plan opens Action plan", { section: "plan" });
+
+function routerSearch(raw: Record<string, unknown>) {
+  return { ...raw, ...accountantValidatedSearch(raw) };
+}
+const planAlias = routerSearch({ tab: "reports", section: "plan", report: "scorecard", action: "preview" });
+assert(planAlias.tab === "plan", "the plan alias tab is plan");
+assert(planAlias.section === undefined, "the plan alias drops section=plan");
+assert(planAlias.report === undefined && planAlias.action === undefined, "a report link does not stick to Action plan");
+const draftsAlias = routerSearch({ tab: "advisory" });
+assert(
+  draftsAlias.tab === "reports" && draftsAlias.section === "drafts",
+  "advisory still opens Reports drafts",
+);
+const reportLink = routerSearch({
+  tab: "reports",
+  section: "drafts",
+  report: "scorecard",
+  action: "preview",
+  filter: "overdue",
+});
+assert(reportLink.section === "drafts" && reportLink.report === "scorecard", "a Reports deep link stays on Drafts");
+assert(reportLink.action === "preview", "preview stays on Reports");
+assert(reportLink.filter === undefined, "an Action Plan filter does not stay on Reports");
+const planFilter = routerSearch({ tab: "reports", section: "plan", filter: "overdue" });
+assert(planFilter.tab === "plan" && planFilter.filter === "overdue", "an overdue filter stays once the alias is Action plan");
+const bareReport = routerSearch({ report: "scorecard", action: "download" });
+assert(bareReport.report === "scorecard" && bareReport.action === "download", "a report param with no tab is kept");
+assert(!("section" in bareReport), "a report param with no tab does not invent a section");
 lands("plan", { tab: "plan" }, "?tab=plan opens Action Plan");
 lands("actions", { tab: "plan" }, "?tab=actions opens Action Plan");
 lands("action", { tab: "plan" }, "?tab=action opens Action Plan");
@@ -220,8 +249,12 @@ const parser = route.slice(
   route.indexOf("validateSearch:"),
   route.indexOf("component: ClientView"),
 );
-assert(parser.includes("canonicalizeAccountantSearch"), "alias runs inside validateSearch");
-assert(parser.includes("out.section = canonical.section"), "section is written onto the search");
+assert(parser.includes("accountantValidatedSearch"), "alias runs inside validateSearch");
+const searchSrc = readFileSync(resolve("src/lib/client-route-search.ts"), "utf8");
+assert(
+  searchSrc.includes("out.section = canonical.section"),
+  "an absent section is written as undefined so the router drops it",
+);
 assert(
   route.includes('resolveAccountantTab(search) ?? "overview"'),
   "the first paint uses the parsed tab and section",
