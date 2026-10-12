@@ -333,7 +333,8 @@ assert(owner.includes('id="owner-header-sage"'), "owner header shows Sage next t
 assert(owner.includes("Connect Sage"), "owner first-data offers Sage");
 assert(studio.includes("<SageConnectCard"), "accountant studio mounts Sage connect");
 assert(studio.includes('label="Connect Sage"'), "accountant Other ways offers Sage");
-assert(studio.includes('id="accounting-connect"'), "Sage sits on the accounting connect surface");
+assert(read("src/components/data-up-to-date.tsx").includes('id="accounting-connect"'), "Sage sits on the Books connect surface");
+assert(!studio.slice(studio.indexOf('id="pane-ratios"'), studio.indexOf('id="pane-profit"')).includes("<SageConnectCard"), "Health does not host Sage");
 assert(briefing.includes('id="client-connect-sage"'), "briefing shows Connect Sage");
 assert(fresh.includes("<SageConnectCard"), "data step shows Sage beside Xero and QuickBooks");
 assert(fresh.includes("onSageSyncComplete"), "data step can auto-populate after a Sage sync");

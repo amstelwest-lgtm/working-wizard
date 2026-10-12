@@ -338,9 +338,14 @@ const HARNESS_DOCUMENTS: SourceDocumentsModel = {
   ],
 };
 
-function BooksPane({ clientId: _clientId }: { clientId: string }) {
+function BooksPane({ clientId }: { clientId: string }) {
   return (
     <div className="tabpane on" id="pane-summary">
+      <div id="accounting-connect" className="data-fresh__ledgers">
+        <QboConnectCard clientId={clientId} returnPath={`/clients/${clientId}`} financials={HARNESS_FINANCIALS} />
+        <XeroConnectCard clientId={clientId} returnPath={`/clients/${clientId}`} financials={HARNESS_FINANCIALS} />
+        <SageConnectCard clientId={clientId} />
+      </div>
       <SourceDocumentsView model={HARNESS_DOCUMENTS} />
       <div id="wizard-brain-hero" className="card hero-card pad brain-hero">
         <span className="eyebrow">Client brain</span>
@@ -536,11 +541,6 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
           </div>
         </div>
       </PaneBoundary>
-      <div id="accounting-connect" style={{ marginBottom: 16, display: "grid", gap: 10 }}>
-        <QboConnectCard clientId={clientId} returnPath={`/clients/${clientId}`} financials={HARNESS_FINANCIALS} />
-        <XeroConnectCard clientId={clientId} returnPath={`/clients/${clientId}`} financials={HARNESS_FINANCIALS} />
-        <SageConnectCard clientId={clientId} />
-      </div>
     </div>
   );
 }

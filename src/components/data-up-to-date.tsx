@@ -109,6 +109,26 @@ export function DataUpToDate({
         chip={chip}
         primary={primary}
       />
+      <div id="accounting-connect" className="data-fresh__ledgers">
+        <XeroConnectCard
+          clientId={clientId}
+          returnPath={returnPath}
+          refreshToken={xeroRefresh}
+          onSyncComplete={onXeroSyncComplete}
+        />
+        <QboConnectCard
+          clientId={clientId}
+          returnPath={returnPath}
+          refreshToken={qboRefresh}
+          onSyncComplete={onQboSyncComplete}
+        />
+        <SageConnectCard
+          clientId={clientId}
+          refreshToken={sageRefresh}
+          onConnectionChange={onSageConnectionChange}
+          onSyncComplete={onSageSyncComplete}
+        />
+      </div>
       <ReviewInputsDrawer hint={booksDrawerHint(freshness)}>
         <div>
           <h2 className="data-fresh__title">{status.title}</h2>
@@ -119,26 +139,6 @@ export function DataUpToDate({
           <p className="data-fresh__line" data-data-freshness="">
             {freshness}
           </p>
-        </div>
-        <div className="data-fresh__ledgers">
-          <XeroConnectCard
-            clientId={clientId}
-            returnPath={returnPath}
-            refreshToken={xeroRefresh}
-            onSyncComplete={onXeroSyncComplete}
-          />
-          <QboConnectCard
-            clientId={clientId}
-            returnPath={returnPath}
-            refreshToken={qboRefresh}
-            onSyncComplete={onQboSyncComplete}
-          />
-          <SageConnectCard
-            clientId={clientId}
-            refreshToken={sageRefresh}
-            onConnectionChange={onSageConnectionChange}
-            onSyncComplete={onSageSyncComplete}
-          />
         </div>
         {primaryKind === "upload" ? null : (
           <button type="button" className="data-fresh__upload" onClick={onUpload}>
