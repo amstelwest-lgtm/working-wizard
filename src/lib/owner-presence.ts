@@ -2,6 +2,7 @@
  * What each owner-door agent is doing right now.
  * Runs, findings, and hand-off messages are the only inputs.
  */
+import { fmAvatarClip, type FmAvatarClip } from "@/lib/fm-avatar-state";
 import { agentShortName } from "@/lib/milon-team";
 import {
   findingFigureEntries,
@@ -27,6 +28,8 @@ export type OwnerAgentPresence = {
   motion: OwnerMotion;
   sentence: string;
   lookAt: AgentKey | null;
+  /** Financial Manager clip. Analyst and Advisor stay null. */
+  fmClip: FmAvatarClip | null;
 };
 
 export type OwnerPresence = {
@@ -106,7 +109,19 @@ export function ownerPresence(
       if (agent === handoff.to && motion === "idle") motion = "working";
       if (agent === handoff.from && motion === "idle") motion = "found";
     }
-    return { agent, motion, sentence, lookAt };
+    const fmClip =
+      agent === "financial_manager"
+        ? fmAvatarClip({
+            talk: talk?.agent === agent ? talk.mode : null,
+            run: runs[agent] ?? null,
+            finding,
+            handoff:
+              handoff && newestMessage && (agent === handoff.from || agent === handoff.to)
+                ? { at: newestMessage.created_at }
+                : null,
+          })
+        : null;
+    return { agent, motion, sentence, lookAt, fmClip };
   });
 
   return { agents, handoff };
