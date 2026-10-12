@@ -1637,12 +1637,6 @@ function Dashboard() {
       search: overdue ? { tab: "plan", filter: "overdue" } : { tab: "plan" },
     });
 
-  const openClientQueries = (clientId: string) => {
-    const dest = firmOpenQueriesDestination([{ id: clientId, openQueries: 1 }]);
-    if (!dest) return;
-    navigate({ to: dest.to, params: dest.params, search: dest.search });
-  };
-
   const scatterClients = useMemo(
     () =>
       scoredRows
@@ -2104,21 +2098,7 @@ function Dashboard() {
                         <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
                       </td>
                       <td className="num hide-sm hide-desk" data-label="Queries">
-                        {c.openQueries > 0 ? (
-                          <button
-                            type="button"
-                            className="followup-cell"
-                            title="Open queries"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openClientQueries(c.id);
-                            }}
-                          >
-                            {c.openQueries}
-                          </button>
-                        ) : (
-                          "—"
-                        )}
+                        {c.openQueries > 0 ? c.openQueries : "—"}
                       </td>
                       <td className="num hide-sm hide-desk" data-label="Actions">
                         {c.openActions > 0 ? (

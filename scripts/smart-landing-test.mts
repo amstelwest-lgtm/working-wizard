@@ -44,8 +44,8 @@ assert(
   "pre-card firm can open account settings",
 );
 assert(
-  decideFirmBillingPathGate({ ...blocked, pathname: "/dashboard" }) === "require_billing",
-  "dashboard still requires a card after an insight",
+  decideFirmBillingPathGate({ ...blocked, pathname: "/dashboard" }) === "allow",
+  "practice Home stays open without a card",
 );
 assert(
   decideFirmBillingPathGate({ ...blocked, pathname: "/reports" }) === "require_billing",
@@ -60,12 +60,15 @@ assert(
   "the first client file stays open",
 );
 
-const client = decideSmartLanding({ signedIn: true, entitled: false, firstClientId: "abc" });
-assert(client.kind === "client" && client.href === "/clients/abc" && client.clientId === "abc", "no card + client → that client");
+const home = decideSmartLanding({ signedIn: true, entitled: false, firstClientId: "abc" });
+assert(
+  home.kind === "dashboard" && home.href === "/dashboard" && home.clientId == null,
+  "no card + client → practice Home, not that client",
+);
 assert(
   decideSmartLanding({ signedIn: true, entitled: false, firstClientId: "  abc  " }).href ===
-    "/clients/abc",
-  "client id is trimmed",
+    "/dashboard",
+  "a client id does not open that file",
 );
 
 const onboard = decideSmartLanding({ signedIn: true, entitled: false, firstClientId: null });
@@ -126,7 +129,7 @@ assert(
   "signed-out opens sign-in and comes back",
 );
 
-for (const landing of [client, onboard, board, signedOut]) {
+for (const landing of [home, onboard, board, signedOut]) {
   assert(isSafeSmartLandingHref(landing.href), `href is an internal landing: ${landing.href}`);
   assert(!landing.href.startsWith("/billing"), "landing never opens the paywall");
 }
@@ -157,6 +160,13 @@ const server = readFileSync(resolve("src/lib/welcome-email.server.ts"), "utf8");
 assert(server.includes("welcomeAppPath"), "sender uses the welcome path helper");
 assert(!server.includes("/dashboard"), "sender does not hard-code the dashboard");
 assert(!/from:\s*[`'"]/.test(server), "sender does not hard-code a from address");
+
+const deskRoute = readFileSync(resolve("src/routes/_authenticated/desk.tsx"), "utf8");
+assert(deskRoute.includes('redirect({ to: "/dashboard" })'), "/desk redirects to practice Home");
+assert(!deskRoute.includes("Practice desk"), "the practice desk page is gone");
+const clientStudio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+assert(!clientStudio.includes("rememberDeskClient"), "opening a client does not remember a desk");
+assert(!clientStudio.includes("desk-client"), "the client file does not keep desk memory");
 
 const openRoute = readFileSync(resolve("src/routes/open.tsx"), "utf8");
 assert(openRoute.includes("resolveSmartLanding"), "landing asks the server where to go");

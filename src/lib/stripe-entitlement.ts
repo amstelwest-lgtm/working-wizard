@@ -294,7 +294,7 @@ export function decideFirmBillingPathGate(input: {
   if (!input.isAccountantFirmUser) return "allow";
   if (input.entitled) return "allow";
   // First client's Overview and figures stay on screen without a card.
-  // Reports, the practice board (a second client), and team settings still redirect.
+  // Reports, a later client file, and team settings still redirect.
   // Brand settings are not a firm-product path, so they stay open with /settings.
   if (
     input.firmClientCount !== undefined &&
@@ -303,6 +303,15 @@ export function decideFirmBillingPathGate(input: {
       firmClientCount: input.firmClientCount,
       firstClientId: input.firstClientId,
     })
+  ) {
+    return "allow";
+  }
+  // Practice Home is where Open Milōn lands. A client on the book does not
+  // send that landing to Checkout. null and omitted counts are not a book.
+  if (
+    pathname === "/dashboard" &&
+    typeof input.firmClientCount === "number" &&
+    input.firmClientCount >= 1
   ) {
     return "allow";
   }

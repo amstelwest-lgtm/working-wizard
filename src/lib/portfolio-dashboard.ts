@@ -421,10 +421,10 @@ export function practiceNeedsAttention(
 }
 
 /**
- * Where the practice Open queries tile goes.
- * Unresolved notes live on the client (`?queries=open`). Returns null when
- * none are open — there is no firm-wide queries page to open.
- * Several clients: the one with the most unresolved notes (name breaks ties).
+ * The client with the most unresolved notes, or null when none are open.
+ * The Open queries tile uses a non-null result only to decide the practice
+ * list is worth opening. It does not navigate to this client.
+ * Several clients: the most unresolved notes wins, then the name.
  */
 export function firmOpenQueriesClient(
   rows: readonly { id: string; name?: string | null; openQueries: number }[],
@@ -445,24 +445,16 @@ export function firmOpenQueriesClient(
 }
 
 /**
- * Navigation for that client. Null when `firmOpenQueriesClient` has nowhere
- * to go — the tile must not pretend to be a link.
- * Unresolved notes open on the client page at `?queries=open`.
+ * Practice list for the Open queries tile. Null when no client has an
+ * unresolved note — the tile must not pretend to be a link.
+ * The list is the book. The accountant picks a row. The tile does not
+ * open a client file.
  */
 export function firmOpenQueriesDestination(
   rows: readonly { id: string; name?: string | null; openQueries: number }[],
-): {
-  to: "/clients/$clientId";
-  params: { clientId: string };
-  search: { queries: "open" };
-} | null {
-  const clientId = firmOpenQueriesClient(rows);
-  if (!clientId) return null;
-  return {
-    to: "/clients/$clientId",
-    params: { clientId },
-    search: { queries: "open" },
-  };
+): { to: "/dashboard"; hash: "clients-table" } | null {
+  if (!firmOpenQueriesClient(rows)) return null;
+  return { to: "/dashboard", hash: "clients-table" };
 }
 
 /** Rule-based portfolio insight chips. */

@@ -4,9 +4,8 @@ import { cn } from "@/lib/utils";
 
 /** Firm-home Open queries destination. A real href, not only an onClick. */
 export type MetricTileLink = {
-  to: "/clients/$clientId";
-  params: { clientId: string };
-  search: { queries: "open" };
+  to: "/dashboard";
+  hash: "clients-table";
 };
 
 export type MetricTileProps = {
@@ -57,7 +56,7 @@ export function MetricTile({
 
   if (link) {
     return (
-      <Link id={id} to={link.to} params={link.params} search={link.search} className={classes}>
+      <Link id={id} to={link.to} hash={link.hash} className={classes}>
         {body}
       </Link>
     );

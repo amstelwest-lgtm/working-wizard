@@ -1,10 +1,10 @@
 /**
  * Where "Open Milōn" should land.
  *
- * A signed-in firm with no card goes to the first client file when one
- * exists (that page stays open before a card). With no client yet, they
- * go to the add-client step, which is where the first upload starts.
- * A card on file, or any other signed-in case, opens the practice dashboard.
+ * A signed-in firm opens practice Home (`/dashboard`). A client on the
+ * book does not pull them into that file. With no client yet, and no
+ * card, they go to the add-client step, which is where the first upload
+ * starts. A card on file opens practice Home too.
  *
  * The session lives in this tab, so the browser asks the server once the
  * user is known. The choice itself is this function.
@@ -40,11 +40,7 @@ export function decideSmartLanding(input: {
   if (!input.signedIn) {
     return { kind: "auth", href: `/auth?next=${SMART_LANDING_PATH}` };
   }
-  if (!input.entitled) {
-    const clientId = safeFirmClientId(input.firstClientId);
-    if (clientId) {
-      return { kind: "client", clientId, href: `/clients/${clientId}` };
-    }
+  if (!input.entitled && !safeFirmClientId(input.firstClientId)) {
     return { kind: "onboarding", href: PRECARD_ONBOARDING_HREF };
   }
   return { kind: "dashboard", href: "/dashboard" };

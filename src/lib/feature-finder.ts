@@ -76,6 +76,11 @@ type FeatureDef = {
   extraSynonyms?: Partial<Record<FeatureAudience, readonly string[]>>;
   audiences: readonly FeatureAudience[];
   requiresClient?: boolean;
+  /**
+   * Practice search (no client file open) lands here instead of a client
+   * studio tab. The studio tab still applies once a client is open.
+   */
+  practiceWhenNoClient?: "dashboard";
   studio?: StudioTarget;
   ownerTab?: OwnerTab;
   practice?: "dashboard" | "settings";
@@ -218,6 +223,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["drafts", "draft", "bot", "ask", "milon bot", "chat"],
     audiences: ["accountant"],
     requiresClient: true,
+    practiceWhenNoClient: "dashboard",
     studio: { tab: "desk" },
   },
   {
@@ -383,7 +389,10 @@ function destinationFor(def: FeatureDef, ctx: FeatureFinderContext): FeatureDest
   if (ctx.audience === "owner" && def.ownerTab) return { kind: "owner", tab: def.ownerTab };
   if (ctx.audience === "accountant" && def.studio) {
     const clientId = ctx.clientId?.trim();
-    if (!clientId) return null;
+    if (!clientId) {
+      if (def.practiceWhenNoClient === "dashboard") return { kind: "dashboard" };
+      return null;
+    }
     return { kind: "client", clientId, search: def.studio };
   }
   return null;
@@ -401,8 +410,10 @@ export function featureHref(dest: FeatureDestination): string {
   return `/clients/${encodeURIComponent(dest.clientId)}?${params.toString()}`;
 }
 
-function groupLabel(def: FeatureDef, audience: FeatureAudience): string {
-  if (def.scope === "practice") return "Practice";
+function groupLabel(def: FeatureDef, audience: FeatureAudience, clientId: string): string {
+  if (def.scope === "practice" || (def.practiceWhenNoClient === "dashboard" && !clientId)) {
+    return "Practice";
+  }
   return audience === "owner" ? "Board" : "This client";
 }
 
@@ -415,9 +426,11 @@ export function searchFeatures(query: string, ctx: FeatureFinderContext): Featur
   }));
   const matched = scored.filter((row) => row.score > 0);
   const clientId = ctx.clientId?.trim() ?? "";
-  const omitted = matched.filter((row) => row.def.requiresClient && !clientId);
+  const needsOpenClient = (def: FeatureDef) =>
+    Boolean(def.requiresClient && !clientId && !(q && def.practiceWhenNoClient === "dashboard"));
+  const omitted = matched.filter((row) => needsOpenClient(row.def));
   const shown = matched
-    .filter((row) => !(row.def.requiresClient && !clientId))
+    .filter((row) => !needsOpenClient(row.def))
     .sort((a, b) => b.score - a.score || a.def.order - b.def.order);
 
   const results: FeatureResult[] = [];
@@ -428,7 +441,7 @@ export function searchFeatures(query: string, ctx: FeatureFinderContext): Featur
       id: row.def.id,
       label: row.def.label,
       hint: row.def.hint,
-      group: groupLabel(row.def, ctx.audience),
+      group: groupLabel(row.def, ctx.audience, clientId),
       destination,
       href: featureHref(destination),
     });
@@ -462,7 +475,11 @@ export function firmSectionTargets(query: string): {
   if (!q) return { targets: [], clientQuery: "" };
 
   const defs = FEATURES.filter(
-    (def) => def.requiresClient && def.audiences.includes("accountant") && def.studio,
+    (def) =>
+      def.requiresClient &&
+      def.practiceWhenNoClient !== "dashboard" &&
+      def.audiences.includes("accountant") &&
+      def.studio,
   );
   const rank = (span: string) =>
     defs
