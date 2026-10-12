@@ -31,11 +31,15 @@ assert(
 );
 
 const routeSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
+const redirectSrc = readFileSync(resolve("src/lib/reports-index-redirect.ts"), "utf8");
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");
 assert(routeSrc.includes("beforeLoad"), "/reports redirects");
 assert(!routeSrc.includes("ReportsPage"), "/reports does not render a studio");
-assert(studioSrc.includes("search.report") || routeSrc.includes("search.report"), "report deep links stay on the studio search");
+assert(
+  redirectSrc.includes("search.report") && redirectSrc.includes("next.report = search.report"),
+  "report deep links stay on the studio search",
+);
 assert(!studioSrc.includes("/reports/demo") && !routeSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
 assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");
