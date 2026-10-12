@@ -150,6 +150,7 @@ import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import {
   accountantClientTabSearch,
+  accountantValidatedSearch,
   canonicalizeAccountantSearch,
   legacyHashDestination,
   legacyPaneForSearch,
@@ -498,20 +499,10 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
-    if (typeof search.tab === "string" || typeof search.section === "string") {
-      const canonical = canonicalizeAccountantSearch({
-        tab: typeof search.tab === "string" ? search.tab : undefined,
-        section: typeof search.section === "string" ? search.section : undefined,
-        focus: typeof search.focus === "string" ? search.focus : undefined,
-      });
-      out.tab = canonical.tab;
-      if (canonical.section) out.section = canonical.section;
-      if (canonical.focus) out.focus = canonical.focus;
-    }
+    Object.assign(out, accountantValidatedSearch(search));
     if (typeof search.queries === "string") out.queries = search.queries;
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
-    if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
     if (
       search.agent === "financial_manager" ||
       search.agent === "analyst" ||
@@ -519,20 +510,9 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     ) {
       out.agent = search.agent;
     }
-    if (search.action === "preview" || search.action === "download") out.action = search.action;
     if (search.profile === 1 || search.profile === "1") out.profile = 1;
     if (search.view === "table" || search.view === "chart" || search.view === "13week") {
       out.view = search.view;
-    }
-    if (
-      out.tab === "plan" &&
-      (search.filter === "overdue" ||
-        search.filter === "at_risk" ||
-        search.filter === "blocked" ||
-        search.filter === "done" ||
-        search.filter === "all")
-    ) {
-      out.filter = search.filter;
     }
     return out;
   },

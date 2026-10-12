@@ -305,6 +305,68 @@ export function legacyPaneForSearch(search: {
   }
 }
 
+const PLAN_FILTERS = new Set(["overdue", "at_risk", "blocked", "done", "all"]);
+
+/**
+ * Tab, section, and the params that stick to one rail item, for `validateSearch`.
+ *
+ * The router merges this object over the raw query. A key left off the object
+ * keeps its old value, so `?tab=reports&section=plan` would still say
+ * `section=plan` after the tab becomes `plan`. `undefined` is what drops it.
+ * An Action Plan filter sticks only on `plan`. `report` and `action` stick
+ * only on Reports.
+ */
+export function accountantValidatedSearch(search: {
+  tab?: unknown;
+  section?: unknown;
+  focus?: unknown;
+  filter?: unknown;
+  report?: unknown;
+  action?: unknown;
+}): {
+  tab?: string;
+  section?: string;
+  focus?: string;
+  filter?: string;
+  report?: string;
+  action?: "preview" | "download";
+} {
+  const out: {
+    tab?: string;
+    section?: string;
+    focus?: string;
+    filter?: string;
+    report?: string;
+    action?: "preview" | "download";
+  } = {};
+  const hasAddress = typeof search.tab === "string" || typeof search.section === "string";
+  if (!hasAddress) {
+    if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
+    if (search.action === "preview" || search.action === "download") out.action = search.action;
+    return out;
+  }
+  const canonical = canonicalizeAccountantSearch({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+    section: typeof search.section === "string" ? search.section : undefined,
+    focus: typeof search.focus === "string" ? search.focus : undefined,
+  });
+  out.tab = canonical.tab;
+  out.section = canonical.section;
+  out.focus = canonical.focus;
+  if (canonical.tab === "reports") {
+    if (typeof search.report === "string" && search.report.length <= 64) out.report = search.report;
+    if (search.action === "preview" || search.action === "download") out.action = search.action;
+  } else {
+    out.report = undefined;
+    out.action = undefined;
+  }
+  out.filter =
+    canonical.tab === "plan" && typeof search.filter === "string" && PLAN_FILTERS.has(search.filter)
+      ? search.filter
+      : undefined;
+  return out;
+}
+
 /**
  * Search to write when the accountant opens a rail item or a legacy pane.
  * `tab` may be a rail id (`cash`) or a legacy pane id (`ask`, `plan`).
