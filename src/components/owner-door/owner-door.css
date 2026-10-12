@@ -1192,7 +1192,9 @@ html.dark .owner-status.is-attention {
   font-weight: var(--type-numeric-weight);
   line-height: var(--type-numeric-leading);
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
 }
 
 .owner-door .owner-reply-kicker {
@@ -1413,6 +1415,20 @@ html.dark .owner-status.is-attention {
   opacity: 0.62;
 }
 
+/* The Financial Manager circle stays put. Her clip moves inside it.
+   Analyst and Advisor keep their drift, breathe, and glow. */
+.owner-presence.is-fm-clip .owner-drift,
+.owner-presence.is-fm-clip .owner-breathe,
+.owner-presence.is-fm-clip .owner-micro {
+  animation: none;
+  transform: none;
+  will-change: auto;
+}
+
+.owner-presence.is-fm-clip .owner-glow {
+  animation: none;
+}
+
 .owner-presence.is-financial_manager {
   --accent: var(--cobalt);
 }
@@ -1483,12 +1499,23 @@ html.dark .owner-status.is-attention {
 }
 
 .owner-fm-face video {
+  z-index: 1;
   opacity: 0;
   transition: opacity 300ms linear;
 }
 
-.owner-fm-face video.is-on {
+.owner-fm-face video.is-hold {
+  z-index: 1;
   opacity: 1;
+}
+
+.owner-fm-face video.is-on {
+  z-index: 2;
+  opacity: 1;
+}
+
+.owner-fm-face.is-live .owner-fm-poster {
+  visibility: hidden;
 }
 
 .owner-presence.is-advisor .mark {
@@ -2431,7 +2458,9 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
   box-shadow: none;
 }
 .owner-door .milon-theme-toggle:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cobalt);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--cobalt);
 }
 
 /* Chart/table switches on the owner tabs use cobalt. Gold stays on the wordmark. */

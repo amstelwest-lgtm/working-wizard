@@ -57,7 +57,7 @@ export function OwnerAvatar({
     const el = node.current;
     if (!el) return;
     const before = prev.current;
-    if (reduced || before === motion) {
+    if (reduced || fmVideo || before === motion) {
       prev.current = motion;
       return;
     }
@@ -81,7 +81,7 @@ export function OwnerAvatar({
       anim.cancel();
       window.clearTimeout(commit);
     };
-  }, [motion, reduced]);
+  }, [motion, reduced, fmVideo]);
 
   return (
     <span
