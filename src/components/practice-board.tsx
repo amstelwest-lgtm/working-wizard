@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -1721,6 +1722,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <span className="gold-text">MILŌN</span>
           </span>
           <FirmSwitcher />
+          <PeriodPill />
           <FeatureFinder audience="accountant" clientId={null} />
           <span className="spacer" />
           <SettingsMenu

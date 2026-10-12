@@ -4,6 +4,7 @@
  */
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
+import { PeriodPill } from "@/components/chrome-icons";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -174,6 +175,7 @@ export function RailStudio() {
           <span className="brand">
             <span className="gold-text">MILŌN</span>
           </span>
+          <PeriodPill />
           <FeatureFinder audience="accountant" clientId={clientId} />
           <span className="spacer" />
           <SettingsMenu

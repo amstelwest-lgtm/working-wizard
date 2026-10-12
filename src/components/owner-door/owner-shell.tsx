@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { PeriodPill, RailIcon } from "@/components/chrome-icons";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -107,8 +108,12 @@ export function OwnerShell({
             <span className="gold-text">MILŌN</span>
           </span>
           <span className="owner-biz">
+            <span className="owner-biz-ic" aria-hidden="true">
+              <RailIcon id="building" />
+            </span>
             <b>{businessName}</b>
           </span>
+          <PeriodPill />
         </div>
         <span className="spacer" />
         <div className="owner-tools">
@@ -135,6 +140,9 @@ export function OwnerShell({
           >
             <span className="av">{initials}</span>
             Owner
+            <span className="profile-caret" aria-hidden="true">
+              <RailIcon id="caret" />
+            </span>
           </button>
           {menuOpen ? (
             <div className="owner-menu" role="menu" aria-label="Settings, plan, and profile">
@@ -192,7 +200,10 @@ export function OwnerShell({
                 aria-current={active ? "page" : undefined}
                 onClick={() => onNavigate(item.screen)}
               >
-                {item.label}
+                <span className="tab-ic" aria-hidden="true">
+                  <RailIcon id={item.id} />
+                </span>
+                <span className="tab-text">{item.label}</span>
               </button>
             );
           })}

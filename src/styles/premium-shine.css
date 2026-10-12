@@ -53,6 +53,8 @@ html:not(.dark) .owner-door {
   --owner-sans: var(--pp-sans);
   --owner-edge: #e3e8ef;
   --owner-shadow: var(--pp-shadow-card);
+  /* Larger page titles with a grey lede underneath. */
+  --type-h1-size: 34px;
 }
 /* Serif italics become upright Inter semibold — one professional voice. */
 html:not(.dark) .accountant-portal .serif {
@@ -65,13 +67,14 @@ html:not(.dark) .accountant-portal .briefing h1 {
   font-family: var(--pp-sans);
   font-style: normal;
   font-weight: 600;
-  font-size: 26px;
+  font-size: 28px;
   letter-spacing: -0.02em;
 }
 html:not(.dark) .accountant-portal .answer-strip__heading {
   font-weight: 600;
-  letter-spacing: -0.015em;
-  font-size: 24px;
+  letter-spacing: -0.02em;
+  font-size: 27px;
+  margin: 0 0 6px;
 }
 html:not(.dark) .owner-door .owner-title {
   font-weight: 600;
@@ -326,8 +329,15 @@ html:not(.dark) .accountant-nav button:focus-visible {
 }
 
 /* ===== light canvas column ===== */
+/* A faint warm wash at the top of the canvas and a lit gold edge where it
+   meets the charcoal frame — the reference's rim light, kept restrained. */
 html:not(.dark) .accountant-portal .deliverable-main {
-  background: var(--pp-canvas);
+  background:
+    radial-gradient(110% 320px at 50% 0%, rgba(212, 175, 55, 0.06), transparent 75%),
+    var(--pp-canvas);
+  box-shadow:
+    inset 0 1px 0 rgba(233, 204, 99, 0.26),
+    inset 1px 0 0 rgba(233, 204, 99, 0.12);
 }
 @media (min-width: 861px) {
   html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
@@ -448,4 +458,319 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:
   background-image: var(--pp-gold-cta-hover);
   color: var(--pp-gold-cta-ink);
   -webkit-text-fill-color: var(--pp-gold-cta-ink);
+}
+
+/* ============================================================
+   Iteration 2 — structure. These rules lay out markup added for
+   the premium pass (rail icons, topbar pills, agent portraits),
+   so they apply in BOTH themes. Colours come from theme vars.
+   ============================================================ */
+
+/* --- rail line icons --- */
+.accountant-nav .nav-ic,
+.owner-door .deliverable-rail .tab-ic {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1.5px;
+  opacity: 0.8;
+}
+.accountant-nav .nav-ic svg,
+.owner-door .deliverable-rail .tab-ic svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.accountant-nav .nav-back,
+.accountant-nav .nav-label {
+  gap: 10px;
+}
+.accountant-nav .nav-text,
+.owner-door .deliverable-rail .tab-text {
+  min-width: 0;
+}
+/* Sub-links indent so their text aligns with the heading text. */
+.accountant-nav .nav-sub {
+  padding-left: 26px;
+}
+/* Owner tabs: icon + label start-aligned (base is space-between). */
+.owner-door .deliverable-rail .tab {
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* --- topbar: business pill, period pill, avatar caret --- */
+.owner-door .owner-biz {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+@media (min-width: 861px) {
+  .owner-door .owner-biz b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.owner-door .owner-biz-ic {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  opacity: 0.85;
+}
+/* Phone: the brand block sizes to its content (the base splits free space
+   with the spacer), and the name wraps at word boundaries, not anywhere. */
+@media (max-width: 760px) {
+  .owner-door .owner-brand {
+    flex: 1 1 auto;
+  }
+  .owner-door .owner-biz b {
+    overflow-wrap: break-word;
+  }
+}
+.owner-door .owner-biz-ic svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+.accountant-portal .topbar .period-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+.accountant-portal .topbar .period-pill svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+  opacity: 0.8;
+}
+@media (max-width: 860px) {
+  .accountant-portal .topbar .period-pill {
+    display: none;
+  }
+}
+.accountant-portal .topbar .profile-chip .profile-caret {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  opacity: 0.7;
+  margin-left: -1px;
+}
+.accountant-portal .topbar .profile-chip .profile-caret svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+}
+
+/* --- agent cards: portrait area with a soft per-agent backdrop --- */
+.owner-door .owner-agent[data-agent="financial_manager"] .owner-portrait {
+  --pp-tint: var(--cobalt);
+}
+.owner-door .owner-agent[data-agent="analyst"] .owner-portrait {
+  --pp-tint: var(--royal);
+}
+.owner-door .owner-agent[data-agent="advisor"] .owner-portrait {
+  --pp-tint: var(--ice);
+}
+.owner-door .owner-portrait {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 22px 12px 18px;
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--pp-tint, var(--cobalt)) 13%, var(--card)) 0%,
+    color-mix(in srgb, var(--pp-tint, var(--cobalt)) 5%, var(--card)) 60%,
+    var(--card) 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pp-tint, var(--cobalt)) 16%, transparent);
+}
+@media (max-width: 760px) {
+  .owner-door .owner-portrait {
+    padding: 16px 10px 14px;
+  }
+}
+/* Wide-row trial keeps the avatar in column one. */
+@media (min-width: 761px) {
+  .owner-door .owner-pane[data-bots="stack"] .owner-agent-open .owner-portrait {
+    grid-row: 1 / span 4;
+    grid-column: 1;
+    width: auto;
+    padding: 12px;
+  }
+}
+.owner-door .owner-portrait-chip {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 86%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pp-tint, var(--cobalt)) 28%, transparent);
+  color: var(--ink-dim);
+}
+.owner-door .owner-portrait-chip svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* ============================================================
+   Iteration 2 — light-mode paint: icon tints on the charcoal
+   rail, topbar pills on charcoal, title scale + grey ledes,
+   status dot lines, spacing rhythm, slim invite banner.
+   ============================================================ */
+
+/* --- rail icon tints --- */
+html:not(.dark) .accountant-nav .nav-ic,
+html:not(.dark) .owner-door .deliverable-rail .tab-ic {
+  color: #98a1b3;
+  opacity: 1;
+}
+html:not(.dark) .accountant-nav .nav-heading.is-current > .nav-row .nav-ic {
+  color: #c6cdd9;
+}
+html:not(.dark) .accountant-portal .deliverable-rail .tab.on .tab-ic,
+html:not(.dark) .accountant-nav .nav-heading.is-page .nav-ic {
+  color: #e0c25f;
+}
+
+/* --- topbar pills on charcoal --- */
+html:not(.dark) .accountant-portal .topbar .period-pill {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: #a9b2c1;
+}
+html:not(.dark) .owner-door .owner-biz-ic {
+  color: #d8bc66;
+}
+html:not(.dark) .accountant-portal .topbar .profile-caret {
+  color: #8e97a8;
+}
+
+/* --- titles and grey ledes --- */
+html:not(.dark) .owner-door .owner-head {
+  margin: 8px 0 2px;
+}
+html:not(.dark) .owner-door .owner-pane > .owner-title:first-child {
+  margin-top: 8px;
+}
+html:not(.dark) .owner-door .owner-lede {
+  margin-top: 7px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #5b6472;
+  max-width: 64ch;
+}
+html:not(.dark) .accountant-portal .answer-strip {
+  margin: 10px 0 20px;
+  row-gap: 12px;
+}
+html:not(.dark) .accountant-portal .answer-strip__sentence {
+  font-size: 15px;
+  color: #5b6472;
+}
+html:not(.dark) .accountant-portal .briefing-type {
+  margin-top: 6px;
+  font-size: 13.5px;
+  color: #5b6472;
+}
+
+/* --- agent cards: status dot line, rhythm, equal rows --- */
+html:not(.dark) .owner-status {
+  min-height: 0;
+  gap: 7px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+html:not(.dark) .owner-status .owner-status-icon {
+  display: none;
+}
+html:not(.dark) .owner-status::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+}
+html:not(.dark) .owner-door .owner-pane[data-owner-home="true"] {
+  gap: 20px;
+}
+@media (min-width: 761px) {
+  html:not(.dark) .owner-door .owner-pane[data-owner-home="true"] .owner-agents {
+    gap: 18px;
+  }
+  html:not(.dark) .owner-door .owner-pane[data-owner-home="true"] .owner-agent {
+    padding: 10px 10px 14px;
+  }
+}
+
+/* --- invite: a slim, refined banner --- */
+html:not(.dark) .owner-door .owner-invite-nudge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 18px;
+  padding: 12px 18px;
+  border-color: var(--pp-gold-line-soft);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--pp-shadow-card);
+}
+html:not(.dark) .owner-door .owner-invite-nudge-copy {
+  flex: 1 1 300px;
+  min-width: 240px;
+}
+html:not(.dark) .owner-door .owner-invite-nudge-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .owner-invite-nudge-copy p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: #5b6472;
+}
+html:not(.dark) .owner-door .owner-invite-nudge-copybtn,
+html:not(.dark) .owner-door .owner-invite-nudge-dismiss {
+  flex: none;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .owner-invite-nudge-copybtn {
+  border-color: #d3dae4;
+  color: var(--cobalt, #0b5fff);
+}
+html:not(.dark) .owner-door .owner-invite-nudge-dismiss {
+  border-color: transparent;
+  color: #6b7483;
+}
+html:not(.dark) .owner-door .owner-invite-nudge #invite-accountant {
+  flex: 1 1 340px;
 }
