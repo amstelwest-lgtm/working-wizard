@@ -5,6 +5,7 @@ import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
+import { AgentChipIcon } from "@/components/chrome-icons";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 import "./owner-door.css";
@@ -132,6 +133,7 @@ export function OwnerHome({
   signoffLine,
   inviteClientId,
   title = "Your finance team",
+  lede = "Three agents watching the books — ask them anything, any time.",
   showInvite = true,
 }: {
   variant: AvatarVariant;
@@ -139,6 +141,8 @@ export function OwnerHome({
   lines: OwnerHomeLines;
   /** Accountant practice Home uses "Your whole finance team". */
   title?: string;
+  /** Grey subtitle under the title. */
+  lede?: string;
   /** Owner home invites an accountant. Practice Home does not. */
   showInvite?: boolean;
   status?: Partial<Record<AgentKey, OwnerCardStatus | null>>;
@@ -169,6 +173,7 @@ export function OwnerHome({
     <div className="owner-pane" data-owner-home="true" data-bots={bots}>
       <div className="owner-head">
         <h1 className="owner-title">{title}</h1>
+        <p className="owner-lede">{lede}</p>
       </div>
       <div className="owner-stage">
         <div className="owner-agents">
@@ -179,15 +184,20 @@ export function OwnerHome({
             return (
               <div key={card.agent} className="owner-agent" data-agent={card.agent}>
                 <button type="button" className="owner-agent-open" onClick={() => onOpen(card.agent)}>
-                  <OwnerAvatar
-                    agent={card.agent}
-                    variant={variant}
-                    size="lg"
-                    share
-                    motion={card.motion}
-                    lookAt={card.lookAt}
-                    label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
-                  />
+                  <span className="owner-portrait">
+                    <span className="owner-portrait-chip" aria-hidden="true">
+                      <AgentChipIcon agent={card.agent} />
+                    </span>
+                    <OwnerAvatar
+                      agent={card.agent}
+                      variant={variant}
+                      size="lg"
+                      share
+                      motion={card.motion}
+                      lookAt={card.lookAt}
+                      label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
+                    />
+                  </span>
                   <span className="owner-name">{agentDisplayName(card.agent)}</span>
                   {chip ? (
                     <span className={`owner-status is-${chip.tone}`}>
