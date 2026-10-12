@@ -214,7 +214,7 @@ import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
-import { headerShortcutClass, portalButtonClass } from "@/lib/client-chrome";
+import { portalButtonClass } from "@/lib/client-chrome";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
 import { focusTrapTabIndex, listFocusable } from "@/lib/dialog-focus";
 import {
@@ -868,6 +868,20 @@ function ClientView() {
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
   }, [search, requestOpenNote, openArchive]);
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    const id =
+      search.section === "drafts"
+        ? "reports-drafts"
+        : search.section === "sent"
+          ? "reports-sent"
+          : null;
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, search.section]);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const apply = () => {
@@ -2438,18 +2452,6 @@ function ClientView() {
     revealTab("reports");
   }, [revealTab]);
 
-  /** Reports studio for this client: Deliverables → Reports. */
-  const openReportsStudio = useCallback(() => {
-    setMobileNavOpen(false);
-    const pane = resolveAccountantTab("reports") ?? "reports";
-    setActiveTab(pane);
-    void navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: (prev) => accountantClientTabSearch(prev, "reports"),
-    });
-  }, [clientId, navigate]);
-
   const overviewScorecardPeriodLabel = useCallback(() => {
     return (
       reportDataPeriodLabel(financials) ??
@@ -2737,17 +2739,39 @@ function ClientView() {
           return;
         default: {
           const route = nextStepRoute(key, "accountant", clientId);
-          const tab =
-            resolveAccountantTab({
-              tab: route.tab ?? undefined,
-              section: route.search.section,
-            }) ?? "overview";
-          const nextSearch = { tab, section: route.search.section, filter: route.search.filter };
-          revealTab(tab, undefined, nextSearch.filter);
+          const canonical = canonicalizeAccountantSearch({
+            tab: route.tab ?? undefined,
+            section: route.search.section,
+          });
+          const tab = resolveAccountantTab(canonical) ?? "overview";
+          setActiveTab(tab);
+          void navigate({
+            to: "/clients/$clientId",
+            params: { clientId },
+            search: (prev) => {
+              const next = accountantClientTabSearch(
+                prev,
+                route.tab ?? tab,
+                route.search.section ? { section: route.search.section } : undefined,
+              );
+              if (route.search.filter) (next as { filter?: string }).filter = route.search.filter;
+              return next;
+            },
+            replace: true,
+          });
+          const scrollId =
+            canonical.tab === "reports" && canonical.section === "drafts"
+              ? "reports-drafts"
+              : canonical.tab === "reports" && canonical.section === "sent"
+                ? "reports-sent"
+                : `pane-${tab}`;
+          window.setTimeout(() => {
+            document.getElementById(scrollId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
         }
       }
     },
-    [clientId, hasFigures, revealTab],
+    [clientId, hasFigures, navigate],
   );
 
   const homeActivity = useAgentActivity(clientId);
@@ -3006,13 +3030,6 @@ function ClientView() {
               <AccountantMenuButton open={mobileNavOpen} onClick={() => setMobileNavOpen((o) => !o)} />
               <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
                 <ThemeToggle />
-                <button type="button" className={headerShortcutClass()} onClick={openReportsStudio}>
-                  <svg viewBox="0 0 24 24">
-                    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                    <path d="M14 3v6h6" />
-                  </svg>
-                  Reports studio
-                </button>
               </div>
             </div>
 
@@ -3072,7 +3089,7 @@ function ClientView() {
                     needs={homeNeeds}
                     onMoves={() => openHomeSection("plan")}
                     onActions={() => openHomeSection("plan")}
-                    onDrafts={() => openHomeSection("deliverables", "pack")}
+                    onDrafts={() => openHomeSection("reports", "drafts")}
                     onDeliverables={() => openHomeSection("reports")}
                     onBooks={() => openHomeSection("portal")}
                     signoffLine={homeSignoffLine}
@@ -3948,7 +3965,7 @@ function ClientView() {
                     }}
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
-                    onOpenDrafts={() => setActiveTab("advisory")}
+                    onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => setActiveTab("plan")}
                   />
                 </div>
@@ -3971,7 +3988,7 @@ function ClientView() {
                     }}
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
-                    onOpenDrafts={() => setActiveTab("advisory")}
+                    onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => setActiveTab("plan")}
                   />
                 </div>
@@ -4032,37 +4049,114 @@ function ClientView() {
                   </div>
                 </div>
 
-                {/* ===== REPORTS TAB — same Reports Studio as /reports ===== */}
+                {/* ===== REPORTS — Drafts, PDFs, Sent. One page, no tabs. ===== */}
                 <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
                   {activeTab === "reports" && (
-                    <TabErrorBoundary label="Reports">
-                      <Suspense
-                        fallback={
-                          <div style={{ padding: 24, color: "var(--ink-dim)" }}>
-                            Loading reports…
-                          </div>
-                        }
-                      >
-                        <ReportsStudioPanel
-                          key={client.id}
-                          client={client.name}
+                    <>
+                      <section id="reports-drafts" className="mb-8">
+                        <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
+                          Drafts
+                        </h2>
+                        <AdvisoryPackPanel
+                          className="mb-5"
                           clientId={client.id}
-                          report={studioDeepLink.report}
-                          action={studioDeepLink.action}
-                          embedded
-                          sourceChip={healthChip}
+                          firmId={client.firm_id ?? null}
+                          signoff={advisorySignoff}
+                          audience="accountant"
+                          canGenerate={hasFigures}
+                          hasFirm={Boolean(client.firm_id)}
+                          refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                          onChanged={() => setAdvisoryBump((n) => n + 1)}
+                          onSignoffAction={setPackSignoff}
+                          chip={healthChip}
+                          liveCashFloor={cashOutlook.floor}
+                          currency={clientMarket.currency}
+                          primary={
+                            <AdvisoryTabSignoff
+                              hideLine
+                              action={packSignoff}
+                              pageSignoff={advisorySignoff}
+                            />
+                          }
                           inputs={
                             <DeliverableInputConfig
                               className="mb-5"
                               clientId={clientId}
-                              deliverableId="reports"
+                              deliverableId="advisory"
                               context={deliverableInputContext}
                             />
                           }
-                          onSearchCleared={() => setStudioDeepLink({})}
+                          currentFigures={{
+                            runwayLabel: runwayDisplayLabel(metricRunway),
+                            cash: cashOutlook.opening,
+                            healthScore: overallHealth.overall,
+                          }}
                         />
-                      </Suspense>
-                    </TabErrorBoundary>
+                        <RecommendationsPanel
+                          className="mb-5"
+                          clientId={client.id}
+                          firmId={client.firm_id ?? null}
+                          audience="accountant"
+                          canPropose={hasFigures}
+                          refreshKey={advisoryBump}
+                          onChanged={() => setAdvisoryBump((n) => n + 1)}
+                          onOpenActions={() => openHomeSection("plan")}
+                          onAddFigures={() => setFirstDataOpen(true)}
+                        />
+                        <OutcomesPanel
+                          className="mb-5"
+                          clientId={client.id}
+                          audience="accountant"
+                          refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                          onChanged={() => setAdvisoryBump((n) => n + 1)}
+                        />
+                        <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
+                          <AdvisoryDrafter
+                            clientId={client.id}
+                            clientName={client.name}
+                            onLogged={() => setDeliveryRefresh((n) => n + 1)}
+                          />
+                        </section>
+                      </section>
+                      <section id="reports-pdfs">
+                        <TabErrorBoundary label="Reports">
+                          <Suspense
+                            fallback={
+                              <div style={{ padding: 24, color: "var(--ink-dim)" }}>
+                                Loading reports…
+                              </div>
+                            }
+                          >
+                            <ReportsStudioPanel
+                              key={client.id}
+                              client={client.name}
+                              clientId={client.id}
+                              report={studioDeepLink.report}
+                              action={studioDeepLink.action}
+                              embedded
+                              sourceChip={healthChip}
+                              inputs={
+                                <DeliverableInputConfig
+                                  className="mb-5"
+                                  clientId={clientId}
+                                  deliverableId="reports"
+                                  context={deliverableInputContext}
+                                />
+                              }
+                              onSearchCleared={() => setStudioDeepLink({})}
+                            />
+                          </Suspense>
+                        </TabErrorBoundary>
+                      </section>
+                      <section id="reports-sent" className="mt-8">
+                        <AdvisorySentHistory
+                          clientId={client.id}
+                          refreshToken={deliveryRefresh}
+                          statementPeriodLabel={reportDataPeriodLabel(financials)}
+                          liveScorecard={renderOverviewScorecard}
+                        />
+                      </section>
+                    </>
                   )}
                 </div>
 
@@ -4147,89 +4241,6 @@ function ClientView() {
                   </TabErrorBoundary>
                 </div>
 
-                {/* ===== ADVISORY TAB ===== */}
-                <div
-                  className={`tabpane${activeTab === "advisory" ? " on" : ""}`}
-                  id="pane-advisory"
-                >
-                  {/* Pack, recommendations, and outcomes. The drafter is section=drafter. */}
-                  <AdvisoryPackPanel
-                    className="mb-5"
-                    clientId={client.id}
-                    firmId={client.firm_id ?? null}
-                    signoff={advisorySignoff}
-                    audience="accountant"
-                    canGenerate={hasFigures}
-                    hasFirm={Boolean(client.firm_id)}
-                    refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                    onSignoffAction={setPackSignoff}
-                    chip={healthChip}
-                    liveCashFloor={cashOutlook.floor}
-                    currency={clientMarket.currency}
-                    primary={
-                      <AdvisoryTabSignoff
-                        hideLine
-                        action={packSignoff}
-                        pageSignoff={advisorySignoff}
-                      />
-                    }
-                    inputs={
-                      <DeliverableInputConfig
-                        className="mb-5"
-                        clientId={clientId}
-                        deliverableId="advisory"
-                        context={deliverableInputContext}
-                      />
-                    }
-                    currentFigures={{
-                      runwayLabel: runwayDisplayLabel(metricRunway),
-                      cash: cashOutlook.opening,
-                      healthScore: overallHealth.overall,
-                    }}
-                  />
-                  {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
-                  <RecommendationsPanel
-                    className="mb-5"
-                    clientId={client.id}
-                    firmId={client.firm_id ?? null}
-                    audience="accountant"
-                    canPropose={hasFigures}
-                    refreshKey={advisoryBump}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                    onOpenActions={() => setActiveTab("plan")}
-                    onAddFigures={() => setFirstDataOpen(true)}
-                  />
-                  {/* P2.1 — outcomes: what the last cycle's recommendations actually did. */}
-                  <OutcomesPanel
-                    className="mb-5"
-                    clientId={client.id}
-                    audience="accountant"
-                    refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                  />
-                </div>
-
-                {/* ===== ADVISORY DRAFTER ===== */}
-                <div className={`tabpane${activeTab === "drafter" ? " on" : ""}`} id="pane-drafter">
-                  {activeTab === "drafter" ? (
-                    <>
-                      <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
-                        <AdvisoryDrafter
-                          clientId={client.id}
-                          clientName={client.name}
-                          onLogged={() => setDeliveryRefresh((n) => n + 1)}
-                        />
-                      </section>
-                      <AdvisorySentHistory
-                        clientId={client.id}
-                        refreshToken={deliveryRefresh}
-                        statementPeriodLabel={reportDataPeriodLabel(financials)}
-                        liveScorecard={renderOverviewScorecard}
-                      />
-                    </>
-                  ) : null}
-                </div>
               </div>
             </div>
 

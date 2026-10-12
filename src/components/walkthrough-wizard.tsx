@@ -178,10 +178,10 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     body: "Click a row to open the shared workspace. You and the client work on the same numbers and the same tabs. Their screen looks a little different — they see a simpler view — but it is the same file.",
   },
   {
-    targetId: "wizard-dash-reports",
+    targetId: ".ctable tbody tr, .client-card, [data-client-row]",
     section: "Reports",
     title: "Reports you can brand",
-    body: "Reports Studio is where you assemble board-ready PDFs. They carry your firm's logo and colours.",
+    body: "Open a client and choose Reports. Drafts, PDFs, and what you have sent sit on one page. The PDFs carry your firm's logo and colours.",
   },
   {
     targetId: "wizard-add-client",

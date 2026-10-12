@@ -153,13 +153,13 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   eq(owner(facts({ state: "recommendations" })).key, "recommend", "recommendations");
   eq(
     acct(facts({ state: "recommendations" })).cta.route.tab,
-    "deliverables",
-    "accountant drafts in Deliverables",
+    "reports",
+    "accountant drafts on Reports",
   );
   eq(
     acct(facts({ state: "recommendations" })).cta.route.search.section,
-    "pack",
-    "accountant drafts on the pack section",
+    "drafts",
+    "accountant drafts on Reports drafts",
   );
   eq(owner(facts({ state: "recommendations" })).cta.route.tab, "next", "owner reads next moves");
 
@@ -167,8 +167,8 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   // P1: with no pack yet the accountant builds one; the pack is the review unit.
   const ar = facts({ state: "accountant_review", hasFirm: true, proposedRecommendations: 2 });
   eq(acct(ar).key, "generate_pack", "accountant generates the pack first");
-  eq(acct(ar).cta.route.tab, "deliverables", "pack lives on Deliverables");
-  eq(acct(ar).cta.route.search.section, "pack", "pack lives on the pack section");
+  eq(acct(ar).cta.route.tab, "reports", "pack lives on Reports");
+  eq(acct(ar).cta.route.search.section, "drafts", "pack lives on Reports drafts");
   eq(owner(ar).key, "wait", "owner waits");
   eq(owner(ar).urgency, "info", "waiting is informational, not a CTA to hammer");
   const arPack = facts({ ...ar, packStatus: "in_review", packVersion: 3 });
@@ -540,7 +540,7 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
     "studio CTA opens upload / profile dialogs",
   );
   assert(
-    studio.includes("filter: route.search.filter"),
+    studio.includes("route.search.filter"),
     "studio CTA carries overdue/blocked filter to the plan",
   );
 

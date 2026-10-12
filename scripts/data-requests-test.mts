@@ -590,7 +590,7 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
   assert(dataCase.includes("requestRevealDataRequests()"), "See what's missing reveals the panel");
   assert(dataCase.includes("return;"), "data_request does not fall through to a tab change");
   assert(!dataCase.includes("revealTab"), "data_request does not scroll the overview pane");
-  assert(act.includes("filter: route.search.filter"), "other CTAs still carry the plan filter");
+  assert(act.includes("route.search.filter"), "other CTAs still carry the plan filter");
 
   assert(panel.includes('id="data-requests"'), "panel is the #data-requests target");
   assert(panel.includes("tabIndex={-1}"), "panel can take programmatic focus");

@@ -2,7 +2,7 @@
  * Mounts the accountant studio shell from the client route, with fixture panes.
  * Supabase is the local stub. Nothing here has a project URL.
  */
-import { Component, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
@@ -149,6 +149,16 @@ export function RailStudio() {
     });
   }, [search.tab, search.section, clientId, navigate]);
   const pane = legacyPaneForSearch(search) ?? "overview";
+  useEffect(() => {
+    if (pane !== "reports") return;
+    const id =
+      search.section === "drafts" ? "reports-drafts" : search.section === "sent" ? "reports-sent" : null;
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [pane, search.section]);
   const [menuOpen, setMenuOpen] = useState(false);
   useAccountantDrawer(menuOpen);
 
@@ -184,18 +194,7 @@ export function RailStudio() {
             onClick={() => setMenuOpen(false)}
           />
           <AccountantMenuButton open={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
-          <div className={`topbar-actions${menuOpen ? " open" : ""}`}>
-            <button
-              type="button"
-              className="tb-btn"
-              onClick={() => {
-                setMenuOpen(false);
-                void navigate({ to: "/reports" });
-              }}
-            >
-              Reports studio
-            </button>
-          </div>
+          <div className={`topbar-actions${menuOpen ? " open" : ""}`} />
         </div>
         <div className="crumb">
           <FirmDashboardCrumb linked={false} onBack={() => {}} />
@@ -225,7 +224,6 @@ export function RailStudio() {
             {pane === "collections" ? <CollectionsPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "payables" ? <PayablesPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
-            {pane === "advisory" ? <PackPane clientId={clientId} packView={search.packView} /> : null}
             {pane === "plan" ? (
               <PlanPane
                 clientId={clientId}
@@ -233,8 +231,9 @@ export function RailStudio() {
                 initialFilter={search.filter === "overdue" ? "overdue" : undefined}
               />
             ) : null}
-            {pane === "reports" ? <ReportsPane clientId={clientId} /> : null}
-            {pane === "drafter" ? <DrafterPane clientId={clientId} /> : null}
+            {pane === "reports" ? (
+              <ReportsPane clientId={clientId} packView={search.packView} />
+            ) : null}
           </div>
         </div>
         <NoteLayer
@@ -419,7 +418,7 @@ function BriefingPane() {
           }}
           onMoves={() => go("plan")}
           onActions={() => go("plan")}
-          onDrafts={() => go("deliverables", "pack")}
+          onDrafts={() => go("reports", "drafts")}
           onDeliverables={() => go("reports")}
           onBooks={() => go("portal")}
           signoffLine={signoffStatusLine({ kind: "draft", scopeLabel: "Advisory" })}
@@ -994,7 +993,7 @@ function harnessPackAction(status: PackAnswerStatus, signedBy: string | null): A
   };
 }
 
-function PackPane({ clientId, packView }: { clientId: string; packView?: string }) {
+function ReportsPane({ clientId, packView }: { clientId: string; packView?: string }) {
   const cycleSection = {
     key: "last_cycle_results",
     title: "What the last cycle achieved",
@@ -1025,7 +1024,11 @@ function PackPane({ clientId, packView }: { clientId: string; packView?: string 
             }
           : null;
   return (
-    <div className="tabpane on" id="pane-advisory">
+    <div className="tabpane on" id="pane-reports">
+      <section id="reports-drafts" className="mb-8">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
+          Drafts
+        </h2>
       <PaneBoundary label="Advisory pack">
         <AdvisoryPackPanel
           className="mb-5"
@@ -1072,36 +1075,27 @@ function PackPane({ clientId, packView }: { clientId: string; packView?: string 
       <PaneBoundary label="Outcomes">
         <OutcomesPanel className="mb-5" clientId={clientId} audience="accountant" onChanged={() => {}} />
       </PaneBoundary>
-    </div>
-  );
-}
-
-function ReportsPane({ clientId }: { clientId: string }) {
-  return (
-    <div className="tabpane on" id="pane-reports">
-      <PaneBoundary label="Reports">
-        <ReportsStudio
-          embedded
-          client="Harbour Glass"
-          clientId={clientId}
-          sourceChip={figureSourceChipLabel("upload")}
-        />
-      </PaneBoundary>
-    </div>
-  );
-}
-
-function DrafterPane({ clientId }: { clientId: string }) {
-  return (
-    <div className="tabpane on" id="pane-drafter">
       <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
         <PaneBoundary label="Advisory drafter">
           <AdvisoryDrafter clientId={clientId} clientName="Harbour Glass" />
         </PaneBoundary>
       </section>
-      <PaneBoundary label="Sent history">
-        <AdvisorySentHistory clientId={clientId} />
-      </PaneBoundary>
+      </section>
+      <section id="reports-pdfs">
+        <PaneBoundary label="Reports">
+          <ReportsStudio
+            embedded
+            client="Harbour Glass"
+            clientId={clientId}
+            sourceChip={figureSourceChipLabel("upload")}
+          />
+        </PaneBoundary>
+      </section>
+      <section id="reports-sent" className="mt-8">
+        <PaneBoundary label="Sent history">
+          <AdvisorySentHistory clientId={clientId} />
+        </PaneBoundary>
+      </section>
     </div>
   );
 }

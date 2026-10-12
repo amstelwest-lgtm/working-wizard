@@ -8,12 +8,12 @@
  * new item. The rewrite is idempotent: a canonical URL comes back unchanged.
  *
  * `focus=pillars` stays on Health so that pane can keep its heading check.
- * Collections and payables stay a section of Cash flow. Pack and the drafter
- * stay a section of Deliverables. Action plan is its own rail item again:
- * `?tab=plan`, and the old `actions` / `tasks` aliases, land there. The
- * horizontal sub-tab row is gone. Other params (`coach`, `filter`,
- * `onboard`, `report`, `action`, …) are preserved by the route parser.
- * An Action Plan `filter` sticks only while the tab is `plan`.
+ * Collections and payables stay a section of Cash flow. Action plan is its own
+ * rail item. Pack, the drafter, and a bare Deliverables link scroll to Drafts
+ * on Reports. Sent stays the third region of that same page. The horizontal
+ * sub-tab row is gone. Other params (`coach`, `filter`, `onboard`, `report`,
+ * `action`, …) are preserved by the route parser. An Action Plan `filter`
+ * sticks only while the tab is `plan`.
  */
 
 export const CLIENT_RAIL_TABS = [
@@ -25,7 +25,6 @@ export const CLIENT_RAIL_TABS = [
   "moves",
   "plan",
   "reports",
-  "deliverables",
   "portal",
 ] as const;
 
@@ -40,6 +39,7 @@ export const RAIL_SUBSECTIONS = [
   "collections",
   "payables",
   "pack",
+  "drafts",
   "drafter",
   "lines",
   "months",
@@ -103,15 +103,15 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   "strategic-moves": { tab: "moves" },
   reports: { tab: "reports" },
   report: { tab: "reports" },
-  pack: { tab: "deliverables", section: "pack" },
-  advisory: { tab: "deliverables", section: "pack" },
+  pack: { tab: "reports", section: "drafts" },
+  advisory: { tab: "reports", section: "drafts" },
   plan: { tab: "plan" },
   actions: { tab: "plan" },
   action: { tab: "plan" },
   "action-plan": { tab: "plan" },
   tasks: { tab: "plan" },
-  drafter: { tab: "deliverables", section: "drafter" },
-  deliverables: { tab: "deliverables" },
+  drafter: { tab: "reports", section: "drafts" },
+  deliverables: { tab: "reports", section: "drafts" },
   portal: { tab: "portal" },
 };
 
@@ -125,7 +125,9 @@ function destinationForSection(
   focus: "health" | "pillars" | undefined,
 ): CanonicalClientSearch | null {
   if (section === "reports" || section === "report") return { tab: "reports" };
-  if (section === "pack" || section === "advisory") return { tab: "deliverables", section: "pack" };
+  if (section === "pack" || section === "advisory" || section === "drafts" || section === "drafter") {
+    return { tab: "reports", section: "drafts" };
+  }
   if (
     section === "plan" ||
     section === "actions" ||
@@ -135,7 +137,6 @@ function destinationForSection(
   ) {
     return { tab: "plan" };
   }
-  if (section === "drafter") return { tab: "deliverables", section: "drafter" };
   if (section === "pillars" || (section === "health" && focus === "pillars")) {
     return { tab: "health", section: "pillars", focus: "pillars" };
   }
@@ -181,23 +182,6 @@ function explicitRail(
     return { tab: "cash" };
   }
   if (tab === "plan") return { tab: "plan" };
-  if (tab === "deliverables") {
-    if (section === "pack") return { tab: "deliverables", section: "pack" };
-    if (
-      section === "plan" ||
-      section === "actions" ||
-      section === "action" ||
-      section === "action-plan" ||
-      section === "tasks"
-    ) {
-      return { tab: "plan" };
-    }
-    if (section === "drafter") return { tab: "deliverables", section: "drafter" };
-    if (section === "reports" || section === "report") return { tab: "reports" };
-    const fromSection = section ? destinationForSection(section, focus) : null;
-    if (fromSection?.tab === "deliverables") return fromSection;
-    return { tab: "deliverables" };
-  }
   if (tab === "profit") {
     if (section === "lines") return { tab: "profit", section: "lines" };
     return { tab: "profit" };
@@ -208,8 +192,23 @@ function explicitRail(
   }
   if (tab === "reports") {
     if (section === "sent") return { tab: "reports", section: "sent" };
-    if (section === "pack") return { tab: "deliverables", section: "pack" };
-    if (section === "drafter") return { tab: "deliverables", section: "drafter" };
+    if (
+      section === "drafts" ||
+      section === "pack" ||
+      section === "advisory" ||
+      section === "drafter"
+    ) {
+      return { tab: "reports", section: "drafts" };
+    }
+    if (
+      section === "plan" ||
+      section === "actions" ||
+      section === "action" ||
+      section === "action-plan" ||
+      section === "tasks"
+    ) {
+      return { tab: "plan" };
+    }
     return { tab: "reports" };
   }
   if (tab === "portal") {
@@ -299,9 +298,6 @@ export function legacyPaneForSearch(search: {
       return "plan";
     case "reports":
       return "reports";
-    case "deliverables":
-      if (canonical.section === "drafter") return "drafter";
-      return "advisory";
     case "portal":
       return "summary";
     default:
@@ -383,10 +379,9 @@ export function clientRailSelection(input: {
       return { headingId: "moves", subId: null };
     case "plan":
       return { headingId: "plan", subId: input.filter === "overdue" ? "overdue" : "open" };
-    case "deliverables":
-      return { headingId: "reports", subId: "drafts" };
     case "reports":
       if (section === "sent") return { headingId: "reports", subId: "sent" };
+      if (section === "drafts") return { headingId: "reports", subId: "drafts" };
       if (report === "scorecard" || report === "forecast" || report === "waterfall") {
         return { headingId: "reports", subId: report };
       }
@@ -433,7 +428,7 @@ export function clientNavSearch<T extends object>(
     return next as T;
   }
   if (headingId === "reports") {
-    if (sub === "drafts") return accountantClientTabSearch(prev, "deliverables", { section: "pack" });
+    if (sub === "drafts") return accountantClientTabSearch(prev, "reports", { section: "drafts" });
     if (sub === "sent") {
       const next = accountantClientTabSearch(prev, "reports", { section: "sent" }) as Record<string, unknown>;
       delete next.report;
@@ -461,7 +456,8 @@ export function clientNavSearch<T extends object>(
 }
 
 /** Hashes that used to point at the drafter while it lived under the pack. */
-const DRAFTER_HASHES = new Set(["drafter", "sent", "sent-history", "advisory-drafter"]);
+const DRAFTER_HASHES = new Set(["drafter", "advisory-drafter"]);
+const SENT_HASHES = new Set(["sent", "sent-history"]);
 
 /**
  * Hash to hand the router. `window.location.hash` already includes `#`.
@@ -475,25 +471,31 @@ export function routerHash(hash: string | null | undefined): string | undefined 
 export function drafterSectionForHash(
   section: string | null | undefined,
   hash: string | null | undefined,
-): "drafter" | null {
+): "drafts" | "sent" | null {
   const id = (routerHash(hash) ?? "").toLowerCase();
+  if (SENT_HASHES.has(id)) {
+    if ((section ?? "").trim() === "sent") return null;
+    return "sent";
+  }
   if (!DRAFTER_HASHES.has(id)) return null;
-  if ((section ?? "").trim() === "drafter") return null;
-  return "drafter";
+  const current = (section ?? "").trim();
+  if (current === "drafts" || current === "drafter") return null;
+  return "drafts";
 }
 
 const HASH_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   cash: { tab: "cash" },
   budget: { tab: "budget" },
-  advisory: { tab: "deliverables", section: "pack" },
-  pack: { tab: "deliverables", section: "pack" },
+  advisory: { tab: "reports", section: "drafts" },
+  pack: { tab: "reports", section: "drafts" },
 };
 
 /** `#cash`, `#budget`, `#advisory`, and the old drafter hashes. */
 export function railSearchForHash(hash: string | null | undefined): CanonicalClientSearch | null {
   const id = (routerHash(hash) ?? "").toLowerCase();
   if (!id) return null;
-  if (DRAFTER_HASHES.has(id)) return { tab: "deliverables", section: "drafter" };
+  if (SENT_HASHES.has(id)) return { tab: "reports", section: "sent" };
+  if (DRAFTER_HASHES.has(id)) return { tab: "reports", section: "drafts" };
   return HASH_DESTINATIONS[id] ?? null;
 }
 
@@ -510,10 +512,14 @@ export function legacyHashDestination(
   if (!id) return null;
   const tab = (search.tab ?? "").trim();
   const section = (search.section ?? "").trim();
-  if (DRAFTER_HASHES.has(id)) {
+  if (DRAFTER_HASHES.has(id) || SENT_HASHES.has(id)) {
     if (tab === "ask" || tab === "home" || tab === "bot" || tab === "milon-bot") return null;
-    if (section === "drafter") return null;
-    return { tab: "deliverables", section: "drafter" };
+    if (DRAFTER_HASHES.has(id)) {
+      if (section === "drafts" || section === "drafter") return null;
+      return { tab: "reports", section: "drafts" };
+    }
+    if (section === "sent") return null;
+    return { tab: "reports", section: "sent" };
   }
   const mapped = HASH_DESTINATIONS[id];
   if (!mapped) return null;

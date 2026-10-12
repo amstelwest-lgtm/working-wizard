@@ -266,8 +266,10 @@ const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clien
 assert(clientSrc.includes("AdvisoryTabSignoff"), "the advisory tab head uses the pack sign-off");
 assert(clientSrc.includes("onSignoffAction={setPackSignoff}"), "the tab button signs the pack");
 assert(
-  !/id="pane-advisory"[\s\S]{0,900}scope="advisory"/.test(clientSrc),
-  "the advisory tab no longer writes a separate page stamp",
+  !clientSrc
+    .slice(clientSrc.indexOf('id="reports-drafts"'), clientSrc.indexOf('id="reports-pdfs"'))
+    .includes('scope="advisory"'),
+  "Reports drafts do not write a separate page stamp",
 );
 
 const panelSrc = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");

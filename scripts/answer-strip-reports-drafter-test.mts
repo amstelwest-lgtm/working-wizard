@@ -47,9 +47,9 @@ assert.equal(
 );
 assert.equal(plainSentDate("02 Oct 2026"), "2 Oct 2026");
 assert.equal(plainSentDate("2 Oct 2026"), "2 Oct 2026");
-assert.equal(drafterSectionForHash("pack", "#drafter"), "drafter");
-assert.equal(drafterSectionForHash("pack", "#sent-history"), "drafter");
-assert.equal(drafterSectionForHash("drafter", "#sent"), null);
+assert.equal(drafterSectionForHash("pack", "#drafter"), "drafts");
+assert.equal(drafterSectionForHash("pack", "#sent-history"), "sent");
+assert.equal(drafterSectionForHash("drafter", "#sent"), "sent");
 
 const packCta = botSignoffCtas({
   created: { packId: "p1" },
@@ -58,19 +58,20 @@ const packCta = botSignoffCtas({
 assert.ok(packCta, "a saved pack still has a sign-off CTA");
 assert.deepEqual(
   { tab: botSignoffDestination(packCta).tab, section: botSignoffDestination(packCta).section },
-  { tab: "deliverables", section: "pack" },
-  "the bot pack link stays on the pack section",
+  { tab: "reports", section: "drafts" },
+  "the bot pack link opens Reports drafts",
 );
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const reportsAt = clientSrc.indexOf('id="pane-reports"');
+const draftsAt = clientSrc.indexOf('id="reports-drafts"');
+const pdfsAt = clientSrc.indexOf('id="reports-pdfs"');
+const sentAt = clientSrc.indexOf('id="reports-sent"');
 const planAt = clientSrc.indexOf('id="pane-plan"');
-const advisoryAt = clientSrc.indexOf('id="pane-advisory"');
-const drafterAt = clientSrc.indexOf('id="pane-drafter"');
-assert.ok(reportsAt > 0 && planAt > reportsAt && advisoryAt > planAt && drafterAt > advisoryAt);
+assert.ok(reportsAt > 0 && draftsAt > reportsAt && pdfsAt > draftsAt && sentAt > pdfsAt && planAt > sentAt);
 const reportsPane = clientSrc.slice(reportsAt, planAt);
-const packPane = clientSrc.slice(advisoryAt, drafterAt);
-const drafterPane = clientSrc.slice(drafterAt, clientSrc.indexOf('className="footer-note"', drafterAt));
+const draftsPane = clientSrc.slice(draftsAt, pdfsAt);
+const sentPane = clientSrc.slice(sentAt, planAt);
 
 assert.ok(reportsPane.includes("ReportsStudioPanel"), "the reports tab still mounts the studio");
 assert.ok(
@@ -80,13 +81,12 @@ assert.ok(
 );
 assert.equal(reportsPane.includes("DeliverableAnswerStrip"), false, "reports has no sign-off strip");
 assert.equal(reportsPane.includes("Board-ready"), false, "the reports lede leaves the tab");
-assert.equal(packPane.includes("AdvisoryDrafter"), false, "the pack page no longer stacks the drafter");
-assert.equal(packPane.includes("AdvisorySentHistory"), false, "sent history leaves the pack page");
-assert.ok(packPane.includes("RecommendationsPanel"), "recommendations stay on the pack");
-assert.ok(packPane.includes("OutcomesPanel"), "outcomes stay on the pack");
-assert.ok(drafterPane.includes("AdvisoryDrafter"), "the drafter has its own section");
-assert.ok(drafterPane.includes("AdvisorySentHistory"), "sent history stays with the drafter");
-assert.ok(drafterPane.includes('id="pane-drafter"') || drafterPane.includes("AdvisoryDrafter"));
+assert.ok(draftsPane.includes("AdvisoryPackPanel"), "the pack sits in Drafts");
+assert.ok(draftsPane.includes("RecommendationsPanel"), "recommendations sit in Drafts");
+assert.ok(draftsPane.includes("OutcomesPanel"), "outcomes sit in Drafts");
+assert.ok(draftsPane.includes("AdvisoryDrafter"), "the drafter sits in Drafts");
+assert.equal(draftsPane.includes("AdvisorySentHistory"), false, "sent history leaves Drafts");
+assert.equal((sentPane.match(/AdvisorySentHistory/g) ?? []).length, 1, "sent history is rendered once");
 
 const studio = readFileSync(resolve("src/routes/_authenticated/reports-studio.tsx"), "utf8");
 assert.ok(studio.includes("ArapAnswerStrip"), "the embedded reports tab uses the no-status strip");
@@ -102,7 +102,7 @@ assert.ok(studio.includes("ReviewInputsDrawer"), "settings stay in the drawer");
   assert.equal(drawer.includes("<AdvisorySentHistory"), false, "the generated list stays in the page body");
   assert.ok(drawer.includes("<SettingsPanel"), "settings stay in the drawer");
   assert.ok(drawer.includes("pin={false}"), "embedded settings are not sticky");
-  assert.ok(studio.indexOf('variant="reports"') < drawerStart, "the list renders above the drawer");
+  assert.equal(studio.includes("AdvisorySentHistory"), false, "sent history is not in the studio");
   assert.ok(studio.indexOf("{reportCatalogue}") < drawerStart, "templates render above the drawer");
 }
 assert.ok(studio.includes("downloadOutline"), "card downloads are not a second gold primary");

@@ -171,8 +171,17 @@ export function coachPageForTab(
       return "budget";
     case "plan":
       return "actions";
-    case "ask":
     case "reports":
+      if (
+        section === "drafts" ||
+        section === "pack" ||
+        section === "drafter" ||
+        section === "advisory"
+      ) {
+        return "advisory";
+      }
+      return "reports";
+    case "ask":
     case "advisory":
       return tab;
     default:

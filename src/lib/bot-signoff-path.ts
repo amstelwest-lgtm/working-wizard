@@ -121,10 +121,10 @@ export function botSignoffStateLine(ctas: readonly BotSignoffCta[]): string {
 export function botSignoffDestination(
   cta: BotSignoffCta,
   why?: string | null,
-): { tab: string; section?: "pack"; coach?: "actions"; why?: string } {
-  // Pack sign-off stays on the pack section. ?tab=advisory opens that pack.
-  const dest: { tab: string; section?: "pack"; coach?: "actions"; why?: string } =
-    cta.tab === "advisory" ? { tab: "deliverables", section: "pack" } : { tab: cta.tab };
+): { tab: string; section?: "drafts" | "pack"; coach?: "actions"; why?: string } {
+  // Pack sign-off stays on the drafts region of Reports. ?tab=advisory opens that pack.
+  const dest: { tab: string; section?: "drafts" | "pack"; coach?: "actions"; why?: string } =
+    cta.tab === "advisory" ? { tab: "reports", section: "drafts" } : { tab: cta.tab };
   if (cta.coach) dest.coach = cta.coach;
   const clean = (why ?? "").replace(/[<>"]/g, "").replace(/\s+/g, " ").trim();
   if (!clean) return dest;

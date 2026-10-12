@@ -412,10 +412,8 @@ assert(client.includes("Other ways"), "upload/sync alternatives are folded");
 assert(dash.includes("<CheckoutAfterInsight />"), "a scored book offers Checkout");
 assert(dash.includes("markInsightSeen(firmId)"), "a scored book marks this firm's insight");
 assert(
-  dash.includes('id="wizard-dash-reports"') &&
-    dash.includes('className="tb-btn"') &&
-    !dash.includes("tb-btn gold"),
-  "Reports studio stays a secondary button",
+  !dash.includes('id="wizard-dash-reports"') && !dash.includes("Reports studio"),
+  "practice has no Reports studio button",
 );
 
 const overview = client.slice(client.indexOf('id="pane-overview"'), client.indexOf('id="pane-summary"'));

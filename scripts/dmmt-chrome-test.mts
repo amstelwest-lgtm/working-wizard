@@ -35,9 +35,8 @@ assert(
 
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 const header = client.slice(client.indexOf("topbar-actions"), client.indexOf("BREADCRUMB"));
-assert(header.includes("Reports studio"), "Reports studio stays in the client header");
-assert(header.includes("headerShortcutClass()"), "the header shortcut uses the quiet class");
-assert(!header.includes("tb-btn gold"), "Reports studio is not a gold primary");
+assert(!header.includes("Reports studio"), "the client header has no Reports studio button");
+assert(!header.includes("tb-btn gold"), "the client header has no gold shortcut");
 
 const overview = client.slice(client.indexOf('id="pane-overview"'), client.indexOf('id="pane-summary"'));
 const books = client.slice(client.indexOf('id="pane-summary"'), client.indexOf('id="pane-moves"'));
