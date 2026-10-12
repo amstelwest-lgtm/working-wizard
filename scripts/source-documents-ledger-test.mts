@@ -572,6 +572,25 @@ assert(migration.includes("proposal_must_start_proposed"), "a proposal cannot ar
 assert(migration.includes("approval_requires_human"), "approval requires a logged-in human");
 assert(migration.includes("WHEN c.firm_id IS NOT NULL THEN 'accountant'"), "the approver is the accountant when there is a firm");
 assert(migration.includes("ELSE 'owner'"), "otherwise the approver is the owner");
+const approverFn = migration.slice(
+  migration.indexOf("CREATE OR REPLACE FUNCTION public.ledger_post_approver_role"),
+  migration.indexOf("CREATE OR REPLACE FUNCTION public.ledger_post_caller_may_decide"),
+);
+const decideFn = migration.slice(
+  migration.indexOf("CREATE OR REPLACE FUNCTION public.ledger_post_caller_may_decide"),
+  migration.indexOf("-- ---------------------------------------------------------------------------\n-- Tables"),
+);
+assert(!approverFn.includes("has_client_access"), "approver role does not filter on client access");
+assert(decideFn.includes("is_firm_member(p_user_id, c.firm_id)"), "an accountant must be in the client's firm");
+assert(decideFn.includes("has_client_access(p_user_id, c.id)"), "an accountant must have client access");
+assert(
+  migration.includes("REVOKE EXECUTE ON FUNCTION public.ledger_post_caller_may_decide(uuid, uuid) FROM PUBLIC, anon, authenticated"),
+  "authenticated cannot execute ledger_post_caller_may_decide",
+);
+assert(
+  migration.includes("REVOKE EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) FROM PUBLIC, anon, authenticated"),
+  "authenticated cannot execute supplier_final_unlocked",
+);
 assert(migration.includes("signed_off_refused"), "sign-off wording is refused in the database");
 assert(migration.includes("held_in_milon"), "QuickBooks and Sage drafts are held in Milōn");
 assert(migration.includes("abs(p.issued_on - p_issued_on) <= 3"), "the semantic duplicate window is 3 days");
@@ -604,7 +623,9 @@ assert(sqlTest.includes("approver_forbidden"), "the SQL test covers the approver
 assert(sqlTest.includes("payload_hash_mismatch"), "the SQL test covers the hash lock");
 assert(sqlTest.includes("source_doc_can_upload"), "the SQL test covers upload rights");
 assert(sqlTest.includes("vat_claimable"), "the SQL test covers the VAT default");
-assert(sqlTest.includes("find_source_document_duplicates"), "the SQL test covers duplicate checks");
+assert(sqlTest.includes("without client access"), "the SQL test refuses a firm member with no client access");
+assert(sqlTest.includes("42501"), "the SQL test expects privilege error 42501");
+assert(sqlTest.includes("has_function_privilege"), "the SQL test checks helper execute privileges");
 assert(sqlTest.includes("2000-01-01"), "the SQL test covers a backdated received_at");
 assert(sqlTest.includes("direct status insert"), "the SQL test covers a direct status insert");
 assert(sqlTest.includes("protect_delete"), "the SQL test records why storage rows are left in place");

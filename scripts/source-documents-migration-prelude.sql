@@ -110,7 +110,13 @@ CREATE TABLE IF NOT EXISTS public.client_memberships (
 
 CREATE TABLE IF NOT EXISTS public.client_practice_access (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id uuid
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  firm_id uuid NOT NULL REFERENCES public.firms(id) ON DELETE CASCADE,
+  classification text NOT NULL DEFAULT 'staff',
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'active', 'revoked', 'declined')),
+  UNIQUE (client_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.client_employees (
@@ -138,6 +144,30 @@ AS $$
   );
 $$;
 
+CREATE OR REPLACE FUNCTION public.is_practice_principal(_user_id uuid, _firm_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT _user_id IS NOT NULL
+    AND _firm_id IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.firms f
+        WHERE f.id = _firm_id AND f.owner_user_id = _user_id
+      )
+      OR EXISTS (
+        SELECT 1 FROM public.firm_memberships fm
+        WHERE fm.firm_id = _firm_id
+          AND fm.user_id = _user_id
+          AND (fm.role = 'owner' OR fm.classification = 'partner')
+      )
+    );
+$$;
+
+-- Prod: a client membership, an active practice assignment, or the practice principal.
 CREATE OR REPLACE FUNCTION public.has_client_access(_user_id uuid, _client_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -146,17 +176,26 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT EXISTS (
+    SELECT 1 FROM public.client_memberships m
+    WHERE m.client_id = _client_id AND m.user_id = _user_id
+  )
+  OR EXISTS (
+    SELECT 1 FROM public.client_practice_access a
+    WHERE a.client_id = _client_id
+      AND a.user_id = _user_id
+      AND a.status = 'active'
+  )
+  OR EXISTS (
     SELECT 1 FROM public.clients c
-    WHERE c.id = _client_id AND (
-      c.owner_user_id = _user_id
-      OR EXISTS (
-        SELECT 1 FROM public.client_memberships m
-        WHERE m.client_id = c.id AND m.user_id = _user_id
-      )
-      OR (c.firm_id IS NOT NULL AND public.is_firm_member(_user_id, c.firm_id))
-    )
+    WHERE c.id = _client_id
+      AND c.firm_id IS NOT NULL
+      AND public.is_practice_principal(_user_id, c.firm_id)
   );
 $$;
+
+-- Hosted projects grant EXECUTE to authenticated at function-create time.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 CREATE TABLE IF NOT EXISTS storage.buckets (
   id text PRIMARY KEY,

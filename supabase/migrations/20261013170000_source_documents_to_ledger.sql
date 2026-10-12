@@ -151,8 +151,8 @@ BEGIN
 END;
 $$;
 
--- Not granted to authenticated. A signed-in session only sees the role for a
--- client auth.uid() can already access, so a client id cannot be probed.
+-- Not granted to authenticated. Returns who must approve, not whether this
+-- caller may. The caller check is ledger_post_caller_may_decide.
 CREATE OR REPLACE FUNCTION public.ledger_post_approver_role(p_client_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -165,13 +165,11 @@ AS $$
     ELSE 'owner'
   END
   FROM public.clients c
-  WHERE c.id = p_client_id
-    AND (
-      coalesce(auth.role(), '') IS DISTINCT FROM 'authenticated'
-      OR public.has_client_access(auth.uid(), c.id)
-    );
+  WHERE c.id = p_client_id;
 $$;
 
+-- Firm clients: a member of that firm who also has client access (practice
+-- principal or an active assignment). No firm: the business owner.
 CREATE OR REPLACE FUNCTION public.ledger_post_caller_may_decide(p_user_id uuid, p_client_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -180,7 +178,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT CASE
-    WHEN c.firm_id IS NOT NULL THEN public.is_firm_member(p_user_id, c.firm_id)
+    WHEN c.firm_id IS NOT NULL THEN
+      public.is_firm_member(p_user_id, c.firm_id)
+      AND public.has_client_access(p_user_id, c.id)
     ELSE c.owner_user_id = p_user_id
   END
   FROM public.clients c
@@ -389,8 +389,8 @@ AS $$
   ), false);
 $$;
 
-REVOKE ALL ON FUNCTION public.supplier_final_unlocked(uuid, text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) TO service_role;
 
 -- ---------------------------------------------------------------------------
 -- Guards
@@ -978,8 +978,12 @@ REVOKE ALL ON FUNCTION public.normalise_document_number(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.source_doc_can_read(uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.source_doc_can_upload(uuid, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.source_doc_client_id_from_path(text) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.ledger_post_approver_role(uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.ledger_post_caller_may_decide(uuid, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.ledger_post_approver_role(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.ledger_post_caller_may_decide(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.source_documents_guard() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.document_extractions_guard() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.ledger_post_proposals_guard() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.find_source_document_duplicates(uuid, text, text, text, numeric, date, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.register_source_document(uuid, text, text, text, bigint, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.decide_ledger_post_proposal(uuid, text, text) FROM PUBLIC, anon;
@@ -988,6 +992,8 @@ GRANT EXECUTE ON FUNCTION public.source_doc_can_read(uuid, uuid) TO authenticate
 GRANT EXECUTE ON FUNCTION public.source_doc_can_upload(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.source_doc_client_id_from_path(text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.ledger_post_approver_role(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.ledger_post_caller_may_decide(uuid, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.supplier_final_unlocked(uuid, text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.register_source_document(uuid, text, text, text, bigint, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.decide_ledger_post_proposal(uuid, text, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.find_source_document_duplicates(uuid, text, text, text, numeric, date, uuid) TO service_role;

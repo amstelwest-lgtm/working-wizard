@@ -8,6 +8,7 @@ DECLARE
   prefix text := 'milon_srcdoc_' || substr(gen_random_uuid()::text, 1, 8);
   v_firm_owner uuid := gen_random_uuid();
   v_staff uuid := gen_random_uuid();
+  v_unassigned uuid := gen_random_uuid();
   v_owner uuid := gen_random_uuid();
   v_member uuid := gen_random_uuid();
   v_outsider uuid := gen_random_uuid();
@@ -45,6 +46,7 @@ BEGIN
   VALUES
     (v_firm_owner, 'authenticated', 'authenticated', prefix || '_firm@example.test', crypt('x', gen_salt('bf')), now(), now(), now(), '00000000-0000-0000-0000-000000000000'),
     (v_staff, 'authenticated', 'authenticated', prefix || '_staff@example.test', crypt('x', gen_salt('bf')), now(), now(), now(), '00000000-0000-0000-0000-000000000000'),
+    (v_unassigned, 'authenticated', 'authenticated', prefix || '_unassigned@example.test', crypt('x', gen_salt('bf')), now(), now(), now(), '00000000-0000-0000-0000-000000000000'),
     (v_owner, 'authenticated', 'authenticated', prefix || '_owner@example.test', crypt('x', gen_salt('bf')), now(), now(), now(), '00000000-0000-0000-0000-000000000000'),
     (v_member, 'authenticated', 'authenticated', prefix || '_member@example.test', crypt('x', gen_salt('bf')), now(), now(), now(), '00000000-0000-0000-0000-000000000000'),
     (v_outsider, 'authenticated', 'authenticated', prefix || '_out@example.test', crypt('x', gen_salt('bf')), now(), now(), now(), '00000000-0000-0000-0000-000000000000'),
@@ -55,6 +57,7 @@ BEGIN
   VALUES
     (v_firm_owner, prefix || '_firm@example.test', prefix || ' Firm'),
     (v_staff, prefix || '_staff@example.test', prefix || ' Staff'),
+    (v_unassigned, prefix || '_unassigned@example.test', prefix || ' Unassigned'),
     (v_owner, prefix || '_owner@example.test', prefix || ' Owner'),
     (v_member, prefix || '_member@example.test', prefix || ' Member'),
     (v_solo, prefix || '_solo@example.test', prefix || ' Solo'),
@@ -68,7 +71,8 @@ BEGIN
   INSERT INTO public.firm_memberships (firm_id, user_id, role, classification)
   VALUES
     (v_firm, v_firm_owner, 'owner', 'staff'),
-    (v_firm, v_staff, 'member', 'staff');
+    (v_firm, v_staff, 'member', 'staff'),
+    (v_firm, v_unassigned, 'member', 'staff');
 
   -- No JWT here. clients_guard_owner_only_columns rejects firm_id when auth.uid() is set.
   PERFORM set_config('request.jwt.claim.sub', '', true);
@@ -87,6 +91,9 @@ BEGIN
     (v_firm_client, v_member, 'member'),
     (v_solo_client, v_solo_member, 'member');
 
+  INSERT INTO public.client_practice_access (client_id, user_id, firm_id, classification, status)
+  VALUES (v_firm_client, v_staff, v_firm, 'staff', 'active');
+
   IF public.normalise_supplier_key('Acme (Pty) Ltd') <> 'acme' THEN
     RAISE EXCEPTION 'supplier key should drop the legal suffix';
   END IF;
@@ -100,7 +107,10 @@ BEGIN
     RAISE EXCEPTION 'the business owner must not approve while a firm is attached';
   END IF;
   IF NOT public.ledger_post_caller_may_decide(v_staff, v_firm_client) THEN
-    RAISE EXCEPTION 'a firm member should approve';
+    RAISE EXCEPTION 'a firm member with practice access should approve';
+  END IF;
+  IF public.ledger_post_caller_may_decide(v_unassigned, v_firm_client) THEN
+    RAISE EXCEPTION 'a firm member without client access must not approve';
   END IF;
   IF NOT public.ledger_post_caller_may_decide(v_solo, v_solo_client) THEN
     RAISE EXCEPTION 'the owner should approve when there is no firm';
@@ -150,10 +160,36 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     v_raised := SQLERRM;
   END;
-  RESET ROLE;
   IF v_raised IS NULL OR v_raised NOT ILIKE '%permission denied%' THEN
     RAISE EXCEPTION 'authenticated must not probe the approver role, got %', v_raised;
   END IF;
+  IF has_function_privilege('authenticated', 'public.ledger_post_caller_may_decide(uuid, uuid)', 'EXECUTE') IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'authenticated must not hold execute on ledger_post_caller_may_decide';
+  END IF;
+  IF has_function_privilege('authenticated', 'public.supplier_final_unlocked(uuid, text)', 'EXECUTE') IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'authenticated must not hold execute on supplier_final_unlocked';
+  END IF;
+  v_raised := NULL;
+  BEGIN
+    PERFORM public.ledger_post_caller_may_decide(v_staff, v_firm_client);
+    v_raised := 'no error';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_raised := SQLSTATE;
+  END;
+  IF v_raised IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION 'authenticated call to ledger_post_caller_may_decide should be 42501, got %', v_raised;
+  END IF;
+  v_raised := NULL;
+  BEGIN
+    PERFORM public.supplier_final_unlocked(v_firm_client, 'acme');
+    v_raised := 'no error';
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_raised := SQLSTATE;
+  END;
+  IF v_raised IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION 'authenticated call to supplier_final_unlocked should be 42501, got %', v_raised;
+  END IF;
+  RESET ROLE;
 
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
@@ -250,28 +286,34 @@ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner::text, 'role', 'authenticated')::text, true);
   SET LOCAL ROLE authenticated;
+  -- The business owner can upload, but prod has_client_access does not include
+  -- owner_user_id, so INSERT ... RETURNING is hidden by the select policy.
   INSERT INTO public.source_documents (
     client_id, uploaded_by, channel, storage_path, sha256, mime, size_bytes, status, received_at
   )
   VALUES (
     v_firm_client, v_owner, 'upload', v_firm_client::text || '/backdated.pdf', repeat('1', 64),
     'application/pdf', 1100, 'received', timestamptz '2000-01-01 00:00:00+00'
-  )
-  RETURNING received_at, retention_until INTO v_received, v_until;
-  IF v_received < now() - interval '5 minutes'
-     OR v_until <> v_received + interval '5 years'
-     OR v_until < timestamptz '2024-01-01 00:00:00+00' THEN
-    RAISE EXCEPTION 'a backdated received_at should be stored as now, retention % from %', v_until, v_received;
-  END IF;
+  );
   INSERT INTO public.source_documents (
     client_id, uploaded_by, channel, storage_path, sha256, mime, size_bytes, status, received_at
   )
   VALUES (
     v_firm_client, v_owner, 'upload', v_firm_client::text || '/status.pdf', repeat('2', 64),
     'application/pdf', 1100, 'extracted', now()
-  )
-  RETURNING status, received_at INTO v_text, v_received;
+  );
   RESET ROLE;
+  SELECT received_at, retention_until INTO v_received, v_until
+  FROM public.source_documents
+  WHERE storage_path = v_firm_client::text || '/backdated.pdf';
+  IF v_received < now() - interval '5 minutes'
+     OR v_until <> v_received + interval '5 years'
+     OR v_until < timestamptz '2024-01-01 00:00:00+00' THEN
+    RAISE EXCEPTION 'a backdated received_at should be stored as now, retention % from %', v_until, v_received;
+  END IF;
+  SELECT status, received_at INTO v_text, v_received
+  FROM public.source_documents
+  WHERE storage_path = v_firm_client::text || '/status.pdf';
   IF v_text <> 'received' THEN
     RAISE EXCEPTION 'a direct status insert should be stored as received, got %', v_text;
   END IF;
@@ -332,6 +374,13 @@ BEGIN
     RAISE EXCEPTION 'owner approval on a firm client should be forbidden, got %', v_result;
   END IF;
 
+  PERFORM set_config('request.jwt.claim.sub', v_unassigned::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_unassigned::text, 'role', 'authenticated')::text, true);
+  v_result := public.decide_ledger_post_proposal(v_proposal, 'approve', NULL);
+  IF v_result ->> 'error' <> 'approver_forbidden' THEN
+    RAISE EXCEPTION 'a firm member without client access must not approve, got %', v_result;
+  END IF;
+
   v_result := public.decide_ledger_post_proposal(v_proposal, 'approve', 'Please sign off');
   IF v_result ->> 'error' <> 'signed_off_refused' THEN
     RAISE EXCEPTION 'sign-off wording should be refused, got %', v_result;
@@ -341,7 +390,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_staff::text, 'role', 'authenticated')::text, true);
   v_result := public.decide_ledger_post_proposal(v_proposal, 'approve', 'Send it');
   IF v_result ->> 'ok' <> 'true' OR v_result ->> 'status' <> 'approved' THEN
-    RAISE EXCEPTION 'firm member approval failed: %', v_result;
+    RAISE EXCEPTION 'a firm member with practice access should approve, got %', v_result;
   END IF;
   IF v_result ->> 'approved_by' <> v_staff::text
      OR v_result ->> 'approval_payload_sha256' <> v_hash
@@ -616,8 +665,8 @@ BEGIN
   DELETE FROM public.firm_memberships WHERE firm_id = v_firm;
   ALTER TABLE public.firm_memberships ENABLE TRIGGER firm_memberships_partner_guard_del;
   DELETE FROM public.firms WHERE id = v_firm;
-  DELETE FROM public.profiles WHERE id IN (v_firm_owner, v_staff, v_owner, v_member, v_outsider, v_solo, v_solo_member);
-  DELETE FROM auth.users WHERE id IN (v_firm_owner, v_staff, v_owner, v_member, v_outsider, v_solo, v_solo_member);
+  DELETE FROM public.profiles WHERE id IN (v_firm_owner, v_staff, v_unassigned, v_owner, v_member, v_outsider, v_solo, v_solo_member);
+  DELETE FROM auth.users WHERE id IN (v_firm_owner, v_staff, v_unassigned, v_owner, v_member, v_outsider, v_solo, v_solo_member);
 
   RAISE NOTICE 'source-documents-ledger-sql-tests: ok';
 END;
