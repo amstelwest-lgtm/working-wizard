@@ -257,8 +257,10 @@ assert(!XERO_AGED_AP_RECONNECT.includes("accounting.reports.aged.read"), "payabl
 assert(!XERO_AGED_AP_RECONNECT.includes("accounting.contacts.read"), "payables reconnect drops the contacts scope id");
 assert(XERO_AGED_AP_RECONNECT.includes("aged-payables access"), "payables reconnect still says what to grant");
 
-assert(legacyPaneForSearch({ tab: "overview", section: "collections" }) === "collections", "collections stays on its pane");
-assert(legacyPaneForSearch({ tab: "overview", section: "payables" }) === "payables", "payables stays on its pane");
+assert(legacyPaneForSearch({ tab: "overview", section: "collections" }) === "cash", "collections stays on the cash page");
+assert(legacyPaneForSearch({ tab: "cash", section: "collections" }) === "cash", "a collections link does not hide the forecast");
+assert(legacyPaneForSearch({ tab: "overview", section: "payables" }) === "cash", "payables stays on the cash page");
+assert(legacyPaneForSearch({ tab: "cash", section: "payables" }) === "cash", "a payables link does not hide the forecast");
 
 function count(src: string, needle: string): number {
   return src.split(needle).length - 1;

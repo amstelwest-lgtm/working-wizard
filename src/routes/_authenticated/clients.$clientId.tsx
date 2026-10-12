@@ -862,6 +862,20 @@ function ClientView() {
     }, 60);
     return () => window.clearTimeout(timer);
   }, [activeTab, search.section]);
+  useEffect(() => {
+    if (activeTab !== "cash") return;
+    const id =
+      search.section === "collections"
+        ? "pane-collections"
+        : search.section === "payables"
+          ? "pane-payables"
+          : null;
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, search.section]);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const apply = () => {
@@ -2415,9 +2429,13 @@ function ClientView() {
       const targetId =
         canonical.section === "pillars" || canonical.focus === "pillars"
           ? "coach-pillars"
-          : tab === "summary"
-            ? "data-up-to-date"
-            : `pane-${tab}`;
+          : canonical.section === "collections"
+            ? "pane-collections"
+            : canonical.section === "payables"
+              ? "pane-payables"
+              : tab === "summary"
+                ? "data-up-to-date"
+                : `pane-${tab}`;
       window.setTimeout(() => {
         document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
@@ -3927,13 +3945,7 @@ function ClientView() {
                       }}
                     />
                   </div>
-                </div>
-
-                {/* ===== COLLECTIONS ===== */}
-                <div
-                  className={`tabpane${activeTab === "collections" ? " on" : ""}`}
-                  id="pane-collections"
-                >
+                <section id="pane-collections" aria-label="Who to chase" className="mt-8">
                   <CollectionsPanel
                     clientId={client.id}
                     market={clientMarket}
@@ -3949,13 +3961,9 @@ function ClientView() {
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => setActiveTab("plan")}
                   />
-                </div>
+                </section>
 
-                {/* ===== PAYABLES ===== */}
-                <div
-                  className={`tabpane${activeTab === "payables" ? " on" : ""}`}
-                  id="pane-payables"
-                >
+                <section id="pane-payables" aria-label="Who to pay" className="mt-8">
                   <PayablesPanel
                     clientId={client.id}
                     market={clientMarket}
@@ -3972,6 +3980,7 @@ function ClientView() {
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
                     onOpenActions={() => setActiveTab("plan")}
                   />
+                </section>
                 </div>
 
                 {/* ===== BUDGET TAB ===== */}

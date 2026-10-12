@@ -221,8 +221,6 @@ export function RailStudio() {
             ) : null}
             {pane === "profit" ? <ProfitPane clientId={clientId} /> : null}
             {pane === "cash" ? <CashPane clientId={clientId} /> : null}
-            {pane === "collections" ? <CollectionsPane aged={search.aged === 1 || search.aged === "1"} /> : null}
-            {pane === "payables" ? <PayablesPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "plan" ? (
               <PlanPane
@@ -827,7 +825,7 @@ const HARNESS_PAYABLES = finalizePayables({
 
 function CollectionsPane({ aged }: { aged: boolean }) {
   return (
-    <div className="tabpane on" id="pane-collections">
+    <section id="pane-collections" aria-label="Who to chase" className="mt-8">
       <PaneBoundary label="Collections">
         <CollectionsPanel
           clientId={CLIENT_ID}
@@ -842,13 +840,13 @@ function CollectionsPane({ aged }: { aged: boolean }) {
           onOpenActions={() => {}}
         />
       </PaneBoundary>
-    </div>
+    </section>
   );
 }
 
 function PayablesPane({ aged }: { aged: boolean }) {
   return (
-    <div className="tabpane on" id="pane-payables">
+    <section id="pane-payables" aria-label="Who to pay" className="mt-8">
       <PaneBoundary label="Payables">
         <PayablesPanel
           clientId={CLIENT_ID}
@@ -864,11 +862,26 @@ function PayablesPane({ aged }: { aged: boolean }) {
           onOpenActions={() => {}}
         />
       </PaneBoundary>
-    </div>
+    </section>
   );
 }
 
 function CashPane({ clientId }: { clientId: string }) {
+  const search = useSearch({ strict: false }) as { section?: string; aged?: string | number };
+  const aged = search.aged === 1 || search.aged === "1";
+  useEffect(() => {
+    const id =
+      search.section === "collections"
+        ? "pane-collections"
+        : search.section === "payables"
+          ? "pane-payables"
+          : null;
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [search.section]);
   return (
     <div className="tabpane on" id="pane-cash">
       <div className="card cf-wrap" id="wizard-cash-panel">
@@ -883,6 +896,8 @@ function CashPane({ clientId }: { clientId: string }) {
           />
         </PaneBoundary>
       </div>
+      <CollectionsPane aged={aged} />
+      <PayablesPane aged={aged} />
     </div>
   );
 }

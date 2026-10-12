@@ -336,7 +336,14 @@ const rail =
   readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
   readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 assert(rail.includes('label: "Cash flow"'), "cash flow is the rail item over collections");
-assert(rail.includes('id="pane-collections"'), "collections stays its own pane under Cash flow");
+assert(rail.includes('id="pane-collections"'), "collections is stacked on the cash page");
+assert(rail.indexOf('id="pane-cash"') < rail.indexOf('id="pane-collections"'), "collections follows the forecast");
+assert(rail.indexOf('id="pane-collections"') < rail.indexOf('id="pane-payables"'), "payables follows collections");
+assert(
+  rail.indexOf('id="pane-payables"') < rail.indexOf('id="pane-budget"'),
+  "both sections close before Budget",
+);
+assert(rail.includes('search.section === "collections"'), "an old collections link scrolls to that section");
 const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
 assert(propose.includes("buildCollectionsDraft"), "propose files a collections draft from the cache");
 assert(propose.includes('source: "ai", data_depth: "statement"'), "statement drafts stay statement depth");
