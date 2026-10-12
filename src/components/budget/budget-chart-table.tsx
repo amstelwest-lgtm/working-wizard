@@ -9,7 +9,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMarketFormat } from "@/contexts/market";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
-import { ViewToggle } from "@/components/ui/view-toggle";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
 import { ownerMinus } from "@/lib/owner-money";
 import {
@@ -76,8 +75,7 @@ export function BudgetChartTable({
   };
   const listActuals = useServerFn(listBudgetMonthActuals);
   const [loaded, setLoaded] = useState<BudgetActualMonth[]>(actualMonths ? [...actualMonths] : []);
-  const [localLens, setLocalLens] = useState<BudgetLens>(lens ?? "chart");
-  const shown = lens ?? localLens;
+  const monthsOpen = lens === "table";
 
   useEffect(() => {
     if (actualMonths) {
@@ -114,17 +112,12 @@ export function BudgetChartTable({
   const sentence = budgetYtdSentence({ ...ytd, money });
   const ytdTone = tone(budgetYtdSignal(ytd));
 
-  const choose = (next: BudgetLens) => {
-    setLocalLens(next);
-    onLensChange?.(next);
-  };
-
   if (readOnly && !budgetPlanIsSet(views)) {
     return (
       <p
         className="budget-lens flex items-center gap-2 rounded-lg bg-[#DBEAFE] px-3 py-2 text-[13px] leading-snug text-[#102A43]"
-        data-budget-lens={shown}
         data-budget-chart="draft"
+        data-budget-lens="chart"
       >
         <Info className="h-4 w-4 shrink-0 text-[#0B5FFF]" aria-hidden />
         Your accountant is still setting the budget
@@ -135,32 +128,36 @@ export function BudgetChartTable({
   return (
     <section
       className="budget-lens min-w-0 max-w-full rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/50"
-      data-budget-lens={shown}
+      data-budget-lens="chart"
       aria-label="Budget chart and table"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-[#102A43] dark:text-slate-100">Budget vs actual</h3>
-          <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
-            {sentence}
-          </p>
-        </div>
-        <ViewToggle
-          value={shown}
-          ariaLabel="Chart or table"
-          options={[
-            { value: "chart", label: "Chart" },
-            { value: "table", label: "Table" },
-          ]}
-          onChange={(next) => choose(next === "table" ? "table" : "chart")}
-        />
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-[#102A43] dark:text-slate-100">Budget vs actual</h3>
+        <p className={`mt-1 text-[13px] leading-snug ${ytdTone}`} data-ytd-signal={budgetYtdSignal(ytd) ?? "none"}>
+          {sentence}
+        </p>
       </div>
-
-      {shown === "chart" ? (
-        <BudgetMonthChart views={views} locale={market.locale} market={market} money={money} signed={signed} />
-      ) : (
-        <BudgetMonthTable doc={doc} views={views} money={money} locale={market.locale} />
-      )}
+      <BudgetMonthChart views={views} locale={market.locale} market={market} money={money} signed={signed} />
+      <details
+        className="mt-4"
+        {...(onLensChange
+          ? {
+              open: monthsOpen,
+              onToggle: (event: { currentTarget: HTMLDetailsElement }) => {
+                const open = event.currentTarget.open;
+                if (open === monthsOpen) return;
+                onLensChange(open ? "table" : "chart");
+              },
+            }
+          : { defaultOpen: monthsOpen })}
+      >
+        <summary className="w-fit cursor-pointer text-sm font-semibold text-[#0B5FFF]">
+          Month by month
+        </summary>
+        <div className="mt-3">
+          <BudgetMonthTable doc={doc} views={views} money={money} locale={market.locale} />
+        </div>
+      </details>
     </section>
   );
 }

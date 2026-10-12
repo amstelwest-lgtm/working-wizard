@@ -113,10 +113,10 @@ assert(builder.includes("resolveRatioRecord"), "Ask AI derives ratios when the s
 
 assert(
   !studio.includes("data-view-mode-toggle") &&
-    readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
+    !readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
       "data-view-mode-toggle",
     ),
-  "simplified/complex toggle is in the budget drawer; health, cash, reports, and action plan do not show it",
+  "the summary and full-year pills are gone",
 );
 assert(
   !/id="wizard-profit-walk"[\s\S]{0,80}className="dark"/.test(studio),
@@ -128,6 +128,8 @@ assert(
 );
 
 const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+assert(!portalCss.includes(".accountant-portal .tabs"), "no horizontal tabs row");
+assert(!studio.includes('className="tabs"'), "the client page does not render a tabs row");
 assert(
   portalCss.includes(".accountant-portal #wizard-budget-panel"),
   "portal pins budget ink so figures stay readable on cream cards",
@@ -221,8 +223,11 @@ assert(
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(!cashSrc.includes('title="Detailed cashflow forecast"'), "the separate detailed section is gone");
 assert(!cashSrc.includes('title="Weekly Detail"'), "old Weekly Detail title is gone");
-assert(cashSrc.includes("<ViewToggle"), "graph and 13-week share one card");
-assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly model is one toggle away from the graph");
+assert(!cashSrc.includes("<ViewToggle"), "the cash graph is not behind a toggle");
+assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits under the graph");
+const clientsPage = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+assert(clientsPage.includes("client-status"), "client status is an icon and a word");
+assert(!clientsPage.includes(">QB<") && !clientsPage.includes(">XO<") && !clientsPage.includes(">SG<"), "ledger badges are gone");
 assert(cashSrc.includes("CollapsibleGoldCard"), "setup still uses the hideable card");
 
 const ownerApp = readFileSync(resolve("src/routes/app.tsx"), "utf8");

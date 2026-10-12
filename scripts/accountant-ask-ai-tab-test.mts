@@ -60,10 +60,10 @@ assert(clientSrc.includes('audience: "accountant"'), "accountant questions send 
 assert(clientSrc.includes("functions/v1/milon-bot"), "studio widget can call brain tools");
 assert(
   !clientSrc.includes("data-view-mode-toggle") &&
-    readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
+    !readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
       "data-view-mode-toggle",
     ),
-  "simple/complex toggle is in the budget drawer, so Overview, Milōn Bot, Health, Cash, and Reports do not show it",
+  "summary and full-year pills are gone from the budget drawer",
 );
 assert(
   !/id="pane-ratios"[\s\S]{0,400}id="ask-ai-accountant"/.test(clientSrc),

@@ -952,7 +952,7 @@ function BudgetPane({ clientId }: { clientId: string }) {
           canSign
           hideInlineSignOff
           signoffKnown={false}
-          simplified={false}
+          simplified
           financials={{ revenue: "420000", cogs: "80000", fixedCosts: "140000", cash: "186000" }}
           fyStartMonthDefault={3}
           lens={search.view === "table" ? "table" : "chart"}

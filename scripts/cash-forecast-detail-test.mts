@@ -156,8 +156,9 @@ const paymentsRow = gridSrc.slice(gridSrc.indexOf('key: "total-payments"'), grid
 assert(paymentsRow.includes("blankZero: true"), "a zero payment week shows a dash");
 assert(paymentsRow.includes('tone: "plain"') && paymentsRow.includes("rule: true"), "total payments stays neutral");
 assert(!paymentsRow.includes('tone: "out"'), "total payments is not a red band");
-assert(cashSrc.includes("<ViewToggle"), "graph and 13-week share one toggle");
-assert(cashSrc.includes('value: "13week"'), "13-week is a view value");
+assert(!cashSrc.includes("<ViewToggle"), "the graph and the 13-week table are not a toggle");
+assert(cashSrc.includes('id="detailed-forecast"'), "the weekly table keeps the old anchor");
+assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits on the cash page");
 assert(cashSrc.includes("detailed-forecast"), "old detailed-forecast anchor still resolves");
 assert(cashSrc.includes("hashIsCashDetailAnchor"), "anchor hashes redirect onto the card");
 assert(cashSrc.includes("const startLabel = weeks[0]"), "forecast start uses the week-axis label");
