@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { SettingsGear } from "@/components/settings-nav-button";
 
@@ -161,7 +161,7 @@ export function AccountantNav({
     setFocusId(id);
   }
 
-  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
+  function onKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
     const target = event.target as HTMLElement | null;
     if (!target?.dataset.navId) return;
     const kind = target.dataset.navKind;
