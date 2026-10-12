@@ -24,6 +24,7 @@ import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-
 import { isPrecardCapFailure } from "@/lib/precard-cap";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
 import { SharedDocumentsList } from "@/components/shared-documents-list";
+import { SourceDocumentsPanel } from "@/components/source-documents-panel";
 import { PanelSkeleton } from "@/components/primitives";
 import {
   asBrainSummaryObject,
@@ -722,6 +723,15 @@ export function ClientBrainSummary({
         <PanelSkeleton rows={6} className="card pad bg-[var(--card)]" />
       ) : (
         <div className="brain-stack">
+          <SourceDocumentsPanel
+            clientId={clientId}
+            surface="review"
+            viewer={{
+              clientHasFirm: Boolean(firmId),
+              isOwner: false,
+              isFirmMemberWithAccess: Boolean(firmId),
+            }}
+          />
           {renderFrame ? null : inputQuestions}
 
           {/* Mini GAP report */}

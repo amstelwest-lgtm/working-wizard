@@ -84,6 +84,7 @@ export function OwnerAccountant({
   firmName,
   invite,
   uploads,
+  documents,
   signed,
   requests,
   onConnect,
@@ -93,6 +94,7 @@ export function OwnerAccountant({
   firmName: string | null;
   invite: ReactNode;
   uploads: ReactNode;
+  documents?: ReactNode;
   requests?: ReactNode;
   signed: OwnerSignoffRow[];
   onConnect: () => void;
@@ -140,6 +142,12 @@ export function OwnerAccountant({
           <p className="owner-lede">Invite your accountant to sign off.</p>
         )}
       </section>
+      {documents ? (
+        <>
+          <h2 className="owner-sub">Documents</h2>
+          {documents}
+        </>
+      ) : null}
       <h2 className="owner-sub">Uploads</h2>
       {uploads}
       <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onConnect}>
