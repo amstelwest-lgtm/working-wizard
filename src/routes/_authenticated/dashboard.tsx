@@ -217,7 +217,7 @@ async function getPlaybookCatalogue(): Promise<PlaybookMeta[]> {
 
 /** Chip from overall health — respects the critical-pillar tell. */
 function chipFromHealth(health: OverallHealth): { cls: "ok" | "warn" | "risk"; label: string } {
-  if (health.overall == null) return { cls: "warn", label: "—" };
+  if (health.overall == null) return { cls: "ok", label: "—" };
   const tier = health.displayStatus;
   if (tier === "healthy") return { cls: "ok", label: health.displayLabel };
   if (tier === "at_risk") return { cls: "warn", label: health.displayLabel };
@@ -1910,7 +1910,7 @@ function Dashboard() {
                 }
                 value={attention.needAttention}
                 valueClassName={attention.needAttention ? "text-[var(--risk)]" : "text-[var(--ok)]"}
-                footnote={<div className="warn">{attentionFootnote(attention)}</div>}
+                footnote={<div className="attention-mix">{attentionFootnote(attention)}</div>}
               />
 
               <MetricTile
@@ -2154,7 +2154,13 @@ function Dashboard() {
                         {opMarginStr(c)}
                       </td>
                       <td data-label="Status">
-                        <StatusPill variant={statusPillFromHealth(c.health.displayStatus)}>
+                        <StatusPill
+                          variant={
+                            c.health.overall == null
+                              ? "neutral"
+                              : statusPillFromHealth(c.health.displayStatus)
+                          }
+                        >
                           {chip.label}
                         </StatusPill>
                         {qbo && (

@@ -194,19 +194,22 @@ checks.clientsRoute = await page.evaluate(() => ({
 await shot(page, "followup-practice-clients-light-1280");
 
 await rail("Desk");
-await page.waitForFunction(() => location.pathname.startsWith("/clients/") && location.search.includes("tab=desk"));
+await page.waitForFunction(() => location.pathname === "/desk");
 await page.waitForSelector(".milon-desk");
+await page.getByText("Practice desk", { exact: true }).waitFor({ timeout: 15000 });
 await page.waitForTimeout(300);
 checks.deskRoute = await page.evaluate(() => {
   const el = document.querySelector(".milon-desk");
-  const active = document.querySelector('nav[aria-label="Client workspace"] .tab.on')?.textContent ?? "";
+  const active = document.querySelector('nav[aria-label="Practice"] a[aria-current="page"], nav[aria-label="Practice"] .tab.on')?.textContent ?? "";
   const rect = el?.getBoundingClientRect();
+  const text = document.body.innerText;
   return {
     path: location.pathname + location.search,
     open: Boolean(el),
     active,
     top: rect?.top ?? null,
-    text: el?.textContent?.slice(0, 220) ?? "",
+    text: text.slice(0, 280),
+    arbitraryClient: /Theo van der Westhuizen/.test(text),
   };
 });
 await shot(page, "followup-practice-desk-light-1280");
@@ -295,8 +298,9 @@ await phoneRail("Clients");
 await phone.locator("#clients-table").scrollIntoViewIfNeeded();
 await shot(phone, "followup-practice-clients-light-390");
 await phoneRail("Desk");
-await phone.waitForFunction(() => location.pathname.startsWith("/clients/") && location.search.includes("tab=desk"));
+await phone.waitForFunction(() => location.pathname === "/desk");
 await phone.waitForSelector(".milon-desk");
+await phone.getByText("Practice desk", { exact: true }).waitFor({ timeout: 15000 });
 await shot(phone, "followup-practice-desk-light-390");
 await phoneRail("Team");
 await phone.waitForURL("**/settings/team");
@@ -322,7 +326,13 @@ const failed = [
   checks.signoff,
   checks.signoffDialog,
 ].filter((row) => !row || (row as { ok?: boolean }).ok === false);
-if (desk.active !== "Desk" || !desk.open || !/Team|Activity/i.test(desk.text ?? "")) {
+if (
+  desk.active?.trim() !== "Desk" ||
+  !desk.open ||
+  desk.path !== "/desk" ||
+  desk.arbitraryClient ||
+  !/Practice desk/i.test(desk.text ?? "")
+) {
   failed.push(desk);
 }
 const chrome = checks.practiceChrome as { ok?: boolean };

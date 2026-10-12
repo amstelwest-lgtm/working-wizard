@@ -672,6 +672,15 @@ export function ClientBrainSummary({
 
   const body = (
     <div>
+      <SourceDocumentsPanel
+        clientId={clientId}
+        surface="review"
+        viewer={{
+          clientHasFirm: Boolean(firmId),
+          isOwner: false,
+          isFirmMemberWithAccess: Boolean(firmId),
+        }}
+      />
       <div id="wizard-brain-hero" className="card hero-card pad brain-hero">
         <span className="eyebrow">Client brain</span>
         <h2 className="h-sec" style={{ marginBottom: 6 }}>
@@ -723,15 +732,6 @@ export function ClientBrainSummary({
         <PanelSkeleton rows={6} className="card pad bg-[var(--card)]" />
       ) : (
         <div className="brain-stack">
-          <SourceDocumentsPanel
-            clientId={clientId}
-            surface="review"
-            viewer={{
-              clientHasFirm: Boolean(firmId),
-              isOwner: false,
-              isFirmMemberWithAccess: Boolean(firmId),
-            }}
-          />
           {renderFrame ? null : inputQuestions}
 
           {/* Mini GAP report */}

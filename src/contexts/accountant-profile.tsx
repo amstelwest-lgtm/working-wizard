@@ -10,6 +10,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  brandPrimaryColor,
   fetchUserFirm,
   firmBrandIsEmpty,
   listUserFirms,
@@ -104,17 +105,21 @@ type AccountantProfileContextValue = {
 const AccountantProfileContext =
   createContext<AccountantProfileContextValue | null>(null);
 
+function coerceStoredBrand(profile: AccountantProfile): AccountantProfile {
+  return { ...profile, primaryColor: brandPrimaryColor(profile.primaryColor) };
+}
+
 function loadFromStorage(userId: string | null): AccountantProfile {
   if (typeof window === "undefined" || !userId) return DEFAULT_PROFILE;
   try {
     const scoped = localStorage.getItem(storageKeyFor(userId));
-    if (scoped) return { ...DEFAULT_PROFILE, ...JSON.parse(scoped) };
+    if (scoped) return coerceStoredBrand({ ...DEFAULT_PROFILE, ...JSON.parse(scoped) });
 
     // One-shot migrate legacy unscoped cache into this user's key, then remove it
     // so another account on the same browser cannot flash the wrong firm brand (N8).
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (legacy) {
-      const parsed = { ...DEFAULT_PROFILE, ...JSON.parse(legacy) };
+      const parsed = coerceStoredBrand({ ...DEFAULT_PROFILE, ...JSON.parse(legacy) });
       localStorage.setItem(storageKeyFor(userId), JSON.stringify(parsed));
       localStorage.removeItem(LEGACY_STORAGE_KEY);
       return parsed;

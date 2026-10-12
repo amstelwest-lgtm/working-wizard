@@ -2,7 +2,12 @@
  * Pure checks for firm brand helpers.
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/firm-brand-test.mts
  */
-import { firmBrandIsEmpty, profileFromFirm, type FirmBrandRow } from "../src/lib/firm-brand";
+import {
+  brandPrimaryColor,
+  firmBrandIsEmpty,
+  profileFromFirm,
+  type FirmBrandRow,
+} from "../src/lib/firm-brand";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -38,5 +43,12 @@ assert(profile.logoUrl?.includes("logo.png") === true, "logo");
 assert(profile.accentColor === "#abcdef", "accent");
 assert(profile.tagline === "Clear numbers", "tagline");
 assert(profile.accountantName === "Jane", "contact name");
+assert(brandPrimaryColor(null) === "#102A43", "missing primary falls back to navy");
+assert(brandPrimaryColor("#1A1A2E") === "#102A43", "legacy default primary is navy");
+assert(
+  profileFromFirm({ ...emptyFirm, primary_color: "#1a1a2e" }).primaryColor === "#102A43",
+  "a stored legacy primary reads as navy",
+);
+assert(brandPrimaryColor("#0B5FFF") === "#0B5FFF", "a chosen primary is kept");
 
 console.log("firm-brand-test: ok");

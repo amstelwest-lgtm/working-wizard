@@ -247,7 +247,7 @@ html.dark .milon-desk {
   color: var(--desk-accent);
   background: rgba(11, 95, 255, 0.08);
   border: 1px solid var(--desk-line);
-  box-shadow: 0 0 18px rgba(212, 175, 55, 0.16);
+  box-shadow: 0 0 18px rgba(11, 95, 255, 0.12);
 }
 
 .milon-desk-mark svg {
@@ -693,8 +693,8 @@ html.dark .milon-desk {
 }
 
 html[data-theme="light"] .milon-desk {
-  --desk-card: rgba(255, 252, 245, 0.96);
-  --desk-plate: #f6f3ea;
+  --desk-card: #ffffff;
+  --desk-plate: #ffffff;
 }
 
 @media (max-width: 720px) {
@@ -835,7 +835,10 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
    only while that pane is the one on screen. */
 .accountant-portal:has(#pane-ask:not(.on)) .shell,
 .accountant-portal:has(#pane-ask:not(.on)) .client-workspace,
-.accountant-portal:has(#pane-ask:not(.on)) .deliverable-main {
+.accountant-portal:has(#pane-ask:not(.on)) .deliverable-main,
+.accountant-portal.practice-home:has(.milon-desk) .shell,
+.accountant-portal.practice-home:has(.milon-desk) .client-workspace,
+.accountant-portal.practice-home:has(.milon-desk) .deliverable-main {
   height: auto;
   max-height: none;
   overflow: visible;

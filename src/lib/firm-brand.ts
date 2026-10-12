@@ -23,6 +23,19 @@ const DEFAULT_BRAND: FirmBrandProfile = {
   tagline: null,
 };
 
+/**
+ * The old brand screen default. The column has no database default; rows and
+ * browser caches still store this hex from before navy became the default.
+ * It is not a chosen brand colour.
+ */
+export const LEGACY_DEFAULT_PRIMARY = "#1a1a2e";
+
+export function brandPrimaryColor(value: string | null | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw || raw.toLowerCase() === LEGACY_DEFAULT_PRIMARY) return DEFAULT_BRAND.primaryColor;
+  return raw;
+}
+
 const FIRM_SELECT =
   "id, name, owner_user_id, referral_code, logo_url, accent_color, primary_color, secondary_color, tagline, brand_contact_name, brand_contact_email, brand_updated_at, market";
 
@@ -127,7 +140,7 @@ export function profileFromFirm(firm: FirmBrandRow): FirmBrandProfile {
   return {
     firmName: firm.name ?? "",
     logoUrl: firm.logo_url ?? null,
-    primaryColor: firm.primary_color || DEFAULT_BRAND.primaryColor,
+    primaryColor: brandPrimaryColor(firm.primary_color),
     secondaryColor: firm.secondary_color || DEFAULT_BRAND.secondaryColor,
     accentColor: firm.accent_color || DEFAULT_BRAND.accentColor,
     accountantName: firm.brand_contact_name ?? "",

@@ -2889,7 +2889,7 @@ function ClientView() {
               </nav>
               <div className="deliverable-main">
                 <div data-notes-tray-slot="" className="notes-tray-slot" />
-                {!hasFigures ? (
+                {!hasFigures && activeTab === "overview" ? (
                   <div className="card hero-card first-figures" id="first-figures-card">
                     <div className="ff-copy">
                       <p className="kicker">Step 1 · Bring in this client's figures</p>
@@ -3178,6 +3178,7 @@ function ClientView() {
                         figureFacts={statementFigureFacts}
                         renderFrame={({ inputs, body }) => (
                           <>
+                            {body}
                             <DataUpToDate
                               clientId={clientId}
                               returnPath={`/clients/${clientId}`}
@@ -3204,7 +3205,6 @@ function ClientView() {
                               />
                               {inputs}
                             </DataUpToDate>
-                            {body}
                           </>
                         )}
                       />

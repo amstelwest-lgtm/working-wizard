@@ -111,6 +111,16 @@ export const Route = createFileRoute("/auth")({
   head: () => pageHead(SEO_PAGES.auth),
 });
 
+type AuthFieldDraft = {
+  email: string;
+  password: string;
+  fullName: string;
+  firmName: string;
+};
+
+/** Survives a search-param remount when the Sign in tab rewrites /auth. */
+let authFieldDraft: AuthFieldDraft = { email: "", password: "", fullName: "", firmName: "" };
+
 function AuthPage() {
   const { geoZa } = Route.useLoaderData();
   const { user, loading } = useAuth();
@@ -133,10 +143,10 @@ function AuthPage() {
     plan: FirmCheckoutBand;
     interval: FirmInterval;
   } | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [firmName, setFirmName] = useState("");
+  const [email, setEmail] = useState(authFieldDraft.email);
+  const [password, setPassword] = useState(authFieldDraft.password);
+  const [fullName, setFullName] = useState(authFieldDraft.fullName);
+  const [firmName, setFirmName] = useState(authFieldDraft.firmName);
   const [busy, setBusy] = useState(false);
   const [signInFailure, setSignInFailure] = useState<PasswordSignInFailure | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
@@ -587,14 +597,20 @@ function AuthPage() {
                   <AuthEntryInput
                     id="auth-full-name"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                  authFieldDraft = { ...authFieldDraft, fullName: e.target.value };
+                  setFullName(e.target.value);
+                }}
                     required
                   />
                   <AuthEntryFieldLabel htmlFor="auth-firm-name">Firm name</AuthEntryFieldLabel>
                   <AuthEntryInput
                     id="auth-firm-name"
                     value={firmName}
-                    onChange={(e) => setFirmName(e.target.value)}
+                    onChange={(e) => {
+                  authFieldDraft = { ...authFieldDraft, firmName: e.target.value };
+                  setFirmName(e.target.value);
+                }}
                     placeholder="Acme & Partners"
                     required
                   />
@@ -649,6 +665,7 @@ function AuthPage() {
                 value={email}
                 autoComplete="username"
                 onChange={(e) => {
+                  authFieldDraft = { ...authFieldDraft, email: e.target.value };
                   setEmail(e.target.value);
                   if (mode === "signin") setSignInFailure(null);
                 }}
@@ -661,6 +678,7 @@ function AuthPage() {
                 value={password}
                 autoComplete="current-password"
                 onChange={(e) => {
+                  authFieldDraft = { ...authFieldDraft, password: e.target.value };
                   setPassword(e.target.value);
                   if (mode === "signin") setSignInFailure(null);
                 }}

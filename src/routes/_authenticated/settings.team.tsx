@@ -329,7 +329,7 @@ function TeamAccessPage() {
           </div>
         ) : null}
         {view?.migrationHint ? (
-          <div className="mb-4 rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          <div className="mb-4 rounded-xl border border-[#DBEAFE] bg-[#F4F8FF] px-4 py-3 text-sm text-[#102A43]">
             {view.migrationHint}
           </div>
         ) : null}
@@ -433,7 +433,7 @@ function TeamAccessPage() {
                   {unsentInvite ? (
                     <div
                       role="status"
-                      className="sm:col-span-2 rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200"
+                      className="sm:col-span-2 rounded-xl border border-[#C43D4B]/35 bg-white px-4 py-3 text-sm text-[#C43D4B]"
                     >
                       <p>{INVITE_EMAIL_FAILED}</p>
                       <p className="mt-2 break-all text-xs">{unsentInvite.url}</p>

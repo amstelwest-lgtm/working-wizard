@@ -65,10 +65,12 @@ export function SimplifiedRatios({
             <span className="text-[28px] font-bold leading-none text-[#102A43] dark:text-white">
               {displayHealth}
             </span>
-            <span
-              className="text-[10px] font-semibold tracking-[0.08em]"
-              style={{ color }}
-            >
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.08em] text-[#102A43] dark:text-white">
+              <i
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: color }}
+              />
               {statusLabel(card.health, card.status)}
             </span>
             {card.series.length >= 2 ? (

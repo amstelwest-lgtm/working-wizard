@@ -2880,9 +2880,9 @@ const REPORTS: ReportMeta[] = [
       "Ranked action steps per failing ratio — sorted critical-first, with effort and impact ratings.",
     pages: "2–3 pages",
     category: "essential",
-    icon: <Lightbulb className="h-4 w-4 text-amber-400" />,
-    iconBg: "bg-amber-500/15",
-    btnBg: "bg-amber-600 hover:bg-amber-700",
+    icon: <Lightbulb className="h-4 w-4 text-[#0B5FFF]" />,
+    iconBg: "bg-[#DBEAFE]",
+    btnBg: "bg-[#0B5FFF] hover:bg-[#2563EB]",
     filename: "InterventionPlan",
   },
   {
@@ -3132,7 +3132,7 @@ function ReportCard({
               {localizeCopy(report.description, market)}
             </p>
             {unavailableReason ? (
-              <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+              <p className="mt-2 text-[11px] leading-relaxed text-[#102A43] dark:text-[#F4F7FB]">
                 {unavailableReason}
               </p>
             ) : null}
@@ -3359,9 +3359,9 @@ function SettingsPanel({
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2.5">
-            <p className="text-xs text-amber-400">No brand configured</p>
-            <p className="text-[10px] text-amber-500/70 mt-0.5">
+          <div className="rounded-lg border border-[#DBEAFE] bg-white px-3 py-2.5">
+            <p className="text-xs text-[#102A43]">No brand configured</p>
+            <p className="text-[10px] text-[#3D5270] mt-0.5">
               PDFs will use default Milōn branding
             </p>
           </div>
@@ -3627,15 +3627,15 @@ const PLAYBOOK_RATIOS: PlaybookRatio[] = [
 ];
 
 const TIER_CHIP: Record<string, string> = {
-  critical: "bg-red-950/60 text-red-400 border border-red-800",
-  at_risk: "bg-amber-950/60 text-amber-400 border border-amber-800",
-  healthy: "bg-emerald-950/60 text-emerald-400 border border-emerald-800",
+  critical: "bg-white text-[#C43D4B] border border-[#DBEAFE]",
+  at_risk: "bg-white text-[#B7791F] border border-[#DBEAFE]",
+  healthy: "bg-white text-[#16845B] border border-[#DBEAFE]",
 };
 
 const TIER_DOT: Record<string, string> = {
-  critical: "bg-red-500",
-  at_risk: "bg-amber-500",
-  healthy: "bg-emerald-500",
+  critical: "bg-[#C43D4B]",
+  at_risk: "bg-[#B7791F]",
+  healthy: "bg-[#16845B]",
 };
 
 // ── Playbook ratio card ─────────────────────────────────────────────────────
@@ -3800,25 +3800,9 @@ export function ReportsStudio({
     };
   }, [needsClientPicker, brandLoading, firmId]);
 
-  useEffect(() => {
-    if (!needsClientPicker || clientId || !firmClients?.length) return;
-    const first = firmClients[0];
-    void navigate({
-      to: "/reports",
-      search: {
-        clientId: first.id,
-        client: first.name,
-        report: undefined,
-        action: undefined,
-      },
-      replace: true,
-    });
-  }, [needsClientPicker, clientId, firmClients, navigate]);
-
   const showIllustrativeDemo =
     needsClientPicker && !clientId && firmClients !== null && firmClients.length === 0;
-  const resolvingClient =
-    needsClientPicker && !clientId && (firmClients === null || firmClients.length > 0);
+  const resolvingClient = needsClientPicker && !clientId && firmClients === null;
 
   useEffect(() => {
     if (!showIllustrativeDemo) return;
@@ -4451,7 +4435,7 @@ export function ReportsStudio({
                   Client
                 </label>
                 <Select
-                  value={clientId ?? firmClients[0]?.id}
+                  value={clientId ?? ""}
                   onValueChange={(id) => {
                     const chosen = firmClients.find((row) => row.id === id);
                     void navigate({
@@ -4485,13 +4469,13 @@ export function ReportsStudio({
             {resolvingClient && (
               <div className="mt-2 flex items-center gap-1.5">
                 <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                <span className="text-[11px] text-muted-foreground">Choosing the latest client…</span>
+                <span className="text-[11px] text-muted-foreground">Loading clients…</span>
               </div>
             )}
             {showIllustrativeDemo && (
               <div className="mt-2 flex items-center gap-1.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
-                <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#0B5FFF]" />
+                <span className="text-[11px] text-[#102A43] dark:text-[#F4F7FB]">
                   No clients on this firm yet — PDFs use illustrative demo data (watermarked).
                 </span>
               </div>

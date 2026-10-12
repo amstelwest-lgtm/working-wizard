@@ -28,11 +28,14 @@ import { MilonTeamDeskPage } from "./milon-team-desk-page";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
+import { Route as DeskRoute } from "@/routes/_authenticated/desk";
+import { ReportsStudio } from "@/routes/_authenticated/reports-studio";
 import { Route as SettingsRoute } from "@/routes/_authenticated/settings.index";
 import { Route as TeamRoute } from "@/routes/_authenticated/settings.team";
 import { Route as BrandRoute } from "@/routes/_authenticated/settings.brand";
 
 const Dashboard = DashboardRoute.options.component as ComponentType;
+const PracticeDesk = DeskRoute.options.component as ComponentType;
 const SettingsPage = SettingsRoute.options.component as ComponentType;
 const TeamAccessPage = TeamRoute.options.component as ComponentType;
 const BrandPage = BrandRoute.options.component as ComponentType;
@@ -306,6 +309,51 @@ const settingsBrandRoute = createRoute({
   },
 });
 
+const deskRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/desk",
+  component: function DeskHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <PracticeDesk />
+      </MarketProvider>
+    );
+  },
+});
+
+const reportsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reports",
+  validateSearch: (search: Record<string, unknown>) => ({
+    client: typeof search.client === "string" ? search.client : undefined,
+    clientId: typeof search.clientId === "string" ? search.clientId : undefined,
+    report: typeof search.report === "string" ? search.report : undefined,
+    action: search.action === "preview" || search.action === "download" ? search.action : undefined,
+  }),
+  component: function ReportsHarness() {
+    const search = useSearch({ strict: false }) as {
+      client?: string;
+      clientId?: string;
+      report?: string;
+      action?: "preview" | "download";
+    };
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <div className="accountant-portal practice-home">
+          <div className="shell">
+            <ReportsStudio
+              client={search.client}
+              clientId={search.clientId}
+              report={search.report}
+              action={search.action}
+            />
+          </div>
+        </div>
+      </MarketProvider>
+    );
+  },
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -326,6 +374,8 @@ const routeTree = rootRoute.addChildren([
   importLowsRoute,
   ownerDoorRoute,
   dashboardRoute,
+  deskRoute,
+  reportsRoute,
   settingsRoute,
   settingsBrandRoute,
   settingsTeamRoute,
