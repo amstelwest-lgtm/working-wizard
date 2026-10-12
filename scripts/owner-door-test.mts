@@ -514,11 +514,21 @@ const avatar = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8"
 assert(!avatar.includes('d="M32 28l8 6 8-6"'), "the advisor brow is not a frown");
 assert(!avatar.includes('className="smile"'), "the advisor face is not a smile");
 assert(avatar.includes('className="mark"'), "the advisor face uses a neutral mark");
+assert(avatar.includes('rx="12"'), "the advisor body uses the family corner");
+assert(avatar.includes('className="badge"'), "the advisor headset uses an ice badge");
+assert(
+  avatar.includes('className="eye" x="31" y="34" width="6" height="6" rx="1.4"'),
+  "the advisor keeps the square eyes that blink",
+);
 assert(
   avatar.indexOf('className="visor"') < avatar.indexOf('agent === "advisor"'),
   "the visor stays on the financial manager",
 );
 assert(css.includes(".owner-presence.is-advisor .mark"), "the advisor mark is drawn with the other faces");
+assert(
+  css.includes(".owner-presence.is-advisor .badge") && css.includes("color-mix(in srgb, var(--ice)"),
+  "the advisor badge uses the ice fill",
+);
 assert(css.includes('button[aria-label="Share Milōn"]'), "the owner door hides the phone share button");
 const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");

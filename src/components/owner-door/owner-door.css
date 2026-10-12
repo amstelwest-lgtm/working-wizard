@@ -1468,6 +1468,10 @@ html.dark .owner-status.is-attention {
   fill: none;
 }
 
+.owner-presence.is-advisor .badge {
+  fill: color-mix(in srgb, var(--ice) 45%, transparent);
+}
+
 .owner-orbit {
   position: absolute;
   inset: 0;
