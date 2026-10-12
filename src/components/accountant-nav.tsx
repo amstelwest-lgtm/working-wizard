@@ -1,6 +1,23 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { Link } from "@tanstack/react-router";
 import { SettingsGear } from "@/components/settings-nav-button";
+import {
+  closeNavGroup,
+  navOpenEqual,
+  openNavGroup,
+  readNavOpen,
+  toggleNavOpen,
+  writeNavOpen,
+  type NavOpenState,
+} from "@/lib/accountant-nav-open";
 
 export type NavDestination = {
   to: "/dashboard" | "/practice" | "/settings" | "/clients" | "/clients/$clientId";
@@ -72,7 +89,9 @@ function NavLink({
       className={className}
       data-nav-row=""
       data-nav-id={navId}
-      data-nav-kind={navId.startsWith("sub:") ? "sub" : navId.startsWith("heading:") ? "heading" : navId}
+      data-nav-kind={
+        navId.startsWith("sub:") ? "sub" : navId.startsWith("heading:") ? "heading" : navId
+      }
       data-heading-id={headingId}
       data-bot-rail={bot ? "true" : undefined}
       tabIndex={tabIndex}
@@ -84,16 +103,30 @@ function NavLink({
   );
 }
 
+function browserStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function remember(storageKey: string, open: NavOpenState) {
+  writeNavOpen(browserStorage(), storageKey, open);
+}
+
 /**
  * Collapsible accountant rail. Kickers are labels. A heading's label navigates
  * to its default sub-item. The chevron only opens or closes that list.
- * One heading is open at a time. The heading for the current address opens
- * on its own, unless the accountant just closed it.
+ * Each group stays as the accountant left it. Navigation highlights the
+ * active item and opens its group when that group is closed.
  */
 export function AccountantNav({
   label,
   sections,
   selection,
+  storageKey,
   settingsActive = false,
   back,
   onSettings,
@@ -102,6 +135,8 @@ export function AccountantNav({
   label: string;
   sections: NavSection[];
   selection: Selection;
+  /** localStorage key for this rail's open groups. */
+  storageKey: string;
   settingsActive?: boolean;
   back?: { label: string; to: NavDestination };
   onSettings?: () => void;
@@ -109,25 +144,33 @@ export function AccountantNav({
   onNavigate?: () => void;
 }) {
   const navRef = useRef<HTMLElement>(null);
-  const holdClosed = useRef<string | null>(null);
   const pendingFocus = useRef<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(selection.headingId);
+  const [openIds, setOpenIds] = useState<NavOpenState>(() => openNavGroup({}, selection.headingId));
   const [focusId, setFocusId] = useState<string | null>(null);
 
+  useLayoutEffect(() => {
+    const stored = readNavOpen(browserStorage(), storageKey);
+    setOpenIds((current) => {
+      const next = openNavGroup({ ...stored, ...current }, selection.headingId);
+      if (!navOpenEqual(next, stored)) remember(storageKey, next);
+      return navOpenEqual(next, current) ? current : next;
+    });
+  }, [selection.headingId, selection.subId, storageKey]);
+
   useEffect(() => {
-    holdClosed.current = null;
-    setOpenId(selection.headingId);
     setFocusId(null);
   }, [selection.headingId, selection.subId]);
 
+  function commit(next: NavOpenState) {
+    setOpenIds(next);
+    remember(storageKey, next);
+  }
+
   function toggle(id: string) {
-    setOpenId((current) => {
-      if (current === id) {
-        if (id === selection.headingId) holdClosed.current = id;
-        return null;
-      }
-      if (id === selection.headingId) holdClosed.current = null;
-      return id;
+    setOpenIds((current) => {
+      const next = toggleNavOpen(current, id);
+      remember(storageKey, next);
+      return next;
     });
   }
 
@@ -138,7 +181,7 @@ export function AccountantNav({
     const row = navRef.current?.querySelector<HTMLElement>(`[data-nav-id="${id}"]`);
     row?.focus();
     setFocusId(id);
-  }, [openId]);
+  }, [openIds]);
 
   const defaultId =
     selection.headingId && selection.subId
@@ -166,7 +209,9 @@ export function AccountantNav({
     if (!target?.dataset.navId) return;
     const kind = target.dataset.navKind;
     const headingId = target.dataset.headingId;
-    const heading = sections.flatMap((section) => section.headings).find((item) => item.id === headingId);
+    const heading = sections
+      .flatMap((section) => section.headings)
+      .find((item) => item.id === headingId);
     const rows = visibleRows();
     const index = rows.findIndex((row) => row.dataset.navId === target.dataset.navId);
 
@@ -198,11 +243,10 @@ export function AccountantNav({
       event.preventDefault();
       const first = heading.items[0];
       if (!first) return;
-      if (heading.id === selection.headingId) holdClosed.current = null;
       const nextId = rowKey("sub", heading.id, first.id);
-      if (openId !== heading.id) {
+      if (!openIds[heading.id]) {
         pendingFocus.current = nextId;
-        setOpenId(heading.id);
+        commit(openNavGroup(openIds, heading.id));
       } else {
         focusRow(nextId);
       }
@@ -214,9 +258,8 @@ export function AccountantNav({
         focusRow(rowKey("heading", headingId));
         return;
       }
-      if (kind === "heading" && headingId && openId === headingId) {
-        if (headingId === selection.headingId) holdClosed.current = headingId;
-        setOpenId(null);
+      if (kind === "heading" && headingId && openIds[headingId]) {
+        commit(closeNavGroup(openIds, headingId));
       }
     }
   }
@@ -249,7 +292,7 @@ export function AccountantNav({
           {section.headings.map((heading) => {
             const current = selection.headingId === heading.id;
             const page = current && !selection.subId;
-            const open = openId === heading.id && !!heading.items?.length;
+            const open = !!openIds[heading.id] && !!heading.items?.length;
             const collapsedCurrent = current && !!selection.subId && !open;
             return (
               <div
