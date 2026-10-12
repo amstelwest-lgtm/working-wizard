@@ -1045,6 +1045,78 @@ function InviteOwnerDialog({
   );
 }
 
+const UNSCORED_HEALTH: OverallHealth = {
+  overall: null,
+  status: "at_risk",
+  displayStatus: "at_risk",
+  displayLabel: "Watch",
+  pillars: [],
+  weakestPillar: null,
+  hasCriticalPillar: false,
+};
+
+/** One book row. A scoring throw still leaves the client on the list. */
+function toClientRow(
+  c: Client,
+  history: ScoreHistoryPoint[],
+  openActions: number,
+  overdueActions: number,
+  openQueries: number,
+): ClientRow {
+  try {
+    const clientMarket = resolveMarket(
+      parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
+    );
+    const assessed = assessClientMetrics({
+      financials: c.financials,
+      cashflow: c.cashflow,
+      financialsUpdatedAt: c.financials_updated_at ?? null,
+      timeZone: clientMarket.timezone,
+    });
+    const runwayWeeks =
+      assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
+        ? assessed.runway.weeks
+        : null;
+    const runwayLabel = runwayDisplayLabel(assessed.runway);
+    const fyStartMonth =
+      parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
+    const health = scorecardHealthFromFinancials({
+      financials: c.financials,
+      fyStartMonth,
+      periodMonths: periodMonthsOf(c.financials),
+      cashRunwayWeeks: runwayWeeks,
+      market: clientMarket,
+      shortfallWeek: assessed.outlook.shortfallWeek,
+    });
+    return {
+      ...c,
+      score: health.overall,
+      health,
+      trendDelta: trendDelta30d(history, health.overall),
+      runwayWeeks,
+      runwayLabel,
+      openQueries,
+      openActions,
+      overdueActions,
+      revenue: revenueOf(c.financials),
+    };
+  } catch (err) {
+    console.error("client row:", c.id, err);
+    return {
+      ...c,
+      score: null,
+      health: UNSCORED_HEALTH,
+      trendDelta: null,
+      runwayWeeks: null,
+      runwayLabel: null,
+      openQueries,
+      openActions,
+      overdueActions,
+      revenue: null,
+    };
+  }
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export type PracticeView = "home" | "clients" | "practice";
@@ -1199,10 +1271,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const mintInvite = useServerFn(inviteClientOwner);
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
+  const loadGen = useRef(0);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = async (activeFirmId: string | null, userId: string | undefined) => {
+    const gen = ++loadGen.current;
     setLoading(true);
+    try {
 
     if (!userId) {
       setClientRows([]);
@@ -1259,6 +1334,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         );
       }
     }
+
+    // Show the book as soon as the client query returns. Score history, open
+    // actions, and notes enrich the rows afterwards. A hung secondary query
+    // used to leave Home on "0 clients on the book." and Clients empty.
+    if (gen !== loadGen.current) return;
+    setClientRows(rawClients.map((c) => toClientRow(c, [], 0, 0, 0)));
+    setLoading(false);
 
     // Score history — query defensively; the table may not exist yet
     const historyMap: Record<string, ScoreHistoryPoint[]> = {};
@@ -1321,56 +1403,31 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       }
     }
 
-    // Compute per-client enriched rows
-    const openQueriesMap = await countOpenQueriesByClient(rawClients.map((c) => c.id));
-    const rows: ClientRow[] = rawClients.map((c) => {
-      const clientMarket = resolveMarket(
-        parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
-      );
-      const assessed = assessClientMetrics({
-        financials: c.financials,
-        cashflow: c.cashflow,
-        financialsUpdatedAt: c.financials_updated_at ?? null,
-        timeZone: clientMarket.timezone,
-      });
-      const runwayWeeks =
-        assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
-          ? assessed.runway.weeks
-          : null;
-      const runwayLabel = runwayDisplayLabel(assessed.runway);
-      const fyStartMonth =
-        parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
-      const health = scorecardHealthFromFinancials({
-        financials: c.financials,
-        fyStartMonth,
-        periodMonths: periodMonthsOf(c.financials),
-        cashRunwayWeeks: runwayWeeks,
-        market: clientMarket,
-        shortfallWeek: assessed.outlook.shortfallWeek,
-      });
-      const score = health.overall;
-      const realHistory = historyMap[c.id] ?? [];
-      const trendDelta = trendDelta30d(realHistory, score);
-      const openActions = openActionsMap[c.id] ?? 0;
-      const overdueActions = overdueActionsMap[c.id] ?? 0;
-      const openQueries = openQueriesMap[c.id] ?? 0;
-      const revenue = revenueOf(c.financials);
-      return {
-        ...c,
-        score,
-        health,
-        trendDelta,
-        runwayWeeks,
-        runwayLabel,
-        openQueries,
-        openActions,
-        overdueActions,
-        revenue,
-      };
-    });
-
-    setClientRows(rows);
-    setLoading(false);
+    // Compute per-client enriched rows. A failure here keeps the clients
+    // already on screen; it does not put the book back to zero.
+    let openQueriesMap: Record<string, number> = {};
+    try {
+      openQueriesMap = await countOpenQueriesByClient(rawClients.map((c) => c.id));
+    } catch (err) {
+      console.error("open queries:", err);
+    }
+    if (gen !== loadGen.current) return;
+    setClientRows(
+      rawClients.map((c) =>
+        toClientRow(
+          c,
+          historyMap[c.id] ?? [],
+          openActionsMap[c.id] ?? 0,
+          overdueActionsMap[c.id] ?? 0,
+          openQueriesMap[c.id] ?? 0,
+        ),
+      ),
+    );
+    } catch (err) {
+      console.error("practice book:", err);
+    } finally {
+      if (gen === loadGen.current) setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1728,6 +1785,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 reviewNow: attention.reviewNow,
                 openQueries: openQueriesTotal,
                 followUps: followUpItems.length,
+                loading: bookLoading,
               })}
               status={practiceCardStatuses({
                 clientCount: clientRows.length,

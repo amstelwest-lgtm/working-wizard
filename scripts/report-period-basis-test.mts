@@ -173,7 +173,11 @@ const profileHref = defaultStringifySearch({ tab: "overview", profile: 1 });
 assert(profileHref.includes("profile=1"), `profile search is profile=1, got ${profileHref}`);
 assert(!profileHref.includes("%22"), `profile search is not JSON-quoted, got ${profileHref}`);
 const clientRoute = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-assert(clientRoute.includes('search.profile === 1 || search.profile === "1"'), "profile=1 opens the editor");
+const clientSearch = readFileSync(resolve("src/lib/client-route-search.ts"), "utf8");
+assert(
+  clientSearch.includes('search.profile === 1 || search.profile === "1"'),
+  "profile=1 opens the editor",
+);
 assert(clientRoute.includes("if (search.profile === 1) setProfileOpen(true)"), "the overview reads profile=1");
 
 const withDa = budgetActualFromFinancials({

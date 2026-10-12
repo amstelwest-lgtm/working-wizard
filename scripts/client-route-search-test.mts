@@ -245,12 +245,15 @@ assert(oldPlan.headingId === "plan" && oldPlan.subId === "open", "the old plan s
 const route =
   readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +
   readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
-const parser = route.slice(
-  route.indexOf("validateSearch:"),
-  route.indexOf("component: ClientView"),
+assert(
+  route.includes("validateSearch: accountantClientRouteSearch"),
+  "the client route validates search through the shared parser",
 );
-assert(parser.includes("accountantValidatedSearch"), "alias runs inside validateSearch");
 const searchSrc = readFileSync(resolve("src/lib/client-route-search.ts"), "utf8");
+assert(
+  searchSrc.includes("Object.assign(out, accountantValidatedSearch(search))"),
+  "alias runs inside validateSearch",
+);
 assert(
   searchSrc.includes("out.section = canonical.section"),
   "an absent section is written as undefined so the router drops it",
