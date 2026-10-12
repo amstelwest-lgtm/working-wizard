@@ -26,7 +26,7 @@ export function SettingsNavButton({
   );
 }
 
-/** Pinned to the bottom of a desktop sidebar. Hidden in the phone pill row. */
+/** Pinned to the bottom of the desktop rail and the phone drawer. */
 export function RailSettingsButton({
   active = false,
   onClick,

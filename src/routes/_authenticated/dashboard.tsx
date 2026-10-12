@@ -1825,7 +1825,7 @@ function Dashboard() {
         </div>
 
         <div className="client-workspace">
-          <PracticeRail />
+          <PracticeRail onNavigate={() => setMobileNavOpen(false)} />
           <div className="deliverable-main">
         {/* ===== GREETING ===== */}
         <PageHeader

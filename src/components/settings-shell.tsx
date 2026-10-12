@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { PracticeRailItems } from "@/components/practice-rail";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -33,8 +33,9 @@ export function SettingsShell({
     (() => {
       void navigate({ to: "/settings", hash: "firm-billing" });
     });
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
-    <div className="accountant-portal settings-portal milon-page-enter">
+    <div className={`accountant-portal settings-portal milon-page-enter${menuOpen ? " nav-open" : ""}`}>
       <div id="atmos" aria-hidden="true">
         <div className="glow g1" />
         <div className="glow g2" />
@@ -49,14 +50,43 @@ export function SettingsShell({
           <SettingsMenu
             className="tb-btn settings-gear"
             current
-            onSettings={openSettings}
-            onPlan={openPlan}
+            onSettings={() => {
+              setMenuOpen(false);
+              openSettings();
+            }}
+            onPlan={() => {
+              setMenuOpen(false);
+              openPlan();
+            }}
           />
+          <button
+            type="button"
+            className="topbar-backdrop"
+            aria-label="Close menu"
+            tabIndex={menuOpen ? 0 : -1}
+            onClick={() => setMenuOpen(false)}
+          />
+          <button
+            type="button"
+            className="topbar-menu-btn"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {menuOpen ? <path d="M18 6L6 18M6 6l12 12" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+          </button>
         </header>
         <div className="client-workspace">
           <nav className="deliverable-rail" aria-label="Practice">
-            <PracticeRailItems />
-            <RailSettingsButton onClick={openSettings} />
+            <PracticeRailItems onNavigate={() => setMenuOpen(false)} />
+            <RailSettingsButton
+              onClick={() => {
+                setMenuOpen(false);
+                openSettings();
+              }}
+            />
           </nav>
           <div className="deliverable-main">
             <div className={`settings-portal__shell settings-portal__shell--${width}`}>{children}</div>

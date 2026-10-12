@@ -28,7 +28,7 @@ function activePracticeItem(pathname: string, hash: string): PracticeRailId | nu
   return null;
 }
 
-export function PracticeRailItems() {
+export function PracticeRailItems({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hash = useRouterState({ select: (s) => s.location.hash });
   const active = activePracticeItem(pathname, hash ?? "");
@@ -42,6 +42,7 @@ export function PracticeRailItems() {
         hash={item.hash}
         className={`tab${on ? " on" : ""}`}
         aria-current={on ? "page" : undefined}
+        onClick={onNavigate}
       >
         {item.label}
       </Link>
@@ -56,6 +57,7 @@ export function PracticeRailItems() {
         to="/desk"
         className={`tab${active === "desk" ? " on" : ""}`}
         aria-current={active === "desk" ? "page" : undefined}
+        onClick={onNavigate}
       >
         Desk
       </Link>
@@ -65,10 +67,10 @@ export function PracticeRailItems() {
 }
 
 /** Practice nav. Same flush rail as the client workspace. */
-export function PracticeRail() {
+export function PracticeRail({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="deliverable-rail" aria-label="Practice">
-      <PracticeRailItems />
+      <PracticeRailItems onNavigate={onNavigate} />
     </nav>
   );
 }
