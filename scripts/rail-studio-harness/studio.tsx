@@ -226,7 +226,13 @@ export function RailStudio() {
             {pane === "payables" ? <PayablesPane aged={search.aged === 1 || search.aged === "1"} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
             {pane === "advisory" ? <PackPane clientId={clientId} packView={search.packView} /> : null}
-            {pane === "plan" ? <PlanPane clientId={clientId} planView={search.planView} /> : null}
+            {pane === "plan" ? (
+              <PlanPane
+                clientId={clientId}
+                planView={search.planView}
+                initialFilter={search.filter === "overdue" ? "overdue" : undefined}
+              />
+            ) : null}
             {pane === "reports" ? <ReportsPane clientId={clientId} /> : null}
             {pane === "drafter" ? <DrafterPane clientId={clientId} /> : null}
           </div>
@@ -411,8 +417,8 @@ function BriefingPane() {
             syncHeading: "Books",
             syncLines: ["No books connected."],
           }}
-          onMoves={() => go("deliverables", "plan")}
-          onActions={() => go("deliverables", "plan")}
+          onMoves={() => go("plan")}
+          onActions={() => go("plan")}
           onDrafts={() => go("deliverables", "pack")}
           onDeliverables={() => go("reports")}
           onBooks={() => go("portal")}
@@ -1100,7 +1106,15 @@ function DrafterPane({ clientId }: { clientId: string }) {
   );
 }
 
-function PlanPane({ clientId, planView }: { clientId: string; planView?: string }) {
+function PlanPane({
+  clientId,
+  planView,
+  initialFilter,
+}: {
+  clientId: string;
+  planView?: string;
+  initialFilter?: "overdue";
+}) {
   const [sentence, setSentence] = useState(
     "No actions in the plan yet. Add the first one to get started.",
   );
@@ -1158,6 +1172,7 @@ function PlanPane({ clientId, planView }: { clientId: string; planView?: string 
           clientName="Harbour Glass"
           simplified
           isOwner
+          initialFilter={initialFilter}
           onAnswer={(actions) => {
             setPlanCount(actions.length);
             setSentence(planAnswerSentence(actions));

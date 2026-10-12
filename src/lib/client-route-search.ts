@@ -8,10 +8,12 @@
  * new item. The rewrite is idempotent: a canonical URL comes back unchanged.
  *
  * `focus=pillars` stays on Health so that pane can keep its heading check.
- * Collections and payables stay a section of Cash flow. Pack, plan, and the
- * drafter stay a section of Deliverables. Those are not their own rail items,
- * and the horizontal sub-tab row is gone. Other params (`coach`, `filter`,
+ * Collections and payables stay a section of Cash flow. Pack and the drafter
+ * stay a section of Deliverables. Action plan is its own rail item again:
+ * `?tab=plan`, and the old `actions` / `tasks` aliases, land there. The
+ * horizontal sub-tab row is gone. Other params (`coach`, `filter`,
  * `onboard`, `report`, `action`, …) are preserved by the route parser.
+ * An Action Plan `filter` sticks only while the tab is `plan`.
  */
 
 export const CLIENT_RAIL_TABS = [
@@ -21,6 +23,7 @@ export const CLIENT_RAIL_TABS = [
   "profit",
   "budget",
   "moves",
+  "plan",
   "reports",
   "deliverables",
   "portal",
@@ -37,7 +40,6 @@ export const RAIL_SUBSECTIONS = [
   "collections",
   "payables",
   "pack",
-  "plan",
   "drafter",
   "lines",
   "months",
@@ -103,11 +105,11 @@ const LEGACY_DESTINATIONS: Record<string, CanonicalClientSearch> = {
   report: { tab: "reports" },
   pack: { tab: "deliverables", section: "pack" },
   advisory: { tab: "deliverables", section: "pack" },
-  plan: { tab: "deliverables", section: "plan" },
-  actions: { tab: "deliverables", section: "plan" },
-  action: { tab: "deliverables", section: "plan" },
-  "action-plan": { tab: "deliverables", section: "plan" },
-  tasks: { tab: "deliverables", section: "plan" },
+  plan: { tab: "plan" },
+  actions: { tab: "plan" },
+  action: { tab: "plan" },
+  "action-plan": { tab: "plan" },
+  tasks: { tab: "plan" },
   drafter: { tab: "deliverables", section: "drafter" },
   deliverables: { tab: "deliverables" },
   portal: { tab: "portal" },
@@ -131,7 +133,7 @@ function destinationForSection(
     section === "action-plan" ||
     section === "tasks"
   ) {
-    return { tab: "deliverables", section: "plan" };
+    return { tab: "plan" };
   }
   if (section === "drafter") return { tab: "deliverables", section: "drafter" };
   if (section === "pillars" || (section === "health" && focus === "pillars")) {
@@ -178,9 +180,18 @@ function explicitRail(
     if (section === "payables") return { tab: "cash", section: "payables" };
     return { tab: "cash" };
   }
+  if (tab === "plan") return { tab: "plan" };
   if (tab === "deliverables") {
     if (section === "pack") return { tab: "deliverables", section: "pack" };
-    if (section === "plan") return { tab: "deliverables", section: "plan" };
+    if (
+      section === "plan" ||
+      section === "actions" ||
+      section === "action" ||
+      section === "action-plan" ||
+      section === "tasks"
+    ) {
+      return { tab: "plan" };
+    }
     if (section === "drafter") return { tab: "deliverables", section: "drafter" };
     if (section === "reports" || section === "report") return { tab: "reports" };
     const fromSection = section ? destinationForSection(section, focus) : null;
@@ -284,10 +295,11 @@ export function legacyPaneForSearch(search: {
       return "budget";
     case "moves":
       return "moves";
+    case "plan":
+      return "plan";
     case "reports":
       return "reports";
     case "deliverables":
-      if (canonical.section === "plan") return "plan";
       if (canonical.section === "drafter") return "drafter";
       return "advisory";
     case "portal":
@@ -301,7 +313,7 @@ export function legacyPaneForSearch(search: {
  * Search to write when the accountant opens a rail item or a legacy pane.
  * `tab` may be a rail id (`cash`) or a legacy pane id (`ask`, `plan`).
  * Coach crumbs do not stick. An Action Plan filter sticks only on the plan
- * section. A Reports deep link (`report`, `action`) sticks only on Reports.
+ * tab. A Reports deep link (`report`, `action`) sticks only on Reports.
  */
 export function accountantClientTabSearch<T extends object>(
   prev: T,
@@ -319,7 +331,7 @@ export function accountantClientTabSearch<T extends object>(
   delete next.why;
   if (canonical.focus) next.focus = canonical.focus;
   else delete next.focus;
-  if (canonical.section !== "plan") delete next.filter;
+  if (canonical.tab !== "plan") delete next.filter;
   if (canonical.tab !== "reports") {
     delete next.report;
     delete next.action;
@@ -369,10 +381,9 @@ export function clientRailSelection(input: {
       return { headingId: "budget", subId: section === "months" ? "months" : "year" };
     case "moves":
       return { headingId: "moves", subId: null };
+    case "plan":
+      return { headingId: "plan", subId: input.filter === "overdue" ? "overdue" : "open" };
     case "deliverables":
-      if (section === "plan") {
-        return { headingId: "plan", subId: input.filter === "overdue" ? "overdue" : "open" };
-      }
       return { headingId: "reports", subId: "drafts" };
     case "reports":
       if (section === "sent") return { headingId: "reports", subId: "sent" };

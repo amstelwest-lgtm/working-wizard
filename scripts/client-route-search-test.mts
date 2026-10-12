@@ -90,15 +90,14 @@ lands("reports", { tab: "reports" }, "?tab=reports opens Reports");
 lands("report", { tab: "reports" }, "?tab=report opens Reports");
 lands("advisory", { tab: "deliverables", section: "pack" }, "?tab=advisory opens the Advisory pack");
 lands("pack", { tab: "deliverables", section: "pack" }, "?tab=pack opens the Advisory pack");
-lands("plan", { tab: "deliverables", section: "plan" }, "?tab=plan opens Action Plan");
-lands("actions", { tab: "deliverables", section: "plan" }, "?tab=actions opens Action Plan");
-lands("action", { tab: "deliverables", section: "plan" }, "?tab=action opens Action Plan");
-lands(
-  "action-plan",
-  { tab: "deliverables", section: "plan" },
-  "?tab=action-plan opens Action Plan",
-);
-lands("tasks", { tab: "deliverables", section: "plan" }, "?tab=tasks opens Action Plan");
+lands("plan", { tab: "plan" }, "?tab=plan opens Action Plan");
+lands("actions", { tab: "plan" }, "?tab=actions opens Action Plan");
+lands("action", { tab: "plan" }, "?tab=action opens Action Plan");
+lands("action-plan", { tab: "plan" }, "?tab=action-plan opens Action Plan");
+lands("tasks", { tab: "plan" }, "?tab=tasks opens Action Plan");
+lands("deliverables", { tab: "plan" }, "Deliverables plan section opens Action Plan", {
+  section: "plan",
+});
 
 lands("overview", { tab: "cash" }, "old overview cash opens Cash flow", {
   section: "cash",
@@ -204,11 +203,15 @@ assert(
 assert(!("filter" in kept), "an Action Plan filter does not stick to Reports");
 
 const plan = accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan");
-assert(
-  plan.tab === "deliverables" && plan.section === "plan",
-  "opening the plan keeps the plan section",
-);
+assert(plan.tab === "plan" && plan.section === undefined, "opening the plan is the plan rail item");
 assert(plan.filter === "overdue", "opening Action Plan keeps an overdue filter");
+const planRail = clientRailSelection({ tab: "plan", filter: "overdue" });
+assert(
+  planRail.headingId === "plan" && planRail.subId === "overdue",
+  "an overdue plan link marks the Overdue sub-item",
+);
+const oldPlan = clientRailSelection({ tab: "deliverables", section: "plan" });
+assert(oldPlan.headingId === "plan" && oldPlan.subId === "open", "the old plan section marks Action plan");
 
 const route =
   readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8") +

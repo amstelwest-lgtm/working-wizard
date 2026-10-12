@@ -22,7 +22,7 @@ export const COACH_STEPS = [
   { id: "profit", label: "Profitability", tab: "profit" },
   { id: "cash", label: "Cash", tab: "cash" },
   { id: "budget", label: "Budget", tab: "budget" },
-  { id: "actions", label: "Actions", tab: "deliverables", section: "plan" },
+  { id: "actions", label: "Actions", tab: "plan" },
 ] as const;
 
 export type CoachStepId = (typeof COACH_STEPS)[number]["id"];
@@ -281,7 +281,7 @@ export function coachView(input: {
       because,
       nextCue: "assign each move to an owner",
       cta: "Assign a move",
-      destination: { tab: "deliverables", section: "plan", assign: true },
+      destination: { tab: "plan", assign: true },
     };
   }
   return {
@@ -313,7 +313,7 @@ const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
   collections: { tab: "cash", section: "collections", coach: "collections", label: "Open Collections" },
   payables: { tab: "cash", section: "payables", coach: "payables", label: "Open Payables" },
   budget: { tab: "budget", coach: "budget", label: "Open Budget" },
-  actions: { tab: "deliverables", section: "plan", coach: "actions", label: "Open Actions" },
+  actions: { tab: "plan", coach: "actions", label: "Open Actions" },
 };
 
 /**

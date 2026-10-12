@@ -96,9 +96,8 @@ assert(href("reports", studio).includes("tab=reports"), "Reports is its own rail
 assert(href("advisory pack", studio).includes("section=pack"), "Advisory pack stays under Deliverables");
 assert(href("drafter", studio).includes("section=drafter"), "Advisory drafter stays under Deliverables");
 assert(
-  href("actions", studio) ===
-    `/clients/${CLIENT}?tab=${coach("actions").tab}&section=${coach("actions").section}`,
-  "Action Plan uses the Deliverables plan section",
+  href("actions", studio) === `/clients/${CLIENT}?tab=plan`,
+  "Action Plan is its own rail item",
 );
 assert(
   href("sync", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}`,
