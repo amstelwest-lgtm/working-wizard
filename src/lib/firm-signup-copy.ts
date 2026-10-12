@@ -62,14 +62,13 @@ export const ENTERPRISE_CONTACT_HREF = `mailto:${ENTERPRISE_CONTACT_EMAIL}?subje
 export const PRACTICE_LOCATION_PROMPT = "Where is this practice?";
 export const BUSINESS_LOCATION_PROMPT = "Where is this business?";
 
-/** One framing line for homepage and collateral footers. */
-export const DUAL_MARKET_TAGLINE =
-  "for accounting firms and small businesses in the United States.";
+/** One framing line for homepage and collateral footers. No country claim. */
+export const DUAL_MARKET_TAGLINE = "for accounting firms and the businesses they advise.";
 
 /** Footer copyright line: legal name plus the registered address. */
 export const MARKETING_COPYRIGHT_ENTITY = `${LEGAL_ENTITY} ${COMPANY_ADDRESS}`;
 
 export const DUAL_MARKET_FOOTER =
-  "Milōn — the AI finance function for accounting firms and the businesses they serve in the United States.";
+  "Milōn — an AI finance team for accounting firms and the businesses they advise.";
 
-export const DUAL_MARKET_BUILT = "Built for the United States";
+export const DUAL_MARKET_BUILT = "An AI finance team for accounting firms";

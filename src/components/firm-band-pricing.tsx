@@ -3,7 +3,6 @@ import { FUNNEL_SOLO_FIRST } from "@/lib/funnel-timing";
 import { ENTERPRISE_CONTACT_HREF, firmSignupHref } from "@/lib/firm-signup-copy";
 import {
   PRICING_TRIAL_AFTER,
-  PRICING_WATCHLIST_NOTE,
   SOLO_CARD_NOTE,
   SOLO_TRIAL_BUTTON,
 } from "@/lib/landing-copy";
@@ -112,14 +111,16 @@ function BandCards({
   interval,
   startControl,
   saLabels,
+  className = "firm-band-cards firm-bands-featured",
 }: {
   bands: FirmBand[];
   interval: FirmInterval;
   startControl: StartControl;
   saLabels?: Partial<Record<string, { month: string; year: string }>> | null;
+  className?: string;
 }) {
   return (
-    <ul className="firm-band-cards firm-bands-featured">
+    <ul className={className}>
       {bands.map((band) => {
         const price = bandPriceLabel(band, interval, saLabels);
         const solo = band.id === "solo";
@@ -220,10 +221,16 @@ export function FirmBandPricingTable({
         <BandCards bands={featured} interval={interval} startControl={startControl} saLabels={labels} />
         <details className="firm-bands-more">
           <summary>See all plans</summary>
+          <BandCards
+            bands={bands}
+            interval={interval}
+            startControl={startControl}
+            saLabels={labels}
+            className="firm-band-cards firm-bands-stack"
+          />
           <BandTable bands={bands} interval={interval} startControl={startControl} saLabels={labels} />
         </details>
       </div>
-      <p className="firm-bands-watchlist">{PRICING_WATCHLIST_NOTE}</p>
     </div>
   );
 }

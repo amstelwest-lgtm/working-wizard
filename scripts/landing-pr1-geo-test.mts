@@ -12,8 +12,7 @@ import { isSaPricingCountry } from "../src/lib/geo-country";
 import {
   HERO_LEDE,
   HERO_SIGNOFF_POINT,
-  TRUST_IDENTIFIERS,
-  TRUST_TRAINING,
+  TRUST_HANDOFF,
   homepageFaqItems,
 } from "../src/lib/landing-copy";
 import { publicFaqItems } from "../src/lib/public-faq";
@@ -83,8 +82,8 @@ assert(
   HERO_SIGNOFF_POINT === "You review and sign off every advisory pack.",
   "VERIFY-1 hero bullet does not claim sign-off gates the client",
 );
-assert(!/claude/i.test(TRUST_IDENTIFIERS), "VERIFY-3 trust line does not claim every AI call");
-assert(TRUST_TRAINING.includes("isn't used to train"), "VERIFY-4 training line is the confirmed wording");
+assert(!/claude/i.test(TRUST_HANDOFF), "trust line does not name a vendor");
+assert(TRUST_HANDOFF.includes("reviews and approves"), "trust line is the hand-off benefit");
 assert(AI_MODEL_DISCLOSURE === DISCLOSURE, "FAQ disclosure constant is the approved sentence");
 
 const GATE = /before advice reaches|before anything reaches|before a client ever sees|before advice is shown|before the client sees|Nothing reaches a client|waits for your sign-off|what was signed off/i;

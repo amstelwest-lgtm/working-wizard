@@ -56,23 +56,23 @@ for (const card of PROOF_CARDS) {
   assert(index.includes("card.alt") || copy.includes(card.alt), `alt present: ${card.alt}`);
   assert(copy.includes(card.alt), `copy alt ${card.id}`);
 }
-assert(PROOF_RATIO_BODY.includes("says so instead of guessing"), "VERIFY-12 sentence shipped");
-assert(PROOF_SIGNOFF_BODY.includes("accountant's name and the sign-off date"), "VERIFY-11 sentence shipped");
-assert(PROOF_SIGNOFF_BODY.includes("old sign-off no longer applies"), "VERIFY-5 sentence shipped");
+assert(PROOF_RATIO_BODY.includes("figures behind them"), "ratio card shows the workings");
+assert(PROOF_SIGNOFF_BODY.includes("reviews and approves"), "sign-off card is the benefit");
 assert(
-  PROOF_BOT_BODY.includes("invents figures") &&
-    PROOF_BOT_BODY.includes("stops when a decision needs you"),
-  "VERIFY-9 sentence shipped",
+  PROOF_BOT_BODY.includes("request changes or sign off") ||
+    PROOF_BOT_BODY.includes("Request changes") ||
+    PROOF_BOT_BODY.toLowerCase().includes("sign off"),
+  "action card keeps the review step",
 );
-assert(!PROOF_BOT_BODY.toLowerCase().includes("email"), "no email claim on the bot card");
+assert(!PROOF_BOT_BODY.toLowerCase().includes("email"), "no email claim on the plan card");
+assert(!/invent|make up|fabricat/i.test(PROOF_BOT_BODY), "plan card does not talk about fabrication");
 const planCard = PROOF_CARDS.find((card) => card.base === "action-plan-review");
 assert(planCard != null, "action plan capture is a proof card");
 assert(planCard!.id === "plan", "action plan card id");
-assert(planCard!.title === "Agents that know their limits", "action plan card keeps its title");
-assert(planCard!.body === PROOF_BOT_BODY, "action plan card keeps the bot body");
+assert(planCard!.title === "Ready for the client", "action plan card sells the review");
+assert(planCard!.body === PROOF_BOT_BODY, "action plan card keeps the plan body");
 assert(
-  planCard!.alt ===
-    "Action plan ready for review with Request changes and Sign off action plan for Sample Co.",
+  planCard!.alt.includes("Request changes") && planCard!.alt.includes("Sign off action plan"),
   "action plan alt describes the review screen",
 );
 assert(!/waiting for accountant approval|bot run|mid-flight/i.test(planCard!.alt), "card C alt is not a bot panel");
@@ -81,11 +81,17 @@ assert(
   !PROOF_SECURITY_FACTS.some((fact) => /row-level|browse-all|the firm/i.test(fact)),
   "VERIFY-6 RLS bullet omitted",
 );
-assert(PROOF_SECURITY_FACTS.some((fact) => fact.includes("Stripe Checkout")), "VERIFY-7 shipped");
-assert(PROOF_SECURITY_FACTS.some((fact) => fact.includes("delete your account")), "VERIFY-8 shipped");
 assert(
-  PROOF_SECURITY_FACTS.some((fact) => fact.includes("can't be edited afterwards")),
-  "sign-off log sentence shipped",
+  PROOF_SECURITY_FACTS.some((fact) => fact.includes("small monthly fee")),
+  "pricing benefit is on the proof strip",
+);
+assert(
+  PROOF_SECURITY_FACTS.some((fact) => /named person approves/i.test(fact)),
+  "document posting stays behind approval",
+);
+assert(
+  !PROOF_SECURITY_FACTS.some((fact) => /stripe|delete your account/i.test(fact)),
+  "proof strip has no checkout or deletion brag",
 );
 
 assert(css.includes("stroke-dashoffset:0"), "cash line is drawn in CSS");
@@ -96,7 +102,7 @@ assert(css.includes(".fc-1{") && css.includes("top:300px"), "desktop float card 
 assert(index.includes("<details"), "FAQ items are details");
 assert(index.includes("<summary>"), "FAQ items have a summary");
 assert(index.includes('href="/faq"'), "FAQ links to all questions");
-assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ dropped the unverified access item");
+assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ keeps the selling answers only");
 assert(HOMEPAGE_FAQ_ITEMS[0]?.question === "Does Milōn replace the accountant?", "accountant objection is first");
 assert(
   HOMEPAGE_FAQ_ITEMS.some((item) => item.question === HOMEPAGE_COST_QUESTION),

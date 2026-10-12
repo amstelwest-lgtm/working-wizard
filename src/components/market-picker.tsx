@@ -142,30 +142,25 @@ export function MarketPicker({
   };
 
   if (variant === "landing") {
+    const country = value.country ?? "US";
     return (
       <div className="milon-market">
-        <p className="milon-market-label">{locationPrompt}</p>
-        <div className="milon-market-choices">
-          <button
-            type="button"
+        <label className="milon-market-label" htmlFor="milon-market-country">
+          {locationPrompt}
+        </label>
+        <div className="milon-market-select-wrap">
+          <select
+            id="milon-market-country"
+            className="milon-market-select"
             disabled={disabled}
-            className={`milon-market-choice${value.country === "ZA" ? " is-on" : ""}`}
-            onClick={() => setCountry("ZA")}
+            value={country}
+            onChange={(e) => setCountry(e.target.value === "ZA" ? "ZA" : "US")}
           >
-            <strong>South Africa</strong>
-            <span>Rand, VAT, March year-start</span>
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            className={`milon-market-choice${value.country === "US" ? " is-on" : ""}`}
-            onClick={() => setCountry("US")}
-          >
-            <strong>United States</strong>
-            <span>Dollars, sales tax by state</span>
-          </button>
+            <option value="US">United States</option>
+            <option value="ZA">South Africa</option>
+          </select>
         </div>
-        {value.country === "US" && (
+        {country === "US" && (
           <div className="milon-market-state">
             <label className="milon-market-label" htmlFor="milon-us-state">
               State

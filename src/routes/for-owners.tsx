@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { MILON_BOT_LINE, OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
+import { OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
@@ -53,8 +53,10 @@ function ForOwnersPage() {
       <h2>What you get in the first week</h2>
       <ul className="mk-list">
         <li>
-          <strong>Three agents, one conversation.</strong> Milōn Financial Manager, Milōn Analyst
-          and Milōn Advisor read QuickBooks, Xero or Sage. {MILON_BOT_LINE}
+          <strong>Three people on your finance team.</strong> Milōn Financial Manager keeps the
+          cash view and the budget. Milōn Analyst shows why margins moved and where cash is
+          leaking. Milōn Advisor lines up what to do next. Your accountant reviews and approves it,
+          so the advice is something you can trust.
         </li>
         <li>
           <strong>One health score.</strong> Nineteen ratios and four pillar scores collapsed into

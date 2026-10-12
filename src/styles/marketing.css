@@ -976,11 +976,11 @@ html .mk .firm-bands-table .firm-bands-name strong {
 }
 .mk .firm-bands-more { margin-top: 18px; }
 .mk .firm-bands-more > summary { cursor: pointer; font-size: 14px; color: var(--ink-dim); }
-.mk .firm-bands-watchlist {
-  margin: 14px 0 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink-dim);
+.mk .firm-bands-stack {
+  display: none;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
 }
 .mk .firm-band-cards {
   display: none;
@@ -1015,8 +1015,21 @@ html .mk .firm-bands-table .firm-bands-name strong {
 .mk .firm-band-card.is-trial .firm-band-card-price { font-size: 28px; color: var(--gold); }
 .mk .firm-band-card .btn { width: 100%; justify-content: center; margin-top: 12px; min-height: 44px; }
 @media (max-width: 767px) {
-  .mk .firm-bands-featured { grid-template-columns: 1fr; }
-  .mk .firm-bands-more .firm-bands-table-wrap { display: block; overflow-x: auto; max-width: 100%; }
+  .mk .firm-bands,
+  .mk .mk-wrap { max-width: 100%; min-width: 0; }
+  .mk .firm-bands-featured,
+  .mk .firm-bands-stack { grid-template-columns: minmax(0, 1fr); }
+  .mk .firm-bands-stack { display: grid; gap: 12px; }
+  .mk .firm-bands-more .firm-bands-table-wrap { display: none; }
+  .mk .firm-band-card { min-width: 0; max-width: 100%; }
+  .mk .firm-band-card-top { flex-wrap: wrap; }
+  .mk .firm-band-card-price { white-space: normal; }
+  .mk .firm-band-card .btn {
+    white-space: normal;
+    height: auto;
+    line-height: 1.25;
+    overflow: visible;
+  }
   .mk .firm-band-card {
     border: 1px solid var(--line);
     border-radius: 16px;

@@ -44,8 +44,8 @@ assert(perClientRands(5299, 200) === 26, "Advanced is about R26 per client");
 assert(perClientRands(7999, 500) === 16, "Scale is about R16 per client");
 
 const copy = loadSaPricingCopy();
-assert(copy.heading === "South African pricing, in rand", "heading");
-assert(copy.heroNote === "Plans from R799/mo for SA firms after day 14.", "hero");
+assert(copy.heading === "Pricing in rand", "heading");
+assert(copy.heroNote === "Plans from R799/mo after day 14.", "hero");
 assert(copy.labels.solo.month === "R799/mo · about R53 per client", "solo monthly line");
 assert(!copy.labels.solo.month.toLowerCase().includes("vat"), "price line has no tax wording");
 assert(copy.labels.small.month === "R1,199/mo · about R48 per client", "small monthly line");
