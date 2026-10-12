@@ -326,12 +326,21 @@ export type PracticeBook = {
   reviewNow: number;
   openQueries: number;
   followUps: number;
+  /**
+   * True while the client query has not returned. An empty array during that
+   * wait is not an empty book.
+   */
+  loading?: boolean;
 };
 
 /** Book-level lines for practice Home. Same shape as the owner cards. */
 export function practiceHomeLines(book: PracticeBook): OwnerHomeLines {
   const clients =
-    book.clientCount === 1 ? "1 client on the book." : `${book.clientCount} clients on the book.`;
+    book.loading && book.clientCount === 0
+      ? "Loading the book."
+      : book.clientCount === 1
+        ? "1 client on the book."
+        : `${book.clientCount} clients on the book.`;
   const queries =
     book.openQueries === 0
       ? "No open queries."

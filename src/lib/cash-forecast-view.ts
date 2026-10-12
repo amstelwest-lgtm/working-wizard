@@ -141,6 +141,22 @@ export function cashGraphWeekTickInterval(chartWidth: number): 0 | 2 {
   return 2;
 }
 
+/**
+ * Width to store for the cash graph. A hidden frame reports 0 and must not
+ * reset a measured chart. A few pixels either side of the 440px tick
+ * breakpoint must not flip the axis, or the chart margin and the measured
+ * frame chase each other and lock the tab.
+ */
+export function stableCashChartWidth(previous: number, next: number): number {
+  if (!Number.isFinite(next) || next <= 0) return previous > 0 ? previous : 0;
+  const rounded = Math.round(next);
+  if (previous <= 0) return rounded;
+  if (rounded === previous || Math.abs(rounded - previous) < 2) return previous;
+  const crossed = cashGraphWeekTickInterval(previous) !== cashGraphWeekTickInterval(rounded);
+  if (crossed && Math.abs(rounded - 440) <= 24) return previous;
+  return rounded;
+}
+
 export function hashIsCashDetailAnchor(hash: string | null | undefined): boolean {
   const id = (hash ?? "").replace(/^#/, "").split("?")[0].trim().toLowerCase();
   return (CASH_DETAIL_ANCHORS as readonly string[]).includes(id);

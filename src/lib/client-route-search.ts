@@ -590,3 +590,69 @@ export function legacyHashDestination(
   if (current.tab === mapped.tab && (current.section ?? undefined) === mapped.section) return null;
   return mapped;
 }
+
+/**
+ * Search the client route keeps. Same merge rules as `validateSearch`:
+ * a key set to `undefined` is dropped, a key left off is kept.
+ * Canonical tab/section come from `accountantValidatedSearch`.
+ */
+export function accountantClientRouteSearch(search: Record<string, unknown>): {
+  qbo?: string;
+  xero?: string;
+  reason?: string;
+  onboard?: string;
+  note?: string;
+  tab?: string;
+  section?: string;
+  filter?: string;
+  queries?: string;
+  coach?: string;
+  why?: string;
+  focus?: string;
+  report?: string;
+  action?: "preview" | "download";
+  agent?: string;
+  profile?: number;
+  view?: "chart" | "table" | "13week";
+} {
+  const out: {
+    qbo?: string;
+    xero?: string;
+    reason?: string;
+    onboard?: string;
+    note?: string;
+    tab?: string;
+    section?: string;
+    filter?: string;
+    queries?: string;
+    coach?: string;
+    why?: string;
+    focus?: string;
+    report?: string;
+    action?: "preview" | "download";
+    agent?: string;
+    profile?: number;
+    view?: "chart" | "table" | "13week";
+  } = {};
+  if (typeof search.qbo === "string") out.qbo = search.qbo;
+  if (typeof search.xero === "string") out.xero = search.xero;
+  if (typeof search.reason === "string") out.reason = search.reason;
+  if (typeof search.onboard === "string") out.onboard = search.onboard;
+  if (typeof search.note === "string") out.note = search.note;
+  Object.assign(out, accountantValidatedSearch(search));
+  if (typeof search.queries === "string") out.queries = search.queries;
+  if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
+  if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
+  if (
+    search.agent === "financial_manager" ||
+    search.agent === "analyst" ||
+    search.agent === "advisor"
+  ) {
+    out.agent = search.agent;
+  }
+  if (search.profile === 1 || search.profile === "1") out.profile = 1;
+  if (search.view === "table" || search.view === "chart" || search.view === "13week") {
+    out.view = search.view;
+  }
+  return out;
+}

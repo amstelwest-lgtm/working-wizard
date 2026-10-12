@@ -66,6 +66,7 @@ import {
   cashBalanceSeries,
   cashGraphAxisTicks,
   cashGraphWeekTickInterval,
+  stableCashChartWidth,
   forecastChipSource,
   hashIsCashDetailAnchor,
   lowestCashPoint,
@@ -1345,6 +1346,7 @@ export function CashForecastPanel({
       data-week-ticks={narrow ? "thin" : "all"}
       className="w-full min-w-0 max-w-full max-md:pb-3"
     >
+      {chartWidth > 0 ? (
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 22, right: narrow ? 80 : 16, left: 0, bottom: 8 }}>
           <defs>
@@ -1452,6 +1454,7 @@ export function CashForecastPanel({
           ) : null}
         </ComposedChart>
       </ResponsiveContainer>
+      ) : null}
     </div>
     );
   };
@@ -1901,7 +1904,7 @@ export function CashForecastPanel({
     if (!node) return;
     const apply = () => {
       const next = node.clientWidth;
-      setChartWidth((current) => (current === next ? current : next));
+      setChartWidth((current) => stableCashChartWidth(current, next));
     };
     apply();
     if (typeof ResizeObserver === "undefined") return;

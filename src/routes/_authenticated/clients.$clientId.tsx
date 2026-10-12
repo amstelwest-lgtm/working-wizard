@@ -149,8 +149,8 @@ import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import {
+  accountantClientRouteSearch,
   accountantClientTabSearch,
-  accountantValidatedSearch,
   canonicalizeAccountantSearch,
   legacyHashDestination,
   legacyPaneForSearch,
@@ -443,79 +443,7 @@ function HealthRing({
 // ── route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/_authenticated/clients/$clientId")({
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): {
-    qbo?: string;
-    xero?: string;
-    reason?: string;
-    onboard?: string;
-    note?: string;
-    tab?: string;
-    filter?: string;
-    queries?: string;
-    /** Coach intent from Milōn Bot or a weak pillar (`margin`, `liquidity`, …). */
-    coach?: string;
-    /** Bot handoff reason. Kept on the URL; the shell does not paint a reading-path line from it. */
-    why?: string;
-    /** Health page sub-step: the score, or the pillar drill. */
-    focus?: string;
-    /** Sub-view under a rail item (`pillars`, `collections`, `pack`, `drafter`). */
-    section?: string;
-    /** Reports studio deep link, carried from `/reports`. */
-    report?: string;
-    action?: "preview" | "download";
-    /** Which practice agent Home should ask. The thread itself is unchanged. */
-    agent?: string;
-    /** Open the business profile so a sector can be set. `1` stays a number so the URL is profile=1. */
-    profile?: number;
-    /**
-     * Shared view param. Budget uses chart (default, omitted) or table.
-     * Cash uses 13week; Graph is the default and omits the param.
-     */
-    view?: "chart" | "table" | "13week";
-  } => {
-    const out: {
-      qbo?: string;
-      xero?: string;
-      reason?: string;
-      onboard?: string;
-      note?: string;
-      tab?: string;
-      section?: string;
-      filter?: string;
-      queries?: string;
-      coach?: string;
-      why?: string;
-      focus?: string;
-      report?: string;
-      action?: "preview" | "download";
-      agent?: string;
-      profile?: number;
-      view?: "chart" | "table" | "13week";
-    } = {};
-    if (typeof search.qbo === "string") out.qbo = search.qbo;
-    if (typeof search.xero === "string") out.xero = search.xero;
-    if (typeof search.reason === "string") out.reason = search.reason;
-    if (typeof search.onboard === "string") out.onboard = search.onboard;
-    if (typeof search.note === "string") out.note = search.note;
-    Object.assign(out, accountantValidatedSearch(search));
-    if (typeof search.queries === "string") out.queries = search.queries;
-    if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
-    if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
-    if (
-      search.agent === "financial_manager" ||
-      search.agent === "analyst" ||
-      search.agent === "advisor"
-    ) {
-      out.agent = search.agent;
-    }
-    if (search.profile === 1 || search.profile === "1") out.profile = 1;
-    if (search.view === "table" || search.view === "chart" || search.view === "13week") {
-      out.view = search.view;
-    }
-    return out;
-  },
+  validateSearch: accountantClientRouteSearch,
   component: ClientView,
 });
 
@@ -3673,6 +3601,8 @@ function ClientView() {
 
                 {/* ===== PROFIT TAB ===== */}
                 <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
+                  {activeTab === "profit" ? (
+                  <>
                   <DeliverableAnswerStrip
                     heading="Profitability"
                     sentence={profitAnswerSentence({
@@ -3876,11 +3806,14 @@ function ClientView() {
                       onExportReady={setProfitExport}
                     />
                   </div>
-
+                  </>
+                  ) : null}
                 </div>
 
                 {/* ===== CASH TAB ===== */}
                 <div className={`tabpane${activeTab === "cash" ? " on" : ""}`} id="pane-cash">
+                  {activeTab === "cash" ? (
+                  <>
                   <div className="card cf-wrap" id="wizard-cash-panel">
                     <CashForecastPanel
                       clientId={client.id}
@@ -3958,10 +3891,14 @@ function ClientView() {
                     onOpenActions={() => setActiveTab("plan")}
                   />
                 </section>
+                  </>
+                  ) : null}
                 </div>
 
                 {/* ===== BUDGET TAB ===== */}
                 <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
+                  {activeTab === "budget" ? (
+                  <>
                   <div id="wizard-budget-panel">
                     <DeliverableTabHead eyebrow="12-month Budget" title="On or off the plan" />
                     {/* Follow the portal theme. A nested `.dark` island made Tailwind
@@ -4005,6 +3942,8 @@ function ClientView() {
                       }}
                     />
                   </div>
+                  </>
+                  ) : null}
                 </div>
 
                 {/* ===== REPORTS — Drafts, PDFs, Sent. One page, no tabs. ===== */}
