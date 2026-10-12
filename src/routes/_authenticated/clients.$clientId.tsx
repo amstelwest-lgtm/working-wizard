@@ -260,7 +260,6 @@ import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
 import { ownerPresence } from "@/lib/owner-presence";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { booksSyncCopy, type BooksLink } from "@/lib/owner-needs";
-import { formatDate } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
