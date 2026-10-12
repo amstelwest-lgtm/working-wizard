@@ -222,6 +222,7 @@ export function RailStudio() {
                     label={item.label}
                     active={railTab === item.id || (!search.tab && item.id === "home")}
                     onSelect={() => {
+                      setMenuOpen(false);
                       void navigate({
                         to: "/clients/$clientId",
                         params: { clientId },

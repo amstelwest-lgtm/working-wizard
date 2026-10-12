@@ -169,26 +169,4 @@
     min-width: 0;
     max-width: 100%;
   }
-
-  .accountant-portal.settings-portal:not(.owner-door) .deliverable-rail {
-    display: flex;
-    flex-flow: row wrap;
-    align-items: stretch;
-    overflow: visible;
-    height: auto;
-    max-height: none;
-    border-radius: 16px;
-    mask-image: none;
-    -webkit-mask-image: none;
-  }
-
-  .accountant-portal.settings-portal:not(.owner-door) .deliverable-rail .tab {
-    flex: 1 1 calc(50% - 4px);
-    width: auto;
-    min-width: 0;
-    max-width: 100%;
-    height: auto;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
 }

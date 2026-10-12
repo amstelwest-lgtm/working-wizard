@@ -93,35 +93,29 @@ html.dark .milon-desk {
   flex-direction: column;
 }
 
-/* Phone: the segmented rail is its own row. The team header sits below it. */
+/* Phone: the desk fills the page. Nav is the drawer, not a row above the desk. */
 @media (max-width: 860px) {
   .accountant-portal:has(.milon-desk) .client-workspace {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 16px;
     align-content: start;
   }
 
-  .accountant-portal:has(.milon-desk) .deliverable-rail {
+  .accountant-portal:has(.milon-desk) .deliverable-main {
     grid-row: 1;
     grid-column: 1;
-    position: relative;
-    z-index: 2;
-    width: 100%;
+  }
+
+  .accountant-portal:has(.milon-desk).nav-open .deliverable-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    z-index: 80;
+    width: min(320px, 88vw);
     height: auto;
-    min-width: 0;
-  }
-
-  .accountant-portal:has(.milon-desk) .deliverable-main {
-    grid-row: 2;
-    grid-column: 1;
-  }
-
-  .accountant-portal:has(.milon-desk) .deliverable-rail .tab {
-    padding: 8px 6px;
-    font-size: 12px;
-    overflow: visible;
-    text-overflow: clip;
   }
 }
 

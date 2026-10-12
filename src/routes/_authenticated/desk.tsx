@@ -80,7 +80,7 @@ function PracticeDeskPage() {
           </div>
         </div>
         <div className="client-workspace">
-          <PracticeRail />
+          <PracticeRail onNavigate={() => setMenuOpen(false)} />
           <div className="deliverable-main">
             <p className="eyebrow">Practice desk</p>
             <h1 className="h-sec" style={{ marginTop: 4 }}>

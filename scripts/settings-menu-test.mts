@@ -57,7 +57,11 @@ assert(
 );
 
 const portalCss = read("src/styles/accountant-portal.css");
-assert(portalCss.includes(".settings-portal:not(.owner-door) .deliverable-rail"), "settings tabs wrap");
+assert(
+  portalCss.includes(":not(.nav-open) .deliverable-rail{display:none"),
+  "phone settings and practice nav is the drawer, not a tab bar",
+);
+assert(!portalCss.includes("flex:1 1 calc(50% - 4px)"), "settings tabs are not a wrapping grid");
 assert(portalCss.includes("overflow-wrap:anywhere"), "practice names wrap on the phone top bar");
 
 const settingsCss = read("src/styles/settings-portal.css");
