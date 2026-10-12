@@ -1192,7 +1192,9 @@ html.dark .owner-status.is-attention {
   font-weight: var(--type-numeric-weight);
   line-height: var(--type-numeric-leading);
   font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
 }
 
 .owner-door .owner-reply-kicker {
@@ -1466,6 +1468,10 @@ html.dark .owner-status.is-attention {
   stroke: var(--navy);
   stroke-width: 1.6;
   fill: none;
+}
+
+.owner-presence.is-advisor .badge {
+  fill: color-mix(in srgb, var(--ice) 45%, transparent);
 }
 
 .owner-orbit {
@@ -2393,7 +2399,9 @@ html.dark .owner-door .owner-settings-link[aria-current="page"] {
   box-shadow: none;
 }
 .owner-door .milon-theme-toggle:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cobalt);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--cobalt);
 }
 
 /* Chart/table switches on the owner tabs use cobalt. Gold stays on the wordmark. */

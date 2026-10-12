@@ -6,7 +6,11 @@ import { readFileSync } from "node:fs";
 import { ownerBotLayout } from "../src/components/owner-door/owner-home.tsx";
 import { avatarRhythm } from "../src/components/owner-door/owner-rhythm.ts";
 import { agentShortName } from "../src/lib/milon-team.ts";
-import { emptyAgentActivity, isVisibleAgentFinding, type AgentActivitySnapshot } from "../src/lib/milon-team-activity.ts";
+import {
+  emptyAgentActivity,
+  isVisibleAgentFinding,
+  type AgentActivitySnapshot,
+} from "../src/lib/milon-team-activity.ts";
 import {
   guardOwnerLine,
   ownerAmount,
@@ -126,19 +130,30 @@ assert(
 );
 assert(ownerTileLabel(cash!, agentShortName).startsWith("Ask "), "ask labels use the short name");
 const homeLines = ownerHomeLines(filled, "Collect the two largest invoices");
-assert(homeLines.financial_manager.length === 2, "the financial manager has cash and the open answer");
+assert(
+  homeLines.financial_manager.length === 2,
+  "the financial manager has cash and the open answer",
+);
 assert(
   homeLines.financial_manager[0] !== cash?.sentence &&
-    /^Cash stays above your \$[\d,]+ minimum\. The low point is \$[\d,]+\.$/.test(homeLines.financial_manager[0] ?? ""),
+    /^Cash stays above your \$[\d,]+ minimum\. The low point is \$[\d,]+\.$/.test(
+      homeLines.financial_manager[0] ?? "",
+    ),
   `cash on home is a sentence (${homeLines.financial_manager[0]})`,
 );
-assert(homeLines.financial_manager[1] === "Approve the payroll run.", "the waiting answer stays under the financial manager");
+assert(
+  homeLines.financial_manager[1] === "Approve the payroll run.",
+  "the waiting answer stays under the financial manager",
+);
 assert(
   /^Profit is \$[\d,]+, up on last period\.$/.test(homeLines.analyst[0] ?? ""),
   `profit on home is a sentence (${homeLines.analyst[0]})`,
 );
 assert(homeLines.analyst[1]?.startsWith("Customers owe"), "debtors stay under the analyst");
-assert(homeLines.advisor[0] === "Collect the two largest invoices.", "the advisor carries the top next move");
+assert(
+  homeLines.advisor[0] === "Collect the two largest invoices.",
+  "the advisor carries the top next move",
+);
 for (const line of [...homeLines.financial_manager, ...homeLines.analyst, ...homeLines.advisor]) {
   assert(/^[A-Z]/.test(line) && /[.!?]$/.test(line), `a home line is a full sentence (${line})`);
 }
@@ -183,7 +198,8 @@ assert(
   "a profit decline is Attention",
 );
 assert(
-  ownerCardStatuses(books({ hasBooks: true, overdueReceivables: 1500 })).analyst?.word === "Attention",
+  ownerCardStatuses(books({ hasBooks: true, overdueReceivables: 1500 })).analyst?.word ===
+    "Attention",
   "overdue debtors are Attention",
 );
 assert(
@@ -199,7 +215,10 @@ assert(
   ).analyst === null,
   "profit up with nothing overdue has no chip",
 );
-assert(guardOwnerLine("get emails out to 10 clients") === "Get emails out to 10 clients.", "a fragment becomes a sentence");
+assert(
+  guardOwnerLine("get emails out to 10 clients") === "Get emails out to 10 clients.",
+  "a fragment becomes a sentence",
+);
 assert(
   ownerCardStatuses(
     books({
@@ -237,12 +256,21 @@ assert(
   "home amounts keep a non-breaking space",
 );
 const emptyLines = ownerHomeLines(empty, null);
-assert(emptyLines.financial_manager[0] === "Connect QuickBooks or Xero.", "an empty cash line stays honest");
-assert(emptyLines.financial_manager[1] === "Nothing is waiting on you.", "an empty answer line stays honest");
-assert(emptyLines.advisor[0] === "Connect QuickBooks or Xero.", "no books does not invent a next move");
 assert(
-  ownerHomeLines(ownerAnswerTiles(books({ hasBooks: true, actionsReady: true })), null).advisor[0] ===
-    "No next move yet.",
+  emptyLines.financial_manager[0] === "Connect QuickBooks or Xero.",
+  "an empty cash line stays honest",
+);
+assert(
+  emptyLines.financial_manager[1] === "Nothing is waiting on you.",
+  "an empty answer line stays honest",
+);
+assert(
+  emptyLines.advisor[0] === "Connect QuickBooks or Xero.",
+  "no books does not invent a next move",
+);
+assert(
+  ownerHomeLines(ownerAnswerTiles(books({ hasBooks: true, actionsReady: true })), null)
+    .advisor[0] === "No next move yet.",
   "books with no ranked move stay empty",
 );
 
@@ -375,7 +403,10 @@ assert(css.includes("list-style: decimal outside"), "numbered replies keep their
 assert(css.includes("list-style: disc outside"), "reply bullets stay visible");
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
-assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
+assert(
+  css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"),
+  "borders mix ink into the background",
+);
 assert(css.includes('--owner-sans: "Geist Sans"'), "the owner shell uses Geist Sans");
 assert(css.includes("lining-nums"), "tables and amounts use lining figures");
 assert(css.includes("--type-h1-size"), "the owner type scale is tokenised");
@@ -384,24 +415,45 @@ assert(css.includes("font-display: swap"), "owner fonts swap in without blocking
 assert(css.includes(".owner-door .owner-btn-secondary"), "secondary buttons are a distinct role");
 assert(css.includes(".owner-door .owner-btn-tertiary"), "tertiary buttons are a distinct role");
 assert(css.includes(".owner-door .btn.gold:focus-visible"), "the primary button shows focus");
-assert(css.includes(".owner-door .owner-btn-secondary:disabled"), "a secondary button has a disabled state");
-assert(css.includes(".owner-door .owner-btn-tertiary:hover"), "a tertiary button has a hover state");
+assert(
+  css.includes(".owner-door .owner-btn-secondary:disabled"),
+  "a secondary button has a disabled state",
+);
+assert(
+  css.includes(".owner-door .owner-btn-tertiary:hover"),
+  "a tertiary button has a hover state",
+);
 assert(!css.includes("Inter"), "the owner shell does not force Inter");
 const home = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(home.includes('className="owner-ask"'), "home ask is the outlined button");
 assert(home.includes("owner-status"), "a problem card shows a status chip");
 assert(home.includes('className="owner-money"'), "home amounts are bold");
-assert(home.includes("ownerHomeLines") === false && home.includes("lines["), "home reads the bot lines");
+assert(
+  home.includes("ownerHomeLines") === false && home.includes("lines["),
+  "home reads the bot lines",
+);
 assert(ownerMoney(-1200, ZA_MARKET) === "−R 1 200", "a rand loss uses one unicode minus");
 assert(ownerMoney(-1200, usd) === "−$1,200", "a dollar loss uses the same minus");
 assert(ownerMoney(1200, ZA_MARKET) === "R 1 200", "a positive rand amount has no sign");
 assert(ownerOutflow("$1,200") === "−$1,200", "an outflow uses the same minus");
 assert(ownerOutflow("R 1 200") === "−R 1 200", "a rand outflow keeps the space");
-assert(ownerBotLayout("") === "row" && ownerBotLayout("?bots=row") === "row", "three across stays the default bot layout");
+assert(
+  ownerBotLayout("") === "row" && ownerBotLayout("?bots=row") === "row",
+  "three across stays the default bot layout",
+);
 assert(ownerBotLayout("?bots=stack") === "stack", "the stack flag is the wide-row trial");
-assert(css.includes('data-bots="stack"') && css.includes("grid-template-columns: 1fr"), "phone and the stack flag use one column");
-assert(css.includes("width: 172px") && css.includes("height: 172px"), "desktop avatars are the hero size");
-assert(css.includes("width: 96px") && css.includes("height: 96px"), "phone avatars are the hero size");
+assert(
+  css.includes('data-bots="stack"') && css.includes("grid-template-columns: 1fr"),
+  "phone and the stack flag use one column",
+);
+assert(
+  css.includes("width: 172px") && css.includes("height: 172px"),
+  "desktop avatars are the hero size",
+);
+assert(
+  css.includes("width: 96px") && css.includes("height: 96px"),
+  "phone avatars are the hero size",
+);
 assert(
   css.includes('.owner-door .owner-pane[data-owner-home="true"] .owner-ask') &&
     css.includes("margin-top: auto"),
@@ -413,7 +465,10 @@ assert(css.includes("text-overflow: unset"), "home lines do not ellipsis");
 assert(!home.includes("owner-promises"), "home does not render the answer tiles");
 assert(!home.includes("owner-health-hero"), "home does not render the health orb");
 assert(!home.includes("What your accountant signed"), "sign-off is not a home tile");
-assert(/\.owner-tile p \{[^}]*color: var\(--ink\)/.test(css), "tile sentences use the foreground colour");
+assert(
+  /\.owner-tile p \{[^}]*color: var\(--ink\)/.test(css),
+  "tile sentences use the foreground colour",
+);
 const shell = readFileSync("src/components/owner-door/owner-shell.tsx", "utf8");
 assert(shell.includes("<ThemeToggle />"), "the owner shell uses the shared theme toggle");
 assert(shell.split("<ThemeToggle />").length >= 3, "the toggle sits in the header and in the menu");
@@ -435,8 +490,14 @@ assert(
   [...shell.matchAll(/label: "([^"]+)"/g)].every((match) => match[1] !== "Accountant"),
   "the owner tab is not labelled Accountant",
 );
-assert(shell.includes("aria-label={item.label}"), "rail items expose their label to assistive tech");
-assert(shell.includes('label: "Accountant portal"'), "the phone pill and the rail share Accountant portal");
+assert(
+  shell.includes("aria-label={item.label}"),
+  "rail items expose their label to assistive tech",
+);
+assert(
+  shell.includes('label: "Accountant portal"'),
+  "the phone pill and the rail share Accountant portal",
+);
 const app = readFileSync("src/routes/app.tsx", "utf8");
 assert(app.includes("<OwnerHealthOrb"), "health keeps the orb");
 assert(app.includes("const OwnerHealthOrb = SphereHero"), "health reuses the sphere");
@@ -444,11 +505,15 @@ assert(!app.includes("hero="), "home does not mount the health orb");
 assert(app.includes("onDriverClick"), "the health orb still drills into a driver");
 assert(app.includes("topMove="), "the advisor line is the top next move");
 assert(
-  css.includes(".owner-door .health-orb:hover") && css.includes(".owner-door .health-orb:focus-visible"),
+  css.includes(".owner-door .health-orb:hover") &&
+    css.includes(".owner-door .health-orb:focus-visible"),
   "the home orb shows hover and focus",
 );
 assert(app.includes("readOnly"), "cash flow and budget can be shown without editing");
-assert(app.includes("Your accountant sets this up"), "an unconfigured view tells the owner who sets it up");
+assert(
+  app.includes("Your accountant sets this up"),
+  "an unconfigured view tells the owner who sets it up",
+);
 
 function channel(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
@@ -480,14 +545,23 @@ function token(source: string, name: string): string {
   return found[1];
 }
 const portal = readFileSync("src/styles/accountant-portal.css", "utf8");
-const darkBlock = portal.slice(portal.indexOf(":root{"), portal.indexOf("html[data-theme=\"light\"]"));
-const lightBlock = portal.slice(portal.indexOf("html[data-theme=\"light\"]"), portal.indexOf(".accountant-portal{"));
+const darkBlock = portal.slice(
+  portal.indexOf(":root{"),
+  portal.indexOf('html[data-theme="light"]'),
+);
+const lightBlock = portal.slice(
+  portal.indexOf('html[data-theme="light"]'),
+  portal.indexOf(".accountant-portal{"),
+);
 for (const block of [darkBlock, lightBlock]) {
   const bg = token(block, "--bg");
   const ink = token(block, "--ink");
   const dim = token(block, "--ink-dim");
   assert(contrast(ink, bg) >= 4.5, `body ink on background is ${contrast(ink, bg).toFixed(2)}`);
-  assert(contrast(dim, bg) >= 4.5, `secondary ink on background is ${contrast(dim, bg).toFixed(2)}`);
+  assert(
+    contrast(dim, bg) >= 4.5,
+    `secondary ink on background is ${contrast(dim, bg).toFixed(2)}`,
+  );
   const edge = mix(ink, bg, 0.55);
   assert(contrast(edge, bg) >= 3, `owner edge on background is ${contrast(edge, bg).toFixed(2)}`);
 }
@@ -514,20 +588,48 @@ const avatar = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8"
 assert(!avatar.includes('d="M32 28l8 6 8-6"'), "the advisor brow is not a frown");
 assert(!avatar.includes('className="smile"'), "the advisor face is not a smile");
 assert(avatar.includes('className="mark"'), "the advisor face uses a neutral mark");
+assert(avatar.includes('rx="12"'), "the advisor body uses the family corner");
+assert(avatar.includes('className="badge"'), "the advisor headset uses an ice badge");
+assert(
+  avatar.includes('className="eye" x="31" y="34" width="6" height="6" rx="1.4"'),
+  "the advisor keeps the square eyes that blink",
+);
 assert(
   avatar.indexOf('className="visor"') < avatar.indexOf('agent === "advisor"'),
   "the visor stays on the financial manager",
 );
-assert(css.includes(".owner-presence.is-advisor .mark"), "the advisor mark is drawn with the other faces");
-assert(css.includes('button[aria-label="Share Milōn"]'), "the owner door hides the phone share button");
+assert(
+  css.includes(".owner-presence.is-advisor .mark"),
+  "the advisor mark is drawn with the other faces",
+);
+assert(
+  css.includes(".owner-presence.is-advisor .badge") && css.includes("var(--ice)"),
+  "the advisor badge uses the ice fill",
+);
+assert(
+  css.includes('button[aria-label="Share Milōn"]'),
+  "the owner door hides the phone share button",
+);
 const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");
-assert((pages.match(/What your accountant signed/g) ?? []).length >= 1, "the accountant tab names the sign-off");
-assert(pages.includes('className="owner-title">Accountant portal'), "the page heading is Accountant portal");
+assert(
+  (pages.match(/What your accountant signed/g) ?? []).length >= 1,
+  "the accountant tab names the sign-off",
+);
+assert(
+  pages.includes('className="owner-title">Accountant portal'),
+  "the page heading is Accountant portal",
+);
 assert(pages.includes('aria-label="breadcrumb"'), "the portal page has a breadcrumb");
-assert(pages.includes('aria-current="page">Accountant portal'), "the breadcrumb names Accountant portal");
+assert(
+  pages.includes('aria-current="page">Accountant portal'),
+  "the breadcrumb names Accountant portal",
+);
 assert(pages.includes("OWNER_SIGNED_SECTION_ID"), "signed deliverables stay on Accountant portal");
-assert(OWNER_SIGNED_SECTION_ID === "owner-signed-deliverables", "the signed section has a stable id");
+assert(
+  OWNER_SIGNED_SECTION_ID === "owner-signed-deliverables",
+  "the signed section has a stable id",
+);
 assert(pages.includes('aria-label="Signed deliverables"'), "the moved section is labelled");
 assert(!pages.includes('data-owner-page="deliverables"'), "Deliverables is not its own owner page");
 const studioChrome = readFileSync("src/components/client-studio-chrome.tsx", "utf8");
@@ -537,7 +639,10 @@ const goldInk = token(lightBlock, "--gold-ink");
 const pillarCard = token(lightBlock, "--bg-2");
 const landing = readFileSync("src/styles/landing.css", "utf8");
 const landingLight = landing.slice(landing.indexOf('html[data-landing="1"][data-theme="light"]'));
-assert(goldInk === token(landingLight, "--gold-ink"), "portal light mode uses the landing dark-gold ink");
+assert(
+  goldInk === token(landingLight, "--gold-ink"),
+  "portal light mode uses the landing dark-gold ink",
+);
 assert(
   contrast(goldInk, pillarCard) >= 4.5,
   `dark-gold ink on the white pillar card is ${contrast(goldInk, pillarCard).toFixed(2)}`,
@@ -571,15 +676,27 @@ assert(
   ownerApp.includes('caption="Tap to see what\'s behind your score"'),
   "the owner health orb uses the plain tap caption",
 );
-assert(sphere.includes("onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}"), "the health orb stays a button");
+assert(
+  sphere.includes("onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}"),
+  "the health orb stays a button",
+);
 assert(sphere.includes("bg-white"), "the pillar card is white");
 assert(shell.includes('className="brand"'), "the owner wordmark uses the accountant brand size");
-assert(shell.includes('className="gold-text">MILŌN'), "the owner wordmark uses the accountant gold colour");
+assert(
+  shell.includes('className="gold-text">MILŌN'),
+  "the owner wordmark uses the accountant gold colour",
+);
 assert(!shell.includes("milon-wordmark.png"), "the tiny image wordmark is gone");
 assert(!home.includes("Milōn Financial Manager"), "the view does not hardcode a display name");
 const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
-assert(door.includes("onOpen={openChat}") && door.includes("onAsk={openChat}"), "the avatar and the ask pill open the same chat");
-assert(door.includes("window.history.back"), "closing a bot the owner opened uses the browser back stack");
+assert(
+  door.includes("onOpen={openChat}") && door.includes("onAsk={openChat}"),
+  "the avatar and the ask pill open the same chat",
+);
+assert(
+  door.includes("window.history.back"),
+  "closing a bot the owner opened uses the browser back stack",
+);
 assert(door.includes("runBotTransition"), "opening a bot runs the shared-element transition");
 assert(app.includes('search.bot === "analyst"'), "a bot deep link is kept on /app");
 const chatSrc = readFileSync("src/components/owner-door/owner-chat.tsx", "utf8");
@@ -587,20 +704,32 @@ assert(chatSrc.includes('size="stage"'), "the open bot is the large stage");
 assert(chatSrc.includes('aria-label="Close"'), "the stage has a close control");
 assert(chatSrc.includes('event.key !== "Escape"'), "escape closes the stage");
 const avatarSrc = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8");
-assert(avatarSrc.includes("viewTransitionName"), "the home avatar and the stage share a transition name");
+assert(
+  avatarSrc.includes("viewTransitionName"),
+  "the home avatar and the stage share a transition name",
+);
 assert(avatarSrc.includes('"stage"'), "the stage is an avatar size");
 const botMotion = readFileSync("src/components/owner-door/owner-bot-motion.ts", "utf8");
 assert(botMotion.includes("startViewTransition"), "the zoom uses the view transition API");
 assert(botMotion.includes("prefers-reduced-motion"), "reduced motion is detected before the zoom");
 assert(botMotion.includes('dataset.botFade = "cross"'), "reduced motion crossfades the zoom");
-assert(botMotion.includes('dataset.botFade = "plain"'), "a browser without view transitions crossfades");
-assert(css.includes(".owner-presence.is-stage") && css.includes("width: 280px"), "the open bot is 280px on a desktop");
+assert(
+  botMotion.includes('dataset.botFade = "plain"'),
+  "a browser without view transitions crossfades",
+);
+assert(
+  css.includes(".owner-presence.is-stage") && css.includes("width: 280px"),
+  "the open bot is 280px on a desktop",
+);
 assert(css.includes("width: 160px"), "the open bot is 160px on a phone");
 assert(
   css.includes("::view-transition-group(*)") && css.includes("animation: none"),
   "reduced motion drops the spatial zoom",
 );
-assert(css.includes("@keyframes owner-bot-in") && css.includes("@keyframes owner-bot-out"), "the fallback is a crossfade");
+assert(
+  css.includes("@keyframes owner-bot-in") && css.includes("@keyframes owner-bot-out"),
+  "the fallback is a crossfade",
+);
 assert(home.includes("share"), "the home avatar opts into the shared element");
 assert(shell.includes('screen: "moves"'), "next moves stays on the rail");
 assert(!door.includes('setScreen("actions")'), "the separate actions screen is gone");
@@ -613,7 +742,9 @@ assert(plan.includes("handoffComingOnline"), "the missing-runner check is the ha
 assert(plan.includes("data-bot-handoff"), "the hand-off controls are in the action row");
 assert(plan.includes("requestOwnerHandoff"), "handing off calls the owner-handoff function");
 assert(
-  handoffComingOnline("No runner exists for financial_manager. supabase/functions has agent-analyst only."),
+  handoffComingOnline(
+    "No runner exists for financial_manager. supabase/functions has agent-analyst only.",
+  ),
   "the financial manager refusal is not an error",
 );
 assert(
@@ -637,35 +768,75 @@ assert(
 assert(!handoffComingOnline("Not signed in."), "a real hand-off error still shows");
 assert(
   ownerRunPhase(
-    { id: "q", agent: "financial_manager", client_id: "c", status: "queued", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    {
+      id: "q",
+      agent: "financial_manager",
+      client_id: "c",
+      status: "queued",
+      queued_at: "2026-10-01T00:00:00.000Z",
+      started_at: null,
+      finished_at: null,
+    },
     [],
   ) === "queued",
   "queued stays queued",
 );
 assert(
   ownerRunPhase(
-    { id: "d", agent: "advisor", client_id: "c", status: "succeeded", queued_at: "2026-10-01T00:00:00.000Z", started_at: "2026-10-01T00:00:01.000Z", finished_at: "2026-10-01T00:05:00.000Z" },
+    {
+      id: "d",
+      agent: "advisor",
+      client_id: "c",
+      status: "succeeded",
+      queued_at: "2026-10-01T00:00:00.000Z",
+      started_at: "2026-10-01T00:00:01.000Z",
+      finished_at: "2026-10-01T00:05:00.000Z",
+    },
     [],
   ) === "done",
   "a finish with no finding is done",
 );
 assert(
   ownerRunPhase(
-    { id: "s", agent: "advisor", client_id: "c", status: "skipped", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    {
+      id: "s",
+      agent: "advisor",
+      client_id: "c",
+      status: "skipped",
+      queued_at: "2026-10-01T00:00:00.000Z",
+      started_at: null,
+      finished_at: null,
+    },
     [],
   ) === "skipped",
   "skipped is nothing to do",
 );
 assert(
   ownerRunPhase(
-    { id: "f", agent: "advisor", client_id: "c", status: "failed", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    {
+      id: "f",
+      agent: "advisor",
+      client_id: "c",
+      status: "failed",
+      queued_at: "2026-10-01T00:00:00.000Z",
+      started_at: null,
+      finished_at: null,
+    },
     [],
   ) === "stalled",
   "failed stays a quiet stall",
 );
 assert(
   ownerRunPhase(
-    { id: "x", agent: "advisor", client_id: "c", status: "cancelled", queued_at: "2026-10-01T00:00:00.000Z", started_at: null, finished_at: null },
+    {
+      id: "x",
+      agent: "advisor",
+      client_id: "c",
+      status: "cancelled",
+      queued_at: "2026-10-01T00:00:00.000Z",
+      started_at: null,
+      finished_at: null,
+    },
     [],
   ) === null,
   "cancelled returns to idle",
@@ -676,10 +847,14 @@ assert(
   "a next-move draft needs the owner's OK",
 );
 assert(
-  draftFindingLabel({ kind: "accountant_handoff_draft", evidence: draftEvidence }) === DRAFT_NEEDS_ACCOUNTANT,
+  draftFindingLabel({ kind: "accountant_handoff_draft", evidence: draftEvidence }) ===
+    DRAFT_NEEDS_ACCOUNTANT,
   "an accountant hand-off draft needs the accountant",
 );
-assert(draftFindingLabel({ kind: "next_move_draft", evidence: { figures: { cash: 1 } } }) === null, "a published finding is not a draft");
+assert(
+  draftFindingLabel({ kind: "next_move_draft", evidence: { figures: { cash: 1 } } }) === null,
+  "a published finding is not a draft",
+);
 const nestedEvidence = {
   draft: true,
   requires_human_approval: true,
@@ -692,30 +867,46 @@ assert(
   "a data request with nested figures and no recipient needs the owner",
 );
 assert(
-  draftFindingKindLabel({ kind: "data_request_draft", evidence: nestedEvidence }) === "Data request",
+  draftFindingKindLabel({ kind: "data_request_draft", evidence: nestedEvidence }) ===
+    "Data request",
   "a data request keeps its kind label",
 );
 assert(
-  draftFindingLabel({ kind: null, evidence: { ...nestedEvidence, kind: "accountant_handoff_draft" } }) ===
-    DRAFT_NEEDS_ACCOUNTANT,
+  draftFindingLabel({
+    kind: null,
+    evidence: { ...nestedEvidence, kind: "accountant_handoff_draft" },
+  }) === DRAFT_NEEDS_ACCOUNTANT,
   "an evidence kind still reaches the accountant",
 );
 assert(
-  draftFindingKindLabel({ kind: "advisory_deliverable_draft", evidence: nestedEvidence }) === "Advisory",
+  draftFindingKindLabel({ kind: "advisory_deliverable_draft", evidence: nestedEvidence }) ===
+    "Advisory",
   "an advisory draft keeps its kind label",
 );
 assert(isVisibleAgentFinding({ status: "approved" }), "an approved draft stays on the list");
 assert(!isVisibleAgentFinding({ status: "dismissed" }), "a dismissed draft stays hidden");
-assert(!isVisibleAgentFinding({ dismissed_reason: "dismissed by user" }), "a dismissed reason stays hidden");
+assert(
+  !isVisibleAgentFinding({ dismissed_reason: "dismissed by user" }),
+  "a dismissed reason stays hidden",
+);
 assert(!isVisibleAgentFinding({ superseded_by: "other" }), "a superseded draft stays hidden");
 assert(plan.includes("OwnerDraftCard"), "Next moves renders a draft card");
 assert(plan.includes("DRAFT_NEEDS_OWNER"), "owner drafts are the ones that can be decided");
-assert(plan.includes('data-owner-drafts='), "Next moves marks the draft section");
+assert(plan.includes("data-owner-drafts="), "Next moves marks the draft section");
 const card = readFileSync("src/components/owner-draft-card.tsx", "utf8");
-assert(card.includes("Approve") && card.includes("Dismiss") && card.includes("Confirm"), "an owner draft can be approved or dismissed");
-assert(card.includes("ownerOk && !blocked && !approved"), "buttons stay off an accountant draft and an approved row");
+assert(
+  card.includes("Approve") && card.includes("Dismiss") && card.includes("Confirm"),
+  "an owner draft can be approved or dismissed",
+);
+assert(
+  card.includes("ownerOk && !blocked && !approved"),
+  "buttons stay off an accountant draft and an approved row",
+);
 assert(card.includes("setOptimistic(null)"), "a failed decision rolls the card back");
-assert(!plan.includes("does not enqueue agent_runs"), "the owner view no longer describes the hand-off as a placeholder");
+assert(
+  !plan.includes("does not enqueue agent_runs"),
+  "the owner view no longer describes the hand-off as a placeholder",
+);
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert agent runs itself");
 assert(app.includes("ownerView"), "Next moves renders the owner action list");
 assert(!door.includes("Dana"), "the door does not use a retired name");
@@ -723,16 +914,33 @@ const prompt = readFileSync("supabase/functions/ask-ai/prompt.ts", "utf8");
 assert(prompt.includes("askAiAgentPersona"), "ask-ai keeps an agent persona");
 assert(!prompt.includes("Milōn Financial Manager"), "the persona does not hardcode a display name");
 
-assert(ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }) === "Owner plan · R299/mo", "SA visitors see the rand price");
-assert(!ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }).includes("$39"), "SA plan hides the dollar price");
-assert(ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }) === "Owner plan · $39/mo", "US visitors see the dollar price");
-assert(!ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }).includes("R299"), "US plan hides the rand price");
+assert(
+  ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }) ===
+    "Owner plan · R299/mo",
+  "SA visitors see the rand price",
+);
+assert(
+  !ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }).includes("$39"),
+  "SA plan hides the dollar price",
+);
+assert(
+  ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }) ===
+    "Owner plan · $39/mo",
+  "US visitors see the dollar price",
+);
+assert(
+  !ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }).includes("R299"),
+  "US plan hides the rand price",
+);
 assert(
   ownerPlanLine({ visitor: "za", accountantOnMilon: true, firmName: "Northline" }) ===
     "Owner plan · included — Northline is on Milōn",
   "a linked accountant replaces the price",
 );
-assert(!ownerPlanLine({ visitor: null, accountantOnMilon: false, firmName: null }).match(/R299|\$39/), "no price before the visitor is known");
+assert(
+  !ownerPlanLine({ visitor: null, accountantOnMilon: false, firmName: null }).match(/R299|\$39/),
+  "no price before the visitor is known",
+);
 assert(ownerPlanFreeLine() === "Free when your accountant joins.", "the free line has no price");
 const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
 assert(!homeSrc.includes("R299") && !homeSrc.includes("$39"), "home does not show a price");
@@ -756,9 +964,15 @@ const emptyNeeds = ownerNeedsView({
   xero: { state: "absent" },
   when: () => "2 Oct 2026",
 });
-assert(emptyNeeds.actionLines[0] === "No open actions assigned to you.", "someone else's action is not the owner's");
+assert(
+  emptyNeeds.actionLines[0] === "No open actions assigned to you.",
+  "someone else's action is not the owner's",
+);
 assert(emptyNeeds.draftLines[0] === "No drafts need your OK.", "an empty draft list stays empty");
-assert(emptyNeeds.deliverableLines[0] === "No deliverables awaiting review.", "an empty deliverable list stays empty");
+assert(
+  emptyNeeds.deliverableLines[0] === "No deliverables awaiting review.",
+  "an empty deliverable list stays empty",
+);
 assert(emptyNeeds.syncLines[0] === "Books are not connected yet.", "no ledger stays unconnected");
 
 const filledNeeds = ownerNeedsView({
@@ -781,20 +995,38 @@ const filledNeeds = ownerNeedsView({
   xero: { state: "absent" },
   when: () => "2 Oct 2026",
 });
-assert(filledNeeds.actionsHeading === "3 open actions", "the strip counts the owner's open actions");
+assert(
+  filledNeeds.actionsHeading === "3 open actions",
+  "the strip counts the owner's open actions",
+);
 assert(filledNeeds.actionLines.length === 2, "the strip shows the top two actions");
 assert(filledNeeds.actionLines[0] === "Approve the payroll run.", "the first owner action leads");
-assert(!filledNeeds.actionLines.join(" ").includes("Send the supplier"), "the third action stays off the strip");
-assert(filledNeeds.draftsHeading === "1 draft needs your OK", "a draft that needs an OK is counted");
-assert(filledNeeds.deliverablesHeading === "2 deliverables awaiting review", "unsigned deliverables are counted");
+assert(
+  !filledNeeds.actionLines.join(" ").includes("Send the supplier"),
+  "the third action stays off the strip",
+);
+assert(
+  filledNeeds.draftsHeading === "1 draft needs your OK",
+  "a draft that needs an OK is counted",
+);
+assert(
+  filledNeeds.deliverablesHeading === "2 deliverables awaiting review",
+  "unsigned deliverables are counted",
+);
 assert(filledNeeds.syncHeading === "QuickBooks", "the sync names the ledger");
 assert(filledNeeds.syncLines[0] === "Last synced 2 Oct 2026.", "the sync shows the last time");
 assert(homeSrc.includes("What needs you"), "home has the needs strip");
 assert(homeSrc.includes("OwnerNeedsStrip"), "the strip is the home block");
-assert(!homeSrc.includes('className="btn gold"'), "the home strip does not add another primary button");
+assert(
+  !homeSrc.includes('className="btn gold"'),
+  "the home strip does not add another primary button",
+);
 assert(css.includes(".owner-needs"), "the strip has its own rhythm");
-assert(door.includes("onMoves={() => go(\"moves\")}"), "open actions and drafts open Next moves");
-assert(door.includes("onDeliverables={() => go(\"deliverables\")}"), "the needs strip still opens the old deliverables target");
+assert(door.includes('onMoves={() => go("moves")}'), "open actions and drafts open Next moves");
+assert(
+  door.includes('onDeliverables={() => go("deliverables")}'),
+  "the needs strip still opens the old deliverables target",
+);
 assert(canonicalOwnerScreen("deliverables") === "accountant", "that target is Accountant portal");
 assert(canonicalOwnerScreen("home") === "home", "other owner screens stay put");
 assert(door.includes("canonicalOwnerScreen"), "the door remaps deliverables before it renders");
@@ -829,14 +1061,21 @@ assert(
   "the deliverables plan section opens Accountant portal",
 );
 assert(
-  ownerDeliverablesRedirectTarget("https://milonfinance.com/clients/abc?tab=deliverables&section=pack") === null,
+  ownerDeliverablesRedirectTarget(
+    "https://milonfinance.com/clients/abc?tab=deliverables&section=pack",
+  ) === null,
   "accountant Deliverables URLs stay",
 );
 assert(
-  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?screen=accountant&section=signed") === null,
+  ownerDeliverablesRedirectTarget(
+    "https://milonfinance.com/app?screen=accountant&section=signed",
+  ) === null,
   "the canonical portal URL does not redirect again",
 );
-assert(ownerDeliverablesRedirectTarget("https://milonfinance.com/app?tab=today") === null, "owner board tabs stay");
+assert(
+  ownerDeliverablesRedirectTarget("https://milonfinance.com/app?tab=today") === null,
+  "owner board tabs stay",
+);
 assert(
   ownerDeliverablesRedirectTarget("https://milonfinance.com/app?section=plan") === null,
   "a bare plan section is not the old deliverables tab",
@@ -846,9 +1085,15 @@ assert(
   "settings keeps a leftover signed section",
 );
 const appRoute = readFileSync("src/routes/app.tsx", "utf8");
-assert(appRoute.includes("ownerDeliverablesRedirectTarget"), "the owner app redirects old deliverables URLs");
+assert(
+  appRoute.includes("ownerDeliverablesRedirectTarget"),
+  "the owner app redirects old deliverables URLs",
+);
 const server = readFileSync("src/server.ts", "utf8");
-assert(server.includes("ownerDeliverablesRedirectTarget"), "full page loads redirect old deliverables URLs");
+assert(
+  server.includes("ownerDeliverablesRedirectTarget"),
+  "full page loads redirect old deliverables URLs",
+);
 
 const quietBook = {
   clientCount: 4,
@@ -859,14 +1104,22 @@ const quietBook = {
   followUps: 0,
 };
 const quietLines = practiceHomeLines(quietBook);
-assert(quietLines.financial_manager[0] === "4 clients on the book.", "practice Home counts the book");
+assert(
+  quietLines.financial_manager[0] === "4 clients on the book.",
+  "practice Home counts the book",
+);
 assert(quietLines.financial_manager[1] === "No open queries.", "a clear book has no open queries");
-assert(quietLines.analyst[0] === "Average health is 72 out of 100.", "practice Home states average health");
+assert(
+  quietLines.analyst[0] === "Average health is 72 out of 100.",
+  "practice Home states average health",
+);
 assert(quietLines.analyst[1] === "No client needs attention.", "a clear book needs no attention");
 assert(quietLines.advisor[0] === "No follow-up waiting.", "a clear book has no follow-up");
 const quietStatus = practiceCardStatuses(quietBook);
 assert(
-  quietStatus.financial_manager === null && quietStatus.analyst === null && quietStatus.advisor === null,
+  quietStatus.financial_manager === null &&
+    quietStatus.analyst === null &&
+    quietStatus.advisor === null,
   "a clear book has no status chip",
 );
 const busyLines = practiceHomeLines({
@@ -877,8 +1130,14 @@ const busyLines = practiceHomeLines({
   openQueries: 3,
   followUps: 1,
 });
-assert(busyLines.financial_manager.join(" ") === "1 client on the book. 3 open queries.", "one client and open queries");
-assert(busyLines.analyst[0] === "No scored clients yet.", "unscored book does not invent a health number");
+assert(
+  busyLines.financial_manager.join(" ") === "1 client on the book. 3 open queries.",
+  "one client and open queries",
+);
+assert(
+  busyLines.analyst[0] === "No scored clients yet.",
+  "unscored book does not invent a health number",
+);
 assert(busyLines.advisor[0] === "1 client to follow up.", "one follow-up is singular");
 const busyStatus = practiceCardStatuses({
   clientCount: 1,
