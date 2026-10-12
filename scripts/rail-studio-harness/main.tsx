@@ -30,10 +30,12 @@ import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as SettingsRoute } from "@/routes/_authenticated/settings.index";
 import { Route as TeamRoute } from "@/routes/_authenticated/settings.team";
+import { Route as BrandRoute } from "@/routes/_authenticated/settings.brand";
 
 const Dashboard = DashboardRoute.options.component as ComponentType;
 const SettingsPage = SettingsRoute.options.component as ComponentType;
 const TeamAccessPage = TeamRoute.options.component as ComponentType;
+const BrandPage = BrandRoute.options.component as ComponentType;
 
 const HARNESS_PREVIEW_NOTES: ClientNote[] = [
   {
@@ -292,6 +294,18 @@ const settingsTeamRoute = createRoute({
   },
 });
 
+const settingsBrandRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/brand",
+  component: function SettingsBrandHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <BrandPage />
+      </MarketProvider>
+    );
+  },
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -313,6 +327,7 @@ const routeTree = rootRoute.addChildren([
   ownerDoorRoute,
   dashboardRoute,
   settingsRoute,
+  settingsBrandRoute,
   settingsTeamRoute,
 ]);
 const router = createRouter({

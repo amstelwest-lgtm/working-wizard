@@ -1888,6 +1888,19 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 
 @media (max-width:767px){
   .share-fab{right:auto;left:max(1rem, env(safe-area-inset-left))}
+  .accountant-portal .topbar .firm-chip,
+  .accountant-portal .topbar .firm-switcher{
+    flex:1 1 100%;
+    max-width:100%;
+    order:3;
+    white-space:normal;
+    overflow:visible;
+  }
+  .accountant-portal .topbar .firm-switcher select{
+    max-width:100%;
+    width:100%;
+    white-space:normal;
+  }
   .accountant-portal .shell{padding-bottom:8.5rem}
   .accountant-portal .deliverable-main{padding-bottom:6.5rem}
   .accountant-portal .topbar-backdrop{display:none}
