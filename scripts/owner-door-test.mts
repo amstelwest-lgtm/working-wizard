@@ -529,7 +529,8 @@ assert(OWNER_SIGNED_SECTION_ID === "owner-signed-deliverables", "the signed sect
 assert(pages.includes('aria-label="Signed deliverables"'), "the moved section is labelled");
 assert(!pages.includes('data-owner-page="deliverables"'), "Deliverables is not its own owner page");
 const studioChrome = readFileSync("src/components/client-studio-chrome.tsx", "utf8");
-assert(studioChrome.includes('label: "Deliverables"'), "the accountant Deliverables tab stays");
+assert(studioChrome.includes('label: "Books"'), "the accountant rail names Books");
+assert(studioChrome.includes('label: "Action plan"'), "the accountant rail names Action plan");
 const goldInk = token(lightBlock, "--gold-ink");
 const pillarCard = token(lightBlock, "--bg-2");
 const landing = readFileSync("src/styles/landing.css", "utf8");

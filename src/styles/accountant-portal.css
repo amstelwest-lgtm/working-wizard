@@ -774,6 +774,7 @@ html.dark .accountant-portal .milon-status-pill--warn{color:#f0d59a;background:r
   display:none;width:38px;height:38px;border-radius:11px;border:1px solid var(--line);
   background:transparent;color:var(--ink);place-items:center;flex-shrink:0;padding:0;
 }
+.accountant-portal .topbar-menu-label{display:none}
 .accountant-portal .topbar-backdrop{display:none}
 .accountant-portal .topbar-menu-btn svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .accountant-portal .topbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;flex-shrink:0}
@@ -1619,11 +1620,84 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   padding-top:8px;
   border-top:1px solid var(--pale);
 }
-.accountant-portal .rail-settings .tab{
+.accountant-portal .rail-settings .tab,
+.accountant-portal .nav-settings{
   display:flex;
   align-items:center;
   gap:8px;
   min-height:44px;
+}
+.accountant-portal .nav-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
+html.nav-drawer-open,
+html.nav-drawer-open body{overflow:hidden}
+.accountant-nav .nav-back,
+.accountant-nav .nav-label,
+.accountant-nav .nav-sub-link{
+  display:flex;
+  align-items:flex-start;
+  width:100%;
+  text-align:left;
+  text-decoration:none;
+  color:var(--ink-dim);
+  font-size:14px;
+  font-weight:600;
+  line-height:1.35;
+  letter-spacing:.01em;
+  padding:9px 12px;
+  border-radius:10px;
+  min-height:44px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  background:transparent;
+}
+.accountant-nav .nav-row{display:flex;align-items:stretch;gap:0}
+.accountant-nav .nav-label{flex:1}
+.accountant-nav .nav-chev{
+  width:44px;
+  min-height:44px;
+  border:0;
+  background:transparent;
+  color:var(--ink-faint);
+  border-radius:10px;
+  flex:none;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+}
+.accountant-nav .nav-chev svg{width:14px;height:14px;transition:transform .2s ease}
+.accountant-nav .nav-heading.is-open .nav-chev svg{transform:rotate(90deg)}
+.accountant-nav .nav-sub{list-style:none;margin:0 0 4px;padding:0 0 0 12px}
+.accountant-nav .nav-back,
+.accountant-nav .nav-label:hover,
+.accountant-nav .nav-chev:hover,
+.accountant-nav .nav-sub-link:hover{background:#f4f8ff;color:#102a43}
+.accountant-nav .nav-heading.is-current > .nav-row .nav-label{
+  box-shadow:inset 3px 0 0 #0b5fff;
+  color:#102a43;
+}
+.accountant-nav .nav-heading.is-page > .nav-row .nav-label,
+.accountant-nav .nav-sub-link[aria-current="page"],
+.accountant-nav .nav-settings[aria-current="page"]{
+  background:var(--pale,#eef4ff);
+  color:#102a43;
+  box-shadow:inset 3px 0 0 #0b5fff;
+}
+.accountant-nav a:focus-visible,
+.accountant-nav button:focus-visible{
+  outline:2px solid #0b5fff;
+  outline-offset:2px;
+}
+@media (max-width:860px){
+  .accountant-portal:not(.owner-door) .topbar-menu-btn{
+    width:auto;
+    height:38px;
+    padding:0 10px;
+    gap:6px;
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+  }
+  .accountant-portal:not(.owner-door) .topbar-menu-label{display:inline}
 }
 .accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
 /* Sign-off pills keep their class name. On accountant surfaces they are cobalt.
@@ -1765,9 +1839,9 @@ html[data-theme="light"] .accountant-portal .data-fresh{
     position:fixed;
     z-index:80;
     top:0;
-    right:0;
+    left:0;
     bottom:0;
-    left:auto;
+    right:auto;
     display:flex;
     flex-direction:column;
     flex-wrap:nowrap;
@@ -1778,7 +1852,9 @@ html[data-theme="light"] .accountant-portal .data-fresh{
     border-radius:0;
     padding:72px 16px 24px;
     background:#ffffff;
-    border-left:1px solid #dbeafe;
+    border-right:1px solid #dbeafe;
+    border-left:0;
+    box-shadow:16px 0 40px rgba(16,42,67,.16);
   }
   .accountant-portal:not(.owner-door).nav-open .topbar-backdrop{
     display:block;
@@ -1866,9 +1942,9 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
     position:fixed;
     z-index:80;
     top:0;
-    right:0;
+    left:0;
     bottom:0;
-    left:auto;
+    right:auto;
     width:min(320px,88vw);
     max-width:88vw;
     height:auto;
@@ -1884,8 +1960,8 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
     padding:72px 12px 148px;
     background:#ffffff;
     border:0;
-    border-left:1px solid #dbeafe;
-    box-shadow:-16px 0 40px rgba(16,42,67,.16);
+    border-right:1px solid #dbeafe;
+    box-shadow:16px 0 40px rgba(16,42,67,.16);
     mask-image:none;
     -webkit-mask-image:none;
   }

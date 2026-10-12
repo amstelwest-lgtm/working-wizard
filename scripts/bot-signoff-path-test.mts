@@ -128,19 +128,18 @@ assert(studio.includes("data-ask-bot"), "Overview has a Bot entry");
 assert(studio.includes("Ask Milōn Bot"), "the entry is labelled Ask Milōn Bot");
 assert(studio.includes('writeAccountantTab("ask")'), "the entry opens the Bot tab for this client");
 assert(studio.includes("data-bot-entry"), "the entry is marked");
-assert(studio.includes("data-bot-rail"), "Home stays marked as the Bot rail item");
-assert(studio.includes('{ id: "home", label: "Home" }'), "the rail names Home");
-assert(studio.includes('label: "Overview"'), "the rail names the Overview group");
 assert(
-  studio.includes('{ id: "deliverables", label: "Deliverables" }'),
-  "the rail names Deliverables",
+  readFileSync(resolve("src/components/accountant-nav.tsx"), "utf8").includes("data-bot-rail"),
+  "Home stays marked as the Bot rail item",
 );
+assert(studio.includes('{ id: "home", label: "Home" }'), "the rail names Home");
+assert(studio.includes('label: "Team"'), "the rail names the Team group");
+assert(studio.includes('label: "Reports"'), "the rail names Reports");
+const railSrc = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
 assert(
-  studio.indexOf('{ id: "home", label: "Home" }') <
-    studio.indexOf('{ id: "health", label: "Health" }') &&
-    studio.indexOf('{ id: "health", label: "Health" }') <
-      studio.indexOf('{ id: "deliverables", label: "Deliverables" }'),
-  "the rail is Home, then Health, then Deliverables",
+  railSrc.indexOf('{ id: "home", label: "Home" }') < railSrc.indexOf('{ id: "health", label: "Health" }') &&
+    railSrc.indexOf('{ id: "health", label: "Health" }') < railSrc.indexOf('label: "Reports"'),
+  "the rail is Home, then Health, then Reports",
 );
 const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
 assert(portalCss.includes(".tab.bot-primary"), "the lead Bot control is gold on first paint");

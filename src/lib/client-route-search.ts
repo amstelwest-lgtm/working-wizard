@@ -29,8 +29,22 @@ export const CLIENT_RAIL_TABS = [
 
 export type ClientRailTab = (typeof CLIENT_RAIL_TABS)[number];
 
-/** Sub-views that still open their own pane, under a rail item. */
-export const RAIL_SUBSECTIONS = ["pillars", "collections", "payables", "pack", "plan", "drafter"] as const;
+/**
+ * Sub-views under a rail item. `lines`, `months`, `sent`, and `connections`
+ * mark a collapsible sub-item. They do not open a different pane.
+ */
+export const RAIL_SUBSECTIONS = [
+  "pillars",
+  "collections",
+  "payables",
+  "pack",
+  "plan",
+  "drafter",
+  "lines",
+  "months",
+  "sent",
+  "connections",
+] as const;
 
 export type RailSubsection = (typeof RAIL_SUBSECTIONS)[number];
 
@@ -132,6 +146,10 @@ function destinationForSection(
   if (section === "cash" || section === "forecast" || section === "cash-forecast") return { tab: "cash" };
   if (section === "profit" || section === "waterfall" || section === "profitability") return { tab: "profit" };
   if (section === "budget") return { tab: "budget" };
+  if (section === "months") return { tab: "budget", section: "months" };
+  if (section === "lines") return { tab: "profit", section: "lines" };
+  if (section === "sent") return { tab: "reports", section: "sent" };
+  if (section === "connections") return { tab: "portal", section: "connections" };
   if (section === "moves" || section === "strategic-moves") return { tab: "moves" };
   if (
     section === "books" ||
@@ -170,6 +188,24 @@ function explicitRail(
     if (fromSection?.tab === "deliverables") return fromSection;
     return { tab: "deliverables" };
   }
+  if (tab === "profit") {
+    if (section === "lines") return { tab: "profit", section: "lines" };
+    return { tab: "profit" };
+  }
+  if (tab === "budget") {
+    if (section === "months") return { tab: "budget", section: "months" };
+    return { tab: "budget" };
+  }
+  if (tab === "reports") {
+    if (section === "sent") return { tab: "reports", section: "sent" };
+    if (section === "pack") return { tab: "deliverables", section: "pack" };
+    if (section === "drafter") return { tab: "deliverables", section: "drafter" };
+    return { tab: "reports" };
+  }
+  if (tab === "portal") {
+    if (section === "connections") return { tab: "portal", section: "connections" };
+    return { tab: "portal" };
+  }
   return { tab };
 }
 
@@ -190,6 +226,11 @@ export function canonicalizeAccountantSearch(input: {
   // is the only one that collapses to Home here.
   if (tab === "home" || (tab === "overview" && !section)) return { tab: "home" };
   if (tab === "desk" || tab === "ask" || tab === "bot" || tab === "milon-bot") return { tab: "desk" };
+  if (tab === "books") {
+    return section === "connections"
+      ? { tab: "portal", section: "connections" }
+      : { tab: "portal" };
+  }
 
   if (RAIL_SET.has(tab)) {
     return explicitRail(tab as ClientRailTab, section, focus);
@@ -286,7 +327,130 @@ export function accountantClientTabSearch<T extends object>(
     delete next.report;
     delete next.action;
   }
+  delete next.agent;
   return next as T;
+}
+
+const NAV_AGENTS = new Set(["financial_manager", "analyst", "advisor"]);
+
+export type ClientNavSelection = {
+  headingId: string;
+  subId: string | null;
+};
+
+/** Which collapsible heading and sub-item the current client address marks. */
+export function clientRailSelection(input: {
+  tab?: string | null;
+  section?: string | null;
+  focus?: string | null;
+  report?: string | null;
+  filter?: string | null;
+  agent?: string | null;
+}): ClientNavSelection {
+  const canonical = canonicalizeAccountantSearch(input);
+  const section = canonical.section ?? "";
+  const report = (input.report ?? "").trim();
+  const agent = (input.agent ?? "").trim();
+  switch (canonical.tab) {
+    case "desk":
+    case "home":
+      return {
+        headingId: "home",
+        subId: NAV_AGENTS.has(agent) ? agent : null,
+      };
+    case "health":
+      return {
+        headingId: "health",
+        subId: section === "pillars" || canonical.focus === "pillars" ? "pillars" : "score",
+      };
+    case "cash":
+      if (section === "collections") return { headingId: "cash", subId: "collections" };
+      if (section === "payables") return { headingId: "cash", subId: "payables" };
+      return { headingId: "cash", subId: "forecast" };
+    case "profit":
+      return { headingId: "profit", subId: section === "lines" ? "lines" : "waterfall" };
+    case "budget":
+      return { headingId: "budget", subId: section === "months" ? "months" : "year" };
+    case "moves":
+      return { headingId: "moves", subId: null };
+    case "deliverables":
+      if (section === "plan") {
+        return { headingId: "plan", subId: input.filter === "overdue" ? "overdue" : "open" };
+      }
+      return { headingId: "reports", subId: "drafts" };
+    case "reports":
+      if (section === "sent") return { headingId: "reports", subId: "sent" };
+      if (report === "scorecard" || report === "forecast" || report === "waterfall") {
+        return { headingId: "reports", subId: report };
+      }
+      return { headingId: "reports", subId: "all" };
+    case "portal":
+      return { headingId: "books", subId: section === "connections" ? "connections" : "documents" };
+    default:
+      return { headingId: "home", subId: null };
+  }
+}
+
+/** Search to write when a heading or sub-item is chosen. The pane underneath stays the one it already is. */
+export function clientNavSearch<T extends object>(
+  prev: T,
+  headingId: string,
+  subId?: string | null,
+): T {
+  const sub = subId ?? null;
+  if (headingId === "home") {
+    const next = accountantClientTabSearch(prev, "home") as Record<string, unknown>;
+    if (sub && NAV_AGENTS.has(sub)) next.agent = sub;
+    return next as T;
+  }
+  if (headingId === "health") {
+    return accountantClientTabSearch(prev, "health", sub === "pillars" ? { section: "pillars" } : undefined);
+  }
+  if (headingId === "cash") {
+    if (sub === "collections" || sub === "payables") {
+      return accountantClientTabSearch(prev, "cash", { section: sub });
+    }
+    return accountantClientTabSearch(prev, "cash");
+  }
+  if (headingId === "profit") {
+    return accountantClientTabSearch(prev, "profit", sub === "lines" ? { section: "lines" } : undefined);
+  }
+  if (headingId === "budget") {
+    return accountantClientTabSearch(prev, "budget", sub === "months" ? { section: "months" } : undefined);
+  }
+  if (headingId === "moves") return accountantClientTabSearch(prev, "moves");
+  if (headingId === "plan") {
+    const next = accountantClientTabSearch(prev, "plan") as Record<string, unknown>;
+    if (sub === "overdue") next.filter = "overdue";
+    else delete next.filter;
+    return next as T;
+  }
+  if (headingId === "reports") {
+    if (sub === "drafts") return accountantClientTabSearch(prev, "deliverables", { section: "pack" });
+    if (sub === "sent") {
+      const next = accountantClientTabSearch(prev, "reports", { section: "sent" }) as Record<string, unknown>;
+      delete next.report;
+      delete next.action;
+      return next as T;
+    }
+    if (sub === "scorecard" || sub === "forecast" || sub === "waterfall") {
+      const next = accountantClientTabSearch(prev, "reports") as Record<string, unknown>;
+      next.report = sub;
+      return next as T;
+    }
+    const next = accountantClientTabSearch(prev, "reports") as Record<string, unknown>;
+    delete next.report;
+    delete next.action;
+    return next as T;
+  }
+  if (headingId === "books") {
+    return accountantClientTabSearch(
+      prev,
+      "portal",
+      sub === "connections" ? { section: "connections" } : undefined,
+    );
+  }
+  return accountantClientTabSearch(prev, "home");
 }
 
 /** Hashes that used to point at the drafter while it lived under the pack. */
