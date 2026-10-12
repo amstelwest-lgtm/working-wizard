@@ -13,9 +13,7 @@ import {
 } from "@/lib/user-roles";
 import {
   scorecardHealthFromFinancials,
-  buildTrend,
   scoreTier,
-  type TrendPoint,
   type OverallHealth,
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
@@ -27,7 +25,6 @@ import {
   clientsAddedThisMonth,
   attentionFootnote,
   dataAsOfLabel,
-  derivePriority,
   firmOpenQueriesDestination,
   firstNameOf,
   practiceGreeting,
@@ -35,7 +32,6 @@ import {
   portfolioSummaryLine,
   revenueOf,
   trendDelta30d,
-  type PriorityLevel,
   type ScoreHistoryPoint,
 } from "@/lib/portfolio-dashboard";
 import { useServerFn } from "@tanstack/react-start";
@@ -140,8 +136,7 @@ type Client = {
 type ClientRow = Client & {
   score: number | null;
   health: OverallHealth;
-  trend: TrendPoint[];
-  /** ~30-day health delta from score history. */
+  /** ~30-day health delta from score history. The Practice chart holds the trend. */
   trendDelta: number | null;
   /** Resolved runway (persisted or derived from cashflow). */
   runwayWeeks: number | null;
@@ -155,8 +150,6 @@ type ClientRow = Client & {
   overdueActions: number;
   /** Revenue for scatter bubble sizing. */
   revenue: number | null;
-  priority: PriorityLevel;
-  priorityLabel: string;
 };
 
 // Playbook metadata shape for the library grid
@@ -319,42 +312,6 @@ function RingSvg({
           strokeDashoffset={off.toFixed(1)}
         />
       )}
-    </svg>
-  );
-}
-
-/** Sparkline SVG from numeric points (or an 8-point trend). */
-function SparkSvg({
-  trend,
-  points,
-  className = "spark",
-  width = 84,
-  height = 26,
-}: {
-  trend?: TrendPoint[];
-  points?: number[];
-  className?: string;
-  width?: number;
-  height?: number;
-}) {
-  const pts = points ?? trend?.map((t) => t.score) ?? [];
-  if (pts.length === 0) return <svg className={className} viewBox={`0 0 ${width} ${height}`} />;
-  const w = width;
-  const h = height;
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
-  const rg = max - min || 1;
-  const step = w / Math.max(pts.length - 1, 1);
-  const d = pts
-    .map(
-      (p, i) =>
-        `${i ? "L" : "M"}${(i * step).toFixed(1)} ${(h - 3 - ((p - min) / rg) * (h - 6)).toFixed(1)}`,
-    )
-    .join(" ");
-  const up = pts[pts.length - 1] >= pts[0];
-  return (
-    <svg className={className} viewBox={`0 0 ${w} ${h}`}>
-      <path d={d} stroke={up ? "var(--ok)" : "var(--risk)"} />
     </svg>
   );
 }
@@ -1393,29 +1350,15 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       });
       const score = health.overall;
       const realHistory = historyMap[c.id] ?? [];
-      const trendHistory =
-        realHistory.length > 0 ? realHistory : score != null ? [{ score, is_estimated: true }] : [];
-      const trend = buildTrend(trendHistory);
       const trendDelta = trendDelta30d(realHistory, score);
       const openActions = openActionsMap[c.id] ?? 0;
       const overdueActions = overdueActionsMap[c.id] ?? 0;
       const openQueries = openQueriesMap[c.id] ?? 0;
       const revenue = revenueOf(c.financials);
-      const priority = derivePriority({
-        score,
-        health,
-        trendDelta,
-        runwayWeeks,
-        openQueries,
-        openActions,
-        overdueActions,
-        revenue,
-      });
       return {
         ...c,
         score,
         health,
-        trend,
         trendDelta,
         runwayWeeks,
         runwayLabel,
@@ -1423,8 +1366,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         openActions,
         overdueActions,
         revenue,
-        priority: priority.level,
-        priorityLabel: priority.label,
       };
     });
 
@@ -1442,23 +1383,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   useEffect(() => {
     getPlaybookCatalogue().then(setPlaybookCatalogue);
   }, []);
-
-  // ── enterAsClient ─────────────────────────────────────────────────────────
-  const enterAsClient = async (c: ClientRow) => {
-    if (!user) return;
-    const { error } = await supabase.from("impersonation_audit").insert({
-      firm_user_id: user.id,
-      client_id: c.id,
-      firm_id: firm?.id ?? null,
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    sessionStorage.setItem("acting_as_client_id", c.id);
-    sessionStorage.setItem("acting_as_client_name", c.name);
-    navigate({ to: "/app" });
-  };
 
   const openOwnerInvite = async (c: Client) => {
     try {
@@ -1705,12 +1629,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (c.runwayLabel) return c.runwayLabel;
     if (c.runwayWeeks == null) return "—";
     return `${c.runwayWeeks} wk`;
-  }
-
-  function trendLabel(c: ClientRow): string {
-    if (c.trendDelta == null) return "—";
-    if (c.trendDelta === 0) return "Flat";
-    return c.trendDelta > 0 ? `↑ ${c.trendDelta}` : `↓ ${Math.abs(c.trendDelta)}`;
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -2142,16 +2060,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 <tr>
                   <th>Client</th>
                   <th>Health</th>
-                  <th className="hide-sm hide-desk">Trend (30d)</th>
-                  <th className="hide-sm">Priority</th>
                   <th>Runway</th>
-                  <th className="hide-sm hide-desk" id="wizard-dash-queries">
-                    Queries
-                  </th>
-                  <th className="hide-sm hide-desk">Actions</th>
-                  <th className="hide-sm hide-desk">Op. profit (MTD)</th>
+                  <th id="wizard-dash-queries">Queries</th>
+                  <th>Op. profit (MTD)</th>
                   <th>Status</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -2209,122 +2121,17 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                           </span>
                         </div>
                       </td>
-                      <td className="hide-sm hide-desk" data-label="Trend">
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <SparkSvg trend={c.trend} />
-                          <span
-                            className="num"
-                            style={{
-                              fontSize: 12,
-                              color:
-                                (c.trendDelta ?? 0) > 0
-                                  ? "var(--ok)"
-                                  : (c.trendDelta ?? 0) < 0
-                                    ? "var(--risk)"
-                                    : "var(--ink-dim)",
-                            }}
-                          >
-                            {trendLabel(c)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="hide-sm" data-label="Priority">
-                        <span className={`prio ${c.priority}`}>
-                          <i />
-                          {c.priorityLabel}
-                        </span>
-                      </td>
                       <td className="num" data-label="Runway" title={runwayStr(c)}>
                         <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
                       </td>
-                      <td className="num hide-sm hide-desk" data-label="Queries">
+                      <td className="num" data-label="Queries">
                         {c.openQueries > 0 ? c.openQueries : "—"}
                       </td>
-                      <td className="num hide-sm hide-desk" data-label="Actions">
-                        {c.openActions > 0 ? (
-                          <button
-                            type="button"
-                            className={`followup-cell${c.overdueActions > 0 ? " overdue" : ""}`}
-                            title="Open Action Plan"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openClientPlan(c.id, c.overdueActions > 0);
-                            }}
-                          >
-                            {c.overdueActions > 0
-                              ? `${c.overdueActions} overdue`
-                              : `${c.openActions} open`}
-                          </button>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="num hide-sm hide-desk" data-label="Op. profit">
+                      <td className="num" data-label="Op. profit">
                         {opMarginStr(c)}
                       </td>
                       <td data-label="Status">
                         <ClientStatus health={c.health} label={chip.label} />
-                      </td>
-                      <td data-label="">
-                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            aria-label="Generate report"
-                            title="Generate report"
-                            onClick={() =>
-                              navigate({
-                                to: "/clients/$clientId",
-                                params: { clientId: c.id },
-                                search: { tab: "reports" },
-                              })
-                            }
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                              <path d="M14 3v6h6" />
-                            </svg>
-                            <span>Report</span>
-                          </button>
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            aria-label="Invite client management"
-                            title="Invite client management — email + copy message"
-                            onClick={() => void openOwnerInvite(c)}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <rect x="3" y="5" width="18" height="14" rx="2" />
-                              <path d="M3 7l9 6 9-6" />
-                            </svg>
-                            <span>Invite</span>
-                          </button>
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            aria-label="Follow up on Action Plan"
-                            title="Follow up on Action Plan"
-                            onClick={() => openClientPlan(c.id, c.overdueActions > 0)}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M9 11l3 3L22 4" />
-                              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                            </svg>
-                            <span>Follow up</span>
-                          </button>
-                          <button
-                            className="icon-btn"
-                            type="button"
-                            aria-label="Enter as client"
-                            title="Enter as client"
-                            onClick={() => enterAsClient(c)}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                            </svg>
-                            <span>Enter as client</span>
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   );

@@ -40,7 +40,8 @@ assert(dashSrc.includes('id="follow-up"'), "dashboard has follow-up panel");
 assert(dashSrc.includes("buildFollowUpQueue"), "dashboard uses follow-up queue");
 assert(dashSrc.includes('tab: "plan"'), "Chase opens Action Plan tab");
 assert(dashSrc.includes('filter: "overdue"'), "overdue Chase deep-links filter=overdue");
-assert(dashSrc.includes("Follow up on Action Plan"), "client row has follow-up action");
+assert(!dashSrc.includes("Follow up on Action Plan"), "follow-up is not a button on the client row");
+assert(dashSrc.includes("Chase →"), "the practice follow-up list still chases");
 assert(dashSrc.includes("openClientPlan"), "attention cards can open the plan");
 
 const practiceAt = dashSrc.indexOf('view === "practice"');
