@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
+import { PremiumIcon } from "@/components/premium/premium-ui";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "@fontsource/geist-sans/latin-400.css";
 import "@fontsource/geist-sans/latin-500.css";
@@ -192,6 +193,7 @@ export function OwnerShell({
                 aria-current={active ? "page" : undefined}
                 onClick={() => onNavigate(item.screen)}
               >
+                <PremiumIcon id={item.id} />
                 {item.label}
               </button>
             );

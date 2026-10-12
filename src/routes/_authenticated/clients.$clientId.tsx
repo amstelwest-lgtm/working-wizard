@@ -3019,6 +3019,11 @@ function ClientView() {
                     presence={homePresence}
                     lines={homeLines}
                     status={homeStatus}
+                    health={{
+                      score: Number.isFinite(avgHealth) ? avgHealth : null,
+                      word: Number.isFinite(avgHealth) ? overallHealth.displayLabel : null,
+                      line: healthSentence,
+                    }}
                     onOpen={openHomeAgent}
                     onAsk={openHomeAgent}
                     needs={homeNeeds}

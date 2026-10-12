@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { agentShortName } from "@/lib/milon-team";
 import { OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
+import { PremiumSteps } from "@/components/premium/premium-ui";
 import { ownerPlanFreeLine, ownerPlanLine, type OwnerVisitor } from "@/lib/owner-plan";
 import {
   OWNER_PLAN_BENEFITS,
@@ -124,6 +125,12 @@ export function OwnerAccountant({
       <div id="owner-accountant-requests">{requests}</div>
       <section id={OWNER_SIGNED_SECTION_ID} aria-label="Signed deliverables">
         <h2 className="owner-sub">What your accountant signed</h2>
+        <PremiumSteps
+          steps={[
+            { label: "Review", done: signed.length > 0, current: signed.length === 0 },
+            { label: "Sign-off", done: signed.length > 0 },
+          ]}
+        />
         {signed.length ? (
           <div className="owner-promises">
             {signed.map((row) => (
@@ -150,7 +157,7 @@ export function OwnerAccountant({
       ) : null}
       <h2 className="owner-sub">Uploads</h2>
       {uploads}
-      <button type="button" className="btn gold owner-ask owner-ask-inline" onClick={onConnect}>
+      <button type="button" className="btn gold premium-gold-cta owner-ask owner-ask-inline" onClick={onConnect}>
         Connect your books
       </button>
     </section>

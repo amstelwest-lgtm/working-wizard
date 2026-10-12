@@ -1,0 +1,317 @@
+@import "./premium-tokens.css";
+
+html:not(.dark) .owner-door,
+html:not(.dark) .accountant-portal {
+  --ink: var(--premium-navy);
+  --cobalt: var(--premium-cobalt);
+  --royal: var(--premium-royal);
+  --ice: var(--premium-ice);
+  --pale: var(--premium-pale);
+  --navy: var(--premium-navy);
+  background: var(--premium-canvas);
+  color: var(--premium-navy);
+  font-family: var(--premium-sans);
+  font-size: var(--premium-body);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+html:not(.dark) .owner-door .owner-title,
+html:not(.dark) .accountant-portal .owner-title,
+html:not(.dark) .accountant-portal .answer-strip__heading {
+  font-family: var(--premium-sans);
+  font-size: var(--premium-title);
+  line-height: var(--premium-title-leading);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--premium-navy);
+}
+
+html:not(.dark) .owner-door .owner-lede,
+html:not(.dark) .owner-door .owner-role,
+html:not(.dark) .accountant-portal .answer-strip__sentence,
+html:not(.dark) .premium-health p {
+  color: var(--premium-muted);
+  font-size: var(--premium-subtitle);
+  font-weight: 400;
+  line-height: 1.45;
+  max-width: 42rem;
+}
+
+html:not(.dark) .owner-door .owner-agent,
+html:not(.dark) .owner-door .owner-needs-item,
+html:not(.dark) .owner-door .owner-tile,
+html:not(.dark) .accountant-portal .answer-strip,
+html:not(.dark) .premium-kpi,
+html:not(.dark) .premium-health {
+  background: var(--premium-card);
+  border: 1px solid var(--premium-line);
+  border-radius: var(--premium-radius);
+  box-shadow: var(--premium-shadow);
+}
+
+html:not(.dark) .owner-door .owner-agents {
+  gap: var(--premium-space);
+}
+
+html:not(.dark) .owner-door .owner-agent {
+  padding: 22px 18px 18px;
+}
+
+html:not(.dark) .owner-door .owner-role {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+html:not(.dark) .owner-door .premium-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--premium-navy);
+  font-size: var(--premium-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+html:not(.dark) .premium-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--premium-ice);
+  display: inline-block;
+}
+
+html:not(.dark) .owner-status.is-attention .premium-dot,
+html:not(.dark) .owner-status.is-critical .premium-dot {
+  background: var(--premium-cobalt);
+}
+
+html:not(.dark) .premium-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  margin: 8px 0 24px;
+}
+
+html:not(.dark) .owner-door .owner-head .owner-lede {
+  margin: 8px 0 0;
+}
+
+html:not(.dark) .premium-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 18px 14px;
+}
+
+html:not(.dark) .premium-kpi-label {
+  color: var(--premium-muted);
+  font-size: var(--premium-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+html:not(.dark) .premium-kpi-value {
+  font-size: var(--premium-kpi);
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--premium-navy);
+}
+
+html:not(.dark) .premium-kpi-delta {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+html:not(.dark) .premium-kpi-delta.is-up {
+  color: var(--premium-up);
+}
+
+html:not(.dark) .premium-kpi-delta.is-down {
+  color: var(--premium-down);
+}
+
+html:not(.dark) .premium-spark {
+  width: 72px;
+  height: 20px;
+  margin-top: 4px;
+}
+
+html:not(.dark) .premium-spark polyline {
+  fill: none;
+  stroke: var(--premium-cobalt);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html:not(.dark) .premium-health {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 18px 22px;
+  margin: 0 0 24px;
+}
+
+html:not(.dark) .premium-health-ring {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  flex: none;
+}
+
+html:not(.dark) .premium-health-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+html:not(.dark) .premium-health-track,
+html:not(.dark) .premium-health-value {
+  fill: none;
+  stroke-width: 8;
+}
+
+html:not(.dark) .premium-health-track {
+  stroke: var(--premium-pale);
+}
+
+html:not(.dark) .premium-health-value {
+  stroke: var(--premium-cobalt);
+  stroke-linecap: round;
+}
+
+html:not(.dark) .premium-health-ring strong,
+html:not(.dark) .premium-health-ring span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+html:not(.dark) .premium-health-ring strong {
+  top: 24px;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+html:not(.dark) .premium-health-ring span {
+  top: 56px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--premium-muted);
+}
+
+html:not(.dark) .owner-door .deliverable-rail,
+html:not(.dark) .accountant-portal .deliverable-rail {
+  background: var(--premium-canvas);
+  border-right: 1px solid var(--premium-line);
+  box-shadow: none;
+}
+
+html:not(.dark) .premium-nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-right: 8px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html:not(.dark) .owner-door .deliverable-rail .tab,
+html:not(.dark) .accountant-nav .nav-label,
+html:not(.dark) .accountant-nav .nav-sub-link {
+  display: flex;
+  align-items: center;
+}
+
+html:not(.dark) .premium-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+html:not(.dark) .answer-strip__signoff {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+html:not(.dark) .answer-strip__signoff .premium-steps {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+html:not(.dark) .premium-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--premium-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+html:not(.dark) .premium-step-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  border: 1.5px solid var(--premium-pale);
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  color: white;
+}
+
+html:not(.dark) .premium-steps .is-done {
+  color: var(--premium-navy);
+}
+
+html:not(.dark) .premium-steps .is-done .premium-step-mark,
+html:not(.dark) .premium-steps .is-current .premium-step-mark {
+  background: var(--premium-cobalt);
+  border-color: var(--premium-cobalt);
+}
+
+html:not(.dark) .owner-door .btn.gold:not(.premium-gold-cta),
+html:not(.dark) .accountant-portal .signoff-primary,
+html:not(.dark) .accountant-portal button[data-approve] {
+  background: var(--premium-cobalt) !important;
+  color: #ffffff !important;
+}
+
+html:not(.dark) .owner-door .premium-gold-cta {
+  background: #c4a24a;
+  color: #1b1300;
+}
+
+@media (max-width: 720px) {
+  html:not(.dark) .owner-door .owner-title,
+  html:not(.dark) .accountant-portal .owner-title,
+  html:not(.dark) .accountant-portal .answer-strip__heading {
+    font-size: 32px;
+  }
+  html:not(.dark) .premium-health {
+    align-items: flex-start;
+  }
+}

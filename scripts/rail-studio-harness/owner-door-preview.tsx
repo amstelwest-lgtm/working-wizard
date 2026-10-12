@@ -25,6 +25,8 @@ import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { OWNER_REPLY_BLOB, OWNER_REPLY_STRUCTURED_BOLD } from "@/lib/owner-reply-format";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines } from "@/lib/owner-answers";
+import { healthAnswerSentence } from "@/lib/overview-insights";
+import { healthBandLabel } from "@/lib/ratios";
 import { ownerNeedsView } from "@/lib/owner-needs";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import { ownerPresence, type OwnerMotion, type OwnerTalk } from "@/lib/owner-presence";
@@ -105,6 +107,18 @@ const PILLARS: SpherePillar[] = [
     drivers: [{ key: "debtorDays", label: "Debtor days", health: 48 }],
   },
 ];
+
+/** Same overall the health preview already passes to SphereHero. */
+const PREVIEW_HEALTH_WORD = healthBandLabel("healthy");
+const PREVIEW_HEALTH = {
+  score: 80,
+  word: PREVIEW_HEALTH_WORD,
+  line: healthAnswerSentence({
+    score: 80,
+    bandLabel: PREVIEW_HEALTH_WORD,
+    pillars: PILLARS.map((pillar) => ({ label: pillar.label, score: pillar.health })),
+  }),
+};
 
 const SIGNATURE =
   "data:image/svg+xml," +
@@ -588,6 +602,7 @@ export function OwnerDoorPreview({
           presence={shown}
           lines={ownerHomeLines(TILES, "Collect the two largest invoices")}
           status={ownerCardStatuses(BOOKS)}
+          health={PREVIEW_HEALTH}
           onOpen={openLive}
           onAsk={openLive}
           needs={HOME_NEEDS}

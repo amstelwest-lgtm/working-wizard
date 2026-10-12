@@ -26,6 +26,7 @@ import {
 } from "@/lib/review-signoffs.functions";
 import { isSamplePracticeSignoff } from "@/lib/review-signoff-stamp";
 import { signoffStatusLine } from "@/lib/signoff-status";
+import { PremiumSteps } from "@/components/premium/premium-ui";
 import { formatReviewDateTime } from "@/lib/market/format";
 import { useMarketFormat } from "@/contexts/market";
 
@@ -514,10 +515,23 @@ export function ReviewSignoffButton({
     : compact
       ? "flex flex-col items-end gap-2"
       : "mt-2 flex w-full max-w-md flex-col items-end gap-2";
+  const signoffSteps = (
+    <PremiumSteps
+      steps={[
+        {
+          label: "Review",
+          done: cycleStatus === "signed_off",
+          current: cycleStatus !== "signed_off",
+        },
+        { label: "Sign-off", done: cycleStatus === "signed_off" },
+      ]}
+    />
+  );
 
   if (shownSignoff && !isStale) {
     return (
       <div className={frame}>
+        {signoffSteps}
         {hideStatus ? null : (
           <SignoffCertificate
             signoff={shownSignoff}
@@ -559,6 +573,7 @@ export function ReviewSignoffButton({
 
   return (
     <div className={frame}>
+      {signoffSteps}
       {shownSignoff && isStale && !hideStatus && (
         <SignoffCertificate
           signoff={shownSignoff}

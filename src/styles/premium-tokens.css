@@ -1,0 +1,32 @@
+/**
+ * Draft premium tokens for owner and accountant.
+ * Theo approves this pass before any rollout slice.
+ * Blue stands in wherever the reference uses green.
+ * Gold stays on the MILŌN wordmark and at most two calls to action.
+ */
+
+:root {
+  --premium-cobalt: #0b5fff;
+  --premium-royal: #2563eb;
+  --premium-ice: #38bdf8;
+  --premium-navy: #102a43;
+  --premium-pale: #dbeafe;
+  --premium-canvas: #ffffff;
+  --premium-card: #ffffff;
+  --premium-muted: #5c6b7e;
+  --premium-faint: #8796a8;
+  --premium-line: #dbeafe;
+  --premium-up: #0b5fff;
+  --premium-down: #c43d4b;
+  --premium-shadow: 0 10px 30px rgba(16, 42, 67, 0.06);
+  --premium-radius: 20px;
+  --premium-radius-sm: 14px;
+  --premium-sans: "Geist Sans", "Inter", "Manrope", "Segoe UI", sans-serif;
+  --premium-title: 40px;
+  --premium-title-leading: 1.08;
+  --premium-subtitle: 16px;
+  --premium-kpi: 32px;
+  --premium-label: 12px;
+  --premium-body: 15px;
+  --premium-space: 28px;
+}

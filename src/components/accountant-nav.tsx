@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link } from "@tanstack/react-router";
 import { SettingsGear } from "@/components/settings-nav-button";
+import { PremiumIcon } from "@/components/premium/premium-ui";
 import {
   closeNavGroup,
   navOpenEqual,
@@ -310,6 +311,7 @@ export function AccountantNav({
                     bot={heading.bot}
                     onClick={() => closeIfLeaving(heading)}
                   >
+                    <PremiumIcon id={heading.id} />
                     {heading.label}
                   </NavLink>
                   {heading.items?.length ? (

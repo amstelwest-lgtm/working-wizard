@@ -105,6 +105,7 @@ import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import { PremiumKpi } from "@/components/premium/premium-ui";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
@@ -1775,9 +1776,56 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <div className="owner-door">
             <OwnerHome
               title="Your whole finance team"
+              subtitle={bookLoading ? null : summaryLine}
               showInvite={false}
               variant="character"
               presence={ownerPresence(emptyAgentActivity())}
+              health={
+                bookLoading
+                  ? null
+                  : {
+                      score: avgHealth,
+                      line:
+                        avgHealth == null
+                          ? "No scored clients yet."
+                          : `Average health is ${avgHealth} out of 100.`,
+                      word:
+                        attention.reviewNow > 0
+                          ? "Critical"
+                          : attention.needAttention > 0
+                            ? "Attention"
+                            : null,
+                    }
+              }
+              kpis={
+                bookLoading ? null : (
+                  <div className="premium-kpis" data-premium-kpis="practice">
+                    <PremiumKpi
+                      label="Clients"
+                      value={String(clientRows.length)}
+                      delta={
+                        addedThisMonth > 0
+                          ? { amount: addedThisMonth, text: `${addedThisMonth} this month` }
+                          : null
+                      }
+                    />
+                    <PremiumKpi
+                      label="Avg health"
+                      value={avgHealth == null ? "—" : String(avgHealth)}
+                      delta={
+                        healthDelta == null
+                          ? null
+                          : {
+                              amount: healthDelta,
+                              text: `${Math.abs(healthDelta)} pts vs last month`,
+                            }
+                      }
+                    />
+                    <PremiumKpi label="Need attention" value={String(attention.needAttention)} />
+                    <PremiumKpi label="Open queries" value={String(openQueriesTotal)} />
+                  </div>
+                )
+              }
               lines={practiceHomeLines({
                 clientCount: clientRows.length,
                 avgHealth,
