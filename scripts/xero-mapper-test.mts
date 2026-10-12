@@ -475,18 +475,20 @@ assert(
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(studioSrc.includes("<XeroConnectCard"), "accountant studio mounts Xero connect");
 assert(studioSrc.includes("search.xero"), "accountant studio handles ?xero= return");
-assert(studioSrc.includes('id="accounting-connect"'), "accountant Xero is outside the Financials collapse");
 assert(studioSrc.includes("onConnectXero={() => setShowXeroDialog(true)}"), "accountant briefing opens Xero");
 const ratiosStart = studioSrc.indexOf('id="pane-ratios"');
 const ratiosEnd = studioSrc.indexOf('id="pane-profit"');
 const ratiosPane = studioSrc.slice(ratiosStart, ratiosEnd);
-const finCollapse = ratiosPane.indexOf('id="finCollapse"');
-const accountingConnect = ratiosPane.indexOf('id="accounting-connect"');
-const drawerClose = ratiosPane.indexOf("</ReviewInputsDrawer>");
-assert(
-  finCollapse !== -1 && accountingConnect !== -1 && drawerClose !== -1 && finCollapse < drawerClose && drawerClose < accountingConnect,
-  "connect cards stay on the Health page, outside the Financials collapse",
-);
+const booksStart = studioSrc.indexOf('id="pane-summary"');
+const booksEnd = studioSrc.indexOf('id="pane-moves"');
+const booksPane = studioSrc.slice(booksStart, booksEnd);
+assert(!ratiosPane.includes('id="accounting-connect"'), "Health does not host the ledger connect cards");
+assert(!ratiosPane.includes("<QboConnectCard"), "Health does not mount QuickBooks");
+assert(ratiosPane.includes("chip={healthChip}"), "Health names the figure source");
+assert(booksPane.includes("<DataUpToDate"), "Books owns the connection block");
+const booksFresh = readFileSync(resolve("src/components/data-up-to-date.tsx"), "utf8");
+assert(booksFresh.includes('id="accounting-connect"'), "the connect cards sit on Books");
+assert(booksFresh.indexOf('id="accounting-connect"') < booksFresh.indexOf("<ReviewInputsDrawer"), "the cards are on the page, not inside Review inputs");
 const briefingSrc = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
 assert(briefingSrc.includes('id="client-connect-xero"'), "briefing labels Connect Xero");
 assert(briefingSrc.includes('id="xero-link-proof"'), "briefing shows the Xero link proof");

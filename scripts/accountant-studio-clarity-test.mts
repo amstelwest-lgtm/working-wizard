@@ -228,6 +228,14 @@ assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits under t
 const clientsPage = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(clientsPage.includes("client-status"), "client status is an icon and a word");
 assert(!clientsPage.includes(">QB<") && !clientsPage.includes(">XO<") && !clientsPage.includes(">SG<"), "ledger badges are gone");
+assert(!clientsPage.includes("Trend (30d)"), "the clients table has no trend column");
+assert(!clientsPage.includes('data-label="Priority"'), "the clients table has no priority column");
+assert(!clientsPage.includes('data-label="Actions"'), "the clients table has no actions column");
+assert(!clientsPage.includes('aria-label="Generate report"'), "report is not a row button");
+assert(!clientsPage.includes('aria-label="Enter as client"'), "enter as client is not a row button");
+assert(clientsPage.includes('data-label="Queries"'), "queries stay on the row");
+assert(clientsPage.includes('data-label="Op. profit"'), "operating profit stays on the row");
+assert(clientsPage.includes("data-client-row"), "the row click is what opens the client");
 assert(cashSrc.includes("CollapsibleGoldCard"), "setup still uses the hideable card");
 
 const ownerApp = readFileSync(resolve("src/routes/app.tsx"), "utf8");
