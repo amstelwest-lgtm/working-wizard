@@ -88,9 +88,11 @@ html:not(.dark) .accountant-portal {
 html:not(.dark) .owner-door.accountant-portal {
   background: var(--pp-frame);
 }
-/* The frame continues past the portal container (short pages, overscroll). */
+/* The frame continues past the portal container (short pages, overscroll).
+   `!important` because theme bootstrapping can set an inline body background. */
+html:not(.dark):has(.accountant-portal),
 html:not(.dark) body:has(.accountant-portal) {
-  background: var(--pp-frame);
+  background: var(--pp-frame) !important;
 }
 html:not(.dark) #atmos .grid {
   display: none;
