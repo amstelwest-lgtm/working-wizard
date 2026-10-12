@@ -492,6 +492,18 @@ assert(
 );
 assert(video.includes("usePrefersReducedMotion"), "reduced motion keeps the poster");
 assert(!video.includes("speechSynthesis") && !video.includes("Audio("), "the avatar never speaks");
+assert(video.includes("requestVideoFrameCallback"), "the crossfade waits for a decoded frame");
+assert(
+  video.includes('"playing"') && video.includes('"canplaythrough"'),
+  "the crossfade waits until the incoming clip can play",
+);
+assert(
+  video.includes("revealed && video === videos[visibleSlot]"),
+  "the visible clip does not have its source reset",
+);
+assert(video.includes('"ended"'), "the next clip starts when the current one ends");
+assert(!video.includes("currentTime < 0.15"), "clips do not switch mid-play");
+assert(!video.includes("poster="), "the video element does not flash its poster");
 
 const clocks = (
   ["financial_manager", "analyst", "advisor"] as const satisfies readonly AgentKey[]
@@ -505,6 +517,16 @@ for (const value of breathes) {
 
 const css = readFileSync("src/components/owner-door/owner-door.css", "utf8");
 assert(css.includes("prefers-reduced-motion"), "reduced motion has a still pose");
+assert(
+  css.includes(".owner-presence.is-fm-clip .owner-drift") &&
+    css.includes(".owner-presence.is-fm-clip .owner-breathe") &&
+    css.includes(".owner-presence.is-fm-clip .owner-micro") &&
+    /\.owner-presence\.is-fm-clip \.owner-drift[\s\S]*?animation:\s*none/.test(css),
+  "the financial manager frame does not drift, breathe, or scale",
+);
+assert(css.includes(".owner-fm-face video.is-hold"), "the outgoing clip stays visible through the fade");
+assert(css.includes(".owner-fm-face.is-live .owner-fm-poster"), "the poster stays hidden once a clip is showing");
+assert(css.includes(".owner-drift {"), "analyst and advisor still drift");
 assert(css.includes("tabular-nums"), "amounts use tabular numerals");
 assert(css.includes("min-height: 44px"), "ask buttons meet the tap target");
 assert(!/#[0-9a-fA-F]{3,8}\b/.test(css), "owner door colours come from theme tokens");
@@ -669,6 +691,10 @@ assert(
 );
 assert(!avatar.includes('className="visor"'), "the financial manager face is no longer the visor");
 assert(avatar.includes("FmVideoAvatar"), "the financial manager character is the video avatar");
+assert(
+  avatar.includes("reduced || fmVideo || before === motion"),
+  "the financial manager frame does not jump or settle",
+);
 assert(
   avatar.includes('agent === "financial_manager" && variant === "character"'),
   "only the financial manager character swaps to video",
