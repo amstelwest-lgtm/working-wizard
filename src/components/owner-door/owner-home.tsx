@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ownerRunPhaseLabel, type OwnerRunPhase } from "@/hooks/owner-agent-ui";
-import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
+import { agentAriaLabel, agentDisplayName, agentJobLine, agentShortName } from "@/lib/milon-team";
+import { PremiumHealthRing } from "@/components/premium/premium-ui";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerCardStatus, OwnerHomeLines } from "@/lib/owner-answers";
 import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
@@ -44,16 +45,6 @@ const MOTION_LABEL: Record<OwnerMotion, string> = {
   speaking: "Speaking",
   listening: "Listening",
 };
-
-function StatusIcon() {
-  return (
-    <svg className="owner-status-icon" viewBox="0 0 16 16" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M8 4.5v4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="8" cy="11.2" r="0.8" fill="currentColor" />
-    </svg>
-  );
-}
 
 export function OwnerNeedsStrip({
   needs,
@@ -131,6 +122,9 @@ export function OwnerHome({
   onBooks,
   signoffLine,
   inviteClientId,
+  health,
+  kpis,
+  subtitle,
   title = "Your finance team",
   showInvite = true,
 }: {
@@ -155,6 +149,12 @@ export function OwnerHome({
   /** Advisory sign-off sentence on a client file. Owner Home leaves this off. */
   signoffLine?: string | null;
   inviteClientId?: string | null;
+  /** Existing book health. Omitted when the page has no score. */
+  health?: { score: number | null; line: string; word?: string | null } | null;
+  /** KPI tiles built from figures the page already has. */
+  kpis?: ReactNode;
+  /** Existing one-line page note under the title. */
+  subtitle?: string | null;
 }) {
   const handoff = presence.handoff;
   const [bots, setBots] = useState<OwnerBotLayout>(() =>
@@ -169,7 +169,10 @@ export function OwnerHome({
     <div className="owner-pane" data-owner-home="true" data-bots={bots}>
       <div className="owner-head">
         <h1 className="owner-title">{title}</h1>
+        {subtitle ? <p className="owner-lede">{subtitle}</p> : null}
       </div>
+      {kpis}
+      {health ? <PremiumHealthRing score={health.score} word={health.word} line={health.line} /> : null}
       <div className="owner-stage">
         <div className="owner-agents">
           {presence.agents.map((card) => {
@@ -189,9 +192,10 @@ export function OwnerHome({
                     label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
                   />
                   <span className="owner-name">{agentDisplayName(card.agent)}</span>
+                  <span className="owner-role">{agentJobLine(card.agent)}</span>
                   {chip ? (
-                    <span className={`owner-status is-${chip.tone}`}>
-                      <StatusIcon />
+                    <span className={`owner-status is-${chip.tone} premium-status`}>
+                      <i className="premium-dot" aria-hidden="true" />
                       {chip.word}
                     </span>
                   ) : null}

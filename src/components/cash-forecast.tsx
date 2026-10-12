@@ -51,6 +51,7 @@ import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
+import { PremiumKpi } from "@/components/premium/premium-ui";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
@@ -97,6 +98,7 @@ import {
   persistedRunwayWeeks,
   plBankDisagreement,
   runwayDisplayLabel,
+  runwayTileValue,
   resolveClientCash,
   resolveThirteenWeekForecast,
   weekDatesFrom,
@@ -1612,8 +1614,28 @@ export function CashForecastPanel({
           cashGenerative: publishedGenerative,
         });
   const stripChip = !loaded ? null : shownLineSource === "Bank" ? "Bank" : statementChip?.trim() || null;
+  const closingSeries = baseCalc.closing.filter((n) => Number.isFinite(n));
+  const closingLast = closingSeries.length ? closingSeries[closingSeries.length - 1] : null;
+  const runwayLabel = runwayDisplayLabel(publishedDirection);
+  const cashKpis =
+    loaded && !forecastEmpty && closingLast != null ? (
+      <div className="premium-kpis" data-premium-kpis="cash">
+        <PremiumKpi label="Opening" value={fmtCompact(baseCalc.opening)} />
+        <PremiumKpi
+          label="Closing"
+          value={fmtCompact(closingLast)}
+          delta={{
+            amount: closingLast - baseCalc.opening,
+            text: `${fmtCompact(Math.abs(closingLast - baseCalc.opening))} vs opening`,
+          }}
+          series={closingSeries}
+        />
+        {runwayLabel ? <PremiumKpi label="Runway" value={runwayTileValue(runwayLabel)} /> : null}
+      </div>
+    ) : null;
 
   const answerStrip = (
+    <>
     <section className="answer-strip" data-answer-strip>
       <div className="answer-strip__lead">
         <h2 className="answer-strip__heading">13-week cash forecast</h2>
@@ -1681,6 +1703,8 @@ export function CashForecastPanel({
         )}
       </div>
     </section>
+    {cashKpis}
+    </>
   );
 
   const reviewInputs = (
