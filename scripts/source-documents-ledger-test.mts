@@ -70,6 +70,7 @@ function billJson(overrides: Record<string, unknown> = {}): string {
 }
 
 const migration = read("supabase/migrations/20261013170000_source_documents_to_ledger.sql");
+const uploadAccess = read("supabase/migrations/20261014120000_source_doc_upload_requires_client_access.sql");
 const edge = read("supabase/functions/extract-source-document/index.ts");
 const prompt = read("supabase/functions/extract-source-document/prompt.ts");
 const jobSrc = read("src/lib/ledger-post-job.ts");
@@ -621,7 +622,18 @@ assert(!refusesSignOffWording(prompt), "the extraction prompt does not call appr
 assert(sqlTest.includes("SET LOCAL ROLE authenticated"), "the SQL test switches to the authenticated role");
 assert(sqlTest.includes("approver_forbidden"), "the SQL test covers the approver rule");
 assert(sqlTest.includes("payload_hash_mismatch"), "the SQL test covers the hash lock");
+assert(
+  uploadAccess.includes("is_firm_member(actor.user_id, c.firm_id)") &&
+    uploadAccess.includes("has_client_access(actor.user_id, c.id)"),
+  "a firm member must have client access to upload",
+);
+assert(edge.includes('admin.rpc("source_doc_can_upload"'), "extraction uses the upload access rule");
 assert(sqlTest.includes("source_doc_can_upload"), "the SQL test covers upload rights");
+assert(sqlTest.includes("must not register"), "the SQL test refuses register without client access");
+assert(
+  sqlTest.split("request.jwt.claim.role', ''").length - 1 >= 3,
+  "the SQL test clears the legacy role claim after use",
+);
 assert(sqlTest.includes("vat_claimable"), "the SQL test covers the VAT default");
 assert(sqlTest.includes("without client access"), "the SQL test refuses a firm member with no client access");
 assert(sqlTest.includes("42501"), "the SQL test expects privilege error 42501");

@@ -135,7 +135,10 @@ BEGIN
     RAISE EXCEPTION 'the owner should upload';
   END IF;
   IF NOT public.source_doc_can_upload(v_staff, v_firm_client) THEN
-    RAISE EXCEPTION 'a firm member should upload';
+    RAISE EXCEPTION 'a firm member with practice access should upload';
+  END IF;
+  IF public.source_doc_can_upload(v_unassigned, v_firm_client) THEN
+    RAISE EXCEPTION 'a firm member without client access must not upload';
   END IF;
   IF public.source_doc_can_upload(v_member, v_firm_client) THEN
     RAISE EXCEPTION 'a client member who is not the owner must not upload';
@@ -190,6 +193,8 @@ BEGIN
     RAISE EXCEPTION 'authenticated call to supplier_final_unlocked should be 42501, got %', v_raised;
   END IF;
   RESET ROLE;
+  -- request.jwt.claim.role overrides request.jwt.claims. Clear it after use.
+  PERFORM set_config('request.jwt.claim.role', '', true);
 
   PERFORM set_config('request.jwt.claim.sub', '', true);
   PERFORM set_config('request.jwt.claim.role', 'service_role', true);
@@ -202,6 +207,9 @@ BEGIN
   END IF;
   IF NOT public.source_doc_can_upload(v_owner, v_firm_client) THEN
     RAISE EXCEPTION 'service role should honour the upload user id';
+  END IF;
+  IF public.source_doc_can_upload(v_unassigned, v_firm_client) THEN
+    RAISE EXCEPTION 'service role should still refuse a firm member without client access';
   END IF;
 
   PERFORM set_config('request.jwt.claim.sub', '', true);
@@ -282,6 +290,26 @@ BEGIN
     RAISE EXCEPTION 'member upload should be blocked, got %', v_raised;
   END IF;
 
+  PERFORM set_config('request.jwt.claim.sub', v_unassigned::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_unassigned::text, 'role', 'authenticated')::text, true);
+  v_raised := NULL;
+  SET LOCAL ROLE authenticated;
+  BEGIN
+    INSERT INTO public.source_documents (
+      client_id, uploaded_by, channel, storage_path, sha256, mime, size_bytes
+    )
+    VALUES (
+      v_firm_client, v_unassigned, 'upload', v_firm_client::text || '/unassigned.pdf', repeat('3', 64),
+      'application/pdf', 1000
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_raised := SQLERRM;
+  END;
+  RESET ROLE;
+  IF v_raised IS NULL OR v_raised NOT ILIKE '%row-level security%' THEN
+    RAISE EXCEPTION 'a firm member without client access must not upload, got %', v_raised;
+  END IF;
+
   PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claims', json_build_object('sub', v_owner::text, 'role', 'authenticated')::text, true);
@@ -303,6 +331,7 @@ BEGIN
     'application/pdf', 1100, 'extracted', now()
   );
   RESET ROLE;
+  PERFORM set_config('request.jwt.claim.role', '', true);
   SELECT received_at, retention_until INTO v_received, v_until
   FROM public.source_documents
   WHERE storage_path = v_firm_client::text || '/backdated.pdf';
@@ -343,6 +372,15 @@ BEGIN
   );
   IF v_result ->> 'error' <> 'upload_forbidden' THEN
     RAISE EXCEPTION 'member register should be forbidden, got %', v_result;
+  END IF;
+
+  PERFORM set_config('request.jwt.claim.sub', v_unassigned::text, true);
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_unassigned::text, 'role', 'authenticated')::text, true);
+  v_result := public.register_source_document(
+    v_firm_client, v_firm_client::text || '/unassigned.pdf', repeat('7', 64), 'application/pdf', 100, 'upload'
+  );
+  IF v_result ->> 'error' <> 'upload_forbidden' THEN
+    RAISE EXCEPTION 'a firm member without client access must not register, got %', v_result;
   END IF;
 
   v_flags := jsonb_build_object(

@@ -151,6 +151,8 @@ Deno.serve(async (req) => {
   if (!loaded.ok) return json({ ok: false, error: loaded.error }, loaded.status);
   const document = loaded.document;
 
+  // Same rule as register and the storage insert policy. The business owner
+  // may upload. A firm member may upload only with client access.
   if (!serviceRole) {
     const { data: canUpload, error: accessError } = await admin.rpc("source_doc_can_upload", {
       p_user_id: userId,
