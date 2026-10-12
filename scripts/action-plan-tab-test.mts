@@ -77,10 +77,10 @@ assert(
   assert(!toggleGate![0].includes("tasks"), "Action Plan tab is not in the view-mode toggle gate");
 }
 assert(
-  readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
+  !readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8").includes(
     "data-view-mode-toggle",
   ),
-  "the budget drawer still has the view toggle",
+  "the budget drawer no longer has summary and full-year pills",
 );
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");

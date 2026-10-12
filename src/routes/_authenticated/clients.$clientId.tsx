@@ -920,7 +920,6 @@ function ClientView() {
   const [profitFinOpen, setProfitFinOpen] = useState(true);
   const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
   const [planFocusMove, setPlanFocusMove] = useState<string | null>(null);
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
   const [cashBankUploadToken, setCashBankUploadToken] = useState(0);
@@ -3985,19 +3984,10 @@ function ClientView() {
                     <BudgetPanel
                       clientId={client.id}
                       clientName={client.name}
-                      simplified={viewMode === "simplified"}
+                      simplified
                       role="accountant"
                       reloadToken={budgetReloadToken}
                       onReviewStale={setBudgetReviewStale}
-                      onViewModeChange={(mode) => {
-                        setViewMode(mode);
-                        track("view_mode_toggled", {
-                          mode,
-                          surface: "accountant_portal",
-                          clientId,
-                          firmId,
-                        });
-                      }}
                       canSign
                       hideInlineSignOff
                       signoff={budgetSignoff}
@@ -4194,7 +4184,7 @@ function ClientView() {
                           clientId={client.id}
                           clientName={client.name}
                           reviewSignoff={stampFromSignoff(actionPlanSignoff, false)}
-                          simplified={viewMode === "simplified"}
+                          simplified
                           isOwner
                           initialFilter={
                             search.filter === "overdue" ||

@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
@@ -61,12 +60,9 @@ import {
   parseOperatingProfileUnknown,
 } from "@/lib/deliverable-input-config";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { ViewToggle } from "@/components/ui/view-toggle";
 import { CashThirteenWeekGrid } from "@/components/cash-thirteen-week";
 import {
   CASH_FORECAST_CARD_ID,
-  cashForecastSearchWithView,
-  cashForecastViewFromSearch,
   cashBalanceSeries,
   cashGraphAxisTicks,
   cashGraphWeekTickInterval,
@@ -74,7 +70,6 @@ import {
   hashIsCashDetailAnchor,
   lowestCashPoint,
   weeksBelowFloorCopy,
-  type CashForecastView,
 } from "@/lib/cash-forecast-view";
 import type {
   CashForecastPublishPayload,
@@ -1898,8 +1893,6 @@ export function CashForecastPanel({
     </ReviewInputsDrawer>
   );
 
-  const navigate = useNavigate();
-  const routeSearch = useSearch({ strict: false }) as { view?: string };
   const tickObserver = useRef<ResizeObserver | null>(null);
   const [chartWidth, setChartWidth] = useState(0);
   const onChartFrame = useCallback((node: HTMLDivElement | null) => {
@@ -1916,77 +1909,27 @@ export function CashForecastPanel({
     observer.observe(node);
     tickObserver.current = observer;
   }, []);
-  const [viewOverride, setViewOverride] = useState<CashForecastView | null>(null);
-  const view: CashForecastView =
-    viewOverride ??
-    cashForecastViewFromSearch(typeof routeSearch.view === "string" ? routeSearch.view : null);
-
-  const setView = useCallback(
-    (next: CashForecastView) => {
-      setViewOverride(next);
-      const writeUrl = () => {
-        const url = new URL(window.location.href);
-        if (next === "13week") url.searchParams.set("view", "13week");
-        else url.searchParams.delete("view");
-        window.history.replaceState(
-          window.history.state,
-          "",
-          `${url.pathname}${url.search}${url.hash}`,
-        );
-      };
-      void Promise.resolve(
-        navigate({
-          replace: true,
-          resetScroll: false,
-          search: (prev: Record<string, unknown>) => cashForecastSearchWithView(prev, next),
-        } as never),
-      )
-        .then(() => {
-          const current = new URL(window.location.href).searchParams.get("view");
-          const wanted = next === "13week" ? "13week" : null;
-          if (current !== wanted) writeUrl();
-        })
-        .catch(() => writeUrl());
-    },
-    [navigate],
-  );
-
-  useEffect(() => {
-    const onPop = () => setViewOverride(null);
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
   useEffect(() => () => tickObserver.current?.disconnect(), []);
 
   useEffect(() => {
-    const redirectDetailAnchor = () => {
+    const revealWeeklyTable = () => {
       const hash = window.location.hash;
-      if (!hashIsCashDetailAnchor(hash)) return;
-      const id = hash.replace(/^#/, "").split("?")[0].trim().toLowerCase();
-      if (new URL(window.location.href).searchParams.get("view") !== "13week") setView("13week");
+      const wantsTable =
+        hashIsCashDetailAnchor(hash) ||
+        new URL(window.location.href).searchParams.get("view") === "13week";
+      if (!wantsTable) return;
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.requestAnimationFrame(() => {
-        document.getElementById(CASH_FORECAST_CARD_ID)?.scrollIntoView({
+        document.getElementById("detailed-forecast")?.scrollIntoView({
           block: "start",
           behavior: reduce ? "auto" : "smooth",
         });
-        if (id !== CASH_FORECAST_CARD_ID) {
-          const url = new URL(window.location.href);
-          url.searchParams.set("view", "13week");
-          url.hash = CASH_FORECAST_CARD_ID;
-          window.history.replaceState(
-            window.history.state,
-            "",
-            `${url.pathname}${url.search}${url.hash}`,
-          );
-        }
       });
     };
-    redirectDetailAnchor();
-    window.addEventListener("hashchange", redirectDetailAnchor);
-    return () => window.removeEventListener("hashchange", redirectDetailAnchor);
-  }, [setView]);
+    revealWeeklyTable();
+    window.addEventListener("hashchange", revealWeeklyTable);
+    return () => window.removeEventListener("hashchange", revealWeeklyTable);
+  }, []);
 
   const openingUntouched =
     xeroCashMarkers.current.openingBalance == null ||
@@ -2109,33 +2052,17 @@ export function CashForecastPanel({
     <Card
       id={CASH_FORECAST_CARD_ID}
       className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
-      data-cash-view={view}
+      data-cash-view="both"
     >
-      <span id="detailed-forecast" className="sr-only">
-        Weekly cash model
-      </span>
       <div className={GOLD_RULE} />
       <CardContent className="pt-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
-              {horizonLabel || "Next 13 weeks"}
-            </p>
-            <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
-              {view === "13week"
-                ? "Double-click a figure to edit. Red marks cash under the runway floor."
-                : `The line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
-            </p>
-          </div>
-          <ViewToggle
-            value={view}
-            onChange={(next) => setView(next === "13week" ? "13week" : "graph")}
-            ariaLabel="Cash forecast view"
-            options={[
-              { value: "graph", label: "Graph" },
-              { value: "13week", label: "13-week" },
-            ]}
-          />
+        <div className="mb-4 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
+            {horizonLabel || "Next 13 weeks"}
+          </p>
+          <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+            {`The line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
+          </p>
         </div>
         {scenarioLabel ? (
           <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
@@ -2159,47 +2086,42 @@ export function CashForecastPanel({
             </Button>
           </div>
         ) : null}
-        <div
-          key={view}
-          className="cash-forecast-swap"
-          role="tabpanel"
-          aria-label={view === "13week" ? "13-week" : "Graph"}
-        >
-          {view === "13week" ? (
-            <CashThirteenWeekGrid
-              weeks={weeks}
-              opening={baseCalc.opening}
-              receipts={baseCalc.revRows.map((row) => ({
-                id: row.id,
-                name: row.name,
-                vals: row.vals,
-                bucket: "revenue",
-              }))}
-              payments={baseCalc.expRows.map((row) => ({
-                id: row.id ?? row.name,
-                name: row.name,
-                vals: row.vals,
-                bucket: row.id && row.bucket ? row.bucket : undefined,
-              }))}
-              inflow={baseCalc.inflow}
-              outflow={baseCalc.outflow}
-              net={baseCalc.net}
-              closing={baseCalc.closing}
-              floor={minimumCash}
-              floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
-              openingNote={openingAsOf ? openingLabel : null}
-              symbol={cur}
-              format={fmtR}
-              signStyle={simplified ? "minus" : "paren"}
-              openingChip={openingChipKey}
-              flowChip={flowChipKey}
-              readOnly={readOnly}
-              onCommit={commitWeekOverride}
-            />
-          ) : (
-            graphPane
-          )}
-        </div>
+        <div aria-label="Graph">{graphPane}</div>
+        <section id="detailed-forecast" className="mt-6" aria-label="13-week">
+          <p className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400">
+            Double-click a figure to edit. Red marks cash under the runway floor.
+          </p>
+          <CashThirteenWeekGrid
+            weeks={weeks}
+            opening={baseCalc.opening}
+            receipts={baseCalc.revRows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              vals: row.vals,
+              bucket: "revenue",
+            }))}
+            payments={baseCalc.expRows.map((row) => ({
+              id: row.id ?? row.name,
+              name: row.name,
+              vals: row.vals,
+              bucket: row.id && row.bucket ? row.bucket : undefined,
+            }))}
+            inflow={baseCalc.inflow}
+            outflow={baseCalc.outflow}
+            net={baseCalc.net}
+            closing={baseCalc.closing}
+            floor={minimumCash}
+            floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
+            openingNote={openingAsOf ? openingLabel : null}
+            symbol={cur}
+            format={fmtR}
+            signStyle={simplified ? "minus" : "paren"}
+            openingChip={openingChipKey}
+            flowChip={flowChipKey}
+            readOnly={readOnly}
+            onCommit={commitWeekOverride}
+          />
+        </section>
       </CardContent>
     </Card>
   );

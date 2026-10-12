@@ -64,10 +64,13 @@ assert(!budgetPanel.includes("Low driver overlap"), "overlap title is plain");
 assert(!budgetPanel.includes("annualised"), "scale-break copy does not say annualised");
 assert(!budgetWorkspace.includes("full FY grid"), "the grid note is plain");
 assert(!budgetWorkspace.includes("no matching key"), "unmapped copy does not say key");
-assert(budgetPanel.includes("Summary"), "summary label");
-assert(budgetPanel.includes("Full year by month"), "full-year label");
+assert(!budgetPanel.includes("Full year by month"), "the full-year pill is gone");
 assert(!clientRoute.includes("data-view-mode-toggle"), "the budget toggle is not on the page");
-assert(budgetPanel.includes("data-view-mode-toggle"), "the budget toggle lives in the drawer");
+assert(!budgetPanel.includes("data-view-mode-toggle"), "the summary pills are gone");
+assert(
+  readFileSync(resolve("src/components/budget/budget-chart-table.tsx"), "utf8").includes("Month by month"),
+  "month by month is a disclosure",
+);
 for (const label of ["Business Health", "Profit", "Cash Forecast", "Budget", "Next moves", "Action Plan"]) {
   assert(owner.includes(`label: "${label}"`), `owner tab ${label} stays`);
 }

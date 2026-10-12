@@ -110,8 +110,9 @@ const complexChart = workspace.indexOf("<BudgetChartTable");
 const complexDrawer = workspace.indexOf("{nestInDrawer(", complexChart);
 assert(complexChart !== -1 && complexDrawer > complexChart, "the full budget chart sits under the strip and above the drawer");
 assert(!workspace.includes("BudgetYearOverviewChart"), "the old year chart stays unmounted");
-assert(panel.includes("data-view-mode-toggle"), "the summary toggle still lives in the drawer");
+assert(!panel.includes("data-view-mode-toggle"), "the summary pills are gone");
 assert(!route.includes("data-view-mode-toggle"), "the summary toggle is not a second control on the page");
+assert(chart.includes("Month by month"), "month by month is a disclosure");
 
 for (const src of [simple, workspace]) {
   const labelAt = src.indexOf("Opening cash");
@@ -125,7 +126,7 @@ assert(chart.includes("budgetYtdSignal"), "the year-to-date colour uses the reve
 assert(!chart.includes(">Only<"), "budget-only months do not say Only");
 assert(chart.includes("Budget only"), "the legend still names budget-only months");
 assert(read("src/styles/accountant-portal.css").includes(".budget-grid__money{white-space:nowrap"), "money cells do not wrap");
-assert(chart.includes("<ViewToggle"), "budget uses the shared toggle");
+assert(!chart.includes("<ViewToggle"), "the chart and the month table are not a toggle");
 assert(!chart.includes("data-view-mode-toggle"), "the chart toggle is not the drawer toggle");
 assert(toggle.includes('role="tablist"'), "the toggle is a tablist");
 assert(toggle.includes('role="tab"'), "each option is a tab");

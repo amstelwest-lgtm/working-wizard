@@ -39,9 +39,6 @@ import {
   type ScoreHistoryPoint,
 } from "@/lib/portfolio-dashboard";
 import { useServerFn } from "@tanstack/react-start";
-import { getQboStatuses } from "@/lib/qbo.functions";
-import { getXeroStatuses } from "@/lib/xero.functions";
-import { getSageStatuses } from "@/lib/sage.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
   idleStarterTrialBanner,
@@ -105,8 +102,6 @@ import {
   ScrollableTable,
   SkeletonBlock,
   SkeletonTile,
-  StatusPill,
-  statusPillFromHealth,
 } from "@/components/primitives";
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
 import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
@@ -212,6 +207,57 @@ async function getPlaybookCatalogue(): Promise<PlaybookMeta[]> {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function ClientStatusIcon({ tier }: { tier: "ok" | "warn" | "risk" | "neutral" }) {
+  if (tier === "ok") {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <path
+          d="M5.2 8.2l1.8 1.8 3.8-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (tier === "neutral") {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M5.5 8h5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 2.2l6 10.6H2L8 2.2z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M8 6.2v3.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="11.2" r="0.7" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Icon and word. No pill, and no ledger initials beside it. */
+function ClientStatus({ health, label }: { health: OverallHealth; label: string }) {
+  const tier =
+    health.overall == null
+      ? "neutral"
+      : health.displayStatus === "healthy"
+        ? "ok"
+        : health.displayStatus === "critical"
+          ? "risk"
+          : "warn";
+  return (
+    <span className={`client-status ${tier}`}>
+      <ClientStatusIcon tier={tier} />
+      <span>{label}</span>
+    </span>
+  );
+}
 
 /** Chip from overall health — respects the critical-pillar tell. */
 function chipFromHealth(health: OverallHealth): { cls: "ok" | "warn" | "risk"; label: string } {
@@ -1169,15 +1215,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
-  const [qboStatuses, setQboStatuses] = useState<
-    Record<string, { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }>
-  >({});
-  const [xeroStatuses, setXeroStatuses] = useState<
-    Record<string, { tenantName: string | null; lastSyncedAt: string | null; syncStatus: string }>
-  >({});
-  const [sageStatuses, setSageStatuses] = useState<
-    Record<string, { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }>
-  >({});
   const [playbookCatalogue, setPlaybookCatalogue] = useState<PlaybookMeta[]>([]);
   // playbook drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -1203,9 +1240,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     setOrigin(browserAppOrigin());
   }, []);
 
-  const getStatuses = useServerFn(getQboStatuses);
-  const getXeroStatusMap = useServerFn(getXeroStatuses);
-  const getSageStatusMap = useServerFn(getSageStatuses);
   const mintInvite = useServerFn(inviteClientOwner);
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
 
@@ -1215,9 +1249,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
     if (!userId) {
       setClientRows([]);
-      setQboStatuses({});
-      setXeroStatuses({});
-      setSageStatuses({});
       setIsItMember(false);
       setLoading(false);
       return;
@@ -1269,28 +1300,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         rawClients = rawClients.map((c) =>
           linked.includes(c.id) ? { ...c, firm_id: activeFirmId } : c,
         );
-      }
-    }
-
-    // QBO / Xero statuses (non-fatal)
-    let qbo: typeof qboStatuses = {};
-    if (rawClients.length > 0) {
-      const ids = rawClients.map((c) => c.id);
-      try {
-        qbo = await getStatuses({ data: { clientIds: ids } });
-        setQboStatuses(qbo);
-      } catch {
-        // non-fatal
-      }
-      try {
-        setXeroStatuses(await getXeroStatusMap({ data: { clientIds: ids } }));
-      } catch {
-        // non-fatal
-      }
-      try {
-        setSageStatuses(await getSageStatusMap({ data: { clientIds: ids } }));
-      } catch {
-        // non-fatal
       }
     }
 
@@ -2149,9 +2158,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 {filteredRows.map((c) => {
                   const chip = chipFromHealth(c.health);
                   const score = c.score != null ? Math.round(c.score) : null;
-                  const qbo = qboStatuses[c.id];
-                  const xero = xeroStatuses[c.id];
-                  const sage = sageStatuses[c.id];
                   return (
                     <tr
                       key={c.id}
@@ -2257,66 +2263,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                         {opMarginStr(c)}
                       </td>
                       <td data-label="Status">
-                        <StatusPill
-                          variant={
-                            c.health.overall == null
-                              ? "neutral"
-                              : statusPillFromHealth(c.health.displayStatus)
-                          }
-                        >
-                          {chip.label}
-                        </StatusPill>
-                        {qbo && (
-                          <span
-                            title={`QuickBooks${qbo.companyName ? ` — ${qbo.companyName}` : ""}`}
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 800,
-                              letterSpacing: "0.08em",
-                              color: "#fff",
-                              background: "#2CA01C",
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              marginLeft: 6,
-                            }}
-                          >
-                            QB
-                          </span>
-                        )}
-                        {xero && (
-                          <span
-                            title={`Xero${xero.tenantName ? ` — ${xero.tenantName}` : ""}`}
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 800,
-                              letterSpacing: "0.08em",
-                              color: "#07212b",
-                              background: "#13B5EA",
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              marginLeft: 6,
-                            }}
-                          >
-                            XO
-                          </span>
-                        )}
-                        {sage && (
-                          <span
-                            title={`Sage${sage.companyName ? ` — ${sage.companyName}` : ""}`}
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 800,
-                              letterSpacing: "0.08em",
-                              color: "#fff",
-                              background: "#00843D",
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              marginLeft: 6,
-                            }}
-                          >
-                            SG
-                          </span>
-                        )}
+                        <ClientStatus health={c.health} label={chip.label} />
                       </td>
                       <td data-label="">
                         <div className="row-actions" onClick={(e) => e.stopPropagation()}>

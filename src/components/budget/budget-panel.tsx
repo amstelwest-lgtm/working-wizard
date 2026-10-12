@@ -67,7 +67,6 @@ export function BudgetPanel({
   firstActualsMonth,
   reloadToken,
   onReviewStale,
-  onViewModeChange,
   lens,
   onLensChange,
   actualMonths,
@@ -513,30 +512,6 @@ export function BudgetPanel({
 
   const reviewDrawer = (
     <ReviewInputsDrawer>
-      {onViewModeChange ? (
-        <div data-view-mode-toggle="" className="flex flex-wrap gap-2">
-          {(
-            [
-              ["simplified", "Summary"],
-              ["complex", "Full year by month"],
-            ] as const
-          ).map(([mode, label]) => {
-            const on = (mode === "simplified") === Boolean(simplified);
-            return (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onViewModeChange(mode)}
-                className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                  on ? "bg-[#0B5FFF] text-white" : "border border-slate-300 text-slate-600"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
       <BudgetScenarioPills
         doc={doc}
         onChange={(next) => {
