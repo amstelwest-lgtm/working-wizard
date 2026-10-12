@@ -2,7 +2,7 @@
  * Owner door answers, presence, and motion clocks.
  * Empty books never invent a figure. Run: pnpm test:owner-door
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { ownerBotLayout } from "../src/components/owner-door/owner-home.tsx";
 import { avatarRhythm } from "../src/components/owner-door/owner-rhythm.ts";
 import { agentShortName } from "../src/lib/milon-team.ts";
@@ -37,8 +37,13 @@ import {
   ownerRunPhase,
 } from "../src/hooks/owner-agent-ui.ts";
 import {
+  AVATAR_CLIP_FPS,
+  FM_AVATAR_CLIPS,
+  avatarClipAtEnd,
+  avatarPoster,
   displayFmClip,
   fmAvatarClip,
+  fmClipSources,
   fmIdleBudget,
   nextFmClip,
   nextFmIdleLoops,
@@ -258,10 +263,9 @@ assert(
   quiet.agents.every((agent) => agent.motion === "idle"),
   "no run is idle",
 );
-assert(quiet.agents.find((agent) => agent.agent === "financial_manager")?.fmClip === "idle", "a quiet financial manager rests");
 assert(
-  quiet.agents.filter((agent) => agent.agent !== "financial_manager").every((agent) => agent.fmClip === null),
-  "analyst and advisor keep their own faces",
+  quiet.agents.every((agent) => agent.fmClip === "idle"),
+  "a quiet team rests on the idle clip",
 );
 assert(quiet.handoff === null, "no hand-off beam without a message");
 
@@ -291,6 +295,10 @@ assert(
 assert(
   working.agents.find((agent) => agent.agent === "analyst")?.sentence === "Working…",
   "working copy",
+);
+assert(
+  working.agents.find((agent) => agent.agent === "analyst")?.fmClip === "working",
+  "a running analyst plays the working clip",
 );
 
 const found = ownerPresence(
@@ -324,6 +332,10 @@ assert(
   found.agents.find((agent) => agent.agent === "advisor")?.motion === "found",
   "a finished finding is found",
 );
+assert(
+  found.agents.find((agent) => agent.agent === "advisor")?.fmClip === "found-issue",
+  "an advisor finding plays the found-issue clip",
+);
 
 const handoff = ownerPresence(
   activity({
@@ -347,6 +359,11 @@ assert(
 assert(
   handoff.agents.find((agent) => agent.agent === "analyst")?.lookAt === "advisor",
   "the sender looks across",
+);
+assert(
+  handoff.agents.find((agent) => agent.agent === "analyst")?.fmClip === "handoff" &&
+    handoff.agents.find((agent) => agent.agent === "advisor")?.fmClip === "handoff",
+  "both ends of a hand-off play the handoff clip",
 );
 
 const speaking = ownerPresence(emptyAgentActivity(), {
@@ -481,6 +498,33 @@ assert(
 );
 assert(nextFmIdleLoops("idle", "idle", 0) === 1, "an idle loop counts");
 assert(nextFmIdleLoops("idle", "calm", 2) === 0, "a flourish resets the idle count");
+const frame = 1 / AVATAR_CLIP_FPS;
+assert(avatarClipAtEnd(5 - frame, 5), "a 120-frame clip swaps on its last frame");
+assert(!avatarClipAtEnd(5 - frame * 2, 5), "a 120-frame clip plays the earlier frames");
+assert(avatarClipAtEnd(121 / 24 - frame, 121 / 24), "a 121-frame clip swaps on its last frame");
+assert(!avatarClipAtEnd(121 / 24 - frame * 2, 121 / 24), "a 121-frame clip does not swap a frame early");
+assert(avatarClipAtEnd(5, 5), "a playhead at the end counts");
+assert(!avatarClipAtEnd(0, 5), "the opening frame is not the end");
+assert(!avatarClipAtEnd(1, Number.NaN), "an unknown duration does not swap");
+assert(fmClipSources("idle").webm === "/avatars/fm/fm-idle.webm", "financial manager clips stay in fm/");
+assert(
+  fmClipSources("reading", "analyst").mp4 === "/avatars/analyst/analyst-reading.mp4",
+  "analyst clips use the analyst folder",
+);
+assert(
+  fmClipSources("handoff", "advisor").webm === "/avatars/advisor/advisor-handoff.webm",
+  "advisor clips use the advisor folder",
+);
+assert(avatarPoster("analyst").webp === "/avatars/analyst/analyst-poster.webp", "the analyst poster is webp");
+assert(avatarPoster("advisor").jpg === "/avatars/advisor/advisor-poster.jpg", "the advisor poster is jpg");
+for (const folder of ["fm", "analyst", "advisor"] as const) {
+  for (const name of FM_AVATAR_CLIPS) {
+    assert(existsSync(`public/avatars/${folder}/${folder}-${name}.webm`), `${folder} ${name} webm is shipped`);
+    assert(existsSync(`public/avatars/${folder}/${folder}-${name}.mp4`), `${folder} ${name} mp4 is shipped`);
+  }
+  assert(existsSync(`public/avatars/${folder}/${folder}-poster.webp`), `${folder} poster webp is shipped`);
+  assert(existsSync(`public/avatars/${folder}/${folder}-poster.jpg`), `${folder} poster jpg is shipped`);
+}
 const video = readFileSync("src/components/owner-door/fm-video-avatar.tsx", "utf8");
 assert(video.includes('muted') && video.includes("playsInline"), "the clips stay muted and inline");
 assert(video.includes("IntersectionObserver"), "clips wait until the face is near the viewport");
@@ -502,8 +546,12 @@ assert(
   "the visible clip does not have its source reset",
 );
 assert(video.includes('"ended"'), "the next clip starts when the current one ends");
+assert(video.includes("avatarClipAtEnd"), "the swap uses the file's own last frame");
+assert(video.includes("holdLastFrame"), "the last frame stays up so the hand-off is not blank");
 assert(!video.includes("currentTime < 0.15"), "clips do not switch mid-play");
+assert(!video.includes("121"), "the player does not assume a 121-frame clip");
 assert(!video.includes("poster="), "the video element does not flash its poster");
+assert(video.includes("canPlayType(\"video/mp4\")"), "Safari loads MP4 when WebM cannot play");
 
 const clocks = (
   ["financial_manager", "analyst", "advisor"] as const satisfies readonly AgentKey[]
@@ -522,11 +570,11 @@ assert(
     css.includes(".owner-presence.is-fm-clip .owner-breathe") &&
     css.includes(".owner-presence.is-fm-clip .owner-micro") &&
     /\.owner-presence\.is-fm-clip \.owner-drift[\s\S]*?animation:\s*none/.test(css),
-  "the financial manager frame does not drift, breathe, or scale",
+  "a character video frame does not drift, breathe, or scale",
 );
 assert(css.includes(".owner-fm-face video.is-hold"), "the outgoing clip stays visible through the fade");
 assert(css.includes(".owner-fm-face.is-live .owner-fm-poster"), "the poster stays hidden once a clip is showing");
-assert(css.includes(".owner-drift {"), "analyst and advisor still drift");
+assert(css.includes(".owner-drift {"), "orb faces still drift");
 assert(css.includes("tabular-nums"), "amounts use tabular numerals");
 assert(css.includes("min-height: 44px"), "ask buttons meet the tap target");
 assert(!/#[0-9a-fA-F]{3,8}\b/.test(css), "owner door colours come from theme tokens");
@@ -682,27 +730,21 @@ assert(css.includes("border: 1px solid var(--cobalt)"), "home ask buttons are ou
 const avatar = readFileSync("src/components/owner-door/owner-avatar.tsx", "utf8");
 assert(!avatar.includes('d="M32 28l8 6 8-6"'), "the advisor brow is not a frown");
 assert(!avatar.includes('className="smile"'), "the advisor face is not a smile");
-assert(avatar.includes('className="mark"'), "the advisor face uses a neutral mark");
-assert(avatar.includes('rx="12"'), "the advisor body uses the family corner");
-assert(avatar.includes('className="badge"'), "the advisor headset uses an ice badge");
-assert(
-  avatar.includes('className="eye" x="31" y="34" width="6" height="6" rx="1.4"'),
-  "the advisor keeps the square eyes that blink",
-);
+assert(avatar.includes('className="mark"'), "the advisor orb keeps a neutral mark");
+assert(avatar.includes('className="badge"'), "the advisor orb keeps the headset badge");
 assert(!avatar.includes('className="visor"'), "the financial manager face is no longer the visor");
-assert(avatar.includes("FmVideoAvatar"), "the financial manager character is the video avatar");
+assert(!avatar.includes('className="monocle"'), "the analyst character is no longer the monocle drawing");
+assert(!avatar.includes('rx="12"'), "the advisor character is no longer the illustrated body");
+assert(avatar.includes("FmVideoAvatar"), "character faces share the video player");
+assert(avatar.includes("agent={agent}"), "each agent plays its own clips");
 assert(
-  avatar.includes("reduced || fmVideo || before === motion"),
-  "the financial manager frame does not jump or settle",
+  avatar.includes("reduced || videoFace || before === motion"),
+  "a video frame does not jump or settle",
 );
+assert(avatar.includes('const videoFace = variant === "character"'), "every character face uses video");
 assert(
-  avatar.includes('agent === "financial_manager" && variant === "character"'),
-  "only the financial manager character swaps to video",
-);
-assert(avatar.includes('className="monocle"'), "the analyst keeps the monocle");
-assert(
-  avatar.indexOf('agent === "advisor"') < avatar.indexOf('className="badge" x="18"'),
-  "the advisor headset stays on the advisor",
+  !avatar.includes('agent === "financial_manager" && variant === "character"'),
+  "analyst and advisor use the same player as the financial manager",
 );
 assert(css.includes(".owner-presence.is-advisor .mark"), "the advisor mark is drawn with the other faces");
 assert(

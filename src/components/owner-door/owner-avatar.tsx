@@ -41,7 +41,7 @@ export function OwnerAvatar({
   size?: AvatarSize;
   lookAt?: AgentKey | null;
   label?: string;
-  /** Activity clip. Analyst and Advisor ignore it. */
+  /** Activity clip for a character video. Orb faces ignore it. */
   fmClip?: FmAvatarClip | null;
   /** Same view-transition name on the home avatar and the open stage. */
   share?: boolean;
@@ -50,14 +50,14 @@ export function OwnerAvatar({
   const prev = useRef(motion);
   const reduced = usePrefersReducedMotion();
   const rhythm = avatarRhythm(agent);
-  const fmVideo = agent === "financial_manager" && variant === "character";
-  const clip = fmVideo ? displayFmClip(fmClip, motion) : null;
+  const videoFace = variant === "character";
+  const clip = videoFace ? displayFmClip(fmClip, motion) : null;
 
   useEffect(() => {
     const el = node.current;
     if (!el) return;
     const before = prev.current;
-    if (reduced || fmVideo || before === motion) {
+    if (reduced || videoFace || before === motion) {
       prev.current = motion;
       return;
     }
@@ -81,12 +81,12 @@ export function OwnerAvatar({
       anim.cancel();
       window.clearTimeout(commit);
     };
-  }, [motion, reduced, fmVideo]);
+  }, [motion, reduced, videoFace]);
 
   return (
     <span
       ref={node}
-      className={`owner-presence is-${agent} is-${variant} is-${motion} is-${size}${fmVideo ? " is-fm-clip" : ""}`}
+      className={`owner-presence is-${agent} is-${variant} is-${motion} is-${size}${videoFace ? " is-fm-clip" : ""}`}
       data-avatar={variant}
       data-agent={agent}
       data-motion={motion}
@@ -119,12 +119,12 @@ export function OwnerAvatar({
           <span className="owner-micro">
             <span className="owner-presence-avatar">
               <span className="owner-glow" aria-hidden="true" />
-              {clip ? <FmVideoAvatar clip={clip} /> : null}
+              {clip ? <FmVideoAvatar agent={agent} clip={clip} /> : null}
               {clip ? null : (
                 <svg viewBox="0 0 80 80" className="owner-presence-svg">
                   <circle className="stage" cx="40" cy="40" r="30" />
                   <circle className="shimmer" cx="40" cy="40" r="30" />
-                  {variant === "orb" ? <OrbSigil agent={agent} /> : <Face agent={agent} />}
+                  {variant === "orb" ? <OrbSigil agent={agent} /> : null}
                   <g className="work-spin">
                     <circle className="work-arc" cx="40" cy="40" r="33" />
                   </g>
@@ -250,37 +250,6 @@ function OrbSigil({ agent }: { agent: AgentKey }) {
       <path d="M30 36 a10 8 0 0 1 20 0" />
       <rect className="badge" x="27" y="33" width="5" height="8" rx="1.6" />
       <path className="mark" d="M29 41 v5 h5" />
-    </g>
-  );
-}
-
-function Face({ agent }: { agent: AgentKey }) {
-  return (
-    <g className="face">
-      {agent === "analyst" ? (
-        <>
-          <circle className="owner-body" cx="40" cy="40" r="20" />
-          <circle className="monocle" cx="50" cy="38" r="8" />
-          <line className="monocle-scan" x1="42" y1="38" x2="58" y2="38" />
-        </>
-      ) : null}
-      {agent === "advisor" ? (
-        <>
-          <rect className="owner-body" x="22" y="18" width="36" height="42" rx="12" />
-          <path d="M24 30 a16 12 0 0 1 32 0" />
-          <rect className="badge" x="18" y="28" width="8" height="12" rx="3" />
-          <path className="mark" d="M22 40 v9 h10" />
-          <g className="eyes">
-            <rect className="eye" x="31" y="34" width="6" height="6" rx="1.4" />
-            <rect className="eye" x="43" y="34" width="6" height="6" rx="1.4" />
-          </g>
-        </>
-      ) : (
-        <g className="eyes">
-          <rect className="eye" x="31" y="34" width="6" height="6" rx="1.4" />
-          <rect className="eye" x="43" y="34" width="6" height="6" rx="1.4" />
-        </g>
-      )}
     </g>
   );
 }

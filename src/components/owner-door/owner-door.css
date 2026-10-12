@@ -1415,8 +1415,8 @@ html.dark .owner-status.is-attention {
   opacity: 0.62;
 }
 
-/* The Financial Manager circle stays put. Her clip moves inside it.
-   Analyst and Advisor keep their drift, breathe, and glow. */
+/* A character video circle stays put. The person moves inside the clip.
+   Orb sigils keep their drift, breathe, and glow. */
 .owner-presence.is-fm-clip .owner-drift,
 .owner-presence.is-fm-clip .owner-breathe,
 .owner-presence.is-fm-clip .owner-micro {
