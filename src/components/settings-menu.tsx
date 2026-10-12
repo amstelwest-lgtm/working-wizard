@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   applyPortalTheme,
@@ -69,6 +69,24 @@ export function SettingsMenu({
     return () => {
       document.removeEventListener("mousedown", onPointer);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    const root = rootRef.current;
+    if (!trigger || !root) return;
+    const place = () => {
+      const rect = trigger.getBoundingClientRect();
+      root.style.setProperty("--settings-menu-top", `${Math.max(8, Math.round(rect.bottom + 8))}px`);
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
   }, [open]);
 

@@ -1806,6 +1806,61 @@ html.dark .owner-status.is-attention {
     font-size: 14px;
     white-space: nowrap;
   }
+
+  .owner-door.accountant-portal[data-screen="settings"] .deliverable-rail,
+  .owner-door.accountant-portal[data-screen="plan"] .deliverable-rail {
+    flex-wrap: wrap;
+    overflow: visible;
+    height: auto;
+    max-height: none;
+    border-radius: 16px;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .owner-door.accountant-portal[data-screen="settings"] .deliverable-rail .tab,
+  .owner-door.accountant-portal[data-screen="plan"] .deliverable-rail .tab {
+    flex: 1 1 calc(50% - 4px);
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .owner-door .owner-menu {
+    position: fixed;
+    top: var(--owner-menu-top, 64px);
+    right: 8px;
+    left: 8px;
+    z-index: 80;
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - 16px);
+    max-height: min(70dvh, calc(100dvh - var(--owner-menu-top, 64px) - 8px));
+    overflow: auto;
+    box-sizing: border-box;
+  }
+
+  .owner-door .owner-menu-item,
+  .owner-door .owner-menu .milon-settings-btn,
+  .owner-door .owner-menu-theme {
+    min-width: 0;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .owner-door .owner-plan,
+  .owner-door .owner-lede,
+  .owner-door .owner-title,
+  .owner-door .owner-plan-card,
+  .owner-door .owner-settings-block {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
 }
 
 @media (max-width: 860px) {
@@ -1831,14 +1886,20 @@ html.dark .owner-status.is-attention {
   }
 
   .owner-door .owner-brand {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
+    align-items: flex-start;
   }
 
-  .owner-door .owner-biz {
-    flex: 1;
+  .owner-door .owner-biz,
+  .owner-door .owner-biz b {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: visible;
     text-overflow: unset;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .owner-door .owner-pane[data-owner-home="true"] {

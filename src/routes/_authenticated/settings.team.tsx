@@ -678,7 +678,7 @@ function TeamAccessPage() {
                                 }
                                 onChange={(e) => toggleClient(c.id, e.target.checked)}
                               />
-                              <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                              <span className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">{c.name}</span>
                               <span className="text-[11px] text-slate-500">
                                 {c.assignedCount}/{board.cap}
                               </span>

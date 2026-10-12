@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -62,6 +62,26 @@ export function OwnerShell({
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const chipRef = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const root = accountRef.current;
+    const chip = chipRef.current;
+    if (!root || !chip) return;
+    const place = () => {
+      const rect = chip.getBoundingClientRect();
+      root.style.setProperty("--owner-menu-top", `${Math.max(8, Math.round(rect.bottom + 8))}px`);
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -103,8 +123,9 @@ export function OwnerShell({
             onPlan={() => open("plan")}
             onSignOut={onSignOut}
           />
-          <div className="owner-account">
+          <div className="owner-account" ref={accountRef}>
           <button
+            ref={chipRef}
             type="button"
             className="profile-chip"
             aria-label="Owner menu"
