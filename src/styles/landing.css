@@ -706,7 +706,7 @@ html[data-landing="1"] .firm-bands-table tbody tr:hover td{background-color:colo
 html[data-landing="1"] .firm-bands-table tbody tr:last-child td{border-bottom:0}
 html[data-landing="1"] .firm-bands-table .firm-bands-name strong{font-weight:700;letter-spacing:.02em;color:var(--ink);-webkit-text-fill-color:var(--ink)}
 html[data-landing="1"] .firm-bands-table .firm-bands-limit{font-weight:500}
-html[data-landing="1"] .firm-bands-table .firm-bands-price{font-weight:800;font-size:15.5px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap}
+html[data-landing="1"] .firm-bands-table .firm-bands-price{font-weight:800;font-size:15.5px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:normal;max-width:16rem}
 html[data-landing="1"] .firm-bands-table th:last-child,html[data-landing="1"] .firm-bands-table .firm-bands-cta{text-align:right}
 html[data-landing="1"] .firm-bands-table .btn{margin:0;height:34px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
 html[data-landing="1"] .firm-bands-table .btn-gold{color:#1b1300;-webkit-text-fill-color:#1b1300;background-color:var(--gold)}
@@ -1286,21 +1286,44 @@ html[data-landing="1"] .firm-bands-featured{
 html[data-landing="1"] .firm-bands:has(.firm-bands-more[open]) .firm-bands-featured{display:none}
 html[data-landing="1"] .firm-band-card{
   border:1px solid var(--line);border-radius:16px;padding:16px;background:var(--bg-2);
+  min-width:0;max-width:100%;container-type:inline-size;
 }
 html[data-landing="1"] .firm-band-card.is-trial{border-color:rgba(212,175,55,.45)}
 html[data-landing="1"] .firm-band-card-top{
-  display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px 12px;min-width:0;
 }
+html[data-landing="1"] .firm-band-card-top > div{min-width:0;flex:1 1 auto}
 html[data-landing="1"] .firm-band-card-name{margin:0;font-weight:700;font-size:16px}
 html[data-landing="1"] .firm-band-card.is-trial .firm-band-card-name{font-size:20px}
 html[data-landing="1"] .firm-band-card-limit{margin:4px 0 0;font-size:14px;color:var(--ink-dim)}
 html[data-landing="1"] .firm-band-card-price{
-  margin:0;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;
+  margin:0;min-width:0;max-width:100%;font-weight:800;font-variant-numeric:tabular-nums;
+  white-space:normal;display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:2px;line-height:1.15;
 }
-html[data-landing="1"] .firm-band-card.is-trial .firm-band-card-price{
-  font-size:28px;color:var(--gold-ink);-webkit-text-fill-color:var(--gold-ink);
+html[data-landing="1"] .firm-band-card-price:has(.firm-price-per){
+  flex:1 1 100%;align-items:flex-start;text-align:left;
 }
-html[data-landing="1"] .firm-band-card .btn{width:100%;justify-content:center;margin-top:12px;min-height:44px}
+html[data-landing="1"] .firm-price-amount{white-space:nowrap;max-width:100%}
+html[data-landing="1"] .firm-band-card.is-trial .firm-price-amount{
+  font-size:22px;font-size:clamp(18px,8cqi,28px);
+  color:var(--cobalt);-webkit-text-fill-color:var(--cobalt);
+}
+html[data-landing="1"].dark .firm-band-card.is-trial .firm-price-amount{
+  color:#dbeafe;-webkit-text-fill-color:#dbeafe;
+}
+html[data-landing="1"] .firm-price-per{
+  font-size:12px;font-weight:600;line-height:1.35;white-space:normal;overflow-wrap:anywhere;
+  color:var(--ink-dim);-webkit-text-fill-color:var(--ink-dim);
+}
+html[data-landing="1"] .firm-bands-price .firm-price-amount{white-space:nowrap}
+html[data-landing="1"] .firm-bands-price .firm-price-per{
+  display:block;margin-top:2px;font-size:12px;font-weight:600;line-height:1.3;white-space:normal;
+  color:var(--ink-dim);-webkit-text-fill-color:var(--ink-dim);
+}
+html[data-landing="1"] .firm-band-card .btn{
+  width:100%;justify-content:center;margin-top:12px;min-height:44px;
+  white-space:normal;height:auto;line-height:1.25;padding:12px 16px;overflow:visible;text-align:center;
+}
 html[data-landing="1"] .firm-band-card.is-trial .btn{min-height:52px}
 html[data-landing="1"] .firm-band-card-note{
   margin:8px 0 0;font-size:13px;line-height:1.4;color:var(--ink-dim);text-align:center;
@@ -1324,11 +1347,6 @@ html[data-landing="1"] .owner-offer-label{
   html[data-landing="1"] .firm-bands-stack{display:grid;gap:12px}
   html[data-landing="1"] .firm-bands-more .firm-bands-table-wrap{display:none}
   html[data-landing="1"] .firm-band-card{min-width:0;max-width:100%}
-  html[data-landing="1"] .firm-band-card-top{flex-wrap:wrap}
-  html[data-landing="1"] .firm-band-card-price{white-space:normal}
-  html[data-landing="1"] .firm-band-card .btn{
-    white-space:normal;height:auto;line-height:1.25;padding:12px 16px;overflow:visible;text-align:center;
-  }
 }
 html[data-landing="1"] .proof-grid{display:grid;gap:24px;margin-top:28px}
 html[data-landing="1"] .proof-card{

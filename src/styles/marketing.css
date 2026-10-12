@@ -898,7 +898,8 @@ html .mk .firm-bands-table .firm-bands-name strong {
   font-size: 15.5px;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
-  white-space: nowrap;
+  white-space: normal;
+  max-width: 16rem;
 }
 .mk .firm-bands-table th:last-child,
 .mk .firm-bands-table .firm-bands-cta {
@@ -1002,18 +1003,74 @@ html .mk .firm-bands-table .firm-bands-name strong {
   border-radius: 16px;
   padding: 16px;
   background: var(--bg-2);
+  min-width: 0;
+  max-width: 100%;
+  container-type: inline-size;
 }
 .mk .firm-band-card-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
+  min-width: 0;
 }
+.mk .firm-band-card-top > div { min-width: 0; flex: 1 1 auto; }
 .mk .firm-band-card-name { margin: 0; font-weight: 700; }
 .mk .firm-band-card.is-trial .firm-band-card-name { font-size: 20px; }
 .mk .firm-band-card-limit { margin: 4px 0 0; font-size: 14px; }
-.mk .firm-band-card-price { margin: 0; font-weight: 800; }
-.mk .firm-band-card.is-trial .firm-band-card-price { font-size: 28px; color: var(--gold); }
-.mk .firm-band-card .btn { width: 100%; justify-content: center; margin-top: 12px; min-height: 44px; }
+.mk .firm-band-card-price {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 2px;
+  line-height: 1.15;
+}
+.mk .firm-band-card-price:has(.firm-price-per) {
+  flex: 1 1 100%;
+  align-items: flex-start;
+  text-align: left;
+}
+.mk .firm-price-amount { white-space: nowrap; max-width: 100%; }
+.mk .firm-band-card.is-trial .firm-price-amount {
+  font-size: 22px;
+  font-size: clamp(18px, 8cqi, 28px);
+}
+.mk .firm-price-per {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--ink-dim);
+}
+.mk .firm-bands-price .firm-price-amount { white-space: nowrap; }
+.mk .firm-bands-price .firm-price-per {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: normal;
+  color: var(--ink-dim);
+}
+.mk .firm-band-card .btn {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+  min-height: 44px;
+  white-space: normal;
+  height: auto;
+  line-height: 1.25;
+  overflow: visible;
+  text-align: center;
+}
 @media (max-width: 767px) {
   .mk .firm-bands,
   .mk .mk-wrap { max-width: 100%; min-width: 0; }
@@ -1022,14 +1079,6 @@ html .mk .firm-bands-table .firm-bands-name strong {
   .mk .firm-bands-stack { display: grid; gap: 12px; }
   .mk .firm-bands-more .firm-bands-table-wrap { display: none; }
   .mk .firm-band-card { min-width: 0; max-width: 100%; }
-  .mk .firm-band-card-top { flex-wrap: wrap; }
-  .mk .firm-band-card-price { white-space: normal; }
-  .mk .firm-band-card .btn {
-    white-space: normal;
-    height: auto;
-    line-height: 1.25;
-    overflow: visible;
-  }
   .mk .firm-band-card {
     border: 1px solid var(--line);
     border-radius: 16px;
@@ -1045,7 +1094,6 @@ html .mk .firm-bands-table .firm-bands-name strong {
   .mk .firm-band-card.is-trial .firm-band-card-name { font-size: 20px; }
   .mk .firm-band-card-limit { margin: 4px 0 0; font-size: 14px; }
   .mk .firm-band-card-price { margin: 0; font-weight: 800; }
-  .mk .firm-band-card.is-trial .firm-band-card-price { font-size: 28px; color: var(--gold); }
   .mk .firm-band-card .btn {
     display: flex;
     width: 100%;
@@ -1067,7 +1115,7 @@ html .mk .mk-wrap p a,
 html .mk .mk-qa a,
 html .mk .mk-note a,
 html .mk .mk-list a,
-html .mk .firm-band-card.is-trial .firm-band-card-price {
+html .mk .firm-band-card.is-trial .firm-price-amount {
   color: var(--cobalt) !important;
   -webkit-text-fill-color: var(--cobalt);
   background: none;

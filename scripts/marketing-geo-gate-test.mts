@@ -81,7 +81,10 @@ assert(!LEAK.test(usPlain), "US geo renders no rand copy");
 assert(!usPlain.includes("mk-market-switch"), "US geo renders no switcher");
 
 const za = accountantsMarkup("ZA", null);
-assert(za.includes("R799/mo · about R53 per client"), "ZA geo renders the solo rand price");
+assert(
+  za.includes("R799/mo") && za.includes("about R53 per client"),
+  "ZA geo renders the solo rand price",
+);
 assert(/\brand\b/i.test(za), "ZA geo renders the rand word");
 assert(za.includes("mk-market-switch"), "ZA geo may link to the US view");
 assert(za.includes("United States"), "ZA switch points at the US view");

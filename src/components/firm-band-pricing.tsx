@@ -51,6 +51,18 @@ function startLabel(band: FirmBand): string {
   return band.id === "solo" ? SOLO_TRIAL_BUTTON : `Start ${band.name}`;
 }
 
+/** Amount stays on one line. The per-client clause wraps under it. */
+function FirmPrice({ price }: { price: string }) {
+  const splitAt = price.indexOf(" · ");
+  if (splitAt === -1) return <span className="firm-price-amount">{price}</span>;
+  return (
+    <>
+      <span className="firm-price-amount">{price.slice(0, splitAt)}</span>
+      <span className="firm-price-per">{price.slice(splitAt + 3)}</span>
+    </>
+  );
+}
+
 function clientLabel(band: FirmBand, withActive: boolean): string {
   if (band.clientLimit == null) return withActive ? "Unlimited" : "Unlimited";
   return withActive ? `Up to ${band.clientLimit} active clients` : `Up to ${band.clientLimit}`;
@@ -93,7 +105,9 @@ function BandTable({
                   <strong>{band.name}</strong>
                 </td>
                 <td className="firm-bands-limit">{clientLabel(band, false)}</td>
-                <td className="firm-bands-price">{price}</td>
+                <td className="firm-bands-price">
+                  <FirmPrice price={price} />
+                </td>
                 <td className="firm-bands-cta">
                   {startControl(band, band.id === "solo" ? "btn btn-gold" : "btn btn-ghost")}
                 </td>
@@ -138,7 +152,11 @@ function BandCards({
                   {enterprise ? "Unlimited · Custom" : clientLabel(band, true)}
                 </p>
               </div>
-              {enterprise ? null : <p className="firm-band-card-price">{price}</p>}
+              {enterprise ? null : (
+                <p className="firm-band-card-price">
+                  <FirmPrice price={price} />
+                </p>
+              )}
             </div>
             {startControl(band, solo ? "btn btn-gold" : "btn btn-ghost")}
             {solo && SOLO_CARD_NOTE ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
