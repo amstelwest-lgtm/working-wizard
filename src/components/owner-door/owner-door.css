@@ -1458,8 +1458,37 @@ html.dark .owner-status.is-attention {
   stroke: none;
 }
 
-.owner-presence .visor {
-  fill: color-mix(in srgb, var(--cobalt) 28%, transparent);
+.owner-fm-face {
+  position: absolute;
+  left: 12.5%;
+  top: 12.5%;
+  width: 75%;
+  height: 75%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--owner-stage);
+  box-shadow: inset 0 0 0 1px var(--owner-edge);
+}
+
+.owner-fm-face video,
+.owner-fm-face .owner-fm-poster,
+.owner-fm-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.owner-fm-face video {
+  opacity: 0;
+  transition: opacity 300ms linear;
+}
+
+.owner-fm-face video.is-on {
+  opacity: 1;
 }
 
 .owner-presence.is-advisor .mark {
@@ -2088,9 +2117,14 @@ html[data-bot-fade="plain"] .owner-door .owner-pane {
   .owner-door .eyes,
   .owner-door .owner-beam-track i,
   .owner-door .btn.gold,
-  .owner-door .btn.gold::after {
+  .owner-door .btn.gold::after,
+  .owner-door .owner-fm-face video {
     animation: none !important;
     transition: none;
+  }
+
+  .owner-door .owner-fm-face video {
+    display: none;
   }
 
   .owner-door .owner-presence.is-working .owner-glow {

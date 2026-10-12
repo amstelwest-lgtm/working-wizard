@@ -714,6 +714,7 @@ export function OwnerDoor({
           agent={agent}
           variant="character"
           motion={active.motion}
+          fmClip={active.fmClip}
           sentence={active.sentence}
           messages={threads[agent].messages}
           draft={threads[agent].draft}

@@ -27,6 +27,8 @@ export type AgentRunRow = {
   client_id: string;
   status: AgentRunStatus | string;
   summary?: string;
+  /** sync and upload are ingest. Other triggers are ordinary work. */
+  trigger?: string | null;
   queued_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -37,6 +39,8 @@ export type AgentFindingRow = {
   agent: AgentKey;
   client_id: string;
   kind?: string | null;
+  /** info, watch, or act. Missing on rows loaded before the column was selected. */
+  severity?: string | null;
   title: string;
   detail: string | null;
   evidence: unknown;

@@ -36,6 +36,13 @@ import {
   handoffComingOnline,
   ownerRunPhase,
 } from "../src/hooks/owner-agent-ui.ts";
+import {
+  displayFmClip,
+  fmAvatarClip,
+  fmIdleBudget,
+  nextFmClip,
+  nextFmIdleLoops,
+} from "../src/lib/fm-avatar-state.ts";
 import { ownerPresence } from "../src/lib/owner-presence.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
@@ -251,6 +258,11 @@ assert(
   quiet.agents.every((agent) => agent.motion === "idle"),
   "no run is idle",
 );
+assert(quiet.agents.find((agent) => agent.agent === "financial_manager")?.fmClip === "idle", "a quiet financial manager rests");
+assert(
+  quiet.agents.filter((agent) => agent.agent !== "financial_manager").every((agent) => agent.fmClip === null),
+  "analyst and advisor keep their own faces",
+);
 assert(quiet.handoff === null, "no hand-off beam without a message");
 
 function activity(patch: Partial<AgentActivitySnapshot>): AgentActivitySnapshot {
@@ -345,6 +357,141 @@ assert(
   speaking.agents.find((agent) => agent.agent === "financial_manager")?.motion === "speaking",
   "chat can speak",
 );
+assert(
+  speaking.agents.find((agent) => agent.agent === "financial_manager")?.fmClip === "idle",
+  "speaking has no clip, so the face stays silent",
+);
+
+const fmRun = {
+  id: "fm-run",
+  agent: "financial_manager" as const,
+  client_id: "c",
+  queued_at: "2026-10-01T00:00:00.000Z",
+  started_at: "2026-10-01T00:00:01.000Z",
+  finished_at: null as string | null,
+};
+assert(fmAvatarClip({ run: { ...fmRun, status: "queued" } }) === "thinking", "a queued run is thinking");
+assert(fmAvatarClip({ run: { ...fmRun, status: "running" } }) === "working", "a running run is working");
+assert(
+  fmAvatarClip({ run: { ...fmRun, status: "running", trigger: "upload" } }) === "reading",
+  "an upload in progress is reading",
+);
+assert(
+  fmAvatarClip({ run: { ...fmRun, status: "queued", trigger: "sync" } }) === "reading",
+  "a sync in progress is reading",
+);
+assert(
+  fmAvatarClip({
+    run: { ...fmRun, status: "succeeded", finished_at: "2026-10-01T00:05:00.000Z" },
+  }) === "done",
+  "a clean finish is done",
+);
+assert(
+  fmAvatarClip({
+    run: { ...fmRun, status: "succeeded", finished_at: "2026-10-01T00:05:00.000Z" },
+    finding: {
+      kind: "variance",
+      severity: "act",
+      evidence: {},
+      created_at: "2026-10-01T00:04:00.000Z",
+    },
+  }) === "found-issue",
+  "an act finding is found-issue",
+);
+assert(
+  fmAvatarClip({
+    finding: {
+      kind: "variance",
+      severity: "watch",
+      evidence: {},
+      created_at: "2026-10-01T00:04:00.000Z",
+    },
+  }) === "concerned",
+  "a watch finding is concerned",
+);
+assert(
+  fmAvatarClip({
+    run: { ...fmRun, status: "succeeded", finished_at: "2026-10-01T00:05:00.000Z" },
+    finding: {
+      kind: "note",
+      severity: "info",
+      evidence: {},
+      created_at: "2026-10-01T00:04:00.000Z",
+    },
+  }) === "done",
+  "an info finding is not an issue",
+);
+assert(
+  fmAvatarClip({
+    finding: {
+      kind: "next_move_draft",
+      severity: "info",
+      evidence: { draft: true, requires_human_approval: true, kind: "next_move_draft" },
+      created_at: "2026-10-01T00:04:00.000Z",
+    },
+  }) === "idea",
+  "a next move is an idea",
+);
+assert(
+  fmAvatarClip({
+    finding: {
+      kind: "data_request_draft",
+      evidence: { draft: true, requires_human_approval: true, kind: "data_request_draft" },
+      created_at: "2026-10-01T00:04:00.000Z",
+    },
+  }) === "waiting",
+  "a data request is waiting",
+);
+assert(
+  fmAvatarClip({
+    finding: {
+      kind: "accountant_handoff_draft",
+      evidence: { draft: true, requires_human_approval: true, kind: "accountant_handoff_draft" },
+      created_at: "2026-10-01T00:04:00.000Z",
+    },
+  }) === "handoff",
+  "an accountant hand-off uses the handoff clip",
+);
+assert(
+  fmAvatarClip({
+    run: { ...fmRun, status: "running", trigger: "upload" },
+    handoff: { at: "2026-10-02T00:00:00.000Z" },
+  }) === "reading",
+  "a live run wins over an older hand-off",
+);
+assert(fmAvatarClip({ talk: "listening" }) === "waiting", "listening needs the user");
+assert(fmAvatarClip({ talk: "working" }) === "thinking", "a chat reply is thinking");
+assert(fmAvatarClip({ talk: "speaking" }) === "idle", "speech does not pick a clip");
+assert(fmAvatarClip({ run: { ...fmRun, status: "failed" } }) === "idle", "a failed run stays quiet");
+assert(displayFmClip("idle", "working") === "working", "a forced working motion still plays");
+assert(displayFmClip("done", "idle") === "done", "a finished run keeps the done clip");
+assert(displayFmClip(null, "speaking") === "idle", "speaking motion does not invent a face");
+assert(fmIdleBudget(0) === 2 && fmIdleBudget(0.5) === 3 && fmIdleBudget(0.99) === 4, "idle flourishes land every 2 to 4 loops");
+assert(
+  nextFmClip({ playing: "idle", desired: "idle", idleLoops: 0, budget: 2, flourish: "calm" }) === "idle",
+  "the first idle play stays idle",
+);
+assert(
+  nextFmClip({ playing: "idle", desired: "idle", idleLoops: 1, budget: 2, flourish: "curious" }) === "curious",
+  "the budget-th idle play queues a flourish",
+);
+assert(
+  nextFmClip({ playing: "pleased", desired: "idle", idleLoops: 0, budget: 3, flourish: "calm" }) === "idle",
+  "a flourish returns to idle",
+);
+assert(nextFmIdleLoops("idle", "idle", 0) === 1, "an idle loop counts");
+assert(nextFmIdleLoops("idle", "calm", 2) === 0, "a flourish resets the idle count");
+const video = readFileSync("src/components/owner-door/fm-video-avatar.tsx", "utf8");
+assert(video.includes('muted') && video.includes("playsInline"), "the clips stay muted and inline");
+assert(video.includes("IntersectionObserver"), "clips wait until the face is near the viewport");
+assert(video.includes('preload="none"') || video.includes('preload = "none"'), "nothing preloads before the face is visible");
+assert(video.includes("FM_CROSSFADE_MS"), "clips crossfade on the shared 300ms clock");
+assert(
+  video.indexOf('"video/webm"') !== -1 && video.indexOf('"video/webm"') < video.indexOf('"video/mp4"'),
+  "webm is first and mp4 is the fallback",
+);
+assert(video.includes("usePrefersReducedMotion"), "reduced motion keeps the poster");
+assert(!video.includes("speechSynthesis") && !video.includes("Audio("), "the avatar never speaks");
 
 const clocks = (
   ["financial_manager", "analyst", "advisor"] as const satisfies readonly AgentKey[]
@@ -520,9 +667,16 @@ assert(
   avatar.includes('className="eye" x="31" y="34" width="6" height="6" rx="1.4"'),
   "the advisor keeps the square eyes that blink",
 );
+assert(!avatar.includes('className="visor"'), "the financial manager face is no longer the visor");
+assert(avatar.includes("FmVideoAvatar"), "the financial manager character is the video avatar");
 assert(
-  avatar.indexOf('className="visor"') < avatar.indexOf('agent === "advisor"'),
-  "the visor stays on the financial manager",
+  avatar.includes('agent === "financial_manager" && variant === "character"'),
+  "only the financial manager character swaps to video",
+);
+assert(avatar.includes('className="monocle"'), "the analyst keeps the monocle");
+assert(
+  avatar.indexOf('agent === "advisor"') < avatar.indexOf('className="badge" x="18"'),
+  "the advisor headset stays on the advisor",
 );
 assert(css.includes(".owner-presence.is-advisor .mark"), "the advisor mark is drawn with the other faces");
 assert(

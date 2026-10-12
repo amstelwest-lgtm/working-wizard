@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { formatOwnerReply, ownerReplyPlainText } from "@/lib/owner-reply-format";
+import type { FmAvatarClip } from "@/lib/fm-avatar-state";
 import type { OwnerMotion } from "@/lib/owner-presence";
 import { browserSpeechPort, createReplySpeech, type ReplySpeech } from "@/lib/owner-reply-speech";
 import { ChatIcon, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
@@ -27,6 +28,7 @@ export function OwnerChat({
   agent,
   variant,
   motion,
+  fmClip = null,
   sentence,
   messages,
   draft,
@@ -42,6 +44,7 @@ export function OwnerChat({
   agent: AgentKey;
   variant: AvatarVariant;
   motion: OwnerMotion;
+  fmClip?: FmAvatarClip | null;
   sentence: string;
   messages: OwnerChatTurn[];
   draft: string;
@@ -113,6 +116,7 @@ export function OwnerChat({
           size="stage"
           share
           motion={motion}
+          fmClip={fmClip}
           label={agentAriaLabel(agent, MOTION_LABEL[motion])}
         />
         <h1 className="owner-title">{agentDisplayName(agent)}</h1>

@@ -186,6 +186,7 @@ export function OwnerHome({
                     share
                     motion={card.motion}
                     lookAt={card.lookAt}
+                    fmClip={card.fmClip}
                     label={agentAriaLabel(card.agent, MOTION_LABEL[card.motion])}
                   />
                   <span className="owner-name">{agentDisplayName(card.agent)}</span>

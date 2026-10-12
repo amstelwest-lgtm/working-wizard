@@ -64,6 +64,7 @@ function parseRun(row: Record<string, unknown>): AgentRunRow | null {
     client_id: typeof row.client_id === "string" ? row.client_id : "",
     status: typeof row.status === "string" ? row.status : "",
     summary: typeof row.summary === "string" ? row.summary : "",
+    trigger: textOrNull(row.trigger),
     queued_at: row.queued_at,
     started_at: textOrNull(row.started_at),
     finished_at: textOrNull(row.finished_at),
@@ -85,6 +86,7 @@ function parseFinding(row: Record<string, unknown>): AgentFindingRow | null {
     agent: row.agent,
     client_id: typeof row.client_id === "string" ? row.client_id : "",
     kind: textOrNull(row.kind),
+    severity: textOrNull(row.severity),
     title: row.title,
     detail: textOrNull(row.detail),
     evidence: row.evidence ?? {},
@@ -132,13 +134,13 @@ export function useAgentActivity(clientId: string): AgentActivity {
     async function load() {
       const [runsRes, findingsRes, messagesRes, clientRes] = await Promise.all([
         table("agent_runs")
-          .select("id, agent, client_id, status, summary, queued_at, started_at, finished_at")
+          .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at")
           .eq("client_id", id)
           .order("queued_at", { ascending: false })
           .limit(ROW_LIMIT),
         table("agent_findings")
           .select(
-            "id, agent, client_id, kind, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id",
+            "id, agent, client_id, kind, severity, title, detail, evidence, as_of, created_at, superseded_by, dismissed_reason, status, approved_by, approved_at, approved_table, approved_row_id",
           )
           .eq("client_id", id)
           .order("created_at", { ascending: false })
