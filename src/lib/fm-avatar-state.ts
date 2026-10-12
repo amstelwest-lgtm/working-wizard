@@ -1,7 +1,7 @@
 /**
- * Which Financial Manager clip to show.
+ * Which clip the Financial Manager, Analyst, and Advisor play.
  * Runs, findings, and hand-off messages are the signals the owner and
- * accountant homes already load. Analyst and Advisor do not use this.
+ * accountant homes already load. The same mapping applies to all three.
  * Surprised is a real clip, and nothing in those signals means surprise,
  * so it stays unmapped. Calm, curious, and pleased are idle flourishes.
  */
@@ -30,10 +30,31 @@ export const FM_AVATAR_CLIPS = [
 
 export type FmAvatarClip = (typeof FM_AVATAR_CLIPS)[number];
 
-export const FM_POSTER = {
-  webp: "/avatars/fm/fm-poster.webp",
-  jpg: "/avatars/fm/fm-poster.jpg",
+/** Character faces that share one player. Folders match public/avatars. */
+export const AVATAR_FOLDERS = {
+  financial_manager: "fm",
+  analyst: "analyst",
+  advisor: "advisor",
 } as const;
+
+export type AvatarFace = keyof typeof AVATAR_FOLDERS;
+
+/**
+ * Clips are 24fps. Financial Manager files are 121 frames (5.042s).
+ * Analyst and Advisor files are 120 frames (5s). The end check uses the
+ * file's own duration, so both lengths swap on their last frame.
+ */
+export const AVATAR_CLIP_FPS = 24;
+
+export function avatarPoster(agent: AvatarFace = "financial_manager") {
+  const folder = AVATAR_FOLDERS[agent];
+  return {
+    webp: `/avatars/${folder}/${folder}-poster.webp`,
+    jpg: `/avatars/${folder}/${folder}-poster.jpg`,
+  };
+}
+
+export const FM_POSTER = avatarPoster("financial_manager");
 
 export const FM_CROSSFADE_MS = 300;
 
@@ -97,15 +118,35 @@ export function fmFindingClip(row: FmAvatarFinding): FmAvatarClip | null {
   return "found-issue";
 }
 
-export function fmClipSources(clip: FmAvatarClip): { webm: string; mp4: string } {
+export function fmClipSources(
+  clip: FmAvatarClip,
+  agent: AvatarFace = "financial_manager",
+): { webm: string; mp4: string } {
+  const folder = AVATAR_FOLDERS[agent];
   return {
-    webm: `/avatars/fm/fm-${clip}.webm`,
-    mp4: `/avatars/fm/fm-${clip}.mp4`,
+    webm: `/avatars/${folder}/${folder}-${clip}.webm`,
+    mp4: `/avatars/${folder}/${folder}-${clip}.mp4`,
   };
 }
 
 /**
- * Activity clip for one Financial Manager.
+ * True once playback is on the last frame of this file.
+ * A 120-frame clip and a 121-frame clip both end here, using `duration`
+ * rather than a fixed length. An unknown duration does not count.
+ */
+export function avatarClipAtEnd(
+  currentTime: number,
+  duration: number,
+  fps = AVATAR_CLIP_FPS,
+): boolean {
+  if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0 || fps <= 0) {
+    return false;
+  }
+  return currentTime + 1 / fps >= duration - 0.001;
+}
+
+/**
+ * Activity clip for one agent. The same signals drive all three faces.
  * A live run wins. Otherwise the newest of the finding, the hand-off,
  * and a clean finish wins. Speaking has no clip: the avatar stays silent.
  */

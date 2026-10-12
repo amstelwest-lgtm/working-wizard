@@ -1,20 +1,26 @@
 /**
- * Silent Financial Manager clips. Two stacked videos crossfade at a
- * neutral frame. The incoming clip stays hidden until it is playing and a
- * frame has been decoded, and the outgoing clip stays up until then.
- * WebM first, MP4 if that cannot play. Nothing loads until the face is near
- * the viewport. Reduced motion keeps the poster.
+ * Silent character clips for the Financial Manager, Analyst, and Advisor.
+ * Two stacked videos crossfade at a neutral frame. The incoming clip stays
+ * hidden until it is playing and a frame has been decoded, and the outgoing
+ * clip stays up until then. The swap waits for the last frame of whatever
+ * file is playing, so either clip length hands off
+ * without a blank frame. WebM first, MP4 when the browser can play MP4 but
+ * not WebM (Safari). Nothing loads until the face is near the viewport.
+ * Reduced motion keeps the poster.
  */
 import { useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
+  AVATAR_CLIP_FPS,
   FM_CROSSFADE_MS,
-  FM_POSTER,
+  avatarClipAtEnd,
+  avatarPoster,
   fmClipSources,
   fmIdleBudget,
   fmIdleFlourish,
   nextFmClip,
   nextFmIdleLoops,
+  type AvatarFace,
   type FmAvatarClip,
   type FmIdleFlourish,
 } from "@/lib/fm-avatar-state";
@@ -51,10 +57,13 @@ function webmUnsupported(): boolean {
 }
 
 /** Swap sources only on a clip that is not the one on screen. */
-function loadHiddenClip(video: HTMLVideoElement, clip: FmAvatarClip) {
-  if (video.dataset.clip === clip && video.dataset.ready === "1") return;
-  const sources = fmClipSources(clip);
+function loadHiddenClip(video: HTMLVideoElement, clip: FmAvatarClip, agent: AvatarFace) {
+  if (video.dataset.clip === clip && video.dataset.agent === agent && video.dataset.ready === "1") {
+    return;
+  }
+  const sources = fmClipSources(clip, agent);
   video.dataset.clip = clip;
+  video.dataset.agent = agent;
   video.dataset.ready = "0";
   video.preload = "auto";
   silence(video);
@@ -76,17 +85,22 @@ function loadHiddenClip(video: HTMLVideoElement, clip: FmAvatarClip) {
   video.load();
 }
 
-function forceMp4(video: HTMLVideoElement) {
+function forceMp4(video: HTMLVideoElement, agent: AvatarFace) {
   const clip = video.dataset.clip;
   if (!clip || video.dataset.fallback === "mp4") return;
   video.dataset.fallback = "mp4";
   video.dataset.ready = "0";
   while (video.firstChild) video.removeChild(video.firstChild);
-  video.src = fmClipSources(clip as FmAvatarClip).mp4;
+  video.src = fmClipSources(clip as FmAvatarClip, agent).mp4;
   video.load();
 }
 
-function whenReady(video: HTMLVideoElement): Promise<void> {
+/** Keep the last painted frame. Pausing before duration avoids a blank end. */
+function holdLastFrame(video: HTMLVideoElement) {
+  if (!video.paused) video.pause();
+}
+
+function whenReady(video: HTMLVideoElement, agent: AvatarFace): Promise<void> {
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.dataset.ready === "1") {
     return Promise.resolve();
   }
@@ -102,7 +116,7 @@ function whenReady(video: HTMLVideoElement): Promise<void> {
         reject(new Error("fm-clip"));
         return;
       }
-      forceMp4(video);
+      forceMp4(video, agent);
     };
     const cleanup = () => {
       video.removeEventListener("loadeddata", done);
@@ -182,7 +196,7 @@ function waitToShow(video: HTMLVideoElement): { done: Promise<void>; cancel: () 
   return { done, cancel };
 }
 
-export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
+export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: AvatarFace }) {
   const reduced = usePrefersReducedMotion();
   const rootRef = useRef<HTMLSpanElement>(null);
   const firstRef = useRef<HTMLVideoElement>(null);
@@ -230,6 +244,9 @@ export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
     let flourish: FmIdleFlourish = fmIdleFlourish(Math.random());
     let queued: FmAvatarClip = desired;
     let fade = 0;
+    let endTimer = 0;
+    let ending = false;
+    let advanced = false;
     let tail = Promise.resolve();
 
     function enqueue(task: () => Promise<void> | void) {
@@ -258,10 +275,14 @@ export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
       const video = videos[nextSlot];
       if (!video || cancelled) return;
       if (revealed && video === videos[visibleSlot]) return;
-      if (video.dataset.clip !== name || video.dataset.ready !== "1") {
-        loadHiddenClip(video, name);
+      if (
+        video.dataset.clip !== name ||
+        video.dataset.agent !== agent ||
+        video.dataset.ready !== "1"
+      ) {
+        loadHiddenClip(video, name, agent);
         try {
-          await whenReady(video);
+          await whenReady(video, agent);
         } catch {
           return;
         }
@@ -331,13 +352,63 @@ export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
           await prepare((1 - nextSlot) as 0 | 1, queued);
         });
       }, FM_CROSSFADE_MS);
+      advanced = false;
+      watchEnd(incoming);
+    }
+
+    function advance() {
+      if (cancelled || ending || !revealed || advanced) return;
+      advanced = true;
+      ending = true;
+      const active = videos[visibleSlot];
+      if (active) holdLastFrame(active);
+      const nextSlot = (1 - visibleSlot) as 0 | 1;
+      void enqueue(async () => {
+        try {
+          await show(nextSlot);
+        } finally {
+          ending = false;
+        }
+      });
+    }
+
+    function watchEnd(video: HTMLVideoElement) {
+      window.clearTimeout(endTimer);
+      const tick = () => {
+        if (cancelled || video !== videos[visibleSlot]) return;
+        if (ending) {
+          endTimer = window.setTimeout(tick, 50);
+          return;
+        }
+        if (avatarClipAtEnd(video.currentTime, video.duration)) {
+          advance();
+          return;
+        }
+        const frameMs = 1000 / AVATAR_CLIP_FPS;
+        const remaining = Number.isFinite(video.duration)
+          ? (video.duration - video.currentTime) * 1000 - frameMs
+          : frameMs;
+        endTimer = window.setTimeout(tick, Math.max(16, remaining));
+      };
+      const framed = video as FramedVideo;
+      if (typeof framed.requestVideoFrameCallback === "function") {
+        const onFrame = () => {
+          if (cancelled || video !== videos[visibleSlot]) return;
+          if (!ending && avatarClipAtEnd(video.currentTime, video.duration)) {
+            advance();
+            return;
+          }
+          framed.requestVideoFrameCallback?.(onFrame);
+        };
+        framed.requestVideoFrameCallback(onFrame);
+      }
+      tick();
     }
 
     function onEnded(event: Event) {
       if (cancelled) return;
       if (event.currentTarget !== videos[visibleSlot]) return;
-      const nextSlot = (1 - visibleSlot) as 0 | 1;
-      void enqueue(() => show(nextSlot));
+      advance();
     }
 
     function retarget(next: FmAvatarClip) {
@@ -358,18 +429,20 @@ export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
       cancelled = true;
       retargetRef.current = () => undefined;
       window.clearTimeout(fade);
+      window.clearTimeout(endTimer);
       videos[0]?.removeEventListener("ended", onEnded);
       videos[1]?.removeEventListener("ended", onEnded);
       videos[0]?.pause();
       videos[1]?.pause();
     };
-  }, [near, reduced]);
+  }, [agent, near, reduced]);
 
   useEffect(() => {
     retargetRef.current(clip);
   }, [clip]);
 
   const play = !reduced && near;
+  const poster = avatarPoster(agent);
   const clipClass = (index: 0 | 1) =>
     [slot === index ? "is-on" : "", hold === index ? "is-hold" : ""].filter(Boolean).join(" ") ||
     undefined;
@@ -378,13 +451,14 @@ export function FmVideoAvatar({ clip }: { clip: FmAvatarClip }) {
     <span
       ref={rootRef}
       className={`owner-fm-face${live ? " is-live" : ""}`}
+      data-fm-agent={agent}
       data-fm-clip={clip}
       data-fm-shown={shown}
       aria-hidden="true"
     >
       <picture className="owner-fm-poster">
-        <source srcSet={FM_POSTER.webp} type="image/webp" />
-        <img src={FM_POSTER.jpg} alt="" draggable={false} />
+        <source srcSet={poster.webp} type="image/webp" />
+        <img src={poster.jpg} alt="" draggable={false} />
       </picture>
       {play ? (
         <>
