@@ -2173,8 +2173,8 @@ function ItemRow({
         )}
       </div>
 
-      {/* Due */}
-      <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-24">
+      {/* Due. w-28 fits "10/15/2026" plus the picker icon; w-24 clipped the year. */}
+      <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-28">
         <input
           type="date"
           value={item.due_date ?? ""}
