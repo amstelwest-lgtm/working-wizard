@@ -1,9 +1,24 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@import "@fontsource-variable/plus-jakarta-sans";
 @import "./styles/primitives.css";
 @import "./styles/responsive-table.css";
 @import "./styles/motion.css";
+
+/*
+ * App typeface fallback — Arial metric-adjusted to Plus Jakarta Sans so text
+ * does not jump when the self-hosted woff2 arrives.
+ */
+@font-face {
+  font-family: "Milon Sans Fallback";
+  src: local("Arial");
+  font-display: swap;
+  size-adjust: 104%;
+  ascent-override: 100%;
+  descent-override: 28%;
+  line-gap-override: 0%;
+}
 
 /*
  * Phase 2 lite — Milōn shared design tokens
@@ -25,9 +40,16 @@
  * p-milon-4, text-milon-sm, font-milon-display, etc.
  */
 :root {
-  /* Typography — matches dashboard (Inter) + editorial headings (Instrument Serif) */
-  --font-display: "Instrument Serif", "Fraunces", Georgia, serif;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /*
+   * Typography — Plus Jakarta Sans Variable (self-hosted) everywhere.
+   * One clean geometric grotesk for headings, UI and figures; tabular lining
+   * numerals (tnum/lnum) keep every table column aligned.
+   * Marketing surfaces (`.mk`, landing) keep their own serif stacks.
+   */
+  --font-display: "Plus Jakarta Sans Variable", "Milon Sans Fallback", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-sans: "Plus Jakarta Sans Variable", "Milon Sans Fallback", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
 
   /* Surfaces & ink — light is the default. Gold stays the wordmark only. */
   --milon-bg: #ffffff;
@@ -59,6 +81,15 @@
   --milon-text-md: 1rem;          /* 16px — emphasis, labels */
   --milon-text-lg: 1.375rem;    /* 22px — section headings */
   --milon-text-xl: 1.75rem;     /* 28px — hero / page titles */
+  --milon-text-2xl: 2.125rem;   /* 34px — portal page titles (owner/accountant) */
+
+  /* Shared shape + elevation — one radius and shadow voice for every portal card */
+  --milon-radius-sm: 10px;
+  --milon-radius-md: 14px;
+  --milon-radius-lg: 18px;
+  --milon-radius-pill: 999px;
+  --milon-shadow-card: 0 1px 2px rgba(16, 42, 67, 0.04), 0 10px 26px rgba(16, 42, 67, 0.06);
+  --milon-shadow-raised: 0 2px 6px rgba(16, 42, 67, 0.06), 0 18px 40px rgba(16, 42, 67, 0.1);
 
   /* Spacing scale — 4px base */
   --milon-space-1: 0.25rem;   /* 4px */
@@ -123,7 +154,12 @@ html.dark {
   --milon-surface: #102a43;
 }
 
-html, body { font-family: var(--font-sans); font-feature-settings: "tnum", "ss01"; }
+html, body {
+  font-family: var(--font-sans);
+  /* Tabular lining numerals app-wide so figures align in every table. */
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
 
 
 @custom-variant dark (&:is(.dark *));
@@ -214,6 +250,7 @@ html, body { font-family: var(--font-sans); font-feature-settings: "tnum", "ss01
   --text-milon-md: var(--milon-text-md);
   --text-milon-lg: var(--milon-text-lg);
   --text-milon-xl: var(--milon-text-xl);
+  --text-milon-2xl: var(--milon-text-2xl);
   --spacing-milon-1: var(--milon-space-1);
   --spacing-milon-2: var(--milon-space-2);
   --spacing-milon-3: var(--milon-space-3);

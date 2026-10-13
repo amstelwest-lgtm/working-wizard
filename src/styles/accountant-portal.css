@@ -45,7 +45,7 @@ html.dark{
   --ok-ink:#7ddeba; --warn-ink:#f0d59a; --risk-ink:#ffb4bc;
   --shadow-gold:0 8px 24px rgba(0,0,0,.28);
 }
-.accountant-portal{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh}
+.accountant-portal{font-family:var(--font-sans,'Noto Sans',sans-serif);background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh}
 .accountant-portal ::selection{background:rgba(11,95,255,.22)}
 .accountant-portal button{font-family:inherit;cursor:pointer}
 .accountant-portal a{color:inherit}
@@ -896,7 +896,7 @@ html.dark .accountant-portal .milon-status-pill--warn{color:#f0d59a;background:r
   border-radius:999px;
   background:#0b5fff;
   color:#ffffff;
-  font-family:'Noto Sans',sans-serif;
+  font-family:var(--font-sans,'Noto Sans',sans-serif);
   font-size:12.5px;
   font-weight:700;
   letter-spacing:.01em;
@@ -959,7 +959,7 @@ html[data-theme="light"] .accountant-portal .data-fresh__line{color:var(--ink)}
   border-radius:999px;
   background:transparent;
   color:var(--ink);
-  font-family:'Noto Sans',sans-serif;
+  font-family:var(--font-sans,'Noto Sans',sans-serif);
   font-size:13px;
   font-weight:600;
   padding:8px 16px;

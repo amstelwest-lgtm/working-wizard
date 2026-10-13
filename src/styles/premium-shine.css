@@ -15,7 +15,7 @@
 
 /* ===== tokens ===== */
 html:not(.dark) {
-  --pp-sans: "Inter", "Geist Sans", "Noto Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pp-sans: var(--font-sans, system-ui, sans-serif);
   /* Deep charcoal frame — not pure black. */
   --pp-frame: #1a1d23;
   --pp-frame-2: #20242b;

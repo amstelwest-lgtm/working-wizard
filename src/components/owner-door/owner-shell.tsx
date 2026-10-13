@@ -4,12 +4,6 @@ import { PeriodPill, RailIcon } from "@/components/chrome-icons";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import "@fontsource/geist-sans/latin-400.css";
-import "@fontsource/geist-sans/latin-500.css";
-import "@fontsource/geist-sans/latin-600.css";
-import "@fontsource/geist-sans/latin-700.css";
-import "@fontsource/cormorant-garamond/latin-500.css";
-import "@fontsource/cormorant-garamond/latin-600.css";
 import "./owner-door.css";
 
 export type OwnerScreen =

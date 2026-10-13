@@ -1364,7 +1364,7 @@ html[data-theme="light"] .ledger-connect__label {
   border-radius: 6px;
   background-image: none;
   box-shadow: none;
-  font-family: Inter, "Noto Sans", sans-serif;
+  font-family: var(--font-sans, sans-serif);
   font-size: 15px;
   font-weight: 700;
   font-style: normal;
