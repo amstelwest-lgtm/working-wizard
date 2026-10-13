@@ -24,6 +24,7 @@ import { useMarket } from "@/contexts/market";
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
 import { healthBandLabel } from "@/lib/ratios";
+import { DigLeaf } from "@/components/health-drill-cue";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -241,6 +242,7 @@ export function PlaybookDrawer({
               </p>
             )}
           </div>
+          <DigLeaf source="From the figures on file." />
           {evidence ? (
             <button type="button" className="pillar-evidence mt-3" onClick={evidence.onOpen}>
               {evidence.label}

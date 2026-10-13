@@ -443,6 +443,10 @@ const HARNESS_FINANCIALS = {
 };
 
 function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean }) {
+  const [healthDrill, setHealthDrill] = useState<{
+    token: number;
+    pillarId: "profit" | "assets" | "financing" | "cash";
+  } | null>(null);
   useEffect(() => {
     if (!pillars) return;
     const timer = window.setTimeout(() => {
@@ -539,10 +543,19 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
               overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
               displayStatus={overall.displayStatus}
               pillars={spherePillars}
+              drillTo={healthDrill}
+              onDriverClick={() => undefined}
             />
           </div>
           <div className="health-plate">
-            <SimplifiedRatios sections={sections} />
+            <SimplifiedRatios
+              sections={sections}
+              onOpenPillar={(id) => {
+                if (id !== "profit" && id !== "assets" && id !== "financing" && id !== "cash") return;
+                setHealthDrill({ token: Date.now(), pillarId: id });
+                document.getElementById("health-score-drill")?.scrollIntoView({ block: "start" });
+              }}
+            />
           </div>
         </div>
       </PaneBoundary>
