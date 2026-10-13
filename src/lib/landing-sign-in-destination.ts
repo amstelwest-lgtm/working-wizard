@@ -1,12 +1,13 @@
 /**
  * Where a successful sign-in goes. The landing modal and /auth share this.
  *
- * The landing door sends a business seat to /app and a practice-only account
- * to /dashboard. /auth does the same for a business owner, including one whose
- * firm_admin role was granted automatically. A practice signup still opens
- * /dashboard, including a pre-card firm with no client files. An empty role
- * read is not a new owner: practice signup metadata still opens /dashboard,
- * and a read that has not finished stays pending instead of pinning /app.
+ * The landing door sends a pure owner to /app. /auth and any real firm
+ * membership (a firm row, or a practice role that is not the auto-grant)
+ * open /dashboard. An explicit owner door still keeps a dual-role account
+ * on /app. firm_admin with no firm row and no practice-signup metadata is
+ * the old auto-grant and stays on /app. An empty role read is not a new
+ * owner: practice signup metadata still opens /dashboard, and a read that
+ * has not finished stays pending instead of pinning /app.
  *
  * Supabase stays behind the dynamic imports in resolveSignedInDestination.
  */
@@ -40,8 +41,8 @@ export function destinationAfterLandingSignIn(d: LandingSignInRoles): SignInDest
  * Shared with /auth (`door: "accountant"`) and the landing modal
  * (`door: "landing"`). `pending` means the profile is not loaded and nothing
  * in the session says this is a practice account — do not open either board
- * yet. A business owner (client seat, no practice-signup metadata) who uses
- * /auth lands on /app, including when firm_admin was granted automatically.
+ * yet. /auth sends a real firm member to /dashboard. A pure owner, and an
+ * auto-granted firm_admin with no firm row, still land on /app.
  */
 export function destinationAfterSignIn(
   d: LandingSignInRoles,
@@ -102,20 +103,11 @@ export async function loadSignInRoleSnapshot(
       .map((row) => row.role as AppRole)
       .filter((role): role is AppRole => Boolean(role)),
   );
-  if (portal.hasPracticeRole) {
-    return {
-      hasPracticeRole: true,
-      hasClientRole: portal.hasClientRole,
-      hasFirm: false,
-      practiceSignup,
-      profileLoaded: true,
-    };
-  }
   try {
     const { listUserFirms } = await import("@/lib/firm-brand");
     const firms = await listUserFirms(userId);
     return {
-      hasPracticeRole: false,
+      hasPracticeRole: portal.hasPracticeRole,
       hasClientRole: portal.hasClientRole,
       hasFirm: firms.length > 0,
       practiceSignup,
@@ -123,11 +115,12 @@ export async function loadSignInRoleSnapshot(
     };
   } catch {
     return {
-      hasPracticeRole: false,
+      hasPracticeRole: portal.hasPracticeRole,
       hasClientRole: portal.hasClientRole,
-      hasFirm: false,
+      // A practice role whose firm read failed is not the auto-grant.
+      hasFirm: portal.hasPracticeRole,
       practiceSignup,
-      profileLoaded: false,
+      profileLoaded: portal.hasPracticeRole,
     };
   }
 }

@@ -175,8 +175,22 @@ const ownerWithFirmRole: LandingSignInRoles = {
   practiceSignup: false,
 };
 assert(
-  destinationAfterSignIn(ownerWithFirmRole, "accountant") === "/app",
-  "/auth sends an owner with an auto-granted firm role to /app",
+  destinationAfterSignIn(ownerWithFirmRole, "accountant") === "/dashboard",
+  "/auth sends a firm member who also has a client seat to /dashboard",
+);
+const autoGrantedOwner: LandingSignInRoles = {
+  hasPracticeRole: true,
+  hasClientRole: true,
+  hasFirm: false,
+  practiceSignup: false,
+};
+assert(
+  destinationAfterSignIn(autoGrantedOwner, "accountant") === "/app",
+  "/auth sends an auto-granted firm_admin with no firm row to /app",
+);
+assert(
+  destinationAfterSignIn(autoGrantedOwner, "landing") === "/app",
+  "the owner door keeps an auto-granted firm_admin on /app",
 );
 assert(
   destinationAfterSignIn(dual, "accountant") === "/dashboard",

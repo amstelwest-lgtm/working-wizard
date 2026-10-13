@@ -238,6 +238,29 @@ export function isSmeOnly(d: Pick<PortalRouteDecision, "hasPracticeRole" | "hasC
 }
 
 /**
+ * firm_admin written onto a business owner without a firm row and without
+ * practice-signup metadata. ensure_practice_firm used to do this. A firm row
+ * is a real membership — this is not that.
+ */
+export function isAutoGrantedFirmRole(
+  d: Pick<PortalRouteDecision, "hasPracticeRole" | "hasClientRole" | "hasFirm" | "practiceSignup">,
+): boolean {
+  return d.hasPracticeRole && d.hasClientRole && !d.hasFirm && !d.practiceSignup;
+}
+
+/**
+ * A firm row, a practice role, or practice-signup metadata. The auto-grant
+ * above is the only firm_admin that does not count. A firm row always counts.
+ */
+export function hasRealFirmMembership(
+  d: Pick<PortalRouteDecision, "hasPracticeRole" | "hasClientRole" | "hasFirm" | "practiceSignup">,
+): boolean {
+  if (d.hasFirm) return true;
+  if (isAutoGrantedFirmRole(d)) return false;
+  return d.hasPracticeRole || d.practiceSignup;
+}
+
+/**
  * May this session sit on /dashboard (practice portal)?
  * Dual-role accounts (practice + client on the same email) may — the door they
  * used decides which board they land on. Pure business-client credentials
@@ -261,35 +284,25 @@ export function canEnterAccountantPortal(d: PortalRouteDecision): boolean {
 /**
  * Where a generic (landing) sign-in should land.
  * A one-shot `force` from a specific door wins — except:
- * - business-client accounts cannot enter the practice portal via the accountant door
- * - owner-door intent + a client/owner role beats leftover accountant force
- *   (SME accounts are often auto-granted firm_admin, which would otherwise
- *   send owner Google to /dashboard after a prior /auth visit)
+ * - a pure owner (client seat, no firm membership) cannot enter the practice portal
+ * - an explicit owner door keeps a dual-role account on /app
+ * The accountant door, and any real firm membership, open /dashboard.
+ * firm_admin with no firm row and no practice-signup metadata is the old
+ * auto-grant, not a practice. A firm row is never treated as that auto-grant.
  */
 export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/app" {
+  // The owner door was chosen. Dual-role accounts follow that choice.
   if (d.force === "owner") return "/app";
-  if (!canEnterAccountantPortal(d)) return "/app";
-  // Owner-door Google (or any owner intent) with a client/owner role must land
-  // on /app even if leftover milon_force_portal=accountant remains from a prior
-  // /auth visit. Practice-only accounts still follow leftover accountant force.
-  if (d.intent === "owner" && d.hasClientRole) return "/app";
-  // A business owner who signs in at /auth. ensure_practice_firm often grants
-  // firm_admin without practice-signup metadata. That seat is not the practice
-  // portal. A real firm signup (signup_type or firm_name) still opens /dashboard.
-  if (d.hasClientRole && !d.practiceSignup) return "/app";
-  if (d.force === "accountant") return "/dashboard";
-  if (d.intent === "accountant") return "/dashboard";
-
-  if (d.hasPracticeRole && d.hasClientRole) {
-    if (d.intent === "owner") return "/app";
-    return "/app";
-  }
-  if (d.hasPracticeRole) return "/dashboard";
+  if (isSmeOnly(d) || !canEnterAccountantPortal(d)) return "/app";
+  // Owner intent, when this sign-in is not the accountant door.
+  if (d.intent === "owner" && d.hasClientRole && d.force !== "accountant") return "/app";
+  // Role only, no firm row: the historical ensure_practice_firm grant.
+  if (isAutoGrantedFirmRole(d)) return "/app";
+  // Accountant / Practice entry, or any real firm membership.
+  if (d.force === "accountant" || d.intent === "accountant") return "/dashboard";
+  if (hasRealFirmMembership(d)) return "/dashboard";
   if (d.hasClientRole) return "/app";
-  if (d.hasFirm) return "/dashboard";
-  // Practice signup metadata is already on the session. Role and firm rows
-  // can still be empty for a beat after sign-in. That is not a new owner.
-  if (d.practiceSignup && !d.hasClientRole) return "/dashboard";
+  if (d.practiceSignup) return "/dashboard";
   return "/app";
 }
 
@@ -311,10 +324,10 @@ export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: 
   if (d.actingAsClient) return false;
   if (d.force === "owner") return false;
   if (!canEnterAccountantPortal(d)) return false;
-  // Same owner exception as decidePostLoginPath: do not bounce them into
-  // the practice portal after /auth.
-  if (d.hasClientRole && !d.practiceSignup) return false;
-  if (d.force === "accountant") return true;
+  // Auto-grant and pure owners stay on the business board.
+  if (isAutoGrantedFirmRole(d) || isSmeOnly(d)) return false;
+  // Accountant door with a real firm seat does not stay on /app.
+  if (d.force === "accountant" && hasRealFirmMembership(d)) return true;
   if (d.hasPracticeRole && !d.hasClientRole) return true;
   return false;
 }
@@ -338,6 +351,19 @@ export function ownerBoardRole(opts: {
 }
 
 /**
+ * True when this user owns or belongs to a firm. A failed read on a practice
+ * role prefers /dashboard: an unseen firm row is not proof of the auto-grant.
+ */
+async function firmRowForRouting(userId: string, hasPracticeRole: boolean): Promise<boolean> {
+  try {
+    const firms = await listUserFirms(userId);
+    return firms.length > 0;
+  } catch {
+    return hasPracticeRole;
+  }
+}
+
+/**
  * Where should this user land after a generic (landing) sign-in?
  * Ops unlock still wins at the call site.
  */
@@ -348,13 +374,13 @@ export async function resolvePostLoginPath(userId: string): Promise<"/dashboard"
     resolvePortalRoles(userId),
     readPracticeSignup(),
   ]);
-  // Need firm membership whenever practice role is missing — SME-only vs
-  // unprovisioned accountant (firm exists, roles lag) vs no-role firm owner.
-  const firms = portal.hasPracticeRole ? [] : await listUserFirms(userId);
+  // A practice role is not enough. A firm row is the real membership, and
+  // skipping the read made every firm_admin look like the auto-grant.
+  const hasFirm = await firmRowForRouting(userId, portal.hasPracticeRole);
   return decidePostLoginPath({
     hasPracticeRole: portal.hasPracticeRole,
     hasClientRole: portal.hasClientRole,
-    hasFirm: firms.length > 0,
+    hasFirm,
     intent,
     force,
     practiceSignup,
@@ -372,11 +398,11 @@ export async function shouldBounceFromOwnerApp(
     resolvePortalRoles(userId),
     readPracticeSignup(),
   ]);
-  const firms = portal.hasPracticeRole || !portal.hasClientRole ? [] : await listUserFirms(userId);
+  const hasFirm = await firmRowForRouting(userId, portal.hasPracticeRole);
   return decideOwnerAppBounce({
     hasPracticeRole: portal.hasPracticeRole,
     hasClientRole: portal.hasClientRole,
-    hasFirm: firms.length > 0,
+    hasFirm,
     intent: getPortalIntent(),
     force,
     practiceSignup,
@@ -415,11 +441,11 @@ export async function shouldStayOnAccountantPortal(userId: string): Promise<bool
     resolvePortalRoles(userId),
     readPracticeSignup(),
   ]);
-  const firms = portal.hasPracticeRole ? [] : await listUserFirms(userId);
+  const hasFirm = await firmRowForRouting(userId, portal.hasPracticeRole);
   return decideAccountantStay({
     hasPracticeRole: portal.hasPracticeRole,
     hasClientRole: portal.hasClientRole,
-    hasFirm: firms.length > 0,
+    hasFirm,
     intent: getPortalIntent(),
     force,
     practiceSignup,
