@@ -31,7 +31,7 @@ const FIRM_ROW = {
   accent_color: "#0B5FFF",
   primary_color: "#1A1A2E",
   secondary_color: "#DBEAFE",
-  tagline: "The passion to perform.",
+  tagline: null,
   brand_contact_name: "Ada Mbeki",
   brand_contact_email: "ada@harbour.example",
   brand_updated_at: "2026-09-01T00:00:00.000Z",

@@ -908,3 +908,47 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
 body:has(#pane-ask.on) #wizard-notes-pin {
   display: none !important;
 }
+
+/* In-client agent pages (Financial Manager, Analyst, Advisor) flow with the
+   document. The team desk keeps the viewport lock. */
+.accountant-portal:has(.agent-stage) .shell,
+.accountant-portal:has(.agent-stage) .client-workspace,
+.accountant-portal:has(.agent-stage) .deliverable-main,
+.accountant-portal:has(.agent-stage) #pane-ask.on,
+.accountant-portal:has(.agent-stage) .milon-desk-host,
+.accountant-portal:has(.agent-stage) .milon-desk,
+.accountant-portal:has(.agent-stage) .milon-desk-scroll {
+  flex: none;
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.accountant-portal:has(.agent-stage) .client-workspace {
+  grid-template-rows: auto;
+  align-items: start;
+}
+
+.accountant-portal:has(.agent-stage) .shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 24px;
+}
+
+.accountant-portal:has(.agent-stage) .deliverable-main {
+  padding-bottom: 0;
+}
+
+.accountant-portal:has(.agent-stage) .footer-note {
+  margin-top: auto;
+}
+
+/* The share and notes buttons are hidden on this pane, so the phone pad
+   that clears them would leave the footer short of the page bottom. */
+@media (max-width: 767px) {
+  html[data-milon-fab="1"]:has(.agent-stage) body {
+    padding-bottom: 0;
+  }
+}
