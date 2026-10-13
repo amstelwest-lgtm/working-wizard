@@ -7,7 +7,6 @@
  * marketing display. Rand amounts and their lookup keys live beside this
  * catalog and are not mixed into ALL_FIRM_LOOKUP_KEYS.
  *
- * Watchlist clients are free and are not Stripe line items.
  * Owner Spark stays free and does not create a Checkout Session.
  *
  * Signup Checkout stays Solo monthly with a 14-day trial and a card on file

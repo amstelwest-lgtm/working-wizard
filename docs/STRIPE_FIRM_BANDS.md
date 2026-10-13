@@ -1,8 +1,7 @@
 # Stripe firm-band catalog (Checkout + Portal)
 
 Paying customer is the **accounting firm**. Pricing is flat USD monthly or annual
-bands by **ACTIVE client count**. Watchlist clients are free and are not Stripe
-line items. Owner **Spark** stays free and does not create a Checkout Session.
+bands by **ACTIVE client count**. Owner **Spark** stays free and does not create a Checkout Session.
 
 Catalog lives in Stripe **TEST and LIVE** on **Milon, Inc.**
 (`acct_1UEXnwGXDN6PFbnz`). Adaptive Pricing is on in the Dashboard (test + live)
