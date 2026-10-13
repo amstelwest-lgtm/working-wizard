@@ -7,8 +7,10 @@ import {
   findingSentence,
   isVisibleAgentFinding,
 } from "@/lib/milon-team-activity";
+import { clientAgentWork } from "@/lib/agent-work";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { AgentStage } from "./agent-stage";
+import { AgentWork } from "./agent-work";
 import { MilonTeamDesk } from "./milon-team-desk";
 
 export function MilonTeamPane({
@@ -61,6 +63,7 @@ export function MilonTeamPane({
   if (!agent) return desk;
   return (
     <AgentStage agent={agent} finding={finding || null} onSelect={(next) => onSelectAgent?.(next)}>
+      <AgentWork label="On this client" items={clientAgentWork(agent, clientId)} />
       {desk}
     </AgentStage>
   );

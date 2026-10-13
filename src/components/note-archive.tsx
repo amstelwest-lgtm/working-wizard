@@ -7,6 +7,7 @@ import {
   stayInListHint,
   type NotesWorkspace,
 } from "@/lib/notes-tabs";
+import { useOverlayHistory } from "@/lib/overlay-history";
 import { ratioQueryLabel } from "@/lib/ratio-queries";
 import {
   Sheet,
@@ -124,18 +125,22 @@ function ArchiveRow({
 
 export function NoteArchiveSheet() {
   const { notes, archiveOpen, archiveFilter, openArchive, closeArchive, surface } = useNotes();
+  const closeSheet = useOverlayHistory(archiveOpen, closeArchive);
   const openNotes = notes.filter((n) => !n.resolved);
   const resolvedNotes = notes.filter((n) => n.resolved);
   const rows = archiveFilter === "resolved" ? resolvedNotes : openNotes;
   const workspace = surface?.workspace ?? null;
 
   return (
-    <Sheet open={archiveOpen} onOpenChange={(open) => (open ? openArchive() : closeArchive())}>
+    <Sheet open={archiveOpen} onOpenChange={(open) => (open ? openArchive() : closeSheet())}>
       <SheetContent
         side="right"
         className="z-[100000] flex w-full flex-col gap-0 overflow-hidden border-l border-black/10 bg-[#f7f8fb] p-0 sm:max-w-md dark:border-white/10 dark:bg-[#0d1526]"
       >
         <SheetHeader className="border-b border-black/8 px-5 py-4 pr-12 text-left dark:border-white/10">
+          <button type="button" className="client-subpage-back" onClick={closeSheet}>
+            Back
+          </button>
           <SheetTitle className="flex items-center gap-2 text-base">
             <Archive className="h-4 w-4 text-[#0B5FFF]" />
             Notes

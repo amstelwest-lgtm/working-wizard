@@ -16,6 +16,8 @@ import {
   ownerHomeLines,
   type OwnerBooks,
 } from "../src/lib/owner-answers";
+import { clientAgentWork, practiceAgentWork } from "../src/lib/agent-work";
+import { clientBackTarget } from "../src/lib/client-back";
 import { practiceAgentFromHash, practiceAgentHash } from "../src/lib/practice-agent-hash";
 import { ratioActualLine } from "../src/lib/ratio-actuals";
 import type { RatioInputs } from "../src/lib/ratios";
@@ -146,9 +148,38 @@ assert(
   "account settings stay open",
 );
 
+const fmWork = practiceAgentWork("financial_manager", {
+  loading: false,
+  clients: [{ id: "a", name: "Harbour Glass", openQueries: 2 }],
+  attention: [],
+  followUps: [],
+});
+assert(fmWork.items[0]?.title === "Harbour Glass", "the financial manager lists the client with queries");
+assert(fmWork.items[0]?.link.search?.agent === "financial_manager", "that row opens the client agent");
+const quietBook = practiceAgentWork("advisor", {
+  loading: false,
+  clients: [],
+  attention: [],
+  followUps: [],
+});
+assert(quietBook.items[0]?.link.hash === "follow-up", "an empty advisor page links to follow up");
+const loadingBook = practiceAgentWork("analyst", {
+  loading: true,
+  clients: [],
+  attention: [],
+  followUps: [],
+});
+assert(loadingBook.items.length === 0 && loadingBook.empty === "Loading the book.", "a loading book is a sentence, not a skeleton");
+assert(clientAgentWork("financial_manager", "c")[0]?.link.search?.section === "forecast", "the client agent links to the cash line");
+assert(clientBackTarget({ tab: "ratios", section: "score" })?.label === "Health", "a score page goes back to Health");
+assert(clientBackTarget({ tab: "overview", agent: "analyst" })?.tab === "home", "an agent page goes back to Home");
+assert(clientBackTarget({ tab: "overview" }) === null, "Home has no back target");
+
 const read = (path: string) => readFileSync(resolve(path), "utf8");
 const board = read("src/components/practice-board.tsx");
 assert(board.includes("<AgentStage"), "the practice dashboard opens the agent stage");
+assert(board.includes("<AgentWork"), "the practice agent page lists the book");
+assert(!board.includes('width: "60%"'), "playbook cards do not draw a fake progress bar");
 assert(board.includes("practiceAgentFromHash"), "the dashboard reads the ask hash");
 assert(board.includes('id="follow-up"'), "Follow up has an anchor");
 assert(!board.includes("followUpItems.length > 0 ? ("), "Follow up stays on the page when the queue is empty");
@@ -158,6 +189,14 @@ const pane = read("src/components/milon-team/milon-team-pane.tsx");
 assert(pane.includes("homeFinding?.trim() || filedFinding"), "the agent stage prefers the Home finding");
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(client.includes("homeFinding="), "the client agent view receives the Home line");
+assert(client.includes("<ClientBackLink"), "client pages have a header back control");
+assert(client.includes("hideScore"), "Health does not repeat the score");
+assert(client.includes("Edit the period figures on Health."), "Profit links to Health for the figures");
+assert(!client.includes("profitFinCollapse"), "Profit does not edit the same figures as Health");
+const openAgent = client.slice(client.indexOf("const openHomeAgent"), client.indexOf("const openHomeSection"));
+assert(!openAgent.includes("replace:"), "opening an agent pushes history");
+const openSection = client.slice(client.indexOf("const openHomeSection"), client.indexOf("const openReportPage"));
+assert(!openSection.includes("replace:"), "opening a section pushes history");
 assert(client.includes("cashPosition:"), "Home cash comes from the Health outlook");
 assert(client.includes('useState("Checking the action plan.")'), "the plan strip waits for the plan");
 assert(!client.includes("studioDeepLink"), "All reports does not keep a stale report link");
@@ -166,6 +205,11 @@ const desk = read("src/components/milon-team/milon-team-desk.tsx");
 assert(desk.includes('presentation !== "agent"'), "an open agent does not sit on feed skeletons");
 const deskCss = read("src/components/milon-team/milon-team-desk.css");
 assert(deskCss.includes(":has(.agent-stage)"), "the agent view is not locked to the viewport");
+assert(
+  deskCss.includes(".accountant-portal:has(.agent-stage) .milon-desk-scroll"),
+  "the agent desk grows with its content",
+);
+assert(pane.includes("<AgentWork"), "the client agent page lists its work");
 
 const drawer = read("src/components/playbook-drawer.tsx");
 assert(drawer.includes("displayNumber"), "playbook steps show a sequential number");

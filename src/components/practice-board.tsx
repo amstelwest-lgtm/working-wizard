@@ -19,12 +19,9 @@ import {
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
 import {
-  avgHealthDelta,
   buildAttentionItems,
   buildFollowUpQueue,
   buildPortfolioInsights,
-  clientsAddedThisMonth,
-  attentionFootnote,
   dataAsOfLabel,
   firmOpenQueriesDestination,
   firstNameOf,
@@ -106,6 +103,9 @@ import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
 import { AgentStage } from "@/components/milon-team/agent-stage";
+import { AgentWork } from "@/components/milon-team/agent-work";
+import { practiceAgentWork } from "@/lib/agent-work";
+import { useOverlayHistory } from "@/lib/overlay-history";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { practiceAgentFromHash, practiceAgentHash } from "@/lib/practice-agent-hash";
@@ -483,6 +483,7 @@ function AddClientDialog({
   const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
   const [confirmUpgrade, setConfirmUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const closeDrawer = useOverlayHistory(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -651,12 +652,15 @@ function AddClientDialog({
 
   return (
     <>
-      <div className="veil open" onClick={onClose} />
+      <div className="veil open" onClick={closeDrawer} />
       <div className="drawer open" style={{ maxWidth: 420 }}>
         <div className="drawer-head">
+          <button type="button" className="client-subpage-back" onClick={closeDrawer}>
+            Back
+          </button>
           <div className="cat">New client</div>
           <h3>{heading}</h3>
-          <button className="close" onClick={onClose}>
+          <button className="close" onClick={closeDrawer} aria-label="Back">
             ✕
           </button>
         </div>
@@ -936,14 +940,18 @@ function InviteOwnerDialog({
   onCopy: () => void;
   onSend: () => void;
 }) {
+  const closeDrawer = useOverlayHistory(true, onClose);
   return (
     <>
-      <div className="veil open" onClick={onClose} />
+      <div className="veil open" onClick={closeDrawer} />
       <div className="drawer open" style={{ maxWidth: 480 }}>
         <div className="drawer-head">
+          <button type="button" className="client-subpage-back" onClick={closeDrawer}>
+            Back
+          </button>
           <div className="cat">Invite client management</div>
           <h3>{draft.clientName}</h3>
-          <button className="close" onClick={onClose}>
+          <button className="close" onClick={closeDrawer} aria-label="Back">
             ✕
           </button>
         </div>
@@ -1551,8 +1559,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
   const queriesDestination = firmOpenQueriesDestination(clientRows);
-  const addedThisMonth = clientsAddedThisMonth(clientRows);
-  const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(greetingSource);
   const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
@@ -1813,7 +1819,17 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   onSelect={(agent) => {
                     void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
                   }}
-                />
+                >
+                  <AgentWork
+                    label="On the book"
+                    {...practiceAgentWork(dashAgent, {
+                      loading: bookLoading,
+                      clients: clientRows,
+                      attention: attentionBook.items,
+                      followUps: followUpItems,
+                    })}
+                  />
+                </AgentStage>
               </div>
             ) : (
             <OwnerHome
@@ -1862,65 +1878,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             </>
           ) : (
             <>
-              <MetricTile
-                label="Clients"
-                icon={
-                  <svg viewBox="0 0 24 24">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                }
-                value={clientRows.length}
-                footnote={
-                  <div className={addedThisMonth > 0 ? "up" : undefined}>
-                    {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "On the platform"}
-                  </div>
-                }
-              />
-
-              <MetricTile
-                label="Avg health"
-                icon={
-                  <svg viewBox="0 0 24 24">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
-                }
-                value={
-                  <>
-                    {avgHealth == null ? "—" : avgHealth}
-                    {avgHealth != null && <small>/100</small>}
-                  </>
-                }
-                footnote={
-                  <div
-                    className={
-                      healthDelta != null && healthDelta > 0
-                        ? "up"
-                        : healthDelta != null && healthDelta < 0
-                          ? "warn"
-                          : undefined
-                    }
-                  >
-                    {healthDelta == null
-                      ? scoredRows.length
-                        ? `Across ${scoredRows.length} scored`
-                        : "No scored clients yet"
-                      : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
-                  </div>
-                }
-              />
-
-              <MetricTile
-                label="Need attention"
-                icon={
-                  <svg viewBox="0 0 24 24">
-                    <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
-                  </svg>
-                }
-                value={attention.needAttention}
-                valueClassName={attention.needAttention ? "text-[var(--risk)]" : "text-[var(--ok)]"}
-                footnote={<div className="attention-mix">{attentionFootnote(attention)}</div>}
-              />
-
               <MetricTile
                 id={OPEN_QUERIES_TILE_ID}
                 label="Open queries"
@@ -2079,9 +2036,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                           <i />
                           Definition
                         </span>
-                      </div>
-                      <div className="bar">
-                        <i style={{ width: "60%", background: "var(--ice, #38BDF8)" }} />
                       </div>
                       <div className="m">
                         <span>{cat}</span>

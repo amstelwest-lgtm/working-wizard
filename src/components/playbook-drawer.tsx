@@ -25,6 +25,7 @@ import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
 import { healthBandLabel } from "@/lib/ratios";
 import { DigLeaf } from "@/components/health-drill-cue";
+import { useOverlayHistory } from "@/lib/overlay-history";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -199,6 +200,7 @@ export function PlaybookDrawer({
   }, [open, signoffEnabled, clientId, ratioKey, loadSignoffs]);
 
   const signoffCount = Object.keys(signoffs).length;
+  const closeDrawer = useOverlayHistory(open, onClose);
 
   const tier = TIER_STYLES[healthTier] ?? TIER_STYLES.at_risk;
   const grouped = groupByTimeframe(steps);
@@ -207,7 +209,7 @@ export function PlaybookDrawer({
     <Sheet
       open={open}
       onOpenChange={(v) => {
-        if (!v) onClose();
+        if (!v) closeDrawer();
       }}
     >
             <SheetContent
@@ -216,6 +218,9 @@ export function PlaybookDrawer({
       >
         {/* Header */}
         <SheetHeader className="flex-shrink-0 space-y-0 border-b border-[#DBEAFE] dark:border-[#1e3a5f] px-6 pb-4 pt-6 text-left">
+          <button type="button" className="client-subpage-back" onClick={closeDrawer}>
+            Back
+          </button>
           <div className="flex items-center gap-3">
             <SheetTitle className="text-[#102A43] dark:text-[#F4F7FB] flex-1 text-left text-base font-semibold leading-tight">
               {ratioName}
