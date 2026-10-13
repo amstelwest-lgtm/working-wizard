@@ -51,8 +51,13 @@ assert(
   "direct ?tab=reports is the Reports item",
 );
 assert(
-  accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan").filter === "overdue",
-  "opening Action Plan keeps an overdue filter",
+  !("filter" in accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan")),
+  "opening the plan overview drops the overdue filter so the Overdue back control works",
+);
+assert(
+  accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan", { section: "overdue" })
+    .filter === "overdue",
+  "opening the Overdue page keeps the overdue filter",
 );
 
 const yankees = "11111111-1111-4111-8111-111111111111";
