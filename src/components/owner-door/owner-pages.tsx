@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { OwnerPageHead } from "@/components/owner-ui";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { agentShortName } from "@/lib/milon-team";
 import { OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
@@ -51,14 +52,17 @@ export function OwnerActions({
 }) {
   return (
     <section className="owner-pane" data-owner-page="actions">
-      <h1 className="owner-title">Action points</h1>
-      <p className="owner-lede">
-        {ready
-          ? rows.length
-            ? "Open points waiting on you."
-            : "Nothing is waiting on you."
-          : "Checking action points."}
-      </p>
+      <OwnerPageHead
+        eyebrow="Next moves"
+        title="Action points"
+        lede={
+          ready
+            ? rows.length
+              ? "Open points waiting on you."
+              : "Nothing is waiting on you."
+            : "Checking action points."
+        }
+      />
       <div className="owner-promises">
         {rows.map((row) => (
           <article key={row.id} className="owner-tile" data-action={row.id}>
@@ -113,12 +117,15 @@ export function OwnerAccountant({
         <span aria-hidden="true">/</span>
         <span aria-current="page">Accountant portal</span>
       </nav>
-      <h1 className="owner-title">Accountant portal</h1>
-      <p className="owner-lede">
-        {joined
-          ? `${firmName?.trim() || "Your accountant"} is on Milōn.`
-          : "Invite your accountant to sign off."}
-      </p>
+      <OwnerPageHead
+        eyebrow="Your accountant"
+        title="Accountant portal"
+        lede={
+          joined
+            ? `${firmName?.trim() || "Your accountant"} is on Milōn.`
+            : "Invite your accountant to sign off."
+        }
+      />
       {joined ? null : <p className="owner-free">{ownerPlanFreeLine()}</p>}
       {invite}
       <div id="owner-accountant-requests">{requests}</div>
@@ -182,7 +189,8 @@ export function OwnerPlan({
 }) {
   return (
     <section className="owner-pane" data-owner-page="plan">
-      <h1 className="owner-title">Plan</h1>
+      <OwnerPageHead eyebrow="Billing" title="Plan" />
+
       <article className="owner-plan-card">
         <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName, zaMonthly })}</p>
         <h2>What you get</h2>
@@ -242,8 +250,11 @@ export function OwnerSettings({
       <button type="button" className="owner-back" onClick={onBack}>
         Back
       </button>
-      <h1 className="owner-title">Settings</h1>
-      <p className="owner-lede">Plan, appearance, profile, and book connections.</p>
+      <OwnerPageHead
+        eyebrow="Your account"
+        title="Settings"
+        lede="Plan, appearance, profile, and book connections."
+      />
       <section className="owner-settings-block">
         <h2>Plan</h2>
         <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName, zaMonthly })}</p>
@@ -295,10 +306,11 @@ export function OwnerFirst({
 }) {
   return (
     <section className="owner-pane" data-owner-page="first">
-      <h1 className="owner-title">Connect your books</h1>
-      <p className="owner-lede">
-        Connect QuickBooks or Xero. Nothing is filled in until the books are on file.
-      </p>
+      <OwnerPageHead
+        eyebrow="Getting started"
+        title="Connect your books"
+        lede="Connect QuickBooks or Xero. Nothing is filled in until the books are on file."
+      />
       <div className="owner-first-actions">
         <button type="button" className="btn gold owner-ask" onClick={onQuickBooks}>
           Connect QuickBooks

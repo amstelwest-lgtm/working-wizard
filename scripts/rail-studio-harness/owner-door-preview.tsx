@@ -25,6 +25,7 @@ import {
   OwnerSettings,
 } from "@/components/owner-door/owner-pages";
 import { OwnerShell } from "@/components/owner-door/owner-shell";
+import { OwnerPageHead } from "@/components/owner-ui";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { OWNER_REPLY_BLOB, OWNER_REPLY_STRUCTURED_BOLD } from "@/lib/owner-reply-format";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
@@ -154,6 +155,7 @@ function HealthOrb({
     <div className="owner-health-hero">
       <OwnerSignoffMark signoff={signoff} isStale={stale} className="mb-2" />
       <SphereHero
+        variant="ring"
         overallHealth={80}
         displayStatus="healthy"
         pillars={PILLARS}
@@ -409,7 +411,11 @@ export function OwnerDoorPreview({
       ) : null}
       {view === "health" ? (
         <section className="owner-pane" data-owner-page="health">
-          <h1 className="owner-title">Business Health</h1>
+          <OwnerPageHead
+            eyebrow="Health"
+            title="Business health"
+            lede="One score built from profit, assets, financing and cash."
+          />
           <HealthOrb onDriver={setDriver} {...previewSignoff("financials")} />
           {driver ? <p data-health-driver={driver}>Opened {driver}</p> : null}
         </section>
@@ -432,6 +438,11 @@ export function OwnerDoorPreview({
       ) : null}
       {view === "budget" ? (
         <section className="owner-pane" data-owner-page="budget">
+          <OwnerPageHead
+            eyebrow="Budget"
+            title="Budget vs actual"
+            lede="The plan for the year, next to what actually happened."
+          />
           <BudgetPanel
             clientId="harness-client"
             clientName="Northline Studio"
@@ -490,7 +501,11 @@ export function OwnerDoorPreview({
       ) : null}
       {view === "moves" || view === "tasks" || view === "actions" ? (
         <section className="owner-pane" data-owner-page="moves">
-          <h1 className="owner-title">Next moves</h1>
+          <OwnerPageHead
+            eyebrow="Next moves"
+            title="Your action plan"
+            lede="What to do next, and who is on it."
+          />
           <ActionPlanPanel
             clientId="harness-client"
             clientName="Northline Studio"

@@ -3393,22 +3393,23 @@ function HealthDonut({
             acc += dash;
             return el;
           })}
+          {/* The svg is CSS-rotated -90°, so the vertical stack offsets live on x. */}
           <text
-            x={cx}
-            y={cy - 6}
+            x={cx + 6}
+            y={cy}
             textAnchor="middle"
             dominantBaseline="central"
-            transform={`rotate(90 ${cx} ${cy - 6})`}
+            transform={`rotate(90 ${cx + 6} ${cy})`}
             className="fill-slate-950 text-xl font-black tabular-nums dark:fill-white"
           >
             {open}
           </text>
           <text
-            x={cx}
-            y={cy + 12}
+            x={cx - 12}
+            y={cy}
             textAnchor="middle"
             dominantBaseline="central"
-            transform={`rotate(90 ${cx} ${cy + 12})`}
+            transform={`rotate(90 ${cx - 12} ${cy})`}
             className="fill-slate-500 text-xs font-semibold uppercase tracking-wide dark:fill-slate-400"
           >
             open

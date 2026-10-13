@@ -21,8 +21,8 @@
 }
 
 .owner-door {
-  --owner-serif: "Cormorant Garamond", "Owner Serif Fallback", Georgia, "Times New Roman", serif;
-  --owner-sans: "Geist Sans", "Owner Sans Fallback", sans-serif;
+  --owner-serif: var(--font-display, "Owner Sans Fallback", sans-serif);
+  --owner-sans: var(--font-sans, "Owner Sans Fallback", sans-serif);
   --owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg));
   --owner-stage: var(--bg-3);
   --owner-mark: var(--ink);

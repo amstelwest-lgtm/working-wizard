@@ -15,11 +15,8 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: ^1.25.5
         version: 1.39.0(vite@7.3.3(@types/node@22.19.19)(jiti@1.21.7)(lightningcss@1.33.0))(workerd@1.20260526.1)(wrangler@4.95.0)
-      '@fontsource/cormorant-garamond':
+      '@fontsource-variable/plus-jakarta-sans':
         specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/geist-sans':
-        specifier: 5.3.0
         version: 5.3.0
       '@fontsource/noto-sans':
         specifier: ^5.3.0
@@ -1153,11 +1150,8 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@fontsource/cormorant-garamond@5.3.0':
-    resolution: {integrity: sha512-weuGsCirGVWBWqpt6YUp0yLThTe4G8YO45noq8wxeJCRvEpq5lFrxNMFSTxcyOyV5k5otzJ8guDzYegdYlcLMQ==}
-
-  '@fontsource/geist-sans@5.3.0':
-    resolution: {integrity: sha512-AmG7cE1AvE4NHROPaOl1sN+a02cB5xy6pA/ZV76HXqWTCsJTV2SCBc9DTFHfJqnVOODm7HhXIYtUIb75NP5QXQ==}
+  '@fontsource-variable/plus-jakarta-sans@5.3.0':
+    resolution: {integrity: sha512-/l/4r0yyWK9JzAlmA0LiYgGgmJe/Gswt4jTJEzr5QhJfwMbvJZDmYWyW0M4X7yCK69BajMVlV/Lx8g7WDc1+sw==}
 
   '@fontsource/noto-sans@5.3.0':
     resolution: {integrity: sha512-fBCog2PY7DiVVTEEqtI/Qdinx/knobHYfoGpjFXdfBX5RoJaBp1Prw2G75p0OIsdlMZg3cLo0c+YbIUYOxnQJw==}
@@ -6548,9 +6542,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@fontsource/cormorant-garamond@5.3.0': {}
-
-  '@fontsource/geist-sans@5.3.0': {}
+  '@fontsource-variable/plus-jakarta-sans@5.3.0': {}
 
   '@fontsource/noto-sans@5.3.0': {}
 

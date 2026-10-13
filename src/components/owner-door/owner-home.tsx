@@ -178,6 +178,7 @@ export function OwnerHome({
   return (
     <div className="owner-pane" data-owner-home="true" data-bots={bots}>
       <div className="owner-head">
+        <p className="owner-eyebrow">Home</p>
         <h1 className="owner-title">{title}</h1>
         <p className="owner-lede">{lede}</p>
       </div>

@@ -4,12 +4,6 @@ import { PeriodPill, RailIcon } from "@/components/chrome-icons";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import "@fontsource/geist-sans/latin-400.css";
-import "@fontsource/geist-sans/latin-500.css";
-import "@fontsource/geist-sans/latin-600.css";
-import "@fontsource/geist-sans/latin-700.css";
-import "@fontsource/cormorant-garamond/latin-500.css";
-import "@fontsource/cormorant-garamond/latin-600.css";
 import "./owner-door.css";
 
 export type OwnerScreen =
@@ -211,6 +205,11 @@ export function OwnerShell({
         <DrawerBackdrop open={navOpen} onClose={() => setNavOpen(false)} />
         <nav className="deliverable-rail" aria-label="Owner">
           <DrawerCloseButton onClose={() => setNavOpen(false)} />
+          <div className="rail-brand" aria-hidden="true">
+            <span className="brand">
+              <span className="gold-text">MILŌN</span>
+            </span>
+          </div>
           {RAIL.map((item) => {
             const active = screen === item.screen || (item.screen === "home" && screen === "chat");
             return (

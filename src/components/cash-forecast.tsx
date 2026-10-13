@@ -21,13 +21,17 @@ import {
 import {
   Plus,
   Trash2,
+  CalendarDays,
   Download,
+  LineChart,
+  ShieldCheck,
   SlidersHorizontal,
   Upload,
   TrendingUp,
   TrendingDown,
   Settings2,
   Wallet,
+  type LucideIcon,
 } from "lucide-react";
 import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
 import { cashExplainerCopy, humanizeIsoDates } from "@/lib/cash-explainer";
@@ -330,27 +334,44 @@ function Stat({
   value,
   sub,
   tone = "neutral",
+  icon: Icon,
 }: {
   label: string;
   value: string;
   sub?: React.ReactNode;
   tone?: "neutral" | "good" | "bad";
+  /** Soft circular tile icon (owner premium pass). */
+  icon?: LucideIcon;
 }) {
   return (
-    <div className="rounded-xl border border-amber-900/10 bg-white/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50">
-      <div className={LABEL_CLS}>{label}</div>
-      <div
-        className={`mt-1 text-xl font-extrabold leading-tight tracking-tight whitespace-normal ${
-          tone === "good"
-            ? "text-[#3f9c72] dark:text-[#5cc492]"
-            : tone === "bad"
-              ? "text-[#c0392b] dark:text-[#ef6b6b]"
-              : "text-slate-950 dark:text-white"
-        }`}
-      >
-        {value}
+    <div
+      className="cash-kpi rounded-xl border border-amber-900/10 bg-white/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50"
+      data-tone={tone}
+    >
+      <div className="cash-kpi-body">
+        <div className={`cash-kpi-label ${LABEL_CLS}`}>{label}</div>
+        <div
+          className={`cash-kpi-value mt-1 text-xl font-extrabold leading-tight tracking-tight whitespace-normal ${
+            tone === "good"
+              ? "text-[#3f9c72] dark:text-[#5cc492]"
+              : tone === "bad"
+                ? "text-[#c0392b] dark:text-[#ef6b6b]"
+                : "text-slate-950 dark:text-white"
+          }`}
+        >
+          {value}
+        </div>
+        {sub && (
+          <div className="cash-kpi-sub mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+            {sub}
+          </div>
+        )}
       </div>
-      {sub && <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{sub}</div>}
+      {Icon ? (
+        <span className="cash-kpi-ic" aria-hidden="true">
+          <Icon />
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -1652,6 +1673,7 @@ export function CashForecastPanel({
   const answerStrip = (
     <section className="answer-strip" data-answer-strip>
       <div className="answer-strip__lead">
+        <p className="answer-strip__eyebrow">Cash flow</p>
         <h2 className="answer-strip__heading">13-week cash forecast</h2>
         {!loaded ? (
           <p className="answer-strip__sentence" data-answer-sentence aria-busy="true">
@@ -1992,7 +2014,9 @@ export function CashForecastPanel({
 
   const graphPane = (
     <>
-      <div className={`mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+      <div
+        className={`cash-kpis mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2 min-[1100px]:grid-cols-4" : "sm:grid-cols-3"}`}
+      >
         {!loaded ? (
           <CashTileSkeletons count={simplified ? 4 : 3} />
         ) : simplified ? (
@@ -2000,6 +2024,7 @@ export function CashForecastPanel({
             <Stat
               label="Closing · Week 13"
               value={fmtCompact(closingW13)}
+              icon={LineChart}
               tone={closingW13 < 0 ? "bad" : "neutral"}
               sub={
                 <span className="inline-flex items-center gap-1">
@@ -2016,6 +2041,7 @@ export function CashForecastPanel({
             <Stat
               label="Lowest balance"
               value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+              icon={ShieldCheck}
               tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
               sub={
                 emptyPresentation.lowestBlank
@@ -2028,12 +2054,16 @@ export function CashForecastPanel({
             <Stat
               label="Weeks below floor"
               value={weeksBelow.value}
+              icon={CalendarDays}
               tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
               sub={weeksBelow.sub}
             />
             <Stat
               label="Net cash · next 4 weeks"
               value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
+              icon={
+                calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? TrendingDown : TrendingUp
+              }
               tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
               sub="Inflows minus outflows"
             />
@@ -2064,14 +2094,21 @@ export function CashForecastPanel({
       </div>
       {emptyPresentation.showChart ? (
         <>
+          <div className="cash-legend" data-cash-legend>
+            <span className="cash-legend-item">
+              <i className="cash-legend-line" aria-hidden="true" />
+              Closing balance
+            </span>
+            <span className="cash-legend-item">
+              <i className="cash-legend-floor" aria-hidden="true" />
+              Runway floor {fmtCompact(minimumCash)}
+            </span>
+          </div>
           {heroChart(
-            simplified ? 180 : 240,
+            simplified ? 200 : 240,
             inlineChart.chartWidth,
             inlineChart.onChartFrame,
           )}
-          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Floor {fmtCompact(minimumCash)}
-          </p>
         </>
       ) : (
         <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">

@@ -1,0 +1,951 @@
+/*
+ * Owner premium pass — the target design system for the owner portal.
+ *
+ * Reference: navy sidebar with a royal active pill, white topbar with light
+ * pills, a soft blue-grey canvas, white cards with hairline borders and one
+ * shadow voice, eyebrow/title/lede page headers, KPI tiles with soft circular
+ * icons, a slim amber warning banner, clean tables with source pills, and
+ * thin gold for the wordmark, the sign-off CTAs, and a metallic rim on
+ * primary buttons (no solid gold fill).
+ *
+ * Scope: `.owner-door` only. It loads after premium-shine.css so equal
+ * selectors here win; the accountant portal keeps its current look and can
+ * copy these tokens next. Structural rules (new markup) apply in both
+ * themes; light-mode paint carries the `html:not(.dark)` prefix to match
+ * premium-shine specificity.
+ */
+
+/* ===== tokens ===== */
+.owner-door {
+  /* Brushed landing gold: dark, mid, a bright highlight, then dark again.
+     Used only as a 2px rim (border-box layer). Never a button fill. */
+  --op-gold-gleam: linear-gradient(
+    115deg,
+    #7a5400 0%,
+    #b8860b 26%,
+    #f6e7a2 48%,
+    #fff6d2 52%,
+    #d4af37 62%,
+    #a67c00 82%,
+    #7a5400 100%
+  );
+}
+html:not(.dark) .owner-door.accountant-portal {
+  /* Re-point the premium-shine frame tokens at the navy system. Everything
+     premium-shine painted with --pp-frame-* follows automatically. */
+  --pp-frame: #0e2238;
+  --pp-frame-2: #112a44;
+  --pp-frame-line: rgba(255, 255, 255, 0.08);
+  --pp-frame-ink: #f2f6fc;
+  --pp-frame-dim: #c0cedf;
+  --pp-frame-faint: #7f93ab;
+  --pp-canvas: #f4f6fa;
+  /* Gold hairlines retire; cards get a quiet cool hairline instead. */
+  --pp-gold-line: #e3e9f2;
+  --pp-gold-line-soft: #edf1f7;
+  --op-line: #e3e9f2;
+  --op-line-soft: #edf1f7;
+  --op-ink: #102a43;
+  --op-ink-dim: #3d5270;
+  --op-ink-faint: #5c7190;
+  --op-active: linear-gradient(180deg, rgba(37, 99, 235, 0.5), rgba(29, 78, 216, 0.42));
+  --op-active-ring: rgba(96, 165, 250, 0.32);
+  --owner-edge: #e3e9f2;
+  --owner-radius: var(--milon-radius-lg, 18px);
+  --owner-shadow: var(--milon-shadow-card, 0 1px 2px rgba(16, 42, 67, 0.04), 0 10px 26px rgba(16, 42, 67, 0.06));
+  --line: #e3e9f2;
+  --line-soft: #edf1f7;
+  --bg-3: #f0f3f9;
+}
+/* The frame continues past the portal (short pages, overscroll). */
+html:not(.dark) body:has(.owner-door) {
+  background: #0e2238 !important;
+}
+
+/* ===== type scale ===== */
+html:not(.dark) .owner-door .owner-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.12;
+  color: var(--op-ink);
+}
+.owner-door .owner-eyebrow,
+.owner-door .health-kicker,
+.accountant-portal .answer-strip__eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint, #5c7190);
+}
+.owner-door .owner-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+.owner-door .owner-page-head-main {
+  min-width: 0;
+}
+.owner-door .owner-page-head .owner-lede {
+  margin-top: 8px;
+}
+html:not(.dark) .owner-door .owner-lede {
+  color: var(--op-ink-dim);
+}
+
+/* ===== topbar: white, light pills ===== */
+html:not(.dark) .owner-door.accountant-portal .topbar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--op-line);
+  box-shadow: none;
+  color: var(--op-ink);
+  backdrop-filter: none;
+}
+html:not(.dark) .owner-door .topbar .brand::after {
+  content: none;
+}
+html:not(.dark) .owner-door .topbar .gold-text {
+  filter: none;
+}
+/* Desktop: the wordmark lives on the navy rail; the topbar leads with the
+   business pill. Phones keep the topbar wordmark next to the menu button. */
+@media (min-width: 861px) {
+  .owner-door .topbar .owner-brand > .brand {
+    display: none;
+  }
+}
+@media (max-width: 860px) {
+  .owner-door .deliverable-rail .rail-brand {
+    display: none;
+  }
+}
+html:not(.dark) .owner-door .owner-biz {
+  border: 1px solid var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink);
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .owner-biz-ic {
+  color: var(--op-ink-faint);
+}
+html:not(.dark) .owner-door .topbar .period-pill {
+  border-color: var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink-dim);
+}
+html:not(.dark) .owner-door .topbar .tb-btn:not(.gold),
+html:not(.dark) .owner-door .topbar .settings-gear,
+html:not(.dark) .owner-door .topbar .owner-settings-link,
+html:not(.dark) .owner-door .topbar-menu-btn {
+  border-color: var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .topbar .tb-btn:not(.gold):hover,
+html:not(.dark) .owner-door .topbar .settings-gear:hover,
+html:not(.dark) .owner-door .topbar .owner-settings-link:hover,
+html:not(.dark) .owner-door .topbar-menu-btn:hover {
+  border-color: #c7d4e8;
+  background: #f4f7fc;
+  color: var(--op-ink);
+}
+/* Theme control: the round navy chip from the reference. */
+html:not(.dark) .owner-door .topbar .milon-theme-toggle,
+html:not(.dark) .owner-door .topbar [data-theme-toggle] {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #0e2238;
+  background: #102a43;
+  color: #f2f6fc;
+}
+html:not(.dark) .owner-door .topbar .milon-theme-toggle:hover {
+  border-color: #1d4ed8;
+  background: #163254;
+  color: #ffffff;
+}
+html:not(.dark) .owner-door .topbar .profile-chip {
+  border-color: var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink);
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .topbar .profile-chip:hover {
+  border-color: #c7d4e8;
+  background: #f4f7fc;
+}
+html:not(.dark) .owner-door .topbar .profile-chip .av {
+  background: var(--pale, #dbeafe);
+  color: var(--royal, #2563eb);
+}
+html:not(.dark) .owner-door .topbar .profile-caret {
+  color: var(--op-ink-faint);
+}
+
+/* ===== rail: navy, royal active pill ===== */
+.owner-door .deliverable-rail .rail-brand {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px 16px;
+}
+.owner-door .deliverable-rail .rail-brand .brand {
+  display: flex;
+  align-items: center;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  font-size: 15px;
+}
+@media (min-width: 861px) {
+  html:not(.dark) .owner-door.accountant-portal .deliverable-rail {
+    padding-top: 18px;
+  }
+}
+html:not(.dark) .owner-door .deliverable-rail .tab {
+  color: var(--pp-frame-dim);
+  font-weight: 500;
+  border-radius: 10px;
+}
+html:not(.dark) .owner-door .deliverable-rail .tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+html:not(.dark) .owner-door .deliverable-rail .tab.on {
+  color: #ffffff;
+  background: var(--op-active);
+  background-image: var(--op-active);
+  box-shadow: inset 0 0 0 1px var(--op-active-ring);
+  border-radius: 10px;
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .deliverable-rail .tab-ic {
+  color: var(--pp-frame-faint);
+}
+html:not(.dark) .owner-door .deliverable-rail .tab.on .tab-ic {
+  color: #dbeafe;
+}
+html:not(.dark) .owner-door .deliverable-rail :is(a, button):focus-visible {
+  outline: 2px solid rgba(147, 197, 253, 0.8);
+  outline-offset: 2px;
+}
+
+/* ===== canvas: flat, no gold rim ===== */
+html:not(.dark) .owner-door.accountant-portal .deliverable-main {
+  background: var(--pp-canvas);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ===== cards: one hairline + shadow voice ===== */
+/* Action-plan cards carry a cobalt top stripe; the owner skin keeps cards quiet. */
+html:not(.dark) .owner-door [class*="bg-[#0B5FFF]"][class*="h-1"] {
+  display: none;
+}
+html:not(.dark) .owner-door .card,
+html:not(.dark) .owner-door .owner-tile,
+html:not(.dark) .owner-door .owner-plan-card,
+html:not(.dark) .owner-door .owner-needs,
+html:not(.dark) .owner-door .owner-settings-block,
+html:not(.dark) .owner-door .owner-health-hero {
+  border-color: var(--op-line);
+  border-radius: var(--milon-radius-lg, 18px);
+  box-shadow: var(--owner-shadow);
+  background: #ffffff;
+}
+@media (min-width: 761px) {
+  html:not(.dark) .owner-door .owner-pane[data-owner-home="true"] .owner-agent {
+    border-color: var(--op-line);
+  }
+}
+@media (max-width: 760px) {
+  html:not(.dark) .owner-door .owner-pane[data-owner-home="true"] .owner-agent {
+    border-color: var(--op-line);
+  }
+}
+
+/* ===== answer strip as page header (cash) ===== */
+html:not(.dark) .owner-door .answer-strip__heading {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.12;
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .answer-strip__sentence {
+  font-size: 15px;
+  color: var(--op-ink-dim);
+}
+
+/* ===== KPI tiles (cash + budget verdict) ===== */
+.owner-door .cash-kpi {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.owner-door .cash-kpi-body {
+  min-width: 0;
+}
+.owner-door .cash-kpi-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cobalt, #0b5fff) 10%, var(--card, #ffffff));
+  color: var(--royal, #2563eb);
+}
+.owner-door .cash-kpi-ic svg {
+  width: 17px;
+  height: 17px;
+}
+.owner-door .cash-kpi[data-tone="good"] .cash-kpi-ic {
+  background: color-mix(in srgb, var(--ok, #16845b) 11%, var(--card, #ffffff));
+  color: var(--ok, #16845b);
+}
+.owner-door .cash-kpi[data-tone="bad"] .cash-kpi-ic {
+  background: color-mix(in srgb, var(--risk, #c43d4b) 10%, var(--card, #ffffff));
+  color: var(--risk, #c43d4b);
+}
+html:not(.dark) .owner-door .cash-kpi {
+  border: 1px solid var(--op-line);
+  border-radius: var(--milon-radius-md, 14px);
+  background: #ffffff;
+  box-shadow: var(--owner-shadow);
+  padding: 14px 16px;
+}
+html:not(.dark) .owner-door .cash-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--op-ink-faint);
+}
+html:not(.dark) .owner-door .cash-kpi-value {
+  margin-top: 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+html:not(.dark) .owner-door .cash-kpi-value.text-slate-950 {
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .cash-kpi-sub {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--op-ink-dim);
+}
+
+/* ===== amber warning banner (P&L vs bank) ===== */
+html:not(.dark) .owner-door .pl-disagree {
+  align-items: center;
+  border: 1px solid #f0dfb3;
+  border-radius: var(--milon-radius-md, 14px);
+  background: #fff8e8;
+  color: var(--op-ink-dim);
+  padding: 12px 16px;
+}
+html:not(.dark) .owner-door .pl-disagree-ic {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 0;
+  border-radius: 999px;
+  background: #faedc8;
+}
+html:not(.dark) .owner-door .pl-disagree-ic svg {
+  color: #a16207;
+}
+html:not(.dark) .owner-door .pl-disagree-title {
+  color: var(--op-ink);
+  font-size: 13.5px;
+}
+html:not(.dark) .owner-door .pl-disagree-line {
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: #6b7a90;
+}
+
+/* ===== chart legend ===== */
+.owner-door .cash-legend {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 2px 4px 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-dim, #3d5270);
+}
+.owner-door .cash-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.owner-door .cash-legend-line,
+.owner-door .cash-legend-floor {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 2.5px solid var(--cobalt, #0b5fff);
+  border-radius: 2px;
+}
+.owner-door .cash-legend-floor {
+  border-top-style: dashed;
+  border-top-color: var(--royal, #2563eb);
+  opacity: 0.75;
+}
+
+/* ===== 13-week table: calm rows, light dividers, generous spacing ===== */
+html:not(.dark) .owner-door .cash-13w-scroll {
+  border: 1px solid var(--op-line);
+  border-radius: var(--milon-radius-md, 14px);
+}
+html:not(.dark) .owner-door .cash-13w-scroll thead th {
+  background: #f7f9fc;
+  border-bottom: 1px solid var(--op-line);
+  color: var(--op-ink-faint);
+  box-shadow: none;
+}
+html:not(.dark) .owner-door .cash-13w-scroll thead th span:first-child {
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .cash-13w-scroll thead th[data-cash-tight] {
+  background: #fdf1f1;
+  box-shadow: inset 0 -2px 0 var(--risk, #c43d4b);
+}
+html:not(.dark) .owner-door .cash-13w-scroll th,
+html:not(.dark) .owner-door .cash-13w-scroll td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--op-line-soft);
+}
+html:not(.dark) .owner-door .cash-13w-scroll tbody th[scope="row"],
+html:not(.dark) .owner-door .cash-13w-scroll tbody td {
+  background: #ffffff;
+  color: var(--op-ink);
+  box-shadow: none;
+}
+html:not(.dark) .owner-door .cash-13w-scroll tbody th[scope="row"] {
+  box-shadow: 10px 0 14px -12px rgba(16, 42, 67, 0.18);
+}
+html:not(.dark) .owner-door .cash-13w-scroll tbody th[scope="colgroup"] {
+  background: #ffffff;
+  color: var(--op-ink-faint);
+  letter-spacing: 0.16em;
+  box-shadow: none;
+}
+/* Emphasis rows: quiet tints instead of loud fills. */
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="total-receipts"] th,
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="total-receipts"] td:not([data-cash-tight]) {
+  background: #f2faf6;
+  color: #0e5c40;
+}
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="total-payments"] th,
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="total-payments"] td:not([data-cash-tight]) {
+  background: #fdf6f5;
+  color: #8e2430;
+}
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="closing"] th,
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="closing"] td:not([data-cash-tight]) {
+  background: #f4f8ff;
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="floor"] th,
+html:not(.dark) .owner-door .cash-13w-scroll tr[data-cash-row="floor"] td {
+  background: #ffffff;
+  color: var(--op-ink-faint);
+}
+html:not(.dark) .owner-door .cash-13w-scroll td[data-cash-tight],
+html:not(.dark) .owner-door .cash-13w-scroll td[data-cash-opening-tight] {
+  background: #fdf1f1;
+}
+/* Source pills: BANK / ASSUMPTION / XERO. */
+html:not(.dark) .owner-door .cash-13w-scroll tbody th [class*="rounded-full"] {
+  border-color: #d4e3fb;
+  background: #eaf2fe;
+  color: var(--royal, #2563eb);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 1px 8px;
+}
+/* The details disclosure reads as a quiet link row. */
+html:not(.dark) .owner-door .cash-details {
+  border: 1px solid var(--op-line-soft);
+  border-radius: 10px;
+  background: #f7f9fc;
+  padding: 8px 12px;
+}
+html:not(.dark) .owner-door .cash-details summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--op-ink-dim);
+}
+
+/* ===== health: ring, takeaways, pillar cards ===== */
+.owner-door .health-ring-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+.owner-door .health-ring-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px 28px;
+  width: 100%;
+}
+@media (max-width: 760px) {
+  .owner-door .health-ring-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.owner-door .health-ring-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.owner-door .health-ring {
+  position: relative;
+  width: min(248px, 72vw);
+  aspect-ratio: 1 / 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.owner-door .health-ring:disabled {
+  cursor: default;
+}
+.owner-door .health-ring:focus-visible {
+  outline: 2px solid var(--cobalt, #0b5fff);
+  outline-offset: 6px;
+  border-radius: 999px;
+}
+.owner-door .health-ring-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.owner-door .health-ring-track {
+  stroke: var(--line-soft, #edf1f7);
+}
+html.dark .owner-door .health-ring-track {
+  stroke: #1e3a5f;
+}
+.owner-door .health-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 0 28px;
+}
+.owner-door .health-ring-label {
+  max-width: 110px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-faint, #5c7190);
+}
+.owner-door .health-ring-score {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink, #102a43) !important;
+}
+.owner-door .health-band {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.owner-door .health-band.is-healthy {
+  background: color-mix(in srgb, var(--ok, #16845b) 12%, transparent);
+  color: var(--ok-ink, #0e5c40);
+}
+.owner-door .health-band.is-watch {
+  background: color-mix(in srgb, var(--warn, #b7791f) 14%, transparent);
+  color: var(--warn-ink, #8a5a12);
+}
+.owner-door .health-band.is-critical {
+  background: color-mix(in srgb, var(--risk, #c43d4b) 12%, transparent);
+  color: var(--risk-ink, #8e2430);
+}
+.owner-door .health-band.is-nodata {
+  background: var(--line-soft, #edf1f7);
+  color: var(--ink-faint, #5c7190);
+}
+.owner-door .health-takeaways {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.owner-door .health-takeaway {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink, #102a43);
+}
+.owner-door .health-takeaway-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+.owner-door .health-takeaway-ic svg {
+  width: 14px;
+  height: 14px;
+}
+.owner-door .health-takeaway.is-up .health-takeaway-ic {
+  background: color-mix(in srgb, var(--ok, #16845b) 12%, transparent);
+  color: var(--ok, #16845b);
+}
+.owner-door .health-takeaway.is-flat .health-takeaway-ic {
+  background: color-mix(in srgb, var(--warn, #b7791f) 14%, transparent);
+  color: var(--warn, #b7791f);
+}
+.owner-door .health-takeaway.is-down .health-takeaway-ic {
+  background: color-mix(in srgb, var(--risk, #c43d4b) 12%, transparent);
+  color: var(--risk, #c43d4b);
+}
+.owner-door .health-ring-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: flex-start;
+  margin-top: 16px;
+  min-height: 40px;
+  padding: 0 20px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--royal, #2563eb);
+  background-image:
+    linear-gradient(180deg, #2e6bf0, #2056d6),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 214, 0.55),
+    0 6px 18px rgba(37, 99, 235, 0.26);
+}
+.owner-door .health-ring-cta:hover {
+  background-image:
+    linear-gradient(180deg, #3b76f2, #2a60e0),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.owner-door .health-pillar-kicker {
+  margin: 4px 0 0;
+}
+.owner-door .health-pillar-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 980px) {
+  .owner-door .health-pillar-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 430px) {
+  .owner-door .health-pillar-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.owner-door .health-pillar-cardx {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line, #e3e9f2);
+  border-radius: var(--milon-radius-md, 14px);
+  background: var(--card, #ffffff);
+  box-shadow: var(--owner-shadow, 0 1px 2px rgba(16, 42, 67, 0.04));
+  color: var(--ink, #102a43);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.owner-door .health-pillar-cardx:hover {
+  border-color: color-mix(in srgb, var(--cobalt, #0b5fff) 45%, var(--line, #e3e9f2));
+  transform: translateY(-1px);
+}
+.owner-door .health-pillar-cardx:focus-visible {
+  outline: 2px solid var(--cobalt, #0b5fff);
+  outline-offset: 2px;
+}
+.owner-door .health-pillar-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-bottom: 6px;
+}
+.owner-door .health-pillar-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cobalt, #0b5fff) 9%, var(--card, #ffffff));
+  color: var(--royal, #2563eb);
+}
+.owner-door .health-pillar-cardx[data-tier="healthy"] .health-pillar-ic {
+  background: color-mix(in srgb, var(--ok, #16845b) 11%, var(--card, #ffffff));
+  color: var(--ok, #16845b);
+}
+.owner-door .health-pillar-cardx[data-tier="watch"] .health-pillar-ic {
+  background: color-mix(in srgb, var(--warn, #b7791f) 13%, var(--card, #ffffff));
+  color: var(--warn, #b7791f);
+}
+.owner-door .health-pillar-cardx[data-tier="critical"] .health-pillar-ic {
+  background: color-mix(in srgb, var(--risk, #c43d4b) 11%, var(--card, #ffffff));
+  color: var(--risk, #c43d4b);
+}
+.owner-door .health-pillar-ic svg {
+  width: 15px;
+  height: 15px;
+}
+.owner-door .health-pillar-name {
+  min-width: 0;
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink, #102a43);
+}
+.owner-door .health-pillar-chev {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #e3e9f2);
+  color: var(--ink-faint, #5c7190);
+}
+.owner-door .health-pillar-chev svg {
+  width: 13px;
+  height: 13px;
+}
+.owner-door .health-pillar-figure {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.owner-door .health-pillar-band {
+  font-size: 12px;
+  font-weight: 700;
+}
+/* Score reads in ink; only the band word carries the semantic colour. */
+html:not(.dark) .owner-door .health-pillar-figure {
+  color: var(--op-ink) !important;
+}
+html:not(.dark) .owner-door .health-pillar-band.text-emerald-400 {
+  color: var(--ok) !important;
+}
+html:not(.dark) .owner-door .health-pillar-band[class*="text-amber"],
+html:not(.dark) .owner-door .health-pillar-band.text-\[\#B7791F\] {
+  color: var(--warn-ink, #8a5a12) !important;
+}
+html:not(.dark) .owner-door .health-pillar-band.text-rose-400 {
+  color: var(--risk) !important;
+}
+html:not(.dark) .owner-door .health-ring-score.text-emerald-400,
+html:not(.dark) .owner-door .health-ring-score[class*="text-amber"],
+html:not(.dark) .owner-door .health-ring-score.text-rose-400,
+html:not(.dark) .owner-door .health-ring-score.text-slate-400 {
+  color: var(--op-ink) !important;
+}
+
+/* ===== budget verdict: four KPI tiles ===== */
+html:not(.dark) .owner-door [data-owner-budget-summary] {
+  border-bottom: 0;
+  padding-bottom: 0;
+  gap: 12px;
+}
+html:not(.dark) .owner-door [data-owner-budget-summary] > * {
+  border: 1px solid var(--op-line);
+  border-radius: var(--milon-radius-md, 14px);
+  background: #ffffff;
+  box-shadow: var(--owner-shadow);
+  padding: 14px 16px;
+  min-width: 0;
+}
+html:not(.dark) .owner-door [data-owner-budget-summary] [class*="uppercase"] {
+  letter-spacing: 0.12em;
+  color: var(--op-ink-faint);
+}
+
+/* ===== home ===== */
+html:not(.dark) .owner-door .owner-head {
+  margin: 8px 0 2px;
+}
+html:not(.dark) .owner-door .owner-needs {
+  border-radius: var(--milon-radius-lg, 18px);
+}
+html:not(.dark) .owner-door .owner-needs h2 {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--op-ink-faint);
+}
+html:not(.dark) .owner-door .owner-invite-nudge {
+  border-color: #f0dfb3;
+  background: #fffdf5;
+}
+
+/* ===== page furniture ===== */
+html:not(.dark) .owner-door .owner-crumb,
+html:not(.dark) .owner-door .owner-crumb-link {
+  color: var(--op-ink-faint);
+}
+html:not(.dark) .owner-door .owner-crumb-link:hover {
+  color: var(--royal);
+}
+html:not(.dark) .owner-door .owner-sub {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .owner-back {
+  align-self: flex-start;
+  width: fit-content;
+  padding: 0 18px;
+  border: 1px solid var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink-dim);
+  border-radius: 999px;
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .owner-back:hover {
+  border-color: #c7d4e8;
+  background: #f4f7fc;
+  color: var(--op-ink);
+}
+html:not(.dark) .owner-door .owner-btn-secondary {
+  border: 1px solid var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink);
+  border-radius: 999px;
+  font-weight: 600;
+}
+html:not(.dark) .owner-door .owner-btn-secondary:hover {
+  border-color: var(--royal);
+  color: var(--royal);
+}
+
+/* Primary buttons stay royal. A 2px brushed-gold rim (border-box layer under
+   the blue padding-box fill) plus a hairline top highlight. No gold fill.
+   The wordmark and sign-off CTAs keep their own gold. */
+html:not(.dark) .owner-door .btn.gold,
+html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold {
+  background-color: var(--royal, #2563eb);
+  background-image:
+    linear-gradient(180deg, #2e6bf0, #2056d6),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  border: 2px solid transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 214, 0.55),
+    0 6px 18px rgba(37, 99, 235, 0.26);
+}
+html:not(.dark) .owner-door .btn.gold:hover,
+html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:hover {
+  background-image:
+    linear-gradient(180deg, #3b76f2, #2a60e0),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+}
+html.dark .owner-door .btn.gold {
+  border: 2px solid transparent;
+  background-color: var(--cobalt);
+  background-image:
+    linear-gradient(180deg, var(--cobalt), var(--cobalt)),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.35);
+}
+html.dark .owner-door .btn.gold:hover {
+  background-color: var(--royal);
+  background-image:
+    linear-gradient(180deg, var(--royal), var(--royal)),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+/* Enlarge / download affordances: quiet outline chips. */
+html:not(.dark) .owner-door .answer-strip__icon,
+html:not(.dark) .owner-door .enlarge-btn {
+  border-color: var(--op-line);
+  background: #ffffff;
+  color: var(--op-ink-dim);
+}
+html:not(.dark) .owner-door .answer-strip__icon:hover,
+html:not(.dark) .owner-door .enlarge-btn:hover {
+  border-color: #c7d4e8;
+  color: var(--op-ink);
+  background: #f4f7fc;
+}
+
+/* ===== phone (390): drawer + rhythm ===== */
+@media (max-width: 860px) {
+  html:not(.dark) .owner-door.accountant-portal.nav-open .deliverable-rail {
+    background: var(--pp-frame-2);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 24px 0 60px rgba(4, 16, 30, 0.55);
+  }
+  html:not(.dark) .owner-door .owner-title,
+  html:not(.dark) .owner-door .answer-strip__heading {
+    font-size: 27px;
+  }
+  .owner-door .health-ring-cta {
+    align-self: stretch;
+  }
+}

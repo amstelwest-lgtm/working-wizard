@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
-import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  TrendingUp,
+  Layers,
+  Shield,
+  Droplet,
+  type LucideIcon,
+} from "lucide-react";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 import { DigCue, DigLeaf } from "@/components/health-drill-cue";
 
@@ -52,6 +60,12 @@ export type SpherePillar = {
 };
 
 export type SphereHeroProps = {
+  /**
+   * "orb" keeps the glowing sphere (accountant studio). "ring" is the owner
+   * premium pass: a flat score ring with a band pill, key takeaways and
+   * pillar cards. Same data, same drill, different level-1 presentation.
+   */
+  variant?: "orb" | "ring";
   overallHealth: number;
   /**
    * When set, drives overall orb colour/label (critical-pillar demotion)
@@ -327,6 +341,118 @@ function Sphere({
   );
 }
 
+// ── Ring dial (owner premium variant) ───────────────────────────────────────
+
+const RING_STROKE: Record<Tier, string> = {
+  healthy: "var(--ok, #16845b)",
+  watch: "var(--warn, #b7791f)",
+  critical: "var(--risk, #c43d4b)",
+  nodata: "#94a3b8",
+};
+
+function RingDial({
+  score,
+  tier,
+  delta,
+  onClick,
+  ariaLabel,
+}: {
+  score: number;
+  tier: Tier;
+  delta?: number;
+  onClick?: () => void;
+  ariaLabel: string;
+}) {
+  const radius = 84;
+  const circumference = 2 * Math.PI * radius;
+  const pct = isFinite(score) ? Math.max(0, Math.min(100, score)) / 100 : 0;
+  return (
+    <button
+      type="button"
+      className="health-ring"
+      data-tier={tier}
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={ariaLabel}
+    >
+      <svg viewBox="0 0 200 200" className="health-ring-svg" aria-hidden="true">
+        <circle
+          cx="100"
+          cy="100"
+          r={radius}
+          className="health-ring-track"
+          strokeWidth="13"
+          fill="none"
+        />
+        <circle
+          cx="100"
+          cy="100"
+          r={radius}
+          className="health-ring-arc"
+          stroke={RING_STROKE[tier]}
+          strokeWidth="13"
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={`${circumference * pct} ${circumference}`}
+          transform="rotate(-90 100 100)"
+        />
+      </svg>
+      <span className="health-ring-center">
+        <span className="health-ring-label">Business health score</span>
+        <span className={`health-ring-score ${TIER_TEXT[tier]}`}>{fmtScore(score)}</span>
+        <span className={`health-band is-${tier}`}>
+          {TIER_LABEL[tier]}
+          {typeof delta === "number" && delta !== 0 ? (
+            <span className="health-band-delta">
+              {delta > 0 ? "↑" : "↓"} {Math.abs(Math.round(delta))}
+            </span>
+          ) : null}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function takeawayDirection(tier: Tier): "up" | "flat" | "down" {
+  if (tier === "healthy") return "up";
+  if (tier === "critical") return "down";
+  return "flat";
+}
+
+function TakeawayIcon({ direction }: { direction: "up" | "flat" | "down" }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      {direction === "up" ? (
+        <path
+          d="M8 12V4m0 0L4.5 7.5M8 4l3.5 3.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : direction === "down" ? (
+        <path
+          d="M8 4v8m0 0l3.5-3.5M8 12L4.5 8.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : (
+        <path
+          d="M4 8h8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 type Level = 1 | 2 | 3;
@@ -350,6 +476,7 @@ function useCompactOrbSize(compact: boolean): number {
 }
 
 export function SphereHero({
+  variant = "orb",
   overallHealth,
   displayStatus,
   overallDelta,
@@ -427,8 +554,110 @@ export function SphereHero({
         </button>
       </div>
 
+      {/* ── RING VARIANT LEVEL 1: flat dial, takeaways, pillar cards ── */}
+      {variant === "ring" && level === 1 && (
+        <div className="health-ring-pane">
+          <div className="health-ring-hero">
+            <div className="health-ring-stage">
+              <RingDial
+                score={overallHealth}
+                tier={overallTier}
+                delta={overallDelta}
+                onClick={() => (onOrbOpen ? onOrbOpen() : go(2))}
+                ariaLabel={`Business Health Score ${fmtScore(overallHealth)}. ${caption ?? "Dig deeper."}`}
+              />
+              {tapCaption || !caption ? (
+                <button
+                  type="button"
+                  className="sphere-caption"
+                  onClick={() => (onOrbOpen ? onOrbOpen() : go(2))}
+                >
+                  {caption ?? "Tap to see what's behind your score"}
+                </button>
+              ) : (
+                <p className="sphere-caption" role="note">
+                  {caption}
+                </p>
+              )}
+            </div>
+            <div className="health-ring-aside">
+              <p className="health-kicker">Key takeaways</p>
+              <ul className="health-takeaways">
+                {pillars.map((p) => {
+                  const t = tierOf(p.health, p.status);
+                  const direction = takeawayDirection(t);
+                  return (
+                    <li key={p.id} className={`health-takeaway is-${direction}`}>
+                      <span className="health-takeaway-ic" aria-hidden="true">
+                        <TakeawayIcon direction={direction} />
+                      </span>
+                      <span>
+                        {p.label}: {TIER_LABEL[t]}
+                        {isFinite(p.health) ? ` (${fmtScore(p.health)})` : ""}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {onTopPriority ? (
+                <button
+                  type="button"
+                  className="health-ring-cta"
+                  onClick={() => {
+                    playKlink();
+                    onTopPriority();
+                  }}
+                >
+                  View recommended actions
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <p className="health-kicker health-pillar-kicker">Health by pillar</p>
+          <div className="health-pillar-cards">
+            {pillars.map((p) => {
+              const Icon = PILLAR_ICON[p.id];
+              const t = tierOf(p.health, p.status);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => go(3, p.id)}
+                  aria-label={`${p.label} score ${fmtScore(p.health)}. Dig deeper.`}
+                  className="health-pillar-cardx"
+                  data-tier={t}
+                >
+                  <span className="health-pillar-top">
+                    <span className="health-pillar-ic" aria-hidden="true">
+                      <Icon />
+                    </span>
+                    <span className="health-pillar-name">{p.label}</span>
+                    <span className="health-pillar-chev" aria-hidden="true">
+                      <ChevronRight />
+                    </span>
+                  </span>
+                  <span className={`health-pillar-figure ${TIER_TEXT[t]}`}>
+                    {fmtScore(p.health)}
+                  </span>
+                  <span className={`health-pillar-band ${TIER_TEXT[t]}`}>
+                    {TIER_LABEL[t]}
+                    {typeof p.delta === "number" && p.delta !== 0 ? (
+                      <span className={p.delta > 0 ? "text-emerald-600" : "text-rose-600"}>
+                        {" "}
+                        {p.delta > 0 ? "↑" : "↓"} {Math.abs(Math.round(p.delta))}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── LEVEL 1 & 2: main sphere (morphs size) ── */}
-      {level < 3 && (
+      {(variant === "orb" || level === 2) && level < 3 && (
         <>
           <div
             className={`flex flex-col items-center ${reduceMotion ? "" : "transition-all duration-500 ease-out"}`}
@@ -498,7 +727,7 @@ export function SphereHero({
       )}
 
       {/* ── LEVEL 1: compact pillar stat row ── */}
-      {level === 1 && (
+      {variant === "orb" && level === 1 && (
         <div className={`${compact ? "mt-3" : "mt-5"} grid w-full max-w-xl grid-cols-2 gap-2 sm:grid-cols-4`}>
           {pillars.map((p) => {
             const Icon = PILLAR_ICON[p.id];
