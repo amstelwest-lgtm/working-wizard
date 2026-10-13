@@ -66,7 +66,7 @@ assert(isSaPricingCountry("za") === false, "country match is case-sensitive ZA")
 const us = surface(false);
 assert(!LEAK.test(us), `US render leaked a forbidden string: ${us.match(LEAK)?.[0]}`);
 assert(!us.includes("R799"), "US render omits the rand price");
-assert(!us.includes("R199") && !us.includes("R299"), "US render has neither owner nor Starter rand");
+assert(!us.includes("R299") && !us.includes("R799"), "US render has no owner or firm rand");
 assert(!us.includes("South African"), "US render omits the rand heading");
 
 const za = surface(true);

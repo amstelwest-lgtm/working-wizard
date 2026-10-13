@@ -9,7 +9,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve("dist/client");
-const needles = ["R799", "R299", "R199", "rand ", "ZAR", "South Africa", "South African", "50%"];
+const needles = ["R799", "R299", "rand ", "ZAR", "South Africa", "South African", "50%"];
 const allow = /za-pricing/;
 
 function walk(dir, out = []) {

@@ -4,15 +4,12 @@ Firm billing uses the Stripe catalog documented in **[STRIPE_FIRM_BANDS.md](./ST
 
 The owner plan is a separate catalog product, **Milōn Owner** (`prod_VQKKjT1uyUzG2b`). Its metadata is `plan=owner` and it has no band key, so firm upgrade and band sync skip it.
 
-New Checkout resolves the existing lookup keys. Those keys now point at the current amounts. Checkout does not switch keys.
+New Checkout resolves the existing lookup keys. Those keys point at the owner amounts. Checkout does not switch keys.
 
-- **$29/mo** USD — `price_1UQ4F4GXDN6PFbnzDkkkw7ZQ`, lookup `milon_owner_monthly` (2900 cents)
-- **R199/mo** ZAR — `price_1UQ4F6GXDN6PFbnz7MF9OPVe`, lookup `milon_za_owner_monthly` (19900 cents)
+- **$39/mo** USD — `price_1UPTfgGXDN6PFbnzzPyRVBi4`, lookup `milon_owner_monthly` (3900 cents)
+- **R299/mo** ZAR — `price_1UPTfiGXDN6PFbnzfAJ9I36b`, lookup `milon_za_owner_monthly` (29900 cents)
 
-Existing subscribers stay on the previous price ids. Those subscriptions are not migrated:
-
-- **$39/mo** USD — `price_1UPTfgGXDN6PFbnzzPyRVBi4` (3900 cents)
-- **R299/mo** ZAR — `price_1UPTfiGXDN6PFbnzfAJ9I36b` (29900 cents)
+Existing subscriptions stay on their current price id. Checkout does not migrate them.
 
 ZAR is charged only when the owner's stored market is ZA and the Checkout billing country is ZA. A US owner stays on USD even if the page asks for ZA. The owner plan is free when the owner's business is accepted by a firm on an active, trialing, or 14-day grace Milōn firm plan. Checkout is skipped and the entitlement is `covered_by_firm`.
 

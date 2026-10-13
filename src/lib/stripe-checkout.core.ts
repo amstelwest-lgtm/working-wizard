@@ -474,9 +474,9 @@ export { isFoundingCode, assertFoundingMonthlyOnly };
 
 export { isOwnerLookupKey, isZaOwnerLookup, OWNER_LOOKUP_KEYS } from "@/lib/owner-price";
 
-export const OWNER_MONTHLY_USD_CENTS = 2_900;
+export const OWNER_MONTHLY_USD_CENTS = 3_900;
 /** Rand monthly amount in cents. The letters of the currency code stay out of this file. */
-export const OWNER_MONTHLY_ZA_CENTS = 19_900;
+export const OWNER_MONTHLY_ZA_CENTS = 29_900;
 
 /** Annual charge is monthly × 12 × 0.8, in cents. */
 export function ownerAnnualCents(monthlyCents: number): number {

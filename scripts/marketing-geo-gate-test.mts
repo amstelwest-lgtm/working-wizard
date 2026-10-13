@@ -19,7 +19,7 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const LEAK = /R199|R299|R799|\brand\b|ZAR|South Africa/i;
+const LEAK = /R299|R799|\brand\b|ZAR|South Africa/i;
 
 function accountantsMarkup(geo: string, marketParam: string | null): string {
   const pack = marketingPackForGeo(geo, marketParam);

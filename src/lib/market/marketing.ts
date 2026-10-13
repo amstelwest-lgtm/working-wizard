@@ -23,7 +23,7 @@ export const LIST_PRICES = {
     retainerUplift: "R1 200+",
   },
   us: {
-    orbit: "$29",
+    orbit: "$39",
     constellation: "$75",
     firmStarter: "$39",
     firmSolo: "$99",

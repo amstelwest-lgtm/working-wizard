@@ -424,8 +424,8 @@ assert(
 assert(checkoutDocs.includes("Milon, Inc."), "docs say Milon, Inc.");
 assert(checkoutDocs.includes("FOUNDING"), "docs mention FOUNDING");
 assert(!checkoutDocs.includes("Owner Spark stays free"), "docs no longer say the owner plan is free Spark");
-assert(checkoutDocs.includes("$29/mo"), "docs price the owner plan at $29");
-assert(checkoutDocs.includes("R199/mo"), "docs price the owner plan at R199");
+assert(checkoutDocs.includes("lookup `milon_owner_monthly` (3900 cents)"), "docs price the owner plan at $39");
+assert(checkoutDocs.includes("lookup `milon_za_owner_monthly` (29900 cents)"), "docs price the owner plan at R299");
 assert(
   checkoutDocs.includes("milon_za_owner_monthly"),
   "docs name the ZA owner lookup key",
@@ -585,14 +585,14 @@ assert(
 
 assert(existsSync(resolve("src/routes/billing.start.tsx")), "billing start route exists");
 
-assert(OWNER_MONTHLY_USD_CENTS === 2900, "owner monthly USD is $29");
-assert(OWNER_MONTHLY_ZA_CENTS === 19900, "owner monthly ZA amount is 19900 cents");
+assert(OWNER_MONTHLY_USD_CENTS === 3900, "owner monthly USD is $39");
+assert(OWNER_MONTHLY_ZA_CENTS === 29900, "owner monthly ZA amount is 29900 cents");
 assert(
-  ownerAnnualCents(OWNER_MONTHLY_USD_CENTS) === 27840,
+  ownerAnnualCents(OWNER_MONTHLY_USD_CENTS) === 37440,
   "owner annual USD is monthly x 12 x 0.8",
 );
 assert(
-  ownerAnnualCents(OWNER_MONTHLY_ZA_CENTS) === 191040,
+  ownerAnnualCents(OWNER_MONTHLY_ZA_CENTS) === 287040,
   "owner annual ZA amount is monthly x 12 x 0.8",
 );
 assert(ownerLookupKey("us", "month") === "milon_owner_monthly", "new USD owner monthly lookup");

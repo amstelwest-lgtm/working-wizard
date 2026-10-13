@@ -68,7 +68,7 @@ function TermsPage() {
       </p>
       ) : null}
       <p>
-        Business owners pay {saPricing?.ownerMonthly ?? "$29/mo"}, or nothing when their accountant
+        Business owners pay {saPricing?.ownerMonthly ?? "$39/mo"}, or nothing when their accountant
         is on Milōn. Accounting firms are billed after a 14-day trial.
       </p>
       {copyPack === "us" ? (

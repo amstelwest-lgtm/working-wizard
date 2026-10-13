@@ -55,16 +55,16 @@ export function loadSaPricingCopy(): SaPricingCopy {
     accountantsLead:
       "Management accounts, 13-week cash and advisory drafts from QuickBooks, Xero or Sage.",
     ownerHomepageCost:
-      "Business owners pay R199/mo, or nothing when their accountant is on Milōn.",
-    ownerBar: "R199/mo · free when your accountant is on Milōn",
-    ownerHeroLink: "Business owner? R199/mo, or free when your accountant is on Milōn →",
+      "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
+    ownerBar: "R299/mo · free when your accountant is on Milōn",
+    ownerHeroLink: "Business owner? R299/mo, or free when your accountant is on Milōn →",
     ownerRegisterNote:
-      "Business owners pay R199/mo, or nothing when their accountant is on Milōn.",
+      "Business owners pay R299/mo, or nothing when their accountant is on Milōn.",
     ownerEarly:
-      "The owner plan is R199 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.",
-    ownerMonthly: "R199/mo",
-    faqCostLead: "Business owners: R199 a month, or free when your accountant is on Milōn.",
-    ownerPlanAnswer: "R199 a month, and free when your accountant is on Milōn.",
+      "The owner plan is R299 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.",
+    ownerMonthly: "R299/mo",
+    faqCostLead: "Business owners: R299 a month, or free when your accountant is on Milōn.",
+    ownerPlanAnswer: "R299 a month, and free when your accountant is on Milōn.",
     footerTagline: "for accounting firms and the businesses they advise.",
     footerBuilt: "An AI finance team for accounting firms",
     footerLine:
