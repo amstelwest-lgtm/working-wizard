@@ -177,8 +177,7 @@ export function FirmBandPricingTable({
   const labels = showSaPricing ? saLabels : null;
   const bands = FIRM_BAND_TABLE;
   const featured = bands.filter(
-    (band) =>
-      band.id === "starter" || band.id === "solo" || band.id === "growing" || band.id === "scale",
+    (band) => band.id === "starter" || band.id === "solo" || band.id === "growing",
   );
 
   const startControl = (band: FirmBand, className: string) => {

@@ -375,8 +375,10 @@ assert(signup.includes("<strong>Solo</strong>"), "signup names Solo as the start
 assert(signup.includes("<details>"), "larger bands are not equal first choices");
 assert(pricing.includes(`data-funnel={FUNNEL_SOLO_FIRST}`), "pricing leads Solo");
 assert(pricing.includes("See all plans"), "the full band table sits behind See all plans");
-assert(pricing.includes('band.id === "growing"'), "Growing is a featured card");
-assert(pricing.includes('band.id === "scale"'), "Scale is a featured card");
+assert(pricing.includes('band.id === "starter"'), "Starter is the first featured card");
+assert(pricing.includes('band.id === "solo"'), "Solo is the second featured card");
+assert(pricing.includes('band.id === "growing"'), "Growing is the third featured card");
+assert(!pricing.includes('band.id === "scale"'), "Scale sits in the dropdown with the later bands");
 assert(picker.includes("FUNNEL_SOLO_FIRST"), "plan picker marks Solo when it leads");
 assert(picker.includes("Start here"), "plan picker says Solo is where to start");
 assert(!pricing.includes("SA_FIRM_DISCOUNT") || pricing.includes("showSaPricing"), "SA discount stays behind the geo flag");
