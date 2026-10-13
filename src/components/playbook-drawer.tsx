@@ -199,6 +199,7 @@ export function PlaybookDrawer({
   }, [open, signoffEnabled, clientId, ratioKey, loadSignoffs]);
 
   const signoffCount = Object.keys(signoffs).length;
+  const displayNumber = new Map(steps.map((step, index) => [step.step_number, index + 1]));
 
   const tier = TIER_STYLES[healthTier] ?? TIER_STYLES.at_risk;
   const grouped = groupByTimeframe(steps);
@@ -413,7 +414,7 @@ export function PlaybookDrawer({
                           <span
                             className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tier.stepDot}`}
                           >
-                            {step.step_number}
+                            {displayNumber.get(step.step_number) ?? step.step_number}
                           </span>
 
                           <div className="min-w-0 flex-1">

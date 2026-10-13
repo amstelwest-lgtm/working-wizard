@@ -52,8 +52,8 @@ assert(
   "reports still require a card after an insight",
 );
 assert(
-  decideFirmBillingPathGate({ ...blocked, pathname: "/settings/team" }) === "require_billing",
-  "team settings still require a card",
+  decideFirmBillingPathGate({ ...blocked, pathname: "/settings/team" }) === "allow",
+  "team settings stay open with the dashboard when the book has a client",
 );
 assert(
   decideFirmBillingPathGate({ ...blocked, pathname: "/clients/abc" }) === "allow",

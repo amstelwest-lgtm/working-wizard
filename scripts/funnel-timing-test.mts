@@ -78,7 +78,7 @@ assert(routePathname(PRECARD_ONBOARDING_HREF) === "/dashboard", "add-client href
 assert(isPreInsightWorkspacePath("/practice"), "practice overview is the pre-insight workspace");
 assert(isPreInsightWorkspacePath("/clients/abc"), "client studio is the pre-insight workspace");
 assert(!isPreInsightWorkspacePath("/reports"), "reports is not the aha path");
-assert(!isPreInsightWorkspacePath("/settings/team"), "team settings is not the aha path");
+assert(isPreInsightWorkspacePath("/settings/team"), "team settings stay open with the dashboard before the insight");
 
 assert(firmSignupCheckoutIntent().plan === "solo", "stashed signup Checkout is still Solo");
 
@@ -331,8 +331,8 @@ assert(
     pathname: "/settings/team",
     insightSeen: readInsightSeen("firm-b"),
     firmClientCount: 1,
-  }) === "require_billing",
-  "firm B after its insight still walls team settings",
+  }) === "allow",
+  "team settings stay open with the dashboard when the book has a client",
 );
 assert(
   decideFirmBillingPathGate({

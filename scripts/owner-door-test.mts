@@ -170,6 +170,25 @@ assert(
   /^Cash is \$[\d,]+ below your \$[\d,]+ minimum\.$/.test(underHome.financial_manager[0] ?? ""),
   `a dip under the floor is a sentence (${underHome.financial_manager[0]})`,
 );
+const outlookBooks = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashOutlook: {
+    opening: 46330,
+    closing: [46330],
+    floor: 36900,
+    dipsBelowFloorWeek: null,
+  },
+});
+const outlookHome = ownerHomeLines(ownerAnswerTiles(outlookBooks), null);
+assert(
+  outlookHome.financial_manager[0] === "Cash is $46,330, above the $36,900 floor.",
+  `home cash uses the health outlook (${outlookHome.financial_manager[0]})`,
+);
+assert(
+  ownerCardStatuses(outlookBooks).financial_manager == null,
+  "cash above the health floor is not Critical",
+);
 assert(
   ownerCardStatuses(
     books({

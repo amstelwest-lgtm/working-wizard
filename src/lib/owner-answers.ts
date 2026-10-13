@@ -36,6 +36,16 @@ export type OwnerBooks = {
   /** Aged overdue balance. Null when the collections snapshot is not loaded. */
   overdueReceivables?: number | null;
   cashflow: SavedCashflowLike | null;
+  /**
+   * The same 13-week outlook Health and Cash use. When it is set, the Home
+   * cash line and the Critical chip use this opening and floor.
+   */
+  cashOutlook?: {
+    opening: number;
+    closing: number[];
+    floor: number;
+    dipsBelowFloorWeek: number | null;
+  } | null;
   openAction: string | null;
   /** False until the action-point read has finished. */
   actionsReady: boolean;
@@ -161,6 +171,7 @@ export function guardOwnerLine(line: string): string {
 /** Home cash copy. The tile sentence stays long for the hold screen. */
 function cashHomeLine(sentence: string): string {
   if (sentence === CONNECT || sentence === "The 13-week line is not on file yet.") return sentence;
+  if (sentence.startsWith("Cash is ")) return guardOwnerLine(sentence);
   const amounts = amountsIn(sentence);
   if (sentence.includes("stays above") && amounts.length >= 2) {
     const [floor, low] = amounts;
@@ -204,11 +215,20 @@ function forecastLow(books: OwnerBooks): number | null {
  * Cash under the 13-week floor is Critical. A profit decline, or overdue
  * debtors above zero, is Attention. The stronger tone wins on the analyst card.
  */
+function outlookUnderFloor(books: OwnerBooks): boolean | null {
+  const outlook = books.cashOutlook;
+  if (!outlook || !finite(outlook.opening) || !finite(outlook.floor)) return null;
+  return outlook.opening < outlook.floor || outlook.dipsBelowFloorWeek != null;
+}
+
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
+  const fromOutlook = outlookUnderFloor(books);
   const low = forecastLow(books);
   const floor = cashComfortThreshold(books.market.currency);
   const cash: OwnerCardStatus | null =
-    low != null && low < floor ? { tone: "critical", word: "Critical" } : null;
+    (fromOutlook != null ? fromOutlook : low != null && low < floor)
+      ? { tone: "critical", word: "Critical" }
+      : null;
 
   const gross =
     finite(books.revenue) && finite(books.cogs) ? books.revenue - books.cogs : null;
@@ -247,6 +267,24 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     heading: "Cash over the next 13 weeks",
     ask: "financial_manager" as const,
   };
+  const outlook = books.cashOutlook;
+  if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
+    const under = outlookUnderFloor(books) === true;
+    const gap = Math.abs(outlook.floor - outlook.opening);
+    const sentence = under
+      ? outlook.opening < outlook.floor
+        ? `Cash is ${money(outlook.opening)}, ${money(gap)} under the ${money(outlook.floor)} floor.`
+        : `Cash is ${money(outlook.opening)}. It dips under the ${money(outlook.floor)} floor.`
+      : `Cash is ${money(outlook.opening)}, above the ${money(outlook.floor)} floor.`;
+    return {
+      ...base,
+      sentence,
+      source: `${booksSource}, 13-week forecast`,
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   const balances = closingBalancesFromCashflow(books.cashflow);
   if (!balances || balances.length === 0) {
     return {

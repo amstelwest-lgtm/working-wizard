@@ -105,7 +105,7 @@ export function isOpsPath(pathname: string): boolean {
  * Accountant / firm product UI — gated until the firm owner has an
  * entitling Stripe subscription. Shared `/settings` and `/settings/brand`
  * stay open so a firm can set the logo before a card, and so owners can
- * still use Spark settings and Customer Portal. Team settings stay gated.
+ * still use Spark settings and Customer Portal. Team settings follow the dashboard.
  */
 export function isFirmProductPath(pathname: string): boolean {
   return (
@@ -118,6 +118,12 @@ export function isFirmProductPath(pathname: string): boolean {
     pathname === "/settings/team" ||
     pathname.startsWith("/settings/team/")
   );
+}
+
+/** Team settings stay open on the same terms as the dashboard. */
+export function isTeamSettingsPath(pathname: string): boolean {
+  const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  return path === "/settings/team";
 }
 
 /** Home, the client list, and the practice overview. Not a client file. */
@@ -302,7 +308,7 @@ export function decideFirmBillingPathGate(input: {
   if (!input.isAccountantFirmUser) return "allow";
   if (input.entitled) return "allow";
   // First client's Overview and figures stay on screen without a card.
-  // Reports, a later client file, and team settings still redirect.
+  // Reports and a later client file still redirect. Team settings follow the dashboard.
   // Brand settings are not a firm-product path, so they stay open with /settings.
   if (
     input.firmClientCount !== undefined &&
@@ -318,7 +324,7 @@ export function decideFirmBillingPathGate(input: {
   // without a card. A later client file still redirects. null and omitted
   // counts are not a book.
   if (
-    isPracticeShellPath(pathname) &&
+    (isPracticeShellPath(pathname) || isTeamSettingsPath(pathname)) &&
     typeof input.firmClientCount === "number" &&
     input.firmClientCount >= 1
   ) {

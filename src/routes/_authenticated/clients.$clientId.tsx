@@ -2874,6 +2874,12 @@ function ClientView() {
       priorCogs: amount(priorFin?.cogs),
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
+      cashOutlook: {
+        opening: cashOutlook.opening,
+        closing: cashOutlook.closing,
+        floor: cashOutlook.floor,
+        dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+      },
       openAction: overviewNextStep?.title ?? null,
       actionsReady: nextStepKnown,
       signedBy: null,
@@ -2888,6 +2894,10 @@ function ClientView() {
     financials,
     statementPosition.receivables,
     client?.cashflow,
+    cashOutlook.opening,
+    cashOutlook.closing,
+    cashOutlook.floor,
+    cashOutlook.dipsBelowFloorWeek,
     overviewNextStep,
     nextStepKnown,
     clientMarket,
@@ -3332,6 +3342,7 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
+                      findingFallback={homeAgent ? (homeLines[homeAgent] ?? []).join(" ") : null}
                       onSelectAgent={openHomeAgent}
                       onOpenApproved={(target) => {
                         if (target.screen === "accountant") {

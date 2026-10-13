@@ -14,6 +14,7 @@ import { MilonTeamDesk } from "./milon-team-desk";
 export function MilonTeamPane({
   clientId,
   agent = null,
+  findingFallback = null,
   onOpenApproved,
   onInvite,
   onSelectAgent,
@@ -21,6 +22,8 @@ export function MilonTeamPane({
   clientId: string;
   /** Home Ask opens this agent's thread. The feed stays off the card stage. */
   agent?: AgentKey | null;
+  /** Home sentence for this agent when no run finding is on file. */
+  findingFallback?: string | null;
   onOpenApproved?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   /** Landing cards and the stage switcher both land here. */
@@ -56,7 +59,11 @@ export function MilonTeamPane({
   );
   if (!agent) return desk;
   return (
-    <AgentStage agent={agent} finding={finding || null} onSelect={(next) => onSelectAgent?.(next)}>
+    <AgentStage
+      agent={agent}
+      finding={finding || findingFallback?.trim() || null}
+      onSelect={(next) => onSelectAgent?.(next)}
+    >
       {desk}
     </AgentStage>
   );
