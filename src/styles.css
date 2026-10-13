@@ -693,6 +693,160 @@ html:not(.dark) .sphere-drill-back--on-dark:hover {
   border-color: #0b5fff;
 }
 
+/* Health drill cue — only on a control that opens a real next level.
+   Click on a fine pointer, Tap on touch. Ice is a shimmer, never the text. */
+.dig-cue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+  padding: 3px 8px 3px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(11, 95, 255, 0.4);
+  background: #f4f8ff;
+  color: #102a43;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 -1px 0 rgba(176, 138, 48, 0.55);
+  pointer-events: none;
+}
+.dig-cue__face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  max-width: 100%;
+  min-width: 0;
+}
+.dig-cue__copy {
+  min-width: 0;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.dig-cue__icon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: #0b5fff;
+}
+.dig-cue__verb--tap { display: none; }
+@media (pointer: coarse) {
+  .dig-cue__verb--click { display: none; }
+  .dig-cue__verb--tap { display: inline; }
+}
+.dig-cue--compact {
+  font-size: 9px;
+  padding: 2px 6px 2px 4px;
+  gap: 2px;
+}
+.dig-cue--compact .dig-cue__icon {
+  width: 11px;
+  height: 11px;
+}
+button.dig-cue--control {
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: inherit;
+  appearance: none;
+}
+button.dig-cue--control:hover,
+.health-pillar-tile:hover .dig-cue,
+.health-pillar-card:hover .dig-cue,
+.health-driver-row:hover .dig-cue,
+.health-summary-card:hover .dig-cue {
+  border-color: #0b5fff;
+  background: #ffffff;
+}
+button.dig-cue--control:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 2px;
+}
+button.dig-cue--control:active,
+.health-pillar-tile:active .dig-cue,
+.health-pillar-card:active .dig-cue,
+.health-driver-row:active .dig-cue {
+  transform: translateY(1px);
+}
+.health-pillar-tile,
+.health-pillar-card,
+.health-driver-row,
+.health-summary-open {
+  cursor: pointer;
+}
+.health-summary-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.health-summary-card:has(.health-summary-open):hover {
+  border-color: rgba(11, 95, 255, 0.55);
+}
+.health-pillar-tile:focus-visible,
+.health-pillar-card:focus-visible,
+.health-summary-open:focus-visible,
+.pillar-evidence:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 2px;
+}
+@keyframes dig-cue-shimmer {
+  0% { box-shadow: inset 0 -1px 0 rgba(176, 138, 48, 0.55), 0 0 0 0 rgba(11, 95, 255, 0); }
+  45% { box-shadow: inset 0 -1px 0 rgba(176, 138, 48, 0.75), 0 0 0 4px rgba(56, 189, 248, 0.28); }
+  100% { box-shadow: inset 0 -1px 0 rgba(176, 138, 48, 0.55), 0 0 0 0 rgba(11, 95, 255, 0); }
+}
+.dig-cue--pulse {
+  animation: dig-cue-shimmer 1.05s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dig-cue--pulse { animation: none; }
+}
+html.dark .dig-cue {
+  color: #f4f7fb;
+  background: #102a43;
+  border-color: rgba(140, 180, 255, 0.55);
+}
+html.dark .dig-cue__icon { color: #dbeafe; }
+html.dark button.dig-cue--control:hover,
+html.dark .health-pillar-tile:hover .dig-cue,
+html.dark .health-pillar-card:hover .dig-cue,
+html.dark .health-driver-row:hover .dig-cue,
+html.dark .health-summary-card:hover .dig-cue {
+  background: #163654;
+  border-color: #2563eb;
+}
+.dig-leaf {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 100%;
+  margin: 8px 0 0;
+  color: #3d5270;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.dig-leaf__title {
+  font-weight: 650;
+  color: #102a43;
+}
+html.dark .dig-leaf { color: #c5d4e4; }
+html.dark .dig-leaf__title { color: #f4f7fb; }
+#health-score-drill { scroll-margin-top: 88px; }
+
 /* Firm-dashboard crumb on the accountant client page. */
 html[data-theme="light"] .accountant-portal .crumb a {
   color: #102a43;

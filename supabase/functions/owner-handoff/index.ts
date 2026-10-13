@@ -3,6 +3,7 @@
  * The caller must own the client or belong to that client's workspace.
  * The queued agent_runs row is written with the service role.
  * Each bot has a runner. A runner whose agent_settings flag is false does not start.
+ * The assignment is still recorded. This function never posts to a ledger.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.ts";
@@ -112,13 +113,21 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (settingError) return json({ error: "runner_check_failed" }, 500);
   if (!runnerEnabled(setting?.value)) {
-    return json(
-      {
-        error: "runner_disabled",
-        missing: `${decision.displayName} has a runner at supabase/functions/${decision.runner}, but agent_settings.${decision.settingKey} is false, so a hand-off will not start it.`,
-      },
-      409,
-    );
+    const { error: parkedError } = await admin.from("action_updates").insert({
+      action_item_id: actionItemId,
+      client_id: clientId,
+      actor_type: "system",
+      actor_label: decision.displayName,
+      note: handoffRequestNote(decision.displayName),
+    });
+    if (parkedError) return json({ error: "note_not_written" }, 500);
+    return json({
+      ok: true,
+      assigned: true,
+      dispatched: false,
+      status: "assigned",
+      runner: decision.runner,
+    });
   }
 
   const inputs = handoffInputs(actionItemId);

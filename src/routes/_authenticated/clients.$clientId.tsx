@@ -101,7 +101,7 @@ import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
 import { FeatureFinder } from "@/components/feature-finder";
-import { SphereHero } from "@/components/sphere-hero";
+import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
 import {
@@ -680,6 +680,10 @@ function ClientView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => resolveAccountantTab(search) ?? "overview",
   );
+  const [healthDrill, setHealthDrill] = useState<{
+    token: number;
+    pillarId: SpherePillar["id"];
+  } | null>(null);
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const persistedCreateRef = useRef<
     (payload: {
@@ -3209,6 +3213,7 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
+                      onSelectAgent={openHomeAgent}
                       onOpenApproved={(target) => {
                         if (target.screen === "accountant") {
                           setActiveTab("overview");
@@ -3540,6 +3545,7 @@ function ClientView() {
                           displayStatus={overallHealth.displayStatus}
                           pillars={spherePillars}
                           queryCounts={ratioQueryCounts}
+                          drillTo={healthDrill}
                           onDriverClick={(key) => openDrawerFromUiKey(key)}
                           topPriority={(() => {
                             const worst = Object.entries(pillarHealths)
@@ -3564,6 +3570,11 @@ function ClientView() {
                         <SimplifiedRatios
                           sections={simplifiedSections}
                           onAddPastPeriod={() => setPastPeriodOpen(true)}
+                          onOpenPillar={(id) => {
+                            if (id !== "profit" && id !== "assets" && id !== "financing" && id !== "cash") return;
+                            setHealthDrill({ token: Date.now(), pillarId: id });
+                            document.getElementById("health-score-drill")?.scrollIntoView({ block: "start" });
+                          }}
                           onOpenEvidence={(id) => {
                             const evidence = evidenceForPillar(id);
                             if (!evidence) return;

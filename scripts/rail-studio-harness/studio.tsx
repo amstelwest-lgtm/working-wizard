@@ -443,6 +443,10 @@ const HARNESS_FINANCIALS = {
 };
 
 function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean }) {
+  const [healthDrill, setHealthDrill] = useState<{
+    token: number;
+    pillarId: "profit" | "assets" | "financing" | "cash";
+  } | null>(null);
   useEffect(() => {
     if (!pillars) return;
     const timer = window.setTimeout(() => {
@@ -539,10 +543,19 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
               overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
               displayStatus={overall.displayStatus}
               pillars={spherePillars}
+              drillTo={healthDrill}
+              onDriverClick={() => undefined}
             />
           </div>
           <div className="health-plate">
-            <SimplifiedRatios sections={sections} />
+            <SimplifiedRatios
+              sections={sections}
+              onOpenPillar={(id) => {
+                if (id !== "profit" && id !== "assets" && id !== "financing" && id !== "cash") return;
+                setHealthDrill({ token: Date.now(), pillarId: id });
+                document.getElementById("health-score-drill")?.scrollIntoView({ block: "start" });
+              }}
+            />
           </div>
         </div>
       </PaneBoundary>
@@ -567,8 +580,20 @@ function ProfitPane({ clientId }: { clientId: string }) {
         scope="profitability"
         clientId={clientId}
         clientName="Harbour Glass"
-        signoff={null}
-        signoffKnown={false}
+        signoff={{
+          id: "harness-signoff-profitability",
+          client_id: clientId,
+          scope: "profitability",
+          signed_off_by_id: "harness-local-user",
+          signed_off_by_name: "Ada Mbeki",
+          signed_off_by_initials: "AM",
+          signed_off_by_title: null,
+          firm_name: "Harbour & Co",
+          note: null,
+          signature_data: null,
+          signed_off_at: "2026-10-02T08:00:00.000Z",
+        }}
+        signoffKnown
         isStale={false}
         onSignoffChange={() => {}}
         canSign
@@ -898,7 +923,20 @@ function CashPane({ clientId }: { clientId: string }) {
             clientName="Harbour Glass"
             canSign
             hideReadOnlyStamp
-            signoffKnown={false}
+            signoffKnown
+            signoff={{
+              id: "harness-signoff-cash",
+              client_id: clientId,
+              scope: "cash_forecast",
+              signed_off_by_id: "harness-local-user",
+              signed_off_by_name: "Ada Mbeki",
+              signed_off_by_initials: "AM",
+              signed_off_by_title: null,
+              firm_name: "Harbour & Co",
+              note: null,
+              signature_data: null,
+              signed_off_at: "2026-10-02T08:00:00.000Z",
+            }}
             statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
           />
         </PaneBoundary>

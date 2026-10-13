@@ -39,6 +39,7 @@ import {
 import {
   AVATAR_CLIP_FPS,
   FM_AVATAR_CLIPS,
+  FM_AVATAR_VERSION,
   avatarClipAtEnd,
   avatarPoster,
   displayFmClip,
@@ -506,7 +507,15 @@ assert(!avatarClipAtEnd(121 / 24 - frame * 2, 121 / 24), "a 121-frame clip does 
 assert(avatarClipAtEnd(5, 5), "a playhead at the end counts");
 assert(!avatarClipAtEnd(0, 5), "the opening frame is not the end");
 assert(!avatarClipAtEnd(1, Number.NaN), "an unknown duration does not swap");
-assert(fmClipSources("idle").webm === "/avatars/fm/fm-idle.webm", "financial manager clips stay in fm/");
+assert(
+  fmClipSources("idle").webm === `/avatars/fm/fm-idle.webm?v=${FM_AVATAR_VERSION}`,
+  "financial manager clips stay in fm/ and carry a cache version",
+);
+assert(
+  avatarPoster("financial_manager").jpg === `/avatars/fm/fm-poster.jpg?v=${FM_AVATAR_VERSION}`,
+  "the financial manager poster carries the same cache version",
+);
+assert(!avatarPoster("analyst").webp.includes("?"), "analyst posters stay unversioned");
 assert(
   fmClipSources("reading", "analyst").mp4 === "/avatars/analyst/analyst-reading.mp4",
   "analyst clips use the analyst folder",
@@ -844,10 +853,11 @@ assert(!door.includes('setScreen("actions")'), "the separate actions screen is g
 assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
-assert(plan.includes("Hand to ${agentDisplayName(agent)}"), "handing off names the bot");
-assert(plan.includes("Coming online soon"), "a missing runner says it is coming online");
+assert(plan.includes("ActionHandoffButtons"), "handing off names the bot");
 assert(plan.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
-assert(plan.includes("data-bot-handoff"), "the hand-off controls are in the action row");
+const handoffButtons = readFileSync("src/components/action-handoff-buttons.tsx", "utf8");
+assert(handoffButtons.includes("Coming online soon"), "a missing runner says it is coming online");
+assert(handoffButtons.includes("data-bot-handoff"), "the hand-off controls are in the action row");
 assert(plan.includes("requestOwnerHandoff"), "handing off calls the owner-handoff function");
 assert(
   handoffComingOnline("No runner exists for financial_manager. supabase/functions has agent-analyst only."),

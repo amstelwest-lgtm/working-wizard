@@ -1,0 +1,97 @@
+.agent-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.agent-stage-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  text-align: center;
+}
+
+.agent-stage-name {
+  margin: 0;
+  color: #102a43;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.agent-stage-role,
+.agent-stage-finding {
+  margin: 0;
+  max-width: 42rem;
+  color: #3d5270;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.agent-stage-finding {
+  color: #102a43;
+  font-weight: 600;
+}
+
+.agent-stage-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.agent-stage-switch button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #0b5fff;
+  border-radius: 999px;
+  background: #fff;
+  color: #0b5fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-stage-switch button.is-on {
+  background: #0b5fff;
+  color: #fff;
+}
+
+.agent-stage-switch button:focus-visible {
+  outline: 2px solid #0b5fff;
+  outline-offset: 3px;
+}
+
+html.dark .agent-stage-name,
+html.dark .agent-stage-finding {
+  color: #f4f7fb;
+}
+
+html.dark .agent-stage-role {
+  color: #c5d4e4;
+}
+
+html.dark .agent-stage-switch button {
+  background: transparent;
+  color: #f4f7fb;
+}
+
+html.dark .agent-stage-switch button.is-on {
+  background: #0b5fff;
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .agent-stage-switch {
+    flex-direction: column;
+  }
+
+  .agent-stage-switch button {
+    width: 100%;
+  }
+}

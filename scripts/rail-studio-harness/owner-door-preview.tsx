@@ -366,9 +366,9 @@ export function OwnerDoorPreview({
                 ? railView
                 : "home"
       }
-      businessName="Northline Studio"
-      initials="NS"
-      workspaces={[{ clientId: "preview", name: "Northline Studio" }]}
+      businessName="Karoo Traders"
+      initials="KT"
+      workspaces={[{ clientId: "preview", name: "Karoo Traders" }]}
       activeClientId="preview"
       onSwitch={() => undefined}
       onNavigate={() => undefined}
@@ -453,8 +453,18 @@ export function OwnerDoorPreview({
                 isStale={previewSignoff("profitability").stale}
               />
             }
+            fallback={{
+              revenue: 186000,
+              cogs: 74000,
+              fixedCosts: 62000,
+              depreciation: 4000,
+              interest: 600,
+              tax: 800,
+              interestIsFact: true,
+              taxIsFact: true,
+            }}
             clientId="harness-client"
-            clientName="Northline Studio"
+            clientName="Karoo Traders"
             periodLabel="September 2026"
             negative="minus"
           />

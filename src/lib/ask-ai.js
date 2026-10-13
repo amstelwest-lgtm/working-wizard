@@ -366,7 +366,7 @@ export function mountAskAi(container, options) {
       sendBtn.type = "button";
       sendBtn.className = "ask-ai-send";
       sendBtn.disabled = loading || !question.trim();
-      sendBtn.innerHTML = `${SEND_SVG} ${loading ? "Thinking…" : "Ask"}`;
+      sendBtn.innerHTML = `${SEND_SVG} ${loading ? "Thinking…" : studio ? "Send" : "Ask"}`;
       sendBtn.addEventListener("click", () => {
         submit();
       });

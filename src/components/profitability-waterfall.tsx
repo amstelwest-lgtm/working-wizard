@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
+import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
@@ -17,7 +18,6 @@ import {
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { profitStepBand } from "@/lib/health-score";
 import { estimatedTaxNote } from "@/lib/estimated-tax-note";
 import { ownerOutflow } from "@/lib/owner-money";
@@ -36,6 +36,18 @@ type WfStep = {
   showStatus: boolean;
   /** When set, the chip scores this ratio instead of the running margin. */
   statusRatio?: string;
+};
+
+const COMPACT_LABEL: Record<string, string> = {
+  Revenue: "Revenue",
+  "Cost of Sales": "COS",
+  "Gross Profit": "Gross",
+  "Operating Expenses": "Op. exp.",
+  Depreciation: "Deprec.",
+  "Operating Profit": "Op. profit",
+  Interest: "Interest",
+  Tax: "Tax",
+  "Net Profit": "Net profit",
 };
 
 function pct(n: number, total: number) {
@@ -69,6 +81,163 @@ const COLORS = {
   decrease: { light: "#e05c5c", dark: "#e05c5c" }, // red
   netNeg: { light: "#c0392b", dark: "#ef6b6b" },
 };
+
+function WaterfallFigure({
+  steps,
+  revenue,
+  fixedCosts,
+  netProfit,
+  taxNote,
+  mounted,
+  negative,
+  money,
+  mode,
+}: {
+  steps: WfStep[];
+  revenue: number;
+  fixedCosts: number;
+  netProfit: number;
+  taxNote: string | null;
+  mounted: boolean;
+  negative: "paren" | "minus";
+  money: (n: number) => string;
+  mode: "fit" | "desk" | "wide";
+}) {
+  const fit = mode === "fit";
+  const chartH = mode === "wide" ? 320 : fit ? 196 : 280;
+  const band = fit ? 64 : 96;
+  const head = fit ? 34 : 40;
+  const runningValues = steps.map((step) => step.runningEnd);
+  const minVal = Math.min(0, ...runningValues);
+  const maxVal = Math.max(revenue, 1);
+  const range = maxVal - minVal || 1;
+  const y = (v: number) => ((v - minVal) / range) * 100;
+  const frame = (
+    <div
+      className="relative"
+      style={{
+        height: chartH + band + head,
+        minWidth: mode === "wide" ? steps.length * 88 : fit ? undefined : 560,
+      }}
+    >
+      {[0, 0.25, 0.5, 0.75, 1].map((p) => (
+        <div
+          key={p}
+          className="absolute left-0 right-0 border-t border-dashed border-amber-900/10 dark:border-white/10"
+          style={{ bottom: band + p * chartH }}
+        />
+      ))}
+      <div
+        className="absolute left-0 right-0 border-t border-amber-900/25 dark:border-white/25"
+        style={{ bottom: band + (y(0) / 100) * chartH }}
+      />
+      <div className="absolute inset-x-0 bottom-0 top-0 flex">
+        {steps.map((s, i) => {
+          const isDec = s.kind === "decrease";
+          const startVal = isDec ? s.runningEnd - s.delta : 0;
+          const topVal = isDec ? Math.max(startVal, s.runningEnd) : Math.max(0, s.runningEnd);
+          const botVal = isDec ? Math.min(startVal, s.runningEnd) : Math.min(0, s.runningEnd);
+          const barBottomPct = y(botVal);
+          const barHeightPct = Math.max(y(topVal) - y(botVal), 0.75);
+          const isNet = s.label === "Net Profit";
+          const negNet = isNet && netProfit < 0;
+          const value = isDec ? Math.abs(s.delta) : s.runningEnd;
+          const status = s.showStatus
+            ? getStatus(
+                s,
+                !revenue
+                  ? 0
+                  : s.statusRatio === "Fixed Cost Ratio"
+                    ? fixedCosts / revenue
+                    : s.runningEnd / revenue,
+              )
+            : null;
+          const connBottom = band + (y(s.runningEnd) / 100) * chartH;
+          const shown = fit ? (COMPACT_LABEL[s.label] ?? s.label) : s.label;
+          const figure = (isDec
+            ? negative === "minus"
+              ? ownerOutflow(money(Math.abs(s.delta)))
+              : `(${money(Math.abs(s.delta))})`
+            : money(s.runningEnd)
+          )
+            .replace(/\s/g, "")
+            .replace(/\.0(?=[km])/i, "");
+          return (
+            <div key={s.label} className={`relative min-w-0 flex-1 ${mode === "wide" ? "min-w-[84px]" : ""}`}>
+              {i < steps.length - 1 ? (
+                <div
+                  className="absolute z-0 border-t border-dashed border-slate-400/60 dark:border-slate-500/60"
+                  style={{
+                    left: "50%",
+                    width: "100%",
+                    bottom: connBottom,
+                    opacity: mounted ? 1 : 0,
+                  }}
+                />
+              ) : null}
+              <div
+                className="absolute left-0 right-0 z-10 text-center"
+                style={{ bottom: band + ((barBottomPct + barHeightPct) / 100) * chartH + 2 }}
+              >
+                <div
+                  className={`rounded-sm bg-[#FFFFFF]/90 px-0.5 font-extrabold leading-none tracking-tight dark:bg-[#0b1220]/85 ${fit ? "text-[8px]" : "text-[11px]"}`}
+                  style={{ color: isDec || negNet ? "#c0392b" : undefined }}
+                >
+                  <span className={`block whitespace-nowrap ${isDec || negNet ? "" : "text-[#102A43] dark:text-[#F4F7FB]"}`}>
+                    {figure}
+                  </span>
+                </div>
+                <div className={`font-medium leading-none text-[#475569] dark:text-[#94a3b8] ${fit ? "text-[8px]" : "text-[10px]"}`}>
+                  {pct(value, revenue)}
+                </div>
+              </div>
+              <div
+                className="absolute left-[12%] right-[12%] z-[5] rounded-md"
+                style={{
+                  bottom: band + (barBottomPct / 100) * chartH,
+                  height: mounted ? `${(barHeightPct / 100) * chartH}px` : "0px",
+                  background: negNet
+                    ? `linear-gradient(180deg, ${COLORS.netNeg.light}, ${COLORS.netNeg.light}cc)`
+                    : isDec
+                      ? "linear-gradient(180deg, #e05c5c, #c94b4b)"
+                      : s.kind === "total"
+                        ? "linear-gradient(180deg, #2c5580, #1a3a5c)"
+                        : "linear-gradient(180deg, #5cc492, #3f9c72)",
+                }}
+              />
+              <div
+                className="absolute bottom-0 left-0 right-0 flex flex-col items-center gap-1 px-0.5 pt-1 text-center"
+                style={{ height: band - 4 }}
+              >
+                <span className="line-clamp-2 w-full whitespace-normal text-[10px] font-bold leading-tight text-[#1e293b] dark:text-[#e2e8f0]">
+                  {shown}
+                </span>
+                {isNet && taxNote && !fit ? (
+                  <span className="line-clamp-2 w-full text-[8px] font-medium leading-tight text-[#64748b]">{taxNote}</span>
+                ) : null}
+                {status && !fit ? (
+                  <span
+                    className="rounded border px-1 py-0.5 text-[8px] font-extrabold"
+                    style={{ color: status.color, background: status.bg, borderColor: status.color }}
+                  >
+                    {status.label}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  if (mode === "fit") return frame;
+  return (
+    <div className="overflow-x-auto overscroll-x-contain">
+      {frame}
+    </div>
+  );
+}
 
 /**
  * Professional PDF export — renders the branded react-pdf
@@ -249,6 +418,7 @@ export function ProfitabilityWaterfall({
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [phone, setPhone] = useState(false);
+  const [waterfallOpen, setWaterfallOpen] = useState(false);
   useLayoutEffect(() => {
     const query = window.matchMedia("(max-width: 767px)");
     const apply = () => setPhone(query.matches);
@@ -365,17 +535,6 @@ export function ProfitabilityWaterfall({
     },
   ];
 
-  // Vertical scale: from min(0, most-negative running value) to max(revenue, 1)
-  const runningValues = steps.map((s) => s.runningEnd);
-  const minVal = Math.min(0, ...runningValues);
-  const maxVal = Math.max(revenue, 1);
-  const range = maxVal - minVal || 1;
-  /** y(v) → % height from chart bottom */
-  const y = (v: number) => ((v - minVal) / range) * 100;
-
-  const CHART_H = 280; // px
-  const LABEL_PAD = 36; // headroom above the tallest bar for its value label
-
   exportPdfRef.current = () => {
     setExporting(true);
     void exportPDF({
@@ -407,8 +566,8 @@ export function ProfitabilityWaterfall({
       <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-[#0B5FFF]" />
       {showHeader ? (
       <CardHeader className="border-b border-[#DBEAFE] pb-5 dark:border-slate-800">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex-1">
+        <div className="deliverable-head flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
             {hideLead ? null : (
               <>
                 <CardTitle className="text-xl font-semibold tracking-tight text-[#102A43] dark:text-[#F4F7FB]">
@@ -429,8 +588,9 @@ export function ProfitabilityWaterfall({
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">{periodNote}</p>
             ) : null}
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:max-w-[48%] sm:justify-end">
             {headerAside}
+            <EnlargeButton label="profitability waterfall" onClick={() => setWaterfallOpen(true)} />
           {hideCardExport ? null : (
             <Button
               size="sm"
@@ -459,7 +619,6 @@ export function ProfitabilityWaterfall({
             </p>
           )}
 
-          {/* ── Waterfall chart ── */}
           {phone ? (
             <ol className="m-0 flex list-none flex-col gap-3 p-0" data-waterfall-layout="horizontal">
               {steps.map((s) => {
@@ -505,146 +664,36 @@ export function ProfitabilityWaterfall({
               })}
             </ol>
           ) : (
-          <ScrollableTable hint="Swipe to see the whole waterfall →" className="pb-1">
-            <div className="relative min-w-[560px]" style={{ height: CHART_H + 88 + LABEL_PAD }}>
-              {/* horizontal grid lines */}
-              {[0, 0.25, 0.5, 0.75, 1].map((p) => (
-                <div
-                  key={p}
-                  className="absolute left-0 right-0 border-t border-dashed border-amber-900/10 dark:border-white/10"
-                  style={{ bottom: 88 + p * CHART_H }}
-                />
-              ))}
-              {/* zero baseline (solid, more visible if negatives present) */}
-              <div
-                className="absolute left-0 right-0 border-t border-amber-900/25 dark:border-white/25"
-                style={{ bottom: 88 + (y(0) / 100) * CHART_H }}
-              />
-
-              <div className="absolute inset-x-0 bottom-0 top-0 flex">
-                {steps.map((s, i) => {
-                  const isDec = s.kind === "decrease";
-                  const startVal = isDec ? s.runningEnd - s.delta : 0;
-                  const topVal = isDec
-                    ? Math.max(startVal, s.runningEnd)
-                    : Math.max(0, s.runningEnd);
-                  const botVal = isDec
-                    ? Math.min(startVal, s.runningEnd)
-                    : Math.min(0, s.runningEnd);
-                  const barBottomPct = y(botVal);
-                  const barHeightPct = Math.max(y(topVal) - y(botVal), 0.75);
-
-                  const isNet = s.label === "Net Profit";
-                  const negNet = isNet && netProfit < 0;
-                  const colorKey: keyof typeof COLORS = negNet ? "netNeg" : s.kind;
-                  const value = isDec ? Math.abs(s.delta) : s.runningEnd;
-                  const p = revenue ? value / revenue : 0;
-                  const status = s.showStatus
-                    ? getStatus(
-                        s,
-                        !revenue
-                          ? 0
-                          : s.statusRatio === "Fixed Cost Ratio"
-                            ? fixedCosts / revenue
-                            : s.runningEnd / revenue,
-                      )
-                    : null;
-
-                  // connector to next bar at this step's running-end level
-                  const connBottom = 88 + (y(s.runningEnd) / 100) * CHART_H;
-
-                  return (
-                    <div key={s.label} className="relative min-w-0 flex-1">
-                      {/* connector line */}
-                      {i < steps.length - 1 && (
-                        <div
-                          className="absolute z-0 border-t border-dashed border-slate-400/60 transition-opacity duration-700 dark:border-slate-500/60"
-                          style={{
-                            left: "50%",
-                            width: "100%",
-                            bottom: connBottom,
-                            opacity: mounted ? 1 : 0,
-                            transitionDelay: `${i * 90 + 250}ms`,
-                          }}
-                        />
-                      )}
-
-                      {/* value label above bar */}
-                      <div
-                        className="absolute left-0 right-0 z-10 text-center transition-all duration-500"
-                        style={{
-                          bottom: 88 + ((barBottomPct + barHeightPct) / 100) * CHART_H + 4,
-                          opacity: mounted ? 1 : 0,
-                          transitionDelay: `${i * 90 + 150}ms`,
-                        }}
-                      >
-                        <div
-                          className="truncate rounded-sm bg-[#FFFFFF]/90 px-0.5 text-[10px] font-extrabold tracking-tight dark:bg-[#0b1220]/85 sm:text-[11px]"
-                          style={{
-                            color: isDec || negNet ? "#c0392b" : undefined,
-                          }}
-                        >
-                          <span className={isDec || negNet ? "" : "text-[#102A43] dark:text-[#F4F7FB]"}>
-                            {isDec
-                              ? negative === "minus"
-                                ? ownerOutflow(fmtCompact(Math.abs(s.delta)))
-                                : `(${fmtCompact(Math.abs(s.delta))})`
-                              : fmtCompact(s.runningEnd)}
-                          </span>
-                        </div>
-                        <div className="truncate text-xs font-medium text-[#475569] dark:text-[#94a3b8]">
-                          {pct(value, revenue)}
-                        </div>
-                      </div>
-
-                      {/* floating bar */}
-                      <div
-                        className="absolute left-[14%] right-[14%] z-[5] rounded-md shadow-[0_4px_14px_rgba(0,0,0,0.12)] transition-all duration-700 ease-out"
-                        style={{
-                          bottom: 88 + (barBottomPct / 100) * CHART_H,
-                          height: mounted ? `${(barHeightPct / 100) * CHART_H}px` : "0px",
-                          background: negNet
-                            ? `linear-gradient(180deg, ${COLORS.netNeg.light}, ${COLORS.netNeg.light}cc)`
-                            : isDec
-                              ? "linear-gradient(180deg, #e05c5c, #c94b4b)"
-                              : s.kind === "total"
-                                ? "linear-gradient(180deg, #2c5580, #1a3a5c)"
-                                : "linear-gradient(180deg, #5cc492, #3f9c72)",
-                          transitionDelay: `${i * 90}ms`,
-                          transformOrigin: "bottom",
-                        }}
-                      />
-
-                      {/* column label + badge */}
-                      <div className="absolute bottom-0 left-0 right-0 flex h-[84px] flex-col items-center gap-1 pt-2">
-                        <span className="w-full truncate px-0.5 text-center text-xs font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
-                          {s.label}
-                        </span>
-                        {isNet && taxNote ? (
-                          <span className="w-full px-0.5 text-center text-[8px] font-medium normal-case leading-tight tracking-normal text-[#64748b] dark:text-[#94a3b8]">
-                            {taxNote}
-                          </span>
-                        ) : null}
-                        {status && (
-                          <span
-                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold tracking-wide sm:px-1.5 sm:text-xs"
-                            style={{
-                              color: status.color,
-                              background: status.bg,
-                              borderColor: status.color,
-                            }}
-                          >
-                            {status.label}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </ScrollableTable>
+            <WaterfallFigure
+              steps={steps}
+              revenue={revenue}
+              fixedCosts={fixedCosts}
+              netProfit={netProfit}
+              taxNote={taxNote}
+              mounted={mounted}
+              negative={negative}
+              money={fmtCompact}
+              mode="desk"
+            />
           )}
+          <EnlargeSheet
+            open={waterfallOpen}
+            onOpenChange={setWaterfallOpen}
+            title="Profitability waterfall"
+          >
+            <WaterfallFigure
+              steps={steps}
+              revenue={revenue}
+              fixedCosts={fixedCosts}
+              netProfit={netProfit}
+              taxNote={taxNote}
+              mounted={mounted}
+              negative={negative}
+              money={fmtCompact}
+              mode="wide"
+            />
+          </EnlargeSheet>
+
 
           {/* legend */}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 border-t border-amber-900/10 pt-3 dark:border-slate-800">

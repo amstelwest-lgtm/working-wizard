@@ -130,7 +130,7 @@ export function BudgetVerdictStrip({
           market={market}
           money={money}
         />
-        <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="col-span-2 flex min-w-0 items-start justify-between gap-2 sm:col-span-1">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">
               Status
