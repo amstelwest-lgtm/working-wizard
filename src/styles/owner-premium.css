@@ -5,7 +5,8 @@
  * pills, a soft blue-grey canvas, white cards with hairline borders and one
  * shadow voice, eyebrow/title/lede page headers, KPI tiles with soft circular
  * icons, a slim amber warning banner, clean tables with source pills, and
- * thin gold kept for the wordmark and the sign-off CTAs only.
+ * thin gold for the wordmark, the sign-off CTAs, and a metallic rim on
+ * primary buttons (no solid gold fill).
  *
  * Scope: `.owner-door` only. It loads after premium-shine.css so equal
  * selectors here win; the accountant portal keeps its current look and can
@@ -15,6 +16,20 @@
  */
 
 /* ===== tokens ===== */
+.owner-door {
+  /* Brushed landing gold: dark, mid, a bright highlight, then dark again.
+     Used only as a 1px rim (border-box layer). Never a button fill. */
+  --op-gold-gleam: linear-gradient(
+    115deg,
+    #7a5400 0%,
+    #b8860b 26%,
+    #f6e7a2 48%,
+    #fff6d2 52%,
+    #d4af37 62%,
+    #a67c00 82%,
+    #7a5400 100%
+  );
+}
 html:not(.dark) .owner-door.accountant-portal {
   /* Re-point the premium-shine frame tokens at the navy system. Everything
      premium-shine painted with --pp-frame-* follows automatically. */
@@ -628,20 +643,28 @@ html.dark .owner-door .health-ring-track {
   margin-top: 16px;
   min-height: 40px;
   padding: 0 20px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 999px;
   background-color: var(--royal, #2563eb);
-  background-image: linear-gradient(180deg, #2e6bf0, #2056d6);
+  background-image:
+    linear-gradient(180deg, #2e6bf0, #2056d6),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
   color: #ffffff;
   font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 246, 214, 0.55),
     0 6px 18px rgba(37, 99, 235, 0.26);
 }
 .owner-door .health-ring-cta:hover {
-  background-image: linear-gradient(180deg, #3b76f2, #2a60e0);
+  background-image:
+    linear-gradient(180deg, #3b76f2, #2a60e0),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
 }
 .owner-door .health-pillar-kicker {
   margin: 4px 0 0;
@@ -850,23 +873,51 @@ html:not(.dark) .owner-door .owner-btn-secondary:hover {
   color: var(--royal);
 }
 
-/* Gold CTAs become royal: gold stays reserved for the logo and sign-off. */
+/* Primary buttons stay royal. A 1px brushed-gold rim (border-box layer under
+   the blue padding-box fill) plus a hairline top highlight. No gold fill.
+   The wordmark and sign-off CTAs keep their own gold. */
 html:not(.dark) .owner-door .btn.gold,
 html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold {
   background-color: var(--royal, #2563eb);
-  background-image: linear-gradient(180deg, #2e6bf0, #2056d6);
+  background-image:
+    linear-gradient(180deg, #2e6bf0, #2056d6),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
-  border: 0;
+  border: 1px solid transparent;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 246, 214, 0.55),
     0 6px 18px rgba(37, 99, 235, 0.26);
 }
 html:not(.dark) .owner-door .btn.gold:hover,
 html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:hover {
-  background-image: linear-gradient(180deg, #3b76f2, #2a60e0);
+  background-image:
+    linear-gradient(180deg, #3b76f2, #2a60e0),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
+}
+html.dark .owner-door .btn.gold {
+  border: 1px solid transparent;
+  background-color: var(--cobalt);
+  background-image:
+    linear-gradient(180deg, var(--cobalt), var(--cobalt)),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.35);
+}
+html.dark .owner-door .btn.gold:hover {
+  background-color: var(--royal);
+  background-image:
+    linear-gradient(180deg, var(--royal), var(--royal)),
+    var(--op-gold-gleam);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
 }
 
 /* Enlarge / download affordances: quiet outline chips. */

@@ -621,7 +621,12 @@ assert(css.includes("list-style: disc outside"), "reply bullets stay visible");
 assert(css.includes("font-size: 16px"), "body text is at least 16px");
 assert(css.includes("font-size: 14px"), "secondary text is at least 14px");
 assert(css.includes("--owner-edge: color-mix(in srgb, var(--ink) 55%, var(--bg))"), "borders mix ink into the background");
-assert(css.includes('--owner-sans: "Geist Sans"'), "the owner shell uses Geist Sans");
+assert(
+  css.includes('--owner-sans: var(--font-sans, "Owner Sans Fallback", sans-serif)'),
+  "the owner shell uses the shared sans token",
+);
+const rootCss = readFileSync("src/styles.css", "utf8");
+assert(rootCss.includes('"Plus Jakarta Sans Variable"'), "the shared sans is Plus Jakarta Sans");
 assert(css.includes("lining-nums"), "tables and amounts use lining figures");
 assert(css.includes("--type-h1-size"), "the owner type scale is tokenised");
 assert(css.includes("--owner-space-1: 8px"), "spacing follows an 8px grid");
@@ -788,7 +793,11 @@ assert(css.includes('button[aria-label="Share Milōn"]'), "the owner door hides 
 const pages = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pages.includes("What your accountant signed"), "sign-off lives on the accountant tab");
 assert((pages.match(/What your accountant signed/g) ?? []).length >= 1, "the accountant tab names the sign-off");
-assert(pages.includes('className="owner-title">Accountant portal'), "the page heading is Accountant portal");
+assert(
+  pages.includes('title="Accountant portal"') &&
+    readFileSync("src/components/owner-ui.tsx", "utf8").includes('<h1 className="owner-title">{title}</h1>'),
+  "the page heading is Accountant portal",
+);
 assert(pages.includes('aria-label="breadcrumb"'), "the portal page has a breadcrumb");
 assert(pages.includes('aria-current="page">Accountant portal'), "the breadcrumb names Accountant portal");
 assert(pages.includes("OWNER_SIGNED_SECTION_ID"), "signed deliverables stay on Accountant portal");
