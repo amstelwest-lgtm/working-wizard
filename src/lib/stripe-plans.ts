@@ -7,11 +7,11 @@
  * marketing display. Rand amounts and their lookup keys live beside this
  * catalog and are not mixed into ALL_FIRM_LOOKUP_KEYS.
  *
- * Watchlist clients are free and are not Stripe line items.
  * Owner Spark stays free and does not create a Checkout Session.
  *
- * New firms do not get forever-free Starter. Signup Checkout is a paid band
- * (default Solo monthly) with a 14-day trial and a card on file.
+ * Signup Checkout stays Solo monthly with a 14-day trial and a card on file
+ * unless the firm picks Starter. The trial cap is 3 clients. Paid Starter
+ * allows 5.
  */
 
 import { isOwnerLookupKey } from "@/lib/owner-price";
@@ -45,9 +45,10 @@ export type FirmBandId = (typeof FIRM_BAND_IDS)[number];
 
 /**
  * Checkout-eligible bands (Enterprise is quotes-only).
- * Starter $0 is archived for new signups — not a Checkout band.
+ * Starter is the paid entry band below Solo.
  */
 export const FIRM_CHECKOUT_BANDS = [
+  "starter",
   "solo",
   "small",
   "growing",
@@ -77,11 +78,11 @@ export const FIRM_BAND_CATALOG: Record<FirmBandId, FirmBand> = {
   starter: {
     id: "starter",
     name: "Starter",
-    /** Legacy $0 band. Not offered at Checkout. Live price should be active=false. */
-    clientLimit: 3,
-    monthlyUsdCents: 0,
-    yearlyUsdCents: null,
-    lookup: { month: "milon_starter_monthly", year: null },
+    clientLimit: 5,
+    /** Live catalog: $39/mo and $370/yr. */
+    monthlyUsdCents: 3_900,
+    yearlyUsdCents: 37_000,
+    lookup: { month: "milon_starter_monthly", year: "milon_starter_yearly" },
     customQuote: false,
   },
   solo: {
@@ -172,6 +173,21 @@ export function isFirmCheckoutBand(value: string): value is FirmCheckoutBand {
   return (FIRM_CHECKOUT_BANDS as readonly string[]).includes(value);
 }
 
+/**
+ * Client cap for a subscription that is still on its existing $0 price id.
+ * Paid Starter Checkout uses the catalog limit of 5. That price id is not moved.
+ */
+export const LEGACY_FREE_STARTER_CLIENT_LIMIT = 3;
+
+export function isLegacyFreeStarterPrice(unitAmount: number | null | undefined): boolean {
+  return unitAmount === 0;
+}
+
+export function starterClientLimit(unitAmount: number | null | undefined): number {
+  if (isLegacyFreeStarterPrice(unitAmount)) return LEGACY_FREE_STARTER_CLIENT_LIMIT;
+  return FIRM_BAND_CATALOG.starter.clientLimit ?? LEGACY_FREE_STARTER_CLIENT_LIMIT;
+}
+
 export function isFirmInterval(value: string): value is FirmInterval {
   return (FIRM_INTERVALS as readonly string[]).includes(value);
 }
@@ -247,6 +263,22 @@ export function firmUsdListPrice(band: FirmBandId, interval: FirmInterval): stri
   return formatUsdFromCents(cents);
 }
 
+/**
+ * USD ladder line. Starter includes the per-client clause the rand ladder
+ * uses. Rand sentences are not built here.
+ */
+export function firmUsdPublicLine(band: FirmBandId, interval: FirmInterval): string | null {
+  const entry = FIRM_BAND_CATALOG[band];
+  const billed: FirmInterval =
+    interval === "year" && entry.yearlyUsdCents == null ? "month" : interval;
+  const price = firmUsdListPrice(band, billed);
+  if (!price) return null;
+  const head = `${price}/${billed === "year" ? "yr" : "mo"}`;
+  if (band !== "starter" || entry.monthlyUsdCents == null || entry.clientLimit == null) return head;
+  const per = Math.round(entry.monthlyUsdCents / 100 / entry.clientLimit);
+  return `${head} · about $${per} per client`;
+}
+
 export function firmClientLimitLabel(band: FirmBandId): string {
   const limit = FIRM_BAND_CATALOG[band].clientLimit;
   if (limit == null) return "Unlimited active clients";
@@ -255,7 +287,8 @@ export function firmClientLimitLabel(band: FirmBandId): string {
 
 /**
  * Default firm Checkout after signup: paid Solo monthly, 14-day trial,
- * card collected. Not Starter $0.
+ * card collected. Starter is offered on the pricing page and in Checkout
+ * when the firm selects it.
  */
 export function firmSignupCheckoutIntent(market: StripePlanMarket = "us"): {
   plan: "solo";

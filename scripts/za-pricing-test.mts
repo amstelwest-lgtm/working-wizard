@@ -2,6 +2,8 @@
  * Rand ladder, billing-country integrity, and the price lines Checkout shows.
  * Run: pnpm test:za-pricing
  */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS, bandIdFromLookupKey, intervalFromLookupKey } from "../src/lib/stripe-plans";
 import {
   annualZarCents,
@@ -35,6 +37,7 @@ for (const band of FIRM_CHECKOUT_BANDS) {
   assert(bandIdFromLookupKey(`milon_${band}_monthly`) === band, `USD ${band} key still maps`);
 }
 
+assert(perClientRands(299, 5) === 60, "Starter is about R60 per client");
 assert(perClientRands(799, 15) === 53, "Solo is about R53 per client");
 assert(perClientRands(1199, 25) === 48, "Small is about R48 per client");
 assert(perClientRands(1999, 50) === 40, "Growing is about R40 per client");
@@ -45,11 +48,31 @@ assert(perClientRands(7999, 500) === 16, "Scale is about R16 per client");
 
 const copy = loadSaPricingCopy();
 assert(copy.heading === "Pricing in rand", "heading");
-assert(copy.heroNote === "Plans from R799/mo after day 14.", "hero");
+assert(copy.heroNote === "Plans from R299/mo after day 14.", "hero");
+assert(copy.labels.starter.month === "R299/mo · about R60 per client", "starter monthly line");
+assert(copy.labels.starter.year === "R2,837/yr · about R60 per client", "starter annual matches Stripe");
+assert(zaBandAmountCents("starter", "year") === 283_700, "starter annual rand is R2,837");
+assert(copy.ownerMonthly === "R299/mo", "owner monthly is R299");
+assert(copy.ownerHomepageCost.includes("R299/mo"), "owner homepage sentence is R299");
+
+const retiredOwnerRand = "R" + "199";
+function walkText(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "dist") continue;
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walkText(path, out);
+    else if (/\.(ts|tsx|mjs|mts|md|js|jsx)$/.test(name)) out.push(path);
+  }
+  return out;
+}
+const retiredHits = ["src", "docs", "scripts"]
+  .flatMap((dir) => walkText(resolve(dir)))
+  .filter((path) => readFileSync(path, "utf8").includes(retiredOwnerRand));
+assert(retiredHits.length === 0, `retired owner rand remains in ${retiredHits.join(", ")}`);
 assert(copy.labels.solo.month === "R799/mo · about R53 per client", "solo monthly line");
 assert(!copy.labels.solo.month.toLowerCase().includes("vat"), "price line has no tax wording");
 assert(copy.labels.small.month === "R1,199/mo · about R48 per client", "small monthly line");
-assert(zaCatalogEntries().length === 14, "seven bands, monthly and annual");
+assert(zaCatalogEntries().length === 16, "eight bands, monthly and annual");
 assert(
   zaCatalogEntries().every((row) => row.currency === "zar" && !("tax_rates" in row)),
   "catalog entries are zar and carry no tax rate",

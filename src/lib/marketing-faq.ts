@@ -40,7 +40,7 @@ export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
 export const HOMEPAGE_OWNER_COST_US =
   "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
 
-const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Starter at ${LIST_PRICES.us.firmStarter}/mo for up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
 
 /**
  * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.

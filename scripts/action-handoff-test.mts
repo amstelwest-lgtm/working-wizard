@@ -50,7 +50,15 @@ const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("assignToAgent"), "the button assigns the action");
 assert(plan.includes("recordHandoffAssignment"), "a switched-off runner still writes the assignee");
 assert(plan.includes("toast.success(`Assigned to ${agentShortName(agent)}`)"), "assignment toasts");
-assert(plan.includes("ActionHandoffButtons"), "the row renders the hand-off buttons");
+assert(plan.includes("HandToMenu"), "the row renders Hand to");
+const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
+assert(menu.includes("ActionHandoffButtons"), "Hand to lists the bots");
+assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to");
+assert(menu.includes("Hand to"), "the button says Hand to");
+assert(menu.includes("data-hand-to-person"), "Hand to lists team members");
+assert(menu.includes("MoveHandTo"), "a Next move can be handed off");
+const moves = readFileSync("src/components/strategic-moves-panel.tsx", "utf8");
+assert(moves.includes("MoveHandTo"), "accountant Next moves include Hand to");
 assert(
   plan.includes("isOwner ? (agent) => void assignToAgent"),
   "owner and accountant both hand off",

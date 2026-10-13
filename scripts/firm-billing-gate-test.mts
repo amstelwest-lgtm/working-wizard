@@ -53,7 +53,8 @@ assert(isPracticeShellPath("/clients/"), "a trailing slash does not leave the cl
 assert(!isPracticeShellPath("/clients/second"), "a client file is not the practice shell");
 assert(isFirmProductPath("/clients/abc"), "client workspace is firm product");
 assert(isFirmProductPath("/reports"), "reports is firm product");
-assert(isFirmProductPath("/settings/team"), "team settings is firm product");
+assert(!isFirmProductPath("/settings/team"), "team settings stay open with the rest of settings");
+assert(!isFirmProductPath("/settings/team/"), "team settings with a slash stay open");
 assert(!isFirmProductPath("/settings/brand"), "brand settings stay open before a card");
 assert(!isFirmProductPath("/settings/brand/"), "brand settings with a slash stay open");
 assert(!isFirmProductPath("/settings"), "shared settings is not gated");
@@ -301,8 +302,8 @@ assert(
     entitled: false,
     insightSeen: false,
     firmClientCount: 1,
-  }) === "require_billing",
-  "team settings still bill before an insight",
+  }) === "allow",
+  "team settings stay open before an insight",
 );
 assert(
   decideFirmBillingPathGate({
@@ -811,8 +812,16 @@ assert(
   "billing start loads the firm quote, not the URL market",
 );
 assert(
-  !start.includes("readSaPricingCopy"),
-  "billing start does not paint geo rand copy for a signed-in firm",
+  start.includes("readSaPricingCopy"),
+  "billing start loads the pre-auth owner line from the server chunk",
+);
+assert(
+  !start.includes("R299") && !start.includes("R799"),
+  "billing start source has no rand literals",
+);
+assert(
+  start.includes("user ? quote : null"),
+  "a signed-in firm price comes from the firm quote, not visitor geo",
 );
 assert(!start.includes("adaptivePricingNote"), "billing start does not mention adaptive pricing");
 assert(

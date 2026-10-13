@@ -32,19 +32,45 @@ export function markOnboardingDone(key: string): void {
   localStorage.setItem(key, "1");
 }
 
+/**
+ * The 5-step dashboard tour and the 11-step client tour are once per signed-in
+ * user on this browser. The unscoped key still counts, so a tour already
+ * finished before the per-user key does not start again.
+ */
+export function tourSeen(key: string, userId?: string | null): boolean {
+  if (onboardingDone(key)) return true;
+  if (userId && onboardingDone(`${key}:${userId}`)) return true;
+  return false;
+}
+
+export function markTourSeen(key: string, userId?: string | null): void {
+  markOnboardingDone(userId ? `${key}:${userId}` : key);
+}
+
+function removeKeyFamily(key: string): void {
+  localStorage.removeItem(key);
+  const prefix = `${key}:`;
+  const extra: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const stored = localStorage.key(i);
+    if (stored?.startsWith(prefix)) extra.push(stored);
+  }
+  for (const stored of extra) localStorage.removeItem(stored);
+}
+
 /** Clear tour flags so guided onboarding can run again on this browser. */
 export function resetOnboardingTours(role: "owner" | "accountant" | "all" = "all"): void {
   if (typeof localStorage === "undefined") return;
   if (role === "owner" || role === "all") {
-    localStorage.removeItem(OWNER_TOUR_KEY);
-    localStorage.removeItem(OWNER_EMPTY_TOUR_KEY);
+    removeKeyFamily(OWNER_TOUR_KEY);
+    removeKeyFamily(OWNER_EMPTY_TOUR_KEY);
   }
   if (role === "accountant" || role === "all") {
-    localStorage.removeItem(ACCOUNTANT_DASH_TOUR_KEY);
-    localStorage.removeItem(ACCOUNTANT_DASH_EMPTY_TOUR_KEY);
-    localStorage.removeItem(ACCOUNTANT_CLIENT_TOUR_KEY);
-    localStorage.removeItem(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
-    localStorage.removeItem(ACCOUNTANT_FIRST_CLIENT_KEY);
+    removeKeyFamily(ACCOUNTANT_DASH_TOUR_KEY);
+    removeKeyFamily(ACCOUNTANT_DASH_EMPTY_TOUR_KEY);
+    removeKeyFamily(ACCOUNTANT_CLIENT_TOUR_KEY);
+    removeKeyFamily(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
+    removeKeyFamily(ACCOUNTANT_FIRST_CLIENT_KEY);
   }
 }
 

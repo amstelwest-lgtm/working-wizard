@@ -9,6 +9,7 @@ import {
   findOwnerCatalogPrice,
   isOwnerLookupKey,
   ownerCheckoutCharge,
+  ownerIntervalFromLookup,
   ownerLookupKey,
   ownerZarNeedsUsdFallback,
   type CatalogPrice,
@@ -589,7 +590,7 @@ export async function enforceOwnerBillingCountry(session: {
   if (session.mode && session.mode !== "subscription") return false;
   const lookup = session.metadata?.milon_lookup_key ?? "";
   if (!ownerZarNeedsUsdFallback(lookup, session.customer_details?.address?.country)) return false;
-  const interval = lookup.endsWith("_annual") ? "year" : "month";
+  const interval = ownerIntervalFromLookup(lookup) ?? "month";
   const stripe = getStripe();
   const usd = await findOwnerCatalogPrice(stripe, "us", interval);
   if (!usd?.price.id) {

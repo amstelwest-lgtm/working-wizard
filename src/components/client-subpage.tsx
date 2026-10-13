@@ -1,6 +1,30 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/primitives/page-header";
+import { accountantClientTabSearch } from "@/lib/client-route-search";
+
+/** Header back control. The link pushes history, so browser back returns here. */
+export function ClientBackLink({
+  clientId,
+  label,
+  tab,
+}: {
+  clientId: string;
+  label: string;
+  tab: string;
+}) {
+  return (
+    <Link
+      to="/clients/$clientId"
+      params={{ clientId }}
+      search={(prev) => accountantClientTabSearch(prev, tab)}
+      className="client-subpage-back"
+    >
+      <span aria-hidden="true">←</span>
+      Back to {label}
+    </Link>
+  );
+}
 
 /** Big title, subtitle, and the section that belongs on this page alone. */
 export function ClientSubpageFrame({

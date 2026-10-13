@@ -31,7 +31,7 @@ const uploadEffect = studio.slice(
 );
 assert(uploadEffect.includes('event.key === "Escape"'), "Escape closes the upload dialog");
 assert(uploadEffect.includes("focusTrapTabIndex"), "Tab is trapped inside the upload dialog");
-assert(uploadEffect.includes("setUploadOpen(false)"), "Escape dismisses the dialog");
+assert(uploadEffect.includes("closeUpload()"), "Escape dismisses the dialog");
 
 const modalStart = studio.indexOf("UPLOAD FINANCIALS MODAL");
 const modal = studio.slice(modalStart, studio.indexOf("<PastPeriodUploadDialog", modalStart));

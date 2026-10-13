@@ -203,6 +203,10 @@ export type ClientBriefingProps = {
   figuresPeriodLabel?: string | null;
   /** When the answer strip shows this line, the briefing does not repeat it. */
   hideWhatMatters?: boolean;
+  /** Score has its own page. The ring and the health headline stay off this briefing. */
+  hideScore?: boolean;
+  /** Revenue, margins, cash, and ledger proof live on Profit, Cash, and Books. */
+  hideFigures?: boolean;
   /** Upload, connect, and the other secondary links live in Review inputs. */
   hideConnectionActions?: boolean;
   /** Primary upload — always in the briefing, not behind a tab. */
@@ -230,7 +234,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
       <div className="briefing-status">
         <div className="briefing-id">
           <div className="briefing-id-row">
-            <div className="ring big-ring">{p.ring}</div>
+            {p.hideScore ? null : <div className="ring big-ring">{p.ring}</div>}
             <div>
               <h1>{p.clientName}</h1>
               <div className="briefing-type">
@@ -239,6 +243,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               </div>
             </div>
           </div>
+          {p.hideScore ? null : (
           <div className="briefing-health">
             <span className={`briefing-dot ${statusTone}`} aria-hidden="true" />
             <div>
@@ -251,8 +256,10 @@ export function ClientBriefing(p: ClientBriefingProps) {
               ) : null}
             </div>
           </div>
+          )}
         </div>
 
+        {p.hideFigures && p.hideConnectionActions ? null : (
         <div className="briefing-snapshot">
           <span className="briefing-kicker">Financial snapshot</span>
           {p.snapshot.length === 0 ? (
@@ -384,6 +391,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
           </div>
           )}
         </div>
+        )}
       </div>
 
       {(p.about || p.onEditProfile) && (

@@ -170,6 +170,25 @@ assert(
   /^Cash is \$[\d,]+ below your \$[\d,]+ minimum\.$/.test(underHome.financial_manager[0] ?? ""),
   `a dip under the floor is a sentence (${underHome.financial_manager[0]})`,
 );
+const outlookBooks = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashOutlook: {
+    opening: 46330,
+    closing: [46330],
+    floor: 36900,
+    dipsBelowFloorWeek: null,
+  },
+});
+const outlookHome = ownerHomeLines(ownerAnswerTiles(outlookBooks), null);
+assert(
+  outlookHome.financial_manager[0] === "Cash is $46,330, above the $36,900 floor.",
+  `home cash uses the health outlook (${outlookHome.financial_manager[0]})`,
+);
+assert(
+  ownerCardStatuses(outlookBooks).financial_manager == null,
+  "cash above the health floor is not Critical",
+);
 assert(
   ownerCardStatuses(
     books({
@@ -853,7 +872,7 @@ assert(!door.includes('setScreen("actions")'), "the separate actions screen is g
 assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
-assert(plan.includes("ActionHandoffButtons"), "handing off names the bot");
+assert(plan.includes("HandToMenu"), "each action has a Hand to control");
 assert(plan.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
 const handoffButtons = readFileSync("src/components/action-handoff-buttons.tsx", "utf8");
 assert(handoffButtons.includes("Coming online soon"), "a missing runner says it is coming online");
@@ -970,19 +989,27 @@ const prompt = readFileSync("supabase/functions/ask-ai/prompt.ts", "utf8");
 assert(prompt.includes("askAiAgentPersona"), "ask-ai keeps an agent persona");
 assert(!prompt.includes("Milōn Financial Manager"), "the persona does not hardcode a display name");
 
-assert(ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }) === "Owner plan · R299/mo", "SA visitors see the rand price");
-assert(!ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null }).includes("$39"), "SA plan hides the dollar price");
+assert(
+  ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null, zaMonthly: "R299/mo" }) ===
+    "Owner plan · R299/mo",
+  "SA visitors see the rand price",
+);
+assert(
+  !ownerPlanLine({ visitor: "za", accountantOnMilon: false, firmName: null, zaMonthly: "R299/mo" }).includes("$39"),
+  "SA plan hides the dollar price",
+);
 assert(ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }) === "Owner plan · $39/mo", "US visitors see the dollar price");
 assert(!ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }).includes("R299"), "US plan hides the rand price");
+assert(!ownerPlanLine({ visitor: "us", accountantOnMilon: false, firmName: null }).includes("R799"), "US plan hides the firm rand price");
 assert(
   ownerPlanLine({ visitor: "za", accountantOnMilon: true, firmName: "Northline" }) ===
     "Owner plan · included — Northline is on Milōn",
   "a linked accountant replaces the price",
 );
-assert(!ownerPlanLine({ visitor: null, accountantOnMilon: false, firmName: null }).match(/R299|\$39/), "no price before the visitor is known");
+assert(!ownerPlanLine({ visitor: null, accountantOnMilon: false, firmName: null }).match(/R299|R799|\$39/), "no price before the visitor is known");
 assert(ownerPlanFreeLine() === "Free when your accountant joins.", "the free line has no price");
 const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
-assert(!homeSrc.includes("R299") && !homeSrc.includes("$39"), "home does not show a price");
+assert(!homeSrc.includes("R299") && !homeSrc.includes("R799") && !homeSrc.includes("$39"), "home does not show a price");
 const pagesSrc = readFileSync("src/components/owner-door/owner-pages.tsx", "utf8");
 assert(pagesSrc.includes("ownerPlanLine"), "the plan view is where the price lives");
 assert(pagesSrc.includes("ownerPlanFreeLine"), "the free line is on the invite surfaces");

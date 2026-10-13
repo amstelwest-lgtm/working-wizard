@@ -40,7 +40,12 @@ import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { AgentStage } from "@/components/milon-team/agent-stage";
+import { AgentWork } from "@/components/milon-team/agent-work";
 import { MilonTeamDesk } from "@/components/milon-team/milon-team-desk";
+import { clientAgentWork } from "@/lib/agent-work";
+import { clientBackTarget } from "@/lib/client-back";
+import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { NoteLayer } from "@/components/note-layer";
 import { DESK_NOW, useMilonTeamFeedStub } from "./milon-team-stub";
 import {
@@ -92,7 +97,6 @@ import {
   routerHash,
 } from "@/lib/client-route-search";
 import { ClientRail } from "@/components/client-studio-chrome";
-import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { SettingsMenu } from "@/components/settings-menu";
 
@@ -205,6 +209,14 @@ export function RailStudio() {
           <DrawerBackdrop open={menuOpen} onClose={() => setMenuOpen(false)} />
           <ClientRail clientId={clientId} search={search} onNavigate={() => setMenuOpen(false)} />
           <div className="deliverable-main">
+            {(() => {
+              const back = clientBackTarget({
+                tab: pane,
+                section: search.section,
+                agent: search.agent,
+              });
+              return back ? <ClientBackLink clientId={clientId} label={back.label} tab={back.tab} /> : null;
+            })()}
             <div data-notes-tray-slot="" className="notes-tray-slot" />
             {pane === "ask" || (pane === "overview" && search.agent) ? (
               <BotPane agent={search.agent} />
@@ -244,24 +256,51 @@ function BotPane({ agent }: { agent?: string }) {
   const feed = useMilonTeamFeedStub("harbour-glass");
   const navigate = useNavigate();
   const selected =
-    agent === "financial_manager" || agent === "analyst" || agent === "advisor" ? agent : "all";
+    agent === "financial_manager" || agent === "analyst" || agent === "advisor" ? agent : null;
+  useEffect(() => {
+    const el = document.getElementById("ask-ai-accountant");
+    if (!el || el.dataset.askAiMounted === "1") return;
+    let cancelled = false;
+    el.dataset.clientId = CLIENT_ID;
+    el.innerHTML = "";
+    void import("@/lib/ask-ai.js").then((mod: { mountAskAi?: (node: HTMLElement, opts: unknown) => void }) => {
+      if (cancelled || typeof mod.mountAskAi !== "function" || el.dataset.askAiMounted === "1") return;
+      el.dataset.askAiMounted = "1";
+      mod.mountAskAi(el, {
+        endpoint: "/__harness/bot-reply",
+        botEndpoint: "/__harness/bot-reply",
+        variant: "studio",
+        audience: "accountant",
+        getToken: async () => "harness",
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const open = (next: "financial_manager" | "analyst" | "advisor") => {
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId: CLIENT_ID },
+      search: { tab: "home", agent: next },
+    });
+  };
   return (
     <div className="tabpane on" id="pane-ask">
       <div className="milon-desk-host">
-        <button
-          type="button"
-          className="btn ghost mini"
-          onClick={() => {
-            void navigate({
-              to: "/clients/$clientId",
-              params: { clientId: CLIENT_ID },
-              search: { tab: "home" },
-            });
-          }}
-        >
-          Back to the team
-        </button>
-        <MilonTeamDesk feed={feed} now={DESK_NOW} initialFilter={selected} />
+        {selected ? (
+          <AgentStage agent={selected} finding="Cash is on the 13-week forecast." onSelect={open}>
+            <AgentWork label="On this client" items={clientAgentWork(selected, CLIENT_ID)} />
+            <MilonTeamDesk
+              feed={feed}
+              now={DESK_NOW}
+              initialFilter={selected}
+              presentation="agent"
+            />
+          </AgentStage>
+        ) : (
+          <MilonTeamDesk feed={feed} now={DESK_NOW} initialFilter="all" />
+        )}
         <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
       </div>
     </div>
@@ -694,14 +733,15 @@ function ProfitPane({ clientId }: { clientId: string }) {
               deliverableId="profit"
               context={{ financials: HARNESS_FINANCIALS }}
             />
-            <div className="card collapse open" id="profitFinCollapse" style={{ marginTop: 20 }}>
-              <div className="c-head">
-                <h3>
-                  Profitability inputs <span className="autosave">Auto-saved</span>
-                </h3>
-                <span className="hint">Period P&amp;L that feeds the waterfall — same figures as Health &amp; Ratios</span>
-              </div>
-            </div>
+            <p className="sub" style={{ marginTop: 12 }}>
+              <Link
+                to="/clients/$clientId"
+                params={{ clientId }}
+                search={(prev) => accountantClientTabSearch(prev, "health")}
+              >
+                Edit the period figures on Health.
+              </Link>
+            </p>
           </ReviewInputsDrawer>
           <div id="wizard-profit-walk">
             <PaneBoundary label="Profitability waterfall">
@@ -1376,9 +1416,8 @@ function PlanPane({
   planView?: string;
   initialFilter?: "overdue";
 }) {
-  const [sentence, setSentence] = useState(
-    "No actions in the plan yet. Add the first one to get started.",
-  );
+  const [sentence, setSentence] = useState("");
+  const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusAdd = useRef<(() => void) | null>(null);
   const signoff =
@@ -1402,7 +1441,7 @@ function PlanPane({
       <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
       <DeliverableAnswerStrip
         heading="Action plan"
-        sentence={sentence}
+        sentence={planKnown ? sentence : ""}
         scope="action_plan"
         clientId={clientId}
         clientName="Harbour Glass"
@@ -1412,7 +1451,7 @@ function PlanPane({
         canSign={planCount > 0}
         signoffVerbOnly
         extraActions={
-          planCount === 0 ? (
+          planKnown && planCount === 0 ? (
             <button type="button" className={ARAP_GOLD_BTN} onClick={() => focusAdd.current?.()}>
               Add action
             </button>
@@ -1435,6 +1474,7 @@ function PlanPane({
           isOwner
           initialFilter={initialFilter}
           onAnswer={(actions) => {
+            setPlanKnown(true);
             setPlanCount(actions.length);
             setSentence(planAnswerSentence(actions));
           }}
