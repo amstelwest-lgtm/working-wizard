@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { readVisitorDraft } from "@/lib/market/storage";
-import { visitorCopyPack } from "@/lib/market/marketing";
-import { ownerPlanPublicLine } from "@/lib/owner-plan";
+import { ownerPlanPublicLine, ownerVisitorFromPack } from "@/lib/owner-plan";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
@@ -33,14 +33,17 @@ export const Route = createFileRoute("/billing/required")({
   },
   loaderDeps: ({ search }) => ({ plan: search.plan, interval: search.interval }),
   loader: async ({ deps }) => {
+    const visitor = await readMarketingVisitor();
+    const ownerPack = visitor.geoZa ? "za" : "us";
+    const ownerMonthly = visitor.showSaPricing ? (await readSaPricingCopy())?.ownerMonthly ?? null : null;
     try {
       const quote = await readFirmBillingQuote({
         data: { plan: deps.plan, interval: deps.interval },
       });
-      return { quote };
+      return { quote, ownerPack, ownerMonthly };
     } catch {
       // SSR has no bearer token. The client refetches once auth is attached.
-      return { quote: null as FirmBillingQuote | null };
+      return { quote: null as FirmBillingQuote | null, ownerPack, ownerMonthly };
     }
   },
   component: BillingRequiredPage,
@@ -65,6 +68,8 @@ export function BillingRequiredCard({
   backLabel,
   backClientId,
   checkout,
+  ownerPack,
+  ownerMonthly,
 }: {
   planName: string;
   priceLabel: string;
@@ -72,11 +77,10 @@ export function BillingRequiredCard({
   backLabel?: string | null;
   backClientId?: string | null;
   checkout: PendingCheckout;
+  ownerPack?: "za" | "us";
+  ownerMonthly?: string | null;
 }) {
-  const [ownerLine, setOwnerLine] = useState(ownerPlanPublicLine("us"));
-  useEffect(() => {
-    setOwnerLine(ownerPlanPublicLine(visitorCopyPack(readVisitorDraft())));
-  }, []);
+  const ownerLine = ownerPlanPublicLine(ownerPack === "za" ? "za" : "us", ownerMonthly);
   const resumeClass =
     backClientId && backLabel
       ? "inline-flex h-10 items-center rounded-full border border-amber-400/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-400"
@@ -120,7 +124,7 @@ export function BillingRequiredCard({
 
 function BillingRequiredPage() {
   const pending = Route.useSearch();
-  const { quote: loadedQuote } = Route.useLoaderData();
+  const { quote: loadedQuote, ownerPack, ownerMonthly } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
@@ -251,6 +255,8 @@ function BillingRequiredPage() {
       backLabel={backLabel}
       backClientId={returnClient?.id}
       checkout={priced}
+      ownerPack={ownerVisitorFromPack(ownerPack)}
+      ownerMonthly={ownerMonthly}
     />
   );
 }

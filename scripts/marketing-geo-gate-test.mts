@@ -19,7 +19,7 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-const LEAK = /R799|\brand\b|ZAR|South Africa/i;
+const LEAK = /R199|R299|R799|\brand\b|ZAR|South Africa/i;
 
 function accountantsMarkup(geo: string, marketParam: string | null): string {
   const pack = marketingPackForGeo(geo, marketParam);
@@ -73,6 +73,10 @@ assert(marketingPackForGeo("ZA", "us") === "us", "ZA opt-out is case-insensitive
 const usQuery = accountantsMarkup("US", "ZA");
 assert(!LEAK.test(usQuery), `US + ?market=ZA leaked: ${usQuery.match(LEAK)?.[0]}`);
 assert(!usQuery.includes("mk-market-switch"), "US + ?market=ZA renders no switcher");
+assert(
+  usQuery.includes("$39/mo") && usQuery.includes("about $8 per client"),
+  "US + ?market=ZA still shows the USD starter price",
+);
 assert(usQuery.includes("$99/mo"), "US + ?market=ZA still shows the USD solo price");
 assert(usQuery.includes("$ thousands"), "US hero micro-copy stays in dollars");
 
@@ -84,6 +88,10 @@ const za = accountantsMarkup("ZA", null);
 assert(
   za.includes("R799/mo") && za.includes("about R53 per client"),
   "ZA geo renders the solo rand price",
+);
+assert(
+  za.includes("R299/mo") && za.includes("about R60 per client"),
+  "ZA geo renders the Starter rand line",
 );
 assert(/\brand\b/i.test(za), "ZA geo renders the rand word");
 assert(za.includes("mk-market-switch"), "ZA geo may link to the US view");

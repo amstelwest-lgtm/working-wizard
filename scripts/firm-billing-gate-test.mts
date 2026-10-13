@@ -812,8 +812,16 @@ assert(
   "billing start loads the firm quote, not the URL market",
 );
 assert(
-  !start.includes("readSaPricingCopy"),
-  "billing start does not paint geo rand copy for a signed-in firm",
+  start.includes("readSaPricingCopy"),
+  "billing start loads the pre-auth owner line from the server chunk",
+);
+assert(
+  !start.includes("R199") && !start.includes("R299"),
+  "billing start source has no rand literals",
+);
+assert(
+  start.includes("user ? quote : null"),
+  "a signed-in firm price comes from the firm quote, not visitor geo",
 );
 assert(!start.includes("adaptivePricingNote"), "billing start does not mention adaptive pricing");
 assert(

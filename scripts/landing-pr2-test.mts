@@ -117,10 +117,10 @@ const zaCost = homepageFaqItems(true, loadSaPricingCopy().ownerHomepageCost).fin
 );
 assert(usCost != null && zaCost != null, "cost answers exist");
 assert(!/FOUNDING|50% off|\bZAR\b|Adaptive Pricing/i.test(usCost!.answer), "US cost answer has no SA pricing");
-assert(usCost!.answer.includes("$39/mo"), "US owners see the dollar price");
-assert(!usCost!.answer.includes("R299"), "US owners do not see the rand price");
-assert(zaCost!.answer.includes("R299/mo"), "SA owners see the rand price");
-assert(!zaCost!.answer.includes("$39"), "SA owners do not see the dollar price");
+assert(usCost!.answer.includes("$29/mo"), "US owners see the dollar price");
+assert(!usCost!.answer.includes("R199") && !usCost!.answer.includes("R299"), "US owners do not see a rand price");
+assert(zaCost!.answer.includes("R199/mo"), "SA owners see the rand price");
+assert(!zaCost!.answer.includes("$29"), "SA owners do not see the dollar price");
 assert(
   PRICING_TRIAL_AFTER ===
     "Free to explore your first client — no card. Trial covers up to 3 clients for 14 days.",

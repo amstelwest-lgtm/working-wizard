@@ -5,8 +5,8 @@ import { BillingSignOutButton } from "@/components/billing-sign-out";
 import { useAuth } from "@/hooks/use-auth";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { ownerPlanPublicLine } from "@/lib/owner-plan";
-import { readFirmBillingQuote, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
+import { ownerPlanPublicLine, ownerVisitorFromPack } from "@/lib/owner-plan";
+import { readFirmBillingQuote, readSaPricingCopy, type FirmBillingQuote } from "@/lib/pricing/za-pricing.functions";
 import {
   billingStartPath,
   consumePendingCheckout,
@@ -35,13 +35,19 @@ export const Route = createFileRoute("/billing/start")({
     // Firm checkout puts its own market on the query string. That must not
     // decide the owner line: a ZA edge with ?market=us is still a ZA visitor.
     const ownerPack = visitor.geoZa ? "za" : "us";
+    const ownerMonthly = visitor.showSaPricing ? (await readSaPricingCopy())?.ownerMonthly ?? null : null;
     try {
       const quote = await readFirmBillingQuote({
         data: { plan: deps.plan, interval: deps.interval },
       });
-      return { quote, copyPack: visitor.copyPack, ownerPack };
+      return { quote, copyPack: visitor.copyPack, ownerPack, ownerMonthly };
     } catch {
-      return { quote: null as FirmBillingQuote | null, copyPack: visitor.copyPack, ownerPack };
+      return {
+        quote: null as FirmBillingQuote | null,
+        copyPack: visitor.copyPack,
+        ownerPack,
+        ownerMonthly,
+      };
     }
   },
   component: BillingStartPage,
@@ -68,7 +74,7 @@ function priceLabel(
 function BillingStartPage() {
   const search = Route.useSearch();
   const hold = search.hold;
-  const { quote: loadedQuote, copyPack, ownerPack } = Route.useLoaderData();
+  const { quote: loadedQuote, copyPack, ownerPack, ownerMonthly } = Route.useLoaderData();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const startCheckout = useServerFn(createStripeCheckout);
@@ -191,7 +197,7 @@ function BillingStartPage() {
         <p className="mt-2 text-sm text-slate-400">
           {user
             ? `Redirecting to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band.`
-            : `Create a firm account or sign in, then we will send you to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE}. Owner plan: ${ownerPlanPublicLine(ownerPack)}.`
+            : `Create a firm account or sign in, then we will send you to Stripe for ${planName}${priceBit}. Card required. ${FIRM_TRIAL_SENTENCE}. Owner plan: ${ownerPlanPublicLine(ownerVisitorFromPack(ownerPack), ownerMonthly)}.`
           }
         </p>
         {user ? (

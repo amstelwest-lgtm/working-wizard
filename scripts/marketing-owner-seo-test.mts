@@ -31,9 +31,15 @@ assert(graph.includes('"postalCode":"19801"'), "postal code");
 assert(graph.includes('"addressCountry":"US"'), "postal country");
 assert(graph.includes('"applicationCategory":"BusinessApplication"'), "software category");
 assert(graph.includes('"operatingSystem":"Web"'), "software operating system");
-assert(graph.includes('"price":"99"') && graph.includes('"price":"39"'), "USD offers are Solo and owner");
+assert(
+  graph.includes('"price":"99"') && graph.includes('"price":"39"') && graph.includes('"price":"29"'),
+  "USD offers are Starter, Solo and owner",
+);
 assert(graph.includes('"priceCurrency":"USD"'), "offers are USD");
-assert(!graph.includes("ZAR") && !graph.includes("R299") && !graph.includes("R799"), "shared JSON-LD has no rand");
+assert(
+  !graph.includes("ZAR") && !graph.includes("R199") && !graph.includes("R299") && !graph.includes("R799"),
+  "shared JSON-LD has no rand",
+);
 
 const titles = new Set<string>();
 const descriptions = new Set<string>();
@@ -59,11 +65,12 @@ assert(map.includes("https://www.milonfinance.com/faq"), "sitemap lists faq");
 assert(map.includes("https://www.milonfinance.com/ai"), "sitemap lists ai");
 
 const usFaq = homepageFaqItems(false).map((item) => item.answer).join("\n");
-assert(!usFaq.includes("R299") && !usFaq.includes("ZAR"), "US homepage FAQ has no rand");
+assert(!usFaq.includes("R199") && !usFaq.includes("R299") && !usFaq.includes("ZAR"), "US homepage FAQ has no rand");
 const zaFaq = homepageFaqItems(true, loadSaPricingCopy().ownerHomepageCost)
   .map((item) => item.answer)
   .join("\n");
-assert(zaFaq.includes("R299"), "ZA homepage FAQ uses the server rand sentence");
+assert(zaFaq.includes("R199"), "ZA homepage FAQ uses the server rand sentence");
+assert(!zaFaq.includes("R299"), "ZA homepage FAQ does not keep the old owner price");
 
 const index = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(index.includes("imageAlt={ACCOUNTANT_TEASER.imageAlt}"), "accountant thumbnail has alt text");
