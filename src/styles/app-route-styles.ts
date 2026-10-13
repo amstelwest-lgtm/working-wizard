@@ -9,6 +9,7 @@ import featureFinderHref from "./feature-finder.css?url";
 import founderMetricsHref from "./founder-metrics.css?url";
 import founderPortalHref from "./founder-portal.css?url";
 import opsConsoleHref from "./ops-console.css?url";
+import ownerPremiumHref from "./owner-premium.css?url";
 import premiumShineHref from "./premium-shine.css?url";
 import settingsPortalHref from "./settings-portal.css?url";
 
@@ -35,6 +36,7 @@ export const founderPortalLinks: StylesheetLink[] = [
   sheet(featureFinderHref),
   sheet(accountantPortalHref),
   sheet(premiumShineHref),
+  sheet(ownerPremiumHref),
 ];
 
 export const founderMetricsLinks: StylesheetLink[] = [
