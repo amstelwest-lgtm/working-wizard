@@ -24,6 +24,7 @@ import { BackLink } from "@/components/back-link";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
+import { reportLinkOpensPreview } from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -3521,12 +3522,12 @@ export function ReportsStudio({
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [previewState, setPreviewState] = useState<PreviewState | null>(() => {
-    // Deep-link: open the preview shell immediately so the catalogue does not flash first.
+    // Deep-link: open the preview shell only when the link asked for a preview.
     if (
       typeof window !== "undefined" &&
+      reportLinkOpensPreview(actionParam) &&
       reportParam &&
-      REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number]) &&
-      reportDeepLinkAction(actionParam) === "preview"
+      REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
     ) {
       const r = REPORTS.find((x) => x.key === reportParam);
       if (r) return { key: r.key, name: r.name, blobUrl: null, loading: true };

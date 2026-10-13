@@ -272,6 +272,7 @@ export function AccountantNav({
   return (
     <nav
       ref={navRef}
+      id="accountant-nav"
       className="deliverable-rail accountant-nav"
       aria-label={label}
       onKeyDown={onKeyDown}
@@ -466,6 +467,7 @@ export function AccountantMenuButton({ open, onClick }: { open: boolean; onClick
   return (
     <button
       type="button"
+      id="accountant-menu"
       className="topbar-menu-btn"
       aria-label={open ? "Close menu" : "Open menu"}
       aria-expanded={open}

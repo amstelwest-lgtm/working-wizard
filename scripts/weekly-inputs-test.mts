@@ -85,7 +85,10 @@ assert(
   !accountantSrc.includes("<WeeklyInputTable"),
   "accountant Profit tab keeps period profitability inputs only — weekly stays on the owner board",
 );
-assert(accountantSrc.includes("Profitability inputs"), "accountant Profit tab keeps profitability-input style");
+assert(
+  accountantSrc.includes("Edit the period figures on Health."),
+  "accountant Profit links period figures to Health",
+);
 {
   const profitStart = accountantSrc.indexOf('id="pane-profit"');
   const profitEnd = accountantSrc.indexOf('id="pane-cash"');
@@ -96,8 +99,8 @@ assert(accountantSrc.includes("Profitability inputs"), "accountant Profit tab ke
     "product-line questions sit above the waterfall",
   );
   assert(
-    profitPane.indexOf('id="profitFinCollapse"') < profitPane.indexOf('id="wizard-profit-walk"'),
-    "profitability inputs sit in the review drawer above the waterfall",
+    profitPane.indexOf("Edit the period figures on Health.") < profitPane.indexOf('id="wizard-profit-walk"'),
+    "the Health figures link sits above the waterfall",
   );
   assert(
     /build revenue and net profit per product line/i.test(profitPane),

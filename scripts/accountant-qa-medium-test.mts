@@ -213,7 +213,7 @@ const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dash.includes("practiceNeedsAttention"), "dashboard tile and list share one attention queue");
 assert(dash.includes("queue={attentionBook.items}"), "the strip renders that same queue");
 assert(dash.includes("needAttention: attention.needAttention"), "greeting uses the shared count");
-assert(dash.includes("attentionFootnote"), "dashboard footnote uses the same summary");
+assert(!dash.includes('label="Need attention"'), "Need attention stays in the queue, not a second tile");
 assert(!dash.includes("summarizePortfolioAttention"), "the tile does not count priority badges on their own");
 assert(dash.includes("firmOpenQueriesDestination(clientRows)"), "open queries tile uses the destination helper");
 assert(

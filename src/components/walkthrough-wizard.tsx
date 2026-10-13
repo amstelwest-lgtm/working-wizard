@@ -7,8 +7,8 @@ import {
   ACCOUNTANT_DASH_TOUR_KEY,
   OWNER_EMPTY_TOUR_KEY,
   OWNER_TOUR_KEY,
-  markOnboardingDone,
-  onboardingDone,
+  markTourSeen,
+  tourSeen,
 } from "@/lib/onboarding";
 import { spotlightClickBlockers, type SpotBox } from "@/lib/spotlight-hole";
 
@@ -359,6 +359,64 @@ function clickSpotsEqual(a: SpotBox[], b: SpotBox[]): boolean {
   );
 }
 
+function isAccountantTour(variant: WalkthroughVariant): boolean {
+  return variant.startsWith("accountant-");
+}
+
+/** Shown once, then remembered. The empty orientations still wait for Skip or Finish. */
+function remembersOnShow(variant: WalkthroughVariant): boolean {
+  return variant === "accountant-dashboard" || variant === "accountant-client";
+}
+
+/** Menu, the rail or drawer, and Ask stay clickable for the whole accountant tour. */
+function protectedSelectors(variant: WalkthroughVariant): string[] {
+  if (!isAccountantTour(variant)) return [];
+  return ["#accountant-menu", "#accountant-nav", "[data-ask]"];
+}
+
+function spotsForSelectors(selectors: readonly string[]): SpotBox[] {
+  const spots: SpotBox[] = [];
+  for (const selector of selectors) {
+    document.querySelectorAll(selector).forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 1 && rect.height > 1) {
+        spots.push({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+      }
+    });
+  }
+  return spots;
+}
+
+function topbarClearance(): number {
+  const bar = document.querySelector(".accountant-portal .topbar");
+  if (!(bar instanceof HTMLElement)) return 0;
+  const rect = bar.getBoundingClientRect();
+  if (rect.height < 1) return 0;
+  return rect.bottom + 8;
+}
+
+/** Keep the card under the top bar and above the Ask buttons. */
+function settleTourCard(
+  pos: { top: number; maxHeight: number },
+  variant: WalkthroughVariant,
+): { top: number; maxHeight: number } {
+  const top = Math.max(pos.top, isAccountantTour(variant) ? topbarClearance() : 0);
+  if (!isAccountantTour(variant)) return { top, maxHeight: pos.maxHeight };
+  let maxHeight = pos.maxHeight;
+  document.querySelectorAll("[data-ask]").forEach((el) => {
+    if (!(el instanceof HTMLElement)) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    if (rect.top > top + 80 && rect.top < top + maxHeight) {
+      maxHeight = Math.min(maxHeight, rect.top - top - 12);
+    }
+  });
+  return { top, maxHeight: Math.max(140, maxHeight) };
+}
+
 /** Lit feature, plus any extra controls that must stay clickable during the tour. */
 function readClickSpots(primary: Element | null, extraIds: readonly string[]): SpotBox[] {
   const spots: SpotBox[] = [];
@@ -489,6 +547,7 @@ export function WalkthroughWizard({
   onComplete,
   onFinish,
   passThroughIds = [],
+  userId = null,
 }: {
   onTabChange?: (tab: string) => void;
   userRole?: string | null;
@@ -502,6 +561,8 @@ export function WalkthroughWizard({
   onFinish?: () => void;
   /** Element ids that stay clickable even when they sit outside the spotlight. */
   passThroughIds?: readonly string[];
+  /** Signed-in user. The long accountant tours are remembered per user. */
+  userId?: string | null;
 }) {
   const variant: WalkthroughVariant =
     variantProp ??
@@ -516,6 +577,7 @@ export function WalkthroughWizard({
     : "top var(--brand-duration) var(--brand-ease), left var(--brand-duration) var(--brand-ease), width var(--brand-duration) var(--brand-ease), height var(--brand-duration) var(--brand-ease), border-radius var(--brand-duration) var(--brand-ease)";
 
   const [visible, setVisible] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [clickSpots, setClickSpots] = useState<SpotBox[]>([]);
@@ -539,8 +601,24 @@ export function WalkthroughWizard({
       setVisible(false);
       return;
     }
-    if (!onboardingDone(storageKey)) setVisible(true);
-  }, [ready, storageKey]);
+    if (tourSeen(storageKey, userId)) return;
+    setVisible(true);
+    if (!remembersOnShow(variant)) return;
+    const id = window.setTimeout(() => markTourSeen(storageKey, userId), 0);
+    return () => window.clearTimeout(id);
+  }, [ready, storageKey, userId, variant]);
+
+  useEffect(() => {
+    if (!visible || !isAccountantTour(variant)) {
+      setDrawerOpen(false);
+      return;
+    }
+    const read = () => setDrawerOpen(document.querySelector(".accountant-portal.nav-open") != null);
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, [visible, variant]);
 
   useEffect(() => {
     if (!visible) return;
@@ -577,12 +655,17 @@ export function WalkthroughWizard({
     };
 
     const publishHoles = (el: Element | null) => {
-      const nextHoles = readClickSpots(el, passThroughIdsRef.current);
+      const nextHoles = [
+        ...readClickSpots(el, passThroughIdsRef.current),
+        ...spotsForSelectors(protectedSelectors(variant)),
+      ];
       if (!clickSpotsEqual(clickSpotsRef.current, nextHoles)) {
         clickSpotsRef.current = nextHoles;
         setClickSpots(nextHoles);
       }
     };
+    // Menu, the rail, and Ask stay open while a missing spotlight is still resolving.
+    publishHoles(s.targetId ? resolveTarget(s.targetId) : null);
 
     const layout = (el: Element | null) => {
       if (cancelled) return;
@@ -593,7 +676,7 @@ export function WalkthroughWizard({
           spotRef.current = null;
           setSpot(null);
         }
-        const pos = cardLayoutForSpot(null, cardH);
+        const pos = settleTourCard(cardLayoutForSpot(null, cardH), variant);
         setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
         setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
         return;
@@ -603,7 +686,7 @@ export function WalkthroughWizard({
         spotRef.current = next;
         setSpot(next);
       }
-      const pos = cardLayoutForSpot(next, cardH);
+      const pos = settleTourCard(cardLayoutForSpot(next, cardH), variant);
       setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
       setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
     };
@@ -672,7 +755,10 @@ export function WalkthroughWizard({
         raf = 0;
         const el = activeElRef.current;
         const cardH = measuredCardHeight(cardRef.current);
-        const holes = readClickSpots(el && document.contains(el) ? el : null, passThroughIdsRef.current);
+        const holes = [
+          ...readClickSpots(el && document.contains(el) ? el : null, passThroughIdsRef.current),
+          ...spotsForSelectors(protectedSelectors(variant)),
+        ];
         if (!clickSpotsEqual(clickSpotsRef.current, holes)) {
           clickSpotsRef.current = holes;
           setClickSpots(holes);
@@ -682,7 +768,7 @@ export function WalkthroughWizard({
             spotRef.current = null;
             setSpot(null);
           }
-          const pos = cardLayoutForSpot(null, cardH);
+          const pos = settleTourCard(cardLayoutForSpot(null, cardH), variant);
           setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
           setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
           return;
@@ -699,12 +785,13 @@ export function WalkthroughWizard({
           spotRef.current = next;
           setSpot(next);
         }
-        const pos = cardLayoutForSpot(next, cardH);
+        const pos = settleTourCard(cardLayoutForSpot(next, cardH), variant);
         setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
         setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
       });
     };
 
+    refresh();
     window.addEventListener("resize", refresh);
     window.addEventListener("scroll", refresh, true);
     return () => {
@@ -712,10 +799,10 @@ export function WalkthroughWizard({
       window.removeEventListener("resize", refresh);
       window.removeEventListener("scroll", refresh, true);
     };
-  }, [visible, step, ownerChrome]);
+  }, [visible, step, ownerChrome, variant]);
 
   const dismiss = () => {
-    markOnboardingDone(storageKey);
+    markTourSeen(storageKey, userId);
     document
       .querySelectorAll(".wizard-highlight")
       .forEach((el) => el.classList.remove("wizard-highlight"));
@@ -727,7 +814,7 @@ export function WalkthroughWizard({
     onComplete?.();
   };
 
-  if (!visible || !ready) return null;
+  if (!visible || !ready || drawerOpen) return null;
 
   const s = STEPS[step];
   if (!s) return null;

@@ -429,9 +429,32 @@ function explainFor(name: string): RatioExplain {
 }
 
 /**
+ * Flow ÷ flow ratios are the same on the period and on the annualised year.
+ * The drawer prints the period dollars the statement uses. Day-count and
+ * stock ÷ flow ratios keep the annualised inputs the score uses.
+ */
+const PERIOD_MONEY_RATIOS = new Set([
+  "Net Margin",
+  "Operating Margin",
+  "Gross Margin",
+  "Interest Burden",
+  "Tax Burden",
+  "Fixed Cost Ratio",
+  "Degree of Operating Leverage",
+  "Top-5 Customer Share",
+  "Gross Profit / Labor",
+  "OCF / EBITDA",
+  "COGS Ratio",
+  "Revenue Growth Rate",
+  "Capex Intensity",
+  "Asset Reinvestment Ratio",
+]);
+
+/**
  * Formula + mini actual calculation for one `computeRatios()` name,
  * owner-board camelCase key, or techName variant.
- * Uses the same annualisation as the live ratio so the line matches the score.
+ * Day-count lines use the same annualisation as the live ratio.
+ * Scale-free ratios print the period amounts.
  */
 export function ratioActualLine(
   name: string,
@@ -440,9 +463,12 @@ export function ratioActualLine(
 ): RatioActualLine {
   name = canonicalRatioName(name);
   const explained = explainFor(name);
-  const n = Object.fromEntries(
-    Object.entries(annualiseFinancials(inputs)).map(([k, val]) => [k, parseField(String(val ?? ""))]),
-  ) as Record<string, number>;
+  const parsed = (source: object) =>
+    Object.fromEntries(
+      Object.entries(source).map(([k, val]) => [k, parseField(String(val ?? ""))]),
+    ) as Record<string, number>;
+  const annual = parsed(annualiseFinancials(inputs));
+  const n = PERIOD_MONEY_RATIOS.has(name) ? parsed(inputs) : annual;
 
   const missing = missingLabels(explained.needed, n);
   const fmt = (v: number) => money(v, formatMoney);

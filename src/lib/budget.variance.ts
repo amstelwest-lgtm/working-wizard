@@ -128,8 +128,14 @@ export function isMaterialVariance(line: Pick<VarianceLine, "budget" | "delta" |
   return line.deltaPct != null && Math.abs(line.deltaPct) >= 5;
 }
 
-function signalFor(delta: number, higherIsBetter: boolean): VarianceSignal {
+function signalFor(
+  delta: number,
+  deltaPct: number | null,
+  higherIsBetter: boolean,
+): VarianceSignal {
   if (Math.abs(delta) < 1) return "inline";
+  // -$20 that prints as -0.0% is the same as no variance on the page.
+  if (deltaPct != null && Math.abs(deltaPct) < 0.05) return "inline";
   const favourable = higherIsBetter ? delta > 0 : delta < 0;
   return favourable ? "favourable" : "adverse";
 }
@@ -144,8 +150,6 @@ export function varianceLine(
 ): VarianceLine {
   const delta = actual - budget;
   const deltaPct = budget !== 0 ? (delta / Math.abs(budget)) * 100 : null;
-  // A slip that prints as 0.0% is the same colour as a match. $20 on a large plan is that case.
-  const nearZero = Math.abs(delta) < 1 || (deltaPct != null && Math.abs(deltaPct) < 0.05);
   return {
     key,
     label,
@@ -154,7 +158,7 @@ export function varianceLine(
     delta,
     deltaPct,
     higherIsBetter,
-    signal: nearZero ? "inline" : signalFor(delta, higherIsBetter),
+    signal: signalFor(delta, deltaPct, higherIsBetter),
   };
 }
 

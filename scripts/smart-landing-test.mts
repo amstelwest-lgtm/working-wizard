@@ -31,7 +31,7 @@ const blocked = {
 assert(!isFirmProductPath("/settings/brand"), "brand is not behind the firm gate");
 assert(!isFirmProductPath("/settings"), "account settings are not behind the firm gate");
 assert(!isFirmProductPath(SMART_LANDING_PATH), "the landing route is not behind the firm gate");
-assert(isFirmProductPath("/settings/team"), "team settings stay gated");
+assert(!isFirmProductPath("/settings/team"), "team settings stay open with the rest of settings");
 assert(isFirmProductPath("/dashboard"), "dashboard stays gated");
 assert(isFirmProductPath("/reports"), "reports stay gated");
 
@@ -53,7 +53,7 @@ assert(
 );
 assert(
   decideFirmBillingPathGate({ ...blocked, pathname: "/settings/team" }) === "allow",
-  "team settings stay open with the dashboard when the book has a client",
+  "team settings stay open without a card",
 );
 assert(
   decideFirmBillingPathGate({ ...blocked, pathname: "/clients/abc" }) === "allow",

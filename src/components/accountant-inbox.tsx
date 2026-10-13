@@ -146,17 +146,21 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
     }
   };
 
-  if (!firmId) return null;
-  if (!loaded || !migrated) {
+  if (!firmId && !quiet) return null;
+  if (!firmId || !loaded || !migrated) {
     return (
       <details className={["home-fold", className].filter(Boolean).join(" ")} id="accountant-inbox">
         <summary>
           <span>Marketplace</span>
-          <span className="home-fold-meta">{loaded ? "Not available" : "Loading"}</span>
+          <span className="home-fold-meta">{!loaded && firmId ? "Loading" : "Unavailable"}</span>
         </summary>
         <div className="home-fold-body">
           <p className="sub">
-            {migrated ? "Loading the marketplace." : "Marketplace is not on this firm yet."}
+            {!firmId
+              ? "Marketplace is not available on this workspace yet."
+              : !migrated
+                ? "Marketplace is not available on this workspace yet."
+                : "Loading marketplace…"}
           </p>
         </div>
       </details>

@@ -889,6 +889,7 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
 .accountant-portal:has(.milon-desk):has([data-agent-stage]) .deliverable-main,
 .accountant-portal:has(.milon-desk):has([data-agent-stage]) .milon-desk-host {
   height: auto;
+  min-height: auto;
   max-height: none;
   overflow: visible;
 }

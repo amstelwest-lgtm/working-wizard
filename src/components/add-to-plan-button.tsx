@@ -30,6 +30,72 @@ interface Props {
   tone?: "strip" | "quiet";
 }
 
+/** Find or create the action item for a next move. The same row Hand to assigns. */
+export async function ensureMoveActionItem(input: {
+  clientId: string;
+  moveKey: string;
+  title: string;
+  outcomeWhy?: string | null;
+}): Promise<{ id: string; created: boolean }> {
+  const { data: plans, error: pErr } = await supabase
+    .from("action_plans")
+    .select("id")
+    .eq("client_id", input.clientId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (pErr) throw pErr;
+  let planId = plans?.[0]?.id as string | undefined;
+  if (!planId) {
+    const { data: created, error: cErr } = await supabase
+      .from("action_plans")
+      .insert({
+        client_id: input.clientId,
+        period_label: defaultPeriodLabel(),
+        outcome_goal: "Set your outcome goal for this quarter",
+        target_date: defaultTargetDate(),
+      })
+      .select("id")
+      .single();
+    if (cErr) throw cErr;
+    planId = created!.id as string;
+  }
+
+  const { data: existing, error: eErr } = await supabase
+    .from("action_items")
+    .select("id")
+    .eq("plan_id", planId)
+    .eq("source_move_key", input.moveKey)
+    .limit(1);
+  if (eErr) throw eErr;
+  const existingId = existing?.[0]?.id as string | undefined;
+  if (existingId) return { id: existingId, created: false };
+
+  const { data: maxSeq } = await supabase
+    .from("action_items")
+    .select("seq")
+    .eq("plan_id", planId)
+    .order("seq", { ascending: false })
+    .limit(1);
+  const seq = ((maxSeq?.[0]?.seq as number | undefined) ?? 0) + 1;
+  const { data: inserted, error: iErr } = await supabase
+    .from("action_items")
+    .insert({
+      plan_id: planId,
+      client_id: input.clientId,
+      seq,
+      title: input.title,
+      outcome_why: input.outcomeWhy ?? null,
+      source: "strategic_move",
+      source_move_key: input.moveKey,
+      driver_key: input.moveKey,
+    })
+    .select("id")
+    .single();
+  if (iErr) throw iErr;
+  return { id: inserted!.id as string, created: true };
+}
+
 /**
  * "Add to Action Plan" — creates an Action Plan item from a Next Move / SOP step
  * (deduped by source_move_key), then offers "Open plan" to hand off into the
@@ -52,55 +118,9 @@ export function AddToPlanButton({
     if (!clientId) { toast.error("Link a client first to build an action plan"); return; }
     setState("adding");
     try {
-      // Find (or create) the active plan — mirrors the Action Plan tab.
-      const { data: plans, error: pErr } = await supabase
-        .from("action_plans").select("id")
-        .eq("client_id", clientId).eq("is_active", true)
-        .order("created_at", { ascending: false }).limit(1);
-      if (pErr) throw pErr;
-      let planId = plans?.[0]?.id as string | undefined;
-      if (!planId) {
-        const { data: created, error: cErr } = await supabase
-          .from("action_plans")
-          .insert({
-            client_id: clientId,
-            period_label: defaultPeriodLabel(),
-            outcome_goal: "Set your outcome goal for this quarter",
-            target_date: defaultTargetDate(),
-          })
-          .select("id").single();
-        if (cErr) throw cErr;
-        planId = created!.id as string;
-      }
-
-      // Duplicate guard: one item per move key per plan.
-      const { data: existing, error: eErr } = await supabase
-        .from("action_items").select("id")
-        .eq("plan_id", planId).eq("source_move_key", moveKey).limit(1);
-      if (eErr) throw eErr;
-      if (existing && existing.length > 0) {
-        toast.info("Already in your Action Plan");
-        setState("added");
-        return;
-      }
-
-      const { data: maxSeq } = await supabase
-        .from("action_items").select("seq")
-        .eq("plan_id", planId).order("seq", { ascending: false }).limit(1);
-      const seq = ((maxSeq?.[0]?.seq as number | undefined) ?? 0) + 1;
-
-      const { error: iErr } = await supabase.from("action_items").insert({
-        plan_id: planId,
-        client_id: clientId,
-        seq,
-        title,
-        outcome_why: outcomeWhy ?? null,
-        source: "strategic_move",
-        source_move_key: moveKey,
-        driver_key: moveKey,
-      });
-      if (iErr) throw iErr;
-      toast.success("Added to Action Plan");
+      const saved = await ensureMoveActionItem({ clientId, moveKey, title, outcomeWhy });
+      if (saved.created) toast.success("Added to Action Plan");
+      else toast.info("Already in your Action Plan");
       setState("added");
     } catch (err: any) {
       toast.error(err.message ?? "Couldn't add to Action Plan");

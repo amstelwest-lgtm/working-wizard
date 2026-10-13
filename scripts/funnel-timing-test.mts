@@ -332,7 +332,7 @@ assert(
     insightSeen: readInsightSeen("firm-b"),
     firmClientCount: 1,
   }) === "allow",
-  "team settings stay open with the dashboard when the book has a client",
+  "firm B after its insight can open team settings",
 );
 assert(
   decideFirmBillingPathGate({

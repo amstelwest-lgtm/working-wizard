@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
+import { PeriodPill } from "@/components/chrome-icons";
 import { FeatureFinder } from "@/components/feature-finder";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { PracticeRail } from "@/components/practice-rail";
@@ -58,6 +59,7 @@ export function SettingsShell({
             <span className="gold-text">MILŌN</span>
           </span>
           <FirmSwitcher />
+          <PeriodPill />
           <FeatureFinder audience="accountant" clientId={null} />
           <span className="spacer" />
           <SettingsMenu
