@@ -54,6 +54,46 @@ assert(dualRoles.primaryRole === "firm_admin", "dual-role primary is practice");
 assert(summarizeRoles(["client_owner"]).primaryRole === "client_owner", "owner primary");
 assert(summarizeRoles(["accountant"]).hasPracticeRole, "accountant is practice");
 
+// ── Sign-in door vs real firm membership (#540 hotfix) ─────────────────────
+const pureOwner = d({ hasClientRole: true });
+const pureAccountant = d({ hasPracticeRole: true, hasFirm: true, practiceSignup: true });
+const bothRoles = d({
+  hasPracticeRole: true,
+  hasClientRole: true,
+  hasFirm: true,
+  practiceSignup: false,
+});
+const autoGrantedOwner = d({
+  hasPracticeRole: true,
+  hasClientRole: true,
+  hasFirm: false,
+  practiceSignup: false,
+});
+assert(
+  decidePostLoginPath({ ...pureOwner, force: "accountant" }) === "/app",
+  "a pure owner stays on /app even from the accountant door",
+);
+assert(
+  decidePostLoginPath({ ...pureAccountant, force: "accountant" }) === "/dashboard",
+  "a pure accountant opens /dashboard",
+);
+assert(
+  decidePostLoginPath({ ...bothRoles, force: "accountant" }) === "/dashboard",
+  "both roles via the accountant entry open /dashboard",
+);
+assert(
+  decidePostLoginPath({ ...bothRoles, force: "owner" }) === "/app",
+  "both roles via the owner entry stay on /app",
+);
+assert(
+  decidePostLoginPath({ ...autoGrantedOwner, force: "accountant" }) === "/app",
+  "an auto-granted firm role with no firm row stays on /app",
+);
+assert(
+  decidePostLoginPath(bothRoles) === "/dashboard",
+  "a firm row with no chosen door opens /dashboard",
+);
+
 // ── The reported glitch: accountant-door sign-in ────────────────────────────
 assert(
   decidePostLoginPath({ ...dual, force: "accountant" }) === "/dashboard",
@@ -70,7 +110,7 @@ assert(
 
 assert(
   decidePostLoginPath({ ...dualNoMeta, force: "accountant" }) === "/app",
-  "client seat without practice signup metadata + /auth → owner board",
+  "auto-granted firm_admin with no firm row + /auth → owner board",
 );
 assert(
   decideAccountantStay({ ...dualNoMeta, force: "accountant" }) === true,
@@ -92,7 +132,10 @@ assert(
   decidePostLoginPath({ ...dual, intent: "owner" }) === "/app",
   "dual-role + owner intent → founder board",
 );
-assert(decidePostLoginPath(dual) === "/app", "dual-role with no intent defaults to founder board");
+assert(
+  decidePostLoginPath(dual) === "/dashboard",
+  "a real practice role with no owner door opens the practice portal",
+);
 
 // Visiting /dashboard after accountant login must not bounce anyone who chose that door
 assert(decideAccountantStay(dual) === true, "dual-role stays on accountant portal (practice role)");
@@ -170,16 +213,16 @@ assert(
 
 assert(canEnterAccountantPortal(leftoverFirmAdmin) === true, "practice role counts as an accountant profile even without signup metadata");
 assert(
-  decidePostLoginPath(leftoverFirmAdmin) === "/app",
-  "auto-granted firm_admin on an owner account uses /auth → owner board",
+  decidePostLoginPath(leftoverFirmAdmin) === "/dashboard",
+  "a firm row plus a client seat on /auth opens the practice portal",
 );
 assert(
   decideAccountantStay(leftoverFirmAdmin) === true,
   "dual-role (practice + client) stays on /dashboard from the accountant door",
 );
 assert(
-  decideOwnerAppBounce({ ...leftoverFirmAdmin, actingAsClient: false }) === false,
-  "auto-granted firm_admin does not bounce an owner off /app",
+  decideOwnerAppBounce({ ...leftoverFirmAdmin, actingAsClient: false }) === true,
+  "a real firm member who landed on /app after /auth is sent to /dashboard",
 );
 assert(isPracticeSignupMeta({ signup_type: "customer" }) === false, "customer signup is not practice");
 assert(isPracticeSignupMeta({ signup_type: "accountant" }) === true, "accountant signup is practice");
@@ -200,12 +243,12 @@ assert(
 // Owner-door Google must not land on /dashboard because of leftover /auth force
 // plus auto-granted firm_admin on SME (ensure_practice_firm) accounts.
 assert(
-  decidePostLoginPath({ ...leftoverFirmAdmin, intent: "owner" }) === "/app",
-  "leftover accountant force + owner intent + dual-role / leftover firm_admin → founder board",
+  decidePostLoginPath({ ...leftoverFirmAdmin, intent: "owner" }) === "/dashboard",
+  "accountant entry wins over leftover owner intent when a firm row exists",
 );
 assert(
-  decidePostLoginPath({ ...dual, force: "accountant", intent: "owner" }) === "/app",
-  "leftover accountant force + owner Google + dual-role → founder board",
+  decidePostLoginPath({ ...dual, force: "accountant", intent: "owner" }) === "/dashboard",
+  "accountant entry wins over leftover owner intent for a practice signup",
 );
 assert(
   decidePostLoginPath({ ...dualNoMeta, force: "accountant", intent: "owner" }) === "/app",
