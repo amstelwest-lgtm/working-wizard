@@ -69,6 +69,10 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
       return;
     }
     let cancelled = false;
+    const giveUp = window.setTimeout(() => {
+      if (cancelled) return;
+      setFeed((prev) => (prev.loading ? { ...prev, loading: false } : prev));
+    }, 8000);
     const switching = loadedFor.current !== id;
     loadedFor.current = id;
     setFeed((prev) =>
@@ -284,6 +288,7 @@ export function useMilonTeamFeed(clientId: string): MilonTeamFeedApi {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(giveUp);
     };
   }, [clientId, tick]);
 

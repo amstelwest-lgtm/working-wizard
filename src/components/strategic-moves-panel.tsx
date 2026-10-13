@@ -1,73 +1,9 @@
-import { useState } from "react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { ActionHandoffButtons } from "@/components/action-handoff-buttons";
-import { AddToPlanButton, ensureMoveActionItem } from "@/components/add-to-plan-button";
+import { AddToPlanButton } from "@/components/add-to-plan-button";
+import { MoveHandTo } from "@/components/hand-to-menu";
 import { ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
-import { handoffComingOnline } from "@/hooks/owner-agent-ui";
-import { agentDisplayName, agentShortName } from "@/lib/milon-team";
-import type { AgentKey } from "@/lib/milon-team-feed";
 import { movesAnswerSentence } from "@/lib/overview-moves-copy";
-import { recordHandoffAssignment, requestOwnerHandoff } from "@/lib/owner-handoff-client";
 import type { RankedStrategicMove } from "@/lib/strategic-moves";
-
-function MoveHandoff({
-  clientId,
-  move,
-}: {
-  clientId: string;
-  move: RankedStrategicMove;
-}) {
-  const [assigned, setAssigned] = useState<string | null>(null);
-  const [comingSoon, setComingSoon] = useState<Partial<Record<AgentKey, true>>>({});
-  const onHandOff = async (agent: AgentKey) => {
-    try {
-      const saved = await ensureMoveActionItem({
-        clientId,
-        moveKey: move.key,
-        title: move.title,
-        outcomeWhy: move.impactLine || `Improves ${move.ratioName}.`,
-      });
-      const result = await requestOwnerHandoff({
-        clientId,
-        actionItemId: saved.id,
-        agent,
-      });
-      if (!result.ok && handoffComingOnline(result.error)) {
-        const parked = await recordHandoffAssignment({
-          clientId,
-          actionItemId: saved.id,
-          agent,
-        });
-        if (!parked.ok) {
-          setComingSoon((current) => ({ ...current, [agent]: true }));
-          toast.error(parked.error);
-          return;
-        }
-      } else if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      const name = agentDisplayName(agent);
-      await supabase
-        .from("action_items")
-        .update({ owner_id: null, owner_name: name, owner_email: null })
-        .eq("id", saved.id);
-      setAssigned(name);
-      toast.success(`Assigned to ${agentShortName(agent)}`);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Couldn't hand this move off");
-    }
-  };
-  return (
-    <ActionHandoffButtons
-      ownerName={assigned}
-      comingSoon={comingSoon}
-      onHandOff={(agent) => void onHandOff(agent)}
-    />
-  );
-}
 
 /**
  * Accountant Moves tab. Same ranked list the Action Plan imports.
@@ -91,15 +27,23 @@ export function StrategicMovesPanel({
         sentence={movesAnswerSentence(moves)}
         primary={
           first ? (
-            <AddToPlanButton
-              clientId={clientId}
-              moveKey={first.key}
-              title={first.title}
-              outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
-              onAssign={onOpenPlan}
-              variant="studio"
-              tone="strip"
-            />
+            <>
+              <AddToPlanButton
+                clientId={clientId}
+                moveKey={first.key}
+                title={first.title}
+                outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+                onAssign={onOpenPlan}
+                variant="studio"
+                tone="strip"
+              />
+              <MoveHandTo
+                clientId={clientId}
+                moveKey={first.key}
+                title={first.title}
+                outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+              />
+            </>
           ) : null
         }
       />
@@ -132,6 +76,12 @@ export function StrategicMovesPanel({
                   <div className="brain-row-meta">{move.ratioName}</div>
                 </div>
                 <div className="brain-row-actions">
+                  <MoveHandTo
+                    clientId={clientId}
+                    moveKey={move.key}
+                    title={move.title}
+                    outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
+                  />
                   {index === 0 ? null : (
                     <AddToPlanButton
                       clientId={clientId}
@@ -143,7 +93,6 @@ export function StrategicMovesPanel({
                       tone="quiet"
                     />
                   )}
-                  <MoveHandoff clientId={clientId} move={move} />
                 </div>
               </li>
             ))}

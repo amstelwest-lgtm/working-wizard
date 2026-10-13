@@ -61,7 +61,9 @@ assert(practiceAgentFromHash("ask-advisor") === "advisor", "advisor hash opens t
 assert(practiceAgentFromHash("clients-table") === null, "a clients hash is not an agent");
 assert(practiceAgentHash("financial_manager") === "ask-financial-manager", "the manager hash is stable");
 
-const above = books({ cashPosition: { cash: 46300, floor: 36900 } });
+const above = books({
+  cashOutlook: { opening: 46300, closing: [46300], floor: 36900, dipsBelowFloorWeek: null },
+});
 const aboveLines = ownerHomeLines(ownerAnswerTiles(above), null);
 assert(
   aboveLines.financial_manager[0]?.includes("46,300") &&
@@ -71,9 +73,11 @@ assert(
 );
 assert(ownerCardStatuses(above).financial_manager === null, "cash above the floor is not Critical");
 
-const below = books({ cashPosition: { cash: 30000, floor: 36900 } });
+const below = books({
+  cashOutlook: { opening: 30000, closing: [30000], floor: 36900, dipsBelowFloorWeek: null },
+});
 const belowLine = ownerHomeLines(ownerAnswerTiles(below), null).financial_manager[0] ?? "";
-assert(belowLine.includes("below") && belowLine.includes("36,900"), `a shortfall names the floor (${belowLine})`);
+assert(belowLine.includes("under") && belowLine.includes("36,900"), `a shortfall names the floor (${belowLine})`);
 assert(ownerCardStatuses(below).financial_manager?.word === "Critical", "cash under the floor is Critical");
 assert(!belowLine.includes("▸"), "the cash line has no stray marker");
 
@@ -184,16 +188,21 @@ assert(clientBackTarget({ tab: "overview" }) === null, "Home has no back target"
 
 const read = (path: string) => readFileSync(resolve(path), "utf8");
 const board = read("src/components/practice-board.tsx");
-assert(board.includes("<AgentStage"), "the practice dashboard opens the agent stage");
+const thread = read("src/components/practice-agent-thread.tsx");
+assert(board.includes("PracticeAgentThread"), "the practice dashboard opens the agent thread");
+assert(thread.includes("<AgentStage"), "the practice agent thread opens the agent stage");
 assert(board.includes("<AgentWork"), "the practice agent page lists the book");
 assert(!board.includes('width: "60%"'), "playbook cards do not draw a fake progress bar");
-assert(board.includes("practiceAgentFromHash"), "the dashboard reads the ask hash");
+assert(board.includes("askAgentFromHash"), "the dashboard reads the ask hash");
 assert(board.includes('id="follow-up"'), "Follow up has an anchor");
 assert(!board.includes("followUpItems.length > 0 ? ("), "Follow up stays on the page when the queue is empty");
 assert(board.includes("<h1>Clients</h1>"), "Clients has an h1");
 
 const pane = read("src/components/milon-team/milon-team-pane.tsx");
-assert(pane.includes("homeFinding?.trim() || filedFinding"), "the agent stage prefers the Home finding");
+assert(
+  pane.includes("homeFinding?.trim() || findingFallback?.trim() || filedFinding"),
+  "the agent stage prefers the Home finding",
+);
 const client = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert(client.includes("homeFinding="), "the client agent view receives the Home line");
 assert(client.includes("<ClientBackLink"), "client pages have a header back control");
@@ -204,8 +213,8 @@ const openAgent = client.slice(client.indexOf("const openHomeAgent"), client.ind
 assert(!openAgent.includes("replace:"), "opening an agent pushes history");
 const openSection = client.slice(client.indexOf("const openHomeSection"), client.indexOf("const openReportPage"));
 assert(!openSection.includes("replace:"), "opening a section pushes history");
-assert(client.includes("cashPosition:"), "Home cash comes from the Health outlook");
-assert(client.includes('useState("Checking the action plan.")'), "the plan strip waits for the plan");
+assert(client.includes("cashOutlook:"), "Home cash comes from the Health outlook");
+assert(client.includes("planKnown ? planSentence"), "the plan strip waits for the plan");
 assert(!client.includes("studioDeepLink"), "All reports does not keep a stale report link");
 
 const desk = read("src/components/milon-team/milon-team-desk.tsx");
@@ -233,8 +242,10 @@ const inbox = read("src/components/accountant-inbox.tsx");
 assert(inbox.includes('id="accountant-inbox"'), "Marketplace has an anchor before it finishes loading");
 
 const moves = read("src/components/strategic-moves-panel.tsx");
-assert(moves.includes("<ActionHandoffButtons"), "next moves reuse the Hand to buttons");
-assert(moves.includes("requestOwnerHandoff"), "next moves use the same hand-off call");
+const handTo = read("src/components/hand-to-menu.tsx");
+assert(moves.includes("<MoveHandTo"), "next moves open the shared Hand to menu");
+assert(handTo.includes("<ActionHandoffButtons"), "Hand to reuses the cobalt buttons");
+assert(handTo.includes("requestOwnerHandoff"), "Hand to uses the same hand-off call");
 const plan = read("src/components/action-plan.tsx");
 assert(plan.includes("onHandOff={isOwner ? (agent) => void assignToAgent"), "the action plan still hands off");
 

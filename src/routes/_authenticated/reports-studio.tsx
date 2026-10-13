@@ -24,7 +24,7 @@ import { BackLink } from "@/components/back-link";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
-import { reportLinkOpensPreview, reportLinkRunsDownload } from "@/lib/report-preview";
+import { reportLinkOpensPreview } from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -3488,6 +3488,14 @@ export type ReportsStudioProps = {
   onlyKeys?: readonly string[];
 };
 
+/** Opening a report page keeps the catalogue. Preview and download are explicit. */
+export function reportDeepLinkAction(
+  action: string | null | undefined,
+): "preview" | "download" | null {
+  if (action === "preview" || action === "download") return action;
+  return null;
+}
+
 export function ReportsStudio({
   client: clientParam,
   clientId,
@@ -3535,7 +3543,7 @@ export function ReportsStudio({
       ? (REPORTS.find((r) => r.key === reportParam) ?? null)
       : null;
   const [deepLinkBusy, setDeepLinkBusy] = useState(
-    () => Boolean(deepLinkReport && (reportLinkOpensPreview(actionParam) || reportLinkRunsDownload(actionParam))),
+    () => Boolean(deepLinkReport && reportDeepLinkAction(actionParam)),
   );
   const [firmClients, setFirmClients] = useState<Array<{ id: string; name: string }> | null>(null);
   const [firmMarket, setFirmMarket] = useState<ResolvedMarket>(ZA_MARKET);
@@ -3631,10 +3639,11 @@ export function ReportsStudio({
     setIsClient(true);
   }, []);
 
-  // Open preview shell immediately for deep-links (avoids catalogue flash).
+  // Open preview shell immediately for an explicit preview or download link.
   useEffect(() => {
-    if (!deepLinkReport) return;
-    if (actionParam === "download") {
+    const linked = reportDeepLinkAction(actionParam);
+    if (!deepLinkReport || !linked) return;
+    if (linked === "download") {
       setLoadingKey(deepLinkReport.key);
       setDeepLinkBusy(true);
       return;
@@ -3834,11 +3843,12 @@ export function ReportsStudio({
   // Deep-link from client gallery: /reports?clientId=&report=labor&action=preview|download
   useEffect(() => {
     if (!isClient || studioBusy) return;
-    if (!deepLinkReport || (!reportLinkOpensPreview(actionParam) && !reportLinkRunsDownload(actionParam))) {
+    const linked = reportDeepLinkAction(actionParam);
+    if (!deepLinkReport || !linked) {
       setDeepLinkBusy(false);
       return;
     }
-    const token = `${clientId ?? "demo"}:${deepLinkReport.key}:${actionParam ?? "none"}`;
+    const token = `${clientId ?? "demo"}:${deepLinkReport.key}:${linked}`;
     if (deepLinkHandled.current === token) return;
 
     if (blockedForClient) {

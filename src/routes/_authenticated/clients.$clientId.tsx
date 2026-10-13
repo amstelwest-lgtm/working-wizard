@@ -157,6 +157,7 @@ import {
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
+import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { clientBackTarget } from "@/lib/client-back";
@@ -873,10 +874,27 @@ function ClientView() {
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
   }, [search, requestOpenNote, openArchive]);
+  const askHashClear = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const apply = () => {
       const hash = window.location.hash;
+      const asked = askAgentFromHash(hash);
+      if (asked) {
+        setActiveTab("overview");
+        const token = `${clientId}:${asked}`;
+        if (search.agent === asked && askHashClear.current === token) return;
+        askHashClear.current = token;
+        void navigate({
+          to: "/clients/$clientId",
+          params: { clientId },
+          search: (prev) => searchWithAskAgent(prev, asked),
+          hash: undefined,
+          replace: true,
+        });
+        return;
+      }
+      askHashClear.current = null;
       const next = legacyHashDestination({ tab: search.tab, section: search.section }, hash);
       if (!next) return;
       const keepHash = hashIsCashDetailAnchor(hash);
@@ -891,7 +909,7 @@ function ClientView() {
     apply();
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
-  }, [search.tab, search.section, clientId, navigate]);
+  }, [search.tab, search.section, search.agent, clientId, navigate]);
   // Landing tab: Home (Bot and the team desk). Decided once per client, after
   // load, and never over a ?tab= deep link.
   // The tour variant is fixed at the same moment: flipping to the full tour
@@ -1101,10 +1119,12 @@ function ClientView() {
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
-  const [planSentence, setPlanSentence] = useState("Checking the action plan.");
+  const [planSentence, setPlanSentence] = useState("");
+  const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusPlanAdd = useRef<(() => void) | null>(null);
   const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
+    setPlanKnown(true);
     setPlanCount(actions.length);
     setPlanSentence(planAnswerSentence(actions));
   }, []);
@@ -2777,11 +2797,7 @@ function ClientView() {
       void navigate({
         to: "/clients/$clientId",
         params: { clientId },
-        search: (prev) => {
-          const next = accountantClientTabSearch(prev, "home") as Record<string, unknown>;
-          next.agent = agent;
-          return next;
-        },
+        search: (prev) => searchWithAskAgent(prev, agent),
       });
     },
     [clientId, navigate],
@@ -2836,7 +2852,12 @@ function ClientView() {
       priorCogs: amount(priorFin?.cogs),
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
-      cashPosition: hasFigures ? { cash: cashOutlook.opening, floor: cashOutlook.floor } : null,
+      cashOutlook: {
+        opening: cashOutlook.opening,
+        closing: cashOutlook.closing,
+        floor: cashOutlook.floor,
+        dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+      },
       openAction: overviewNextStep?.title ?? null,
       actionsReady: nextStepKnown,
       signedBy: null,
@@ -2852,7 +2873,9 @@ function ClientView() {
     statementPosition.receivables,
     client?.cashflow,
     cashOutlook.opening,
+    cashOutlook.closing,
     cashOutlook.floor,
+    cashOutlook.dipsBelowFloorWeek,
     overviewNextStep,
     nextStepKnown,
     clientMarket,
@@ -4367,7 +4390,7 @@ function ClientView() {
                   <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                   <DeliverableAnswerStrip
                     heading="Action plan"
-                    sentence={planSentence}
+                    sentence={planKnown ? planSentence : ""}
                     scope="action_plan"
                     clientId={clientId}
                     clientName={client?.name}
@@ -4378,7 +4401,7 @@ function ClientView() {
                     canSign={planCount > 0}
                     signoffVerbOnly
                     extraActions={
-                      planCount === 0 ? (
+                      planKnown && planCount === 0 ? (
                         <button
                           type="button"
                           className={ARAP_GOLD_BTN}
@@ -4403,11 +4426,7 @@ function ClientView() {
               near-transparent cream — titles vanished in light mode. */}
                   <TabErrorBoundary label="Action Plan">
                     <div id="action-plan-work">
-                    <Suspense
-                      fallback={
-                        <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>
-                      }
-                    >
+                    <Suspense fallback={null}>
                       {activeTab === "plan" && (
                         <ActionPlanPanel
                           key={`${client.id}-${search.filter ?? "all"}`}

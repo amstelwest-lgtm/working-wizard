@@ -17,6 +17,7 @@ export function MilonTeamPane({
   clientId,
   agent = null,
   homeFinding = null,
+  findingFallback = null,
   onOpenApproved,
   onInvite,
   onSelectAgent,
@@ -26,6 +27,8 @@ export function MilonTeamPane({
   agent?: AgentKey | null;
   /** The sentence Home already shows for this agent. Wins over an empty feed. */
   homeFinding?: string | null;
+  /** Home sentence for this agent when no run finding is on file. */
+  findingFallback?: string | null;
   onOpenApproved?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   /** Landing cards and the stage switcher both land here. */
@@ -47,7 +50,7 @@ export function MilonTeamPane({
       market: live.market,
     });
   }, [agent, live.findings, live.market]);
-  const finding = homeFinding?.trim() || filedFinding;
+  const finding = homeFinding?.trim() || findingFallback?.trim() || filedFinding;
   const desk = (
     <MilonTeamDesk
       feed={feed}

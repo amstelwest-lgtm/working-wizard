@@ -16,6 +16,7 @@ import {
   budgetYtdSignal,
   revenueYtd,
 } from "../src/lib/budget-chart-table";
+import { formatVariancePct, varianceLine } from "../src/lib/budget.variance";
 import { formatMoney } from "../src/lib/market/format";
 import { ZA_MARKET } from "../src/lib/market/resolve";
 
@@ -53,6 +54,14 @@ assert(budgetYtdSignal({ budget: 1000, actual: null }) === null, "no actuals hav
 assert(budgetYtdSignal({ budget: 1000, actual: 700 }) === "adverse", "revenue under budget is red");
 assert(budgetYtdSignal({ budget: 1000, actual: 1300 }) === "favourable", "revenue over budget is green");
 assert(budgetYtdSignal({ budget: 1000, actual: 1000 }) === "inline", "a matched year is not red");
+const slip = varianceLine("revenue", "Revenue", 400_000, 399_980, true);
+assert(slip.delta === -20, "a twenty dollar slip keeps its dollars");
+assert(slip.signal === "inline", "a slip that prints as 0.0% stays neutral");
+assert(formatVariancePct(slip.deltaPct) === "0.0%", "a near-zero percent has no minus");
+assert(
+  varianceLine("revenue", "Revenue", 1000, 800, true).signal === "adverse",
+  "a real miss stays adverse",
+);
 
 const doc = createBudgetDocument({
   templateId: "services_hours",

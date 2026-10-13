@@ -201,6 +201,7 @@ export function PlaybookDrawer({
 
   const signoffCount = Object.keys(signoffs).length;
   const closeDrawer = useOverlayHistory(open, onClose);
+  const displayNumber = new Map(steps.map((step, index) => [step.step_number, index + 1]));
 
   const tier = TIER_STYLES[healthTier] ?? TIER_STYLES.at_risk;
   const grouped = groupByTimeframe(steps);
@@ -405,10 +406,9 @@ export function PlaybookDrawer({
                 </div>
 
                 <div className="space-y-3">
-                  {phaseSteps.map((step, index) => {
+                  {phaseSteps.map((step) => {
                     const cat = CATEGORY_STYLES[step.category] ?? CATEGORY_STYLES.operations;
                     const CatIcon = cat.Icon;
-                    const displayNumber = index + 1;
                     return (
                       <div
                         key={step.step_number}
@@ -419,7 +419,7 @@ export function PlaybookDrawer({
                           <span
                             className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tier.stepDot}`}
                           >
-                            {displayNumber}
+                            {displayNumber.get(step.step_number) ?? step.step_number}
                           </span>
 
                           <div className="min-w-0 flex-1">

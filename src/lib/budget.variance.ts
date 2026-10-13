@@ -326,6 +326,7 @@ function num(v: number | null | undefined): number {
 
 export function formatVariancePct(pct: number | null): string {
   if (pct == null || !Number.isFinite(pct)) return "—";
+  if (Math.abs(pct) < 0.05) return "0.0%";
   const sign = pct > 0 ? "+" : "";
   return `${sign}${pct.toFixed(1)}%`;
 }

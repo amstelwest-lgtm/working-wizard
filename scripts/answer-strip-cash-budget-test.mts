@@ -88,8 +88,8 @@ assert(drawer.includes("review-inputs__hint"), "the drawer summary can show a co
 assert(portalCss.includes("grid-row:3"), "at phone width the primary drops under the chips");
 assert(portalCss.includes(".review-inputs__body{display:none}"), "a closed drawer does not paint its inputs");
 assert(portalCss.includes(".review-inputs[open] > .review-inputs__body"), "the drawer body shows only when open");
-assert(portalCss.includes(".review-inputs__chevron::before"), "the closed drawer shows a chevron");
-assert(!portalCss.includes('content:"▸"'), "the drawer chevron is not a stray glyph");
+assert(portalCss.includes(".review-inputs__chevron{"), "the closed drawer shows a chevron");
+assert(!portalCss.includes('content:"▸"'), "the drawer chevron is a border, not a text glyph");
 const assumptionsAt = budgetWorkspace.indexOf('id="wizard-budget-assumptions"');
 const driversAt = budgetWorkspace.indexOf("{/* Revenue drivers */}");
 const nestAt = budgetWorkspace.lastIndexOf("nestInDrawer(", assumptionsAt);

@@ -146,8 +146,8 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
     }
   };
 
+  if (!firmId && !quiet) return null;
   if (!firmId || !loaded || !migrated) {
-    if (!quiet) return null;
     return (
       <details className={["home-fold", className].filter(Boolean).join(" ")} id="accountant-inbox">
         <summary>

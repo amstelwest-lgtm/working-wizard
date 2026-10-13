@@ -884,6 +884,34 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
 .accountant-portal.practice-home:has(.milon-desk) .shell,
 .accountant-portal.practice-home:has(.milon-desk) .client-workspace,
 .accountant-portal.practice-home:has(.milon-desk) .deliverable-main,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .shell,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .client-workspace,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .deliverable-main,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .milon-desk-host {
+  height: auto;
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.accountant-portal:has([data-agent-stage]) #ask-ai-accountant.ask-ai-studio-shell {
+  position: static;
+  box-shadow: none;
+}
+
+@media (max-width: 767px) {
+  body:has(#pane-ask.on) button[aria-label="Share Milōn"] {
+    display: none !important;
+  }
+}
+
+/* The notes pencil sits over the composer's Clear on the Bot tab. */
+body:has(#pane-ask.on) #wizard-notes-pin {
+  display: none !important;
+}
+
+/* In-client agent pages (Financial Manager, Analyst, Advisor) flow with the
+   document. The team desk keeps the viewport lock. */
 .accountant-portal:has(.agent-stage) .shell,
 .accountant-portal:has(.agent-stage) .client-workspace,
 .accountant-portal:has(.agent-stage) .deliverable-main,
@@ -898,13 +926,30 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
   overflow: visible;
 }
 
-@media (max-width: 767px) {
-  body:has(#pane-ask.on) button[aria-label="Share Milōn"] {
-    display: none !important;
-  }
+.accountant-portal:has(.agent-stage) .client-workspace {
+  grid-template-rows: auto;
+  align-items: start;
 }
 
-/* The notes pencil sits over the composer's Clear on the Bot tab. */
-body:has(#pane-ask.on) #wizard-notes-pin {
-  display: none !important;
+.accountant-portal:has(.agent-stage) .shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 24px;
+}
+
+.accountant-portal:has(.agent-stage) .deliverable-main {
+  padding-bottom: 0;
+}
+
+.accountant-portal:has(.agent-stage) .footer-note {
+  margin-top: auto;
+}
+
+/* The share and notes buttons are hidden on this pane, so the phone pad
+   that clears them would leave the footer short of the page bottom. */
+@media (max-width: 767px) {
+  html[data-milon-fab="1"]:has(.agent-stage) body {
+    padding-bottom: 0;
+  }
 }

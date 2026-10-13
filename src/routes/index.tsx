@@ -11,6 +11,7 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import { HeroAgents } from "@/components/landing/hero-agents";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import {
   DUAL_MARKET_BUILT,
@@ -2141,6 +2142,7 @@ function LandingPage() {
                 </div>
               </div>
             </div>
+            <HeroAgents />
             <div className="float-card fc-1">
               <span className="tag">Milōn Advisor draft · awaiting sign-off</span>
               <p>

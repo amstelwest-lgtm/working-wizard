@@ -119,6 +119,12 @@ export function isFirmProductPath(pathname: string): boolean {
   );
 }
 
+/** Team settings stay open on the same terms as the dashboard. */
+export function isTeamSettingsPath(pathname: string): boolean {
+  const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  return path === "/settings/team";
+}
+
 /** Home, the client list, and the practice overview. Not a client file. */
 export function isPracticeShellPath(pathname: string): boolean {
   const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
@@ -317,7 +323,7 @@ export function decideFirmBillingPathGate(input: {
   // without a card. A later client file still redirects. null and omitted
   // counts are not a book.
   if (
-    isPracticeShellPath(pathname) &&
+    (isPracticeShellPath(pathname) || isTeamSettingsPath(pathname)) &&
     typeof input.firmClientCount === "number" &&
     input.firmClientCount >= 1
   ) {

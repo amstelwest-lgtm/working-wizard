@@ -1416,9 +1416,8 @@ function PlanPane({
   planView?: string;
   initialFilter?: "overdue";
 }) {
-  const [sentence, setSentence] = useState(
-    "No actions in the plan yet. Add the first one to get started.",
-  );
+  const [sentence, setSentence] = useState("");
+  const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusAdd = useRef<(() => void) | null>(null);
   const signoff =
@@ -1442,7 +1441,7 @@ function PlanPane({
       <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
       <DeliverableAnswerStrip
         heading="Action plan"
-        sentence={sentence}
+        sentence={planKnown ? sentence : ""}
         scope="action_plan"
         clientId={clientId}
         clientName="Harbour Glass"
@@ -1452,7 +1451,7 @@ function PlanPane({
         canSign={planCount > 0}
         signoffVerbOnly
         extraActions={
-          planCount === 0 ? (
+          planKnown && planCount === 0 ? (
             <button type="button" className={ARAP_GOLD_BTN} onClick={() => focusAdd.current?.()}>
               Add action
             </button>
@@ -1475,6 +1474,7 @@ function PlanPane({
           isOwner
           initialFilter={initialFilter}
           onAnswer={(actions) => {
+            setPlanKnown(true);
             setPlanCount(actions.length);
             setSentence(planAnswerSentence(actions));
           }}

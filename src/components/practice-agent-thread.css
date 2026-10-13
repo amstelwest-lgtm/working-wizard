@@ -1,0 +1,48 @@
+.practice-agent-thread {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+  padding: 8px 0 32px;
+}
+
+.practice-agent-thread .agent-stage {
+  width: 100%;
+}
+
+.practice-agent-thread .milon-desk-host {
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.practice-agent-client {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: #3d5270;
+  font-size: 0.95rem;
+}
+
+.practice-agent-client select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  color: #102a43;
+  font: inherit;
+}
+
+html.dark .practice-agent-client {
+  color: #c5d4e4;
+}
+
+html.dark .practice-agent-client select {
+  background: #102a43;
+  color: #f4f7fb;
+  border-color: #1e3a5f;
+}

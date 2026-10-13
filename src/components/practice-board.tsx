@@ -102,15 +102,15 @@ import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
-import { AgentStage } from "@/components/milon-team/agent-stage";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { practiceAgentWork } from "@/lib/agent-work";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
-import { practiceAgentFromHash, practiceAgentHash } from "@/lib/practice-agent-hash";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
+import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
+import { PracticeAgentThread } from "@/components/practice-agent-thread";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1135,7 +1135,8 @@ export type PracticeView = "home" | "clients" | "practice";
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const locationHash = useRouterState({ select: (s) => s.location.hash });
+  const practiceHash = useRouterState({ select: (s) => s.location.hash });
+  const practiceAgent = askAgentFromHash(practiceHash);
 
   // ── Role guard ────────────────────────────────────────────────────────────
   // Business-client credentials must not sit on the practice portal. Wait for
@@ -1651,7 +1652,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     [practiceBrief, bookLoading],
   );
   const practiceStatus = useMemo(() => practiceCardStatuses(practiceBrief), [practiceBrief]);
-  const dashAgent = view === "home" ? practiceAgentFromHash(locationHash) : null;
+  const dashAgent = view === "home" ? practiceAgent : null;
 
   const openClientPlan = (clientId: string, overdue: boolean) =>
     navigate({
@@ -1804,34 +1805,27 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         {view === "home" ? (
           <div className="owner-door">
             {dashAgent ? (
-              <div data-practice-agent={dashAgent}>
-                <button
-                  type="button"
-                  className="owner-back"
-                  onClick={() => {
-                    void navigate({ to: "/dashboard", hash: "" });
-                  }}
-                >
-                  Back to the team
-                </button>
-                <AgentStage
-                  agent={dashAgent}
-                  finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ") || null}
-                  onSelect={(agent) => {
-                    void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
-                  }}
-                >
-                  <AgentWork
-                    label="On the book"
-                    {...practiceAgentWork(dashAgent, {
-                      loading: bookLoading,
-                      clients: clientRows,
-                      attention: attentionBook.items,
-                      followUps: followUpItems,
-                    })}
-                  />
-                </AgentStage>
-              </div>
+              <PracticeAgentThread
+                agent={dashAgent}
+                finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")}
+                clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
+                onBack={() => {
+                  void navigate({ to: "/dashboard", hash: "" });
+                }}
+                onSelectAgent={(agent) => {
+                  void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
+                }}
+              >
+                <AgentWork
+                  label="On the book"
+                  {...practiceAgentWork(dashAgent, {
+                    loading: bookLoading,
+                    clients: clientRows,
+                    attention: attentionBook.items,
+                    followUps: followUpItems,
+                  })}
+                />
+              </PracticeAgentThread>
             ) : (
             <OwnerHome
               title="Your whole finance team"
@@ -1841,10 +1835,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               lines={practiceLines}
               status={practiceStatus}
               onOpen={(agent) => {
-                void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
+                void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
               onAsk={(agent) => {
-                void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
+                void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
             />
             )}

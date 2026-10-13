@@ -170,6 +170,25 @@ assert(
   /^Cash is \$[\d,]+ below your \$[\d,]+ minimum\.$/.test(underHome.financial_manager[0] ?? ""),
   `a dip under the floor is a sentence (${underHome.financial_manager[0]})`,
 );
+const outlookBooks = books({
+  hasBooks: true,
+  ledger: "QuickBooks",
+  cashOutlook: {
+    opening: 46330,
+    closing: [46330],
+    floor: 36900,
+    dipsBelowFloorWeek: null,
+  },
+});
+const outlookHome = ownerHomeLines(ownerAnswerTiles(outlookBooks), null);
+assert(
+  outlookHome.financial_manager[0] === "Cash is $46,330, above the $36,900 floor.",
+  `home cash uses the health outlook (${outlookHome.financial_manager[0]})`,
+);
+assert(
+  ownerCardStatuses(outlookBooks).financial_manager == null,
+  "cash above the health floor is not Critical",
+);
 assert(
   ownerCardStatuses(
     books({
@@ -853,7 +872,7 @@ assert(!door.includes('setScreen("actions")'), "the separate actions screen is g
 assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is gone");
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
-assert(plan.includes("ActionHandoffButtons"), "handing off names the bot");
+assert(plan.includes("HandToMenu"), "each action has a Hand to control");
 assert(plan.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
 const handoffButtons = readFileSync("src/components/action-handoff-buttons.tsx", "utf8");
 assert(handoffButtons.includes("Coming online soon"), "a missing runner says it is coming online");

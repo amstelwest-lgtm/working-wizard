@@ -1,6 +1,7 @@
 import { AccountantNav, type NavDestination, type NavSection } from "@/components/accountant-nav";
 import { CLIENT_NAV_OPEN_KEY } from "@/lib/accountant-nav-open";
 import { clientNavSearch, clientRailSelection } from "@/lib/client-route-search";
+import { askHashForAgent, searchWithAskAgent } from "@/lib/ask-agent";
 import { agentDisplayName } from "@/lib/milon-team";
 import { openPracticeSettings } from "@/lib/user-roles";
 
@@ -42,7 +43,17 @@ function clientSections(clientId: string): NavSection[] {
           label: "Home",
           bot: true,
           to: go("home"),
-          items: subs("home", [...AGENTS]),
+          items: AGENTS.map((agent) => ({
+            id: agent.id,
+            label: agent.label,
+            to: {
+              to: "/clients/$clientId" as const,
+              params: { clientId },
+              hash: askHashForAgent(agent.id),
+              search: (prev: Record<string, unknown>) =>
+                searchWithAskAgent(prev, agent.id) as Record<string, unknown>,
+            },
+          })),
         },
       ],
     },
