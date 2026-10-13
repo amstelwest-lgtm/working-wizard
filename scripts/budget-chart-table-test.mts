@@ -133,7 +133,10 @@ assert(toggle.includes('role="tab"'), "each option is a tab");
 assert(toggle.includes("#0B5FFF"), "the active segment is cobalt");
 assert(toggle.includes("ArrowRight") && toggle.includes("ArrowLeft"), "arrow keys move the toggle");
 assert(toggle.includes("Home") && toggle.includes("End"), "home and end move the toggle");
-assert(route.includes('search.view === "table"'), "the client route keeps view=table");
+assert(
+  route.includes('search.section === "months" ? "table" : "chart"'),
+  "month by month is the table page",
+);
 assert(harness.includes('search.view === "table"'), "the harness keeps view=table");
 
 assert(!budgetPlanIsSet([{ budget: { revenue: 0 } }, { budget: { revenue: 0.4 } }]), "a drafted plan is not set");

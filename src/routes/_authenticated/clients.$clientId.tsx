@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { PeriodPill } from "@/components/chrome-icons";
 import { openPracticeSettings } from "@/lib/user-roles";
@@ -158,6 +158,10 @@ import {
   routerHash,
 } from "@/lib/client-route-search";
 import { ClientRail } from "@/components/client-studio-chrome";
+import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
+import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
+import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
+import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
@@ -269,8 +273,11 @@ import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
-const ReportsStudioPanel = lazyPanel(
-  () => import("@/routes/_authenticated/reports-studio").then((m) => ({ default: m.ReportsStudio })),
+const ReportsStudioPanel = lazyPanel<ReportsStudioProps>(
+  () =>
+    import("@/routes/_authenticated/reports-studio").then((m) => ({
+      default: m.ReportsStudio,
+    })),
   "Reports",
 );
 
@@ -500,6 +507,92 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "drafter",
 ];
 
+const CRUMB_PARENT: Record<string, { label: string; tab: string }> = {
+  overview: { label: "Home", tab: "home" },
+  ask: { label: "Home", tab: "home" },
+  ratios: { label: "Health", tab: "health" },
+  cash: { label: "Cash flow", tab: "cash" },
+  profit: { label: "Profit", tab: "profit" },
+  budget: { label: "Budget", tab: "budget" },
+  moves: { label: "Next moves", tab: "moves" },
+  plan: { label: "Action plan", tab: "plan" },
+  reports: { label: "Reports", tab: "reports" },
+  summary: { label: "Books", tab: "portal" },
+};
+
+function crumbSectionLabel(tab: string, section: string): string {
+  if (tab === "reports" && section === "forecast") return "13-week cash forecast";
+  if (tab === "reports" && section === "waterfall") return "Profitability waterfall";
+  const labels: Record<string, string> = {
+    score: "Score",
+    pillars: "Where it hurts",
+    forecast: "13-week forecast",
+    collections: "Who to chase",
+    payables: "Who to pay",
+    waterfall: "Waterfall",
+    lines: "Product lines",
+    year: "This year",
+    months: "Month by month",
+    open: "Open work",
+    overdue: "Overdue",
+    scorecard: "Health scorecard",
+    drafts: "Drafts",
+    sent: "Sent",
+    all: "All reports",
+    documents: "Documents",
+    connections: "Connections",
+  };
+  return labels[section] ?? section;
+}
+
+function ClientCrumb({
+  clientId,
+  activeTab,
+  section,
+  agent,
+}: {
+  clientId: string;
+  activeTab: string;
+  section: string | null;
+  agent: string | null;
+}) {
+  const parent = CRUMB_PARENT[activeTab];
+  if (!parent) return null;
+  const child = agent
+    ? agentDisplayName(agent as "financial_manager" | "analyst" | "advisor")
+    : section
+      ? crumbSectionLabel(activeTab, section)
+      : null;
+  if (activeTab === "overview" && !agent) return null;
+  return (
+    <>
+      <span>/</span>
+      {child ? (
+        <Link
+          to="/clients/$clientId"
+          params={{ clientId }}
+          search={(prev) => {
+            const next = accountantClientTabSearch(prev, parent.tab);
+            delete (next as { agent?: string }).agent;
+            return next;
+          }}
+          className="crumb-link"
+        >
+          {parent.label}
+        </Link>
+      ) : (
+        <b style={{ color: "var(--ink)" }}>{parent.label}</b>
+      )}
+      {child ? (
+        <>
+          <span>/</span>
+          <b style={{ color: "var(--ink)" }}>{child}</b>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function DeliverableTabHead({
   id,
   eyebrow,
@@ -684,6 +777,13 @@ function ClientView() {
     token: number;
     pillarId: SpherePillar["id"];
   } | null>(null);
+  useEffect(() => {
+    if (search.section !== "score" || !healthDrill) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById("health-score-drill")?.scrollIntoView({ block: "start" });
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [search.section, healthDrill]);
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const persistedCreateRef = useRef<
     (payload: {
@@ -781,62 +881,20 @@ function ClientView() {
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
   }, [search, requestOpenNote, openArchive]);
-  useEffect(() => {
-    if (activeTab !== "reports") return;
-    const id =
-      search.section === "drafts"
-        ? "reports-drafts"
-        : search.section === "sent"
-          ? "reports-sent"
-          : null;
-    if (!id) return;
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ block: "start" });
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, search.section]);
-  useEffect(() => {
-    if (activeTab !== "cash") return;
-    const id =
-      search.section === "collections"
-        ? "pane-collections"
-        : search.section === "payables"
-          ? "pane-payables"
-          : null;
-    if (!id) return;
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ block: "start" });
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, search.section]);
-  useEffect(() => {
-    if (activeTab !== "ratios") return;
-    if (search.section !== "pillars" && search.focus !== "pillars") return;
-    const timer = window.setTimeout(() => {
-      document.getElementById("coach-pillars")?.scrollIntoView({ block: "start" });
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, search.section, search.focus]);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const apply = () => {
       const hash = window.location.hash;
       const next = legacyHashDestination({ tab: search.tab, section: search.section }, hash);
-      if (next) {
-        void navigate({
-          to: "/clients/$clientId",
-          params: { clientId },
-          search: (prev) => accountantClientTabSearch(prev, next.tab, { section: next.section }),
-          hash: routerHash(hash),
-          replace: true,
-        });
-        return;
-      }
-      const id = (routerHash(hash) ?? "").toLowerCase();
-      if (id !== "cash" && id !== "budget" && id !== "advisory" && id !== "pack") return;
-      const pane = legacyPaneForSearch({ tab: search.tab, section: search.section });
-      if (!pane) return;
-      document.getElementById(`pane-${pane}`)?.scrollIntoView({ block: "start" });
+      if (!next) return;
+      const keepHash = hashIsCashDetailAnchor(hash);
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => accountantClientTabSearch(prev, next.tab, { section: next.section }),
+        hash: keepHash ? routerHash(hash) : undefined,
+        replace: true,
+      });
     };
     apply();
     window.addEventListener("hashchange", apply);
@@ -2334,13 +2392,18 @@ function ClientView() {
   const openCoach = useCallback(
     (dest: CoachDestination) => {
       if (dest.assign) {
-        writeAccountantTab("plan");
+        setActiveTab("plan");
+        void navigate({
+          to: "/clients/$clientId",
+          params: { clientId },
+          search: (prev) => accountantClientTabSearch(prev, "plan", { section: "open" }),
+        });
         window.setTimeout(() => {
           document.getElementById("action-plan-work")?.scrollIntoView({
             behavior: "smooth",
             block: "start",
           });
-        }, 60);
+        }, 120);
         return;
       }
       const canonical = canonicalizeAccountantSearch({
@@ -2757,6 +2820,25 @@ function ClientView() {
     },
     [clientId, navigate],
   );
+  const openReportPage = useCallback(
+    (report: string, action?: "preview" | "download") => {
+      setStudioDeepLink({ report, action });
+      const section =
+        report === "scorecard" || report === "forecast" || report === "waterfall" ? report : "all";
+      setActiveTab("reports");
+      void navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = accountantClientTabSearch(prev, "reports", { section }) as Record<string, unknown>;
+          next.report = report;
+          if (action) next.action = action;
+          return next;
+        },
+      });
+    },
+    [clientId, navigate],
+  );
   const homeBooks = useMemo<OwnerBooks>(() => {
     const priorFin =
       priorSnapshot?.financials && typeof priorSnapshot.financials === "object"
@@ -2983,6 +3065,12 @@ function ClientView() {
                   {firmClientCrumbLabel(client.name, actingAsThisClient)}
                 </b>
               </span>
+              <ClientCrumb
+                clientId={clientId}
+                activeTab={activeTab}
+                section={search.section ?? null}
+                agent={homeAgent}
+              />
               {hasFigures ? (
                 <span className="aud">On file</span>
               ) : (
@@ -3052,9 +3140,36 @@ function ClientView() {
 
                 {/* ===== SUMMARY TAB ===== */}
                 <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
-                  {activeTab === "summary" && (
-                    <>
-                <ReviewInputsDrawer hint="Connections, exports">
+                  {activeTab === "summary" && search.section !== "documents" && search.section !== "connections" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="File"
+                      title="Books"
+                      subtitle="Documents and connections each have their own page."
+                      links={[
+                        {
+                          id: "documents",
+                          label: "Documents",
+                          detail: "Figures, files, and what is already on the client record.",
+                          search: (prev) => accountantClientTabSearch(prev, "portal", { section: "documents" }),
+                        },
+                        {
+                          id: "connections",
+                          label: "Connections",
+                          detail: "Xero, QuickBooks, and Sage.",
+                          search: (prev) => accountantClientTabSearch(prev, "portal", { section: "connections" }),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {activeTab === "summary" && search.section === "documents" ? (
+                    <ClientSubpageFrame
+                      id="documents"
+                      eyebrow="Books"
+                      title="Documents"
+                      subtitle="Figures, files, and exports for this client."
+                    >
+                <ReviewInputsDrawer hint="Exports">
                   <div className="briefing-actions deliverables-more" data-bot-entry>
                     <button
                       type="button"
@@ -3072,23 +3187,6 @@ function ClientView() {
                     >
                       Upload
                     </button>
-                    {isUsCopy(clientMarket) ? null : (
-                      <BrandConnectButton
-                        id="client-connect-sage"
-                        brand="sage"
-                        onClick={() => setShowSageDialog(true)}
-                      />
-                    )}
-                    <BrandConnectButton
-                      id="client-connect-qbo"
-                      brand="quickbooks"
-                      onClick={() => setShowQboDialog(true)}
-                    />
-                    <BrandConnectButton
-                      id="client-connect-xero"
-                      brand="xero"
-                      onClick={() => setShowXeroDialog(true)}
-                    />
                     <button
                       type="button"
                       className={portalButtonClass("secondary")}
@@ -3102,10 +3200,7 @@ function ClientView() {
                       <button
                         type="button"
                         className={portalButtonClass("secondary")}
-                        onClick={() => {
-                          setStudioDeepLink({ report: "movement", action: "preview" });
-                          revealTab("reports");
-                        }}
+                        onClick={() => openReportPage("movement", "preview")}
                       >
                         Open movement report
                       </button>
@@ -3150,37 +3245,45 @@ function ClientView() {
                         renderFrame={({ inputs, body }) => (
                           <>
                             {body}
-                            <DataUpToDate
+                            <DeliverableInputConfig
+                              className="mb-5"
                               clientId={clientId}
-                              returnPath={`/clients/${clientId}`}
-                              xeroRefresh={xeroRefresh}
-                              qboRefresh={qboRefresh}
-                              sageRefresh={sageRefresh}
-                              onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
-                              onXeroSyncComplete={onXeroSyncComplete}
-                              onQboSyncComplete={onQboSyncComplete}
-                              onSageSyncComplete={onSageSyncComplete}
-                              onUpload={() => setUploadOpen(true)}
-                              freshness={dataFreshness}
-                              chip={healthChip}
-                              openQueries={openQueriesCount}
-                              onOpenQueries={() =>
-                                openArchive(openQueriesCount > 0 ? "open" : "resolved")
-                              }
-                            >
-                              <DeliverableInputConfig
-                                className="mb-5"
-                                clientId={clientId}
-                                deliverableId="summary"
-                                context={deliverableInputContext}
-                              />
-                              {inputs}
-                            </DataUpToDate>
+                              deliverableId="summary"
+                              context={deliverableInputContext}
+                            />
+                            {inputs}
                           </>
                         )}
                       />
-                    </>
-                  )}
+                    </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "summary" && search.section === "connections" ? (
+                    <ClientSubpageFrame
+                      id="connections"
+                      eyebrow="Books"
+                      title="Connections"
+                      subtitle="Xero, QuickBooks, and Sage for this client."
+                    >
+                      <DataUpToDate
+                        clientId={clientId}
+                        returnPath={`/clients/${clientId}?tab=portal&section=connections`}
+                        xeroRefresh={xeroRefresh}
+                        qboRefresh={qboRefresh}
+                        sageRefresh={sageRefresh}
+                        onSageConnectionChange={() => setSageRefresh((n) => n + 1)}
+                        onXeroSyncComplete={onXeroSyncComplete}
+                        onQboSyncComplete={onQboSyncComplete}
+                        onSageSyncComplete={onSageSyncComplete}
+                        onUpload={() => setUploadOpen(true)}
+                        freshness={dataFreshness}
+                        chip={healthChip}
+                        openQueries={openQueriesCount}
+                        onOpenQueries={() =>
+                          openArchive(openQueriesCount > 0 ? "open" : "resolved")
+                        }
+                      />
+                    </ClientSubpageFrame>
+                  ) : null}
                 </div>
 
                 {/* ===== MOVES ===== */}
@@ -3191,7 +3294,7 @@ function ClientView() {
                       clientId={client.id}
                       onOpenPlan={(moveKey) => {
                         setPlanFocusMove(moveKey);
-                        setActiveTab("plan");
+                        openHomeSection("plan", "open");
                       }}
                     />
                   )}
@@ -3200,14 +3303,21 @@ function ClientView() {
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" || showHomeThread ? " on" : ""}`} id="pane-ask">
                   <div className="milon-desk-host">
-                    {showHomeThread ? (
-                      <button
-                        type="button"
-                        className={portalButtonClass("secondary")}
-                        onClick={closeHomeThread}
+                    {showHomeThread && homeAgent ? (
+                      <ClientSubpageFrame
+                        id={homeAgent}
+                        eyebrow="Home"
+                        title={agentDisplayName(homeAgent)}
+                        subtitle="This agent's thread for the client. The rest of the team stays on Home."
                       >
-                        Back to the team
-                      </button>
+                        <button
+                          type="button"
+                          className={portalButtonClass("secondary")}
+                          onClick={closeHomeThread}
+                        >
+                          Back to the team
+                        </button>
+                      </ClientSubpageFrame>
                     ) : null}
                     <MilonTeamPane
                       key={homeAgent ?? "team"}
@@ -3220,7 +3330,7 @@ function ClientView() {
                           requestRevealDataRequests();
                           return;
                         }
-                        setActiveTab("plan");
+                        openHomeSection("plan", "open");
                       }}
                     />
                     <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
@@ -3239,6 +3349,35 @@ function ClientView() {
 
                 {/* ===== RATIOS TAB ===== */}
                 <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
+                  {search.section !== "score" && search.section !== "pillars" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="Numbers"
+                      title="Health"
+                      subtitle="Score and where it hurts each have their own page. The briefing and the figures stay here."
+                      links={[
+                        {
+                          id: "score",
+                          label: "Score",
+                          detail: "The health score, with sign-off and the PDF.",
+                          search: (prev) => accountantClientTabSearch(prev, "health", { section: "score" }),
+                        },
+                        {
+                          id: "pillars",
+                          label: "Where it hurts",
+                          detail: "The pillars that pull the score down.",
+                          search: (prev) => accountantClientTabSearch(prev, "health", { section: "pillars" }),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {search.section === "score" ? (
+                  <ClientSubpageFrame
+                    id="score"
+                    eyebrow="Health"
+                    title="Score"
+                    subtitle="The health score for this client. Sign off and export the PDF from this page."
+                  >
                   <DeliverableAnswerStrip
                     heading="Health score"
                     sentence={healthSentence}
@@ -3268,6 +3407,10 @@ function ClientView() {
                       </button>
                     }
                   />
+                  </ClientSubpageFrame>
+                  ) : null}
+                  {search.section !== "score" && search.section !== "pillars" ? (
+                  <>
                   {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
                     <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
                   ) : null}
@@ -3282,7 +3425,7 @@ function ClientView() {
                   refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                   financials={financials}
                   onUpload={() => setFirstDataOpen(true)}
-                  onOpenForecast={() => setActiveTab("cash")}
+                  onOpenForecast={() => openHomeSection("cash", "forecast")}
                   onChanged={() => setAdvisoryBump((n) => n + 1)}
                 />
 
@@ -3329,10 +3472,7 @@ function ClientView() {
                   onOpenQueries={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
                   reportsIssued={reportsIssued}
                   movementReportAvailable={Boolean(priorSnapshot)}
-                  onOpenMovementReport={() => {
-                    setStudioDeepLink({ report: "movement", action: "preview" });
-                    revealTab("reports");
-                  }}
+                  onOpenMovementReport={() => openReportPage("movement", "preview")}
                   onAddPastPeriod={() => setPastPeriodOpen(true)}
                   onOpenReports={() => revealTab("reports")}
                   hasFigures={hasFigures}
@@ -3536,7 +3676,9 @@ function ClientView() {
                     </div>
                   </div>
                   </ReviewInputsDrawer>
-                  {/* One Health view — orb and pillar cards. No Simplified/Complex switch. */}
+                  </>
+                  ) : null}
+                  {search.section === "score" ? (
                   <div style={{ marginBottom: 32 }}>
                       <div className="health-plate">
                         <SphereHero
@@ -3565,7 +3707,18 @@ function ClientView() {
                           })()}
                         />
                       </div>
-                      {/* Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
+                  </div>
+                  ) : null}
+                  {search.section === "pillars" ? (
+                  <ClientSubpageFrame
+                    id="pillars"
+                    eyebrow="Health"
+                    title="Where it hurts"
+                    subtitle="The pillars that pull the score down."
+                  >
+                  <div style={{ marginBottom: 32 }}>
+                      {/* One Health view — orb and pillar cards. No Simplified/Complex switch.
+                          Pillar summary cards. SimplifiedRatios owns id="coach-pillars". */}
                       <div className="health-plate">
                         <SimplifiedRatios
                           sections={simplifiedSections}
@@ -3573,7 +3726,7 @@ function ClientView() {
                           onOpenPillar={(id) => {
                             if (id !== "profit" && id !== "assets" && id !== "financing" && id !== "cash") return;
                             setHealthDrill({ token: Date.now(), pillarId: id });
-                            document.getElementById("health-score-drill")?.scrollIntoView({ block: "start" });
+                            openHomeSection("health", "score");
                           }}
                           onOpenEvidence={(id) => {
                             const evidence = evidenceForPillar(id);
@@ -3602,8 +3755,10 @@ function ClientView() {
                         </div>
                       ) : null}
                   </div>
+                  </ClientSubpageFrame>
+                  ) : null}
 
-                  {hasStatementWorkingCapital(ratiosStatementFigures(financials)) ? (
+                  {search.section !== "score" && search.section !== "pillars" && hasStatementWorkingCapital(ratiosStatementFigures(financials)) ? (
                     <StatementArApTiles
                       position={ratiosStatementFigures(financials)}
                       market={clientMarket}
@@ -3614,8 +3769,53 @@ function ClientView() {
 
                 {/* ===== PROFIT TAB ===== */}
                 <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
-                  {activeTab === "profit" ? (
+                  {activeTab === "profit" && search.section !== "waterfall" && search.section !== "lines" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="Profit"
+                      title="Profit"
+                      subtitle="The waterfall and the product lines each have their own page."
+                      links={[
+                        {
+                          id: "waterfall",
+                          label: "Waterfall",
+                          detail: "Where profit goes, from revenue down to the bottom line.",
+                          search: (prev) => accountantClientTabSearch(prev, "profit", { section: "waterfall" }),
+                        },
+                        {
+                          id: "lines",
+                          label: "Product lines",
+                          detail: "Revenue and net profit by product line.",
+                          search: (prev) => accountantClientTabSearch(prev, "profit", { section: "lines" }),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {activeTab === "profit" && search.section === "lines" ? (
+                    <ClientSubpageFrame
+                      id="lines"
+                      eyebrow="Profit"
+                      title="Product lines"
+                      subtitle="Revenue and net profit by product line, so you can see which lines actually make the money."
+                    >
+                      <ProductMixPanel
+                        totalRevenue={
+                          resolveWaterfallFigures(weeklyInputs, waterfallFallback, {
+                            preferPeriod: preferStatementPeriod(financials),
+                          }).revenue
+                        }
+                        incentive="Answer these to build revenue and net profit per product line."
+                      />
+                    </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "profit" && search.section === "waterfall" ? (
                   <>
+                  <ClientSubpageFrame
+                    id="waterfall"
+                    eyebrow="Profit"
+                    title="Waterfall"
+                    subtitle="Where profit goes, from revenue down to the bottom line. Sign off and export from here."
+                  >
                   <DeliverableAnswerStrip
                     heading="Profitability"
                     sentence={profitAnswerSentence({
@@ -3669,21 +3869,6 @@ function ClientView() {
                     deliverableId="profit"
                     context={deliverableInputContext}
                   />
-                  <span className="eyebrow">Product lines</span>
-                  <p className="sub" style={{ marginBottom: 16 }}>
-                    Answer these questions to build revenue and net profit per product line — so you
-                    can see which lines actually make the money.
-                  </p>
-                  <div style={{ marginBottom: 28 }}>
-                    <ProductMixPanel
-                      totalRevenue={
-                        resolveWaterfallFigures(weeklyInputs, waterfallFallback, {
-                          preferPeriod: preferStatementPeriod(financials),
-                        }).revenue
-                      }
-                      incentive="Answer these to build revenue and net profit per product line."
-                    />
-                  </div>
                   <div
                     className={`card collapse${profitFinOpen ? " open" : ""}`}
                     id="profitFinCollapse"
@@ -3819,14 +4004,49 @@ function ClientView() {
                       onExportReady={setProfitExport}
                     />
                   </div>
+                  </ClientSubpageFrame>
                   </>
                   ) : null}
                 </div>
 
                 {/* ===== CASH TAB ===== */}
                 <div className={`tabpane${activeTab === "cash" ? " on" : ""}`} id="pane-cash">
-                  {activeTab === "cash" ? (
+                  {activeTab === "cash" && search.section !== "forecast" && search.section !== "collections" && search.section !== "payables" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="Numbers"
+                      title="Cash flow"
+                      subtitle="The forecast, who to chase, and who to pay each have their own page."
+                      links={[
+                        {
+                          id: "forecast",
+                          label: "13-week forecast",
+                          detail: "Thirteen weeks of cash, with sign-off on this page.",
+                          search: (prev) => accountantClientTabSearch(prev, "cash", { section: "forecast" }),
+                        },
+                        {
+                          id: "collections",
+                          label: "Who to chase",
+                          detail: "Debtors to collect.",
+                          search: (prev) => accountantClientTabSearch(prev, "cash", { section: "collections" }),
+                        },
+                        {
+                          id: "payables",
+                          label: "Who to pay",
+                          detail: "Bills to schedule against the cash you have.",
+                          search: (prev) => accountantClientTabSearch(prev, "cash", { section: "payables" }),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {activeTab === "cash" && search.section === "forecast" ? (
                   <>
+                  <ClientSubpageFrame
+                    id="forecast"
+                    eyebrow="Cash flow"
+                    title="13-week forecast"
+                    subtitle="Thirteen weeks of cash. Sign off and export from this page."
+                  >
                   <div className="card cf-wrap" id="wizard-cash-panel">
                     <CashForecastPanel
                       clientId={client.id}
@@ -3868,7 +4088,17 @@ function ClientView() {
                       }}
                     />
                   </div>
-                <section id="pane-collections" aria-label="Who to chase" className="mt-8">
+                  </ClientSubpageFrame>
+                  </>
+                  ) : null}
+                  {activeTab === "cash" && search.section === "collections" ? (
+                  <ClientSubpageFrame
+                    id="collections"
+                    eyebrow="Cash flow"
+                    title="Who to chase"
+                    subtitle="Debtors to collect, with the controls for this list."
+                  >
+                <section id="pane-collections" aria-label="Who to chase">
                   <CollectionsPanel
                     clientId={client.id}
                     market={clientMarket}
@@ -3882,11 +4112,19 @@ function ClientView() {
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
-                    onOpenActions={() => setActiveTab("plan")}
+                    onOpenActions={() => openHomeSection("plan", "open")}
                   />
                 </section>
-
-                <section id="pane-payables" aria-label="Who to pay" className="mt-8">
+                  </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "cash" && search.section === "payables" ? (
+                  <ClientSubpageFrame
+                    id="payables"
+                    eyebrow="Cash flow"
+                    title="Who to pay"
+                    subtitle="Bills to schedule against the cash you have."
+                  >
+                <section id="pane-payables" aria-label="Who to pay">
                   <PayablesPanel
                     clientId={client.id}
                     market={clientMarket}
@@ -3901,22 +4139,49 @@ function ClientView() {
                     onConnectXero={() => setShowXeroDialog(true)}
                     onConnectQbo={() => setShowQboDialog(true)}
                     onOpenDrafts={() => openHomeSection("reports", "drafts")}
-                    onOpenActions={() => setActiveTab("plan")}
+                    onOpenActions={() => openHomeSection("plan", "open")}
                   />
                 </section>
-                  </>
+                  </ClientSubpageFrame>
                   ) : null}
                 </div>
 
                 {/* ===== BUDGET TAB ===== */}
                 <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
-                  {activeTab === "budget" ? (
-                  <>
+                  {activeTab === "budget" && search.section !== "year" && search.section !== "months" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="Numbers"
+                      title="Budget"
+                      subtitle="This year and the month-by-month view each have their own page."
+                      links={[
+                        {
+                          id: "year",
+                          label: "This year",
+                          detail: "The year against the plan, with sign-off and the PDF.",
+                          search: (prev) => accountantClientTabSearch(prev, "budget", { section: "year" }),
+                        },
+                        {
+                          id: "months",
+                          label: "Month by month",
+                          detail: "Every month in the budget, next to actuals.",
+                          search: (prev) => accountantClientTabSearch(prev, "budget", { section: "months" }),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {activeTab === "budget" && (search.section === "year" || search.section === "months") ? (
+                  <ClientSubpageFrame
+                    id={search.section}
+                    eyebrow="Budget"
+                    title={search.section === "months" ? "Month by month" : "This year"}
+                    subtitle={
+                      search.section === "months"
+                        ? "Every month in the budget, next to actuals. Sign off and export from this page."
+                        : "The year against the plan. Sign off and export from this page."
+                    }
+                  >
                   <div id="wizard-budget-panel">
-                    <DeliverableTabHead eyebrow="12-month Budget" title="On or off the plan" />
-                    {/* Follow the portal theme. A nested `.dark` island made Tailwind
-                light-on-dark copy and `color-scheme: dark` inputs fire while
-                budget cards stayed cream/white — revenue and totals vanished. */}
                     <BudgetPanel
                       clientId={client.id}
                       clientName={client.name}
@@ -3939,34 +4204,99 @@ function ClientView() {
                       onRetakeProfile={() => setProfileOpen(true)}
                       onPushedToCash={() => {
                         setCashForecastReloadToken((n) => n + 1);
-                        setActiveTab("cash");
+                        openHomeSection("cash", "forecast");
                       }}
-                      lens={search.view === "table" ? "table" : "chart"}
+                      lens={search.section === "months" ? "table" : "chart"}
                       onLensChange={(next) => {
                         void navigate({
                           to: "/clients/$clientId",
                           params: { clientId },
-                          search: (prev) => ({
-                            ...prev,
-                            view: next === "table" ? "table" : undefined,
-                          }),
-                          replace: true,
+                          search: (prev) =>
+                            accountantClientTabSearch(prev, "budget", {
+                              section: next === "table" ? "months" : "year",
+                            }),
                         });
                       }}
                     />
                   </div>
-                  </>
+                  </ClientSubpageFrame>
                   ) : null}
                 </div>
 
-                {/* ===== REPORTS — Drafts, PDFs, Sent. One page, no tabs. ===== */}
+                {/* ===== REPORTS — each sub-heading is its own page. ===== */}
                 <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
-                  {activeTab === "reports" && (
-                    <>
-                      <section id="reports-drafts" className="mb-8">
-                        <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
-                          Drafts
-                        </h2>
+                  {activeTab === "reports" &&
+                  search.section !== "drafts" &&
+                  search.section !== "sent" &&
+                  search.section !== "all" &&
+                  search.section !== "scorecard" &&
+                  search.section !== "forecast" &&
+                  search.section !== "waterfall" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="Work"
+                      title="Reports"
+                      subtitle="Each report, the drafts, and what has been sent has its own page."
+                      links={[
+                        {
+                          id: "scorecard",
+                          label: "Health scorecard",
+                          detail: "The health scorecard PDF.",
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "scorecard" }) as Record<string, unknown>;
+                            next.report = "scorecard";
+                            return next;
+                          },
+                        },
+                        {
+                          id: "forecast",
+                          label: "13-week cash forecast",
+                          detail: "The 13-week cash forecast PDF.",
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "forecast" }) as Record<string, unknown>;
+                            next.report = "forecast";
+                            return next;
+                          },
+                        },
+                        {
+                          id: "waterfall",
+                          label: "Profitability waterfall",
+                          detail: "The profitability waterfall PDF.",
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "reports", { section: "waterfall" }) as Record<string, unknown>;
+                            next.report = "waterfall";
+                            return next;
+                          },
+                        },
+                        {
+                          id: "drafts",
+                          label: "Drafts",
+                          detail: "Packs and the drafter, ready for sign-off.",
+                          search: (prev) => accountantClientTabSearch(prev, "reports", { section: "drafts" }),
+                        },
+                        {
+                          id: "sent",
+                          label: "Sent",
+                          detail: "Reports already sent to this client.",
+                          search: (prev) => accountantClientTabSearch(prev, "reports", { section: "sent" }),
+                        },
+                        {
+                          id: "all",
+                          label: "All reports",
+                          detail: "Every board-ready PDF, with export.",
+                          search: (prev) => accountantClientTabSearch(prev, "reports", { section: "all" }),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {activeTab === "reports" && search.section === "drafts" ? (
+                    <ClientSubpageFrame
+                      id="drafts"
+                      eyebrow="Reports"
+                      title="Drafts"
+                      subtitle="Packs, recommendations, and the drafter. Sign off from this page."
+                    >
+                      <section id="reports-drafts">
                         <AdvisoryPackPanel
                           className="mb-5"
                           clientId={client.id}
@@ -4028,6 +4358,31 @@ function ClientView() {
                           />
                         </section>
                       </section>
+                    </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "reports" &&
+                  (search.section === "all" ||
+                    search.section === "scorecard" ||
+                    search.section === "forecast" ||
+                    search.section === "waterfall") ? (
+                    <ClientSubpageFrame
+                      id={search.section ?? "all"}
+                      eyebrow="Reports"
+                      title={
+                        search.section === "scorecard"
+                          ? "Health scorecard"
+                          : search.section === "forecast"
+                            ? "13-week cash forecast"
+                            : search.section === "waterfall"
+                              ? "Profitability waterfall"
+                              : "All reports"
+                      }
+                      subtitle={
+                        search.section === "all"
+                          ? "Every board-ready PDF. Export one, or the whole pack."
+                          : "This PDF on its own, with its export."
+                      }
+                    >
                       <section id="reports-pdfs">
                         <TabErrorBoundary label="Reports">
                           <Suspense
@@ -4038,11 +4393,24 @@ function ClientView() {
                             }
                           >
                             <ReportsStudioPanel
-                              key={client.id}
+                              key={`${client.id}-${search.section ?? "all"}`}
                               client={client.name}
                               clientId={client.id}
-                              report={studioDeepLink.report}
+                              report={
+                                search.section === "scorecard" ||
+                                search.section === "forecast" ||
+                                search.section === "waterfall"
+                                  ? search.section
+                                  : studioDeepLink.report
+                              }
                               action={studioDeepLink.action}
+                              onlyKeys={
+                                search.section === "scorecard" ||
+                                search.section === "forecast" ||
+                                search.section === "waterfall"
+                                  ? [search.section]
+                                  : undefined
+                              }
                               embedded
                               sourceChip={healthChip}
                               inputs={
@@ -4058,7 +4426,16 @@ function ClientView() {
                           </Suspense>
                         </TabErrorBoundary>
                       </section>
-                      <section id="reports-sent" className="mt-8">
+                    </ClientSubpageFrame>
+                  ) : null}
+                  {activeTab === "reports" && search.section === "sent" ? (
+                    <ClientSubpageFrame
+                      id="sent"
+                      eyebrow="Reports"
+                      title="Sent"
+                      subtitle="Reports already sent to this client."
+                    >
+                      <section id="reports-sent">
                         <AdvisorySentHistory
                           clientId={client.id}
                           refreshToken={deliveryRefresh}
@@ -4066,12 +4443,49 @@ function ClientView() {
                           liveScorecard={renderOverviewScorecard}
                         />
                       </section>
-                    </>
-                  )}
+                    </ClientSubpageFrame>
+                  ) : null}
                 </div>
 
                 {/* ===== ACTION PLAN TAB ===== */}
                 <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
+                  {activeTab === "plan" && search.section !== "open" && search.section !== "overdue" ? (
+                    <ClientSectionOverview
+                      clientId={clientId}
+                      eyebrow="Work"
+                      title="Action plan"
+                      subtitle="Open work and overdue actions each have their own page, with sign-off on the page."
+                      links={[
+                        {
+                          id: "open",
+                          label: "Open work",
+                          detail: "Actions still open.",
+                          search: (prev) => accountantClientTabSearch(prev, "plan", { section: "open" }),
+                        },
+                        {
+                          id: "overdue",
+                          label: "Overdue",
+                          detail: "Actions past their date.",
+                          search: (prev) => {
+                            const next = accountantClientTabSearch(prev, "plan", { section: "overdue" }) as Record<string, unknown>;
+                            next.filter = "overdue";
+                            return next;
+                          },
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {activeTab === "plan" && (search.section === "open" || search.section === "overdue") ? (
+                  <ClientSubpageFrame
+                    id={search.section}
+                    eyebrow="Action plan"
+                    title={search.section === "overdue" ? "Overdue" : "Open work"}
+                    subtitle={
+                      search.section === "overdue"
+                        ? "Actions past their date. Sign off from this page."
+                        : "Actions still open. Sign off from this page."
+                    }
+                  >
                   <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                   <DeliverableAnswerStrip
                     heading="Action plan"
@@ -4125,13 +4539,14 @@ function ClientView() {
                           simplified
                           isOwner
                           initialFilter={
-                            search.filter === "overdue" ||
-                            search.filter === "at_risk" ||
-                            search.filter === "blocked" ||
-                            search.filter === "done" ||
-                            search.filter === "all"
-                              ? search.filter
-                              : undefined
+                            search.section === "overdue"
+                              ? "overdue"
+                              : search.filter === "at_risk" ||
+                                  search.filter === "blocked" ||
+                                  search.filter === "done" ||
+                                  search.filter === "all"
+                                ? search.filter
+                                : undefined
                           }
                           moves={strategicMoves.map((move) => ({
                             key: move.key,
@@ -4149,6 +4564,8 @@ function ClientView() {
                     </Suspense>
                     </div>
                   </TabErrorBoundary>
+                  </ClientSubpageFrame>
+                  ) : null}
                 </div>
 
               </div>

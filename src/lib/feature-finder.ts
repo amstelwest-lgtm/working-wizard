@@ -235,7 +235,7 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["actions", "tasks", "work list", "assign", "sign-off", "signoff", "sign off"],
     audiences: ["accountant", "owner"],
     requiresClient: true,
-    studio: { tab: "plan" },
+    studio: { tab: "plan", section: "open" },
     ownerTab: "tasks",
   },
   {

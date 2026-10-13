@@ -34,11 +34,13 @@ const plan = assertSettles("?tab=plan", "?tab=plan");
 assert(plan === "?tab=plan", `plan stays on plan (${plan})`);
 
 const actions = assertSettles("?tab=actions", "?tab=actions");
-assert(actions === "?tab=plan", `actions becomes plan once (${actions})`);
-assert(!actions.includes("section="), "the actions alias does not keep a section");
+assert(actions.includes("tab=plan") && actions.includes("section=open"), `actions becomes Open work once (${actions})`);
 
 const reportsPlan = assertSettles("?tab=reports&section=plan", "?tab=reports&section=plan");
-assert(reportsPlan === "?tab=plan", `reports section=plan becomes plan once (${reportsPlan})`);
+assert(
+  reportsPlan.includes("tab=plan") && reportsPlan.includes("section=open"),
+  `reports section=plan becomes Open work once (${reportsPlan})`,
+);
 
 const overdue = assertSettles("?tab=plan&filter=overdue", "?tab=plan&filter=overdue");
 assert(overdue.includes("tab=plan") && overdue.includes("filter=overdue"), "an overdue filter stays on plan");
@@ -51,8 +53,10 @@ const aliasOverdue = assertSettles(
   "alias plus overdue filter",
 );
 assert(
-  aliasOverdue.includes("tab=plan") && aliasOverdue.includes("filter=overdue") && !aliasOverdue.includes("section="),
-  `the overdue alias settles on plan (${aliasOverdue})`,
+  aliasOverdue.includes("tab=plan") &&
+    aliasOverdue.includes("filter=overdue") &&
+    aliasOverdue.includes("section=overdue"),
+  `the overdue alias settles on the overdue page (${aliasOverdue})`,
 );
 
 const homeRedirect = reportsIndexRedirect(reportsIndexSearch({}));
@@ -120,11 +124,20 @@ assert(width === 430, "a few pixels around the tick breakpoint do not flip the a
 assert(stableCashChartWidth(800, 520) === 520, "a real resize is kept");
 
 const clientRoute = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
-assert(clientRoute.includes('{activeTab === "cash" ? ('), "the cash panel mounts only on the cash tab");
-assert(clientRoute.includes('{activeTab === "profit" ? ('), "the profit panel mounts only on the profit tab");
-assert(clientRoute.includes('{activeTab === "budget" ? ('), "the budget panel mounts only on the budget tab");
+assert(
+  clientRoute.includes('activeTab === "cash" && search.section === "forecast"'),
+  "the cash forecast mounts only on its page",
+);
+assert(
+  clientRoute.includes('activeTab === "profit" && search.section === "waterfall"'),
+  "the waterfall mounts only on its page",
+);
+assert(
+  clientRoute.includes('activeTab === "budget" && (search.section === "year" || search.section === "months")'),
+  "the budget chart mounts only on a budget page",
+);
 const cashAt = clientRoute.indexOf('id="pane-cash"');
-const cashGate = clientRoute.indexOf('{activeTab === "cash" ? (', cashAt);
+const cashGate = clientRoute.indexOf('activeTab === "cash" && search.section === "forecast"', cashAt);
 const cashPanel = clientRoute.indexOf("<CashForecastPanel", cashAt);
 assert(cashGate !== -1 && cashGate < cashPanel, "CashForecastPanel is inside the cash-tab gate");
 
