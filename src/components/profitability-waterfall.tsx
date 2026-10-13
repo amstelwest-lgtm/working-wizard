@@ -949,7 +949,7 @@ export function ProfitabilityWaterfall({
       netMarginPct: netMargin != null ? netMargin * 100 : null,
       grossMarginPct: grossMargin != null ? grossMargin * 100 : null,
     });
-    const infoText = `How ${currencySymbol(market)}1 of revenue becomes profit, step by step. Blue bars are revenue and net profit, green bars are profit subtotals, red bars are costs. Health bands use the same scoring as your Health tab.`;
+    const infoText = `How ${currencySymbol(market)}1 of revenue becomes profit. Blue bars are revenue and net profit, green bars are profit subtotals, red bars are the costs in between. Health bands use the same scoring as your Health tab.`;
     const strip: {
       key: string;
       label: string;
