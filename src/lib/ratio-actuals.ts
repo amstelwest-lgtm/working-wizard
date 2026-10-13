@@ -494,7 +494,11 @@ export function ratioActualLine(
     const cd = Math.round((pay / cogs) * 365);
     calculation = `${days(dd)} + ${days(id)} - ${days(cd)} = ${days(dd + id - cd)}`;
   } else if (name === "Fixed Cost Ratio" && missing.length === 0) {
-    calculation = `${fmt(n.fixedCosts)} / ${fmt(r)} = ${pct(n.fixedCosts / r)}`;
+    const periodFixed = parseField(String(inputs.fixedCosts ?? ""));
+    const periodRevenue = parseField(String(inputs.revenue ?? ""));
+    const fixed = Number.isFinite(periodFixed) ? periodFixed : n.fixedCosts;
+    const revenue = Number.isFinite(periodRevenue) ? periodRevenue : r;
+    calculation = `${fmt(fixed)} / ${fmt(revenue)} = ${pct(revenue ? fixed / revenue : 0)}`;
   } else if (name === "Degree of Operating Leverage" && missing.length === 0) {
     const cm = r - n.variableCosts;
     calculation = `(${fmt(r)} − ${fmt(n.variableCosts)}) / ${fmt(ebit)} = ${times(cm / ebit)}`;

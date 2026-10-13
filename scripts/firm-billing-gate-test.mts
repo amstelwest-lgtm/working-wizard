@@ -301,8 +301,8 @@ assert(
     entitled: false,
     insightSeen: false,
     firmClientCount: 1,
-  }) === "require_billing",
-  "team settings still bill before an insight",
+  }) === "allow",
+  "team settings stay open with the dashboard when the book has a client",
 );
 assert(
   decideFirmBillingPathGate({

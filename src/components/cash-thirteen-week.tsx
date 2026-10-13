@@ -197,7 +197,11 @@ export function CashThirteenWeekGrid({
   /** Extra classes for the scroll frame. The enlarge sheet fills the viewport. */
   scrollClassName?: string;
 }) {
-  const openings = closing.map((_, index) => (index === 0 ? opening : closing[index - 1]!));
+  const openings = closing.map((_, index) => {
+    if (index > 0) return closing[index - 1] ?? 0;
+    if (Number.isFinite(opening) && Math.abs(opening) >= 0.005) return opening;
+    return (closing[0] ?? 0) - (net[0] ?? 0);
+  });
   const series = cashBalanceSeries({ opening, closings: closing, floor });
   const openingBelow = series[0]?.belowFloor === true;
   const tight = series.slice(1).map((point) =>
@@ -231,7 +235,7 @@ export function CashThirteenWeekGrid({
           name: "Opening cash",
           chip: openingChip,
           values: openings,
-          total: null,
+          total: openings.length ? openings[openings.length - 1]! : opening,
           kind: "balance",
           blankZero: false,
           tone: "plain",

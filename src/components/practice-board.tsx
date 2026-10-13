@@ -1959,15 +1959,19 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ) : null}
 
         {scoredRows.length > 0 ? <CheckoutAfterInsight /> : null}
-        {followUpItems.length > 0 ? (
-          <details className="home-fold" id="follow-up">
+        <details className="home-fold" id="follow-up">
             <summary>
               <span>Follow up</span>
               <span className="home-fold-meta">
-                {followUpItems.length} with open Action Plan work
+                {followUpItems.length > 0
+                  ? `${followUpItems.length} with open Action Plan work`
+                  : "None waiting"}
               </span>
             </summary>
             <div className="home-fold-body">
+              {followUpItems.length === 0 ? (
+                <p className="sub">No follow-up waiting.</p>
+              ) : (
               <div className="followup-list">
                 {followUpItems.map((item) => (
                   <button
@@ -1986,9 +1990,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   </button>
                 ))}
               </div>
+              )}
             </div>
           </details>
-        ) : null}
 
         <details className="home-fold" id="portfolio-insights">
           <summary>

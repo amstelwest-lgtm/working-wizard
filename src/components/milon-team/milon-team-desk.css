@@ -883,10 +883,19 @@ html[data-theme="light"] .milon-desk-host #ask-ai-accountant.ask-ai-studio-shell
 .accountant-portal:has(#pane-ask:not(.on)) .deliverable-main,
 .accountant-portal.practice-home:has(.milon-desk) .shell,
 .accountant-portal.practice-home:has(.milon-desk) .client-workspace,
-.accountant-portal.practice-home:has(.milon-desk) .deliverable-main {
+.accountant-portal.practice-home:has(.milon-desk) .deliverable-main,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .shell,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .client-workspace,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .deliverable-main,
+.accountant-portal:has(.milon-desk):has([data-agent-stage]) .milon-desk-host {
   height: auto;
   max-height: none;
   overflow: visible;
+}
+
+.accountant-portal:has([data-agent-stage]) #ask-ai-accountant.ask-ai-studio-shell {
+  position: static;
+  box-shadow: none;
 }
 
 @media (max-width: 767px) {

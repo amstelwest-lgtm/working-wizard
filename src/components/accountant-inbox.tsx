@@ -146,7 +146,22 @@ export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) 
     }
   };
 
-  if (!firmId || !loaded || !migrated) return null;
+  if (!firmId) return null;
+  if (!loaded || !migrated) {
+    return (
+      <details className={["home-fold", className].filter(Boolean).join(" ")} id="accountant-inbox">
+        <summary>
+          <span>Marketplace</span>
+          <span className="home-fold-meta">{loaded ? "Not available" : "Loading"}</span>
+        </summary>
+        <div className="home-fold-body">
+          <p className="sub">
+            {migrated ? "Loading the marketplace." : "Marketplace is not on this firm yet."}
+          </p>
+        </div>
+      </details>
+    );
+  }
 
   const open = requests.filter((r) => r.status === "open");
   const history = requests.filter((r) => r.status !== "open");
