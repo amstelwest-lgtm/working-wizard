@@ -264,8 +264,8 @@ assert(landing.includes("Create firm account"), "home has a firm signup CTA");
 assert(landing.includes("PRICING_H2_USD"), "home pricing leads with firm bands");
 assert(landing.includes("saPricing?.heading"), "home pricing can show the rand heading");
 assert(
-  PRICING_H2_USD === "Flat USD pricing by active clients, Solo to Scale.",
-  "USD band heading is the PR2 default",
+  PRICING_H2_USD === "Flat USD pricing by active clients, Starter to Scale.",
+  "USD band heading names Starter through Scale",
 );
 assert(!landing.includes("Start free. <span className=\"gold-text\">Scale when it pays for itself."), "home pricing no longer leads with the owner Start-free story");
 assert(landing.includes("Small businesses have the numbers"), "gap section is the strategic reposition");

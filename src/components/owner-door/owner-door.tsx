@@ -48,6 +48,7 @@ import {
 import { OwnerHome } from "./owner-home";
 import { canonicalOwnerScreen, OWNER_SIGNED_SECTION_ID } from "@/lib/owner-nav";
 import { ownerCheckoutHref, ownerSubscribeView, type OwnerSubscribeView } from "@/lib/owner-subscribe";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { getOwnerEntitlement, startOwnerCheckout } from "@/lib/stripe-checkout.functions";
 import { OwnerAccountant, OwnerFirst, OwnerPlan, OwnerSettings } from "./owner-pages";
 import { OwnerShell, type OwnerScreen } from "./owner-shell";
@@ -197,9 +198,11 @@ export function OwnerDoor({
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
+  const [zaMonthly, setZaMonthly] = useState<string | null>(null);
   const [billing, setBilling] = useState<OwnerSubscribeView>({ kind: "pending" });
   const [subscribeBusy, setSubscribeBusy] = useState(false);
   const loadEntitlement = useServerFn(getOwnerEntitlement);
+  const loadSaPricing = useServerFn(readSaPricingCopy);
   const beginCheckout = useServerFn(startOwnerCheckout);
   const recRef = useRef<SpeechRec | null>(null);
   const listenGen = useRef(0);
@@ -252,7 +255,18 @@ export function OwnerDoor({
 
   useEffect(() => {
     setVisitor(visitorCopyPack(readVisitorDraft()));
-  }, []);
+    let cancelled = false;
+    void loadSaPricing()
+      .then((copy) => {
+        if (!cancelled) setZaMonthly(copy?.ownerMonthly ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setZaMonthly(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadSaPricing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -787,6 +801,7 @@ export function OwnerDoor({
       {railScreen === "plan" ? (
         <OwnerPlan
           visitor={visitor}
+          zaMonthly={zaMonthly}
           accountantOnMilon={Boolean(firmId)}
           firmName={firmName}
           billing={billing}
@@ -807,6 +822,7 @@ export function OwnerDoor({
       {railScreen === "settings" ? (
         <OwnerSettings
           visitor={visitor}
+          zaMonthly={zaMonthly}
           accountantOnMilon={Boolean(firmId)}
           firmName={firmName}
           onProfile={onProfile}

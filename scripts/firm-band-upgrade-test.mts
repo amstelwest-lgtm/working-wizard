@@ -83,7 +83,7 @@ assert(
   "a starter practice with 20 clients skips Solo 15",
 );
 
-assert(firmBandPriceLabel("starter", "month", "USD") === "$0", "starter stays $0");
+assert(firmBandPriceLabel("starter", "month", "USD") === "$39", "starter monthly is $39");
 assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "solo monthly is the catalog $99");
 assert(firmBandPriceLabel("small", "month", "USD") === "$149", "small monthly is the catalog $149");
 assert(firmBandPriceLabel("scale", "month", "USD") === "$999", "scale monthly is the catalog $999");
@@ -353,6 +353,21 @@ const starterByAmount = firmSubscriptionUpgradeParams({
 assert(
   starterByAmount.billing_cycle_anchor === "now" && starterByAmount.proration_behavior === "none",
   "unit_amount 0 starts the paid plan today even without the Starter lookup key",
+);
+
+const paidStarterChange = firmSubscriptionUpgradeParams({
+  itemId: "si_starter",
+  priceId: "price_test_solo",
+  band: "solo",
+  interval: "month",
+  lookupKey: "milon_solo_monthly",
+  endTrial: false,
+  current: { status: "active", lookupKey: "milon_starter_monthly", unitAmount: 3_900 },
+});
+assert(
+  paidStarterChange.billing_cycle_anchor == null &&
+    paidStarterChange.proration_behavior === "create_prorations",
+  "a paid Starter price prorates like the other bands",
 );
 
 const trialEnd = firmSubscriptionUpgradeParams({
@@ -999,7 +1014,7 @@ const annualStarter = renderToStaticMarkup(
     onUpgrade: () => undefined,
   }),
 );
-assert(annualStarter.includes("$0/yr"), "annual Starter reads $0/yr");
+assert(annualStarter.includes("$370/yr · about $8 per client"), "annual Starter is the live $370 price");
 assert(!annualStarter.includes("$0/mo"), "annual Starter is not labelled $0/mo");
 const saPicker = renderToStaticMarkup(
   createElement(FirmBandUpgrade, {
@@ -1010,14 +1025,16 @@ const saPicker = renderToStaticMarkup(
     clientCount: 1,
     saDiscount: true,
     zaLabels: {
+      starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
       solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
     },
     onUpgrade: () => undefined,
   }),
 );
 assert(saPicker.includes("R799/mo · about R53 per client"), "an SA picker shows the rand price");
-assert(saPicker.includes("R0/mo"), "an SA picker shows Starter as R0/mo");
-assert(!saPicker.includes("$0"), "an SA picker does not show a dollar Starter price");
+assert(saPicker.includes("R299/mo · about R60 per client"), "an SA picker shows the Starter rand line");
+assert(!saPicker.includes("R0/mo"), "an SA picker does not invent a zero rand price");
+assert(!saPicker.includes("$39"), "an SA picker does not show the dollar Starter price");
 assert(!saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker has no discount note");
 assert(!saPicker.toLowerCase().includes("vat"), "an SA picker has no tax wording");
 
@@ -1098,6 +1115,7 @@ const starterAtCap = decideFirmClientCreate({
   phase: "active",
   band: "starter",
   clientCount: 3,
+  unitAmount: 0,
   starterTrialExpired: true,
 });
 assert(
@@ -1105,7 +1123,19 @@ assert(
     starterAtCap.code === "band_client_cap" &&
     starterAtCap.message.startsWith("You can't add another client on Starter.") &&
     !starterAtCap.message.includes("trial has ended"),
-  "Starter at 3/3 explains the client limit and does not say the trial ended",
+  "legacy Starter at 3/3 explains the client limit and does not say the trial ended",
+);
+const paidStarterAtCap = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "active",
+  band: "starter",
+  clientCount: 5,
+  unitAmount: 3_900,
+});
+assert(
+  !paidStarterAtCap.allowed &&
+    paidStarterAtCap.message.includes("Upgrade to Solo"),
+  "paid Starter at 5 prompts Solo",
 );
 const trialingEnded = decideFirmClientCreate({
   stripeConfigured: true,

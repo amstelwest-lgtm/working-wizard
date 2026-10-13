@@ -2680,6 +2680,7 @@ function LandingPage() {
           {mounted && registerReady ? (
             <Suspense fallback={<div className="reg-shell" style={{ minHeight: 480 }} />}>
               <LandingRegisterForm
+                ownerNote={saPricing?.ownerRegisterNote ?? OWNER_REGISTER_NOTE_US}
                 inviteClientId={inviteClientId}
                 inviteBusiness={inviteBusiness}
                 inviteNeedsCode={inviteNeedsCode}

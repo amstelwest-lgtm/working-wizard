@@ -122,11 +122,11 @@ assert(!landing.includes("Trading as MILŌN"), "landing footer no longer names t
 assert(shell.includes("MARKETING_COPYRIGHT_ENTITY"), "shared marketing footer uses the same copyright entity");
 assert(landing.includes("FirmBandPricingTable"), "landing prices render through the band table");
 assert(
-  readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("firmUsdListPrice"),
+  readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("firmUsdPublicLine"),
   "band table prices come from the plan catalog",
 );
 assert(
-  readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES.us.firmSolo"),
+  readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES.us.firmStarter"),
   "homepage cost answer still reads the marketing pack",
 );
 assert(landing.includes("RegionCopy"), "landing uses RegionCopy for single-region copy");

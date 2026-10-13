@@ -49,7 +49,7 @@ export function loadSaPricingCopy(): SaPricingCopy {
   }
   return {
     heading: "Pricing in rand",
-    heroNote: "Plans from R799/mo after day 14.",
+    heroNote: "Plans from R299/mo after day 14.",
     accountantsIntro:
       "Pricing in rand. One monthly price, set by how many clients you actively advise.",
     accountantsLead:

@@ -73,6 +73,10 @@ export async function resolveFirmCatalogPrice(
 ): Promise<{ price: CatalogPrice; lookupKey: string }> {
   const lookupKey = market === "za" ? zaLookupKey(band, interval) : firmLookupKey(band, interval);
   const price = await resolvePriceByLookupKey(stripe, lookupKey);
+  // A $0 price id is an existing subscription, not the live Starter price.
+  if (band === "starter" && price.unit_amount === 0) {
+    throw new Error(`No active paid Stripe price for lookup_key ${lookupKey}.`);
+  }
   const priceInterval = price.recurring?.interval;
   if (priceInterval && priceInterval !== interval) {
     throw new Error(`Stripe price ${lookupKey} is ${priceInterval}, expected ${interval}.`);
@@ -494,7 +498,7 @@ export function ownerMarketFromLookup(
 export function ownerIntervalFromLookup(lookupKey: string | null | undefined): FirmInterval | null {
   const key = lookupKey?.trim() ?? "";
   if (!isOwnerLookupKey(key)) return null;
-  return key.endsWith("_annual") ? "year" : "month";
+  return key.includes("_annual") ? "year" : "month";
 }
 
 /**

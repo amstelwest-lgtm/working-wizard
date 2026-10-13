@@ -15,6 +15,7 @@ import {
   FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
   isFirmBandId,
+  starterClientLimit,
   type FirmBandId,
   type FirmInterval,
 } from "./stripe-plans";
@@ -109,9 +110,10 @@ export function starterTrialForPlanState(
 }
 
 function bandClientCapMessage(name: string, clientLimit: number, starter: boolean): string {
-  const limit = `${name} includes up to ${clientLimit} active clients. Upgrade to a larger band to add another.`;
-  if (starter) return `You can't add another client on Starter. ${limit}`;
-  return limit;
+  if (starter) {
+    return `You can't add another client on Starter. Starter includes up to ${clientLimit} active clients. Upgrade to Solo to add another.`;
+  }
+  return `${name} includes up to ${clientLimit} active clients. Upgrade to a larger band to add another.`;
 }
 
 export function decideFirmClientCreate(input: {
@@ -120,6 +122,11 @@ export function decideFirmClientCreate(input: {
   phase: FirmSubscriptionPhase;
   band: FirmBandId | null;
   clientCount: number;
+  /**
+   * Billed price unit_amount. 0 keeps the legacy $0 Starter cap.
+   * Omitted means the catalog limit (paid Starter is 5).
+   */
+  unitAmount?: number | null;
   /**
    * Enforced Starter past day 14. Omitted means the caller is not applying
    * the clock (existing firms, paid bands, or a missing start).
@@ -152,13 +159,14 @@ export function decideFirmClientCreate(input: {
 
   if (input.phase === "active" && input.band && isFirmBandId(input.band)) {
     const band = FIRM_BAND_CATALOG[input.band];
-    if (band.clientLimit == null) return { allowed: true };
-    if (input.clientCount >= band.clientLimit) {
+    const clientLimit = band.id === "starter" ? starterClientLimit(input.unitAmount) : band.clientLimit;
+    if (clientLimit == null) return { allowed: true };
+    if (input.clientCount >= clientLimit) {
       return {
         allowed: false,
         code: "band_client_cap",
         bandName: band.name,
-        message: bandClientCapMessage(band.name, band.clientLimit, band.id === "starter"),
+        message: bandClientCapMessage(band.name, clientLimit, band.id === "starter"),
       };
     }
   }
@@ -226,7 +234,13 @@ export function formatFirmPlanStatus(input: {
           ? "Trial — ends today"
           : `Trial — ${days} day${days === 1 ? "" : "s"} left`;
     const cap = `Up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
-    const detail = bandName ? `${cap} · ${bandName} after the trial` : cap;
+    const after =
+      band === "starter"
+        ? `${bandName} includes up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients after the trial`
+        : bandName
+          ? `${bandName} after the trial`
+          : null;
+    const detail = after ? `${cap} · ${after}` : cap;
     return { phase: "trialing", band, headline, detail };
   }
 
