@@ -39,6 +39,7 @@ import {
 import {
   AVATAR_CLIP_FPS,
   FM_AVATAR_CLIPS,
+  FM_AVATAR_VERSION,
   avatarClipAtEnd,
   avatarPoster,
   displayFmClip,
@@ -506,7 +507,15 @@ assert(!avatarClipAtEnd(121 / 24 - frame * 2, 121 / 24), "a 121-frame clip does 
 assert(avatarClipAtEnd(5, 5), "a playhead at the end counts");
 assert(!avatarClipAtEnd(0, 5), "the opening frame is not the end");
 assert(!avatarClipAtEnd(1, Number.NaN), "an unknown duration does not swap");
-assert(fmClipSources("idle").webm === "/avatars/fm/fm-idle.webm", "financial manager clips stay in fm/");
+assert(
+  fmClipSources("idle").webm === `/avatars/fm/fm-idle.webm?v=${FM_AVATAR_VERSION}`,
+  "financial manager clips stay in fm/ and carry a cache version",
+);
+assert(
+  avatarPoster("financial_manager").jpg === `/avatars/fm/fm-poster.jpg?v=${FM_AVATAR_VERSION}`,
+  "the financial manager poster carries the same cache version",
+);
+assert(!avatarPoster("analyst").webp.includes("?"), "analyst posters stay unversioned");
 assert(
   fmClipSources("reading", "analyst").mp4 === "/avatars/analyst/analyst-reading.mp4",
   "analyst clips use the analyst folder",

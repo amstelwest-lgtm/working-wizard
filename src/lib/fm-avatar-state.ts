@@ -40,17 +40,30 @@ export const AVATAR_FOLDERS = {
 export type AvatarFace = keyof typeof AVATAR_FOLDERS;
 
 /**
- * Clips are 24fps. Financial Manager files are 121 frames (5.042s).
- * Analyst and Advisor files are 120 frames (5s). The end check uses the
- * file's own duration, so both lengths swap on their last frame.
+ * Clips are 24fps and 120 frames (5s). The end check uses the file's own
+ * duration, so a longer file still swaps on its last frame.
  */
 export const AVATAR_CLIP_FPS = 24;
+
+/**
+ * Financial Manager files live at public/avatars/fm and are not content-hashed.
+ * vercel.json does not set Cache-Control on /avatars, so they fall through to
+ * Vercel's static default (`public, max-age=0, must-revalidate`). The CDN still
+ * keeps a static file for the life of a deployment, and a video element keeps
+ * the previous bytes for that URL. This query is the new cache key.
+ */
+export const FM_AVATAR_VERSION = "2";
+
+function avatarHref(folder: string, file: string): string {
+  const href = `/avatars/${folder}/${file}`;
+  return folder === AVATAR_FOLDERS.financial_manager ? `${href}?v=${FM_AVATAR_VERSION}` : href;
+}
 
 export function avatarPoster(agent: AvatarFace = "financial_manager") {
   const folder = AVATAR_FOLDERS[agent];
   return {
-    webp: `/avatars/${folder}/${folder}-poster.webp`,
-    jpg: `/avatars/${folder}/${folder}-poster.jpg`,
+    webp: avatarHref(folder, `${folder}-poster.webp`),
+    jpg: avatarHref(folder, `${folder}-poster.jpg`),
   };
 }
 
@@ -124,8 +137,8 @@ export function fmClipSources(
 ): { webm: string; mp4: string } {
   const folder = AVATAR_FOLDERS[agent];
   return {
-    webm: `/avatars/${folder}/${folder}-${clip}.webm`,
-    mp4: `/avatars/${folder}/${folder}-${clip}.mp4`,
+    webm: avatarHref(folder, `${folder}-${clip}.webm`),
+    mp4: avatarHref(folder, `${folder}-${clip}.mp4`),
   };
 }
 
