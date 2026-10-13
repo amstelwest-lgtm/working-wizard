@@ -508,7 +508,10 @@ export function accountantClientTabSearch<T extends object>(
   delete next.why;
   if (canonical.focus) next.focus = canonical.focus;
   else delete next.focus;
-  if (canonical.tab !== "plan") delete next.filter;
+  // A plan filter sticks only on a plan sub-page. A bare `plan` is the
+  // overview: keeping `filter=overdue` there would canonicalize straight
+  // back to the Overdue page and turn its back control into a no-op.
+  if (canonical.tab !== "plan" || !canonical.section) delete next.filter;
   if (canonical.tab !== "reports") {
     delete next.report;
     delete next.action;
