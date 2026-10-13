@@ -10,10 +10,9 @@
  * Watchlist clients are free and are not Stripe line items.
  * Owner Spark stays free and does not create a Checkout Session.
  *
- * Starter is the paid entry band (5 active clients). A legacy $0 subscription
- * is recognized by unit_amount 0 on its existing price id, not by moving
- * that subscription onto the new price. Signup Checkout stays Solo monthly
- * with a 14-day trial and a card on file unless the firm picks Starter.
+ * Signup Checkout stays Solo monthly with a 14-day trial and a card on file
+ * unless the firm picks Starter. The trial cap is 3 clients. Paid Starter
+ * allows 5.
  */
 
 import { isOwnerLookupKey } from "@/lib/owner-price";
@@ -81,9 +80,9 @@ export const FIRM_BAND_CATALOG: Record<FirmBandId, FirmBand> = {
     id: "starter",
     name: "Starter",
     clientLimit: 5,
-    /** $39. Annual follows the other bands: floor(monthly dollars × 12 × 0.8). */
+    /** Live catalog: $39/mo and $370/yr. */
     monthlyUsdCents: 3_900,
-    yearlyUsdCents: 37_400,
+    yearlyUsdCents: 37_000,
     lookup: { month: "milon_starter_monthly", year: "milon_starter_yearly" },
     customQuote: false,
   },
@@ -176,9 +175,8 @@ export function isFirmCheckoutBand(value: string): value is FirmCheckoutBand {
 }
 
 /**
- * Client cap for a subscription still on the archived $0 Starter price.
- * New Starter Checkout uses the catalog limit of 5. The price id is left
- * where it is; unit_amount 0 is how that old price is recognized.
+ * Client cap for a subscription that is still on its existing $0 price id.
+ * Paid Starter Checkout uses the catalog limit of 5. That price id is not moved.
  */
 export const LEGACY_FREE_STARTER_CLIENT_LIMIT = 3;
 

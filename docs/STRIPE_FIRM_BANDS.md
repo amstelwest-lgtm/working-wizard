@@ -16,7 +16,7 @@ Head office for Stripe Tax is Wilmington, DE.
 
 | Band                                     | Active clients | Monthly       | Annual (~20% off) | Lookup keys                                              |
 | ---------------------------------------- | -------------- | ------------- | ----------------- | -------------------------------------------------------- |
-| Starter                                  | 5              | $39           | $374              | `milon_starter_monthly` / `milon_starter_yearly`         |
+| Starter                                  | 5              | $39           | $370              | `milon_starter_monthly` / `milon_starter_yearly`         |
 | Solo                                     | 15             | $99           | $950              | `milon_solo_monthly` / `milon_solo_yearly`               |
 | Small                                    | 25             | $149          | $1,430            | `milon_small_monthly` / `milon_small_yearly`             |
 | Growing                                  | 50             | $249          | $2,390            | `milon_growing_monthly` / `milon_growing_yearly`         |
@@ -83,9 +83,14 @@ Growth owns the Resend sends. Do not add day-12 or day-14 mail in the Checkout /
 
 ## Starter price
 
-Paid Starter is the entry band: 5 active clients, $39/mo (about $8 per client) and R299/mo for a ZA firm (about R60 per client). Annual follows the other bands at about 20% off ($374, and the same USD ratio in rand). Checkout resolves `milon_starter_monthly` / `milon_starter_yearly` and `milon_za_starter_monthly` / `milon_za_starter_annual`. Those keys are placeholders until the catalog prices exist. The app does not create Stripe prices.
+Paid Starter is the entry band: 5 active clients, $39/mo (about $8 per client) and R299/mo for a ZA firm (about R60 per client). The live annual prices are $370 and R2,837. Product `prod_VGnVYlf6iuRKd8`. Checkout resolves lookup keys, not hardcoded price ids:
 
-A subscription whose price `unit_amount` is 0 keeps the legacy 3-client cap and the immediate-bill upgrade path. That price id is not migrated. New Checkout refuses a $0 price even if it still holds the placeholder lookup key.
+- USD $39/mo `price_1UQ4F2GXDN6PFbnzweJXqk3K` — `milon_starter_monthly`
+- USD $370/yr `price_1UQ4F2GXDN6PFbnz8ct7qmNr` — `milon_starter_yearly`
+- ZAR R299/mo `price_1UQ4F2GXDN6PFbnz3tG5OQNL` — `milon_za_starter_monthly`
+- ZAR R2,837/yr `price_1UQ4F3GXDN6PFbnzSRwzs8I1` — `milon_za_starter_annual`
+
+The trial cap stays 3 clients. Paid Starter allows 5. A subscription whose price `unit_amount` is 0 keeps that existing price id and the 3-client cap. It is not migrated. New Checkout does not attach a $0 price.
 
 ### Stripe Live ops checklist (coordinator)
 
@@ -121,7 +126,7 @@ Portal `return_url`, Checkout `success_url` / `cancel_url`, invite links, and au
 
 Practice owners and firm admins upgrade from the Add client limit panel and from **Settings → Plan**. The list uses `FIRM_BAND_CATALOG` (Solo 15 / $99, Small 25 / $149, … Scale 500 / $999). The current band is marked and the next band up is preselected.
 
-- Prices resolve by `lookup_key` (`milon_<band>_monthly` / `milon_<band>_yearly` for USD, `milon_za_<band>_monthly` / `milon_za_<band>_annual` for rand), then product `metadata.band`. The app does not hardcode `price_` ids. USD band prices on `acct_1UEXnwGXDN6PFbnz` stay the catalog (Starter 5 / $39 and $374, Solo 15 / $99 and $950, Small 25 / $149 and $1,430, Growing 50 / $249 and $2,390, Established 75 / $349 and $3,350, Larger 125 / $499 and $4,790, Advanced 200 / $649 and $6,230, Scale 500 / $999 and $9,590). A QA subscription still on the $0 Starter price keeps that price id. Rand prices are separate recurring prices on those same products. `scripts/stripe-create-za-prices.mts` finds or creates them in test mode and refuses a live key unless `--live` is passed.
+- Prices resolve by `lookup_key` (`milon_<band>_monthly` / `milon_<band>_yearly` for USD, `milon_za_<band>_monthly` / `milon_za_<band>_annual` for rand), then product `metadata.band`. The app does not hardcode `price_` ids. USD band prices on `acct_1UEXnwGXDN6PFbnz` stay the catalog (Starter 5 / $39 and $370, Solo 15 / $99 and $950, Small 25 / $149 and $1,430, Growing 50 / $249 and $2,390, Established 75 / $349 and $3,350, Larger 125 / $499 and $4,790, Advanced 200 / $649 and $6,230, Scale 500 / $999 and $9,590). A subscription still on a $0 Starter price id keeps that price id. Rand prices are separate recurring prices on those same products. `scripts/stripe-create-za-prices.mts` finds or creates them in test mode and refuses a live key unless `--live` is passed.
 - A paid band changing to another paid band is updated with `subscriptions.update` (`proration_behavior: create_prorations`, `payment_behavior: error_if_incomplete`) regardless of presentment currency. A $0 Starter (`unit_amount` 0 or lookup `milon_starter_monthly`) or a trial starts the paid plan today: `billing_cycle_anchor: now`, `proration_behavior: none`, and `payment_behavior: error_if_incomplete`, so the first invoice is the new price. A subscription with no card (a $0 Starter) opens Checkout in `mode: setup` on that customer. On completion the saved payment method becomes the customer and subscription default, and the same subscription is updated onto the catalog price and charged immediately. A new subscription Checkout (`mode: subscription`) is only used when there is no entitling subscription. No second trial. Success returns to `/dashboard?addClient=1&upgrade=success`. Cancel returns to `/dashboard?addClient=1&upgrade=cancelled` and charges nothing.
 - A firm with `firms.market` country `ZA` (otherwise a stored currency `ZAR` or locale `en-ZA`) checks out on the rand lookup key. A missing market is not South Africa. The Checkout `market` field, request IP, and geo headers do not choose the price. Checkout sets `adaptive_pricing` enabled false for both markets so the rand price is not currency-switched. Rand sessions set `automatic_tax` enabled false and send no tax rates. They do not attach `MILON_ZA_50` and do not open `allow_promotion_codes`. A known billing country other than ZA, or a completed Checkout whose billing country is not ZA, falls back to the USD price and sets `milon_za_billing_fallback=usd`. FOUNDING stays monthly-only on USD. An existing `MILON_ZA_50` discount is cleared on the next subscription update so it cannot stack.
 - `checkout.session.completed` for a new subscription cancels `milon_replaces_subscription` once the new subscription is active or trialing, so an old $0 Starter does not stay active beside it. A setup-mode completion does not cancel the subscription it updates.

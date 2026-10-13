@@ -1014,7 +1014,7 @@ const annualStarter = renderToStaticMarkup(
     onUpgrade: () => undefined,
   }),
 );
-assert(annualStarter.includes("$374/yr · about $8 per client"), "annual Starter follows the band discount");
+assert(annualStarter.includes("$370/yr · about $8 per client"), "annual Starter is the live $370 price");
 assert(!annualStarter.includes("$0/mo"), "annual Starter is not labelled $0/mo");
 const saPicker = renderToStaticMarkup(
   createElement(FirmBandUpgrade, {
@@ -1025,7 +1025,7 @@ const saPicker = renderToStaticMarkup(
     clientCount: 1,
     saDiscount: true,
     zaLabels: {
-      starter: { month: "R299/mo · about R60 per client", year: "R2,867/yr · about R60 per client" },
+      starter: { month: "R299/mo · about R60 per client", year: "R2,837/yr · about R60 per client" },
       solo: { month: "R799/mo · about R53 per client", year: "R7,667/yr · about R53 per client" },
     },
     onUpgrade: () => undefined,

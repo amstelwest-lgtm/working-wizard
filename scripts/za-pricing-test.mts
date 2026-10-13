@@ -48,6 +48,8 @@ const copy = loadSaPricingCopy();
 assert(copy.heading === "Pricing in rand", "heading");
 assert(copy.heroNote === "Plans from R299/mo after day 14.", "hero");
 assert(copy.labels.starter.month === "R299/mo · about R60 per client", "starter monthly line");
+assert(copy.labels.starter.year === "R2,837/yr · about R60 per client", "starter annual matches Stripe");
+assert(zaBandAmountCents("starter", "year") === 283_700, "starter annual rand is R2,837");
 assert(copy.ownerMonthly === "R199/mo", "owner monthly is R199");
 assert(!copy.ownerMonthly.includes("R299"), "owner copy no longer uses the old rand price");
 assert(copy.labels.solo.month === "R799/mo · about R53 per client", "solo monthly line");

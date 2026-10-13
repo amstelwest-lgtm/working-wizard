@@ -73,8 +73,7 @@ export async function resolveFirmCatalogPrice(
 ): Promise<{ price: CatalogPrice; lookupKey: string }> {
   const lookupKey = market === "za" ? zaLookupKey(band, interval) : firmLookupKey(band, interval);
   const price = await resolvePriceByLookupKey(stripe, lookupKey);
-  // The archived $0 Starter price may still hold the placeholder lookup key.
-  // New Checkout must not attach that price id. Existing subscriptions stay on it.
+  // A $0 price id is an existing subscription, not the live Starter price.
   if (band === "starter" && price.unit_amount === 0) {
     throw new Error(`No active paid Stripe price for lookup_key ${lookupKey}.`);
   }

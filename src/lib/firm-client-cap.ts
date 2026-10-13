@@ -234,7 +234,13 @@ export function formatFirmPlanStatus(input: {
           ? "Trial — ends today"
           : `Trial — ${days} day${days === 1 ? "" : "s"} left`;
     const cap = `Up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
-    const detail = bandName ? `${cap} · ${bandName} after the trial` : cap;
+    const after =
+      band === "starter"
+        ? `${bandName} includes up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients after the trial`
+        : bandName
+          ? `${bandName} after the trial`
+          : null;
+    const detail = after ? `${cap} · ${after}` : cap;
     return { phase: "trialing", band, headline, detail };
   }
 
