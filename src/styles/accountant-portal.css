@@ -866,6 +866,9 @@ html.dark .accountant-portal .milon-status-pill--warn{color:#f0d59a;background:r
 
 @media(max-width:480px){
   .accountant-portal .debt-line{grid-template-columns:1fr}
+  /* Hand to + Add to plan squeezed the move title to one word per line. */
+  .accountant-portal .brain-row{grid-template-columns:1fr}
+  .accountant-portal .brain-row-actions{justify-content:flex-start;flex-wrap:wrap}
   .accountant-portal .hide-xs{display:none}
   .accountant-portal .topbar{
     display:flex;

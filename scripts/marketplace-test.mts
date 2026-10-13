@@ -357,7 +357,7 @@ const NOW = "2026-09-18T12:00:00.000Z";
   assert(inbox.includes('id="accountant-inbox"'), "inbox anchor matches the email link");
   const app = readFileSync(resolve("src/routes/app.tsx"), "utf8");
   assert(
-    app.includes("!clientMeta?.firm_id ? (\n                  <FindAccountantPanel"),
+    app.includes("!clientMeta?.firm_id ? (\n                    <FindAccountantPanel"),
     "owner board mounts the panel only without a firm",
   );
   const dash = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");

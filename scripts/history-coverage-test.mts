@@ -103,7 +103,7 @@ assert(
   "complex ratios explain that past periods fill the graphs",
 );
 assert(
-  app.includes("height={18}\n                                            placeholder"),
+  app.includes("height={18}\n                                              placeholder"),
   "complex ratios keep the trend slot visible without fake history",
 );
 assert(!app.includes('label="Add period"'), "complex ratios dropped the sad per-row Add period links");

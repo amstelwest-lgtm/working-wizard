@@ -129,7 +129,11 @@ import {
   overlayWeeklyInputs,
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
-import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
+import {
+  preferStatementPeriod,
+  readStatementMeta,
+  statementYearLine,
+} from "@/lib/statement-period";
 import {
   emptyProductMix,
   hasProductMixAnswer,
@@ -139,7 +143,11 @@ import {
 } from "@/lib/product-mix";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProductMixPanel } from "@/components/product-mix-panel";
-import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
+import {
+  ProfitabilityWaterfall,
+  ProfitLead,
+  priorMarginsFromFinancials,
+} from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
 import { IndustryPulse, IndustryNewsBand } from "@/components/industry-pulse";
 import { OverviewRail } from "@/components/overview-rail";
@@ -176,10 +184,7 @@ import {
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
 import { periodProfitBridge } from "@/lib/period-profit";
-import {
-  statementKindFromMetadata,
-  type StatementMeta,
-} from "@/lib/statement-parse";
+import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
 import {
   hasOwnerFirstUploadHandled,
@@ -1894,8 +1899,7 @@ function flatExtractionToMergedResult(
       period_label: meta?.periodLabel ?? null,
       prior_period_start_date: null,
       prior_period_end_date: null,
-      document_type:
-        kind === "income_statement" || kind === "balance_sheet" ? kind : "unknown",
+      document_type: kind === "income_statement" || kind === "balance_sheet" ? kind : "unknown",
       financial_statement_type: "unknown",
       prepared_by: null,
       auditor_firm: null,
@@ -2190,8 +2194,7 @@ function Index() {
         const extracted =
           (result as { financials?: Record<string, string>; statement?: StatementMeta })
             ?.financials ?? {};
-        const statementMeta =
-          (result as { statement?: StatementMeta }).statement ?? null;
+        const statementMeta = (result as { statement?: StatementMeta }).statement ?? null;
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {
           toast.warning(
@@ -3356,7 +3359,11 @@ function Index() {
   const safe = (a: number, b: number) => (b === 0 ? 0 : a / b);
 
   const computedRatios = useMemo(
-    () => withCanonicalDebtorCreditorDays(computeRatios(ratioSource), v as unknown as Record<string, unknown>),
+    () =>
+      withCanonicalDebtorCreditorDays(
+        computeRatios(ratioSource),
+        v as unknown as Record<string, unknown>,
+      ),
     [ratioSource, v],
   );
 
@@ -3933,7 +3940,9 @@ function Index() {
                 settingsOpen={oauthReturn.screen === "settings"}
                 openAccountant={oauthReturn.screen === "accountant"}
                 openPlan={oauthReturn.screen === "plan"}
-                checkoutNotice={oauthReturn.screen === "plan" ? (oauthReturn.checkout ?? null) : null}
+                checkoutNotice={
+                  oauthReturn.screen === "plan" ? (oauthReturn.checkout ?? null) : null
+                }
                 focusSigned={oauthReturn.section === "signed"}
                 onSettings={() => {
                   openOwnerSettings();
@@ -3982,17 +3991,17 @@ function Index() {
                             )}
                             className="mb-2"
                           />
-                        <OwnerHealthOrb
-                          variant="ring"
-                          overallHealth={avgHealth}
-                          displayStatus={overallHealth.displayStatus}
-                          pillars={spherePillars}
-                          caption="Tap to see what's behind your score"
-                          onTopPriority={() => go("moves")}
-                          onDriverClick={(key) => {
-                            if (key in RATIO_META) setOpenRatio(key as RatioKey);
-                          }}
-                        />
+                          <OwnerHealthOrb
+                            variant="ring"
+                            overallHealth={avgHealth}
+                            displayStatus={overallHealth.displayStatus}
+                            pillars={spherePillars}
+                            caption="Tap to see what's behind your score"
+                            onTopPriority={() => go("moves")}
+                            onDriverClick={(key) => {
+                              if (key in RATIO_META) setOpenRatio(key as RatioKey);
+                            }}
+                          />
                         </div>
                       ) : (
                         <>
@@ -4043,7 +4052,9 @@ function Index() {
                           onInvite={() => go("accountant")}
                           priorYear={
                             ownerPrior?.financials
-                              ? yearMoneyFromFinancials(ownerPrior.financials as Record<string, unknown>)
+                              ? yearMoneyFromFinancials(
+                                  ownerPrior.financials as Record<string, unknown>,
+                                )
                               : null
                           }
                           priorYearLabel={ownerPrior?.period_label ?? null}
@@ -4056,10 +4067,13 @@ function Index() {
                           operatingProfile={operatingProfile}
                           fyStartMonthDefault={
                             operatingProfile?.fyStartMonth ??
-                            resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
+                            resolveMarket(coerceMarketSelection(workspaceMarket))
+                              .fyStartMonthDefault
                           }
                           firstActualsMonth={
-                            hasRealFinancials ? (history[0]?.period_date?.slice(0, 7) ?? null) : null
+                            hasRealFinancials
+                              ? (history[0]?.period_date?.slice(0, 7) ?? null)
+                              : null
                           }
                           financials={{
                             revenue: v.revenue,
@@ -4108,36 +4122,43 @@ function Index() {
                   ),
                   profit: (
                     <section className="owner-pane" data-owner-page="profit">
-                      <h1 className="owner-title">Profit</h1>
                       {showScoredBoard ? (
-                        <ProfitabilityWaterfall
-                          headerAside={
-                            <OwnerSignoffMark
-                              signoff={profitabilitySignoff}
-                              isStale={computeIsStale(
+                        <>
+                          <ProfitLead periodLabel={readStatementMeta(v).periodLabel} />
+                          <ProfitabilityWaterfall
+                            appearance="premium"
+                            previousMargins={priorMarginsFromFinancials(
+                              (ownerPrior?.financials as Record<string, unknown> | null) ?? null,
+                            )}
+                            headerAside={
+                              <OwnerSignoffMark
+                                signoff={profitabilitySignoff}
+                                isStale={computeIsStale(
+                                  profitabilitySignoff,
+                                  clientMeta?.financials_updated_at ?? null,
+                                )}
+                              />
+                            }
+                            negative="minus"
+                            clientName={actingClientName ?? undefined}
+                            clientId={effectiveClientId ?? undefined}
+                            reviewSignoff={stampFromSignoff(
+                              profitabilitySignoff,
+                              computeIsStale(
                                 profitabilitySignoff,
                                 clientMeta?.financials_updated_at ?? null,
-                              )}
-                            />
-                          }
-                          negative="minus"
-                          clientName={actingClientName ?? undefined}
-                          clientId={effectiveClientId ?? undefined}
-                          reviewSignoff={stampFromSignoff(
-                            profitabilitySignoff,
-                            computeIsStale(
-                              profitabilitySignoff,
-                              clientMeta?.financials_updated_at ?? null,
-                            ),
-                          )}
-                          fallback={derivePeriodWaterfallFallback(v)}
-                          periodLabel={readStatementMeta(v).periodLabel}
-                          preferPeriod={preferStatementPeriod(v)}
-                          yearToDate={statementYearLine(v)}
-                          statementSource={readStatementMeta(v).statementSource}
-                        />
+                              ),
+                            )}
+                            fallback={derivePeriodWaterfallFallback(v)}
+                            periodLabel={readStatementMeta(v).periodLabel}
+                            preferPeriod={preferStatementPeriod(v)}
+                            yearToDate={statementYearLine(v)}
+                            statementSource={readStatementMeta(v).statementSource}
+                          />
+                        </>
                       ) : (
                         <>
+                          <h1 className="owner-title">Profit</h1>
                           <p className="owner-lede">Your accountant sets this up</p>
                           <button
                             type="button"
@@ -4197,276 +4218,280 @@ function Index() {
                 })}
               />
             ) : (
-            <header className="founder-app-bar relative mb-3 overflow-visible rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <img
-                    src="/milon-wordmark.png"
-                    alt="Milōn"
-                    className="founder-app-bar__logo h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
-                    style={{ filter: "brightness(0.85) saturate(1.2)" }}
-                  />
-                  <div className="founder-app-bar__brand-text hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
-                    {actingClientName ??
-                      ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ??
-                      "Operating finance"}
-                  </div>
-                  {!actingClientId ? (
-                    <OwnerBusinessSwitcher
-                      workspaces={ownerWorkspaces}
-                      activeClientId={effectiveClientId}
-                      onSelect={switchOwnerWorkspace}
-                      loading={!clientLinkResolved}
+              <header className="founder-app-bar relative mb-3 overflow-visible rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <img
+                      src="/milon-wordmark.png"
+                      alt="Milōn"
+                      className="founder-app-bar__logo h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
+                      style={{ filter: "brightness(0.85) saturate(1.2)" }}
                     />
-                  ) : null}
-                </div>
-                <div className="founder-app-bar__actions flex shrink-0 items-center gap-1 print:hidden">
-                  {/* Keep primary actions visible on phones; park the rest in More */}
-                  {userRole !== "client_member" && (
-                    <>
-                      <button
-                        onClick={() => setShowFinData(true)}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
-                        title={
-                          isUsCopy(boardMarket)
-                            ? "Connect QuickBooks or Xero, or upload statements"
-                            : "Upload financial statements or connect Xero"
-                        }
-                      >
-                        <Upload className="h-3 w-3 shrink-0" />
-                        <span className="founder-app-bar__upload-label hidden sm:inline">Upload</span>
-                      </button>
-                      <button
-                        type="button"
-                        id="owner-header-qbo"
-                        onClick={() => setShowQboDialog(true)}
-                        className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
-                        title="Connect QuickBooks Online"
-                      >
-                        QuickBooks
-                      </button>
-                      <button
-                        type="button"
-                        id="owner-header-xero"
-                        onClick={() => setShowXeroDialog(true)}
-                        className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
-                        title="Connect Xero"
-                      >
-                        Xero
-                      </button>
-                      {!isUsCopy(boardMarket) ? (
+                    <div className="founder-app-bar__brand-text hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
+                      {actingClientName ??
+                        ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ??
+                        "Operating finance"}
+                    </div>
+                    {!actingClientId ? (
+                      <OwnerBusinessSwitcher
+                        workspaces={ownerWorkspaces}
+                        activeClientId={effectiveClientId}
+                        onSelect={switchOwnerWorkspace}
+                        loading={!clientLinkResolved}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="founder-app-bar__actions flex shrink-0 items-center gap-1 print:hidden">
+                    {/* Keep primary actions visible on phones; park the rest in More */}
+                    {userRole !== "client_member" && (
+                      <>
+                        <button
+                          onClick={() => setShowFinData(true)}
+                          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
+                          title={
+                            isUsCopy(boardMarket)
+                              ? "Connect QuickBooks or Xero, or upload statements"
+                              : "Upload financial statements or connect Xero"
+                          }
+                        >
+                          <Upload className="h-3 w-3 shrink-0" />
+                          <span className="founder-app-bar__upload-label hidden sm:inline">
+                            Upload
+                          </span>
+                        </button>
                         <button
                           type="button"
-                          id="owner-header-sage"
-                          onClick={() => setShowSageDialog(true)}
+                          id="owner-header-qbo"
+                          onClick={() => setShowQboDialog(true)}
                           className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
-                          title="Connect Sage Accounting"
+                          title="Connect QuickBooks Online"
                         >
-                          Sage
+                          QuickBooks
                         </button>
-                      ) : null}
-                    </>
-                  )}
-                  <FeatureFinder audience="owner" clientId={effectiveClientId} chrome="owner" />
-                  <ThemeToggle />
-                  <HeaderShareButton />
+                        <button
+                          type="button"
+                          id="owner-header-xero"
+                          onClick={() => setShowXeroDialog(true)}
+                          className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
+                          title="Connect Xero"
+                        >
+                          Xero
+                        </button>
+                        {!isUsCopy(boardMarket) ? (
+                          <button
+                            type="button"
+                            id="owner-header-sage"
+                            onClick={() => setShowSageDialog(true)}
+                            className="hidden h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200 sm:inline-flex"
+                            title="Connect Sage Accounting"
+                          >
+                            Sage
+                          </button>
+                        ) : null}
+                      </>
+                    )}
+                    <FeatureFinder audience="owner" clientId={effectiveClientId} chrome="owner" />
+                    <ThemeToggle />
+                    <HeaderShareButton />
 
-                  <div className="hidden items-center gap-1 sm:flex">
-                    {userRole !== "client_member" ? (
+                    <div className="hidden items-center gap-1 sm:flex">
+                      {userRole !== "client_member" ? (
+                        <button
+                          onClick={() => openProfileDialog("retake")}
+                          className="inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
+                          title={
+                            operatingProfile
+                              ? `${profileShortLabel(operatingProfile)} — update your business profile`
+                              : "Set up your business profile"
+                          }
+                        >
+                          <Building2 className="h-3 w-3 shrink-0" />
+                          <span className="truncate">Business profile</span>
+                          <Pencil className="h-2.5 w-2.5 shrink-0 opacity-40" />
+                        </button>
+                      ) : operatingProfile || businessType ? (
+                        <div
+                          className="inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
+                          title={profileShortLabel(operatingProfile) || businessType?.label}
+                        >
+                          <Building2 className="h-3 w-3 shrink-0" />
+                          <span className="truncate">Business profile</span>
+                        </div>
+                      ) : null}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
+                            title={`Risk profile — currently ${RISK_TUNING[risk].label}`}
+                          >
+                            <Shield className="h-3 w-3 shrink-0" />
+                            <span>Risk profile</span>
+                            <span className="hidden font-medium text-slate-500 dark:text-slate-400 lg:inline">
+                              · {RISK_TUNING[risk].label}
+                            </span>
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-44 border border-slate-700 bg-slate-900 p-2 shadow-xl"
+                          align="end"
+                        >
+                          <p className="mb-2 px-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                            Risk Profile
+                          </p>
+                          <div className="flex flex-col gap-1">
+                            {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map(
+                              (r) => (
+                                <button
+                                  key={r}
+                                  onClick={() => setRisk(r)}
+                                  className={`rounded px-2 py-1.5 text-left text-[11px] font-medium capitalize transition-colors ${
+                                    risk === r
+                                      ? "border border-[#b7872a]/40 bg-[#b7872a]/15 text-[#d4a550]"
+                                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                  }`}
+                                >
+                                  {RISK_TUNING[r].label}
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                      {userRole === "firm_admin" && (
+                        <button
+                          onClick={() => setAdminOpen(true)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] transition-colors hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+                          title="Admin Dashboard"
+                        >
+                          ⬡ Admin
+                        </button>
+                      )}
+                      <SettingsMenu
+                        className="milon-settings-btn"
+                        onSettings={() => {
+                          openOwnerSettings();
+                          void navigate({ to: "/settings" });
+                        }}
+                        onPlan={() => {
+                          void navigate({ to: "/app", search: { screen: "plan" } });
+                        }}
+                      />
                       <button
-                        onClick={() => openProfileDialog("retake")}
-                        className="inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
-                        title={
-                          operatingProfile
-                            ? `${profileShortLabel(operatingProfile)} — update your business profile`
-                            : "Set up your business profile"
+                        onClick={() =>
+                          signOut().then(() => {
+                            window.location.href = "/";
+                          })
                         }
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                        title="Sign out"
                       >
-                        <Building2 className="h-3 w-3 shrink-0" />
-                        <span className="truncate">Business profile</span>
-                        <Pencil className="h-2.5 w-2.5 shrink-0 opacity-40" />
+                        Sign out
                       </button>
-                    ) : operatingProfile || businessType ? (
-                      <div
-                        className="inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
-                        title={profileShortLabel(operatingProfile) || businessType?.label}
-                      >
-                        <Building2 className="h-3 w-3 shrink-0" />
-                        <span className="truncate">Business profile</span>
-                      </div>
-                    ) : null}
+                    </div>
+
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
-                          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
-                          title={`Risk profile — currently ${RISK_TUNING[risk].label}`}
+                          className="founder-app-bar__more inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300 sm:hidden"
+                          title="More"
+                          aria-label="More actions"
                         >
-                          <Shield className="h-3 w-3 shrink-0" />
-                          <span>Risk profile</span>
-                          <span className="hidden font-medium text-slate-500 dark:text-slate-400 lg:inline">
-                            · {RISK_TUNING[risk].label}
-                          </span>
-                          <ChevronDown className="h-3 w-3 opacity-50" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </button>
                       </PopoverTrigger>
                       <PopoverContent
-                        className="w-44 border border-slate-700 bg-slate-900 p-2 shadow-xl"
+                        className="z-50 w-56 border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
                         align="end"
+                        side="bottom"
+                        collisionPadding={12}
                       >
-                        <p className="mb-2 px-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                          Risk Profile
-                        </p>
                         <div className="flex flex-col gap-1">
+                          {userRole !== "client_member" && (
+                            <button
+                              onClick={() => openProfileDialog("retake")}
+                              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                              <Building2 className="h-3.5 w-3.5" /> Business profile
+                            </button>
+                          )}
+                          {userRole !== "client_member" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setShowQboDialog(true)}
+                                className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                <Plug2 className="h-3.5 w-3.5" /> Connect QuickBooks
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowXeroDialog(true)}
+                                className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                <Plug2 className="h-3.5 w-3.5" /> Connect Xero
+                              </button>
+                              {!isUsCopy(boardMarket) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowSageDialog(true)}
+                                  className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                  <Plug2 className="h-3.5 w-3.5" /> Connect Sage
+                                </button>
+                              ) : null}
+                            </>
+                          )}
+                          <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Risk profile · {RISK_TUNING[risk].label}
+                          </div>
                           {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map(
                             (r) => (
                               <button
                                 key={r}
                                 onClick={() => setRisk(r)}
-                                className={`rounded px-2 py-1.5 text-left text-[11px] font-medium capitalize transition-colors ${
+                                className={`rounded-md px-2 py-1.5 text-left text-xs capitalize ${
                                   risk === r
-                                    ? "border border-[#b7872a]/40 bg-[#b7872a]/15 text-[#d4a550]"
-                                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                    ? "bg-[#b7872a]/15 font-semibold text-[#8a6508] dark:text-[#d4a550]"
+                                    : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                                 }`}
                               >
                                 {RISK_TUNING[r].label}
                               </button>
                             ),
                           )}
+                          {userRole === "firm_admin" && (
+                            <button
+                              onClick={() => setAdminOpen(true)}
+                              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                            >
+                              Admin
+                            </button>
+                          )}
+                          <SettingsNavButton
+                            className="milon-settings-btn w-full justify-start"
+                            onClick={() => {
+                              openOwnerSettings();
+                              navigate({ to: "/settings" });
+                            }}
+                          />
+                          <button
+                            onClick={() =>
+                              signOut().then(() => {
+                                window.location.href = "/";
+                              })
+                            }
+                            className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            <LogOut className="h-3.5 w-3.5" /> Sign out
+                          </button>
                         </div>
                       </PopoverContent>
                     </Popover>
-                    {userRole === "firm_admin" && (
-                      <button
-                        onClick={() => setAdminOpen(true)}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] transition-colors hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
-                        title="Admin Dashboard"
-                      >
-                        ⬡ Admin
-                      </button>
-                    )}
-                    <SettingsMenu
-                      className="milon-settings-btn"
-                      onSettings={() => {
-                        openOwnerSettings();
-                        void navigate({ to: "/settings" });
-                      }}
-                      onPlan={() => {
-                        void navigate({ to: "/app", search: { screen: "plan" } });
-                      }}
-                    />
-                    <button
-                      onClick={() =>
-                        signOut().then(() => {
-                          window.location.href = "/";
-                        })
-                      }
-                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                      title="Sign out"
-                    >
-                      Sign out
-                    </button>
                   </div>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        className="founder-app-bar__more inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300 sm:hidden"
-                        title="More"
-                        aria-label="More actions"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      className="z-50 w-56 border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
-                      align="end"
-                      side="bottom"
-                      collisionPadding={12}
-                    >
-                      <div className="flex flex-col gap-1">
-                        {userRole !== "client_member" && (
-                          <button
-                            onClick={() => openProfileDialog("retake")}
-                            className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                          >
-                            <Building2 className="h-3.5 w-3.5" /> Business profile
-                          </button>
-                        )}
-                        {userRole !== "client_member" && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setShowQboDialog(true)}
-                              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                            >
-                              <Plug2 className="h-3.5 w-3.5" /> Connect QuickBooks
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowXeroDialog(true)}
-                              className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                            >
-                              <Plug2 className="h-3.5 w-3.5" /> Connect Xero
-                            </button>
-                            {!isUsCopy(boardMarket) ? (
-                              <button
-                                type="button"
-                                onClick={() => setShowSageDialog(true)}
-                                className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                              >
-                                <Plug2 className="h-3.5 w-3.5" /> Connect Sage
-                              </button>
-                            ) : null}
-                          </>
-                        )}
-                        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          Risk profile · {RISK_TUNING[risk].label}
-                        </div>
-                        {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map((r) => (
-                          <button
-                            key={r}
-                            onClick={() => setRisk(r)}
-                            className={`rounded-md px-2 py-1.5 text-left text-xs capitalize ${
-                              risk === r
-                                ? "bg-[#b7872a]/15 font-semibold text-[#8a6508] dark:text-[#d4a550]"
-                                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                            }`}
-                          >
-                            {RISK_TUNING[r].label}
-                          </button>
-                        ))}
-                        {userRole === "firm_admin" && (
-                          <button
-                            onClick={() => setAdminOpen(true)}
-                            className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                          >
-                            Admin
-                          </button>
-                        )}
-                        <SettingsNavButton
-                          className="milon-settings-btn w-full justify-start"
-                          onClick={() => {
-                            openOwnerSettings();
-                            navigate({ to: "/settings" });
-                          }}
-                        />
-                        <button
-                          onClick={() =>
-                            signOut().then(() => {
-                              window.location.href = "/";
-                            })
-                          }
-                          className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          <LogOut className="h-3.5 w-3.5" /> Sign out
-                        </button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
                 </div>
-              </div>
-            </header>
+              </header>
             )}
 
             {/* Business profile funnel — required on first run, retakeable thereafter */}
@@ -4589,45 +4614,45 @@ function Index() {
                               setFirstRunStep(null);
                               setShowXeroDialog(true);
                             }
-                        : id === "sage"
-                          ? () => {
-                              setFirstRunStep(null);
-                              setShowSageDialog(true);
-                            }
-                        : id === "files"
-                          ? () => {
-                              setFirstRunStep(null);
-                              setShowFinData(true);
-                              setTimeout(() => uploadRef.current?.click(), 150);
-                            }
-                          : () => {
-                              setFirstRunStep(null);
-                              setShowBankDrafter(true);
-                            };
+                          : id === "sage"
+                            ? () => {
+                                setFirstRunStep(null);
+                                setShowSageDialog(true);
+                              }
+                            : id === "files"
+                              ? () => {
+                                  setFirstRunStep(null);
+                                  setShowFinData(true);
+                                  setTimeout(() => uploadRef.current?.click(), 150);
+                                }
+                              : () => {
+                                  setFirstRunStep(null);
+                                  setShowBankDrafter(true);
+                                };
                     const title =
                       id === "qbo"
                         ? "Connect QuickBooks Online"
                         : id === "xero"
                           ? "Connect Xero"
-                        : id === "sage"
-                          ? "Connect Sage"
-                        : id === "files"
-                          ? isUsCopy(boardMarket)
-                            ? "Upload Excel, ODS, CSV or PDF financials (recommended)"
-                            : "Upload a financial statement instead"
-                          : isUsCopy(boardMarket)
-                            ? "Have bank statements instead? Upload those"
-                            : "Upload bank statements (recommended)";
+                          : id === "sage"
+                            ? "Connect Sage"
+                            : id === "files"
+                              ? isUsCopy(boardMarket)
+                                ? "Upload Excel, ODS, CSV or PDF financials (recommended)"
+                                : "Upload a financial statement instead"
+                              : isUsCopy(boardMarket)
+                                ? "Have bank statements instead? Upload those"
+                                : "Upload bank statements (recommended)";
                     const sub =
                       id === "qbo"
                         ? "Live sync from QuickBooks Online"
                         : id === "xero"
                           ? "Live sync of P&L and balance sheet"
-                        : id === "sage"
-                          ? "Sage Business Cloud Accounting (South Africa)"
-                        : id === "files"
-                          ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
-                          : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
+                          : id === "sage"
+                            ? "Sage Business Cloud Accounting (South Africa)"
+                            : id === "files"
+                              ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
+                              : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
                     const icon =
                       id === "qbo" || id === "xero" || id === "sage" ? (
                         <Plug2 className="h-4 w-4" />
@@ -4656,7 +4681,7 @@ function Index() {
                                   ? "bg-sky-500/10 text-sky-400"
                                   : id === "sage"
                                     ? "bg-emerald-500/10 text-emerald-300"
-                                : "bg-slate-700 text-slate-300"
+                                    : "bg-slate-700 text-slate-300"
                           }`}
                         >
                           {icon}
@@ -4744,1071 +4769,1097 @@ function Index() {
               </div>
             ) : null}
 
-            {!showOwnerDoor && userRole === "client_owner" && !actingClientId && effectiveClientId ? (
+            {!showOwnerDoor &&
+            userRole === "client_owner" &&
+            !actingClientId &&
+            effectiveClientId ? (
               <div className="mb-3">
                 <InviteAccountantCard clientId={effectiveClientId} tone="board" />
               </div>
             ) : null}
 
             {!showOwnerDoor ? (
-            <Tabs
-              id="owner-board-tabs"
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
-            >
-              <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
-                {[
-                  { value: "today", label: "Business Health", short: "Health" },
-                  { value: "waterfall", label: "Profit", short: "Profit" },
-                  { value: "cash", label: "Cash Forecast", short: "Cash" },
-                  { value: "budget", label: "Budget", short: "Budget" },
-                  { value: "next", label: "Next moves", short: "Moves" },
-                  { value: "tasks", label: "Action Plan", short: "Plan" },
-                ].map((t) => (
-                  <TabsTrigger
-                    key={t.value}
-                    value={t.value}
-                    className="min-w-[4.5rem] flex-1 whitespace-nowrap rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 shadow-none transition-all data-[state=active]:border-[#d4a550] data-[state=active]:bg-transparent data-[state=active]:text-[#b8860b] data-[state=active]:shadow-none dark:text-slate-500 dark:data-[state=active]:text-[#d4a550] sm:min-w-0 sm:px-1 sm:text-[10px] sm:tracking-[0.18em]"
-                  >
-                    <span className="sm:hidden">{t.short}</span>
-                    <span className="hidden sm:inline">{t.label}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <Tabs
+                id="owner-board-tabs"
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="w-full"
+              >
+                <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
+                  {[
+                    { value: "today", label: "Business Health", short: "Health" },
+                    { value: "waterfall", label: "Profit", short: "Profit" },
+                    { value: "cash", label: "Cash Forecast", short: "Cash" },
+                    { value: "budget", label: "Budget", short: "Budget" },
+                    { value: "next", label: "Next moves", short: "Moves" },
+                    { value: "tasks", label: "Action Plan", short: "Plan" },
+                  ].map((t) => (
+                    <TabsTrigger
+                      key={t.value}
+                      value={t.value}
+                      className="min-w-[4.5rem] flex-1 whitespace-nowrap rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 shadow-none transition-all data-[state=active]:border-[#d4a550] data-[state=active]:bg-transparent data-[state=active]:text-[#b8860b] data-[state=active]:shadow-none dark:text-slate-500 dark:data-[state=active]:text-[#d4a550] sm:min-w-0 sm:px-1 sm:text-[10px] sm:tracking-[0.18em]"
+                    >
+                      <span className="sm:hidden">{t.short}</span>
+                      <span className="hidden sm:inline">{t.label}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
 
-              {/* View mode only changes Health, Cash, and Next moves. Budget's control is in its drawer. */}
-              {["today", "cash", "next"].includes(activeTab) && (
-                <div className="relative z-10 mb-4 mt-1 flex justify-center">
-                  <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
-                    {(["simplified", "complex"] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => {
-                          setViewMode(m);
-                          track("view_mode_toggled", {
-                            mode: m,
-                            surface: "owner_app",
-                            clientId: effectiveClientId,
-                          });
-                        }}
-                        className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
-                          viewMode === m
-                            ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
-                            : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
+                {/* View mode only changes Health, Cash, and Next moves. Budget's control is in its drawer. */}
+                {["today", "cash", "next"].includes(activeTab) && (
+                  <div className="relative z-10 mb-4 mt-1 flex justify-center">
+                    <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
+                      {(["simplified", "complex"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => {
+                            setViewMode(m);
+                            track("view_mode_toggled", {
+                              mode: m,
+                              surface: "owner_app",
+                              clientId: effectiveClientId,
+                            });
+                          }}
+                          className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
+                            viewMode === m
+                              ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
+                              : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <TabsContent value="today" className="mt-0">
-                <TabErrorBoundary label="Business Health">
-                  {needsTrialBalanceRefresh({
-                    live: v as unknown as Record<string, unknown>,
-                    snapshots: history,
-                  }) ? (
-                    <TrialBalanceRefreshPrompt onImport={() => setFirstRunStep("first-data")} />
-                  ) : null}
-                  {viewMode === "simplified" ? (
-                    <div className="pb-6">
-                      {/* Page header — aligned with rail top */}
-                      <PageHeader
-                        compact
-                        className="mb-3 !items-start dark:[&_.milon-page-header__title]:text-white [&_.milon-page-header__title]:text-slate-900 [&_.milon-page-header__subtitle]:text-slate-500 dark:[&_.milon-page-header__subtitle]:text-slate-400"
-                        title="Business Health"
-                        subtitle="Your financial pulse at a glance."
-                        meta={
-                          <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
-                            {hasRealFinancials ? (
-                              <StatusPill
-                                variant="live"
-                                pulse
-                                className="!text-[9px] !tracking-[0.16em]"
-                              >
-                                Live ·{" "}
-                                {formatDate(new Date(), boardMarket, {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                }).toUpperCase()}
-                              </StatusPill>
-                            ) : sampleMode ? (
-                              <StatusPill
-                                variant="sample"
-                                className="!text-[9px] !tracking-[0.16em]"
-                              >
-                                Sample · illustrative
-                              </StatusPill>
-                            ) : (
-                              <StatusPill
-                                variant="neutral"
-                                className="!text-[9px] !tracking-[0.16em]"
-                              >
-                                No data yet
-                              </StatusPill>
-                            )}
-                          </div>
-                        }
-                      />
+                <TabsContent value="today" className="mt-0">
+                  <TabErrorBoundary label="Business Health">
+                    {needsTrialBalanceRefresh({
+                      live: v as unknown as Record<string, unknown>,
+                      snapshots: history,
+                    }) ? (
+                      <TrialBalanceRefreshPrompt onImport={() => setFirstRunStep("first-data")} />
+                    ) : null}
+                    {viewMode === "simplified" ? (
+                      <div className="pb-6">
+                        {/* Page header — aligned with rail top */}
+                        <PageHeader
+                          compact
+                          className="mb-3 !items-start dark:[&_.milon-page-header__title]:text-white [&_.milon-page-header__title]:text-slate-900 [&_.milon-page-header__subtitle]:text-slate-500 dark:[&_.milon-page-header__subtitle]:text-slate-400"
+                          title="Business Health"
+                          subtitle="Your financial pulse at a glance."
+                          meta={
+                            <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+                              {hasRealFinancials ? (
+                                <StatusPill
+                                  variant="live"
+                                  pulse
+                                  className="!text-[9px] !tracking-[0.16em]"
+                                >
+                                  Live ·{" "}
+                                  {formatDate(new Date(), boardMarket, {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  }).toUpperCase()}
+                                </StatusPill>
+                              ) : sampleMode ? (
+                                <StatusPill
+                                  variant="sample"
+                                  className="!text-[9px] !tracking-[0.16em]"
+                                >
+                                  Sample · illustrative
+                                </StatusPill>
+                              ) : (
+                                <StatusPill
+                                  variant="neutral"
+                                  className="!text-[9px] !tracking-[0.16em]"
+                                >
+                                  No data yet
+                                </StatusPill>
+                              )}
+                            </div>
+                          }
+                        />
 
-                      {/* No-data empty state — shown until owner uploads or enters real financials */}
-                      {!showScoredBoard && !actingClientId ? (
-                        <div>
-                          <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
-                            <div className="flex w-full flex-col gap-3">
-                              {profileNeedsCompletion(operatingProfile) &&
-                                userRole !== "client_member" && (
-                                  <ProfileCompletionNote
-                                    onFinish={() => openProfileDialog("complete")}
-                                  />
-                                )}
-                              <OwnerBrainDrip
-                                clientId={effectiveClientId}
-                                operatingProfile={operatingProfile}
-                                productMix={productMix}
-                                weeklyInputs={weeklyInputs}
-                                snapshotCount={history.length}
-                                hasLiveFigures={hasRealFinancials}
-                                onAddPastPeriod={
-                                  firstRunStep === null ? () => setPastPeriodOpen(true) : undefined
-                                }
-                                onSaveProfile={saveDripProfile}
-                                onSaveProductMix={saveProductMix}
-                                onSaveWeekly={saveDripWeekly}
-                                enabled={firstRunStep === null}
-                              />
-                              <EmptyState
-                                id="wizard-empty-score"
-                                dashed
-                                className="w-full !gap-5 !px-4 !py-10 dark:[&_.milon-empty-state__title]:text-slate-100 [&_.milon-empty-state__title]:text-slate-800 [&_.milon-empty-state__desc]:text-slate-500"
-                                icon={
-                                  <div className="relative flex h-36 w-36 items-center justify-center">
-                                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
-                                    <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
-                                    <div className="flex flex-col items-center gap-1">
-                                      <span className="text-3xl font-bold text-slate-400">—</span>
-                                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                        No score yet
-                                      </span>
+                        {/* No-data empty state — shown until owner uploads or enters real financials */}
+                        {!showScoredBoard && !actingClientId ? (
+                          <div>
+                            <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                              <div className="flex w-full flex-col gap-3">
+                                {profileNeedsCompletion(operatingProfile) &&
+                                  userRole !== "client_member" && (
+                                    <ProfileCompletionNote
+                                      onFinish={() => openProfileDialog("complete")}
+                                    />
+                                  )}
+                                <OwnerBrainDrip
+                                  clientId={effectiveClientId}
+                                  operatingProfile={operatingProfile}
+                                  productMix={productMix}
+                                  weeklyInputs={weeklyInputs}
+                                  snapshotCount={history.length}
+                                  hasLiveFigures={hasRealFinancials}
+                                  onAddPastPeriod={
+                                    firstRunStep === null
+                                      ? () => setPastPeriodOpen(true)
+                                      : undefined
+                                  }
+                                  onSaveProfile={saveDripProfile}
+                                  onSaveProductMix={saveProductMix}
+                                  onSaveWeekly={saveDripWeekly}
+                                  enabled={firstRunStep === null}
+                                />
+                                <EmptyState
+                                  id="wizard-empty-score"
+                                  dashed
+                                  className="w-full !gap-5 !px-4 !py-10 dark:[&_.milon-empty-state__title]:text-slate-100 [&_.milon-empty-state__title]:text-slate-800 [&_.milon-empty-state__desc]:text-slate-500"
+                                  icon={
+                                    <div className="relative flex h-36 w-36 items-center justify-center">
+                                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                                      <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span className="text-3xl font-bold text-slate-400">—</span>
+                                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                          No score yet
+                                        </span>
+                                      </div>
                                     </div>
-                                  </div>
-                                }
-                                title={
-                                  <>
-                                    {userRole !== "client_member" && operatingProfile && (
-                                      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
-                                        Step 2 of 2 · Bring in your numbers
-                                      </span>
-                                    )}
-                                    {userRole !== "client_member"
-                                      ? "One upload and your board comes alive"
-                                      : "Add your financials to see your score"}
-                                  </>
-                                }
-                                description={
-                                  isUsCopy(boardMarket)
-                                    ? "Upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF — and MILŌN scores your business and ranks your first move. No invented numbers until then."
-                                    : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."
-                                }
-                                action={
-                                  userRole !== "client_member" ? (
-                                    <div className="flex w-full max-w-sm flex-col gap-2.5">
-                                      <button
-                                        id="wizard-first-figures"
-                                        onClick={() => {
-                                          if (isUsCopy(boardMarket)) {
-                                            setShowFinData(true);
-                                            setTimeout(() => uploadRef.current?.click(), 150);
-                                          } else {
-                                            setShowBankDrafter(true);
-                                          }
-                                        }}
-                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
-                                      >
-                                        <Upload className="h-4 w-4" />
-                                        {isUsCopy(boardMarket)
-                                          ? "Upload Excel, ODS, CSV or PDF financials"
-                                          : "Upload bank statements"}
-                                      </button>
-                                      <div className="flex w-full flex-col gap-2.5 sm:flex-row">
-                                        {isUsCopy(boardMarket) ? (
+                                  }
+                                  title={
+                                    <>
+                                      {userRole !== "client_member" && operatingProfile && (
+                                        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
+                                          Step 2 of 2 · Bring in your numbers
+                                        </span>
+                                      )}
+                                      {userRole !== "client_member"
+                                        ? "One upload and your board comes alive"
+                                        : "Add your financials to see your score"}
+                                    </>
+                                  }
+                                  description={
+                                    isUsCopy(boardMarket)
+                                      ? "Upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF — and MILŌN scores your business and ranks your first move. No invented numbers until then."
+                                      : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."
+                                  }
+                                  action={
+                                    userRole !== "client_member" ? (
+                                      <div className="flex w-full max-w-sm flex-col gap-2.5">
+                                        <button
+                                          id="wizard-first-figures"
+                                          onClick={() => {
+                                            if (isUsCopy(boardMarket)) {
+                                              setShowFinData(true);
+                                              setTimeout(() => uploadRef.current?.click(), 150);
+                                            } else {
+                                              setShowBankDrafter(true);
+                                            }
+                                          }}
+                                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          {isUsCopy(boardMarket)
+                                            ? "Upload Excel, ODS, CSV or PDF financials"
+                                            : "Upload bank statements"}
+                                        </button>
+                                        <div className="flex w-full flex-col gap-2.5 sm:flex-row">
+                                          {isUsCopy(boardMarket) ? (
+                                            <button
+                                              onClick={() => setShowQboDialog(true)}
+                                              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                            >
+                                              <Plug2 className="h-4 w-4" />
+                                              Connect QuickBooks
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={() => {
+                                                setShowFinData(true);
+                                                setTimeout(() => uploadRef.current?.click(), 150);
+                                              }}
+                                              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                            >
+                                              <Upload className="h-4 w-4" />
+                                              Upload a financial statement
+                                            </button>
+                                          )}
                                           <button
-                                            onClick={() => setShowQboDialog(true)}
+                                            onClick={() => setShowXeroDialog(true)}
                                             className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                                           >
                                             <Plug2 className="h-4 w-4" />
-                                            Connect QuickBooks
+                                            Connect Xero
                                           </button>
-                                        ) : (
+                                          {!isUsCopy(boardMarket) ? (
+                                            <button
+                                              type="button"
+                                              id="owner-empty-sage"
+                                              onClick={() => setShowSageDialog(true)}
+                                              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                            >
+                                              <Plug2 className="h-4 w-4" />
+                                              Connect Sage
+                                            </button>
+                                          ) : null}
                                           <button
                                             onClick={() => {
                                               setShowFinData(true);
-                                              setTimeout(() => uploadRef.current?.click(), 150);
+                                              setShowInputs(true);
                                             }}
                                             className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                                           >
-                                            <Upload className="h-4 w-4" />
-                                            Upload a financial statement
+                                            <Database className="h-4 w-4" />
+                                            Enter manually
                                           </button>
-                                        )}
-                                        <button
-                                          onClick={() => setShowXeroDialog(true)}
-                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                        >
-                                          <Plug2 className="h-4 w-4" />
-                                          Connect Xero
-                                        </button>
-                                        {!isUsCopy(boardMarket) ? (
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                                          {isUsCopy(boardMarket) && (
+                                            <button
+                                              onClick={() => setShowBankDrafter(true)}
+                                              className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                            >
+                                              Have bank statements instead? Upload those
+                                            </button>
+                                          )}
                                           <button
-                                            type="button"
-                                            id="owner-empty-sage"
-                                            onClick={() => setShowSageDialog(true)}
-                                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                          >
-                                            <Plug2 className="h-4 w-4" />
-                                            Connect Sage
-                                          </button>
-                                        ) : null}
-                                        <button
-                                          onClick={() => {
-                                            setShowFinData(true);
-                                            setShowInputs(true);
-                                          }}
-                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                        >
-                                          <Database className="h-4 w-4" />
-                                          Enter manually
-                                        </button>
-                                      </div>
-                                      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                                        {isUsCopy(boardMarket) && (
-                                          <button
-                                            onClick={() => setShowBankDrafter(true)}
+                                            onClick={() => setFirstRunStep("first-data")}
                                             className="underline hover:text-slate-700 dark:hover:text-slate-300"
                                           >
-                                            Have bank statements instead? Upload those
+                                            See all ways to add figures
                                           </button>
-                                        )}
+                                        </div>
                                         <button
-                                          onClick={() => setFirstRunStep("first-data")}
-                                          className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                          id="wizard-sample-board"
+                                          onClick={enterSampleMode}
+                                          className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-sky-500/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300"
                                         >
-                                          See all ways to add figures
+                                          <FlaskConical className="h-3.5 w-3.5" />
+                                          Not ready? See the board with a sample business
                                         </button>
                                       </div>
-                                      <button
-                                        id="wizard-sample-board"
-                                        onClick={enterSampleMode}
-                                        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-sky-500/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300"
-                                      >
-                                        <FlaskConical className="h-3.5 w-3.5" />
-                                        Not ready? See the board with a sample business
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <p className="max-w-sm text-center text-sm text-slate-500">
-                                      Financial data hasn't been added yet. The owner will set this
-                                      up.
-                                    </p>
-                                  )
-                                }
-                              />
-                              {/* Same Milōn Bot mount as the scored board — before figures it
-                                  carries a small "more relevant once your figures are in" note. */}
-                              <div
-                                id="ask-ai-overview"
-                                className="min-h-[44px] w-full rounded-xl border border-[#b7872a]/25 bg-white dark:bg-[#0a1020]/80"
-                              />
-                            </div>
-                            <OverviewRail
-                              healthBand={null}
-                              weekChanges={[]}
-                              cashTrajectory={null}
-                              onOpenCash={() => setActiveTab("cash")}
-                              onOpenMoves={() => setActiveTab("next")}
-                              onOpenBenchmarks={() => {
-                                setActiveTab("today");
-                                setViewMode("complex");
-                              }}
-                              industryPulse={<IndustryPulse industry={industryLabel} vertical />}
-                            />
-                          </div>
-                          <IndustryNewsBand industry={industryLabel} />
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
-                            {/* Main column */}
-                            <section className="flex min-w-0 flex-col gap-3">
-                              {profileNeedsCompletion(operatingProfile) &&
-                                userRole !== "client_member" &&
-                                !actingClientId && (
-                                  <ProfileCompletionNote
-                                    onFinish={() => openProfileDialog("complete")}
-                                  />
-                                )}
-                              <OwnerBrainDrip
-                                clientId={effectiveClientId}
-                                operatingProfile={operatingProfile}
-                                productMix={productMix}
-                                weeklyInputs={weeklyInputs}
-                                snapshotCount={history.length}
-                                hasLiveFigures={hasRealFinancials}
-                                onAddPastPeriod={
-                                  firstRunStep === null ? () => setPastPeriodOpen(true) : undefined
-                                }
-                                onSaveProfile={saveDripProfile}
-                                onSaveProductMix={saveProductMix}
-                                onSaveWeekly={saveDripWeekly}
-                                enabled={firstRunStep === null}
-                              />
-                              {needsPastPeriodPrompt({
-                                hasLiveFigures: hasRealFinancials,
-                                firstRunBusy: firstRunStep !== null,
-                                snapshots: history,
-                              }) && userRole !== "client_member" ? (
-                                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                                  Trend lines and comparison figures need another period.{" "}
-                                  <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
-                                </p>
-                              ) : null}
-                              <CollectionsOverdueNote clientId={effectiveClientId} market={boardMarket} />
-                              <PayablesOverdueNote clientId={effectiveClientId} market={boardMarket} />
-                              <div className="relative rounded-xl border border-[#DBEAFE] bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
-                                <OwnerSignoffMark
-                                  signoff={financialsSignoff}
-                                  isStale={computeIsStale(
-                                    financialsSignoff,
-                                    clientMeta?.financials_updated_at ?? null,
-                                  )}
-                                  className="mb-2"
-                                />
-                                <SphereHero
-                                  compact
-                                  overallHealth={avgHealth}
-                                  displayStatus={overallHealth.displayStatus}
-                                  pillars={spherePillars}
-                                  caption={overviewCaption}
-                                  topPriority={
-                                    nextSteps[0]
-                                      ? {
-                                          title: nextSteps[0].title,
-                                          description:
-                                            nextSteps[0].key === "debtorDays"
-                                              ? "Cash conversion is your biggest constraint."
-                                              : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
-                                          actions: nextSteps[0].actions,
-                                          impactLabel: nextMoveImpactLabel,
-                                        }
-                                      : {
-                                          title: "Upload your financial data",
-                                          description:
-                                            "Add your figures to get a personalised score and first move.",
-                                        }
+                                    ) : (
+                                      <p className="max-w-sm text-center text-sm text-slate-500">
+                                        Financial data hasn't been added yet. The owner will set
+                                        this up.
+                                      </p>
+                                    )
                                   }
-                                  onTopPriority={() => setActiveTab("next")}
-                                  onDriverClick={(key) => {
-                                    if (key in RATIO_META) setOpenRatio(key as RatioKey);
-                                  }}
+                                />
+                                {/* Same Milōn Bot mount as the scored board — before figures it
+                                  carries a small "more relevant once your figures are in" note. */}
+                                <div
+                                  id="ask-ai-overview"
+                                  className="min-h-[44px] w-full rounded-xl border border-[#b7872a]/25 bg-white dark:bg-[#0a1020]/80"
                                 />
                               </div>
-
-                              <div
-                                id="ask-ai-overview"
-                                className="min-h-[88px] w-full rounded-xl border border-[#b7872a]/35 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-[#0a1020]/80"
+                              <OverviewRail
+                                healthBand={null}
+                                weekChanges={[]}
+                                cashTrajectory={null}
+                                onOpenCash={() => setActiveTab("cash")}
+                                onOpenMoves={() => setActiveTab("next")}
+                                onOpenBenchmarks={() => {
+                                  setActiveTab("today");
+                                  setViewMode("complex");
+                                }}
+                                industryPulse={<IndustryPulse industry={industryLabel} vertical />}
                               />
-                            </section>
-
-                            {/* Insight rail — pulse metrics + compact cards only */}
-                            <OverviewRail
-                              healthBand={healthBand}
-                              positionPercentile={positionPercentile}
-                              weekChanges={weekChanges}
-                              cashTrajectory={cashTrajectory}
-                              onOpenCash={() => setActiveTab("cash")}
-                              onOpenMoves={() => setActiveTab("next")}
-                              onOpenBenchmarks={() => {
-                                setActiveTab("today");
-                                setViewMode("complex");
-                              }}
-                              industryPulse={<IndustryPulse industry={industryLabel} vertical />}
-                            />
+                            </div>
+                            <IndustryNewsBand industry={industryLabel} />
                           </div>
-                          <IndustryNewsBand industry={industryLabel} />
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="mb-3 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-                        <span className="text-[13px] font-semibold text-[#102A43]">Financial ratios</span>
-                        <OwnerSignoffMark
-                          signoff={financialsSignoff}
-                          isStale={computeIsStale(
-                            financialsSignoff,
-                            clientMeta?.financials_updated_at ?? null,
-                          )}
-                        />
+                        ) : (
+                          <div>
+                            <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                              {/* Main column */}
+                              <section className="flex min-w-0 flex-col gap-3">
+                                {profileNeedsCompletion(operatingProfile) &&
+                                  userRole !== "client_member" &&
+                                  !actingClientId && (
+                                    <ProfileCompletionNote
+                                      onFinish={() => openProfileDialog("complete")}
+                                    />
+                                  )}
+                                <OwnerBrainDrip
+                                  clientId={effectiveClientId}
+                                  operatingProfile={operatingProfile}
+                                  productMix={productMix}
+                                  weeklyInputs={weeklyInputs}
+                                  snapshotCount={history.length}
+                                  hasLiveFigures={hasRealFinancials}
+                                  onAddPastPeriod={
+                                    firstRunStep === null
+                                      ? () => setPastPeriodOpen(true)
+                                      : undefined
+                                  }
+                                  onSaveProfile={saveDripProfile}
+                                  onSaveProductMix={saveProductMix}
+                                  onSaveWeekly={saveDripWeekly}
+                                  enabled={firstRunStep === null}
+                                />
+                                {needsPastPeriodPrompt({
+                                  hasLiveFigures: hasRealFinancials,
+                                  firstRunBusy: firstRunStep !== null,
+                                  snapshots: history,
+                                }) && userRole !== "client_member" ? (
+                                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                                    Trend lines and comparison figures need another period.{" "}
+                                    <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+                                  </p>
+                                ) : null}
+                                <CollectionsOverdueNote
+                                  clientId={effectiveClientId}
+                                  market={boardMarket}
+                                />
+                                <PayablesOverdueNote
+                                  clientId={effectiveClientId}
+                                  market={boardMarket}
+                                />
+                                <div className="relative rounded-xl border border-[#DBEAFE] bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
+                                  <OwnerSignoffMark
+                                    signoff={financialsSignoff}
+                                    isStale={computeIsStale(
+                                      financialsSignoff,
+                                      clientMeta?.financials_updated_at ?? null,
+                                    )}
+                                    className="mb-2"
+                                  />
+                                  <SphereHero
+                                    compact
+                                    overallHealth={avgHealth}
+                                    displayStatus={overallHealth.displayStatus}
+                                    pillars={spherePillars}
+                                    caption={overviewCaption}
+                                    topPriority={
+                                      nextSteps[0]
+                                        ? {
+                                            title: nextSteps[0].title,
+                                            description:
+                                              nextSteps[0].key === "debtorDays"
+                                                ? "Cash conversion is your biggest constraint."
+                                                : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
+                                            actions: nextSteps[0].actions,
+                                            impactLabel: nextMoveImpactLabel,
+                                          }
+                                        : {
+                                            title: "Upload your financial data",
+                                            description:
+                                              "Add your figures to get a personalised score and first move.",
+                                          }
+                                    }
+                                    onTopPriority={() => setActiveTab("next")}
+                                    onDriverClick={(key) => {
+                                      if (key in RATIO_META) setOpenRatio(key as RatioKey);
+                                    }}
+                                  />
+                                </div>
+
+                                <div
+                                  id="ask-ai-overview"
+                                  className="min-h-[88px] w-full rounded-xl border border-[#b7872a]/35 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-[#0a1020]/80"
+                                />
+                              </section>
+
+                              {/* Insight rail — pulse metrics + compact cards only */}
+                              <OverviewRail
+                                healthBand={healthBand}
+                                positionPercentile={positionPercentile}
+                                weekChanges={weekChanges}
+                                cashTrajectory={cashTrajectory}
+                                onOpenCash={() => setActiveTab("cash")}
+                                onOpenMoves={() => setActiveTab("next")}
+                                onOpenBenchmarks={() => {
+                                  setActiveTab("today");
+                                  setViewMode("complex");
+                                }}
+                                industryPulse={<IndustryPulse industry={industryLabel} vertical />}
+                              />
+                            </div>
+                            <IndustryNewsBand industry={industryLabel} />
+                          </div>
+                        )}
                       </div>
-                      {isUsCopy(boardMarket) && (
-                        <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
-                          {industryBenchmarkCaption(boardMarket)}
-                        </p>
-                      )}
-                      {needsPastPeriodPrompt({
-                        hasLiveFigures: hasRealFinancials,
-                        firstRunBusy: firstRunStep !== null,
-                        snapshots: history,
-                      }) && userRole !== "client_member" ? (
-                        <p className="mb-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
-                          The small trend on each row fills in once you add a past period — a prior
-                          year or quarter. Until then you still see the graph slot; we do not invent
-                          the history. <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
-                        </p>
-                      ) : null}
-                      {!showScoredBoard && !actingClientId && (
-                        <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
-                          <span className="text-amber-400">⚠</span>
-                          <span>
-                            <span className="font-semibold">No financial data yet</span> — ratios
-                            below show zero or undefined until figures are added.{" "}
-                            {userRole !== "client_member" ? (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setShowFinData(true);
-                                    setTimeout(() => uploadRef.current?.click(), 150);
-                                  }}
-                                  className="underline hover:text-amber-200"
-                                >
-                                  Upload your statement
-                                </button>{" "}
-                                or{" "}
-                                <button
-                                  onClick={() => {
-                                    setShowFinData(true);
-                                    setShowInputs(true);
-                                  }}
-                                  className="underline hover:text-amber-200"
-                                >
-                                  enter figures manually
-                                </button>{" "}
-                                to see your real score.
-                              </>
-                            ) : (
-                              "The owner will add financial data."
-                            )}
+                    ) : (
+                      <div>
+                        <div className="mb-3 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                          <span className="text-[13px] font-semibold text-[#102A43]">
+                            Financial ratios
                           </span>
+                          <OwnerSignoffMark
+                            signoff={financialsSignoff}
+                            isStale={computeIsStale(
+                              financialsSignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            )}
+                          />
                         </div>
-                      )}
-                      <div className="space-y-3">
-                        {/* Break-even callout */}
-                        {isFinite(breakevenRevenue) && breakevenRevenue > 0 && (
-                          <div className="rounded-md border border-amber-800/40 bg-amber-950/20 px-4 py-2 text-xs text-amber-200 flex items-center gap-2">
-                            <span className="text-amber-400">⚡</span>
-                            Estimated break-even revenue:{" "}
-                            <span className="font-mono font-semibold ml-1">
-                              {currencySymbol(boardMarket)}
-                              {breakevenRevenue.toFixed(0)}
+                        {isUsCopy(boardMarket) && (
+                          <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                            {industryBenchmarkCaption(boardMarket)}
+                          </p>
+                        )}
+                        {needsPastPeriodPrompt({
+                          hasLiveFigures: hasRealFinancials,
+                          firstRunBusy: firstRunStep !== null,
+                          snapshots: history,
+                        }) && userRole !== "client_member" ? (
+                          <p className="mb-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
+                            The small trend on each row fills in once you add a past period — a
+                            prior year or quarter. Until then you still see the graph slot; we do
+                            not invent the history.{" "}
+                            <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+                          </p>
+                        ) : null}
+                        {!showScoredBoard && !actingClientId && (
+                          <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
+                            <span className="text-amber-400">⚠</span>
+                            <span>
+                              <span className="font-semibold">No financial data yet</span> — ratios
+                              below show zero or undefined until figures are added.{" "}
+                              {userRole !== "client_member" ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setShowFinData(true);
+                                      setTimeout(() => uploadRef.current?.click(), 150);
+                                    }}
+                                    className="underline hover:text-amber-200"
+                                  >
+                                    Upload your statement
+                                  </button>{" "}
+                                  or{" "}
+                                  <button
+                                    onClick={() => {
+                                      setShowFinData(true);
+                                      setShowInputs(true);
+                                    }}
+                                    className="underline hover:text-amber-200"
+                                  >
+                                    enter figures manually
+                                  </button>{" "}
+                                  to see your real score.
+                                </>
+                              ) : (
+                                "The owner will add financial data."
+                              )}
                             </span>
                           </div>
                         )}
-
-                        {/* PPE movement callout — only shown when PPE inputs are provided */}
-                        {isFinite(netPpe) && (
-                          <div className="rounded-md border border-slate-700/60 bg-slate-800/30 px-4 py-3 text-xs text-slate-300">
-                            <div className="mb-1.5 font-semibold text-slate-200 uppercase tracking-wide text-[10px]">
-                              PPE Movement
+                        <div className="space-y-3">
+                          {/* Break-even callout */}
+                          {isFinite(breakevenRevenue) && breakevenRevenue > 0 && (
+                            <div className="rounded-md border border-amber-800/40 bg-amber-950/20 px-4 py-2 text-xs text-amber-200 flex items-center gap-2">
+                              <span className="text-amber-400">⚡</span>
+                              Estimated break-even revenue:{" "}
+                              <span className="font-mono font-semibold ml-1">
+                                {currencySymbol(boardMarket)}
+                                {breakevenRevenue.toFixed(0)}
+                              </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
-                              <div>
-                                <span className="text-slate-500">Net PPE (current)</span>
-                                <div className="font-mono text-slate-200">
-                                  {currencySymbol(boardMarket)}
-                                  {netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                </div>
+                          )}
+
+                          {/* PPE movement callout — only shown when PPE inputs are provided */}
+                          {isFinite(netPpe) && (
+                            <div className="rounded-md border border-slate-700/60 bg-slate-800/30 px-4 py-3 text-xs text-slate-300">
+                              <div className="mb-1.5 font-semibold text-slate-200 uppercase tracking-wide text-[10px]">
+                                PPE Movement
                               </div>
-                              {isFinite(priorNetPpe) && (
+                              <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
                                 <div>
-                                  <span className="text-slate-500">Net PPE (prior)</span>
+                                  <span className="text-slate-500">Net PPE (current)</span>
                                   <div className="font-mono text-slate-200">
                                     {currencySymbol(boardMarket)}
-                                    {priorNetPpe.toLocaleString(undefined, {
-                                      maximumFractionDigits: 0,
-                                    })}
+                                    {netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                   </div>
                                 </div>
-                              )}
-                              {isFinite(ppeMovement) && (
-                                <div>
-                                  <span className="text-slate-500">PPE Movement</span>
-                                  <div
-                                    className={`font-mono font-semibold ${ppeMovement >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                                  >
-                                    {ppeMovement >= 0 ? "+" : ""}
-                                    {currencySymbol(boardMarket)}
-                                    {ppeMovement.toLocaleString(undefined, {
-                                      maximumFractionDigits: 0,
-                                    })}
+                                {isFinite(priorNetPpe) && (
+                                  <div>
+                                    <span className="text-slate-500">Net PPE (prior)</span>
+                                    <div className="font-mono text-slate-200">
+                                      {currencySymbol(boardMarket)}
+                                      {priorNetPpe.toLocaleString(undefined, {
+                                        maximumFractionDigits: 0,
+                                      })}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                              {isFinite(impliedCapex) && (
-                                <div>
-                                  <span className="text-slate-500">Implied CAPEX</span>
-                                  <div className="font-mono text-slate-200">
-                                    {currencySymbol(boardMarket)}
-                                    {impliedCapex.toLocaleString(undefined, {
-                                      maximumFractionDigits: 0,
-                                    })}
+                                )}
+                                {isFinite(ppeMovement) && (
+                                  <div>
+                                    <span className="text-slate-500">PPE Movement</span>
+                                    <div
+                                      className={`font-mono font-semibold ${ppeMovement >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                                    >
+                                      {ppeMovement >= 0 ? "+" : ""}
+                                      {currencySymbol(boardMarket)}
+                                      {ppeMovement.toLocaleString(undefined, {
+                                        maximumFractionDigits: 0,
+                                      })}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                                {isFinite(impliedCapex) && (
+                                  <div>
+                                    <span className="text-slate-500">Implied CAPEX</span>
+                                    <div className="font-mono text-slate-200">
+                                      {currencySymbol(boardMarket)}
+                                      {impliedCapex.toLocaleString(undefined, {
+                                        maximumFractionDigits: 0,
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Ratio section tables */}
-                        {(
-                          [
-                            {
-                              id: "profit",
-                              title: "Profit Drivers",
-                              desc: "How your business converts sales into profit",
-                              rows: [
-                                { sub: "Revenue" },
-                                { key: "revenueGrowth", indent: true },
-                                { key: "salesPerEmployee", indent: true },
-                                { sub: "Margins" },
-                                { key: "grossMargin", indent: true },
-                                { key: "directCostsRatio", indent: true },
-                                { key: "operatingMargin", indent: true },
-                                { key: "netMargin", indent: true },
-                                { sub: "Operating Expenses (OpEx)" },
-                                { key: "fixedCostRatio", indent: true },
-                                { key: "dol", indent: true },
-                                { sub: "Below-the-Line" },
-                                { key: "interestBurden", indent: true },
-                                { key: "taxBurden", indent: true },
-                              ],
-                            },
-                            {
-                              id: "asset",
-                              title: "Asset Productivity",
-                              desc: "How efficiently assets generate revenue and return",
-                              rows: [
-                                { sub: "Returns" },
-                                { key: "assetTurnover", indent: true },
-                                { key: "roa", indent: true },
-                                { sub: "Working Capital Utilisation" },
-                                { key: "workingCapitalUtilization", indent: true },
-                                { key: "workingCapitalDays", indent: true },
-                                { sub: "Fixed Capital Utilisation" },
-                                { key: "fixedCapitalUtilization", indent: true },
-                                { key: "inventoryDays", indent: true },
-                                { sub: "Capex" },
-                                { key: "capexIntensity", indent: true },
-                                { key: "assetReinvestmentRatio", indent: true },
-                              ],
-                            },
-                            {
-                              id: "leverage",
-                              title: "Leverage & Finance",
-                              desc: "Capital structure and shareholder return",
-                              rows: [
-                                { sub: "Funding Structure" },
-                                { key: "fundingStructure", indent: true },
-                                { key: "debtToEquity", indent: true },
-                                { key: "debtToAssets", indent: true },
-                                { sub: "Shareholder Return" },
-                                { key: "equityMultiplier", indent: true },
-                                { key: "roe", indent: true },
-                              ],
-                            },
-                            {
-                              id: "cash",
-                              title: "Cash Flow",
-                              desc: "Working capital cycle and cash quality",
-                              rows: [
-                                { sub: "Working Capital Cycle" },
-                                { key: "debtorDays", indent: true },
-                                { key: "creditorDays", indent: true },
-                                { sub: "Liquidity" },
-                                { key: "currentRatio", indent: true },
-                                { key: "workingCapitalFunding", indent: true },
-                                { sub: "Cash Quality" },
-                                { key: "ocfToEbitda", indent: true },
-                              ],
-                            },
-                            {
-                              id: "people",
-                              title: "People & Systems",
-                              desc: "Team productivity, customer dependency, and founder reliance",
-                              rows: [
-                                { key: "customerConcentration" },
-                                { key: "gpToLabor" },
-                                { key: "revenuePerFounderHour" },
-                              ],
-                            },
-                          ] as Array<{
-                            id: string;
-                            title: string;
-                            desc: string;
-                            rows: Array<{ key: RatioKey; indent?: boolean } | { sub: string }>;
-                          }>
-                        ).map((section) => (
-                          <div
-                            key={section.id}
-                            className="overflow-hidden rounded-xl border border-amber-900/15 bg-white/80 shadow-[0_10px_30px_rgba(109,79,22,0.06)] dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none"
-                          >
-                            <div className="flex items-baseline gap-3 border-b border-amber-900/10 bg-amber-50/60 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60">
-                              <span className="text-sm font-semibold text-slate-950 dark:text-slate-100">
-                                {section.title}
-                              </span>
-                              <span className="hidden text-xs text-slate-600 dark:text-slate-400 sm:inline">
-                                {section.desc}
-                              </span>
-                            </div>
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-amber-900/10 bg-amber-50/25 dark:border-slate-800/80 dark:bg-slate-900/30">
-                                  <th className="w-44 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                    Metric
-                                  </th>
-                                  <th className="hidden px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500 md:table-cell">
-                                    Description
-                                  </th>
-                                  <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                    Trend
-                                  </th>
-                                  <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                    {industryBenchmarkShortLabel(boardMarket)}
-                                  </th>
-                                  <th className="w-24 px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                    Health
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {section.rows.map((row, ri) => {
-                                  if ("sub" in row) {
+                          {/* Ratio section tables */}
+                          {(
+                            [
+                              {
+                                id: "profit",
+                                title: "Profit Drivers",
+                                desc: "How your business converts sales into profit",
+                                rows: [
+                                  { sub: "Revenue" },
+                                  { key: "revenueGrowth", indent: true },
+                                  { key: "salesPerEmployee", indent: true },
+                                  { sub: "Margins" },
+                                  { key: "grossMargin", indent: true },
+                                  { key: "directCostsRatio", indent: true },
+                                  { key: "operatingMargin", indent: true },
+                                  { key: "netMargin", indent: true },
+                                  { sub: "Operating Expenses (OpEx)" },
+                                  { key: "fixedCostRatio", indent: true },
+                                  { key: "dol", indent: true },
+                                  { sub: "Below-the-Line" },
+                                  { key: "interestBurden", indent: true },
+                                  { key: "taxBurden", indent: true },
+                                ],
+                              },
+                              {
+                                id: "asset",
+                                title: "Asset Productivity",
+                                desc: "How efficiently assets generate revenue and return",
+                                rows: [
+                                  { sub: "Returns" },
+                                  { key: "assetTurnover", indent: true },
+                                  { key: "roa", indent: true },
+                                  { sub: "Working Capital Utilisation" },
+                                  { key: "workingCapitalUtilization", indent: true },
+                                  { key: "workingCapitalDays", indent: true },
+                                  { sub: "Fixed Capital Utilisation" },
+                                  { key: "fixedCapitalUtilization", indent: true },
+                                  { key: "inventoryDays", indent: true },
+                                  { sub: "Capex" },
+                                  { key: "capexIntensity", indent: true },
+                                  { key: "assetReinvestmentRatio", indent: true },
+                                ],
+                              },
+                              {
+                                id: "leverage",
+                                title: "Leverage & Finance",
+                                desc: "Capital structure and shareholder return",
+                                rows: [
+                                  { sub: "Funding Structure" },
+                                  { key: "fundingStructure", indent: true },
+                                  { key: "debtToEquity", indent: true },
+                                  { key: "debtToAssets", indent: true },
+                                  { sub: "Shareholder Return" },
+                                  { key: "equityMultiplier", indent: true },
+                                  { key: "roe", indent: true },
+                                ],
+                              },
+                              {
+                                id: "cash",
+                                title: "Cash Flow",
+                                desc: "Working capital cycle and cash quality",
+                                rows: [
+                                  { sub: "Working Capital Cycle" },
+                                  { key: "debtorDays", indent: true },
+                                  { key: "creditorDays", indent: true },
+                                  { sub: "Liquidity" },
+                                  { key: "currentRatio", indent: true },
+                                  { key: "workingCapitalFunding", indent: true },
+                                  { sub: "Cash Quality" },
+                                  { key: "ocfToEbitda", indent: true },
+                                ],
+                              },
+                              {
+                                id: "people",
+                                title: "People & Systems",
+                                desc: "Team productivity, customer dependency, and founder reliance",
+                                rows: [
+                                  { key: "customerConcentration" },
+                                  { key: "gpToLabor" },
+                                  { key: "revenuePerFounderHour" },
+                                ],
+                              },
+                            ] as Array<{
+                              id: string;
+                              title: string;
+                              desc: string;
+                              rows: Array<{ key: RatioKey; indent?: boolean } | { sub: string }>;
+                            }>
+                          ).map((section) => (
+                            <div
+                              key={section.id}
+                              className="overflow-hidden rounded-xl border border-amber-900/15 bg-white/80 shadow-[0_10px_30px_rgba(109,79,22,0.06)] dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none"
+                            >
+                              <div className="flex items-baseline gap-3 border-b border-amber-900/10 bg-amber-50/60 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60">
+                                <span className="text-sm font-semibold text-slate-950 dark:text-slate-100">
+                                  {section.title}
+                                </span>
+                                <span className="hidden text-xs text-slate-600 dark:text-slate-400 sm:inline">
+                                  {section.desc}
+                                </span>
+                              </div>
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b border-amber-900/10 bg-amber-50/25 dark:border-slate-800/80 dark:bg-slate-900/30">
+                                    <th className="w-44 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                      Metric
+                                    </th>
+                                    <th className="hidden px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500 md:table-cell">
+                                      Description
+                                    </th>
+                                    <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                      Trend
+                                    </th>
+                                    <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                      {industryBenchmarkShortLabel(boardMarket)}
+                                    </th>
+                                    <th className="w-24 px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                      Health
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {section.rows.map((row, ri) => {
+                                    if ("sub" in row) {
+                                      return (
+                                        <tr
+                                          key={`sub-${ri}`}
+                                          className="border-t border-amber-900/10 bg-amber-50/30 dark:border-slate-700/20 dark:bg-slate-800/25"
+                                        >
+                                          <td
+                                            colSpan={5}
+                                            className="pl-8 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400"
+                                          >
+                                            ↳ {row.sub}
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+                                    const k = row.key;
+                                    const meta = RATIO_META[k];
+                                    const rawVal = valueMap[k].value;
+                                    const fmt = valueMap[k].format;
+                                    const health = healthMap[k];
+                                    const series = seriesFor(k, rawVal);
+                                    const delta = pctDelta(series);
+                                    const bm = benchmarkFor(k);
+                                    const fmtd = !isFinite(rawVal)
+                                      ? "—"
+                                      : fmt === "pct"
+                                        ? `${(rawVal * 100).toFixed(1)}%`
+                                        : fmt === "x"
+                                          ? `${rawVal.toFixed(2)}×`
+                                          : fmt === "days"
+                                            ? `${Math.round(rawVal)} d`
+                                            : formatNumber(rawVal, boardMarket);
+                                    const healthTier = scoreTier(health);
+                                    const hCls = !isFinite(health)
+                                      ? "text-slate-400"
+                                      : healthTier === "healthy"
+                                        ? "text-emerald-400"
+                                        : healthTier === "at_risk"
+                                          ? "text-amber-400"
+                                          : "text-rose-400";
+                                    const hLabelCls = !isFinite(health)
+                                      ? "text-slate-500/70"
+                                      : healthTier === "healthy"
+                                        ? "text-emerald-500/70"
+                                        : healthTier === "at_risk"
+                                          ? "text-amber-500/70"
+                                          : "text-rose-500/70";
+                                    const actual = ratioActualLine(k, v, (amt) =>
+                                      formatMoneyCompact(amt, boardMarket),
+                                    );
+                                    const actualLine =
+                                      actual.calculation ??
+                                      (actual.missing.length
+                                        ? `Need: ${actual.missing.join(", ")}`
+                                        : null);
                                     return (
                                       <tr
-                                        key={`sub-${ri}`}
-                                        className="border-t border-amber-900/10 bg-amber-50/30 dark:border-slate-700/20 dark:bg-slate-800/25"
+                                        key={k}
+                                        data-row-id={k}
+                                        onClick={() => setOpenRatio(k)}
+                                        className={`cursor-pointer border-b border-amber-900/10 transition-colors dark:border-slate-800/40 ${row.indent ? "bg-amber-50/25 dark:bg-slate-800/10" : ""} ${k === highlightId ? "bg-[#f7d98a]/15 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.08)]" : "hover:bg-amber-50/60 dark:hover:bg-slate-800/50"}`}
                                       >
+                                        <td className="px-4 py-3">
+                                          <div className="text-[13px] font-medium leading-tight text-slate-950 dark:text-slate-100">
+                                            {meta.friendly}
+                                          </div>
+                                          <div className="mt-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-500">
+                                            {localizeCopy(meta.techName, boardMarket)}
+                                          </div>
+                                          {actualLine ? (
+                                            <div className="mt-0.5 font-mono text-[10px] font-semibold tabular-nums leading-snug text-slate-700 dark:text-slate-300">
+                                              {actualLine}
+                                            </div>
+                                          ) : null}
+                                          <div
+                                            className={`text-xs font-semibold tabular-nums mt-0.5 ${hCls}`}
+                                          >
+                                            {fmtd}
+                                          </div>
+                                        </td>
                                         <td
-                                          colSpan={5}
-                                          className="pl-8 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400"
+                                          className="hidden px-4 py-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 md:table-cell"
+                                          style={{ maxWidth: 240 }}
                                         >
-                                          ↳ {row.sub}
+                                          {meta.hint}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                          {series.length >= 2 ? (
+                                            <div className="flex flex-col items-center gap-0.5">
+                                              <KpiTrendline
+                                                values={series}
+                                                width={52}
+                                                height={18}
+                                              />
+                                              {delta !== null && (
+                                                <span
+                                                  className={`text-[9px] tabular-nums ${delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+                                                >
+                                                  {delta >= 0 ? "+" : ""}
+                                                  {(delta * 100).toFixed(1)}%
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : isFinite(rawVal) ? (
+                                            <KpiTrendline
+                                              values={series}
+                                              width={52}
+                                              height={18}
+                                              placeholder
+                                            />
+                                          ) : (
+                                            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                              —
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-2 py-3 text-center">
+                                          {bm && isFinite(rawVal) ? (
+                                            <IndustryQuintile
+                                              health={health}
+                                              title={`${industryBenchmarkShortLabel(boardMarket)}: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
+                                            />
+                                          ) : (
+                                            <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                              —
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                          <div className={`text-sm font-bold tabular-nums ${hCls}`}>
+                                            {isFinite(health) ? `${Math.round(health)}%` : "—"}
+                                          </div>
+                                          <div className={`text-[10px] ${hLabelCls}`}>
+                                            {isFinite(health) ? healthBandLabel(healthTier) : "—"}
+                                          </div>
                                         </td>
                                       </tr>
                                     );
-                                  }
-                                  const k = row.key;
-                                  const meta = RATIO_META[k];
-                                  const rawVal = valueMap[k].value;
-                                  const fmt = valueMap[k].format;
-                                  const health = healthMap[k];
-                                  const series = seriesFor(k, rawVal);
-                                  const delta = pctDelta(series);
-                                  const bm = benchmarkFor(k);
-                                  const fmtd = !isFinite(rawVal)
-                                    ? "—"
-                                    : fmt === "pct"
-                                      ? `${(rawVal * 100).toFixed(1)}%`
-                                      : fmt === "x"
-                                        ? `${rawVal.toFixed(2)}×`
-                                        : fmt === "days"
-                                          ? `${Math.round(rawVal)} d`
-                                          : formatNumber(rawVal, boardMarket);
-                                  const healthTier = scoreTier(health);
-                                  const hCls = !isFinite(health)
-                                    ? "text-slate-400"
-                                    : healthTier === "healthy"
-                                      ? "text-emerald-400"
-                                      : healthTier === "at_risk"
-                                        ? "text-amber-400"
-                                        : "text-rose-400";
-                                  const hLabelCls = !isFinite(health)
-                                    ? "text-slate-500/70"
-                                    : healthTier === "healthy"
-                                      ? "text-emerald-500/70"
-                                      : healthTier === "at_risk"
-                                        ? "text-amber-500/70"
-                                        : "text-rose-500/70";
-                                  const actual = ratioActualLine(k, v, (amt) =>
-                                    formatMoneyCompact(amt, boardMarket),
-                                  );
-                                  const actualLine =
-                                    actual.calculation ??
-                                    (actual.missing.length
-                                      ? `Need: ${actual.missing.join(", ")}`
-                                      : null);
-                                  return (
-                                    <tr
-                                      key={k}
-                                      data-row-id={k}
-                                      onClick={() => setOpenRatio(k)}
-                                      className={`cursor-pointer border-b border-amber-900/10 transition-colors dark:border-slate-800/40 ${row.indent ? "bg-amber-50/25 dark:bg-slate-800/10" : ""} ${k === highlightId ? "bg-[#f7d98a]/15 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.08)]" : "hover:bg-amber-50/60 dark:hover:bg-slate-800/50"}`}
-                                    >
-                                      <td className="px-4 py-3">
-                                        <div className="text-[13px] font-medium leading-tight text-slate-950 dark:text-slate-100">
-                                          {meta.friendly}
-                                        </div>
-                                        <div className="mt-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-500">
-                                          {localizeCopy(meta.techName, boardMarket)}
-                                        </div>
-                                        {actualLine ? (
-                                          <div className="mt-0.5 font-mono text-[10px] font-semibold tabular-nums leading-snug text-slate-700 dark:text-slate-300">
-                                            {actualLine}
-                                          </div>
-                                        ) : null}
-                                        <div
-                                          className={`text-xs font-semibold tabular-nums mt-0.5 ${hCls}`}
-                                        >
-                                          {fmtd}
-                                        </div>
-                                      </td>
-                                      <td
-                                        className="hidden px-4 py-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 md:table-cell"
-                                        style={{ maxWidth: 240 }}
-                                      >
-                                        {meta.hint}
-                                      </td>
-                                      <td className="px-4 py-3 text-center">
-                                        {series.length >= 2 ? (
-                                          <div className="flex flex-col items-center gap-0.5">
-                                            <KpiTrendline values={series} width={52} height={18} />
-                                            {delta !== null && (
-                                              <span
-                                                className={`text-[9px] tabular-nums ${delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
-                                              >
-                                                {delta >= 0 ? "+" : ""}
-                                                {(delta * 100).toFixed(1)}%
-                                              </span>
-                                            )}
-                                          </div>
-                                        ) : isFinite(rawVal) ? (
-                                          <KpiTrendline
-                                            values={series}
-                                            width={52}
-                                            height={18}
-                                            placeholder
-                                          />
-                                        ) : (
-                                          <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            —
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="px-2 py-3 text-center">
-                                        {bm && isFinite(rawVal) ? (
-                                          <IndustryQuintile
-                                            health={health}
-                                            title={`${industryBenchmarkShortLabel(boardMarket)}: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
-                                          />
-                                        ) : (
-                                          <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                            —
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="px-4 py-3 text-right">
-                                        <div className={`text-sm font-bold tabular-nums ${hCls}`}>
-                                          {isFinite(health) ? `${Math.round(health)}%` : "—"}
-                                        </div>
-                                        <div className={`text-[10px] ${hLabelCls}`}>
-                                          {isFinite(health) ? healthBandLabel(healthTier) : "—"}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ))}
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </TabErrorBoundary>
-              </TabsContent>
+                    )}
+                  </TabErrorBoundary>
+                </TabsContent>
 
-              <TabsContent value="waterfall">
-                <TabErrorBoundary label="Profit">
-                  <div id="wizard-owner-signoff" className="mb-3 flex min-w-0 flex-col items-stretch sm:items-end">
-                    <OwnerSignoffMark
-                      signoff={profitabilitySignoff}
-                      isStale={computeIsStale(
-                        profitabilitySignoff,
-                        clientMeta?.financials_updated_at ?? null,
-                      )}
-                    />
-                  </div>
-                  {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
-                    <NoFiguresBanner
-                      tabLabel="Profit"
-                      detail="The waterfall below is an empty frame until revenue and costs land."
-                      onAddFigures={() => setFirstRunStep("first-data")}
-                    />
-                  )}
-                  {/* Milōn Bot first — same widget as Business Health, scoped to this client */}
-                  <div
-                    id="ask-ai-waterfall"
-                    className="mb-4 w-full rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
-                  />
-                  <div id="wizard-profit-walk">
-                    <ProfitabilityWaterfall
-                      clientName={actingClientName ?? undefined}
-                      clientId={effectiveClientId ?? undefined}
-                      reviewSignoff={stampFromSignoff(
-                        profitabilitySignoff,
-                        computeIsStale(
+                <TabsContent value="waterfall">
+                  <TabErrorBoundary label="Profit">
+                    <div
+                      id="wizard-owner-signoff"
+                      className="mb-3 flex min-w-0 flex-col items-stretch sm:items-end"
+                    >
+                      <OwnerSignoffMark
+                        signoff={profitabilitySignoff}
+                        isStale={computeIsStale(
                           profitabilitySignoff,
                           clientMeta?.financials_updated_at ?? null,
-                        ),
-                      )}
-                      fallback={derivePeriodWaterfallFallback(v)}
-                      periodLabel={readStatementMeta(v).periodLabel}
-                      preferPeriod={preferStatementPeriod(v)}
-                      yearToDate={statementYearLine(v)}
-                      statementSource={readStatementMeta(v).statementSource}
+                        )}
+                      />
+                    </div>
+                    {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
+                      <NoFiguresBanner
+                        tabLabel="Profit"
+                        detail="The waterfall below is an empty frame until revenue and costs land."
+                        onAddFigures={() => setFirstRunStep("first-data")}
+                      />
+                    )}
+                    {/* Milōn Bot first — same widget as Business Health, scoped to this client */}
+                    <div
+                      id="ask-ai-waterfall"
+                      className="mb-4 w-full rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
                     />
-                  </div>
-                  {/* Optional product-line mix — collapsed until the owner opts in */}
-                  <div id="wizard-product-mix" className="mt-4">
-                    <ProductMixPanel
-                      totalRevenue={
-                        resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v), {
-                          preferPeriod: preferStatementPeriod(v),
-                        }).revenue
-                      }
-                    />
-                  </div>
-                  {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
-                  <div className="mt-4">
-                    <WeeklyInputTable />
-                  </div>
-                </TabErrorBoundary>
-              </TabsContent>
+                    <div id="wizard-profit-walk">
+                      <ProfitabilityWaterfall
+                        clientName={actingClientName ?? undefined}
+                        clientId={effectiveClientId ?? undefined}
+                        reviewSignoff={stampFromSignoff(
+                          profitabilitySignoff,
+                          computeIsStale(
+                            profitabilitySignoff,
+                            clientMeta?.financials_updated_at ?? null,
+                          ),
+                        )}
+                        fallback={derivePeriodWaterfallFallback(v)}
+                        periodLabel={readStatementMeta(v).periodLabel}
+                        preferPeriod={preferStatementPeriod(v)}
+                        yearToDate={statementYearLine(v)}
+                        statementSource={readStatementMeta(v).statementSource}
+                      />
+                    </div>
+                    {/* Optional product-line mix — collapsed until the owner opts in */}
+                    <div id="wizard-product-mix" className="mt-4">
+                      <ProductMixPanel
+                        totalRevenue={
+                          resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v), {
+                            preferPeriod: preferStatementPeriod(v),
+                          }).revenue
+                        }
+                      />
+                    </div>
+                    {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
+                    <div className="mt-4">
+                      <WeeklyInputTable />
+                    </div>
+                  </TabErrorBoundary>
+                </TabsContent>
 
-              <TabsContent value="next">
-                <div className="mb-4 flex items-center gap-3 pb-3">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                    Next Moves
-                  </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-                </div>
-                {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
-                  <NoFiguresBanner
-                    tabLabel="Next moves"
-                    detail="The list below is the generic playbook — it is ranked for your business only once your figures are in."
-                    onAddFigures={() => setFirstRunStep("first-data")}
-                  />
-                )}
-                {/* P1 — the advisory pack frames the moves below; owner reads / accepts it here. */}
-                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
-                  <AdvisoryPackPanel
-                    className="mb-5"
-                    clientId={effectiveClientId}
-                    firmId={clientMeta?.firm_id ?? null}
-                    signoff={advisorySignoff}
-                    audience="owner"
-                    canGenerate={hasRealFinancials}
-                    hasFirm={Boolean(clientMeta?.firm_id)}
-                    refreshKey={`${activeTab}|${advisoryBump}`}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                    currentFigures={{
-                      runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
-                      cash: ownerOutlook.opening,
-                      healthScore: overallHealth.overall,
-                    }}
-                  />
-                ) : null}
-                {/* P3 — owner-only clients can ask a listed firm to review the pack; hidden once a firm is attached. */}
-                {effectiveClientId &&
-                !sampleMode &&
-                userRole !== "client_member" &&
-                !clientMeta?.firm_id ? (
-                  <FindAccountantPanel
-                    className="mb-5"
-                    clientId={effectiveClientId}
-                    hasFirm={Boolean(clientMeta?.firm_id)}
-                    packStatus={null}
-                    refreshKey={`${activeTab}|${advisoryBump}`}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                  />
-                ) : null}
-                {/* P0.5 — recommendations the owner decides on directly; no accountant required. */}
-                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
-                  <RecommendationsPanel
-                    className="mb-5"
-                    clientId={effectiveClientId}
-                    firmId={clientMeta?.firm_id ?? null}
-                    audience="owner"
-                    canPropose={hasRealFinancials}
-                    refreshKey={advisoryBump}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                    onOpenActions={() => setActiveTab("tasks")}
-                    onAddFigures={() => setFirstRunStep("first-data")}
-                  />
-                ) : null}
-                {/* P2.1 — did the money move? measured from snapshots; manual where statements can't tell. */}
-                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
-                  <OutcomesPanel
-                    className="mb-5"
-                    clientId={effectiveClientId}
-                    audience="owner"
-                    refreshKey={`${activeTab}|${advisoryBump}`}
-                    onChanged={() => setAdvisoryBump((n) => n + 1)}
-                  />
-                ) : null}
-                <div id="wizard-moves-list">
-                  <NextStepsPanel
-                    steps={nextSteps}
-                    simplified={viewMode === "simplified"}
-                    done={doneSteps}
-                    onToggleDone={toggleDone}
-                    onOpenSop={(k) => setOpenSop(k)}
-                    clientId={effectiveClientId}
-                    clientName={actingClientName ?? undefined}
-                    isOwner={userRole !== "client_member"}
-                    onGoToPlan={(k) => {
-                      setPlanFocusKey(k);
-                      setActiveTab("tasks");
-                    }}
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="cash">
-                <div id="wizard-cash-panel">
+                <TabsContent value="next">
+                  <div className="mb-4 flex items-center gap-3 pb-3">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
+                      Next Moves
+                    </span>
+                    <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
+                  </div>
                   {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
                     <NoFiguresBanner
-                      tabLabel="Cash Forecast"
-                      detail="Zeros below are placeholders, not a forecast. Bank statements can draft the 13 weeks for you."
+                      tabLabel="Next moves"
+                      detail="The list below is the generic playbook — it is ranked for your business only once your figures are in."
                       onAddFigures={() => setFirstRunStep("first-data")}
                     />
                   )}
-                  <TabErrorBoundary label="Cash Forecast">
-                    <Suspense
-                      fallback={
-                        <div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>
-                      }
-                    >
-                      <CashForecastPanel
-                        clientId={effectiveClientId ?? undefined}
-                        clientName={actingClientName ?? undefined}
-                        simplified={viewMode === "simplified"}
-                        canSign={
-                          (userRole === "accountant" || userRole === "firm_admin") &&
-                          !!actingClientId
-                        }
-                        hideReadOnlyStamp
-                        reloadToken={cashForecastReloadToken}
-                      />
-                    </Suspense>
-                  </TabErrorBoundary>
-                </div>
-              </TabsContent>
+                  {/* P1 — the advisory pack frames the moves below; owner reads / accepts it here. */}
+                  {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                    <AdvisoryPackPanel
+                      className="mb-5"
+                      clientId={effectiveClientId}
+                      firmId={clientMeta?.firm_id ?? null}
+                      signoff={advisorySignoff}
+                      audience="owner"
+                      canGenerate={hasRealFinancials}
+                      hasFirm={Boolean(clientMeta?.firm_id)}
+                      refreshKey={`${activeTab}|${advisoryBump}`}
+                      onChanged={() => setAdvisoryBump((n) => n + 1)}
+                      currentFigures={{
+                        runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
+                        cash: ownerOutlook.opening,
+                        healthScore: overallHealth.overall,
+                      }}
+                    />
+                  ) : null}
+                  {/* P3 — owner-only clients can ask a listed firm to review the pack; hidden once a firm is attached. */}
+                  {effectiveClientId &&
+                  !sampleMode &&
+                  userRole !== "client_member" &&
+                  !clientMeta?.firm_id ? (
+                    <FindAccountantPanel
+                      className="mb-5"
+                      clientId={effectiveClientId}
+                      hasFirm={Boolean(clientMeta?.firm_id)}
+                      packStatus={null}
+                      refreshKey={`${activeTab}|${advisoryBump}`}
+                      onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    />
+                  ) : null}
+                  {/* P0.5 — recommendations the owner decides on directly; no accountant required. */}
+                  {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                    <RecommendationsPanel
+                      className="mb-5"
+                      clientId={effectiveClientId}
+                      firmId={clientMeta?.firm_id ?? null}
+                      audience="owner"
+                      canPropose={hasRealFinancials}
+                      refreshKey={advisoryBump}
+                      onChanged={() => setAdvisoryBump((n) => n + 1)}
+                      onOpenActions={() => setActiveTab("tasks")}
+                      onAddFigures={() => setFirstRunStep("first-data")}
+                    />
+                  ) : null}
+                  {/* P2.1 — did the money move? measured from snapshots; manual where statements can't tell. */}
+                  {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                    <OutcomesPanel
+                      className="mb-5"
+                      clientId={effectiveClientId}
+                      audience="owner"
+                      refreshKey={`${activeTab}|${advisoryBump}`}
+                      onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    />
+                  ) : null}
+                  <div id="wizard-moves-list">
+                    <NextStepsPanel
+                      steps={nextSteps}
+                      simplified={viewMode === "simplified"}
+                      done={doneSteps}
+                      onToggleDone={toggleDone}
+                      onOpenSop={(k) => setOpenSop(k)}
+                      clientId={effectiveClientId}
+                      clientName={actingClientName ?? undefined}
+                      isOwner={userRole !== "client_member"}
+                      onGoToPlan={(k) => {
+                        setPlanFocusKey(k);
+                        setActiveTab("tasks");
+                      }}
+                    />
+                  </div>
+                </TabsContent>
 
-              <TabsContent value="budget">
-                <div id="wizard-budget-panel">
-                  <TabErrorBoundary label="Budget">
-                    <Suspense
-                      fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
-                    >
-                      <BudgetPanel
-                        clientId={effectiveClientId ?? undefined}
-                        clientName={actingClientName ?? undefined}
-                        simplified={viewMode === "simplified"}
-                        onViewModeChange={setViewMode}
-                        role={
-                          userRole === "accountant" || userRole === "firm_admin"
-                            ? "accountant"
-                            : "owner"
-                        }
-                        canSign={
-                          (userRole === "accountant" || userRole === "firm_admin") &&
-                          !!actingClientId
-                        }
-                        hideReadOnlyStamp
-                        businessTypeId={businessTypeId}
-                        operatingProfile={operatingProfile}
-                        fyStartMonthDefault={
-                          operatingProfile?.fyStartMonth ??
-                          resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
-                        }
-                        onRetakeProfile={() => openProfileDialog("retake")}
-                        firstActualsMonth={
-                          hasRealFinancials ? (history[0]?.period_date?.slice(0, 7) ?? null) : null
-                        }
-                        financials={{
-                          revenue: v.revenue,
-                          cogs: v.cogs,
-                          fixedCosts: v.fixedCosts,
-                          laborCost: v.laborCost,
-                          receivables: v.receivables,
-                          payables: v.payables,
-                          inventory: v.inventory,
-                          operatingCashflow: v.operatingCashflow,
-                          // Months the P&L covers — without it a quarter seeds as a year.
-                          [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
-                        }}
-                        onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
-                        reloadToken={budgetReloadToken}
+                <TabsContent value="cash">
+                  <div id="wizard-cash-panel">
+                    {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
+                      <NoFiguresBanner
+                        tabLabel="Cash Forecast"
+                        detail="Zeros below are placeholders, not a forecast. Bank statements can draft the 13 weeks for you."
+                        onAddFigures={() => setFirstRunStep("first-data")}
                       />
-                    </Suspense>
-                  </TabErrorBoundary>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="tasks">
-                <div id="wizard-tasks-panel">
-                  <TabErrorBoundary label="Action Plan">
-                    <Suspense
-                      fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}
-                    >
-                      {effectiveClientId ? (
-                        <ActionPlanPanel
-                          clientId={effectiveClientId}
+                    )}
+                    <TabErrorBoundary label="Cash Forecast">
+                      <Suspense
+                        fallback={
+                          <div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>
+                        }
+                      >
+                        <CashForecastPanel
+                          clientId={effectiveClientId ?? undefined}
                           clientName={actingClientName ?? undefined}
                           simplified={viewMode === "simplified"}
-                          isOwner={userRole !== "client_member"}
-                          ownerSignoff={actionPlanSignoff}
-                          ownerSignoffStale={computeIsStale(
-                            actionPlanSignoff,
-                            clientMeta?.financials_updated_at ?? null,
-                          )}
-                          moves={nextSteps.map((s) => ({
-                            key: s.key,
-                            title: s.title,
-                            ratioName: s.ratioName,
-                            impactLine: s.impactLine,
-                            health: Number.isFinite(s.health) ? s.health : Number.NaN,
-                          }))}
-                          onViewAnalysis={() => {
-                            setViewMode("complex");
-                            setActiveTab("today");
-                          }}
-                          focusMoveKey={planFocusKey}
-                          onFocusHandled={() => setPlanFocusKey(null)}
+                          canSign={
+                            (userRole === "accountant" || userRole === "firm_admin") &&
+                            !!actingClientId
+                          }
+                          hideReadOnlyStamp
+                          reloadToken={cashForecastReloadToken}
                         />
-                      ) : (
-                        <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
-                      )}
-                    </Suspense>
-                  </TabErrorBoundary>
-                </div>
-              </TabsContent>
-            </Tabs>
+                      </Suspense>
+                    </TabErrorBoundary>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="budget">
+                  <div id="wizard-budget-panel">
+                    <TabErrorBoundary label="Budget">
+                      <Suspense
+                        fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
+                      >
+                        <BudgetPanel
+                          clientId={effectiveClientId ?? undefined}
+                          clientName={actingClientName ?? undefined}
+                          simplified={viewMode === "simplified"}
+                          onViewModeChange={setViewMode}
+                          role={
+                            userRole === "accountant" || userRole === "firm_admin"
+                              ? "accountant"
+                              : "owner"
+                          }
+                          canSign={
+                            (userRole === "accountant" || userRole === "firm_admin") &&
+                            !!actingClientId
+                          }
+                          hideReadOnlyStamp
+                          businessTypeId={businessTypeId}
+                          operatingProfile={operatingProfile}
+                          fyStartMonthDefault={
+                            operatingProfile?.fyStartMonth ??
+                            resolveMarket(coerceMarketSelection(workspaceMarket))
+                              .fyStartMonthDefault
+                          }
+                          onRetakeProfile={() => openProfileDialog("retake")}
+                          firstActualsMonth={
+                            hasRealFinancials
+                              ? (history[0]?.period_date?.slice(0, 7) ?? null)
+                              : null
+                          }
+                          financials={{
+                            revenue: v.revenue,
+                            cogs: v.cogs,
+                            fixedCosts: v.fixedCosts,
+                            laborCost: v.laborCost,
+                            receivables: v.receivables,
+                            payables: v.payables,
+                            inventory: v.inventory,
+                            operatingCashflow: v.operatingCashflow,
+                            // Months the P&L covers — without it a quarter seeds as a year.
+                            [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
+                          }}
+                          onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
+                          reloadToken={budgetReloadToken}
+                        />
+                      </Suspense>
+                    </TabErrorBoundary>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="tasks">
+                  <div id="wizard-tasks-panel">
+                    <TabErrorBoundary label="Action Plan">
+                      <Suspense
+                        fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}
+                      >
+                        {effectiveClientId ? (
+                          <ActionPlanPanel
+                            clientId={effectiveClientId}
+                            clientName={actingClientName ?? undefined}
+                            simplified={viewMode === "simplified"}
+                            isOwner={userRole !== "client_member"}
+                            ownerSignoff={actionPlanSignoff}
+                            ownerSignoffStale={computeIsStale(
+                              actionPlanSignoff,
+                              clientMeta?.financials_updated_at ?? null,
+                            )}
+                            moves={nextSteps.map((s) => ({
+                              key: s.key,
+                              title: s.title,
+                              ratioName: s.ratioName,
+                              impactLine: s.impactLine,
+                              health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                            }))}
+                            onViewAnalysis={() => {
+                              setViewMode("complex");
+                              setActiveTab("today");
+                            }}
+                            focusMoveKey={planFocusKey}
+                            onFocusHandled={() => setPlanFocusKey(null)}
+                          />
+                        ) : (
+                          <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
+                        )}
+                      </Suspense>
+                    </TabErrorBoundary>
+                  </div>
+                </TabsContent>
+              </Tabs>
             ) : null}
           </div>
 
@@ -5958,7 +6009,8 @@ function Index() {
                       Connect Sage
                     </span>
                     <span className="text-xs text-slate-600 dark:text-slate-400">
-                      Sage Business Cloud Accounting (South Africa). Email, password, and Company ID.
+                      Sage Business Cloud Accounting (South Africa). Email, password, and Company
+                      ID.
                     </span>
                   </button>
                 ) : null}
@@ -6387,16 +6439,19 @@ function Index() {
                   const importedCash = allEntries.some(
                     ([key, val]) => key === "cash" && String(val ?? "").trim() !== "",
                   );
-                  setV((prev) => ({
-                    ...prev,
-                    ...Object.fromEntries(allEntries),
-                    ...(uploadKindForCash === "balance_sheet" &&
-                    importedCash &&
-                    periodEndForCash &&
-                    /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
-                      ? { cashAsOf: periodEndForCash.slice(0, 10) }
-                      : {}),
-                  }) as Inputs);
+                  setV(
+                    (prev) =>
+                      ({
+                        ...prev,
+                        ...Object.fromEntries(allEntries),
+                        ...(uploadKindForCash === "balance_sheet" &&
+                        importedCash &&
+                        periodEndForCash &&
+                        /^\d{4}-\d{2}-\d{2}$/.test(periodEndForCash)
+                          ? { cashAsOf: periodEndForCash.slice(0, 10) }
+                          : {}),
+                      }) as Inputs,
+                  );
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();
                   track("financials_uploaded", {
@@ -6500,8 +6555,8 @@ function Index() {
                   Sage Accounting
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect Sage Business Cloud Accounting (South Africa). Milōn checks the login
-                  and stores it. Statement sync does not fill Health until figures are available.
+                  Connect Sage Business Cloud Accounting (South Africa). Milōn checks the login and
+                  stores it. Statement sync does not fill Health until figures are available.
                 </DialogDescription>
               </DialogHeader>
               <SageConnectCard
@@ -6545,9 +6600,8 @@ function Index() {
                   Xero Integration
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank
-                  balances. Existing connections need a reconnect once the bank summary scope
-                  is enabled.
+                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank balances.
+                  Existing connections need a reconnect once the bank summary scope is enabled.
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard
