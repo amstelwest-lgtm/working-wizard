@@ -1809,43 +1809,8 @@ html[data-landing="1"] .alert-chip .attention-chip{
 }
 html[data-landing="1"] .alert-chip .attention-chip svg{display:block}
 
-/* ── Hero rework: the finance report stays; the accountant-home card layers
-   over its top-right corner and the three agents stand on its lower band. ── */
-html[data-landing="1"] .hero-shot{
-  margin:0;
-  border-radius:16px;
-  overflow:hidden;
-  background:linear-gradient(var(--card),var(--card)) padding-box,
-             linear-gradient(150deg,rgba(253,238,121,.85),rgba(212,175,55,.22) 38%,rgba(212,175,55,.1) 62%,rgba(253,238,121,.45)) border-box;
-  border:1px solid transparent;
-  box-shadow:0 24px 60px rgba(16,42,67,.18);
-}
-html[data-landing="1"] .hero-shot figcaption{
-  display:flex;
-  align-items:center;
-  gap:9px;
-  padding:8px 14px;
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  color:var(--gold-ink);
-  -webkit-text-fill-color:var(--gold-ink);
-  border-bottom:1px solid var(--line);
-  background:var(--card);
-}
-html[data-landing="1"] .hero-shot figcaption span:not(.hero-shot-dots){
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-html[data-landing="1"] .hero-shot-dots{display:inline-flex;gap:4px;flex:none}
-html[data-landing="1"] .hero-shot-dots i{width:6px;height:6px;border-radius:50%}
-html[data-landing="1"] .hero-shot-dots i:nth-child(1){background:var(--cobalt)}
-html[data-landing="1"] .hero-shot-dots i:nth-child(2){background:var(--royal)}
-html[data-landing="1"] .hero-shot-dots i:nth-child(3){background:var(--ice)}
-html[data-landing="1"] .hero-shot img{display:block;width:100%;height:auto}
-
+/* ── Hero rework: the finance report stays and the three agents stand,
+   display-only, on its lower band. ── */
 html[data-landing="1"] .hero-agents{
   list-style:none;
   margin:0;
@@ -1908,18 +1873,9 @@ html[data-landing="1"] .hero-agent-name{
   html[data-landing="1"] .dash{
     height:auto;
     overflow:visible;
-    margin-top:104px;
+    margin-top:12px;
     padding-bottom:76px;
   }
-  html[data-landing="1"] .hero-shot{
-    position:absolute;
-    top:0;
-    right:-16px;
-    width:min(74%,560px);
-    z-index:4;
-  }
-  /* The sample pill moves next to the mock brand so the card never hides it. */
-  html[data-landing="1"] .dash-top{justify-content:flex-start;gap:14px}
   html[data-landing="1"] .hero-agents{
     position:relative;
     z-index:5;
@@ -1950,9 +1906,8 @@ html[data-landing="1"] .hero-agent-name{
   html[data-landing="1"] .dash-stage{display:flex;flex-direction:column}
   html[data-landing="1"] .dash{order:1}
   html[data-landing="1"] .hero-agents{order:2;margin-top:18px}
-  html[data-landing="1"] .hero-shot{order:3;margin-top:16px}
-  html[data-landing="1"] .fc-1{order:4}
-  html[data-landing="1"] .fc-2{order:5}
+  html[data-landing="1"] .fc-1{order:3}
+  html[data-landing="1"] .fc-2{order:4}
 }
 @media (max-width:420px){
   html[data-landing="1"] .hero-agents{gap:10px}
