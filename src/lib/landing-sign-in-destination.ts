@@ -1,9 +1,10 @@
 /**
  * Where a successful sign-in goes. The landing modal and /auth share this.
  *
- * Owners and dual-role accounts (a business seat) land on /app. A practice
- * account with no business seat lands on /dashboard — the same path /auth
- * chooses, including a pre-card firm with no client files. An empty role
+ * The landing door sends a business seat to /app and a practice-only account
+ * to /dashboard. /auth does the same for a business owner, including one whose
+ * firm_admin role was granted automatically. A practice signup still opens
+ * /dashboard, including a pre-card firm with no client files. An empty role
  * read is not a new owner: practice signup metadata still opens /dashboard,
  * and a read that has not finished stays pending instead of pinning /app.
  *
@@ -38,7 +39,9 @@ export function destinationAfterLandingSignIn(d: LandingSignInRoles): SignInDest
 /**
  * Shared with /auth (`door: "accountant"`) and the landing modal
  * (`door: "landing"`). `pending` means the profile is not loaded and nothing
- * in the session says this is a practice account — do not open /app yet.
+ * in the session says this is a practice account — do not open either board
+ * yet. A business owner (client seat, no practice-signup metadata) who uses
+ * /auth lands on /app, including when firm_admin was granted automatically.
  */
 export function destinationAfterSignIn(
   d: LandingSignInRoles,
@@ -49,7 +52,8 @@ export function destinationAfterSignIn(
 
   if (!profileLoaded) {
     if (!d.hasClientRole && practiceEvidence) return "/dashboard";
-    if (door === "accountant" && !d.hasClientRole) return "/dashboard";
+    // An unfinished read with no practice evidence is not an accountant yet.
+    // /auth must wait and retry so a business owner is not dropped on /dashboard.
     if (!practiceEvidence && !d.hasClientRole) return "pending";
   }
 

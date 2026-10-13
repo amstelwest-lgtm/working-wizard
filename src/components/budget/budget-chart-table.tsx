@@ -3,7 +3,7 @@
  * Actuals are the month rows the variance panel already loads. Nothing here
  * writes a budget.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Info } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -162,6 +162,27 @@ export function BudgetChartTable({
   );
 }
 
+function BudgetMonthTick({
+  x = 0,
+  y = 0,
+  payload,
+  index = 0,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string };
+  index?: number;
+}) {
+  const label = payload?.value ?? "";
+  // Two rows. Twelve horizontal names do not fit on one line at 390px.
+  const drop = index % 2 === 0 ? 12 : 26;
+  return (
+    <text x={x} y={y + drop} textAnchor="middle" fill="currentColor" fontSize={11} fontWeight={600}>
+      {label}
+    </text>
+  );
+}
+
 function BudgetMonthChart({
   views,
   locale,
@@ -175,6 +196,14 @@ function BudgetMonthChart({
   money: (n: number) => string;
   signed?: boolean;
 }) {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const query = window.matchMedia("(max-width: 640px)");
+    const apply = () => setNarrow(query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
   const tick = (n: number) => {
     const text = formatMoneyChartTick(n, market);
     return signed ? ownerMinus(text) : text;
@@ -192,18 +221,19 @@ function BudgetMonthChart({
 
   return (
     <div className="mt-4 min-w-0">
-      <div className="h-[240px] w-full min-w-0">
+      <div className="h-[240px] w-full min-w-0 text-[#102A43] dark:text-slate-100" data-budget-axis="chart">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={2}>
+          <BarChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: narrow ? 8 : 0 }} barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" vertical={false} />
             <XAxis
               dataKey="label"
               stroke="#94a3b8"
-              fontSize={10}
               tickLine={false}
               axisLine={false}
               interval={0}
               minTickGap={0}
+              height={narrow ? 40 : 4}
+              tick={narrow ? BudgetMonthTick : false}
             />
             <YAxis
               stroke="#94a3b8"
@@ -263,10 +293,10 @@ function BudgetMonthChart({
           />
         ))}
       </div>
-      <div className="mt-1 flex min-w-0">
+      <div className={`mt-1 flex min-w-0${narrow ? " hidden" : ""}`} data-budget-axis="readout">
         {data.map((row) => (
           <div key={row.month} className="min-w-0 flex-1 px-0.5 text-center">
-            <div className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{row.label}</div>
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{row.label}</div>
             {row.delta == null ? (
               <div className="truncate text-[10px] text-slate-500/40" title="Budget only" aria-label="Budget only">
                 –

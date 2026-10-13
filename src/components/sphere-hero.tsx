@@ -229,6 +229,7 @@ function Sphere({
   className,
   ariaLabel,
   tier: tierProp,
+  fit = false,
 }: {
   score: number;
   label?: string;
@@ -244,18 +245,26 @@ function Sphere({
   ariaLabel?: string;
   /** Overall orb follows displayStatus. Pillars fall back to the score table. */
   tier?: Tier;
+  /** Fill the card. A fixed pixel size overflows the pillar card at 390px. */
+  fit?: boolean;
 }) {
   const tier = tierProp ?? tierOf(score);
+  const scoreSize = fit ? `min(${size * 0.3}px, 28cqw)` : `${size * 0.3}px`;
+  const labelSize = fit ? `min(${Math.max(9, size * 0.052)}px, 9cqw)` : `${Math.max(9, size * 0.052)}px`;
+  const tierSize = fit ? `min(${Math.max(8, size * 0.048)}px, 8cqw)` : `${Math.max(8, size * 0.048)}px`;
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={!onClick}
       aria-label={ariaLabel ?? (label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`)}
-      className={`sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-sky-400/70 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
+      className={`sphere-orb group relative flex select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-sky-400/70 enabled:cursor-pointer enabled:active:scale-95${fit ? " aspect-square w-full min-w-0 max-w-full" : " shrink-0"}${className ? ` ${className}` : ""}`}
       style={{
-        width: size,
-        height: size,
+        width: fit ? "100%" : size,
+        maxWidth: fit ? size : undefined,
+        height: fit ? "auto" : size,
+        aspectRatio: fit ? "1 / 1" : undefined,
+        containerType: fit ? "inline-size" : undefined,
         background: `radial-gradient(circle at 32% 26%, rgba(56,189,248,0.35), rgba(0,0,0,0) 42%), radial-gradient(circle at 50% 45%, rgba(16,42,67,0.96) 58%, rgba(${glowRgb},0.55) 92%, rgba(${glowRgb},0.9) 100%)`,
         boxShadow: `0 0 ${size * 0.16}px rgba(${glowRgb},0.55), 0 0 ${size * 0.45}px rgba(${glowRgb},0.28), inset 0 0 ${size * 0.22}px rgba(${glowRgb},0.35)`,
       }}
@@ -270,14 +279,14 @@ function Sphere({
 
       {Icon && <Icon className={`mb-1 h-[12%] w-[12%] min-h-4 min-w-4 ${TIER_TEXT[tier]}`} />}
       {label && (
-        <span className="text-[10px] font-semibold tracking-[0.04em] text-slate-200" style={{ fontSize: Math.max(9, size * 0.052) }}>
+        <span className="text-[10px] font-semibold tracking-[0.04em] text-slate-200" style={{ fontSize: labelSize }}>
           {label}
         </span>
       )}
-      <span className={`${numberClass} ${scoreClass ?? ""} font-bold leading-none`} style={{ fontSize: size * 0.30 }}>
+      <span className={`${numberClass} ${scoreClass ?? ""} font-bold leading-none`} style={{ fontSize: scoreSize }}>
         {fmtScore(score)}
       </span>
-      <span className={`mt-1 flex items-center gap-1 font-semibold tracking-widest ${TIER_TEXT[tier]}`} style={{ fontSize: Math.max(8, size * 0.048) }}>
+      <span className={`mt-1 flex items-center gap-1 font-semibold tracking-widest ${TIER_TEXT[tier]}`} style={{ fontSize: tierSize }}>
         {TIER_LABEL[tier]}
         {typeof delta === "number" && delta !== 0 && (
           <span className={delta > 0 ? "text-emerald-400" : "text-rose-400"}>
@@ -501,7 +510,7 @@ export function SphereHero({
               return (
                 <div
                   key={p.id}
-                  className={`flex flex-col items-center rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-[0_12px_30px_rgba(16,42,67,0.06)] dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
+                  className={`owner-pillar-card flex min-w-0 flex-col items-center overflow-hidden rounded-2xl border border-[#DBEAFE] bg-white p-2 shadow-[0_12px_30px_rgba(16,42,67,0.06)] sm:p-4 dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
                   style={reduceMotion ? undefined : { animationDelay: `${i * morphMs / 7}ms`, animationFillMode: "both" }}
                 >
                   <Sphere
@@ -510,10 +519,12 @@ export function SphereHero({
                     label={p.label}
                     delta={p.delta}
                     size={132}
+                    fit
                     glowRgb={PILLAR_GLOW}
                     numberClass={TIER_TEXT[t]}
                     icon={PILLAR_ICON[p.id]}
                     onClick={() => go(3, p.id)}
+                    className="owner-pillar-orb"
                   />
                   {p.blurb && (
                     <div className="mt-3 flex w-full items-center justify-between gap-1">

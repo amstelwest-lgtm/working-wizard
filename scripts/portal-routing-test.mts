@@ -69,16 +69,16 @@ assert(
 );
 
 assert(
-  decidePostLoginPath({ ...dualNoMeta, force: "accountant" }) === "/dashboard",
-  "dual-role without practice signup metadata + accountant door → practice portal",
+  decidePostLoginPath({ ...dualNoMeta, force: "accountant" }) === "/app",
+  "client seat without practice signup metadata + /auth → owner board",
 );
 assert(
   decideAccountantStay({ ...dualNoMeta, force: "accountant" }) === true,
-  "dual-role without practice signup metadata stays on /dashboard from accountant door",
+  "a client seat can still open the practice portal when they choose it",
 );
 assert(
-  decideOwnerAppBounce({ ...dualNoMeta, force: "accountant", actingAsClient: false }) === true,
-  "dual-role without metadata on /app after accountant login is sent to /dashboard",
+  decideOwnerAppBounce({ ...dualNoMeta, force: "accountant", actingAsClient: false }) === false,
+  "client seat without practice signup stays on /app after /auth",
 );
 assert(
   decidePostLoginPath({ ...dualNoMeta, force: "owner" }) === "/app",
@@ -170,16 +170,16 @@ assert(
 
 assert(canEnterAccountantPortal(leftoverFirmAdmin) === true, "practice role counts as an accountant profile even without signup metadata");
 assert(
-  decidePostLoginPath(leftoverFirmAdmin) === "/dashboard",
-  "same email with practice + client roles uses accountant door → practice portal",
+  decidePostLoginPath(leftoverFirmAdmin) === "/app",
+  "auto-granted firm_admin on an owner account uses /auth → owner board",
 );
 assert(
   decideAccountantStay(leftoverFirmAdmin) === true,
   "dual-role (practice + client) stays on /dashboard from the accountant door",
 );
 assert(
-  decideOwnerAppBounce({ ...leftoverFirmAdmin, actingAsClient: false }) === true,
-  "dual-role accountant-door session on /app is sent to the practice portal",
+  decideOwnerAppBounce({ ...leftoverFirmAdmin, actingAsClient: false }) === false,
+  "auto-granted firm_admin does not bounce an owner off /app",
 );
 assert(isPracticeSignupMeta({ signup_type: "customer" }) === false, "customer signup is not practice");
 assert(isPracticeSignupMeta({ signup_type: "accountant" }) === true, "accountant signup is practice");

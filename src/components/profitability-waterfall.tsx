@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -248,6 +248,14 @@ export function ProfitabilityWaterfall({
   const { money: fmt, moneyCompact: fmtCompact, market } = useMarketFormat();
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [phone, setPhone] = useState(false);
+  useLayoutEffect(() => {
+    const query = window.matchMedia("(max-width: 767px)");
+    const apply = () => setPhone(query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
   const exportPdfRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -452,6 +460,51 @@ export function ProfitabilityWaterfall({
           )}
 
           {/* ── Waterfall chart ── */}
+          {phone ? (
+            <ol className="m-0 flex list-none flex-col gap-3 p-0" data-waterfall-layout="horizontal">
+              {steps.map((s) => {
+                const isDec = s.kind === "decrease";
+                const negNet = s.kind === "total" && s.label === "Net Profit" && s.runningEnd < 0;
+                const span = Math.abs(isDec ? s.delta : s.runningEnd);
+                const width = Math.max(8, Math.min(100, (span / Math.max(Math.abs(revenue), 1)) * 100));
+                const valueText = isDec
+                  ? negative === "minus"
+                    ? ownerOutflow(fmtCompact(Math.abs(s.delta)))
+                    : `(${fmtCompact(Math.abs(s.delta))})`
+                  : fmtCompact(s.runningEnd);
+                return (
+                  <li key={s.label} className="min-w-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 text-xs font-bold uppercase leading-tight tracking-wide text-[#1e293b] dark:text-[#e2e8f0]">
+                        {s.label}
+                      </span>
+                      <span
+                        className="shrink-0 text-xs font-extrabold tabular-nums text-[#102A43] dark:text-[#F4F7FB]"
+                        style={{ color: isDec || negNet ? "#c0392b" : undefined }}
+                      >
+                        {valueText}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[#e8eef5] dark:bg-slate-800">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${width}%`,
+                          background: negNet
+                            ? "#c0392b"
+                            : isDec
+                              ? "#c94b4b"
+                              : s.kind === "total"
+                                ? "#1a3a5c"
+                                : "#3f9c72",
+                        }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
           <ScrollableTable hint="Swipe to see the whole waterfall →" className="pb-1">
             <div className="relative min-w-[560px]" style={{ height: CHART_H + 88 + LABEL_PAD }}>
               {/* horizontal grid lines */}
@@ -591,6 +644,7 @@ export function ProfitabilityWaterfall({
               </div>
             </div>
           </ScrollableTable>
+          )}
 
           {/* legend */}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 border-t border-amber-900/10 pt-3 dark:border-slate-800">

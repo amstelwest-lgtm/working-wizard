@@ -144,6 +144,10 @@ assert(scaled?.[0] === 0 && scaled[1] === 80_000, `the axis reaches the real val
 assert(chart.includes("Your accountant is still setting the budget"), "a draft tells the owner the budget is not set");
 assert(chart.includes("data-budget-chart=\"draft\""), "the draft chart is marked");
 assert(chart.includes("domain={domain}"), "the axis uses the scaled domain");
+assert(chart.includes("BudgetMonthTick"), "narrow months use a full label tick");
+assert(chart.includes('data-budget-axis="chart"'), "the chart keeps one month axis");
+assert(chart.includes('data-budget-axis="readout"'), "the desktop readout is marked");
+assert(chart.includes('narrow ? " hidden"'), "the second month row hides on a phone");
 assert(simple.includes("readOnly={readOnly}"), "only the owner view hides a draft chart");
 
 console.log("budget chart table ok");

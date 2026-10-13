@@ -644,6 +644,11 @@ html:not(.dark) .sphere-orb .text-emerald-400,
 html:not(.dark) .health-orb .text-emerald-400 { color: #0e5c40 !important; }
 html:not(.dark) .sphere-orb .text-rose-400,
 html:not(.dark) .health-orb .text-rose-400 { color: #8e2430 !important; }
+@media (max-width: 480px) {
+  html:not(.dark) .owner-pillar-card .sphere-orb {
+    box-shadow: 0 6px 14px rgba(11, 95, 255, 0.16) !important;
+  }
+}
 
 /* Health drill "Back to pillars" / "Back to overview".
    Explicit navy and ink, because light mode remaps text-slate-* . */
