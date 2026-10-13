@@ -872,11 +872,13 @@ function ClientView() {
     // Old ?tab= values are rewritten to tab + section in validateSearch.
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
-    if (search.report || search.action) {
+    if (search.action === "preview" || search.action === "download") {
       setStudioDeepLink({
         report: search.report,
         action: search.action,
       });
+    } else {
+      setStudioDeepLink({});
     }
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
@@ -1127,12 +1129,12 @@ function ClientView() {
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
-  const [planSentence, setPlanSentence] = useState(
-    "No actions in the plan yet. Add the first one to get started.",
-  );
+  const [planSentence, setPlanSentence] = useState("");
+  const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusPlanAdd = useRef<(() => void) | null>(null);
   const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
+    setPlanKnown(true);
     setPlanCount(actions.length);
     setPlanSentence(planAnswerSentence(actions));
   }, []);
@@ -4509,7 +4511,7 @@ function ClientView() {
                   <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                   <DeliverableAnswerStrip
                     heading="Action plan"
-                    sentence={planSentence}
+                    sentence={planKnown ? planSentence : ""}
                     scope="action_plan"
                     clientId={clientId}
                     clientName={client?.name}
@@ -4520,7 +4522,7 @@ function ClientView() {
                     canSign={planCount > 0}
                     signoffVerbOnly
                     extraActions={
-                      planCount === 0 ? (
+                      planKnown && planCount === 0 ? (
                         <button
                           type="button"
                           className={ARAP_GOLD_BTN}
@@ -4545,11 +4547,7 @@ function ClientView() {
               near-transparent cream — titles vanished in light mode. */}
                   <TabErrorBoundary label="Action Plan">
                     <div id="action-plan-work">
-                    <Suspense
-                      fallback={
-                        <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>
-                      }
-                    >
+                    <Suspense fallback={null}>
                       {activeTab === "plan" && (
                         <ActionPlanPanel
                           key={`${client.id}-${search.filter ?? "all"}`}

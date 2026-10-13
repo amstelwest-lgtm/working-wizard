@@ -2089,7 +2089,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <>
                 {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">
-          <h2>Clients</h2>
+          <h1>Clients</h1>
           <div className="search">
             <svg viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="7" />

@@ -5,13 +5,17 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ReportsStudio } from "../src/routes/_authenticated/reports-studio";
+import { reportDeepLinkAction, ReportsStudio } from "../src/routes/_authenticated/reports-studio";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
 assert(typeof ReportsStudio === "function", "ReportsStudio is exported for the client workspace tab");
+assert(reportDeepLinkAction(undefined) === null, "opening Reports does not preview a PDF");
+assert(reportDeepLinkAction("scorecard") === null, "a report key is not a preview action");
+assert(reportDeepLinkAction("preview") === "preview", "an explicit preview still opens");
+assert(reportDeepLinkAction("download") === "download", "an explicit download still starts");
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes("ReportsStudioPanel"), "client Reports tab mounts ReportsStudio");
