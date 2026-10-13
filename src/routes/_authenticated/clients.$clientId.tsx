@@ -157,6 +157,7 @@ import {
   legacyPaneForSearch,
   routerHash,
 } from "@/lib/client-route-search";
+import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
@@ -881,10 +882,27 @@ function ClientView() {
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
   }, [search, requestOpenNote, openArchive]);
+  const askHashClear = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     const apply = () => {
       const hash = window.location.hash;
+      const asked = askAgentFromHash(hash);
+      if (asked) {
+        setActiveTab("overview");
+        const token = `${clientId}:${asked}`;
+        if (search.agent === asked && askHashClear.current === token) return;
+        askHashClear.current = token;
+        void navigate({
+          to: "/clients/$clientId",
+          params: { clientId },
+          search: (prev) => searchWithAskAgent(prev, asked),
+          hash: undefined,
+          replace: true,
+        });
+        return;
+      }
+      askHashClear.current = null;
       const next = legacyHashDestination({ tab: search.tab, section: search.section }, hash);
       if (!next) return;
       const keepHash = hashIsCashDetailAnchor(hash);
@@ -899,7 +917,7 @@ function ClientView() {
     apply();
     window.addEventListener("hashchange", apply);
     return () => window.removeEventListener("hashchange", apply);
-  }, [search.tab, search.section, clientId, navigate]);
+  }, [search.tab, search.section, search.agent, clientId, navigate]);
   // Landing tab: Home (Bot and the team desk). Decided once per client, after
   // load, and never over a ?tab= deep link.
   // The tour variant is fixed at the same moment: flipping to the full tour
@@ -2788,11 +2806,8 @@ function ClientView() {
       void navigate({
         to: "/clients/$clientId",
         params: { clientId },
-        search: (prev) => {
-          const next = accountantClientTabSearch(prev, "home") as Record<string, unknown>;
-          next.agent = agent;
-          return next;
-        },
+        search: (prev) => searchWithAskAgent(prev, agent),
+        hash: undefined,
         replace: true,
       });
     },

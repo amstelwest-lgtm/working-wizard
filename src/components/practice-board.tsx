@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,6 +109,8 @@ import { OwnerHome } from "@/components/owner-door/owner-home";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
+import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
+import { PracticeAgentThread } from "@/components/practice-agent-thread";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1125,6 +1127,8 @@ export type PracticeView = "home" | "clients" | "practice";
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const practiceHash = useRouterState({ select: (s) => s.location.hash });
+  const practiceAgent = askAgentFromHash(practiceHash);
 
   // ── Role guard ────────────────────────────────────────────────────────────
   // Business-client credentials must not sit on the practice portal. Wait for
@@ -1769,6 +1773,27 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <div className="deliverable-main">
         {view === "home" ? (
           <div className="owner-door">
+            {practiceAgent ? (
+              <PracticeAgentThread
+                agent={practiceAgent}
+                finding={practiceHomeLines({
+                  clientCount: clientRows.length,
+                  avgHealth,
+                  needAttention: attention.needAttention,
+                  reviewNow: attention.reviewNow,
+                  openQueries: openQueriesTotal,
+                  followUps: followUpItems.length,
+                  loading: bookLoading,
+                })[practiceAgent].join(" ")}
+                clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
+                onBack={() => {
+                  void navigate({ to: "/dashboard" });
+                }}
+                onSelectAgent={(agent) => {
+                  void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
+                }}
+              />
+            ) : (
             <OwnerHome
               title="Your whole finance team"
               showInvite={false}
@@ -1792,12 +1817,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 followUps: followUpItems.length,
               })}
               onOpen={(agent) => {
-                void navigate({ to: "/dashboard", hash: `ask-${agent.replace(/_/g, "-")}` });
+                void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
               onAsk={(agent) => {
-                void navigate({ to: "/dashboard", hash: `ask-${agent.replace(/_/g, "-")}` });
+                void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
             />
+            )}
           </div>
         ) : null}
         {view === "practice" ? (
