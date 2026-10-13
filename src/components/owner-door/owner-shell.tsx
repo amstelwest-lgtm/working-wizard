@@ -205,6 +205,11 @@ export function OwnerShell({
         <DrawerBackdrop open={navOpen} onClose={() => setNavOpen(false)} />
         <nav className="deliverable-rail" aria-label="Owner">
           <DrawerCloseButton onClose={() => setNavOpen(false)} />
+          <div className="rail-brand" aria-hidden="true">
+            <span className="brand">
+              <span className="gold-text">MILŌN</span>
+            </span>
+          </div>
           {RAIL.map((item) => {
             const active = screen === item.screen || (item.screen === "home" && screen === "chat");
             return (

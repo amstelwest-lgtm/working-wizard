@@ -281,6 +281,7 @@ import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-sign
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { computeIsStale } from "@/components/review-signoff";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
+import { OwnerPageHead } from "@/components/owner-ui";
 import {
   currentPeriodDate,
   currentPeriodLabel,
@@ -3966,7 +3967,11 @@ function Index() {
                 boards={(go) => ({
                   health: (
                     <section className="owner-pane" data-owner-page="health">
-                      <h1 className="owner-title">Business Health</h1>
+                      <OwnerPageHead
+                        eyebrow="Health"
+                        title="Business health"
+                        lede="One score built from profit, assets, financing and cash."
+                      />
                       {showScoredBoard ? (
                         <div className="owner-health-hero">
                           <OwnerSignoffMark
@@ -3978,6 +3983,7 @@ function Index() {
                             className="mb-2"
                           />
                         <OwnerHealthOrb
+                          variant="ring"
                           overallHealth={avgHealth}
                           displayStatus={overallHealth.displayStatus}
                           pillars={spherePillars}
@@ -4020,6 +4026,11 @@ function Index() {
                   ),
                   budget: (
                     <section className="owner-pane" data-owner-page="budget">
+                      <OwnerPageHead
+                        eyebrow="Budget"
+                        title="Budget vs actual"
+                        lede="The plan for the year, next to what actually happened."
+                      />
                       <Suspense fallback={<p className="owner-lede">Loading budget…</p>}>
                         <BudgetPanel
                           clientId={effectiveClientId ?? undefined}
@@ -4141,7 +4152,11 @@ function Index() {
                   ),
                   moves: (
                     <section className="owner-pane" data-owner-page="moves">
-                      <h1 className="owner-title">Next moves</h1>
+                      <OwnerPageHead
+                        eyebrow="Next moves"
+                        title="Your action plan"
+                        lede="What to do next, and who is on it."
+                      />
                       <Suspense fallback={<p className="owner-lede">Loading next moves…</p>}>
                         {effectiveClientId ? (
                           <ActionPlanPanel
