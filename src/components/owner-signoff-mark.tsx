@@ -58,8 +58,8 @@ export function OwnerSignoffMark({
     <div
       data-owner-signoff
       data-signoff-stale={isStale ? "true" : "false"}
-      className={`flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 ${
-        align === "start" ? "justify-start" : "justify-end"
+      className={`flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1 ${
+        align === "start" ? "justify-start" : "justify-start sm:justify-end"
       } ${className}`}
     >
       {signoff.signature_data ? (
@@ -69,7 +69,9 @@ export function OwnerSignoffMark({
           className="h-5 w-auto max-w-[4.5rem] object-contain object-left"
         />
       ) : null}
-      <p className="text-[12px] font-medium leading-snug text-[#102A43]">{line}</p>
+      <p className="min-w-0 whitespace-normal text-[12px] font-medium leading-snug text-[#102A43] [overflow-wrap:break-word]">
+        {line}
+      </p>
       {isStale ? (
         <span
           data-signoff-stale-chip

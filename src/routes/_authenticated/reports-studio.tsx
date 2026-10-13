@@ -3136,7 +3136,7 @@ function ReportCard({
       </div>
 
       {clientId && scope && onSignoffChange ? (
-        <div className="flex justify-end px-5 pb-2">
+        <div className="flex min-w-0 justify-stretch px-5 pb-2 sm:justify-end">
           <ReviewSignoffButton
             compact
             clientId={clientId}

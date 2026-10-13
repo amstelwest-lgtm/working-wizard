@@ -567,8 +567,20 @@ function ProfitPane({ clientId }: { clientId: string }) {
         scope="profitability"
         clientId={clientId}
         clientName="Harbour Glass"
-        signoff={null}
-        signoffKnown={false}
+        signoff={{
+          id: "harness-signoff-profitability",
+          client_id: clientId,
+          scope: "profitability",
+          signed_off_by_id: "harness-local-user",
+          signed_off_by_name: "Ada Mbeki",
+          signed_off_by_initials: "AM",
+          signed_off_by_title: null,
+          firm_name: "Harbour & Co",
+          note: null,
+          signature_data: null,
+          signed_off_at: "2026-10-02T08:00:00.000Z",
+        }}
+        signoffKnown
         isStale={false}
         onSignoffChange={() => {}}
         canSign
@@ -898,7 +910,20 @@ function CashPane({ clientId }: { clientId: string }) {
             clientName="Harbour Glass"
             canSign
             hideReadOnlyStamp
-            signoffKnown={false}
+            signoffKnown
+            signoff={{
+              id: "harness-signoff-cash",
+              client_id: clientId,
+              scope: "cash_forecast",
+              signed_off_by_id: "harness-local-user",
+              signed_off_by_name: "Ada Mbeki",
+              signed_off_by_initials: "AM",
+              signed_off_by_title: null,
+              firm_name: "Harbour & Co",
+              note: null,
+              signature_data: null,
+              signed_off_at: "2026-10-02T08:00:00.000Z",
+            }}
             statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
           />
         </PaneBoundary>

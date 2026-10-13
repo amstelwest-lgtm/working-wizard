@@ -67,6 +67,7 @@ const CLIENT_ROW = {
   created_at: "2026-06-12T00:00:00.000Z",
   cashflow: {
     startDate: "2026-10-05",
+    seededFromBanksAt: "2026-10-05T00:00:00.000Z",
     openingBalance: "186000",
     openingBalanceSource: "upload",
     forecastLinesSource: "xero-bank-summary",
@@ -109,6 +110,7 @@ const CLIENT_ROW = {
     revenue: "420000",
     cogs: "80000",
     fixedCosts: "140000",
+    receivables: "38000",
     periodEnd: "2026-09-30",
   },
   financials_updated_at: "2026-10-01T00:00:00.000Z",
@@ -144,6 +146,28 @@ const ACTION_ITEM = {
   source_move_key: null,
 };
 
+const HARNESS_SIGNATURE =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="36" viewBox="0 0 120 36"><path d="M4 28 C 18 6, 28 8, 40 24 S 72 42, 112 8" fill="none" stroke="#8a6508" stroke-width="2"/></svg>',
+  );
+
+function reviewSignoff(scope: string) {
+  return {
+    id: `harness-signoff-${scope}`,
+    client_id: "harness-client",
+    scope,
+    signed_off_by_id: "harness-local-user",
+    signed_off_by_name: "Ada Mbeki",
+    signed_off_by_initials: "AM",
+    signed_off_by_title: null,
+    firm_name: "Harbour & Co",
+    note: null,
+    signature_data: HARNESS_SIGNATURE,
+    signed_off_at: "2026-10-02T08:00:00.000Z",
+  };
+}
+
 const TABLES: Record<string, unknown> = {
   clients: CLIENT_ROW,
   action_plans: [ACTION_PLAN],
@@ -160,6 +184,9 @@ const TABLES: Record<string, unknown> = {
   ],
   action_milestones: [],
   action_emails: [],
+  client_review_signoffs: ["financials", "cash_forecast", "profitability", "budget", "action_plan"].map(
+    reviewSignoff,
+  ),
   user_roles: [],
   firms: [],
   firm_members: [],

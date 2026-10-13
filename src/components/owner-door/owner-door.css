@@ -1938,7 +1938,7 @@ html.dark .owner-status.is-attention {
 @media (max-width: 760px) {
   .owner-door:not([data-screen="chat"]) {
     padding-inline: var(--owner-space-2);
-    padding-bottom: calc(var(--owner-space-6) + var(--owner-space-6));
+    padding-bottom: calc(7.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .owner-door .owner-tools > .milon-theme-toggle {
@@ -1946,20 +1946,20 @@ html.dark .owner-status.is-attention {
   }
 
   .owner-door .owner-brand {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     max-width: 100%;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .owner-door .owner-biz,
   .owner-door .owner-biz b {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: visible;
-    text-overflow: unset;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   .owner-door .owner-pane[data-owner-home="true"] {

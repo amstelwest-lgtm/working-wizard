@@ -5130,7 +5130,7 @@ function Index() {
                     </div>
                   ) : (
                     <div>
-                      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                      <div className="mb-3 flex min-w-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                         <span className="text-[13px] font-semibold text-[#102A43]">Financial ratios</span>
                         <OwnerSignoffMark
                           signoff={financialsSignoff}
@@ -5528,7 +5528,7 @@ function Index() {
 
               <TabsContent value="waterfall">
                 <TabErrorBoundary label="Profit">
-                  <div id="wizard-owner-signoff" className="mb-3 flex justify-end">
+                  <div id="wizard-owner-signoff" className="mb-3 flex min-w-0 flex-col items-stretch sm:items-end">
                     <OwnerSignoffMark
                       signoff={profitabilitySignoff}
                       isStale={computeIsStale(

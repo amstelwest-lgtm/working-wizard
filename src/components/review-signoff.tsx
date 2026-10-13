@@ -95,7 +95,7 @@ function SignoffCertificate({
       <div
         data-signoff-corner
         data-signoff-scope={scope}
-        className="flex max-w-[210px] shrink-0 flex-col items-end rounded-lg border border-[#DBEAFE] bg-white/90 px-2.5 py-1.5 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]/90"
+        className="flex w-full min-w-0 max-w-full flex-col items-start rounded-lg border border-[#DBEAFE] bg-white/90 px-2.5 py-1.5 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]/90 sm:max-w-[210px] sm:shrink-0 sm:items-end"
         title={title}
       >
         <span className="text-right text-[10px] font-semibold leading-snug text-[#8a6508] dark:text-[#e1b85e]">
@@ -105,7 +105,7 @@ function SignoffCertificate({
           <img
             src={signoff.signature_data}
             alt={`Signature of ${signoff.signed_off_by_name}`}
-            className="mt-0.5 h-10 w-auto max-w-[180px] object-contain object-right"
+            className="mt-0.5 h-10 w-auto max-w-full object-contain object-left sm:object-right"
           />
         ) : (
           <span
@@ -137,7 +137,7 @@ function SignoffCertificate({
         >
           {isStale ? "!" : initials.slice(0, 2)}
         </span>
-        <span className="truncate text-[11px] font-semibold text-[#0e5c40] dark:text-[#8dccb0]">
+        <span className="min-w-0 whitespace-normal text-[11px] font-semibold leading-snug text-[#0e5c40] [overflow-wrap:break-word] dark:text-[#8dccb0]">
           {line}
         </span>
       </div>
@@ -381,7 +381,7 @@ export function OwnerTabSignoffRow({
   id?: string;
 }) {
   return (
-    <div id={id} className="mb-4 flex items-center gap-3 pb-3">
+    <div id={id} className="mb-4 flex min-w-0 flex-col items-stretch gap-2 pb-3 sm:flex-row sm:items-center sm:gap-3">
       <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#16845B] dark:text-[#8dccb0]">
         {label}
       </span>
@@ -512,8 +512,8 @@ export function ReviewSignoffButton({
   const frame = hideStatus
     ? "answer-strip__signoff"
     : compact
-      ? "flex flex-col items-end gap-2"
-      : "mt-2 flex w-full max-w-md flex-col items-end gap-2";
+      ? "flex w-full min-w-0 max-w-full flex-col items-stretch gap-2 sm:items-end"
+      : "mt-2 flex w-full max-w-md flex-col items-stretch gap-2 sm:items-end";
 
   if (shownSignoff && !isStale) {
     return (

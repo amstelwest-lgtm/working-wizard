@@ -25,6 +25,20 @@ type NoteLayerProps = {
   onNeedTab?: (tab: string) => void;
 };
 
+function usePhoneLayout() {
+  const [phone, setPhone] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setPhone(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return phone;
+}
+
 function getInitials(name: string) {
   return name
     .split(/[\s@.]+/)
@@ -237,6 +251,7 @@ export function NoteLayer({
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tagIt, setTagIt] = useState(false);
+  const phone = usePhoneLayout();
   const [trayExpanded, setTrayExpanded] = useState(false);
   const [trayHidden, setTrayHidden] = useState(false);
   const [traySlot, setTraySlot] = useState<HTMLElement | null>(null);
@@ -431,10 +446,24 @@ export function NoteLayer({
         <div
           data-note="true"
           data-notes-tray=""
+          data-notes-expanded={trayExpanded ? "true" : "false"}
           className={
             trayInFlow
               ? "notes-tray relative z-[1] mb-3 w-full max-w-full rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
-              : "notes-tray fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+              : phone
+                ? trayExpanded
+                  ? "notes-tray fixed z-30 max-h-[min(46dvh,360px)] overflow-auto rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+                  : "notes-tray notes-tray--pill fixed z-30 w-auto max-w-[calc(100vw-5.5rem)] rounded-full border border-[#0B5FFF]/30 bg-white/95 py-0.5 pl-1 pr-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+                : "notes-tray fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+          }
+          style={
+            phone && !trayInFlow
+              ? {
+                  right: "max(12px, env(safe-area-inset-right))",
+                  bottom: "max(76px, calc(env(safe-area-inset-bottom) + 68px))",
+                  left: trayExpanded ? "12px" : "auto",
+                }
+              : undefined
           }
         >
           <div className="flex items-center justify-between gap-1 px-1">
@@ -455,23 +484,27 @@ export function NoteLayer({
                 )}
               </span>
             </button>
-            <button
-              type="button"
-              title="Open notes archive"
-              onClick={() => openArchive("resolved")}
-              className="px-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#102A43]"
-            >
-              Archive
-            </button>
-            <button
-              type="button"
-              title="Close notes panel"
-              aria-label="Close notes panel"
-              onClick={() => setTrayHidden(true)}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            {phone && !trayExpanded ? null : (
+              <span className="notes-tray-tools flex shrink-0 items-center">
+                <button
+                  type="button"
+                  title="Open notes archive"
+                  onClick={() => openArchive("resolved")}
+                  className="px-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#102A43]"
+                >
+                  Archive
+                </button>
+                <button
+                  type="button"
+                  title="Close notes panel"
+                  aria-label="Close notes panel"
+                  onClick={() => setTrayHidden(true)}
+                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )}
           </div>
           {trayExpanded && (
             <ul className="mt-1 max-h-[36vh] space-y-1 overflow-y-auto">

@@ -1404,6 +1404,7 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
 .answer-strip__chip,
 .answer-strip__status{
   margin:0;
+  max-width:100%;
   border-radius:999px;
   border:1px solid var(--line,rgba(11,95,255,.16));
   padding:4px 10px;
@@ -1411,6 +1412,8 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   font-weight:700;
   letter-spacing:.04em;
   color:var(--ink-dim,#9b958a);
+  white-space:normal;
+  overflow-wrap:break-word;
 }
 .answer-strip__status{color:var(--accent-text)}
 .answer-strip__actions{
@@ -1444,7 +1447,7 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   color:var(--ink-dim,#9b958a);
 }
 .answer-strip__icon:disabled{opacity:.5}
-@media (max-width:480px){
+@media (max-width:640px){
   .answer-strip{grid-template-columns:minmax(0,1fr)}
   .answer-strip__actions{
     grid-column:1;
@@ -1455,7 +1458,14 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   .answer-strip__signoff,
   .answer-strip__signoff > div{width:100%}
   .answer-strip__signoff button,
-  .answer-strip__primary{width:100%;justify-content:center}
+  .answer-strip__primary,
+  .signoff-primary{
+    width:100%;
+    max-width:100%;
+    justify-content:center;
+    white-space:normal;
+    text-align:center;
+  }
 }
 .review-inputs{
   grid-column:1 / -1;
@@ -1915,7 +1925,12 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 .accountant-portal.nav-open{position:relative;z-index:40}
 @media (max-width:767px){
   .share-fab{right:auto;left:max(1rem, env(safe-area-inset-left))}
-  .notes-fab{bottom:max(5.25rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))}
+  .notes-fab{
+    left:auto !important;
+    right:max(12px, env(safe-area-inset-right)) !important;
+    bottom:max(12px, env(safe-area-inset-bottom)) !important;
+    align-items:flex-end;
+  }
   .accountant-portal .topbar .firm-chip,
   .accountant-portal .topbar .firm-switcher{
     flex:1 1 100%;
