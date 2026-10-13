@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AccountantMenuButton } from "@/components/accountant-nav";
+import { AccountantMenuButton, DrawerBackdrop, DrawerCloseButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { PeriodPill, RailIcon } from "@/components/chrome-icons";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
@@ -107,6 +107,7 @@ export function OwnerShell({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [menuOpen, navOpen]);
+  useAccountantDrawer(navOpen, () => setNavOpen(false));
 
   function open(next: OwnerScreen) {
     setMenuOpen(false);
@@ -122,12 +123,6 @@ export function OwnerShell({
     >
       <header className="topbar">
         <AccountantMenuButton open={navOpen} onClick={() => setNavOpen((open) => !open)} />
-        <button
-          type="button"
-          className="topbar-backdrop"
-          aria-label="Close menu"
-          onClick={() => setNavOpen(false)}
-        />
         <div className="owner-brand">
           <span className="brand">
             <span className="gold-text">MILŌN</span>
@@ -213,7 +208,9 @@ export function OwnerShell({
         </div>
       </header>
       <div className="client-workspace">
+        <DrawerBackdrop open={navOpen} onClose={() => setNavOpen(false)} />
         <nav className="deliverable-rail" aria-label="Owner">
+          <DrawerCloseButton onClose={() => setNavOpen(false)} />
           {RAIL.map((item) => {
             const active = screen === item.screen || (item.screen === "home" && screen === "chat");
             return (
@@ -223,7 +220,7 @@ export function OwnerShell({
                 className={`tab${active ? " on" : ""}`}
                 aria-label={item.label}
                 aria-current={active ? "page" : undefined}
-                onClick={() => onNavigate(item.screen)}
+                onClick={() => open(item.screen)}
               >
                 <span className="tab-ic" aria-hidden="true">
                   <RailIcon id={item.id} />
@@ -232,7 +229,13 @@ export function OwnerShell({
               </button>
             );
           })}
-          <RailSettingsButton active={screen === "settings"} onClick={onSettings} />
+          <RailSettingsButton
+            active={screen === "settings"}
+            onClick={() => {
+              setNavOpen(false);
+              onSettings();
+            }}
+          />
         </nav>
         <div className="deliverable-main">{children}</div>
       </div>

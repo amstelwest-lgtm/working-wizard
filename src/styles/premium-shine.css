@@ -229,7 +229,16 @@ html:not(.dark) .accountant-portal .deliverable-rail {
     box-shadow: none;
   }
 }
-/* Phone drawers go charcoal too. */
+/* Phone drawers go charcoal too. The close control uses the frame ink. */
+html:not(.dark) .accountant-portal .drawer-close {
+  color: var(--pp-frame-ink);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+html:not(.dark) .accountant-portal .drawer-close:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
 @media (max-width: 860px) {
   html:not(.dark) .accountant-portal:not(.owner-door).nav-open .deliverable-rail {
     background: var(--pp-frame-2);

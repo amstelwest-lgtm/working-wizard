@@ -93,7 +93,7 @@ import {
 } from "@/lib/client-route-search";
 import { ClientRail } from "@/components/client-studio-chrome";
 import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
-import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
+import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { SettingsMenu } from "@/components/settings-menu";
 
 const CLIENT_ID = "harness-client";
@@ -162,7 +162,7 @@ export function RailStudio() {
     return () => window.clearTimeout(timer);
   }, [pane, search.section]);
   const [menuOpen, setMenuOpen] = useState(false);
-  useAccountantDrawer(menuOpen);
+  useAccountantDrawer(menuOpen, () => setMenuOpen(false));
 
   return (
     <div className={`accountant-portal${menuOpen ? " nav-open" : ""}`} data-rail-harness="true" data-rail-ready="true">
@@ -190,12 +190,6 @@ export function RailStudio() {
               void navigate({ to: "/settings", hash: "firm-billing" });
             }}
           />
-          <button
-            type="button"
-            className="topbar-backdrop"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-          />
           <AccountantMenuButton open={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
           <div className={`topbar-actions${menuOpen ? " open" : ""}`} />
         </div>
@@ -208,6 +202,7 @@ export function RailStudio() {
           <HarnessCrumb clientId={clientId} pane={pane} section={search.section} />
         </div>
         <div className="client-workspace">
+          <DrawerBackdrop open={menuOpen} onClose={() => setMenuOpen(false)} />
           <ClientRail clientId={clientId} search={search} onNavigate={() => setMenuOpen(false)} />
           <div className="deliverable-main">
             <div data-notes-tray-slot="" className="notes-tray-slot" />

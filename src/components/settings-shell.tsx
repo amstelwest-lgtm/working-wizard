@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
+import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
 import { SettingsMenu } from "@/components/settings-menu";
 
@@ -42,7 +42,7 @@ export function SettingsShell({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
-  useAccountantDrawer(menuOpen);
+  useAccountantDrawer(menuOpen, () => setMenuOpen(false));
   return (
     <div className={`accountant-portal settings-portal milon-page-enter${menuOpen ? " nav-open" : ""}`}>
       <div id="atmos" aria-hidden="true">
@@ -68,16 +68,10 @@ export function SettingsShell({
               openPlan();
             }}
           />
-          <button
-            type="button"
-            className="topbar-backdrop"
-            aria-label="Close menu"
-            tabIndex={menuOpen ? 0 : -1}
-            onClick={() => setMenuOpen(false)}
-          />
           <AccountantMenuButton open={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
         </header>
         <div className="client-workspace">
+          <DrawerBackdrop open={menuOpen} onClose={() => setMenuOpen(false)} />
           <PracticeRail onNavigate={() => setMenuOpen(false)} />
           <div className="deliverable-main">
             <div className={`settings-portal__shell settings-portal__shell--${width}`}>{children}</div>

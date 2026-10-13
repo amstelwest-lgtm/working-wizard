@@ -52,8 +52,9 @@ const ownerCss = read("src/components/owner-door/owner-door.css");
 assert(ownerCss.includes("--owner-menu-top"), "the owner account menu is placed under its trigger");
 assert(ownerCss.includes("overflow-wrap: anywhere"), "owner practice names wrap");
 assert(
-  ownerCss.includes('[data-screen="settings"]') && ownerCss.includes('[data-screen="plan"]'),
-  "owner Settings and Plan tabs can wrap",
+  ownerCss.includes(".owner-door.accountant-portal.nav-open .deliverable-rail") &&
+    !ownerCss.includes("flex: 1 1 calc(50% - 4px)"),
+  "owner Settings and Plan use the phone drawer, not a wrapping tab grid",
 );
 
 const portalCss = read("src/styles/accountant-portal.css");
@@ -75,7 +76,7 @@ const shell = read("src/components/owner-door/owner-shell.tsx");
 assert(shell.includes("<SettingsMenu"), "the owner top-right Settings control opens the menu");
 assert(shell.includes("<RailSettingsButton"), "the owner sidebar Settings item stays");
 assert(
-  /<RailSettingsButton[\s\S]*onClick=\{onSettings\}/.test(shell),
+  /<RailSettingsButton[\s\S]*onSettings\(\)/.test(shell),
   "the owner sidebar Settings item is still a direct link",
 );
 

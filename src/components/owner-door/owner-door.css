@@ -1916,7 +1916,7 @@ html.dark .owner-status.is-attention {
     overflow-x: hidden;
     overflow-y: auto;
     border-radius: 0;
-    padding: 72px 12px 24px;
+    padding: 12px 12px 24px;
     mask-image: none;
     -webkit-mask-image: none;
   }

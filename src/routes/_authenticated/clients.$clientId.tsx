@@ -162,7 +162,7 @@ import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-s
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
 import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
 import { agentDisplayName } from "@/lib/milon-team";
-import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
+import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
@@ -1162,7 +1162,7 @@ function ClientView() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
-  useAccountantDrawer(mobileNavOpen);
+  useAccountantDrawer(mobileNavOpen, () => setMobileNavOpen(false));
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
   const [drawerTier, setDrawerTier] = useState<HealthTier>("at_risk");
@@ -3043,13 +3043,6 @@ function ClientView() {
                   void navigate({ to: "/settings", hash: "firm-billing" });
                 }}
               />
-              <button
-                type="button"
-                className="topbar-backdrop"
-                aria-label="Close menu"
-                tabIndex={mobileNavOpen ? 0 : -1}
-                onClick={() => setMobileNavOpen(false)}
-              />
               <AccountantMenuButton open={mobileNavOpen} onClick={() => setMobileNavOpen((o) => !o)} />
               <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
                 <ThemeToggle />
@@ -3079,6 +3072,7 @@ function ClientView() {
             </div>
 
             <div className="client-workspace">
+              <DrawerBackdrop open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
               <ClientRail
                 clientId={clientId}
                 search={search}
