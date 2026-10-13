@@ -35,6 +35,8 @@ assert(shell.includes("accountant-portal"), "settings sit on portal chrome");
 assert(shell.includes('id="atmos"'), "settings have the gold atmos");
 assert(shell.includes("settings-gear"), "settings keeps a top-right control");
 assert(shell.includes("<PracticeRail"), "settings pins the practice rail");
+assert(shell.includes("<FirmSwitcher"), "settings keeps the firm pill");
+assert(shell.includes("<FeatureFinder"), "settings keeps search");
 assert(read("src/components/accountant-nav.tsx").includes(">Settings<") || read("src/components/accountant-nav.tsx").includes("Settings"), "the rail pins Settings");
 
 for (const page of [

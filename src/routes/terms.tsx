@@ -73,9 +73,9 @@ function TermsPage() {
       </p>
       {copyPack === "us" ? (
       <p className="mk-copy-us">
-        US list prices: Solo {LIST_PRICES.us.firmSolo}/mo after a 14-day free trial · up to 3
-        clients, Scale {LIST_PRICES.us.firmScale}/mo. Annual is
-        about 20% off. Enterprise is a custom quote.
+        US list prices: Starter {LIST_PRICES.us.firmStarter}/mo for up to 5 clients, Solo{" "}
+        {LIST_PRICES.us.firmSolo}/mo after a 14-day free trial · up to 3 clients, Scale{" "}
+        {LIST_PRICES.us.firmScale}/mo. Annual is about 20% off. Enterprise is a custom quote.
       </p>
       ) : null}
 

@@ -98,7 +98,10 @@ assert(
   subscribe.includes("OWNER_MANAGE_LABEL") && labels.includes('OWNER_MANAGE_LABEL = "Manage billing"'),
   "Stripe entitlement is Manage billing",
 );
-assert(!subscribe.includes("R299") && !subscribe.includes("ZAR"), "the button does not ship a rand price");
+assert(
+  !subscribe.includes("R299") && !subscribe.includes("R799") && !subscribe.includes("ZAR"),
+  "the button does not ship a rand price",
+);
 assert(!subscribe.includes("role=\"alert\""), "unavailable is not an error");
 
 const pages = read("src/components/owner-door/owner-pages.tsx");

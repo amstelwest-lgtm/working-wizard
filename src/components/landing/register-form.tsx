@@ -22,7 +22,6 @@ import {
 } from "@/lib/pending-checkout";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { setPortalIntent } from "@/lib/user-roles";
-import { ownerRegisterPlanNote } from "@/lib/owner-plan";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 
 type SignedIn = { email?: string | null } | null;
@@ -56,6 +55,7 @@ export function LandingRegisterForm({
   setDraftMarket,
   firmInterval,
   copyMarket,
+  ownerNote,
   handleRegister,
   goToFirmSignup,
   goToOwnerSpark,
@@ -88,6 +88,8 @@ export function LandingRegisterForm({
   setDraftMarket: (value: DraftMarket) => void;
   firmInterval: FirmInterval;
   copyMarket: { copyPack: VisitorCopyPack };
+  /** Server-built for ZA. The US sentence otherwise. Never a client-side rand literal. */
+  ownerNote: string;
   handleRegister: (event: FormEvent) => void;
   goToFirmSignup: (opts?: { plan?: FirmCheckoutBand; scrollTo?: "register" | "pricing" }) => void;
   goToOwnerSpark: () => void;
@@ -465,7 +467,7 @@ export function LandingRegisterForm({
                     lineHeight: 1.5,
                   }}
                 >
-                  {ownerRegisterPlanNote(visitorCopyPack(draftMarket))}. Accounting firms:{" "}
+                  {ownerNote} Accounting firms:{" "}
                   {FIRM_CARD_TIMING} By creating an account you agree to the <a href="/terms">Terms</a>.
                 </p>
               </>

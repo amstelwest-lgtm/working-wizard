@@ -10,6 +10,8 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { AuthProvider } from "@/hooks/use-auth";
+import { ChunkReloadNotice } from "@/components/chunk-reload-notice";
+import { CHUNK_RELOAD_BOOT_SCRIPT, installChunkReloadGuard, isChunkLoadError } from "@/lib/chunk-reload";
 import { reportClientError } from "@/lib/monitoring";
 import { StaleBundleBar } from "@/components/stale-bundle-bar";
 import { isPublicMarketingPath, PUBLIC_MARKETING_PATHS } from "@/lib/public-marketing";
@@ -31,15 +33,25 @@ const PublicChrome = lazy(() =>
  */
 function DeferredAppChrome({ children }: { children: ReactNode }) {
   const [Chrome, setChrome] = useState<ComponentType<{ children: ReactNode }> | null>(null);
+  const [chunkFailed, setChunkFailed] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    void import("@/components/app-chrome").then((mod) => {
-      if (!cancelled) setChrome(() => mod.AppChrome);
-    });
+    void import("@/components/app-chrome")
+      .then((mod) => {
+        if (!cancelled) setChrome(() => mod.AppChrome);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[app-chrome] chunk failed", err);
+        if (!isChunkLoadError(err)) return;
+        setChrome(null);
+        setChunkFailed(true);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
+  if (chunkFailed) return <ChunkReloadNotice />;
   if (!Chrome) {
     return <AppChromeReadyContext.Provider value={false}>{children}</AppChromeReadyContext.Provider>;
   }
@@ -76,9 +88,10 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  const router = useRouter();
   console.error(error);
   reportClientError(error, { source: "root-boundary" });
-  const router = useRouter();
+  if (isChunkLoadError(error)) return <ChunkReloadNotice />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -168,6 +181,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       scripts: import.meta.env.DEV
         ? [
             jsonLd,
+            { children: CHUNK_RELOAD_BOOT_SCRIPT },
             {
               // Dev-only: report FULL browser errors (console truncates them) to
               // the server so hydration failures can be diagnosed from logs.
@@ -222,7 +236,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 })();`,
             },
           ]
-        : [jsonLd],
+        : [jsonLd, { children: CHUNK_RELOAD_BOOT_SCRIPT }],
     };
   },
   shellComponent: RootShell,
@@ -332,6 +346,10 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onPublic = isPublicMarketingPath(pathname);
+
+  useEffect(() => {
+    installChunkReloadGuard();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

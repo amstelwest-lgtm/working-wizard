@@ -19,12 +19,9 @@ import {
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
 import {
-  avgHealthDelta,
   buildAttentionItems,
   buildFollowUpQueue,
   buildPortfolioInsights,
-  clientsAddedThisMonth,
-  attentionFootnote,
   dataAsOfLabel,
   firmOpenQueriesDestination,
   firstNameOf,
@@ -105,6 +102,9 @@ import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
+import { AgentWork } from "@/components/milon-team/agent-work";
+import { practiceAgentWork } from "@/lib/agent-work";
+import { useOverlayHistory } from "@/lib/overlay-history";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
 import { ownerPresence } from "@/lib/owner-presence";
@@ -483,6 +483,7 @@ function AddClientDialog({
   const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
   const [confirmUpgrade, setConfirmUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const closeDrawer = useOverlayHistory(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -607,7 +608,8 @@ function AddClientDialog({
       const message = err instanceof Error ? err.message : "Could not add client";
       const trialEnded = message.includes("Your trial has ended");
       const trialCap = message.includes("14-day free trial");
-      const bandCap = message.includes("Upgrade to a larger band");
+      const bandCap =
+        message.includes("Upgrade to a larger band") || message.includes("Upgrade to Solo");
       if (trialEnded || trialCap || bandCap) {
         try {
           await refreshCap();
@@ -651,12 +653,15 @@ function AddClientDialog({
 
   return (
     <>
-      <div className="veil open" onClick={onClose} />
+      <div className="veil open" onClick={closeDrawer} />
       <div className="drawer open" style={{ maxWidth: 420 }}>
         <div className="drawer-head">
+          <button type="button" className="client-subpage-back" onClick={closeDrawer}>
+            Back
+          </button>
           <div className="cat">New client</div>
           <h3>{heading}</h3>
-          <button className="close" onClick={onClose}>
+          <button className="close" onClick={closeDrawer} aria-label="Back">
             ✕
           </button>
         </div>
@@ -936,14 +941,18 @@ function InviteOwnerDialog({
   onCopy: () => void;
   onSend: () => void;
 }) {
+  const closeDrawer = useOverlayHistory(true, onClose);
   return (
     <>
-      <div className="veil open" onClick={onClose} />
+      <div className="veil open" onClick={closeDrawer} />
       <div className="drawer open" style={{ maxWidth: 480 }}>
         <div className="drawer-head">
+          <button type="button" className="client-subpage-back" onClick={closeDrawer}>
+            Back
+          </button>
           <div className="cat">Invite client management</div>
           <h3>{draft.clientName}</h3>
-          <button className="close" onClick={onClose}>
+          <button className="close" onClick={closeDrawer} aria-label="Back">
             ✕
           </button>
         </div>
@@ -1552,8 +1561,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     : null;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
   const queriesDestination = firmOpenQueriesDestination(clientRows);
-  const addedThisMonth = clientsAddedThisMonth(clientRows);
-  const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(greetingSource);
   const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
@@ -1623,6 +1630,30 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       ),
     [clientRows],
   );
+  const practiceBrief = useMemo(
+    () => ({
+      clientCount: clientRows.length,
+      avgHealth,
+      needAttention: attention.needAttention,
+      reviewNow: attention.reviewNow,
+      openQueries: openQueriesTotal,
+      followUps: followUpItems.length,
+    }),
+    [
+      clientRows.length,
+      avgHealth,
+      attention.needAttention,
+      attention.reviewNow,
+      openQueriesTotal,
+      followUpItems.length,
+    ],
+  );
+  const practiceLines = useMemo(
+    () => practiceHomeLines({ ...practiceBrief, loading: bookLoading }),
+    [practiceBrief, bookLoading],
+  );
+  const practiceStatus = useMemo(() => practiceCardStatuses(practiceBrief), [practiceBrief]);
+  const dashAgent = view === "home" ? practiceAgent : null;
 
   const openClientPlan = (clientId: string, overdue: boolean) =>
     navigate({
@@ -1711,6 +1742,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
         onFinish={clientRows.length === 0 ? () => setFirstClientOpen(true) : undefined}
         passThroughIds={[OPEN_QUERIES_TILE_ID]}
+        userId={user?.id ?? null}
       />
       {/* Ambient background */}
       <div id="atmos">
@@ -1773,49 +1805,36 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <div className="deliverable-main">
         {view === "home" ? (
           <div className="owner-door">
-            {practiceAgent ? (
+            {dashAgent ? (
               <PracticeAgentThread
-                agent={practiceAgent}
-                finding={practiceHomeLines({
-                  clientCount: clientRows.length,
-                  avgHealth,
-                  needAttention: attention.needAttention,
-                  reviewNow: attention.reviewNow,
-                  openQueries: openQueriesTotal,
-                  followUps: followUpItems.length,
-                  loading: bookLoading,
-                })[practiceAgent].join(" ")}
+                agent={dashAgent}
+                finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")}
                 clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
                 onBack={() => {
-                  void navigate({ to: "/dashboard" });
+                  void navigate({ to: "/dashboard", hash: "" });
                 }}
                 onSelectAgent={(agent) => {
                   void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
                 }}
-              />
+              >
+                <AgentWork
+                  label="On the book"
+                  {...practiceAgentWork(dashAgent, {
+                    loading: bookLoading,
+                    clients: clientRows,
+                    attention: attentionBook.items,
+                    followUps: followUpItems,
+                  })}
+                />
+              </PracticeAgentThread>
             ) : (
             <OwnerHome
               title="Your whole finance team"
               showInvite={false}
               variant="character"
               presence={ownerPresence(emptyAgentActivity())}
-              lines={practiceHomeLines({
-                clientCount: clientRows.length,
-                avgHealth,
-                needAttention: attention.needAttention,
-                reviewNow: attention.reviewNow,
-                openQueries: openQueriesTotal,
-                followUps: followUpItems.length,
-                loading: bookLoading,
-              })}
-              status={practiceCardStatuses({
-                clientCount: clientRows.length,
-                avgHealth,
-                needAttention: attention.needAttention,
-                reviewNow: attention.reviewNow,
-                openQueries: openQueriesTotal,
-                followUps: followUpItems.length,
-              })}
+              lines={practiceLines}
+              status={practiceStatus}
               onOpen={(agent) => {
                 void navigate({ to: "/dashboard", hash: askHashForAgent(agent) });
               }}
@@ -1855,65 +1874,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             </>
           ) : (
             <>
-              <MetricTile
-                label="Clients"
-                icon={
-                  <svg viewBox="0 0 24 24">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                }
-                value={clientRows.length}
-                footnote={
-                  <div className={addedThisMonth > 0 ? "up" : undefined}>
-                    {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "On the platform"}
-                  </div>
-                }
-              />
-
-              <MetricTile
-                label="Avg health"
-                icon={
-                  <svg viewBox="0 0 24 24">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
-                }
-                value={
-                  <>
-                    {avgHealth == null ? "—" : avgHealth}
-                    {avgHealth != null && <small>/100</small>}
-                  </>
-                }
-                footnote={
-                  <div
-                    className={
-                      healthDelta != null && healthDelta > 0
-                        ? "up"
-                        : healthDelta != null && healthDelta < 0
-                          ? "warn"
-                          : undefined
-                    }
-                  >
-                    {healthDelta == null
-                      ? scoredRows.length
-                        ? `Across ${scoredRows.length} scored`
-                        : "No scored clients yet"
-                      : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
-                  </div>
-                }
-              />
-
-              <MetricTile
-                label="Need attention"
-                icon={
-                  <svg viewBox="0 0 24 24">
-                    <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
-                  </svg>
-                }
-                value={attention.needAttention}
-                valueClassName={attention.needAttention ? "text-[var(--risk)]" : "text-[var(--ok)]"}
-                footnote={<div className="attention-mix">{attentionFootnote(attention)}</div>}
-              />
-
               <MetricTile
                 id={OPEN_QUERIES_TILE_ID}
                 label="Open queries"
@@ -1959,15 +1919,23 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ) : null}
 
         {scoredRows.length > 0 ? <CheckoutAfterInsight /> : null}
-        {followUpItems.length > 0 ? (
-          <details className="home-fold" id="follow-up">
+        <details className="home-fold" id="follow-up">
             <summary>
               <span>Follow up</span>
               <span className="home-fold-meta">
-                {followUpItems.length} with open Action Plan work
+                {followUpItems.length > 0
+                  ? `${followUpItems.length} with open Action Plan work`
+                  : bookLoading
+                    ? "Loading"
+                    : "None open"}
               </span>
             </summary>
             <div className="home-fold-body">
+              {followUpItems.length === 0 ? (
+                <p className="sub">
+                  {bookLoading ? "Loading follow-ups…" : "No open Action Plan work to chase."}
+                </p>
+              ) : (
               <div className="followup-list">
                 {followUpItems.map((item) => (
                   <button
@@ -1986,9 +1954,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   </button>
                 ))}
               </div>
+              )}
             </div>
           </details>
-        ) : null}
 
         <details className="home-fold" id="portfolio-insights">
           <summary>
@@ -2065,9 +2033,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                           Definition
                         </span>
                       </div>
-                      <div className="bar">
-                        <i style={{ width: "60%", background: "var(--ice, #38BDF8)" }} />
-                      </div>
                       <div className="m">
                         <span>{cat}</span>
                         <a>Definition &amp; steps →</a>
@@ -2085,7 +2050,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <>
                 {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">
-          <h2>Clients</h2>
+          <h1>Clients</h1>
           <div className="search">
             <svg viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="7" />
@@ -2223,9 +2188,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           </>
         ) : null}
 
-        <div className="footer-note">
-          MILŌN Practice Portal · <span className="serif footer-tagline">The passion to perform.</span>
-        </div>
+        <div className="footer-note">MILŌN Practice Portal</div>
           </div>
         </div>
       </main>

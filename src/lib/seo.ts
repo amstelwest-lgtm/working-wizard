@@ -268,6 +268,14 @@ export function organizationGraphJson(): string {
         offers: [
           {
             "@type": "Offer",
+            name: "Firm plan: Starter (up to 5 active clients)",
+            priceCurrency: "USD",
+            price: "39",
+            url: `${SITE_ORIGIN}/for-accountants`,
+            availability: "https://schema.org/InStock",
+          },
+          {
+            "@type": "Offer",
             name: "Firm plan: Solo (up to 15 active clients)",
             priceCurrency: "USD",
             price: USD_LIST_PRICE,
@@ -345,7 +353,7 @@ export const LLMS_TXT = `# Milōn
 - Source documents post to the books only after a named person approves
 
 ## Pricing (USD)
-- Accounting firms: flat bands by active client count, Solo $99/mo to Scale $999/mo; 14-day free trial · up to 3 clients
+- Accounting firms: flat bands by active client count, Starter $39/mo to Scale $999/mo; 14-day free trial · up to 3 clients
 - Business owners: $39/mo, free when their accountant is on Milōn
 
 ## Who it is for

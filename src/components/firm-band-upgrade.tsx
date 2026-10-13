@@ -11,10 +11,10 @@ import {
 import { FUNNEL_SOLO_FIRST } from "@/lib/funnel-timing";
 import { FIRM_VOUCHER_INVALID_MESSAGE } from "@/lib/firm-voucher";
 import {
-  FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
   firmClientLimitLabel,
+  firmUsdPublicLine,
   isFirmCheckoutBand,
   type FirmBandId,
   type FirmCheckoutBand,
@@ -63,12 +63,10 @@ function rowPrice(
     interval === "year" && yearlyUsdCents == null ? "month" : interval;
   const local = zaLabels?.[bandId]?.[pricedInterval];
   if (local) return local;
-  const starterZero = FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0;
-  // Starter has no annual price. $0 on the annual toggle is $0/yr, not $0/mo.
-  if (interval === "year" && yearlyUsdCents == null && starterZero) {
-    return saFirm ? "R0/yr" : "$0/yr";
+  if (!saFirm) {
+    const usd = firmUsdPublicLine(bandId, pricedInterval);
+    if (usd) return usd;
   }
-  if (saFirm && starterZero) return "R0/mo";
   const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand);
   if (!label) return "—";
   return pricedInterval === "year" ? `${label}/yr` : `${label}/mo`;

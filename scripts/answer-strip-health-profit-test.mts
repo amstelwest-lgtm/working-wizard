@@ -158,9 +158,9 @@ assert(!ratiosPane.includes("scaled to a 12-month equivalent"), "the period tool
 assert(ratiosPane.includes("stretched across a full year"), "the period tooltip says what the stretch does");
 assert(!profitPane.includes("step by step"), "step by step is gone");
 assert(!profitPane.includes("Full financials"), "full financials is plain words");
-assert(profitPane.includes("All figures"), "the health-figures link says all figures");
+assert(profitPane.includes("Edit the period figures on Health."), "profit figures are edited on Health");
 assert(!profitPane.includes("client management"), "the inputs hint does not say client management");
-assert(profitPane.includes("weekly figures the owner enters stay on their board"), "owner weeks stay on their board");
+assert(!profitPane.includes('id="profitFinCollapse"'), "profit does not keep a second figures editor");
 for (const banned of ["aggregated weekly data", "period inputs", "the ledger", "step by step"]) {
   assert(!waterfall.includes(banned), `waterfall omits ${banned}`);
 }

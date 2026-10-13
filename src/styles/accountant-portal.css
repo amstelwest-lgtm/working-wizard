@@ -197,7 +197,7 @@ html[data-theme="light"] .accountant-portal .doc{background:#ffffff;border-color
 
 /* ===== clients table ===== */
 .accountant-portal .clients-head{display:flex;align-items:center;gap:16px;margin:8px 0 16px}
-.accountant-portal .clients-head h2{font-size:20px}
+.accountant-portal .clients-head h1{font-size:20px;margin:0}
 .accountant-portal .clients-head .search{flex:1;max-width:300px;position:relative}
 .accountant-portal .clients-head input{width:100%;padding:10px 16px 10px 38px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:13px;transition:border-color .3s}
 .accountant-portal .clients-head input:focus{outline:none;border-color:var(--accent-text)}
@@ -842,7 +842,7 @@ html.dark .accountant-portal .milon-status-pill--warn{color:#f0d59a;background:r
   .accountant-portal .fin-grid{grid-template-columns:1fr}
   .accountant-portal .clients-head{flex-wrap:wrap;gap:10px}
   .accountant-portal .clients-head .search{max-width:none;width:100%;order:3}
-  .accountant-portal .clients-head h2{font-size:18px}
+  .accountant-portal .clients-head h1{font-size:18px}
   .accountant-portal .ctable{min-width:0}
   .accountant-portal .ctable th,.accountant-portal .ctable td{padding:8px 10px;font-size:13px}
   .accountant-portal .ph-scatter,.accountant-portal .attn-panel{min-height:0;padding:16px}
@@ -1359,7 +1359,7 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
 .accountant-portal.practice-home .stats-strip .milon-metric-tile__value{font-size:22px}
 .accountant-portal.practice-home .stats-strip .milon-metric-tile__foot{margin-top:2px;font-size:11.5px}
 .accountant-portal.practice-home .clients-head{margin:2px 0 8px}
-.accountant-portal.practice-home .clients-head h2{font-size:18px}
+.accountant-portal.practice-home .clients-head h1{font-size:18px}
 .accountant-portal.practice-home .footer-note{margin-top:28px}
 .accountant-portal .attn-strip{display:flex;align-items:flex-start;gap:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;margin:0 0 12px}
 .accountant-portal .attn-strip h2{margin:7px 0 0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--warn-ink);white-space:nowrap}
@@ -1373,8 +1373,8 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
 .accountant-portal .home-fold{border:1px solid var(--line);border-radius:16px;background:var(--card);margin-top:14px}
 .accountant-portal .home-fold > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 16px;font-weight:700;font-size:14px}
 .accountant-portal .home-fold > summary::-webkit-details-marker{display:none}
-.accountant-portal .home-fold > summary::after{content:"▸";color:var(--accent-text);font-size:12px;margin-left:4px}
-.accountant-portal .home-fold[open] > summary::after{content:"▾"}
+.accountant-portal .home-fold > summary::after{content:"";width:7px;height:7px;margin-left:4px;border-right:1.6px solid var(--accent-text);border-bottom:1.6px solid var(--accent-text);transform:rotate(-45deg);flex:none}
+.accountant-portal .home-fold[open] > summary::after{content:"";transform:rotate(45deg)}
 .accountant-portal .home-fold-meta{margin-left:auto;font-weight:500;font-size:12px;color:var(--ink-dim)}
 .accountant-portal .home-fold-body{padding:0 16px 16px}
 .accountant-portal .home-fold .pb-section{margin-top:0}
@@ -1517,9 +1517,8 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   font-weight:500;
   color:var(--ink-dim,#9b958a);
 }
-.review-inputs__chevron{margin-left:auto;color:var(--accent-text);font-size:12px}
-.review-inputs__chevron::before{content:"▸"}
-.review-inputs[open] > .review-inputs__summary .review-inputs__chevron::before{content:"▾"}
+.review-inputs__chevron{margin-left:auto;width:7px;height:7px;border-right:1.6px solid var(--accent-text);border-bottom:1.6px solid var(--accent-text);transform:rotate(-45deg);flex:none}
+.review-inputs[open] > .review-inputs__summary .review-inputs__chevron{transform:rotate(45deg)}
 .review-inputs:not([open]){overflow:hidden}
 .review-inputs__body{display:none}
 .review-inputs[open] > .review-inputs__body{
@@ -1730,6 +1729,10 @@ html.nav-drawer-open body{overflow:hidden}
 }
 @media (max-width:860px){
   .accountant-portal:not(.owner-door) .topbar-menu-btn{
+    display:inline-flex;
+    flex-direction:row;
+    align-items:center;
+    justify-content:center;
     width:auto;
     height:38px;
     padding:0 10px;
@@ -1737,8 +1740,9 @@ html.nav-drawer-open body{overflow:hidden}
     font:inherit;
     font-size:13px;
     font-weight:700;
+    white-space:nowrap;
   }
-  .accountant-portal:not(.owner-door) .topbar-menu-label{display:inline}
+  .accountant-portal:not(.owner-door) .topbar-menu-label{display:inline;line-height:1}
 }
 .accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
 /* Sign-off pills keep their class name. On accountant surfaces they are cobalt.
@@ -1927,6 +1931,25 @@ html.dark .health-plate{
   background:#102a43;
   border-color:#1e3a5f;
 }
+.client-subpage-back{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  width:fit-content;
+  min-height:44px;
+  margin:0 0 12px;
+  padding:0 14px;
+  border:1px solid var(--pale, #dbeafe);
+  border-radius:999px;
+  background:transparent;
+  color:var(--ink, #102a43);
+  font-size:14px;
+  font-weight:650;
+  text-decoration:none;
+  cursor:pointer;
+}
+.client-subpage-back:hover{border-color:var(--cobalt, #0b5fff);color:var(--cobalt, #0b5fff)}
+.client-subpage-back:focus-visible{outline:2px solid var(--cobalt, #0b5fff);outline-offset:3px}
 .accountant-portal .client-subpage-links{
   list-style:none;
   margin:8px 0 0;
@@ -1965,7 +1988,6 @@ html.dark .health-plate{
 .accountant-portal .crumb a.crumb-link:hover{
   text-decoration:underline;
 }
-.accountant-portal .footer-tagline{color:var(--ink-dim,#3d5270);font-style:italic}
 .accountant-portal .followup-cta,
 .accountant-portal .attn-strip-go,
 .accountant-portal .followup-cell{color:#0b5fff}

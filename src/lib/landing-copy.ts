@@ -136,9 +136,9 @@ export const AI_USE_LEAD = "";
 export const DASH_ARIA_LABEL =
   "Sample client dashboard: health score 78 with four pillar scores and a 13-week cash forecast showing a dip in week 6";
 
-export const PRICING_H2_USD = "Flat USD pricing by active clients, Solo to Scale.";
+export const PRICING_H2_USD = "Flat USD pricing by active clients, Starter to Scale.";
 export const PRICING_INTRO =
-  "One monthly price, set by how many clients you actively advise. Start on Solo and move up a band as your client list grows.";
+  "One monthly price, set by how many clients you actively advise. Start on Starter and move up a band as your client list grows.";
 /**
  * VERIFY-2 confirmed. Checkout creates a subscription on the chosen band price
  * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).

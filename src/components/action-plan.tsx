@@ -25,7 +25,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
 import { agentKeyFromAssignee, handoffProgressCaption } from "@/lib/action-handoff";
-import { ActionHandoffButtons } from "@/components/action-handoff-buttons";
+import { HandToMenu } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel, handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
@@ -1121,8 +1121,9 @@ export default function ActionPlanPanel({
   // ── Derived views ─────────────────────────────────────────────────────────────
   const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
   useEffect(() => {
+    if (loading) return;
     onAnswer?.(items.map((item) => ({ title: item.title })));
-  }, [items, onAnswer]);
+  }, [items, onAnswer, loading]);
   const filtered = useMemo(() => {
     let list = enriched;
     if (filter === "overdue") list = list.filter((i) => i.health === "overdue");
@@ -2258,12 +2259,30 @@ function ItemRow({
       </div>
       </div>
       {onHandOff ? (
-        <ActionHandoffButtons
-          ownerName={item.owner_name}
-          comingSoon={comingSoon}
-          pickupLabel={pickupLabel}
-          onHandOff={onHandOff}
-        />
+        <div className="px-3 pb-3 sm:px-4">
+          <HandToMenu
+            employees={employees}
+            assignee={item.owner_name}
+            comingSoon={comingSoon}
+            onAssignAgent={onHandOff}
+            onAssignPerson={(person) =>
+              onPatch(
+                {
+                  owner_id: person.id,
+                  owner_name: person.name,
+                  owner_email: person.email,
+                  sent_at: null,
+                },
+                { note: `Assigned to ${person.name}` },
+              )
+            }
+          />
+          {pickupLabel ? (
+            <p className="mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
+              {pickupLabel}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

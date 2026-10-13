@@ -17,6 +17,7 @@ import {
   formatUsdFromCents,
   intervalFromLookupKey,
   isFirmCheckoutBand,
+  starterClientLimit,
   type FirmBandId,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -38,10 +39,12 @@ export const MILON_DOWNGRADE_BLOCKED = "milon_downgrade_blocked";
  * always_invoice — that would change the charge timing of a mid-cycle
  * paid change.
  *
- * A $0 Starter (unit_amount 0 or lookup milon_starter_monthly) or a trial
+ * A legacy $0 Starter (unit_amount 0 on the existing price id) or a trial
  * does not use this. Those start the paid plan today, with
  * billing_cycle_anchor now and proration_behavior none, so the first
  * invoice is the new price and a voucher is not spent on a $0 cycle.
+ * The paid Starter lookup key is not a $0 signal: that key is the new
+ * entry band, and a paid-to-paid change keeps create_prorations.
  */
 export const FIRM_UPGRADE_PRORATION = "create_prorations" as const;
 
@@ -52,8 +55,6 @@ export function firmUpgradeBillsImmediately(input: {
   unitAmount?: number | null;
 }): boolean {
   if (input.status === "trialing") return true;
-  const lookup = input.lookupKey?.trim() ?? "";
-  if (lookup && lookup === FIRM_BAND_CATALOG.starter.lookup.month) return true;
   return input.unitAmount === 0;
 }
 
@@ -110,8 +111,10 @@ export function callerCanManageFirmBilling(input: {
 export function firmUsageLimit(
   phase: FirmSubscriptionPhase,
   band: FirmBandId | null,
+  unitAmount?: number | null,
 ): number | null {
   if (phase === "trialing") return FIRM_TRIAL_CLIENT_LIMIT;
+  if (phase === "active" && band === "starter") return starterClientLimit(unitAmount);
   if (phase === "active" && band) return FIRM_BAND_CATALOG[band].clientLimit;
   return null;
 }

@@ -159,7 +159,9 @@ import {
 } from "@/lib/client-route-search";
 import { askAgentFromHash, searchWithAskAgent } from "@/lib/ask-agent";
 import { ClientRail } from "@/components/client-studio-chrome";
-import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
+import { ClientBackLink, ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
+import { clientBackTarget } from "@/lib/client-back";
+import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
 import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
 import { agentDisplayName } from "@/lib/milon-team";
@@ -864,20 +866,10 @@ function ClientView() {
       .then(() => toast.success("Action Plan PDF downloaded"))
       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "PDF export failed"));
   };
-  const [studioDeepLink, setStudioDeepLink] = useState<{
-    report?: string;
-    action?: "preview" | "download";
-  }>({});
   useEffect(() => {
     // Old ?tab= values are rewritten to tab + section in validateSearch.
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
-    if (search.report || search.action) {
-      setStudioDeepLink({
-        report: search.report,
-        action: search.action,
-      });
-    }
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
@@ -948,7 +940,6 @@ function ClientView() {
     });
   }, [activeTab, clientId, firmId, track]);
   const [finOpen, setFinOpen] = useState(false);
-  const [profitFinOpen, setProfitFinOpen] = useState(true);
   const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [planFocusMove, setPlanFocusMove] = useState<string | null>(null);
@@ -1074,6 +1065,7 @@ function ClientView() {
   productMixRef.current = productMix;
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const closeUpload = useOverlayHistory(uploadOpen, () => setUploadOpen(false));
   const [uploadPurpose, setUploadPurpose] = useState<"figures" | "aged">("figures");
   const uploadDialogRef = useRef<HTMLDivElement>(null);
   const [pastPeriodOpen, setPastPeriodOpen] = useState(false);
@@ -1097,7 +1089,7 @@ function ClientView() {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        setUploadOpen(false);
+        closeUpload();
         return;
       }
       if (event.key !== "Tab") return;
@@ -1127,12 +1119,12 @@ function ClientView() {
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
-  const [planSentence, setPlanSentence] = useState(
-    "No actions in the plan yet. Add the first one to get started.",
-  );
+  const [planSentence, setPlanSentence] = useState("");
+  const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusPlanAdd = useRef<(() => void) | null>(null);
   const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
+    setPlanKnown(true);
     setPlanCount(actions.length);
     setPlanSentence(planAnswerSentence(actions));
   }, []);
@@ -2255,7 +2247,7 @@ function ClientView() {
       if (historyOnlyUploadRef.current) {
         historyOnlyUploadRef.current = false;
         toast.success(`Saved ${periodLabel} as history — live figures unchanged.`);
-        setUploadOpen(false);
+        closeUpload();
         const { data } = await supabase
           .from("client_financial_snapshots")
           .select("id, period_label, period_date, financials, ratios, source, created_at")
@@ -2309,7 +2301,6 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => accountantClientTabSearch(prev, "home"),
-        replace: true,
       });
       startStudioTourAfterFigures();
       track("financials_uploaded", {
@@ -2317,7 +2308,7 @@ function ClientView() {
         clientId,
         firmId,
       });
-      setUploadOpen(false);
+      closeUpload();
 
       if (autoPopulate) {
         try {
@@ -2376,7 +2367,6 @@ function ClientView() {
           if (filter) (next as { filter?: string }).filter = filter;
           return next;
         },
-        replace: true,
       });
     },
     [clientId, navigate],
@@ -2401,7 +2391,6 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => accountantClientTabSearch(prev, "overview", { section }),
-        replace: true,
       });
     },
     [clientId, navigate],
@@ -2446,7 +2435,6 @@ function ClientView() {
           if (canonical.focus) next.focus = canonical.focus;
           return next;
         },
-        replace: true,
       });
       const targetId =
         canonical.section === "pillars" || canonical.focus === "pillars"
@@ -2467,7 +2455,6 @@ function ClientView() {
   openFromBotRef.current = openCoach;
 
   const handleGenerateReport = useCallback(() => {
-    setStudioDeepLink({});
     revealTab("reports");
   }, [revealTab]);
 
@@ -2776,7 +2763,6 @@ function ClientView() {
               if (route.search.filter) (next as { filter?: string }).filter = route.search.filter;
               return next;
             },
-            replace: true,
           });
           const scrollId =
             canonical.tab === "reports" && canonical.section === "drafts"
@@ -2800,6 +2786,11 @@ function ClientView() {
       ? search.agent
       : null;
   const showHomeThread = activeTab === "overview" && homeAgent != null;
+  const pageBack = clientBackTarget({
+    tab: activeTab,
+    section: search.section ?? null,
+    agent: homeAgent,
+  });
   const openHomeAgent = useCallback(
     (agent: AgentKey) => {
       setActiveTab("overview");
@@ -2807,21 +2798,10 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => searchWithAskAgent(prev, agent),
-        hash: undefined,
-        replace: true,
       });
     },
     [clientId, navigate],
   );
-  const closeHomeThread = useCallback(() => {
-    setActiveTab("overview");
-    void navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: (prev) => accountantClientTabSearch(prev, "home"),
-      replace: true,
-    });
-  }, [clientId, navigate]);
   const openHomeSection = useCallback(
     (tab: string, section?: string) => {
       const pane = resolveAccountantTab({ tab, section }) ?? "overview";
@@ -2830,14 +2810,12 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => accountantClientTabSearch(prev, tab, section ? { section } : undefined),
-        replace: true,
       });
     },
     [clientId, navigate],
   );
   const openReportPage = useCallback(
     (report: string, action?: "preview" | "download") => {
-      setStudioDeepLink({ report, action });
       const section =
         report === "scorecard" || report === "forecast" || report === "waterfall" ? report : "all";
       setActiveTab("reports");
@@ -2874,6 +2852,12 @@ function ClientView() {
       priorCogs: amount(priorFin?.cogs),
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
+      cashOutlook: {
+        opening: cashOutlook.opening,
+        closing: cashOutlook.closing,
+        floor: cashOutlook.floor,
+        dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+      },
       openAction: overviewNextStep?.title ?? null,
       actionsReady: nextStepKnown,
       signedBy: null,
@@ -2888,6 +2872,10 @@ function ClientView() {
     financials,
     statementPosition.receivables,
     client?.cashflow,
+    cashOutlook.opening,
+    cashOutlook.closing,
+    cashOutlook.floor,
+    cashOutlook.dipsBelowFloorWeek,
     overviewNextStep,
     nextStepKnown,
     clientMarket,
@@ -3027,6 +3015,7 @@ function ClientView() {
                 ? () => setFirstDataOpen(true)
                 : undefined
             }
+            userId={user?.id ?? null}
           />
           {/* Ambient background */}
           <div id="atmos">
@@ -3094,6 +3083,9 @@ function ClientView() {
                 onNavigate={() => setMobileNavOpen(false)}
               />
               <div className="deliverable-main">
+                {pageBack ? (
+                  <ClientBackLink clientId={clientId} label={pageBack.label} tab={pageBack.tab} />
+                ) : null}
                 <div data-notes-tray-slot="" className="notes-tray-slot" />
                 {!hasFigures && activeTab === "summary" ? (
                   <div className="card hero-card first-figures" id="first-figures-card">
@@ -3312,26 +3304,15 @@ function ClientView() {
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" || showHomeThread ? " on" : ""}`} id="pane-ask">
                   <div className="milon-desk-host">
-                    {showHomeThread && homeAgent ? (
-                      <ClientSubpageFrame
-                        id={homeAgent}
-                        eyebrow="Home"
-                        title={agentDisplayName(homeAgent)}
-                        subtitle="This agent's thread for the client. The rest of the team stays on Home."
-                      >
-                        <button
-                          type="button"
-                          className={portalButtonClass("secondary")}
-                          onClick={closeHomeThread}
-                        >
-                          Back to the team
-                        </button>
-                      </ClientSubpageFrame>
-                    ) : null}
                     <MilonTeamPane
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
+                      homeFinding={
+                        homeAgent
+                          ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")
+                          : null
+                      }
                       onSelectAgent={openHomeAgent}
                       onOpenApproved={(target) => {
                         if (target.screen === "accountant") {
@@ -3363,7 +3344,7 @@ function ClientView() {
                       clientId={clientId}
                       eyebrow="Numbers"
                       title="Health"
-                      subtitle="Score and where it hurts each have their own page. The briefing and the figures stay here."
+                      subtitle="Score and where it hurts each have their own page. The figures are edited here."
                       links={[
                         {
                           id: "score",
@@ -3470,6 +3451,8 @@ function ClientView() {
                   whatMatters={briefingMatters}
                   hideWhatMatters
                   hideConnectionActions
+                  hideScore
+                  hideFigures
                   workflow={workflow}
                   workflowLoading={workflowLoading}
                   onRefreshWorkflow={() => void requestWorkflow(true)}
@@ -3878,116 +3861,15 @@ function ClientView() {
                     deliverableId="profit"
                     context={deliverableInputContext}
                   />
-                  <div
-                    className={`card collapse${profitFinOpen ? " open" : ""}`}
-                    id="profitFinCollapse"
-                    style={{ marginTop: 20, marginBottom: 20 }}
-                  >
-                    <div
-                      className="c-head"
-                      onClick={() => setProfitFinOpen((v) => !v)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && setProfitFinOpen((v) => !v)}
+                  <p className="sub" style={{ marginTop: 12 }}>
+                    <Link
+                      to="/clients/$clientId"
+                      params={{ clientId }}
+                      search={(prev) => accountantClientTabSearch(prev, "health")}
                     >
-                      <h3>
-                        Profitability inputs{" "}
-                        {autosaveStatus === "saving" && (
-                          <span className="autosave" style={{ marginLeft: 10 }}>
-                            Saving…
-                          </span>
-                        )}
-                        {(autosaveStatus === "saved" || autosaveStatus === "idle") && (
-                          <span className="autosave" style={{ marginLeft: 10 }}>
-                            Auto-saved
-                          </span>
-                        )}
-                      </h3>
-                      <span className="hint">
-                        Period P&amp;L that feeds the waterfall — same figures as Health &amp;
-                        Ratios
-                      </span>
-                      <span className="chev">
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </span>
-                    </div>
-                    <div className="c-body">
-                      <div className="c-inner">
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 10,
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: 16,
-                          }}
-                        >
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: 12,
-                              color: "var(--ink-dim)",
-                              maxWidth: 420,
-                            }}
-                          >
-                            Edit the period figures here. The waterfall updates from this P&amp;L —
-                            weekly figures the owner enters stay on their board.
-                          </p>
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                            <button
-                              type="button"
-                              className="btn ghost mini"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveTab("ratios");
-                                setFinOpen(true);
-                              }}
-                            >
-                              All figures
-                            </button>
-                            <button
-                              type="button"
-                              className="btn ghost mini"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUploadOpen(true);
-                              }}
-                            >
-                              <svg viewBox="0 0 24 24">
-                                <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
-                              </svg>
-                              Upload statement
-                            </button>
-                          </div>
-                        </div>
-                        <div className="fin-grid">
-                          {PROFIT_FIELD_LABELS.map(({ key, label }) => (
-                            <div key={key}>
-                              <label>{label}</label>
-                              <input
-                                value={financials[key] ?? ""}
-                                onChange={(e) => handleFinancialChange(key, e.target.value)}
-                                onBlur={(e) => handleFinancialChange(key, e.target.value)}
-                                placeholder="—"
-                                type="number"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                      Edit the period figures on Health.
+                    </Link>
+                  </p>
 
                   </ReviewInputsDrawer>
                   <div id="wizard-profit-walk">
@@ -4405,14 +4287,12 @@ function ClientView() {
                               key={`${client.id}-${search.section ?? "all"}`}
                               client={client.name}
                               clientId={client.id}
-                              report={
-                                search.section === "scorecard" ||
-                                search.section === "forecast" ||
-                                search.section === "waterfall"
-                                  ? search.section
-                                  : studioDeepLink.report
+                              report={search.section === "all" ? undefined : search.section}
+                              action={
+                                search.action === "preview" || search.action === "download"
+                                  ? search.action
+                                  : undefined
                               }
-                              action={studioDeepLink.action}
                               onlyKeys={
                                 search.section === "scorecard" ||
                                 search.section === "forecast" ||
@@ -4430,7 +4310,19 @@ function ClientView() {
                                   context={deliverableInputContext}
                                 />
                               }
-                              onSearchCleared={() => setStudioDeepLink({})}
+                              onSearchCleared={() => {
+                                void navigate({
+                                  to: "/clients/$clientId",
+                                  params: { clientId },
+                                  search: (prev) => {
+                                    const next = { ...(prev as Record<string, unknown>) };
+                                    delete next.report;
+                                    delete next.action;
+                                    return next;
+                                  },
+                                  replace: true,
+                                });
+                              }}
                             />
                           </Suspense>
                         </TabErrorBoundary>
@@ -4498,7 +4390,7 @@ function ClientView() {
                   <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
                   <DeliverableAnswerStrip
                     heading="Action plan"
-                    sentence={planSentence}
+                    sentence={planKnown ? planSentence : ""}
                     scope="action_plan"
                     clientId={clientId}
                     clientName={client?.name}
@@ -4509,7 +4401,7 @@ function ClientView() {
                     canSign={planCount > 0}
                     signoffVerbOnly
                     extraActions={
-                      planCount === 0 ? (
+                      planKnown && planCount === 0 ? (
                         <button
                           type="button"
                           className={ARAP_GOLD_BTN}
@@ -4534,11 +4426,7 @@ function ClientView() {
               near-transparent cream — titles vanished in light mode. */}
                   <TabErrorBoundary label="Action Plan">
                     <div id="action-plan-work">
-                    <Suspense
-                      fallback={
-                        <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>
-                      }
-                    >
+                    <Suspense fallback={null}>
                       {activeTab === "plan" && (
                         <ActionPlanPanel
                           key={`${client.id}-${search.filter ?? "all"}`}
@@ -4580,10 +4468,7 @@ function ClientView() {
               </div>
             </div>
 
-            <div className="footer-note">
-              MILŌN Practice Portal ·{" "}
-              <span className="serif footer-tagline">The passion to perform.</span>
-            </div>
+            <div className="footer-note">MILŌN Practice Portal</div>
           </div>
 
           {/* ===== PLAYBOOK DRAWER ===== */}
@@ -4640,7 +4525,7 @@ function ClientView() {
 
           {/* ===== UPLOAD FINANCIALS MODAL ===== */}
           {uploadOpen && (
-            <div className="veil open" onClick={() => setUploadOpen(false)} role="presentation">
+            <div className="veil open" onClick={closeUpload} role="presentation">
               <div
                 ref={uploadDialogRef}
                 className="drawer open"
@@ -4659,14 +4544,19 @@ function ClientView() {
                     marginBottom: 20,
                   }}
                 >
-                  <h3 id="upload-statement-title" style={{ fontSize: 20, fontWeight: 700 }}>
-                    {uploadPurpose === "aged"
-                      ? "Upload aged debtors and creditors"
-                      : "Upload financial statement"}
-                  </h3>
+                  <div>
+                    <button type="button" className="client-subpage-back" onClick={closeUpload}>
+                      Back
+                    </button>
+                    <h3 id="upload-statement-title" style={{ fontSize: 20, fontWeight: 700 }}>
+                      {uploadPurpose === "aged"
+                        ? "Upload aged debtors and creditors"
+                        : "Upload financial statement"}
+                    </h3>
+                  </div>
                   <button
                     className="close"
-                    onClick={() => setUploadOpen(false)}
+                    onClick={closeUpload}
                     aria-label="Close"
                     style={{
                       position: "static",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AgentStage } from "@/components/milon-team/agent-stage";
 import { portalButtonClass } from "@/lib/client-chrome";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,12 +19,14 @@ export function PracticeAgentThread({
   clients,
   onBack,
   onSelectAgent,
+  children,
 }: {
   agent: AgentKey;
   finding: string;
   clients: PracticeThreadClient[];
   onBack: () => void;
   onSelectAgent: (agent: AgentKey) => void;
+  children?: ReactNode;
 }) {
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
   useEffect(() => {
@@ -77,6 +79,7 @@ export function PracticeAgentThread({
         Back to the team
       </button>
       <AgentStage agent={agent} finding={finding} onSelect={onSelectAgent}>
+        {children}
         {clients.length > 1 ? (
           <label className="practice-agent-client">
             Ask about

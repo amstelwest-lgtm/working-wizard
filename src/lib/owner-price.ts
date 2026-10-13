@@ -1,6 +1,10 @@
 /**
  * Owner-plan catalog keys. Not firm bands. The live product is Milōn Owner
  * with metadata plan=owner and no band key.
+ *
+ * Checkout uses these lookup keys. The keys now resolve to the current
+ * monthly amounts. Subscriptions already on an older price id stay there;
+ * product metadata plan=owner still recognizes them.
  */
 
 export const OWNER_LOOKUP_KEYS = {

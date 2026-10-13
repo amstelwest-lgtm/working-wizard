@@ -56,9 +56,9 @@ export type EntitlingFirmSubscription = {
   /** subscription.currency only. Null when Stripe did not send a charge currency. */
   chargeCurrency: string | null;
   itemId: string | null;
-  /** Billed price lookup_key. Used to tell a $0 Starter from a paid band. */
+  /** Billed price lookup_key. */
   lookupKey: string | null;
-  /** Billed price unit_amount in the price currency. 0 is Starter. */
+  /** Billed price unit_amount. 0 is an existing price id; paid Starter is the catalog amount. */
   unitAmount: number | null;
   metadata: Record<string, string>;
   hasDefaultPaymentMethod: boolean;
@@ -462,6 +462,7 @@ export async function loadFirmClientCreateAllowance(input: {
     phase: sub?.phase ?? "none",
     band: sub?.band ?? null,
     clientCount,
+    unitAmount: sub?.unitAmount,
     starterTrialExpired: starterTrial.expired,
   });
   if (decision.allowed) return { allowed: true, canEndTrial: false, upgrade, starterTrial };
@@ -639,7 +640,7 @@ async function buildUpgradeSnapshot(input: {
 }): Promise<FirmUpgradeSnapshot> {
   const phase = input.sub?.phase ?? "none";
   const band = input.sub?.band ?? null;
-  const clientLimit = firmUsageLimit(phase, band);
+  const clientLimit = firmUsageLimit(phase, band, input.sub?.unitAmount);
   const interval = input.sub?.interval === "year" ? "year" : "month";
   const marketCountry = parseMarketSelection(input.market)?.country ?? null;
   const billingCurrency = billingCurrencyCode({

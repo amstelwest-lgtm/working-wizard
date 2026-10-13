@@ -226,6 +226,7 @@ assert(!cashSrc.includes('title="Weekly Detail"'), "old Weekly Detail title is g
 assert(!cashSrc.includes("<ViewToggle"), "the cash graph is not behind a toggle");
 assert(cashSrc.includes("<CashThirteenWeekGrid"), "the weekly table sits under the graph");
 const clientsPage = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+assert(clientsPage.includes("<h1>Clients</h1>"), "the clients page has a heading");
 assert(clientsPage.includes("client-status"), "client status is an icon and a word");
 assert(!clientsPage.includes(">QB<") && !clientsPage.includes(">XO<") && !clientsPage.includes(">SG<"), "ledger badges are gone");
 assert(!clientsPage.includes("Trend (30d)"), "the clients table has no trend column");

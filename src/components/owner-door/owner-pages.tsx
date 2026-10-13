@@ -166,6 +166,7 @@ export function OwnerAccountant({
 
 export function OwnerPlan({
   visitor,
+  zaMonthly = null,
   accountantOnMilon,
   firmName,
   billing = { kind: "pending" },
@@ -175,6 +176,8 @@ export function OwnerPlan({
   checkoutNotice = null,
 }: {
   visitor: OwnerVisitor | null;
+  /** Server-built rand amount. Null unless this request is South Africa. */
+  zaMonthly?: string | null;
   accountantOnMilon: boolean;
   firmName: string | null;
   billing?: OwnerSubscribeView;
@@ -189,7 +192,7 @@ export function OwnerPlan({
       <OwnerPageHead eyebrow="Billing" title="Plan" />
 
       <article className="owner-plan-card">
-        <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
+        <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName, zaMonthly })}</p>
         <h2>What you get</h2>
         <ul className="owner-plan-benefits">
           {OWNER_PLAN_BENEFITS.map((line) => (
@@ -217,6 +220,7 @@ export function OwnerPlan({
 
 export function OwnerSettings({
   visitor,
+  zaMonthly = null,
   accountantOnMilon,
   firmName,
   onProfile,
@@ -229,6 +233,7 @@ export function OwnerSettings({
   onSubscribe,
 }: {
   visitor: OwnerVisitor | null;
+  zaMonthly?: string | null;
   accountantOnMilon: boolean;
   firmName: string | null;
   onProfile: () => void;
@@ -252,7 +257,7 @@ export function OwnerSettings({
       />
       <section className="owner-settings-block">
         <h2>Plan</h2>
-        <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName })}</p>
+        <p className="owner-plan">{ownerPlanLine({ visitor, accountantOnMilon, firmName, zaMonthly })}</p>
         <OwnerSubscribe view={billing} busy={subscribeBusy} onSubscribe={onSubscribe} />
       </section>
       <section className="owner-settings-block">

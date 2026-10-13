@@ -4,8 +4,12 @@ Firm billing uses the Stripe catalog documented in **[STRIPE_FIRM_BANDS.md](./ST
 
 The owner plan is a separate catalog product, **Milōn Owner** (`prod_VQKKjT1uyUzG2b`). Its metadata is `plan=owner` and it has no band key, so firm upgrade and band sync skip it.
 
+New Checkout resolves the existing lookup keys. Those keys point at the owner amounts. Checkout does not switch keys.
+
 - **$39/mo** USD — `price_1UPTfgGXDN6PFbnzzPyRVBi4`, lookup `milon_owner_monthly` (3900 cents)
 - **R299/mo** ZAR — `price_1UPTfiGXDN6PFbnzfAJ9I36b`, lookup `milon_za_owner_monthly` (29900 cents)
+
+Existing subscriptions stay on their current price id. Checkout does not migrate them.
 
 ZAR is charged only when the owner's stored market is ZA and the Checkout billing country is ZA. A US owner stays on USD even if the page asks for ZA. The owner plan is free when the owner's business is accepted by a firm on an active, trialing, or 14-day grace Milōn firm plan. Checkout is skipped and the entitlement is `covered_by_firm`.
 
@@ -29,7 +33,7 @@ Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack wit
 
 ## Smoke
 
-1. Open https://milonfinance.com, choose the accountant path, pick **Solo** (or another paid band). There is no Starter $0 signup.
+1. Open https://milonfinance.com, choose the accountant path, pick **Starter** (5 clients, $39 / R299) or another paid band. A legacy $0 Starter subscription is not migrated.
 2. Create a firm account at `/auth` if needed.
 3. Stripe Checkout should open on **Milon, Inc.** for the catalog price resolved by lookup_key, collect a card, and start `trial_period_days: 14`. An SA firm uses the rand price. Copy: “14-day free trial · up to 3 clients”.
 4. Success returns to `/billing/success`. Cancel charges nothing. A fourth client during the trial is blocked until the paid plan is active.

@@ -450,20 +450,23 @@ export function NoteLayer({
           className={
             trayInFlow
               ? "notes-tray relative z-[1] mb-3 w-full max-w-full rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
-              : phone
-                ? trayExpanded
-                  ? "notes-tray fixed z-30 max-h-[min(46dvh,360px)] overflow-auto rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
-                  : "notes-tray notes-tray--pill fixed z-30 w-auto max-w-[calc(100vw-5.5rem)] rounded-full border border-[#0B5FFF]/30 bg-white/95 py-0.5 pl-1 pr-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
-                : "notes-tray fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+              : trayExpanded
+                ? "notes-tray fixed bottom-44 right-4 z-30 max-h-[min(46dvh,360px)] w-[min(280px,calc(100vw-2rem))] overflow-auto rounded-2xl border border-[#0B5FFF]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
+                : "notes-tray notes-tray--pill fixed z-30 w-auto max-w-[calc(100vw-5.5rem)] rounded-full border border-[#0B5FFF]/30 bg-white/95 py-0.5 pl-1 pr-2 shadow-xl backdrop-blur dark:border-[#0B5FFF]/25 dark:bg-[#0d1525]/95"
           }
           style={
-            phone && !trayInFlow
+            !trayInFlow && !trayExpanded
               ? {
                   right: "max(12px, env(safe-area-inset-right))",
-                  bottom: "max(76px, calc(env(safe-area-inset-bottom) + 68px))",
-                  left: trayExpanded ? "12px" : "auto",
+                  bottom: "max(12px, env(safe-area-inset-bottom))",
                 }
-              : undefined
+              : phone && !trayInFlow && trayExpanded
+                ? {
+                    right: "max(12px, env(safe-area-inset-right))",
+                    bottom: "max(76px, calc(env(safe-area-inset-bottom) + 68px))",
+                    left: "12px",
+                  }
+                : undefined
           }
         >
           <div className="flex items-center justify-between gap-1 px-1">
@@ -484,7 +487,7 @@ export function NoteLayer({
                 )}
               </span>
             </button>
-            {phone && !trayExpanded ? null : (
+            {!trayExpanded ? null : (
               <span className="notes-tray-tools flex shrink-0 items-center">
                 <button
                   type="button"

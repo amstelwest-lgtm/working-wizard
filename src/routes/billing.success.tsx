@@ -6,9 +6,8 @@ import {
   getFirmBillingEntitlement,
 } from "@/lib/stripe-checkout.functions";
 import { checkoutSessionUnlocksFirm } from "@/lib/stripe-entitlement";
-import { readVisitorDraft } from "@/lib/market/storage";
-import { visitorCopyPack } from "@/lib/market/marketing";
 import { ownerPlanPublicLine } from "@/lib/owner-plan";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { ownerCheckoutReturnCopy } from "@/lib/owner-subscribe";
 
 export const Route = createFileRoute("/billing/success")({
@@ -28,6 +27,7 @@ export const Route = createFileRoute("/billing/success")({
 function BillingSuccessPage() {
   const { session_id: sessionId } = Route.useSearch();
   const loadStatus = useServerFn(getCheckoutSessionStatus);
+  const loadSaPricing = useServerFn(readSaPricingCopy);
   const refreshEntitlement = useServerFn(getFirmBillingEntitlement);
   const [label, setLabel] = useState("Checking Stripe…");
   const [unlocked, setUnlocked] = useState(false);
@@ -42,7 +42,7 @@ function BillingSuccessPage() {
     }
     let cancelled = false;
     void loadStatus({ data: { sessionId } })
-      .then((result) => {
+      .then(async (result) => {
         if (cancelled) return;
         if (!result.ok) {
           setLabel("Checkout finished. Stripe status is not available on this deploy.");
@@ -55,8 +55,12 @@ function BillingSuccessPage() {
           return;
         }
         if (checkoutSessionUnlocksFirm(result)) {
+          const pricing = await loadSaPricing().catch(() => null);
+          const ownerLine = pricing?.ownerMonthly
+            ? ownerPlanPublicLine("za", pricing.ownerMonthly)
+            : ownerPlanPublicLine("us");
           setLabel(
-            `Checkout is complete and your card is on file. A first firm subscription is a 14-day free trial · up to 3 clients, then the paid band bills automatically. Owner plan: ${ownerPlanPublicLine(visitorCopyPack(readVisitorDraft()))}.`,
+            `Checkout is complete and your card is on file. A first firm subscription is a 14-day free trial · up to 3 clients, then the paid band bills automatically. Owner plan: ${ownerLine}.`,
           );
           setUnlocked(true);
           void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
@@ -72,7 +76,7 @@ function BillingSuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, loadStatus, refreshEntitlement]);
+  }, [sessionId, loadStatus, loadSaPricing, refreshEntitlement]);
 
   if (ownerReturn) {
     return (

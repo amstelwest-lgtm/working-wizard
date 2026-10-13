@@ -945,6 +945,36 @@ function moneyString(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
 
+/** Week 1 opens on `opening`. Each later week opens on the prior close. */
+export function openingCashByWeek(opening: number, closing: readonly number[]): number[] {
+  return closing.map((_, index) => (index === 0 ? opening : closing[index - 1]!));
+}
+
+/** True when every line is missing or a zero placeholder. */
+export function blankForecastLines(
+  lines: readonly { amount?: string | number | null }[] | null | undefined,
+): boolean {
+  if (!lines || lines.length === 0) return true;
+  return lines.every((line) => {
+    const n = typeof line.amount === "number" ? line.amount : parseFloat(String(line.amount ?? ""));
+    return !Number.isFinite(n) || Math.abs(n) < 0.5;
+  });
+}
+
+/**
+ * A stored opening of 0 or blank must not replace live cash.
+ * Returns true when the outlook opening should stay on screen.
+ */
+export function keepOutlookOpening(
+  stored: string | number | null | undefined,
+  outlookOpening: number,
+): boolean {
+  if (!Number.isFinite(outlookOpening) || Math.abs(outlookOpening) < 0.5) return false;
+  if (stored == null || stored === "") return true;
+  const storedN = typeof stored === "number" ? stored : parseFloat(String(stored));
+  return !Number.isFinite(storedN) || Math.abs(storedN) < 0.5;
+}
+
 /**
  * Roll a saved forecast forward. Same rules as the cash screen: monthly
  * lines land every four weeks, collection delay shifts receipts, and a

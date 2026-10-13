@@ -105,6 +105,8 @@ import {
   runwayDisplayLabel,
   resolveClientCash,
   resolveThirteenWeekForecast,
+  blankForecastLines,
+  keepOutlookOpening,
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
@@ -172,12 +174,6 @@ const makeLine = (name: string): LineItem => ({
   startWeek: 1,
   splitCount: 3,
 });
-
-const DEFAULT_REVENUE: LineItem[] = [
-  { ...makeLine("Recurring sales"), frequency: "recurring-monthly" },
-  { ...makeLine("Once-off sales"), frequency: "once-off" },
-  { ...makeLine("Project / milestone revenue"), frequency: "split-months" },
-];
 
 const EXPENSE_PRESETS = [
   "Cost of sales (COS)",
@@ -579,7 +575,7 @@ export function CashForecastPanel({
   const [bankSeeded, setBankSeeded] = useState(false);
   const plEstimateRef = useRef(false);
   const [openingBalance, setOpeningBalance] = useState("0");
-  const [revenue, setRevenue] = useState<LineItem[]>(DEFAULT_REVENUE);
+  const [revenue, setRevenue] = useState<LineItem[]>([]);
   const [expenses, setExpenses] = useState<LineItem[]>(DEFAULT_EXPENSES);
   const [other, setOther] = useState<LineItem[]>(DEFAULT_OTHER);
   const [revAdj, setRevAdj] = useState(100); // %
@@ -899,10 +895,17 @@ export function CashForecastPanel({
           plEstimateRef.current = false;
         }
       } else if (cf) {
-        if (!outlook.reanchored && !seededOpening && cf.openingBalance != null) {
+        if (
+          !outlook.reanchored &&
+          !seededOpening &&
+          cf.openingBalance != null &&
+          !keepOutlookOpening(cf.openingBalance, outlook.opening)
+        ) {
           setOpeningBalance(cf.openingBalance);
         }
-        if (cf.revenue) setRevenue(cf.revenue);
+        if (cf.revenue && !blankForecastLines(cf.revenue)) setRevenue(cf.revenue);
+        else if (!blankForecastLines(outlook.lines.revenue)) setRevenue(outlook.lines.revenue);
+        else setRevenue([]);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
         // Scenario knobs (collection delay, growth, capex) are session-only.

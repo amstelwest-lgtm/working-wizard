@@ -7,11 +7,12 @@
 import { useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { avatarPoster, fmClipSources, type AvatarFace } from "@/lib/fm-avatar-state";
+import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
 
 const HERO_AGENTS: ReadonlyArray<{ agent: AvatarFace; name: string }> = [
-  { agent: "financial_manager", name: "Milōn Financial Manager" },
-  { agent: "analyst", name: "Milōn Analyst" },
-  { agent: "advisor", name: "Milōn Advisor" },
+  { agent: "financial_manager", name: AGENT_DISPLAY_NAME.financial_manager },
+  { agent: "analyst", name: AGENT_DISPLAY_NAME.analyst },
+  { agent: "advisor", name: AGENT_DISPLAY_NAME.advisor },
 ];
 
 function HeroAgentFace({ agent }: { agent: AvatarFace }) {
