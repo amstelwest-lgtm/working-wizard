@@ -1,4 +1,6 @@
 import { Component, Fragment, lazy, type ComponentType, type ReactNode } from "react";
+import { ChunkReloadNotice } from "@/components/chunk-reload-notice";
+import { isChunkLoadError } from "@/lib/chunk-reload";
 import { reportClientError } from "@/lib/monitoring";
 
 const PANEL_ERROR_CLS =
@@ -46,6 +48,7 @@ export function lazyPanel<P extends object>(
     } catch (err) {
       console.error(`[${label}] chunk failed`, err);
       const Fallback: ComponentType<P> = function ChunkError() {
+        if (isChunkLoadError(err)) return <ChunkReloadNotice compact />;
         return <PanelError label={label} detail="failed to load." />;
       };
       return { default: Fallback };
@@ -71,6 +74,7 @@ export class TabErrorBoundary extends Component<
 
   render() {
     if (this.state.error) {
+      if (isChunkLoadError(this.state.error)) return <ChunkReloadNotice compact />;
       return (
         <PanelError
           label={this.props.label}

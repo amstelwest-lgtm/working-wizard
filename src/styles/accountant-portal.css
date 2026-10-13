@@ -1722,6 +1722,10 @@ html.nav-drawer-open body{overflow:hidden}
 }
 @media (max-width:860px){
   .accountant-portal:not(.owner-door) .topbar-menu-btn{
+    display:inline-flex;
+    flex-direction:row;
+    align-items:center;
+    justify-content:center;
     width:auto;
     height:38px;
     padding:0 10px;
@@ -1729,8 +1733,9 @@ html.nav-drawer-open body{overflow:hidden}
     font:inherit;
     font-size:13px;
     font-weight:700;
+    white-space:nowrap;
   }
-  .accountant-portal:not(.owner-door) .topbar-menu-label{display:inline}
+  .accountant-portal:not(.owner-door) .topbar-menu-label{display:inline;line-height:1}
 }
 .accountant-portal .rail-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
 /* Sign-off pills keep their class name. On accountant surfaces they are cobalt.
@@ -1976,7 +1981,6 @@ html.dark .health-plate{
 .accountant-portal .crumb a.crumb-link:hover{
   text-decoration:underline;
 }
-.accountant-portal .footer-tagline{color:var(--ink-dim,#3d5270);font-style:italic}
 .accountant-portal .followup-cta,
 .accountant-portal .attn-strip-go,
 .accountant-portal .followup-cell{color:#0b5fff}

@@ -1740,6 +1740,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
         onFinish={clientRows.length === 0 ? () => setFirstClientOpen(true) : undefined}
         passThroughIds={[OPEN_QUERIES_TILE_ID]}
+        userId={user?.id ?? null}
       />
       {/* Ambient background */}
       <div id="atmos">
@@ -2192,9 +2193,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           </>
         ) : null}
 
-        <div className="footer-note">
-          MILŌN Practice Portal · <span className="serif footer-tagline">The passion to perform.</span>
-        </div>
+        <div className="footer-note">MILŌN Practice Portal</div>
           </div>
         </div>
       </main>

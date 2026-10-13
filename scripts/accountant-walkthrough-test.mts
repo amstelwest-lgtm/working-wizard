@@ -21,6 +21,13 @@ import { clientBackTarget } from "../src/lib/client-back";
 import { practiceAgentFromHash, practiceAgentHash } from "../src/lib/practice-agent-hash";
 import { ratioActualLine } from "../src/lib/ratio-actuals";
 import type { RatioInputs } from "../src/lib/ratios";
+import {
+  CHUNK_RELOAD_BOOT_SCRIPT,
+  CHUNK_RELOAD_KEY,
+  isChunkLoadError,
+  reloadForChunkError,
+} from "../src/lib/chunk-reload";
+import { markTourSeen, tourSeen } from "../src/lib/onboarding";
 import { reportLinkOpensPreview, reportLinkRunsDownload } from "../src/lib/report-preview";
 import { decideFirmBillingPathGate, isFirmProductPath } from "../src/lib/stripe-entitlement";
 
@@ -233,5 +240,75 @@ assert(plan.includes("onHandOff={isOwner ? (agent) => void assignToAgent"), "the
 
 const portalCss = read("src/styles/accountant-portal.css");
 assert(!portalCss.includes('content:"▸"'), "the portal does not paint a stray triangle glyph");
+assert(
+  portalCss.includes(".topbar-menu-btn{\n    display:inline-flex;"),
+  "the Menu label sits on the same row as its icon",
+);
+assert(!portalCss.includes("footer-tagline"), "the footer slogan style is gone");
+assert(!board.includes("The passion to perform"), "the practice footer drops the old slogan");
+assert(!client.includes("The passion to perform"), "the client footer drops the old slogan");
+
+const notes = read("src/components/note-layer.tsx");
+assert(!notes.includes("z-[99993]"), "the notes tray does not cover the page");
+assert(notes.includes("notes-tray--pill"), "a closed notes tray is a pill");
+
+const wizard = read("src/components/walkthrough-wizard.tsx");
+assert(wizard.includes('"#accountant-menu"'), "the tour leaves the Menu button clickable");
+assert(wizard.includes('"#accountant-nav"'), "the tour leaves the drawer clickable");
+assert(wizard.includes('"[data-ask]"'), "the tour leaves Ask buttons clickable");
+assert(wizard.includes("markTourSeen"), "the long tours are remembered");
+assert(wizard.includes("drawerOpen"), "an open drawer dismisses the tour overlay");
+
+const menu = read("src/components/accountant-nav.tsx");
+assert(menu.includes('id="accountant-menu"'), "the Menu button has a stable id");
+assert(menu.includes('id="accountant-nav"'), "the rail has a stable id");
+
+assert(isChunkLoadError(new Error("Failed to fetch dynamically imported module")), "dynamic import failures count");
+assert(isChunkLoadError("Loading chunk 8 failed"), "chunk load failures count");
+assert(isChunkLoadError("/assets/app-chrome-abc123.js"), "app-chrome 404s count");
+assert(isChunkLoadError("/assets/upload-abc.js"), "upload chunk 404s count");
+assert(isChunkLoadError("/assets/settings-menu-abc.js"), "settings menu chunk 404s count");
+assert(isChunkLoadError("/assets/use-share-abc.js"), "share chunk 404s count");
+assert(!isChunkLoadError(new Error("ResizeObserver loop")), "ordinary errors do not reload");
+assert(CHUNK_RELOAD_BOOT_SCRIPT.includes(CHUNK_RELOAD_KEY), "the boot script uses the reload flag");
+
+const memory = new Map<string, string>();
+const storage = {
+  getItem: (key: string) => memory.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    memory.set(key, value);
+  },
+  removeItem: (key: string) => {
+    memory.delete(key);
+  },
+  clear: () => memory.clear(),
+  key: () => null,
+  length: 0,
+} as Storage;
+assert(reloadForChunkError(storage), "the first chunk failure reloads once");
+assert(memory.get(CHUNK_RELOAD_KEY) === "1", "the reload flag is stored");
+assert(!reloadForChunkError(storage), "a second chunk failure does not reload again");
+
+const tours = new Map<string, string>();
+const previous = globalThis.localStorage;
+(globalThis as unknown as { localStorage: Storage }).localStorage = {
+  getItem: (key: string) => tours.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    tours.set(key, value);
+  },
+  removeItem: (key: string) => {
+    tours.delete(key);
+  },
+  clear: () => tours.clear(),
+  key: (index: number) => [...tours.keys()][index] ?? null,
+  get length() {
+    return tours.size;
+  },
+};
+assert(!tourSeen("milon_accountant_dash_tour_v10", "user-a"), "a new user has not seen the dashboard tour");
+markTourSeen("milon_accountant_dash_tour_v10", "user-a");
+assert(tourSeen("milon_accountant_dash_tour_v10", "user-a"), "the dashboard tour is remembered for that user");
+assert(!tourSeen("milon_accountant_dash_tour_v10", "user-b"), "another user still sees the dashboard tour");
+(globalThis as unknown as { localStorage: Storage }).localStorage = previous;
 
 console.log("accountant-walkthrough ok");
