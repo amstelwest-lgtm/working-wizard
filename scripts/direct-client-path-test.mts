@@ -259,7 +259,7 @@ function facts(over: Partial<NextStepFacts>): NextStepFacts {
     "owner board mounts the panel on the Next Moves tab",
   );
   assert(
-    app.includes('audience="owner"\n                    canPropose={hasRealFinancials}'),
+    app.includes('audience="owner"\n                      canPropose={hasRealFinancials}'),
     "owner panel proposes only with real figures",
   );
   assert(app.includes("setAdvisoryBump((n) => n + 1)"), "panel writes refresh the Next Step card");
