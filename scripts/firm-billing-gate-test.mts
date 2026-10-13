@@ -816,7 +816,7 @@ assert(
   "billing start loads the pre-auth owner line from the server chunk",
 );
 assert(
-  !start.includes("R199") && !start.includes("R299"),
+  !start.includes("R299") && !start.includes("R799"),
   "billing start source has no rand literals",
 );
 assert(

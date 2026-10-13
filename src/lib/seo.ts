@@ -55,7 +55,7 @@ export const SEO_PAGES = {
     path: "/for-owners",
     title: "AI CFO for Small Business on QuickBooks, Xero & Sage | MILŌN",
     description:
-      "An AI finance team for your business: health score, 13-week cash and next moves from QuickBooks, Xero or Sage. $29 a month, or free with your accountant.",
+      "An AI finance team for your business: health score, 13-week cash and next moves from QuickBooks, Xero or Sage. $39 a month, or free with your accountant.",
     ogTitle: "An AI finance team for small business owners | MILŌN",
     ogDescription:
       "Milōn Financial Manager, Analyst and Advisor read QuickBooks, Xero or Sage and tell you what to do next. Free when your accountant is on Milōn.",
@@ -286,7 +286,7 @@ export function organizationGraphJson(): string {
             "@type": "Offer",
             name: "Owner plan",
             priceCurrency: "USD",
-            price: "29",
+            price: "39",
             url: `${SITE_ORIGIN}/for-owners`,
             availability: "https://schema.org/InStock",
           },
@@ -354,7 +354,7 @@ export const LLMS_TXT = `# Milōn
 
 ## Pricing (USD)
 - Accounting firms: flat bands by active client count, Starter $39/mo to Scale $999/mo; 14-day free trial · up to 3 clients
-- Business owners: $29/mo, free when their accountant is on Milōn
+- Business owners: $39/mo, free when their accountant is on Milōn
 
 ## Who it is for
 - Accounting firms, CPA firms and bookkeeping firms launching or scaling client advisory services

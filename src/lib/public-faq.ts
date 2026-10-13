@@ -14,7 +14,7 @@ import {
 
 /** Lead sentence of the cost answer. USD. The ZA page swaps this from the server chunk. */
 export const FAQ_OWNER_COST_US =
-  "Business owners: $29 a month, or free when your accountant is on Milōn.";
+  "Business owners: $39 a month, or free when your accountant is on Milōn.";
 
 export {
   FAQ_NOT_A_BOOKKEEPER_ANSWER,

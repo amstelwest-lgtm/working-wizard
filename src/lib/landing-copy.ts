@@ -20,13 +20,13 @@ export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
   "mailto:hello@milonfinance.com?subject=Question%20about%20Mil%C5%8Dn";
 export const HERO_OWNER_PREFIX = "Business owner?";
-export const HERO_OWNER_LINK = "Business owner? $29/mo, or free when your accountant is on Milōn →";
+export const HERO_OWNER_LINK = "Business owner? $39/mo, or free when your accountant is on Milōn →";
 export const OWNER_SIGNUP_LINK = "Get your own AI finance team →";
 /** /for-owners and /about. USD. The rand twin lives in the SA pricing server chunk. */
 export const OWNER_PLAN_EARLY_US =
-  "The owner plan is $29 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.";
+  "The owner plan is $39 a month, and free when your accountant is on Milōn. If something in the product is not finished, we tell you inside the product rather than hiding it.";
 export const OWNER_REGISTER_NOTE_US =
-  "Business owners pay $29/mo, or nothing when their accountant is on Milōn.";
+  "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
 
 /**
  * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can
@@ -145,7 +145,7 @@ export const PRICING_INTRO =
  * The paid band bills that price when the trial ends and a card is on file.
  */
 export const PRICING_TRIAL_AFTER = FIRM_TRIAL_EXPLORE;
-export const PRICING_OWNER_BAR_US = "$29/mo · free when your accountant is on Milōn";
+export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
 export const OWNER_OFFER_LABEL = "For business owners";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;
 export const SOLO_TRIAL_BUTTON = "Start my 14-day free trial";

@@ -10,7 +10,7 @@ export function ownerVisitorFromPack(value: string | null | undefined): OwnerVis
   return value === "za" ? "za" : "us";
 }
 
-export const OWNER_MONTHLY_USD_LABEL = "$29/mo";
+export const OWNER_MONTHLY_USD_LABEL = "$39/mo";
 
 export function ownerPlanLine(input: {
   visitor: OwnerVisitor | null;

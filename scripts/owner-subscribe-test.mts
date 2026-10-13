@@ -99,7 +99,7 @@ assert(
   "Stripe entitlement is Manage billing",
 );
 assert(
-  !subscribe.includes("R199") && !subscribe.includes("R299") && !subscribe.includes("ZAR"),
+  !subscribe.includes("R299") && !subscribe.includes("R799") && !subscribe.includes("ZAR"),
   "the button does not ship a rand price",
 );
 assert(!subscribe.includes("role=\"alert\""), "unavailable is not an error");
