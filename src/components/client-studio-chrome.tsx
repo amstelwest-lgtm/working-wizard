@@ -53,7 +53,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "health",
           label: "Health",
-          to: go("health", "score"),
+          to: go("health"),
           items: subs("health", [
             { id: "score", label: "Score" },
             { id: "pillars", label: "Where it hurts" },
@@ -62,7 +62,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "cash",
           label: "Cash flow",
-          to: go("cash", "forecast"),
+          to: go("cash"),
           items: subs("cash", [
             { id: "forecast", label: "13-week forecast" },
             { id: "collections", label: "Who to chase" },
@@ -72,7 +72,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "profit",
           label: "Profit",
-          to: go("profit", "waterfall"),
+          to: go("profit"),
           items: subs("profit", [
             { id: "waterfall", label: "Waterfall" },
             { id: "lines", label: "Product lines" },
@@ -81,7 +81,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "budget",
           label: "Budget",
-          to: go("budget", "year"),
+          to: go("budget"),
           items: subs("budget", [
             { id: "year", label: "This year" },
             { id: "months", label: "Month by month" },
@@ -97,7 +97,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "plan",
           label: "Action plan",
-          to: go("plan", "open"),
+          to: go("plan"),
           items: subs("plan", [
             { id: "open", label: "Open work" },
             { id: "overdue", label: "Overdue" },
@@ -106,7 +106,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "reports",
           label: "Reports",
-          to: go("reports", "all"),
+          to: go("reports"),
           items: subs("reports", [
             { id: "scorecard", label: "Health scorecard" },
             { id: "forecast", label: "13-week cash forecast" },
@@ -125,7 +125,7 @@ function clientSections(clientId: string): NavSection[] {
         {
           id: "books",
           label: "Books",
-          to: go("books", "documents"),
+          to: go("books"),
           items: subs("books", [
             { id: "documents", label: "Documents" },
             { id: "connections", label: "Connections" },

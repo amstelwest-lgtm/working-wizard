@@ -16,13 +16,13 @@
 import { scoreTier } from "@/lib/ratios";
 
 export const COACH_STEPS = [
-  { id: "data", label: "Data", tab: "portal" },
-  { id: "health", label: "Health", tab: "health", focus: "health" },
+  { id: "data", label: "Data", tab: "portal", section: "connections" },
+  { id: "health", label: "Health", tab: "health", section: "score", focus: "health" },
   { id: "pillars", label: "Pillars", tab: "health", section: "pillars", focus: "pillars" },
-  { id: "profit", label: "Profitability", tab: "profit" },
-  { id: "cash", label: "Cash", tab: "cash" },
-  { id: "budget", label: "Budget", tab: "budget" },
-  { id: "actions", label: "Actions", tab: "plan" },
+  { id: "profit", label: "Profitability", tab: "profit", section: "waterfall" },
+  { id: "cash", label: "Cash", tab: "cash", section: "forecast" },
+  { id: "budget", label: "Budget", tab: "budget", section: "year" },
+  { id: "actions", label: "Actions", tab: "plan", section: "open" },
 ] as const;
 
 export type CoachStepId = (typeof COACH_STEPS)[number]["id"];

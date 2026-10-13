@@ -3483,6 +3483,8 @@ export type ReportsStudioProps = {
   sourceChip?: string | null;
   /** Configure-inputs block. The embedded tab keeps it in the closed drawer with settings. */
   inputs?: ReactNode;
+  /** When set, the embedded catalogue shows only these report keys. */
+  onlyKeys?: readonly string[];
 };
 
 export function ReportsStudio({
@@ -3494,6 +3496,7 @@ export function ReportsStudio({
   onSearchCleared,
   sourceChip = null,
   inputs = null,
+  onlyKeys,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId, brandLoading } = useAccountantProfile();
@@ -3933,8 +3936,11 @@ export function ReportsStudio({
   }
 
   const zipPct = zipProgress ? Math.round((zipProgress.done / zipProgress.total) * 100) : 0;
-  const essential = REPORTS.filter((r) => r.category === "essential");
-  const optional = REPORTS.filter((r) => r.category === "optional");
+  const catalogueReports = onlyKeys?.length
+    ? REPORTS.filter((r) => onlyKeys.includes(r.key))
+    : REPORTS;
+  const essential = catalogueReports.filter((r) => r.category === "essential");
+  const optional = catalogueReports.filter((r) => r.category === "optional");
   const reportMarket = clientData?.market ?? ZA_MARKET;
   const readyReports = clientData?.hasData
     ? REPORTS.filter((report) => !unavailableFor(report.key))
@@ -3944,20 +3950,23 @@ export function ReportsStudio({
     periodLabel: clientData?.dataPeriodLabel || null,
   });
   const openPrimaryReport = () => {
-    const target = readyReports[0] ?? REPORTS[0];
+    const target = catalogueReports[0] ?? readyReports[0] ?? REPORTS[0];
     if (!target) return;
     void handlePreview(target);
   };
 
   const reportCatalogue = (
     <>
+      {essential.length > 0 ? (
       <section>
+        {onlyKeys?.length === 1 ? null : (
         <div className="mb-3 flex items-center gap-2">
           <span className="rounded-full bg-[#DBEAFE] px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-[#102A43] dark:bg-[#163654] dark:text-[#F4F7FB]">
             Essential — {essential.length} Reports
           </span>
           <div className="flex-1 border-t border-border" />
         </div>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {essential.map((r) => (
             <ReportCard
@@ -3979,13 +3988,17 @@ export function ReportsStudio({
           ))}
         </div>
       </section>
+      ) : null}
+      {optional.length > 0 ? (
       <section>
+        {onlyKeys?.length === 1 ? null : (
         <div className="mb-3 flex items-center gap-2">
           <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Optional — {optional.length} Reports
           </span>
           <div className="flex-1 border-t border-border" />
         </div>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {optional.map((r) => (
             <ReportCard
@@ -4007,6 +4020,7 @@ export function ReportsStudio({
           ))}
         </div>
       </section>
+      ) : null}
     </>
   );
 
@@ -4075,7 +4089,7 @@ export function ReportsStudio({
         {embedded ? (
           <section className="mb-5 rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-sm dark:border-[#1e3a5f] dark:bg-[#102A43]">
             <ArapAnswerStrip
-              heading="PDFs"
+              heading={onlyKeys?.length === 1 ? "This PDF" : "PDFs"}
               sentence={reportsSentence}
               chip={sourceChip}
               primary={
@@ -4089,6 +4103,7 @@ export function ReportsStudio({
                   >
                     {studioBusy ? "Loading…" : reportsPrimaryLabel(readyReports.length)}
                   </button>
+                  {onlyKeys?.length === 1 ? null : (
                   <button
                     type="button"
                     className="answer-strip__icon"
@@ -4106,6 +4121,7 @@ export function ReportsStudio({
                       <Download className="h-3.5 w-3.5" aria-hidden />
                     )}
                   </button>
+                  )}
                 </>
               }
             />

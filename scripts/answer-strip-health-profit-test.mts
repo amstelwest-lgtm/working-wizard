@@ -137,8 +137,13 @@ assert(
 );
 assert(!profitPane.includes("Sync QuickBooks again"), "profit does not ask for another sync");
 assert(!ratiosPane.includes('search.focus === "pillars" ? null'), "pillars keep the orb");
-assert(route.includes('getElementById("coach-pillars")'), "a pillars link scrolls to the cards");
-assert(!ratiosPane.includes('"Where it hurts"'), "pillars does not retitle Health");
+assert(
+  ratiosPane.includes('search.section === "pillars"') && ratiosPane.includes("<SimplifiedRatios"),
+  "where it hurts is its own page",
+);
+assert(ratiosPane.includes('title="Health"'), "the health parent stays Health");
+assert(ratiosPane.includes('title="Where it hurts"'), "where it hurts keeps its own title");
+assert(ratiosPane.includes('title="Score"'), "the score lives on its own page");
 assert(profitPane.includes('aria-label="Export PDF"'), "profit export sits on the strip");
 assert(profitPane.includes("hideCardExport"), "the waterfall card does not repeat export");
 assert(!waterfall.includes("ChevronUp"), "the chart collapse chevron is gone");

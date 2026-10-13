@@ -67,7 +67,10 @@ assert(
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes("filter?: string"), "client search accepts filter");
-assert(clientSrc.includes('search.filter === "overdue"'), "Action Plan receives overdue filter");
+assert(
+  /search\.section === "overdue"\s*\?\s*"overdue"/.test(clientSrc),
+  "Overdue is its own page and still filters the plan",
+);
 assert(clientSrc.includes("initialFilter="), "Action Plan is given initialFilter");
 
 console.log("accountant-followup-test: ok");

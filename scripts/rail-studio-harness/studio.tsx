@@ -5,7 +5,7 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ARAP_GOLD_BTN } from "@/components/arap-answer-strip";
 import { PeriodPill } from "@/components/chrome-icons";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { AdvisoryTabSignoff } from "@/components/advisory-tab-signoff";
@@ -92,6 +92,7 @@ import {
   routerHash,
 } from "@/lib/client-route-search";
 import { ClientRail } from "@/components/client-studio-chrome";
+import { ClientSectionOverview, ClientSubpageFrame } from "@/components/client-subpage";
 import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
 import { SettingsMenu } from "@/components/settings-menu";
 
@@ -204,6 +205,7 @@ export function RailStudio() {
           <span>
             <b style={{ color: "var(--ink)" }}>Harbour Glass</b>
           </span>
+          <HarnessCrumb clientId={clientId} pane={pane} section={search.section} />
         </div>
         <div className="client-workspace">
           <ClientRail clientId={clientId} search={search} onNavigate={() => setMenuOpen(false)} />
@@ -215,12 +217,7 @@ export function RailStudio() {
             {pane === "overview" && !search.agent ? <BriefingPane /> : null}
             {pane === "moves" ? <MovesPane /> : null}
             {pane === "summary" ? <BooksPane clientId={clientId} /> : null}
-            {pane === "ratios" ? (
-              <HealthPane
-                clientId={clientId}
-                pillars={search.section === "pillars" || search.focus === "pillars"}
-              />
-            ) : null}
+            {pane === "ratios" ? <HealthPane clientId={clientId} /> : null}
             {pane === "profit" ? <ProfitPane clientId={clientId} /> : null}
             {pane === "cash" ? <CashPane clientId={clientId} /> : null}
             {pane === "budget" ? <BudgetPane clientId={clientId} /> : null}
@@ -442,18 +439,14 @@ const HARNESS_FINANCIALS = {
   periodLabel: "September 2026",
 };
 
-function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean }) {
+function HealthPane({ clientId }: { clientId: string }) {
+  const search = useSearch({ strict: false }) as { section?: string };
+  const navigate = useNavigate();
+  const section = search.section;
   const [healthDrill, setHealthDrill] = useState<{
     token: number;
     pillarId: "profit" | "assets" | "financing" | "cash";
   } | null>(null);
-  useEffect(() => {
-    if (!pillars) return;
-    const timer = window.setTimeout(() => {
-      document.getElementById("coach-pillars")?.scrollIntoView({ block: "start" });
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [pillars]);
   const overall = scorecardHealthFromFinancials({
     financials: HARNESS_FINANCIALS,
     cashBalance: 186000,
@@ -473,7 +466,7 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
     caption,
     score: Number.isFinite(avg) ? avg : null,
     bandLabel: overall.displayLabel,
-    includeScore: pillars,
+    includeScore: section === "pillars",
     pillars: (["profit", "assets", "financing", "cash"] as const).map((id) => ({
       label: PILLAR_SHORT_LABELS[id],
       score: pillarById[id],
@@ -498,167 +491,240 @@ function HealthPane({ clientId, pillars }: { clientId: string; pillars: boolean 
 
   return (
     <div className="tabpane on" id="pane-ratios">
-      <DeliverableAnswerStrip
-        heading="Health score"
-        sentence={sentence}
-        chip={chip}
-        scope="financials"
-        clientId={clientId}
-        clientName="Harbour Glass"
-        signoff={null}
-        signoffKnown={false}
-        isStale={false}
-        onSignoffChange={() => {}}
-        canSign
-        extraActions={
-          <button type="button" className="answer-strip__icon" aria-label="Export PDF" title="Export PDF">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-            </svg>
-          </button>
-        }
-      />
-      <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}>
-        <DeliverableInputConfig
-          clientId={clientId}
-          deliverableId="ratios"
-          context={{ financials: HARNESS_FINANCIALS }}
-        />
-        <div className="card collapse" id="finCollapse">
-          <div className="c-head">
-            <h3>
-              Financials <span className="autosave">Auto-saved</span>
-            </h3>
-            <span className="hint">
-              Edit the figures or upload a statement. The score follows what is saved here.
-            </span>
-          </div>
-        </div>
-      </ReviewInputsDrawer>
-      <PaneBoundary label="Health score">
-        <div style={{ marginBottom: 32 }}>
-          <div className="health-plate">
-            <SphereHero
-              hideCaption
-              overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
-              displayStatus={overall.displayStatus}
-              pillars={spherePillars}
-              drillTo={healthDrill}
-              onDriverClick={() => undefined}
+      {section !== "score" && section !== "pillars" ? (
+        <>
+          <ClientSectionOverview
+            clientId={clientId}
+            eyebrow="Numbers"
+            title="Health"
+            subtitle="Score and where it hurts each have their own page. The figures stay here."
+            links={[
+              {
+                id: "score",
+                label: "Score",
+                detail: "The health score, with sign-off and the PDF.",
+                search: (prev) => accountantClientTabSearch(prev, "health", { section: "score" }),
+              },
+              {
+                id: "pillars",
+                label: "Where it hurts",
+                detail: "The pillars that pull the score down.",
+                search: (prev) => accountantClientTabSearch(prev, "health", { section: "pillars" }),
+              },
+            ]}
+          />
+          <ReviewInputsDrawer hint={deliverableDrawerHint("ratios", { financials: HARNESS_FINANCIALS })}>
+            <DeliverableInputConfig
+              clientId={clientId}
+              deliverableId="ratios"
+              context={{ financials: HARNESS_FINANCIALS }}
             />
-          </div>
+            <div className="card collapse" id="finCollapse">
+              <div className="c-head">
+                <h3>
+                  Financials <span className="autosave">Auto-saved</span>
+                </h3>
+                <span className="hint">
+                  Edit the figures or upload a statement. The score follows what is saved here.
+                </span>
+              </div>
+            </div>
+          </ReviewInputsDrawer>
+        </>
+      ) : null}
+      {section === "score" ? (
+        <ClientSubpageFrame
+          id="score"
+          eyebrow="Health"
+          title="Score"
+          subtitle="The health score for this client. Sign off and export the PDF from this page."
+        >
+          <DeliverableAnswerStrip
+            heading="Health score"
+            sentence={sentence}
+            chip={chip}
+            scope="financials"
+            clientId={clientId}
+            clientName="Harbour Glass"
+            signoff={null}
+            signoffKnown={false}
+            isStale={false}
+            onSignoffChange={() => {}}
+            canSign
+            extraActions={
+              <button type="button" className="answer-strip__icon" aria-label="Export PDF" title="Export PDF">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                </svg>
+              </button>
+            }
+          />
+          <PaneBoundary label="Health score">
+            <div className="health-plate">
+              <SphereHero
+                hideCaption
+                overallHealth={Number.isFinite(avg) ? avg : Number.NaN}
+                displayStatus={overall.displayStatus}
+                pillars={spherePillars}
+                drillTo={healthDrill}
+                onDriverClick={() => undefined}
+              />
+            </div>
+          </PaneBoundary>
+        </ClientSubpageFrame>
+      ) : null}
+      {section === "pillars" ? (
+        <ClientSubpageFrame
+          id="pillars"
+          eyebrow="Health"
+          title="Where it hurts"
+          subtitle="The pillars that pull the score down."
+        >
           <div className="health-plate">
             <SimplifiedRatios
               sections={sections}
               onOpenPillar={(id) => {
                 if (id !== "profit" && id !== "assets" && id !== "financing" && id !== "cash") return;
                 setHealthDrill({ token: Date.now(), pillarId: id });
-                document.getElementById("health-score-drill")?.scrollIntoView({ block: "start" });
+                void navigate({
+                  to: "/clients/$clientId",
+                  params: { clientId },
+                  search: (prev) => accountantClientTabSearch(prev, "health", { section: "score" }),
+                });
               }}
             />
           </div>
-        </div>
-      </PaneBoundary>
+        </ClientSubpageFrame>
+      ) : null}
     </div>
   );
 }
 
 function ProfitPane({ clientId }: { clientId: string }) {
+  const search = useSearch({ strict: false }) as { section?: string };
   const meta = readStatementMeta(HARNESS_FINANCIALS);
   const preferPeriod = preferStatementPeriod(HARNESS_FINANCIALS);
   const [profitExport, setProfitExport] = useState<WaterfallExportApi | null>(null);
+  const section = search.section;
   return (
     <div className="tabpane on" id="pane-profit">
-      <DeliverableAnswerStrip
-        heading="Profitability"
-        sentence={profitAnswerSentence({
-          currency: currencySymbol(),
-          periodLabel: meta.periodLabel,
-          preferPeriod,
-        })}
-        chip={figureSourceChipLabel(meta.statementSource)}
-        scope="profitability"
-        clientId={clientId}
-        clientName="Harbour Glass"
-        signoff={{
-          id: "harness-signoff-profitability",
-          client_id: clientId,
-          scope: "profitability",
-          signed_off_by_id: "harness-local-user",
-          signed_off_by_name: "Ada Mbeki",
-          signed_off_by_initials: "AM",
-          signed_off_by_title: null,
-          firm_name: "Harbour & Co",
-          note: null,
-          signature_data: null,
-          signed_off_at: "2026-10-02T08:00:00.000Z",
-        }}
-        signoffKnown
-        isStale={false}
-        onSignoffChange={() => {}}
-        canSign
-        extraActions={
-          <button
-            type="button"
-            className="answer-strip__icon"
-            aria-label="Export PDF"
-            title="Export PDF"
-            disabled={profitExport?.exporting}
-            onClick={() => profitExport?.exportPdf()}
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-            </svg>
-          </button>
-        }
-      />
-      <ReviewInputsDrawer hint={deliverableDrawerHint("profit", { financials: HARNESS_FINANCIALS })}>
-        <DeliverableInputConfig
+      {section !== "waterfall" && section !== "lines" ? (
+        <ClientSectionOverview
           clientId={clientId}
-          deliverableId="profit"
-          context={{ financials: HARNESS_FINANCIALS }}
+          eyebrow="Profit"
+          title="Profit"
+          subtitle="The waterfall and the product lines each have their own page."
+          links={[
+            {
+              id: "waterfall",
+              label: "Waterfall",
+              detail: "Where profit goes, from revenue down to the bottom line.",
+              search: (prev) => accountantClientTabSearch(prev, "profit", { section: "waterfall" }),
+            },
+            {
+              id: "lines",
+              label: "Product lines",
+              detail: "Revenue and net profit by product line.",
+              search: (prev) => accountantClientTabSearch(prev, "profit", { section: "lines" }),
+            },
+          ]}
         />
-        <p className="eyebrow">Product lines</p>
-        <p className="sub" style={{ marginBottom: 16 }}>
-          Answer these questions to build revenue and net profit per product line — so you can see which
-          lines actually make the money.
-        </p>
-        <ProductMixPanel
-          totalRevenue={420000}
-          incentive="Answer these to build revenue and net profit per product line."
-        />
-        <div className="card collapse open" id="profitFinCollapse" style={{ marginTop: 20 }}>
-          <div className="c-head">
-            <h3>
-              Profitability inputs <span className="autosave">Auto-saved</span>
-            </h3>
-            <span className="hint">Period P&amp;L that feeds the waterfall — same figures as Health &amp; Ratios</span>
-          </div>
-          <div className="c-body">
-            <div className="c-inner">
-              <p className="sub" style={{ marginTop: 0 }}>
-                Edit the period figures here. The waterfall updates from this P&amp;L — weekly figures the
-                owner enters stay on their board.
-              </p>
-            </div>
-          </div>
-        </div>
-      </ReviewInputsDrawer>
-      <div id="wizard-profit-walk">
-        <PaneBoundary label="Profitability waterfall">
-          <ProfitabilityWaterfall
-            fallback={derivePeriodWaterfallFallback(HARNESS_FINANCIALS)}
-            clientName="Harbour Glass"
-            clientId={clientId}
-            periodLabel={meta.periodLabel}
-            preferPeriod={preferPeriod}
-            statementSource={meta.statementSource}
-            hideLead
-            hideCardExport
-            onExportReady={setProfitExport}
+      ) : null}
+      {section === "lines" ? (
+        <ClientSubpageFrame
+          id="lines"
+          eyebrow="Profit"
+          title="Product lines"
+          subtitle="Revenue and net profit by product line, so you can see which lines actually make the money."
+        >
+          <ProductMixPanel
+            totalRevenue={420000}
+            incentive="Answer these to build revenue and net profit per product line."
           />
-        </PaneBoundary>
-      </div>
+        </ClientSubpageFrame>
+      ) : null}
+      {section === "waterfall" ? (
+        <ClientSubpageFrame
+          id="waterfall"
+          eyebrow="Profit"
+          title="Waterfall"
+          subtitle="Where profit goes, from revenue down to the bottom line. Sign off and export from here."
+        >
+          <DeliverableAnswerStrip
+            heading="Profitability"
+            sentence={profitAnswerSentence({
+              currency: currencySymbol(),
+              periodLabel: meta.periodLabel,
+              preferPeriod,
+            })}
+            chip={figureSourceChipLabel(meta.statementSource)}
+            scope="profitability"
+            clientId={clientId}
+            clientName="Harbour Glass"
+            signoff={{
+              id: "harness-signoff-profitability",
+              client_id: clientId,
+              scope: "profitability",
+              signed_off_by_id: "harness-local-user",
+              signed_off_by_name: "Ada Mbeki",
+              signed_off_by_initials: "AM",
+              signed_off_by_title: null,
+              firm_name: "Harbour & Co",
+              note: null,
+              signature_data: null,
+              signed_off_at: "2026-10-02T08:00:00.000Z",
+            }}
+            signoffKnown
+            isStale={false}
+            onSignoffChange={() => {}}
+            canSign
+            extraActions={
+              <button
+                type="button"
+                className="answer-strip__icon"
+                aria-label="Export PDF"
+                title="Export PDF"
+                disabled={profitExport?.exporting}
+                onClick={() => profitExport?.exportPdf()}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+                </svg>
+              </button>
+            }
+          />
+          <ReviewInputsDrawer hint={deliverableDrawerHint("profit", { financials: HARNESS_FINANCIALS })}>
+            <DeliverableInputConfig
+              clientId={clientId}
+              deliverableId="profit"
+              context={{ financials: HARNESS_FINANCIALS }}
+            />
+            <div className="card collapse open" id="profitFinCollapse" style={{ marginTop: 20 }}>
+              <div className="c-head">
+                <h3>
+                  Profitability inputs <span className="autosave">Auto-saved</span>
+                </h3>
+                <span className="hint">Period P&amp;L that feeds the waterfall — same figures as Health &amp; Ratios</span>
+              </div>
+            </div>
+          </ReviewInputsDrawer>
+          <div id="wizard-profit-walk">
+            <PaneBoundary label="Profitability waterfall">
+              <ProfitabilityWaterfall
+                fallback={derivePeriodWaterfallFallback(HARNESS_FINANCIALS)}
+                clientName="Harbour Glass"
+                clientId={clientId}
+                periodLabel={meta.periodLabel}
+                preferPeriod={preferPeriod}
+                statementSource={meta.statementSource}
+                hideLead
+                hideCardExport
+                onExportReady={setProfitExport}
+              />
+            </PaneBoundary>
+          </div>
+        </ClientSubpageFrame>
+      ) : null}
     </div>
   );
 }
@@ -901,48 +967,91 @@ function PayablesPane({ aged }: { aged: boolean }) {
 function CashPane({ clientId }: { clientId: string }) {
   const search = useSearch({ strict: false }) as { section?: string; aged?: string | number };
   const aged = search.aged === 1 || search.aged === "1";
-  useEffect(() => {
-    const id =
-      search.section === "collections"
-        ? "pane-collections"
-        : search.section === "payables"
-          ? "pane-payables"
-          : null;
-    if (!id) return;
-    const timer = window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ block: "start" });
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [search.section]);
+  const section = search.section;
   return (
     <div className="tabpane on" id="pane-cash">
-      <div className="card cf-wrap" id="wizard-cash-panel">
-        <PaneBoundary label="Cash forecast">
-          <CashForecastPanel
-            clientId={clientId}
-            clientName="Harbour Glass"
-            canSign
-            hideReadOnlyStamp
-            signoffKnown
-            signoff={{
-              id: "harness-signoff-cash",
-              client_id: clientId,
-              scope: "cash_forecast",
-              signed_off_by_id: "harness-local-user",
-              signed_off_by_name: "Ada Mbeki",
-              signed_off_by_initials: "AM",
-              signed_off_by_title: null,
-              firm_name: "Harbour & Co",
-              note: null,
-              signature_data: null,
-              signed_off_at: "2026-10-02T08:00:00.000Z",
-            }}
-            statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
-          />
-        </PaneBoundary>
-      </div>
-      <CollectionsPane aged={aged} />
-      <PayablesPane aged={aged} />
+      {section !== "forecast" && section !== "collections" && section !== "payables" ? (
+        <ClientSectionOverview
+          clientId={clientId}
+          eyebrow="Numbers"
+          title="Cash flow"
+          subtitle="The forecast, who to chase, and who to pay each have their own page."
+          links={[
+            {
+              id: "forecast",
+              label: "13-week forecast",
+              detail: "Thirteen weeks of cash, with sign-off on this page.",
+              search: (prev) => accountantClientTabSearch(prev, "cash", { section: "forecast" }),
+            },
+            {
+              id: "collections",
+              label: "Who to chase",
+              detail: "Debtors to collect.",
+              search: (prev) => accountantClientTabSearch(prev, "cash", { section: "collections" }),
+            },
+            {
+              id: "payables",
+              label: "Who to pay",
+              detail: "Bills to schedule against the cash you have.",
+              search: (prev) => accountantClientTabSearch(prev, "cash", { section: "payables" }),
+            },
+          ]}
+        />
+      ) : null}
+      {section === "forecast" ? (
+        <ClientSubpageFrame
+          id="forecast"
+          eyebrow="Cash flow"
+          title="13-week forecast"
+          subtitle="Thirteen weeks of cash. Sign off and export from this page."
+        >
+          <div className="card cf-wrap" id="wizard-cash-panel">
+            <PaneBoundary label="Cash forecast">
+              <CashForecastPanel
+                clientId={clientId}
+                clientName="Harbour Glass"
+                canSign
+                hideReadOnlyStamp
+                signoffKnown
+                signoff={{
+                  id: "harness-signoff-cash",
+                  client_id: clientId,
+                  scope: "cash_forecast",
+                  signed_off_by_id: "harness-local-user",
+                  signed_off_by_name: "Ada Mbeki",
+                  signed_off_by_initials: "AM",
+                  signed_off_by_title: null,
+                  firm_name: "Harbour & Co",
+                  note: null,
+                  signature_data: null,
+                  signed_off_at: "2026-10-02T08:00:00.000Z",
+                }}
+                statementChip={figureSourceChipLabel(HARNESS_FINANCIALS.statementSource)}
+              />
+            </PaneBoundary>
+          </div>
+        </ClientSubpageFrame>
+      ) : null}
+      {section === "collections" ? (
+        <ClientSubpageFrame
+          id="collections"
+          eyebrow="Cash flow"
+          title="Who to chase"
+          subtitle="Debtors to collect, with the controls for this list."
+        >
+          <CollectionsPane aged={aged} />
+        </ClientSubpageFrame>
+      ) : null}
+      {section === "payables" ? (
+        <ClientSubpageFrame
+          id="payables"
+          eyebrow="Cash flow"
+          title="Who to pay"
+          subtitle="Bills to schedule against the cash you have."
+        >
+          <PayablesPane aged={aged} />
+        </ClientSubpageFrame>
+      ) : null}
     </div>
   );
 }
@@ -1000,37 +1109,140 @@ const HARNESS_BUDGET_ACTUALS: readonly BudgetActualMonth[] = [
 }));
 
 function BudgetPane({ clientId }: { clientId: string }) {
-  const search = useSearch({ strict: false }) as { view?: string };
+  const search = useSearch({ strict: false }) as { section?: string; view?: string };
   const navigate = useNavigate();
+  const section = search.section === "months" || search.view === "table" ? "months" : search.section;
   return (
     <div className="tabpane on" id="pane-budget">
-      <PaneBoundary label="Budget">
-        <BudgetPanel
+      {section !== "year" && section !== "months" ? (
+        <ClientSectionOverview
           clientId={clientId}
-          clientName="Harbour Glass"
-          role="accountant"
-          canSign
-          hideInlineSignOff
-          signoffKnown={false}
-          simplified
-          financials={{ revenue: "420000", cogs: "80000", fixedCosts: "140000", cash: "186000" }}
-          fyStartMonthDefault={3}
-          lens={search.view === "table" ? "table" : "chart"}
-          onLensChange={(next) => {
-            void navigate({
-              to: "/clients/$clientId",
-              params: { clientId },
-              search: (prev) => ({
-                ...prev,
-                view: next === "table" ? "table" : undefined,
-              }),
-              replace: true,
-            });
-          }}
-          actualMonths={HARNESS_BUDGET_ACTUALS}
+          eyebrow="Numbers"
+          title="Budget"
+          subtitle="This year and the month-by-month view each have their own page."
+          links={[
+            {
+              id: "year",
+              label: "This year",
+              detail: "The year on one chart.",
+              search: (prev) => accountantClientTabSearch(prev, "budget", { section: "year" }),
+            },
+            {
+              id: "months",
+              label: "Month by month",
+              detail: "Every month in a table.",
+              search: (prev) => accountantClientTabSearch(prev, "budget", { section: "months" }),
+            },
+          ]}
         />
-      </PaneBoundary>
+      ) : (
+        <ClientSubpageFrame
+          id={section}
+          eyebrow="Budget"
+          title={section === "months" ? "Month by month" : "This year"}
+          subtitle={
+            section === "months"
+              ? "Every month in a table. Sign off from this page."
+              : "The year on one chart. Sign off from this page."
+          }
+        >
+          <PaneBoundary label="Budget">
+            <BudgetPanel
+              clientId={clientId}
+              clientName="Harbour Glass"
+              role="accountant"
+              canSign
+              hideInlineSignOff
+              signoffKnown={false}
+              simplified
+              financials={{ revenue: "420000", cogs: "80000", fixedCosts: "140000", cash: "186000" }}
+              fyStartMonthDefault={3}
+              lens={section === "months" ? "table" : "chart"}
+              onLensChange={(next) => {
+                void navigate({
+                  to: "/clients/$clientId",
+                  params: { clientId },
+                  search: (prev) =>
+                    accountantClientTabSearch(prev, "budget", {
+                      section: next === "table" ? "months" : "year",
+                    }),
+                  replace: true,
+                });
+              }}
+              actualMonths={HARNESS_BUDGET_ACTUALS}
+            />
+          </PaneBoundary>
+        </ClientSubpageFrame>
+      )}
     </div>
+  );
+}
+
+const HARNESS_CRUMB: Record<string, { label: string; tab: string }> = {
+  overview: { label: "Home", tab: "home" },
+  ask: { label: "Home", tab: "home" },
+  ratios: { label: "Health", tab: "health" },
+  cash: { label: "Cash flow", tab: "cash" },
+  profit: { label: "Profit", tab: "profit" },
+  budget: { label: "Budget", tab: "budget" },
+  moves: { label: "Next moves", tab: "moves" },
+  plan: { label: "Action plan", tab: "plan" },
+  reports: { label: "Reports", tab: "reports" },
+  summary: { label: "Books", tab: "portal" },
+};
+
+const HARNESS_SECTION_LABEL: Record<string, string> = {
+  score: "Score",
+  pillars: "Where it hurts",
+  forecast: "13-week forecast",
+  collections: "Who to chase",
+  payables: "Who to pay",
+  waterfall: "Waterfall",
+  lines: "Product lines",
+  year: "This year",
+  months: "Month by month",
+  open: "Open work",
+  overdue: "Overdue",
+  drafts: "Drafts",
+  sent: "Sent",
+  documents: "Documents",
+  connections: "Connections",
+};
+
+function HarnessCrumb({
+  clientId,
+  pane,
+  section,
+}: {
+  clientId: string;
+  pane: string;
+  section?: string;
+}) {
+  const parent = HARNESS_CRUMB[pane];
+  if (!parent || pane === "overview") return null;
+  const child = section ? (HARNESS_SECTION_LABEL[section] ?? null) : null;
+  return (
+    <>
+      <span>/</span>
+      {child ? (
+        <Link
+          to="/clients/$clientId"
+          params={{ clientId }}
+          search={(prev) => accountantClientTabSearch(prev, parent.tab)}
+          className="crumb-link"
+        >
+          {parent.label}
+        </Link>
+      ) : (
+        <b style={{ color: "var(--ink)" }}>{parent.label}</b>
+      )}
+      {child ? (
+        <>
+          <span>/</span>
+          <b style={{ color: "var(--ink)" }}>{child}</b>
+        </>
+      ) : null}
+    </>
   );
 }
 
