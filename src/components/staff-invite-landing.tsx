@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordResetRequest } from "@/components/password-reset-request";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { PasswordWithShow } from "@/components/show-password";
 import {
   OwnerInviteCard,
   OwnerInviteEyebrow,
@@ -219,17 +220,21 @@ export function StaffInviteLanding({
                     ) : null}
                     <LockedEmail email={memberEmail} />
                     <OwnerInviteFieldLabel htmlFor="staff-invite-password">Password</OwnerInviteFieldLabel>
-                    <OwnerInviteInput
-                      id="staff-invite-password"
-                      type="password"
-                      name="password"
-                      required
-                      minLength={phase === "create" ? 8 : undefined}
-                      autoComplete={phase === "create" ? "new-password" : "current-password"}
-                      value={password}
-                      onChange={(event) => onPasswordChange(event.target.value)}
-                      aria-describedby={phase === "create" ? "staff-invite-password-hint" : undefined}
-                    />
+                    <PasswordWithShow id="staff-invite-password">
+                      {(type) => (
+                        <OwnerInviteInput
+                          id="staff-invite-password"
+                          type={type}
+                          name="password"
+                          required
+                          minLength={phase === "create" ? 8 : undefined}
+                          autoComplete={phase === "create" ? "new-password" : "current-password"}
+                          value={password}
+                          onChange={(event) => onPasswordChange(event.target.value)}
+                          aria-describedby={phase === "create" ? "staff-invite-password-hint" : undefined}
+                        />
+                      )}
+                    </PasswordWithShow>
                     {phase === "create" ? (
                       <p id="staff-invite-password-hint" className="mt-2 text-[11px] text-[#8a938c]">
                         At least 8 characters.

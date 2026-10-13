@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useId, useRef, type FormEvent } from "react"
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import { isTextEntry, overlayMayHandleKey } from "@/lib/dialog-focus";
+import { PasswordWithShow } from "@/components/show-password";
 import { t, type VisitorCopyPack } from "@/lib/market";
 import { billingStartPath, peekPendingCheckout } from "@/lib/pending-checkout";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -232,15 +233,19 @@ export function LandingSignInModal({
               </div>
               <div className="field">
                 <label htmlFor="si-password">Password</label>
-                <input
-                  id="si-password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••"
-                  value={siPassword}
-                  onChange={(e) => onSiPasswordChange(e.target.value)}
-                />
+                <PasswordWithShow id="si-password">
+                  {(type) => (
+                    <input
+                      id="si-password"
+                      type={type}
+                      autoComplete="current-password"
+                      required
+                      placeholder="••••••••"
+                      value={siPassword}
+                      onChange={(e) => onSiPasswordChange(e.target.value)}
+                    />
+                  )}
+                </PasswordWithShow>
                 <button
                   type="button"
                   onClick={onForgotPassword}

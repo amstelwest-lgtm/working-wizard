@@ -1917,3 +1917,15 @@ html[data-landing="1"] .hero-agent-name{
 @media (prefers-reduced-motion:reduce){
   html[data-landing="1"] .hero-agent-face video{display:none}
 }
+html[data-landing="1"] .milon-signin-box .field .show-password,
+html[data-landing="1"] .reg-shell .show-password{
+  display:flex;align-items:center;gap:8px;margin-top:8px;
+}
+html[data-landing="1"] .milon-signin-box .field .show-password input[type="checkbox"],
+html[data-landing="1"] .reg-shell .show-password input[type="checkbox"]{
+  width:16px;height:16px;min-height:0;padding:0;margin:0;border-radius:3px;flex:none;
+}
+html[data-landing="1"] .milon-signin-box .field .show-password label,
+html[data-landing="1"] .reg-shell .show-password label{
+  display:inline;margin:0;font-size:13px;letter-spacing:normal;text-transform:none;cursor:pointer;
+}

@@ -22,6 +22,7 @@ import {
 } from "@/lib/pending-checkout";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { setPortalIntent } from "@/lib/user-roles";
+import { PasswordWithShow } from "@/components/show-password";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 
 type SignedIn = { email?: string | null } | null;
@@ -185,15 +186,19 @@ export function LandingRegisterForm({
               onChange={(e) => setRegEmail(e.target.value)}
             />
             <label htmlFor="regPasswordField">Password</label>
-            <input
-              id="regPasswordField"
-              type="password"
-              required={!user}
-              placeholder="At least 6 characters"
-              minLength={user ? undefined : 6}
-              value={regPassword}
-              onChange={(e) => setRegPassword(e.target.value)}
-            />
+            <PasswordWithShow id="regPasswordField">
+              {(type) => (
+                <input
+                  id="regPasswordField"
+                  type={type}
+                  required={!user}
+                  placeholder="At least 6 characters"
+                  minLength={user ? undefined : 6}
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                />
+              )}
+            </PasswordWithShow>
             <button
               type="submit"
               className="btn btn-gold"
@@ -329,16 +334,20 @@ export function LandingRegisterForm({
                   onChange={(e) => setRegEmail(e.target.value)}
                 />
                 <label htmlFor="regPasswordField">Password</label>
-                <input
-                  id="regPasswordField"
-                  type="password"
-                  required
-                  placeholder="At least 6 characters"
-                  minLength={6}
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  aria-describedby="register-password-hint"
-                />
+                <PasswordWithShow id="regPasswordField">
+                  {(type) => (
+                    <input
+                      id="regPasswordField"
+                      type={type}
+                      required
+                      placeholder="At least 6 characters"
+                      minLength={6}
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      aria-describedby="register-password-hint"
+                    />
+                  )}
+                </PasswordWithShow>
                 <p id="register-password-hint" className="firm-signup-hint">
                   At least 6 characters.
                 </p>
@@ -408,15 +417,19 @@ export function LandingRegisterForm({
                   onChange={(e) => setRegEmail(e.target.value)}
                 />
                 <label htmlFor="regPasswordField">Password</label>
-                <input
-                  id="regPasswordField"
-                  type="password"
-                  required
-                  placeholder="At least 6 characters"
-                  minLength={6}
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                />
+                <PasswordWithShow id="regPasswordField">
+                  {(type) => (
+                    <input
+                      id="regPasswordField"
+                      type={type}
+                      required
+                      placeholder="At least 6 characters"
+                      minLength={6}
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                    />
+                  )}
+                </PasswordWithShow>
                 <label htmlFor="regBusinessField">Business name</label>
                 <input
                   id="regBusinessField"

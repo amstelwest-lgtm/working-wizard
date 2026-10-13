@@ -53,6 +53,7 @@ import {
   type PasswordSignInFailure,
 } from "@/lib/password-sign-in";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { PasswordWithShow } from "@/components/show-password";
 import { PasswordResetRequest } from "@/components/password-reset-request";
 import { MarketPicker } from "@/components/market-picker";
 import {
@@ -672,20 +673,24 @@ function AuthPage() {
                 required
               />
               <AuthEntryFieldLabel htmlFor="auth-password">Password</AuthEntryFieldLabel>
-              <AuthEntryInput
-                id="auth-password"
-                type="password"
-                value={password}
-                autoComplete="current-password"
-                onChange={(e) => {
-                  authFieldDraft = { ...authFieldDraft, password: e.target.value };
-                  setPassword(e.target.value);
-                  if (mode === "signin") setSignInFailure(null);
-                }}
-                minLength={8}
-                required
-                aria-describedby={mode === "signup" ? "auth-password-hint" : undefined}
-              />
+              <PasswordWithShow id="auth-password">
+                {(type) => (
+                  <AuthEntryInput
+                    id="auth-password"
+                    type={type}
+                    value={password}
+                    autoComplete="current-password"
+                    onChange={(e) => {
+                      authFieldDraft = { ...authFieldDraft, password: e.target.value };
+                      setPassword(e.target.value);
+                      if (mode === "signin") setSignInFailure(null);
+                    }}
+                    minLength={8}
+                    required
+                    aria-describedby={mode === "signup" ? "auth-password-hint" : undefined}
+                  />
+                )}
+              </PasswordWithShow>
               {mode === "signup" ? (
                 <p id="auth-password-hint" className="firm-signup-hint">
                   At least 8 characters.

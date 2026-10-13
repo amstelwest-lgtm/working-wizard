@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PasswordWithShow } from "@/components/show-password";
 import {
   AuthEntryCard,
   AuthEntryFieldLabel,
@@ -20,6 +21,50 @@ export const Route = createFileRoute("/reset-password")({
     meta: [{ title: "Reset password — MILŌN" }],
   }),
 });
+
+export function ResetPasswordFields({
+  password,
+  confirm,
+  onPasswordChange,
+  onConfirmChange,
+}: {
+  password: string;
+  confirm: string;
+  onPasswordChange: (value: string) => void;
+  onConfirmChange: (value: string) => void;
+}) {
+  return (
+    <>
+      <AuthEntryFieldLabel htmlFor="reset-password">New password</AuthEntryFieldLabel>
+      <PasswordWithShow id="reset-password">
+        {(type) => (
+          <AuthEntryInput
+            id="reset-password"
+            type={type}
+            required
+            autoFocus
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => onPasswordChange(e.target.value)}
+          />
+        )}
+      </PasswordWithShow>
+      <AuthEntryFieldLabel htmlFor="reset-confirm">Confirm password</AuthEntryFieldLabel>
+      <PasswordWithShow id="reset-confirm">
+        {(type) => (
+          <AuthEntryInput
+            id="reset-confirm"
+            type={type}
+            required
+            placeholder="••••••••"
+            value={confirm}
+            onChange={(e) => onConfirmChange(e.target.value)}
+          />
+        )}
+      </PasswordWithShow>
+    </>
+  );
+}
 
 function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -91,24 +136,11 @@ function ResetPasswordPage() {
             <AuthEntryTitle>Set a new password</AuthEntryTitle>
             <AuthEntryLead>Choose a strong password of at least 8 characters.</AuthEntryLead>
             <form onSubmit={handleSubmit} className="mt-6">
-              <AuthEntryFieldLabel htmlFor="reset-password">New password</AuthEntryFieldLabel>
-              <AuthEntryInput
-                id="reset-password"
-                type="password"
-                required
-                autoFocus
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <AuthEntryFieldLabel htmlFor="reset-confirm">Confirm password</AuthEntryFieldLabel>
-              <AuthEntryInput
-                id="reset-confirm"
-                type="password"
-                required
-                placeholder="••••••••"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+              <ResetPasswordFields
+                password={password}
+                confirm={confirm}
+                onPasswordChange={setPassword}
+                onConfirmChange={setConfirm}
               />
               {error ? <p className="auth-entry__error">{error}</p> : null}
               <AuthEntryPrimaryButton type="submit" className="mt-6" disabled={busy}>

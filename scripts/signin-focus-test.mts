@@ -89,6 +89,7 @@ const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { DrawerCloseButton, useAccountantDrawer } = await import("../src/components/accountant-nav");
 const { AuthEntryInput } = await import("../src/components/auth-entry-shell");
+const { PasswordWithShow } = await import("../src/components/show-password");
 const { LandingSignInModal } = await import("../src/components/landing/sign-in-modal");
 
 type FormEventLike = { preventDefault: () => void; currentTarget: HTMLInputElement };
@@ -197,13 +198,15 @@ function AuthPageFields() {
       autoComplete: "username",
       onChange: (event: FormEventLike) => setEmail(event.currentTarget.value),
     }),
-    createElement(AuthEntryInput, {
-      id: "auth-password",
-      type: "password",
-      value: password,
-      autoComplete: "current-password",
-      onChange: (event: FormEventLike) => setPassword(event.currentTarget.value),
-    }),
+    createElement(PasswordWithShow, { id: "auth-password" }, (type: "password" | "text") =>
+      createElement(AuthEntryInput, {
+        id: "auth-password",
+        type,
+        value: password,
+        autoComplete: "current-password",
+        onChange: (event: FormEventLike) => setPassword(event.currentTarget.value),
+      }),
+    ),
     createElement(
       "nav",
       { className: "deliverable-rail", "aria-label": "Accountant" },
@@ -253,6 +256,11 @@ async function typePair(emailId: string, passwordId: string, label: string) {
   assert(document.activeElement === password, `${label} focus stays in the password field`);
   const labelOf = document.activeElement?.getAttribute("aria-label");
   assert(labelOf !== "Close" && labelOf !== "Close menu", `${label} does not leave focus on a close button`);
+  const show = document.getElementById(`${passwordId}-show`);
+  assert(show instanceof HTMLInputElement, `${label} has a show-password checkbox`);
+  assert(show.type === "checkbox" && !show.checked, `${label} show password starts unchecked`);
+  assert(password.type === "password", `${label} password stays masked while typing`);
+  assert(document.activeElement !== show, `${label} show password does not take focus while typing`);
 }
 
 async function runWidth(width: number) {
