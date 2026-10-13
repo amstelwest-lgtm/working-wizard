@@ -167,6 +167,7 @@ export function CashThirteenWeekGrid({
   flowChip,
   onCommit,
   readOnly = false,
+  scrollClassName,
 }: {
   weeks: string[];
   opening: number;
@@ -193,6 +194,8 @@ export function CashThirteenWeekGrid({
     weekIndex: number,
     value: number | null,
   ) => void;
+  /** Extra classes for the scroll frame. The enlarge sheet fills the viewport. */
+  scrollClassName?: string;
 }) {
   const openings = closing.map((_, index) => (index === 0 ? opening : closing[index - 1]!));
   const series = cashBalanceSeries({ opening, closings: closing, floor });
@@ -319,7 +322,10 @@ export function CashThirteenWeekGrid({
         {floorNote ? ` Floor ${floorNote}.` : ""}
       </p>
       <div
-        className="cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-[#DBEAFE]/70 pe-4 max-md:pe-16 dark:border-slate-800"
+        className={cn(
+          "cash-13w-scroll max-h-[min(70vh,680px)] overflow-auto overscroll-x-contain rounded-lg border border-[#DBEAFE]/70 pe-4 max-md:pe-16 dark:border-slate-800",
+          scrollClassName,
+        )}
         tabIndex={0}
         aria-label="13-week cash model"
       >

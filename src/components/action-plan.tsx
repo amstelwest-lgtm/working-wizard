@@ -1265,8 +1265,8 @@ export default function ActionPlanPanel({
       <Card id="wizard-action-list" className={CARD_SHELL}>
         <div className={GOLD_RULE} />
         <CardHeader className="border-b border-[#DBEAFE] pb-4 dark:border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+          <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <CardTitle className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-100">
                 Actions
               </CardTitle>

@@ -22,6 +22,7 @@ import appCss from "@/styles.css?url";
 import { authenticatedLayoutLinks, founderPortalLinks } from "@/styles/app-route-styles";
 import { ShareButton } from "@/components/share";
 import { FloatingNoteButton } from "@/components/floating-note-button";
+import { NoteLayer } from "@/components/note-layer";
 import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
@@ -63,6 +64,23 @@ const HARNESS_PREVIEW_NOTES: ClientNote[] = [
     mentions: [],
     replies: [],
   },
+  ...(["today", "waterfall", "cash", "budget", "tasks"] as const).map((tab) => ({
+    id: `harness-note-${tab}`,
+    clientId: "harness-client",
+    tab,
+    x: 48,
+    y: 220,
+    ratioKey: null,
+    text: "Check this figure before the next review.",
+    authorId: "harness",
+    author: "Harbour & Co",
+    authorEmail: null,
+    timestamp: "2026-10-08T08:00:00.000Z",
+    resolved: false,
+    taggedMilonIt: false,
+    mentions: [],
+    replies: [],
+  })),
 ];
 
 // Light is the default. Dark only after an explicit theme_pref_v2 choice.
@@ -248,8 +266,18 @@ const ownerDoorRoute = createRoute({
       bill?: "none" | "stripe" | "firm" | "unavailable";
     };
     const navigate = useNavigate();
+    const noteTab =
+      search.view === "cash"
+        ? "cash"
+        : search.view === "profit"
+          ? "waterfall"
+          : search.view === "budget"
+            ? "budget"
+            : search.view === "tasks" || search.view === "actions" || search.view === "moves"
+              ? "tasks"
+              : "today";
     return (
-      <MarketProvider selection={{ country: "US", regionCode: "NY" }}>
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
         <OwnerDoorPreview
           view={search.view ?? "rest"}
           bot={search.bot ?? null}
@@ -266,6 +294,13 @@ const ownerDoorRoute = createRoute({
               replace: mode === "replace",
             });
           }}
+        />
+        <NoteLayer
+          clientId="harness-client"
+          tab={noteTab}
+          workspace="owner"
+          authorName="Theo"
+          clientName="Karoo Traders"
         />
       </MarketProvider>
     );

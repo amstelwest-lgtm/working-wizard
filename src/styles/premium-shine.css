@@ -521,14 +521,42 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:
   place-items: center;
   opacity: 0.85;
 }
-/* Phone: the brand block sizes to its content (the base splits free space
-   with the spacer), and the name wraps at word boundaries, not anywhere. */
+/* Phone: one header row. The name truncates; it does not stack a letter per line. */
 @media (max-width: 760px) {
+  .owner-door.accountant-portal .topbar {
+    flex-wrap: nowrap;
+    align-items: center;
+    height: auto;
+    min-height: 52px;
+    max-height: none;
+    gap: 8px;
+  }
   .owner-door .owner-brand {
     flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+  }
+  .owner-door .owner-biz {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .owner-door .owner-biz,
+  .owner-door .owner-biz b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
   }
   .owner-door .owner-biz b {
-    overflow-wrap: break-word;
+    display: block;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .owner-door .owner-tools {
+    flex: 0 0 auto;
   }
 }
 .owner-door .owner-biz-ic svg {

@@ -29,6 +29,8 @@ import {
   Settings2,
   Wallet,
 } from "lucide-react";
+import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
+import { cashExplainerCopy, humanizeIsoDates } from "@/lib/cash-explainer";
 import { Slider } from "@/components/ui/slider";
 import {
   ResponsiveContainer,
@@ -192,6 +194,27 @@ function distribute(line: LineItem): number[] {
 const GOLD = "#0B5FFF";
 const GOLD_DARK = "#2563EB";
 const RED = "#e05c5c";
+
+function useStableChartWidth() {
+  const tickObserver = useRef<ResizeObserver | null>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  const onChartFrame = useCallback((node: HTMLDivElement | null) => {
+    tickObserver.current?.disconnect();
+    tickObserver.current = null;
+    if (!node) return;
+    const apply = () => {
+      const next = node.clientWidth;
+      setChartWidth((current) => stableCashChartWidth(current, next));
+    };
+    apply();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    tickObserver.current = observer;
+  }, []);
+  useEffect(() => () => tickObserver.current?.disconnect(), []);
+  return { chartWidth, onChartFrame };
+}
 
 function CashNegativeDot({
   cx,
@@ -1333,8 +1356,14 @@ export function CashForecastPanel({
   };
 
   // ── Shared hero chart ──────────────────────────────────────────────────────
-  const heroChart = (height: number) => {
+  const heroChart = (
+    height: number | string,
+    chartWidth: number,
+    onChartFrame: (node: HTMLDivElement | null) => void,
+    enlarged = false,
+  ) => {
     const narrow = cashGraphWeekTickInterval(chartWidth) === 2;
+    const tickSize = enlarged ? 12 : 10;
     const axisTicks = cashGraphAxisTicks(
       chartWidth,
       chartData.map((row) => row.week),
@@ -1359,21 +1388,21 @@ export function CashForecastPanel({
           <XAxis
             dataKey="week"
             stroke="#94a3b8"
-            fontSize={10}
+            fontSize={tickSize}
             tickLine={false}
             axisLine={false}
             interval={0}
             ticks={axisTicks}
-            height={28}
+            height={enlarged ? 36 : 28}
           />
           <YAxis
             stroke="#94a3b8"
-            fontSize={10}
+            fontSize={tickSize}
             tickLine={false}
             axisLine={false}
             tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
-            width={68}
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
+            width={enlarged ? 76 : 68}
+            tick={{ fill: "#94a3b8", fontSize: tickSize }}
           />
           <Tooltip
             contentStyle={{
@@ -1526,13 +1555,17 @@ export function CashForecastPanel({
     linesBlank,
   });
 
-  const forecastNotes =
-    !forecastEmpty && (shortfallExplain || forecastCycleNote) ? (
-      <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-        {shortfallExplain ? `Timing: ${shortfallExplain}. ` : ""}
-        {forecastCycleNote}
-      </p>
-    ) : null;
+  const rollNote =
+    xeroBankNote && /rolled forward|days sit between/i.test(xeroBankNote) ? xeroBankNote : null;
+  const cashCopy = cashExplainerCopy({
+    rangeStart: weekIsos[0] ?? null,
+    rangeEnd: weekIsos.length >= WEEKS ? (weekIsos[WEEKS - 1] ?? null) : null,
+    floorText: forecastEmpty ? "" : fmtCompact(minimumCash),
+    anchorNote: rollNote,
+    cycleNote: forecastEmpty ? null : forecastCycleNote,
+    otherNote: rollNote ? null : xeroBankNote,
+    timingNote: !forecastEmpty && shortfallExplain ? `Timing: ${shortfallExplain}` : null,
+  });
 
   const bankDisagree = plBankDisagreement({
     financials: inputFinancials,
@@ -1896,23 +1929,9 @@ export function CashForecastPanel({
     </ReviewInputsDrawer>
   );
 
-  const tickObserver = useRef<ResizeObserver | null>(null);
-  const [chartWidth, setChartWidth] = useState(0);
-  const onChartFrame = useCallback((node: HTMLDivElement | null) => {
-    tickObserver.current?.disconnect();
-    tickObserver.current = null;
-    if (!node) return;
-    const apply = () => {
-      const next = node.clientWidth;
-      setChartWidth((current) => stableCashChartWidth(current, next));
-    };
-    apply();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(apply);
-    observer.observe(node);
-    tickObserver.current = observer;
-  }, []);
-  useEffect(() => () => tickObserver.current?.disconnect(), []);
+  const inlineChart = useStableChartWidth();
+  const enlargeChart = useStableChartWidth();
+  const [cashEnlarge, setCashEnlarge] = useState<null | "chart" | "table">(null);
 
   useEffect(() => {
     const revealWeeklyTable = () => {
@@ -2041,7 +2060,16 @@ export function CashForecastPanel({
         )}
       </div>
       {emptyPresentation.showChart ? (
-        heroChart(simplified ? 180 : 240)
+        <>
+          {heroChart(
+            simplified ? 180 : 240,
+            inlineChart.chartWidth,
+            inlineChart.onChartFrame,
+          )}
+          <p className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            Floor {fmtCompact(minimumCash)}
+          </p>
+        </>
       ) : (
         <p className="rounded-xl border border-dashed border-slate-300/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
           The 13-week chart appears once a forecast line is entered.
@@ -2052,6 +2080,7 @@ export function CashForecastPanel({
 
 
   const forecastCard = (
+    <>
     <Card
       id={CASH_FORECAST_CARD_ID}
       className={`${CARD_SHELL} w-full min-w-0 max-md:pb-6 max-md:pr-3`}
@@ -2059,28 +2088,37 @@ export function CashForecastPanel({
     >
       <div className={GOLD_RULE} />
       <CardContent className="pt-5">
-        <div className="mb-4 min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#102A43] dark:text-[#F4F7FB]">
-            {horizonLabel || "Next 13 weeks"}
-          </p>
-          <p className="mt-1 max-w-xl text-xs text-slate-600 dark:text-slate-400">
-            {`The line is the ${fmtCompact(minimumCash)} floor${runwayAside ? ` · Runway ${runwayAside}` : ""}`}
-          </p>
+        <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]">
+              {cashCopy.range || "Next 13 weeks"}
+            </p>
+            {simplified && cashCopy.ownerRollLine ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{cashCopy.ownerRollLine}</p>
+            ) : null}
+            {runwayAside ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
+            ) : null}
+          </div>
+          {emptyPresentation.showChart ? (
+            <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
+          ) : null}
         </div>
+        {cashCopy.bullets.length > 0 ? (
+          <details className="cash-details">
+            <summary>Details</summary>
+            <ul>
+              {cashCopy.bullets.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         {scenarioLabel ? (
           <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
         ) : null}
-        {simplified && xeroBankNote ? (
-          <p
-            id="xero-bank-forecast-note"
-            className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400"
-          >
-            {xeroBankNote}
-          </p>
-        ) : null}
         {disagreeNotice}
         {emptyNotice}
-        {forecastNotes}
         {exportError ? (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
             <span>{exportError}</span>
@@ -2091,9 +2129,14 @@ export function CashForecastPanel({
         ) : null}
         <div aria-label="Graph">{graphPane}</div>
         <section id="detailed-forecast" className="mt-6" aria-label="13-week">
-          <p className="mb-3 max-w-xl text-xs text-slate-600 dark:text-slate-400">
-            Double-click a figure to edit. Red marks cash under the runway floor.
-          </p>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <p className="max-w-xl text-xs text-slate-600 dark:text-slate-400">
+              {readOnly
+                ? "Red marks cash under the runway floor."
+                : "Double-click a figure to edit. Red marks cash under the runway floor."}
+            </p>
+            <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
+          </div>
           <CashThirteenWeekGrid
             weeks={weeks}
             opening={baseCalc.opening}
@@ -2127,6 +2170,56 @@ export function CashForecastPanel({
         </section>
       </CardContent>
     </Card>
+    <EnlargeSheet
+      open={cashEnlarge === "chart"}
+      onOpenChange={(next) => setCashEnlarge(next ? "chart" : null)}
+      title="Cash flow graph"
+    >
+      <div className="flex h-full min-h-[280px] flex-col">
+        {heroChart("100%", enlargeChart.chartWidth, enlargeChart.onChartFrame, true)}
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          Floor {fmtCompact(minimumCash)}
+        </p>
+      </div>
+    </EnlargeSheet>
+    <EnlargeSheet
+      open={cashEnlarge === "table"}
+      onOpenChange={(next) => setCashEnlarge(next ? "table" : null)}
+      title="13-week cash flow"
+    >
+      <CashThirteenWeekGrid
+        weeks={weeks}
+        opening={baseCalc.opening}
+        receipts={baseCalc.revRows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          vals: row.vals,
+          bucket: "revenue",
+        }))}
+        payments={baseCalc.expRows.map((row) => ({
+          id: row.id ?? row.name,
+          name: row.name,
+          vals: row.vals,
+          bucket: row.id && row.bucket ? row.bucket : undefined,
+        }))}
+        inflow={baseCalc.inflow}
+        outflow={baseCalc.outflow}
+        net={baseCalc.net}
+        closing={baseCalc.closing}
+        floor={minimumCash}
+        floorNote={hasWeeklyOutflows ? "about 4 weeks of outflows" : null}
+        openingNote={openingAsOf ? openingLabel : null}
+        symbol={cur}
+        format={fmtR}
+        signStyle={simplified ? "minus" : "paren"}
+        openingChip={openingChipKey}
+        flowChip={flowChipKey}
+        readOnly={readOnly}
+        onCommit={commitWeekOverride}
+        scrollClassName="cash-13w-scroll--sheet"
+      />
+    </EnlargeSheet>
+    </>
   );
 
   // ── Simplified mode: glanceable hero ─────────────────────────────────────
@@ -2178,7 +2271,7 @@ export function CashForecastPanel({
               id="xero-bank-forecast-note"
               className="text-xs text-slate-600 md:col-span-2 dark:text-slate-400"
             >
-              {xeroBankNote}
+              {humanizeIsoDates(xeroBankNote)}
             </p>
           ) : null}
         </div>
