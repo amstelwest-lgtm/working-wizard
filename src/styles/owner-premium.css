@@ -18,7 +18,7 @@
 /* ===== tokens ===== */
 .owner-door {
   /* Brushed landing gold: dark, mid, a bright highlight, then dark again.
-     Used only as a 1px rim (border-box layer). Never a button fill. */
+     Used only as a 2px rim (border-box layer). Never a button fill. */
   --op-gold-gleam: linear-gradient(
     115deg,
     #7a5400 0%,
@@ -643,7 +643,7 @@ html.dark .owner-door .health-ring-track {
   margin-top: 16px;
   min-height: 40px;
   padding: 0 20px;
-  border: 1px solid transparent;
+  border: 2px solid transparent;
   border-radius: 999px;
   background-color: var(--royal, #2563eb);
   background-image:
@@ -873,7 +873,7 @@ html:not(.dark) .owner-door .owner-btn-secondary:hover {
   color: var(--royal);
 }
 
-/* Primary buttons stay royal. A 1px brushed-gold rim (border-box layer under
+/* Primary buttons stay royal. A 2px brushed-gold rim (border-box layer under
    the blue padding-box fill) plus a hairline top highlight. No gold fill.
    The wordmark and sign-off CTAs keep their own gold. */
 html:not(.dark) .owner-door .btn.gold,
@@ -886,7 +886,7 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold 
   background-clip: padding-box, border-box;
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
-  border: 1px solid transparent;
+  border: 2px solid transparent;
   box-shadow:
     inset 0 1px 0 rgba(255, 246, 214, 0.55),
     0 6px 18px rgba(37, 99, 235, 0.26);
@@ -902,7 +902,7 @@ html:not(.dark) .owner-door .owner-pane[data-owner-page="accountant"] .btn.gold:
   -webkit-text-fill-color: #ffffff;
 }
 html.dark .owner-door .btn.gold {
-  border: 1px solid transparent;
+  border: 2px solid transparent;
   background-color: var(--cobalt);
   background-image:
     linear-gradient(180deg, var(--cobalt), var(--cobalt)),
