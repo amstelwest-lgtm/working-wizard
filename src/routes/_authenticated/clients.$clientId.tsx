@@ -3213,6 +3213,7 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
+                      onSelectAgent={openHomeAgent}
                       onOpenApproved={(target) => {
                         if (target.screen === "accountant") {
                           setActiveTab("overview");

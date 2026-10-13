@@ -578,6 +578,7 @@ export function deskSignoffText(line: string | null, ownerReviewed: boolean): st
   if (ownerReviewed) return "Reviewed by you";
   if (!line) return null;
   if (/\bsigned off\b/i.test(line)) return "Signed off ✓";
+  if (line.trim() === "Draft") return "Advisory pack · still a draft";
   return line;
 }
 

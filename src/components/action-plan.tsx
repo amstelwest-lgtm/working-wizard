@@ -22,13 +22,15 @@ import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
-import { agentDisplayName } from "@/lib/milon-team";
+import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
+import { agentKeyFromAssignee, handoffProgressCaption } from "@/lib/action-handoff";
+import { ActionHandoffButtons } from "@/components/action-handoff-buttons";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel, handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import { requestOwnerHandoff } from "@/lib/owner-handoff-client";
-import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
+import { loadActionHandoffRuns, recordHandoffAssignment, requestOwnerHandoff } from "@/lib/owner-handoff-client";
+import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { useServerFn } from "@tanstack/react-start";
@@ -516,6 +518,7 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
+  const [pickups, setPickups] = useState<Record<string, { agent: AgentKey; status: string }>>({});
   const draftActivity = useAgentActivity(ownerView ? clientId : "");
   const draftFindings = useMemo(
     () => draftActivity.findings.filter((row) => row.status === "approved" || draftFindingLabel(row) != null),
@@ -601,7 +604,7 @@ export default function ActionPlanPanel({
       }
       const list = (its ?? []) as Item[];
       let shown = list;
-      if (ownerView && list.length) {
+      if (list.length) {
         const { data: notes } = await supabase
           .from("action_updates")
           .select("action_item_id,note,created_at")
@@ -633,6 +636,14 @@ export default function ActionPlanPanel({
         }
       }
       setItems(shown);
+      if (list.length) {
+        const runs = await loadActionHandoffRuns(list.map((item) => item.id));
+        const next: Record<string, { agent: AgentKey; status: string }> = {};
+        for (const [id, run] of runs) next[id] = run;
+        setPickups(next);
+      } else {
+        setPickups({});
+      }
       setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
       if (list.length) {
         const ids = list.map((i) => i.id);
@@ -677,6 +688,54 @@ export default function ActionPlanPanel({
       setLoading(false);
     }
   }, [clientId, isOwner, ownerView]);
+
+  const assignToAgent = useCallback(
+    async (item: Item, agent: AgentKey) => {
+      const previous = {
+        owner_id: item.owner_id ?? null,
+        owner_name: item.owner_name ?? null,
+        owner_email: item.owner_email ?? null,
+      };
+      const name = agentDisplayName(agent);
+      setItems((current) =>
+        current.map((row) =>
+          row.id === item.id ? { ...row, owner_id: null, owner_name: name, owner_email: null } : row,
+        ),
+      );
+      const result = await requestOwnerHandoff({
+        clientId,
+        actionItemId: item.id,
+        agent,
+      });
+      if (!result.ok && handoffComingOnline(result.error)) {
+        const saved = await recordHandoffAssignment({
+          clientId,
+          actionItemId: item.id,
+          agent,
+        });
+        if (!saved.ok) {
+          setItems((current) =>
+            current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
+          );
+          setComingSoon((current) => ({
+            ...current,
+            [item.id]: { ...current[item.id], [agent]: true },
+          }));
+          toast.error(saved.error);
+          return;
+        }
+      } else if (!result.ok) {
+        setItems((current) =>
+          current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
+        );
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Assigned to ${agentShortName(agent)}`);
+      void refresh();
+    },
+    [clientId, refresh],
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -1421,30 +1480,14 @@ export default function ActionPlanPanel({
                   setTeamOpen(true);
                 }}
                 comingSoon={comingSoon[it.id]}
-                onHandOff={
-                  ownerView
-                    ? (agent) => {
-                        void requestOwnerHandoff({
-                          clientId,
-                          actionItemId: it.id,
-                          agent,
-                        }).then((result) => {
-                          if (!result.ok) {
-                            if (handoffComingOnline(result.error)) {
-                              setComingSoon((current) => ({
-                                ...current,
-                                [it.id]: { ...current[it.id], [agent]: true },
-                              }));
-                              return;
-                            }
-                            toast.error(result.error);
-                            return;
-                          }
-                          void refresh();
-                        });
-                      }
-                    : undefined
-                }
+                pickupLabel={(() => {
+                  const run = pickups[it.id];
+                  if (!run) return null;
+                  const assigned = agentKeyFromAssignee(it.owner_name);
+                  if (assigned && assigned !== run.agent) return null;
+                  return handoffProgressCaption(run.agent, run.status);
+                })()}
+                onHandOff={isOwner ? (agent) => void assignToAgent(it, agent) : undefined}
               />
             ))}
           </div>
@@ -1942,6 +1985,7 @@ function ItemRow({
   onManageTeam,
   onHandOff,
   comingSoon,
+  pickupLabel,
   focused,
 }: {
   item: Item & { health?: Health };
@@ -1958,10 +2002,12 @@ function ItemRow({
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
   onManageTeam?: () => void;
-  /** Owner rail only. Asks owner-handoff. The browser does not insert agent_runs. */
+  /** Owner and accountant. Asks owner-handoff. The browser does not insert agent_runs. */
   onHandOff?: (agent: AgentKey) => void;
   /** Agents whose hand-off came back 409 no_runner. */
   comingSoon?: Partial<Record<AgentKey, true>>;
+  /** Set when a queued run for this action has started or finished. */
+  pickupLabel?: string | null;
 }) {
   const { date } = useMarketFormat();
   const h = healthMeta(item.health);
@@ -2212,30 +2258,12 @@ function ItemRow({
       </div>
       </div>
       {onHandOff ? (
-        <div
-          className="flex flex-wrap gap-1.5 px-3 pb-3 sm:px-4"
-          data-bot-handoff="true"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {AGENT_KEYS.map((agent) => {
-            const waiting = Boolean(comingSoon?.[agent]);
-            return (
-              <button
-                key={agent}
-                type="button"
-                disabled={waiting}
-                data-handoff-state={waiting ? "coming-soon" : "ready"}
-                data-handoff-agent={agent}
-                className="rounded-md border border-amber-900/15 px-2 py-1 text-left text-[11px] font-semibold text-slate-700 hover:bg-amber-900/5 disabled:cursor-default disabled:opacity-80 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                onClick={() => {
-                  if (!waiting) onHandOff(agent);
-                }}
-              >
-                {waiting ? "Coming online soon" : `Hand to ${agentDisplayName(agent)}`}
-              </button>
-            );
-          })}
-        </div>
+        <ActionHandoffButtons
+          ownerName={item.owner_name}
+          comingSoon={comingSoon}
+          pickupLabel={pickupLabel}
+          onHandOff={onHandOff}
+        />
       ) : null}
     </div>
   );

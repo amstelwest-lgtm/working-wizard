@@ -63,6 +63,8 @@ export function MilonTeamDesk({
   onOpenApproved,
   onInvite,
   onRefreshDrafts,
+  onOpenAgent,
+  presentation = "team",
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
@@ -72,6 +74,10 @@ export function MilonTeamDesk({
   onOpenApproved?: (target: ApprovedDraftTarget) => void;
   onInvite?: () => void;
   onRefreshDrafts?: () => void;
+  /** A team chip opens that agent's view. The local filter still applies until then. */
+  onOpenAgent?: (agent: AgentKey) => void;
+  /** Agent view hides the last-run chip strip. The stage switcher owns that click. */
+  presentation?: "team" | "agent";
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
@@ -176,6 +182,7 @@ export function MilonTeamDesk({
           </div>
         ) : quietError ? null : (
           <>
+            {presentation === "agent" ? null : (
             <div className="milon-desk-team" role="radiogroup" aria-label="Team" onKeyDown={onFilterKey}>
               <div className="milon-desk-team-bar">
                 <p className="milon-desk-kicker">Team</p>
@@ -231,7 +238,10 @@ export function MilonTeamDesk({
                       title={agentJobLine(agent)}
                       aria-label={agentAriaLabel(agent, header.label)}
                       data-agent-initial={agentInitial(agent)}
-                      onClick={() => setFilter(agent)}
+                      onClick={() => {
+                        setFilter(agent);
+                        onOpenAgent?.(agent);
+                      }}
                     >
                       <AgentMark agent={agent} />
                       <span className="milon-desk-agent-copy">
@@ -252,6 +262,7 @@ export function MilonTeamDesk({
                 })}
               </div>
             </div>
+            )}
 
             {signoffText ? (
               <section className="milon-desk-signoff" aria-label="Sign-off">

@@ -1484,6 +1484,13 @@ html.dark .owner-status.is-attention {
   overflow: hidden;
   background: var(--owner-stage);
   box-shadow: inset 0 0 0 1px var(--owner-edge);
+  pointer-events: none;
+}
+
+.owner-door .owner-agent-open,
+.owner-door .owner-ask {
+  position: relative;
+  z-index: 1;
 }
 
 .owner-fm-face video,

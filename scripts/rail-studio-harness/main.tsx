@@ -26,6 +26,7 @@ import type { ClientNote } from "@/lib/notes.functions";
 import { StaffInvitePreview } from "./invite-preview";
 import { ImportLowsPreview } from "./import-lows-preview";
 import { MilonTeamDeskPage } from "./milon-team-desk-page";
+import { AgentStagePreview } from "./agent-stage-preview";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { ProofLandingPreview } from "./proof-preview";
@@ -156,6 +157,12 @@ const ownerRoute = createRoute({
       </MarketProvider>
     );
   },
+});
+
+const agentStageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agent-stage",
+  component: AgentStagePreview,
 });
 
 const teamDeskRoute = createRoute({
@@ -400,6 +407,7 @@ const routeTree = rootRoute.addChildren([
   clientRoute,
   ownerRoute,
   teamDeskRoute,
+  agentStageRoute,
   inviteRoute,
   importLowsRoute,
   ownerDoorRoute,
