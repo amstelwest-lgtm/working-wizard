@@ -144,6 +144,8 @@ export function varianceLine(
 ): VarianceLine {
   const delta = actual - budget;
   const deltaPct = budget !== 0 ? (delta / Math.abs(budget)) * 100 : null;
+  // A slip that prints as 0.0% is the same colour as a match. $20 on a large plan is that case.
+  const nearZero = Math.abs(delta) < 1 || (deltaPct != null && Math.abs(deltaPct) < 0.05);
   return {
     key,
     label,
@@ -152,7 +154,7 @@ export function varianceLine(
     delta,
     deltaPct,
     higherIsBetter,
-    signal: signalFor(delta, higherIsBetter),
+    signal: nearZero ? "inline" : signalFor(delta, higherIsBetter),
   };
 }
 
@@ -320,6 +322,7 @@ function num(v: number | null | undefined): number {
 
 export function formatVariancePct(pct: number | null): string {
   if (pct == null || !Number.isFinite(pct)) return "—";
+  if (Math.abs(pct) < 0.05) return "0.0%";
   const sign = pct > 0 ? "+" : "";
   return `${sign}${pct.toFixed(1)}%`;
 }

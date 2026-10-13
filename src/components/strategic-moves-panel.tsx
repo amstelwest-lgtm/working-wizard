@@ -1,4 +1,5 @@
 import { AddToPlanButton } from "@/components/add-to-plan-button";
+import { MoveHandTo } from "@/components/hand-to-menu";
 import { ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { movesAnswerSentence } from "@/lib/overview-moves-copy";
@@ -26,15 +27,23 @@ export function StrategicMovesPanel({
         sentence={movesAnswerSentence(moves)}
         primary={
           first ? (
-            <AddToPlanButton
-              clientId={clientId}
-              moveKey={first.key}
-              title={first.title}
-              outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
-              onAssign={onOpenPlan}
-              variant="studio"
-              tone="strip"
-            />
+            <>
+              <AddToPlanButton
+                clientId={clientId}
+                moveKey={first.key}
+                title={first.title}
+                outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+                onAssign={onOpenPlan}
+                variant="studio"
+                tone="strip"
+              />
+              <MoveHandTo
+                clientId={clientId}
+                moveKey={first.key}
+                title={first.title}
+                outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+              />
+            </>
           ) : null
         }
       />
@@ -66,8 +75,14 @@ export function StrategicMovesPanel({
                   </div>
                   <div className="brain-row-meta">{move.ratioName}</div>
                 </div>
-                {index === 0 ? null : (
-                  <div className="brain-row-actions">
+                <div className="brain-row-actions">
+                  <MoveHandTo
+                    clientId={clientId}
+                    moveKey={move.key}
+                    title={move.title}
+                    outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
+                  />
+                  {index === 0 ? null : (
                     <AddToPlanButton
                       clientId={clientId}
                       moveKey={move.key}
@@ -77,8 +92,8 @@ export function StrategicMovesPanel({
                       variant="studio"
                       tone="quiet"
                     />
-                  </div>
-                )}
+                  )}
+                </div>
               </li>
             ))}
           </ol>
