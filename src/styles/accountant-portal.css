@@ -1458,7 +1458,7 @@ html[data-theme="light"] .accountant-portal .reports-studio .sent-history__row{
   .answer-strip__signoff,
   .answer-strip__signoff > div{width:100%}
   .answer-strip__signoff button,
-  .answer-strip__primary,
+  .answer-strip__primary{width:100%;justify-content:center}
   .signoff-primary{
     width:100%;
     max-width:100%;

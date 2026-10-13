@@ -180,7 +180,7 @@ function WaterfallFigure({
                 style={{ bottom: band + ((barBottomPct + barHeightPct) / 100) * chartH + 2 }}
               >
                 <div
-                  className={`px-0.5 font-extrabold leading-none tracking-tight ${fit ? "text-[8px]" : "text-[11px]"}`}
+                  className={`rounded-sm bg-[#FFFFFF]/90 px-0.5 font-extrabold leading-none tracking-tight dark:bg-[#0b1220]/85 ${fit ? "text-[8px]" : "text-[11px]"}`}
                   style={{ color: isDec || negNet ? "#c0392b" : undefined }}
                 >
                   <span className={`block whitespace-nowrap ${isDec || negNet ? "" : "text-[#102A43] dark:text-[#F4F7FB]"}`}>
