@@ -1281,7 +1281,10 @@ html[data-landing="1"] .firm-bands-more[open]{margin-top:18px}
 html[data-landing="1"] .firm-bands-stack{display:none;list-style:none;margin:12px 0 0;padding:0}
 html[data-landing="1"] .firm-band-cards{display:none;list-style:none;margin:0;padding:0}
 html[data-landing="1"] .firm-bands-featured{
-  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;list-style:none;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;list-style:none;margin:0;padding:0;
+}
+@media (max-width:1100px){
+  html[data-landing="1"] .firm-bands-featured{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 html[data-landing="1"] .firm-bands:has(.firm-bands-more[open]) .firm-bands-featured{display:none}
 html[data-landing="1"] .firm-band-card{

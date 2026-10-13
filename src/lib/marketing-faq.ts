@@ -29,7 +29,7 @@ export const FOUNDING_CALLOUT =
 
 /** Visible US answer and FAQPage JSON-LD. The ZA page shows the server rand sentence instead. */
 export const FAQ_OWNER_PLAN_US =
-  "$39 a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.";
+  "$29 a month for a business owner's own workspace, and free when your accountant is on Milōn. Your three AI agents, Milōn Financial Manager, Milōn Analyst and Milōn Advisor, are included.";
 
 export const FAQ_NOT_A_BOOKKEEPER_QUESTION = "Is Milōn an AI accountant or an AI bookkeeper?";
 
@@ -38,9 +38,9 @@ export const FAQ_NOT_A_BOOKKEEPER_ANSWER =
 
 /** Last sentence of the homepage cost answer. USD only. ZA replaces this from the server chunk. */
 export const HOMEPAGE_OWNER_COST_US =
-  "Business owners pay $39/mo, or nothing when their accountant is on Milōn.";
+  "Business owners pay $29/mo, or nothing when their accountant is on Milōn.";
 
-const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Solo at ${LIST_PRICES.us.firmSolo}/mo for up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
+const HOMEPAGE_COST_ANSWER = `Flat USD bands by active client count, from Starter at ${LIST_PRICES.us.firmStarter}/mo for up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients to Scale at ${LIST_PRICES.us.firmScale}/mo for up to ${FIRM_BAND_CATALOG.scale.clientLimit}. Annual billing is about 20% off, and Enterprise is a custom quote. ${HOMEPAGE_OWNER_COST_US}`;
 
 /**
  * Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep.

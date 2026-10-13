@@ -73,6 +73,11 @@ export async function resolveFirmCatalogPrice(
 ): Promise<{ price: CatalogPrice; lookupKey: string }> {
   const lookupKey = market === "za" ? zaLookupKey(band, interval) : firmLookupKey(band, interval);
   const price = await resolvePriceByLookupKey(stripe, lookupKey);
+  // The archived $0 Starter price may still hold the placeholder lookup key.
+  // New Checkout must not attach that price id. Existing subscriptions stay on it.
+  if (band === "starter" && price.unit_amount === 0) {
+    throw new Error(`No active paid Stripe price for lookup_key ${lookupKey}.`);
+  }
   const priceInterval = price.recurring?.interval;
   if (priceInterval && priceInterval !== interval) {
     throw new Error(`Stripe price ${lookupKey} is ${priceInterval}, expected ${interval}.`);
@@ -470,9 +475,9 @@ export { isFoundingCode, assertFoundingMonthlyOnly };
 
 export { isOwnerLookupKey, isZaOwnerLookup, OWNER_LOOKUP_KEYS } from "@/lib/owner-price";
 
-export const OWNER_MONTHLY_USD_CENTS = 3_900;
+export const OWNER_MONTHLY_USD_CENTS = 2_900;
 /** Rand monthly amount in cents. The letters of the currency code stay out of this file. */
-export const OWNER_MONTHLY_ZA_CENTS = 29_900;
+export const OWNER_MONTHLY_ZA_CENTS = 19_900;
 
 /** Annual charge is monthly × 12 × 0.8, in cents. */
 export function ownerAnnualCents(monthlyCents: number): number {
@@ -494,7 +499,7 @@ export function ownerMarketFromLookup(
 export function ownerIntervalFromLookup(lookupKey: string | null | undefined): FirmInterval | null {
   const key = lookupKey?.trim() ?? "";
   if (!isOwnerLookupKey(key)) return null;
-  return key.endsWith("_annual") ? "year" : "month";
+  return key.includes("_annual") ? "year" : "month";
 }
 
 /**

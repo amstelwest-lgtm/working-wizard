@@ -9,7 +9,7 @@ import {
 import {
   FIRM_BAND_TABLE,
   FIRM_TRIAL_SENTENCE,
-  firmUsdListPrice,
+  firmUsdPublicLine,
   isFirmCheckoutBand,
   type FirmBand,
   type FirmCheckoutBand,
@@ -42,9 +42,7 @@ function bandPriceLabel(
   const local = saLabels?.[band.id]?.[billed];
   if (local) return local;
   if (interval === "year" && band.yearlyUsdCents == null) return "Monthly only";
-  const price = firmUsdListPrice(band.id, billed);
-  if (!price) return "Custom";
-  return billed === "year" ? `${price}/yr` : `${price}/mo`;
+  return firmUsdPublicLine(band.id, billed) ?? "Custom";
 }
 
 function startLabel(band: FirmBand): string {
@@ -177,8 +175,11 @@ export function FirmBandPricingTable({
   saLabels = null,
 }: Props) {
   const labels = showSaPricing ? saLabels : null;
-  const bands = FIRM_BAND_TABLE.filter((band) => band.id !== "starter");
-  const featured = bands.filter((band) => band.id === "solo" || band.id === "growing" || band.id === "scale");
+  const bands = FIRM_BAND_TABLE;
+  const featured = bands.filter(
+    (band) =>
+      band.id === "starter" || band.id === "solo" || band.id === "growing" || band.id === "scale",
+  );
 
   const startControl = (band: FirmBand, className: string) => {
     const billed = pricedInterval(band, interval);

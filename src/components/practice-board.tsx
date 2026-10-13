@@ -607,7 +607,8 @@ function AddClientDialog({
       const message = err instanceof Error ? err.message : "Could not add client";
       const trialEnded = message.includes("Your trial has ended");
       const trialCap = message.includes("14-day free trial");
-      const bandCap = message.includes("Upgrade to a larger band");
+      const bandCap =
+        message.includes("Upgrade to a larger band") || message.includes("Upgrade to Solo");
       if (trialEnded || trialCap || bandCap) {
         try {
           await refreshCap();

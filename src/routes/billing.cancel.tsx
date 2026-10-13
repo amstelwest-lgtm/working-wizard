@@ -8,15 +8,21 @@ import {
   type PendingCheckout,
 } from "@/lib/pending-checkout";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
-import { readVisitorDraft } from "@/lib/market/storage";
-import { visitorCopyPack } from "@/lib/market/marketing";
-import { ownerPlanPublicLine } from "@/lib/owner-plan";
+import { ownerPlanPublicLine, ownerVisitorFromPack } from "@/lib/owner-plan";
+import { readMarketingVisitor } from "@/lib/geo-country.functions";
+import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { ownerCheckoutReturnCopy } from "@/lib/owner-subscribe";
 
 export const Route = createFileRoute("/billing/cancel")({
   validateSearch: (search: Record<string, unknown>): { plan?: "owner" } => ({
     plan: search.plan === "owner" ? "owner" : undefined,
   }),
+  loader: async () => {
+    const visitor = await readMarketingVisitor();
+    const ownerPack = visitor.geoZa ? "za" : "us";
+    const ownerMonthly = visitor.showSaPricing ? (await readSaPricingCopy())?.ownerMonthly ?? null : null;
+    return { ownerPack, ownerMonthly };
+  },
   component: BillingCancelPage,
   head: () => ({
     meta: [
@@ -28,13 +34,10 @@ export const Route = createFileRoute("/billing/cancel")({
 
 function BillingCancelPage() {
   const { plan } = Route.useSearch();
+  const { ownerPack, ownerMonthly } = Route.useLoaderData();
   const profile = useOptionalAccountantProfile();
   const [pending, setPending] = useState<PendingCheckout>(() => firmSignupCheckoutIntent());
-  const [ownerLine, setOwnerLine] = useState(ownerPlanPublicLine("us"));
-
-  useEffect(() => {
-    setOwnerLine(ownerPlanPublicLine(visitorCopyPack(readVisitorDraft())));
-  }, []);
+  const ownerLine = ownerPlanPublicLine(ownerVisitorFromPack(ownerPack), ownerMonthly);
 
   useEffect(() => {
     if (profile?.brandLoading) return;

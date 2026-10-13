@@ -462,6 +462,7 @@ export async function loadFirmClientCreateAllowance(input: {
     phase: sub?.phase ?? "none",
     band: sub?.band ?? null,
     clientCount,
+    unitAmount: sub?.unitAmount,
     starterTrialExpired: starterTrial.expired,
   });
   if (decision.allowed) return { allowed: true, canEndTrial: false, upgrade, starterTrial };
@@ -639,7 +640,7 @@ async function buildUpgradeSnapshot(input: {
 }): Promise<FirmUpgradeSnapshot> {
   const phase = input.sub?.phase ?? "none";
   const band = input.sub?.band ?? null;
-  const clientLimit = firmUsageLimit(phase, band);
+  const clientLimit = firmUsageLimit(phase, band, input.sub?.unitAmount);
   const interval = input.sub?.interval === "year" ? "year" : "month";
   const marketCountry = parseMarketSelection(input.market)?.country ?? null;
   const billingCurrency = billingCurrencyCode({

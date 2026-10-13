@@ -220,12 +220,12 @@ assert(
 assert(isBillingStartPath("/billing/start?plan=solo&interval=month&market=us"), "is billing start");
 assert(!isBillingStartPath("/app"), "app is not billing start");
 assert(
-  pendingCheckoutFromNext("/billing/start?plan=starter&interval=month&market=za")?.plan === "solo",
-  "archived starter query resumes as Solo",
+  pendingCheckoutFromNext("/billing/start?plan=starter&interval=month&market=za")?.plan === "starter",
+  "starter query stays on Starter",
 );
 assert(
-  parsePendingCheckout({ plan: "starter", interval: "year", market: "us" })?.interval === "month",
-  "archived starter does not keep a yearly interval",
+  parsePendingCheckout({ plan: "starter", interval: "year", market: "us" })?.interval === "year",
+  "starter keeps the yearly interval",
 );
 assert(registerLabelForPlan("solo") === "Solo", "solo label");
 assert(paidPlanFromRegisterLabel("Solo") === "solo", "label back to plan");
@@ -424,8 +424,8 @@ assert(
 assert(checkoutDocs.includes("Milon, Inc."), "docs say Milon, Inc.");
 assert(checkoutDocs.includes("FOUNDING"), "docs mention FOUNDING");
 assert(!checkoutDocs.includes("Owner Spark stays free"), "docs no longer say the owner plan is free Spark");
-assert(checkoutDocs.includes("$39/mo"), "docs price the owner plan at $39");
-assert(checkoutDocs.includes("R299/mo"), "docs price the owner plan at R299");
+assert(checkoutDocs.includes("$29/mo"), "docs price the owner plan at $29");
+assert(checkoutDocs.includes("R199/mo"), "docs price the owner plan at R199");
 assert(
   checkoutDocs.includes("milon_za_owner_monthly"),
   "docs name the ZA owner lookup key",
@@ -585,23 +585,29 @@ assert(
 
 assert(existsSync(resolve("src/routes/billing.start.tsx")), "billing start route exists");
 
-assert(OWNER_MONTHLY_USD_CENTS === 3900, "owner monthly USD is $39");
-assert(OWNER_MONTHLY_ZA_CENTS === 29900, "owner monthly ZA amount is 29900 cents");
+assert(OWNER_MONTHLY_USD_CENTS === 2900, "owner monthly USD is $29");
+assert(OWNER_MONTHLY_ZA_CENTS === 19900, "owner monthly ZA amount is 19900 cents");
 assert(
-  ownerAnnualCents(OWNER_MONTHLY_USD_CENTS) === 37440,
+  ownerAnnualCents(OWNER_MONTHLY_USD_CENTS) === 27840,
   "owner annual USD is monthly x 12 x 0.8",
 );
 assert(
-  ownerAnnualCents(OWNER_MONTHLY_ZA_CENTS) === 287040,
+  ownerAnnualCents(OWNER_MONTHLY_ZA_CENTS) === 191040,
   "owner annual ZA amount is monthly x 12 x 0.8",
 );
-assert(ownerLookupKey("us", "month") === "milon_owner_monthly", "USD owner monthly lookup");
-assert(ownerLookupKey("za", "month") === "milon_za_owner_monthly", "ZA owner monthly lookup");
-assert(ownerLookupKey("us", "year") === "milon_owner_annual", "USD owner annual lookup");
-assert(ownerLookupKey("za", "year") === "milon_za_owner_annual", "ZA owner annual lookup");
-assert(bandIdFromLookupKey("milon_owner_monthly") === null, "owner monthly key is not a firm band");
+assert(ownerLookupKey("us", "month") === "milon_owner_monthly_v2", "new USD owner monthly lookup");
+assert(ownerLookupKey("za", "month") === "milon_za_owner_monthly_v2", "new ZA owner monthly lookup");
+assert(ownerLookupKey("us", "year") === "milon_owner_annual_v2", "new USD owner annual lookup");
+assert(ownerLookupKey("za", "year") === "milon_za_owner_annual_v2", "new ZA owner annual lookup");
+assert(isOwnerLookupKey("milon_owner_monthly"), "existing USD owner price stays an owner key");
+assert(isOwnerLookupKey("milon_za_owner_monthly"), "existing ZA owner price stays an owner key");
+assert(isOwnerLookupKey("milon_owner_annual"), "existing USD annual owner price stays an owner key");
+assert(bandIdFromLookupKey("milon_owner_monthly") === null, "legacy owner monthly key is not a firm band");
+assert(bandIdFromLookupKey("milon_owner_monthly_v2") === null, "owner monthly key is not a firm band");
 assert(bandIdFromLookupKey("milon_za_owner_monthly") === null, "ZA owner key is not a firm band");
+assert(bandIdFromLookupKey("milon_za_owner_monthly_v2") === null, "ZA owner v2 key is not a firm band");
 assert(bandIdFromLookupKey("milon_za_owner_annual") === null, "ZA owner annual key is not a firm band");
+assert(bandIdFromLookupKey("milon_za_owner_annual_v2") === null, "ZA owner annual v2 key is not a firm band");
 assert(
   parseZaLookupKey("milon_za_owner_monthly") === null,
   "firm ZA parser does not claim the owner price",
@@ -623,7 +629,7 @@ assert(
   usOwner.priceMarket === "us",
   "a US owner with ?market=za and ZA billing never gets the rand price",
 );
-assert(usOwner.lookupKey === "milon_owner_monthly", "a US owner uses the USD owner lookup");
+assert(usOwner.lookupKey === "milon_owner_monthly_v2", "a US owner uses the USD owner lookup");
 assert(!usOwner.billingFallback, "a US owner is not a billing-country fallback");
 
 const zaOwnerZaBill = ownerCheckoutCharge({
@@ -634,7 +640,7 @@ const zaOwnerZaBill = ownerCheckoutCharge({
 });
 assert(zaOwnerZaBill.priceMarket === "za", "ZA owner with ZA billing uses the rand price");
 assert(
-  zaOwnerZaBill.lookupKey === "milon_za_owner_monthly",
+  zaOwnerZaBill.lookupKey === "milon_za_owner_monthly_v2",
   "ZA owner lookup is the owner rand key",
 );
 
@@ -647,7 +653,7 @@ const zaOwnerUsBill = ownerCheckoutCharge({
 assert(zaOwnerUsBill.ownerMarket === "za", "ZA owner market stays ZA");
 assert(zaOwnerUsBill.priceMarket === "us", "ZA owner with non-ZA billing falls back to USD");
 assert(
-  zaOwnerUsBill.lookupKey === "milon_owner_monthly",
+  zaOwnerUsBill.lookupKey === "milon_owner_monthly_v2",
   "that fallback uses the USD owner lookup",
 );
 assert(zaOwnerUsBill.billingFallback, "the owner fallback is recorded");
@@ -657,7 +663,7 @@ assert(
     requested: "us",
     billingCountry: null,
     interval: "month",
-  }).lookupKey === "milon_za_owner_monthly",
+  }).lookupKey === "milon_za_owner_monthly_v2",
   "ZA owner with an unknown billing country stays on the rand lookup",
 );
 assert(
@@ -726,8 +732,8 @@ function ownerPriceStripe(
 }
 
 const monthlyOnly = ownerPriceStripe({
-  milon_owner_monthly: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
-  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+  milon_owner_monthly_v2: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
+  milon_za_owner_monthly_v2: { id: "price_owner_za_month", currency: "zar", interval: "month" },
   milon_solo_monthly: { id: "price_firm_solo", currency: "usd", interval: "month" },
 });
 const skippedAnnual = await findOwnerCatalogPrice(monthlyOnly, "us", "year");
@@ -748,7 +754,7 @@ const usCheckout = await planOwnerCheckout({
 });
 assert(usCheckout.status === "checkout", "US owner opens Checkout");
 if (usCheckout.status === "checkout") {
-  assert(usCheckout.lookupKey === "milon_owner_monthly", "US Checkout uses the USD owner price");
+  assert(usCheckout.lookupKey === "milon_owner_monthly_v2", "US Checkout uses the USD owner price");
   assert(usCheckout.priceMarket === "us", "US Checkout price market is USD");
 }
 assert(
@@ -756,13 +762,13 @@ assert(
   "US session line is the USD owner price",
 );
 assert(
-  monthlyOnly.created[0]?.metadata?.milon_lookup_key === "milon_owner_monthly",
+  monthlyOnly.created[0]?.metadata?.milon_lookup_key === "milon_owner_monthly_v2",
   "US session metadata does not use a firm price",
 );
 
 const zaCheckoutStripe = ownerPriceStripe({
-  milon_owner_monthly: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
-  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+  milon_owner_monthly_v2: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
+  milon_za_owner_monthly_v2: { id: "price_owner_za_month", currency: "zar", interval: "month" },
 });
 const zaCheckout = await planOwnerCheckout({
   stripe: zaCheckoutStripe,
@@ -776,7 +782,7 @@ const zaCheckout = await planOwnerCheckout({
   firmCoverage: null,
 });
 assert(
-  zaCheckout.status === "checkout" && zaCheckout.lookupKey === "milon_za_owner_monthly",
+  zaCheckout.status === "checkout" && zaCheckout.lookupKey === "milon_za_owner_monthly_v2",
   "ZA billing uses the rand owner price",
 );
 const zaParams = ownerCheckoutSessionParams({
@@ -806,8 +812,8 @@ assert(zaParams.metadata?.milon_plan === "owner", "owner session is marked owner
 assert(zaParams.payment_method_collection === "always", "owner Checkout collects a card");
 
 const fallbackStripe = ownerPriceStripe({
-  milon_owner_monthly: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
-  milon_za_owner_monthly: { id: "price_owner_za_month", currency: "zar", interval: "month" },
+  milon_owner_monthly_v2: { id: "price_owner_usd_month", currency: "usd", interval: "month" },
+  milon_za_owner_monthly_v2: { id: "price_owner_za_month", currency: "zar", interval: "month" },
 });
 const fallback = await planOwnerCheckout({
   stripe: fallbackStripe,
@@ -821,7 +827,7 @@ const fallback = await planOwnerCheckout({
   firmCoverage: null,
 });
 assert(
-  fallback.status === "checkout" && fallback.lookupKey === "milon_owner_monthly",
+  fallback.status === "checkout" && fallback.lookupKey === "milon_owner_monthly_v2",
   "ZA owner with non-ZA billing checks out on USD",
 );
 

@@ -35,6 +35,7 @@ for (const band of FIRM_CHECKOUT_BANDS) {
   assert(bandIdFromLookupKey(`milon_${band}_monthly`) === band, `USD ${band} key still maps`);
 }
 
+assert(perClientRands(299, 5) === 60, "Starter is about R60 per client");
 assert(perClientRands(799, 15) === 53, "Solo is about R53 per client");
 assert(perClientRands(1199, 25) === 48, "Small is about R48 per client");
 assert(perClientRands(1999, 50) === 40, "Growing is about R40 per client");
@@ -45,11 +46,14 @@ assert(perClientRands(7999, 500) === 16, "Scale is about R16 per client");
 
 const copy = loadSaPricingCopy();
 assert(copy.heading === "Pricing in rand", "heading");
-assert(copy.heroNote === "Plans from R799/mo after day 14.", "hero");
+assert(copy.heroNote === "Plans from R299/mo after day 14.", "hero");
+assert(copy.labels.starter.month === "R299/mo · about R60 per client", "starter monthly line");
+assert(copy.ownerMonthly === "R199/mo", "owner monthly is R199");
+assert(!copy.ownerMonthly.includes("R299"), "owner copy no longer uses the old rand price");
 assert(copy.labels.solo.month === "R799/mo · about R53 per client", "solo monthly line");
 assert(!copy.labels.solo.month.toLowerCase().includes("vat"), "price line has no tax wording");
 assert(copy.labels.small.month === "R1,199/mo · about R48 per client", "small monthly line");
-assert(zaCatalogEntries().length === 14, "seven bands, monthly and annual");
+assert(zaCatalogEntries().length === 16, "eight bands, monthly and annual");
 assert(
   zaCatalogEntries().every((row) => row.currency === "zar" && !("tax_rates" in row)),
   "catalog entries are zar and carry no tax rate",

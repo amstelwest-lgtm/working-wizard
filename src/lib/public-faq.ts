@@ -1,4 +1,5 @@
 import { LIST_PRICES } from "./market/marketing";
+import { FIRM_BAND_CATALOG } from "./stripe-plans";
 import type { FaqItem } from "./seo";
 import {
   ACCOUNTING_SOFTWARE_ANSWER,
@@ -13,7 +14,7 @@ import {
 
 /** Lead sentence of the cost answer. USD. The ZA page swaps this from the server chunk. */
 export const FAQ_OWNER_COST_US =
-  "Business owners: $39 a month, or free when your accountant is on Milōn.";
+  "Business owners: $29 a month, or free when your accountant is on Milōn.";
 
 export {
   FAQ_NOT_A_BOOKKEEPER_ANSWER,
@@ -28,7 +29,7 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `${FAQ_OWNER_COST_US} Accounting firms pay on USD client-count bands — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. Enterprise is a custom quote.`,
+      answer: `${FAQ_OWNER_COST_US} Accounting firms pay on USD client-count bands — Starter is ${LIST_PRICES.us.firmStarter} a month for up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. Enterprise is a custom quote.`,
     },
     {
       question: "What does the owner plan cost?",
