@@ -555,7 +555,7 @@ export function mountAskAi(container, options) {
       widget.appendChild(panel);
 
       // Focus textarea after render
-      requestAnimationFrame(() => ta && ta.focus());
+      requestAnimationFrame(() => ta && ta.focus({ preventScroll: true }));
     }
 
     container.appendChild(widget);

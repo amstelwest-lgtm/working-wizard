@@ -925,8 +925,21 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  padding-bottom: 24px;
+}
+
+.accountant-portal:has(.agent-stage) .deliverable-main {
+  padding-bottom: 0;
 }
 
 .accountant-portal:has(.agent-stage) .footer-note {
   margin-top: auto;
+}
+
+/* The share and notes buttons are hidden on this pane, so the phone pad
+   that clears them would leave the footer short of the page bottom. */
+@media (max-width: 767px) {
+  html[data-milon-fab="1"]:has(.agent-stage) body {
+    padding-bottom: 0;
+  }
 }
