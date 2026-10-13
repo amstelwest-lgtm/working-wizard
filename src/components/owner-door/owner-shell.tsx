@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AccountantMenuButton, DrawerBackdrop, DrawerCloseButton, useAccountantDrawer } from "@/components/accountant-nav";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { PeriodPill, RailIcon } from "@/components/chrome-icons";
 import { SettingsMenu } from "@/components/settings-menu";
 import { RailSettingsButton, SettingsNavButton } from "@/components/settings-nav-button";
@@ -94,6 +95,8 @@ export function OwnerShell({
   useEffect(() => {
     if (!menuOpen && !navOpen) return;
     function onKey(event: KeyboardEvent) {
+      if (!menuOpen && !navOpen) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key !== "Escape") return;
       setMenuOpen(false);
       setNavOpen(false);

@@ -101,6 +101,7 @@ import { PortfolioExceptions } from "@/components/portfolio-exceptions";
 import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { PracticeRail } from "@/components/practice-rail";
 import { AgentWork } from "@/components/milon-team/agent-work";
 import { practiceAgentWork } from "@/lib/agent-work";
@@ -1267,6 +1268,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (event: KeyboardEvent) => {
+      if (!mobileNavOpen) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") setMobileNavOpen(false);
     };
     window.addEventListener("keydown", onKey);

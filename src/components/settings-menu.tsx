@@ -6,6 +6,7 @@ import {
   resolvePortalTheme,
   type PortalTheme,
 } from "@/lib/portal-theme";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { menuIndexForKey } from "@/lib/settings-menu";
 import { SettingsGear } from "./settings-nav-button";
 import "./settings-menu.css";
@@ -59,6 +60,8 @@ export function SettingsMenu({
       setOpen(false);
     }
     function onKey(event: KeyboardEvent) {
+      if (!open) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key !== "Escape") return;
       event.preventDefault();
       setOpen(false);
@@ -135,6 +138,8 @@ export function SettingsMenu({
   }
 
   function onMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!open) return;
+    if (!overlayMayHandleKey(event)) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { agentAriaLabel, agentDisplayName, agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { formatOwnerReply, ownerReplyPlainText } from "@/lib/owner-reply-format";
@@ -83,6 +84,7 @@ export function OwnerChat({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (!overlayMayHandleKey(event)) return;
       if (event.key !== "Escape") return;
       event.preventDefault();
       onBack();

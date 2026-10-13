@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -236,6 +237,8 @@ export function LighthousePanel({
   useEffect(() => {
     if (!confirmSend) return;
     const onKey = (event: KeyboardEvent) => {
+      if (!confirmSend) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
@@ -2012,6 +2015,7 @@ function LeadDrawer({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (!overlayMayHandleKey(event)) return;
       if (event.key !== "Escape") return;
       if (document.querySelector("[data-lighthouse-confirm]")) return;
       event.preventDefault();
