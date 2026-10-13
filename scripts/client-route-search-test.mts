@@ -240,7 +240,22 @@ assert(!("filter" in kept), "an Action Plan filter does not stick to Reports");
 
 const plan = accountantClientTabSearch({ tab: "reports", filter: "overdue" }, "plan");
 assert(plan.tab === "plan" && plan.section === undefined, "opening the plan is the plan rail item");
-assert(plan.filter === "overdue", "opening Action Plan keeps an overdue filter");
+assert(
+  !("filter" in plan),
+  "a bare plan target drops the filter — keeping it canonicalized back to Overdue and made that page's back control a no-op",
+);
+const planOverdue = accountantClientTabSearch({ tab: "plan", filter: "overdue" }, "plan", {
+  section: "overdue",
+});
+assert(planOverdue.filter === "overdue", "the Overdue page itself keeps the overdue filter");
+const planBack = accountantClientTabSearch(
+  { tab: "plan", section: "overdue", filter: "overdue" },
+  "plan",
+);
+assert(
+  planBack.tab === "plan" && planBack.section === undefined && !("filter" in planBack),
+  "back from Overdue lands on the plan overview, not Overdue again",
+);
 const planRail = clientRailSelection({ tab: "plan", filter: "overdue" });
 assert(
   planRail.headingId === "plan" && planRail.subId === "overdue",

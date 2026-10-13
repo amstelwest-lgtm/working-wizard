@@ -586,9 +586,10 @@ export function ProductMixPanel({
       >
         {!answered && (
           <div className="flex flex-col items-start gap-2">
+            {/* The incentive already shows as the card subtitle; repeating it here printed the same sentence twice. */}
             <p className="text-xs text-slate-600 dark:text-[#C5D4E4]">
-              {incentive ??
-                "Optional. Of the stated total revenue, how much is from each line — then sales share vs GP share. Does not change the waterfall."}
+              Optional. Of the stated total revenue, how much is from each line — then sales share
+              vs GP share. Does not change the waterfall.
             </p>
             <Button
               size="sm"
