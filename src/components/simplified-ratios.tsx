@@ -1,6 +1,7 @@
 import { Sparkline } from "@/components/sparkline";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import { DigCue } from "@/components/health-drill-cue";
 import { evidenceForPillar, pillarIsWeak } from "@/lib/workflow-coach";
 
 interface SectionCard {
@@ -17,6 +18,8 @@ interface SimplifiedRatiosProps {
   onAddPastPeriod?: () => void;
   /** Weak pillar → the evidence page that explains it. */
   onOpenEvidence?: (pillarId: string) => void;
+  /** Open this pillar's real driver ratios in the health score drill. */
+  onOpenPillar?: (pillarId: string) => void;
 }
 
 function statusLabel(health: number, status?: HealthTier): string {
@@ -44,6 +47,7 @@ export function SimplifiedRatios({
   sections,
   onAddPastPeriod,
   onOpenEvidence,
+  onOpenPillar,
 }: SimplifiedRatiosProps) {
   return (
     <div className="grid grid-cols-2 gap-3 p-1" id="coach-pillars">
@@ -53,12 +57,20 @@ export function SimplifiedRatios({
         const displayHealth = isFinite(card.health) ? `${Math.round(card.health)}%` : "—";
         const evidence =
           onOpenEvidence && pillarIsWeak(card.health) ? evidenceForPillar(card.id) : null;
-
-        return (
-          <div
-            key={card.id}
-            className="flex flex-col gap-1 rounded-2xl border border-[#DBEAFE] bg-white px-4 pb-3 pt-4 dark:border-[#1e3a5f] dark:bg-[#0b1b2b]"
-          >
+        const trendSlot =
+          card.series.length >= 2 ? (
+            <Sparkline data={card.series} trend={trend} width={110} height={36} />
+          ) : (
+            <div className="mt-1.5 flex h-9 items-center text-[10px] text-slate-500">
+              {onAddPastPeriod ? (
+                <AddPastPeriodLink onOpen={onAddPastPeriod} className="text-[10px] font-medium text-[#0B5FFF] underline decoration-[#0B5FFF]/40 underline-offset-2" />
+              ) : (
+                "trend builds with snapshots"
+              )}
+            </div>
+          );
+        const figure = (
+          <>
             <span className="text-[10px] font-bold tracking-[0.12em] text-[#3D5270] dark:text-slate-400">
               {card.label}
             </span>
@@ -73,17 +85,29 @@ export function SimplifiedRatios({
               />
               {statusLabel(card.health, card.status)}
             </span>
-            {card.series.length >= 2 ? (
-              <Sparkline data={card.series} trend={trend} width={110} height={36} />
+            {card.series.length >= 2 ? trendSlot : null}
+          </>
+        );
+
+        return (
+          <div
+            key={card.id}
+            className="health-summary-card flex min-w-0 flex-col gap-1 rounded-2xl border border-[#DBEAFE] bg-white px-4 pb-3 pt-4 dark:border-[#1e3a5f] dark:bg-[#0b1b2b]"
+          >
+            {onOpenPillar ? (
+              <button
+                type="button"
+                className="health-summary-open"
+                onClick={() => onOpenPillar(card.id)}
+                aria-label={`${card.label} score ${displayHealth}. Dig deeper.`}
+              >
+                {figure}
+                <DigCue id={`pillar-summary-${card.id}`} compact />
+              </button>
             ) : (
-              <div className="mt-1.5 flex h-9 items-center text-[10px] text-slate-500">
-                {onAddPastPeriod ? (
-                  <AddPastPeriodLink onOpen={onAddPastPeriod} className="text-[10px] font-medium text-[#0B5FFF] underline decoration-[#0B5FFF]/40 underline-offset-2" />
-                ) : (
-                  "trend builds with snapshots"
-                )}
-              </div>
+              figure
             )}
+            {card.series.length < 2 ? trendSlot : null}
             {evidence ? (
               <button
                 type="button"

@@ -10,6 +10,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { formatVal } from "@/components/owner-board-ui";
+import { DigLeaf } from "@/components/health-drill-cue";
 import { COLLAPSIBLE_GOLD_RULE } from "@/components/primitives/collapsible-gold-card";
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
@@ -239,6 +240,7 @@ export function OwnerRatioBriefing({
             </SheetHeader>
 
             <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-8">
+              <DigLeaf source="From the figures on file." />
               <div className="rounded-xl border border-amber-900/15 bg-white/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
                 <p className="font-mono text-[11px] font-semibold leading-snug text-slate-700 dark:text-slate-200">
                   {formula?.calculation ?? formula?.formula ?? localizeCopy(meta.formula, briefingMarket)}

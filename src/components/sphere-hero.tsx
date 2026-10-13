@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
+import { DigCue, DigLeaf } from "@/components/health-drill-cue";
 
 /**
  * SphereHero — the morphing 3-level health drill-down.
@@ -86,6 +87,12 @@ export type SphereHeroProps = {
   onDriverClick?: (key: string) => void;
   /** Unresolved owner questions keyed by driver ratio (debtorDays, …). */
   queryCounts?: Record<string, number>;
+  /**
+   * Open a pillar's drivers from outside the orb (the accountant pillar cards).
+   * `token` must change on each request so a later tap still drills after the
+   * owner has backed out.
+   */
+  drillTo?: { token: number; pillarId: SpherePillar["id"] } | null;
 };
 
 // ── Tier helpers (HEALTH_BAND_TABLE via scoreTier) ──────────────────────────
@@ -229,6 +236,7 @@ function Sphere({
   className,
   ariaLabel,
   tier: tierProp,
+  decorative = false,
 }: {
   score: number;
   label?: string;
@@ -244,22 +252,19 @@ function Sphere({
   ariaLabel?: string;
   /** Overall orb follows displayStatus. Pillars fall back to the score table. */
   tier?: Tier;
+  /** Drawn inside another button. Not its own control. */
+  decorative?: boolean;
 }) {
   const tier = tierProp ?? tierOf(score);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!onClick}
-      aria-label={ariaLabel ?? (label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`)}
-      className={`sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-sky-400/70 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
-      style={{
-        width: size,
-        height: size,
-        background: `radial-gradient(circle at 32% 26%, rgba(56,189,248,0.35), rgba(0,0,0,0) 42%), radial-gradient(circle at 50% 45%, rgba(16,42,67,0.96) 58%, rgba(${glowRgb},0.55) 92%, rgba(${glowRgb},0.9) 100%)`,
-        boxShadow: `0 0 ${size * 0.16}px rgba(${glowRgb},0.55), 0 0 ${size * 0.45}px rgba(${glowRgb},0.28), inset 0 0 ${size * 0.22}px rgba(${glowRgb},0.35)`,
-      }}
-    >
+  const classNameJoined = `sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out${decorative ? "" : " focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/70 enabled:cursor-pointer enabled:active:scale-95"}${className ? ` ${className}` : ""}`;
+  const style = {
+    width: size,
+    height: size,
+    background: `radial-gradient(circle at 32% 26%, rgba(56,189,248,0.35), rgba(0,0,0,0) 42%), radial-gradient(circle at 50% 45%, rgba(16,42,67,0.96) 58%, rgba(${glowRgb},0.55) 92%, rgba(${glowRgb},0.9) 100%)`,
+    boxShadow: `0 0 ${size * 0.16}px rgba(${glowRgb},0.55), 0 0 ${size * 0.45}px rgba(${glowRgb},0.28), inset 0 0 ${size * 0.22}px rgba(${glowRgb},0.35)`,
+  };
+  const body = (
+    <>
       {/* shine sweep on hover/tap */}
       <span
         className="pointer-events-none absolute inset-0 overflow-hidden rounded-full"
@@ -290,6 +295,25 @@ function Sphere({
           {sublabel}
         </span>
       )}
+    </>
+  );
+  if (decorative) {
+    return (
+      <div aria-hidden className={classNameJoined} style={style}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={ariaLabel ?? (label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`)}
+      className={classNameJoined}
+      style={style}
+    >
+      {body}
     </button>
   );
 }
@@ -330,12 +354,21 @@ export function SphereHero({
   onOrbOpen,
   onDriverClick,
   queryCounts,
+  drillTo,
 }: SphereHeroProps) {
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
   const liveRef = useRef<HTMLDivElement>(null);
   const reduceMotion = usePrefersReducedMotion();
   const morphMs = reduceMotion ? 0 : 500;
+  const drillToken = drillTo?.token ?? 0;
+  const drillPillarId = drillTo?.pillarId;
+
+  useEffect(() => {
+    if (!drillToken || !drillPillarId) return;
+    setActivePillarId(drillPillarId);
+    setLevel(3);
+  }, [drillToken, drillPillarId]);
 
   const activePillar = pillars.find((p) => p.id === activePillarId) ?? null;
   const orbSize = useCompactOrbSize(compact);
@@ -349,8 +382,11 @@ export function SphereHero({
   const overallTier = tierFromDisplayStatus(displayStatus, overallHealth);
   const overallGlow = ORB_GLOW;
 
+  const tapCaption = caption === "Tap to see what's behind your score";
+
   return (
     <div
+      id="health-score-drill"
       className={`sphere-reduced-motion relative flex w-full flex-col items-center ${compact ? "px-0 pb-0 pt-0" : "px-4 pb-6 pt-2"}`}
     >
       {/* ambient motes */}
@@ -386,7 +422,7 @@ export function SphereHero({
       {level < 3 && (
         <>
           <div
-            className={reduceMotion ? "" : "transition-all duration-500 ease-out"}
+            className={`flex flex-col items-center ${reduceMotion ? "" : "transition-all duration-500 ease-out"}`}
             style={{
               transform: level === 2 ? "scale(0.52)" : "scale(1)",
               marginBottom: level === 2 ? -56 : 0,
@@ -405,14 +441,23 @@ export function SphereHero({
               onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}
               ariaLabel={
                 onOrbOpen
-                  ? `${caption ?? "Tap to see what's behind your score"}. Business Health Score ${fmtScore(overallHealth)}`
-                  : undefined
+                  ? `${caption ?? "Tap to see what's behind your score"}. Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
+                  : level === 1
+                    ? `Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
+                    : `Business Health Score ${fmtScore(overallHealth)}. Back to overview.`
               }
               className="health-orb"
             />
+            {level === 1 ? (
+              <DigCue
+                id="health-overall"
+                onClick={() => (onOrbOpen ? onOrbOpen() : go(2))}
+                label={`Dig deeper into the business health score, ${fmtScore(overallHealth)}`}
+              />
+            ) : null}
           </div>
 
-          {hideCaption ? null : onOrbOpen && level === 1 ? (
+          {hideCaption || (tapCaption && level === 1) ? null : onOrbOpen && level === 1 ? (
             <button type="button" className="sphere-caption" onClick={onOrbOpen}>
               {caption ?? "Tap to see what's behind your score"}
             </button>
@@ -456,7 +501,8 @@ export function SphereHero({
                 key={p.id}
                 type="button"
                 onClick={() => go(3, p.id)}
-                className={`flex flex-col items-center rounded-xl border border-[#DBEAFE] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#0B5FFF]/55 hover:shadow-[0_4px_14px_rgba(16,42,67,0.08)] dark:border-[#1e3a5f] dark:bg-[#102A43]/80 dark:shadow-none dark:hover:bg-[#163654] ${
+                aria-label={`${p.label} score ${fmtScore(p.health)}. Dig deeper.`}
+                className={`health-pillar-tile flex min-w-0 flex-col items-center rounded-xl border border-[#DBEAFE] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#0B5FFF]/55 hover:shadow-[0_4px_14px_rgba(16,42,67,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/50 active:translate-y-px dark:border-[#1e3a5f] dark:bg-[#102A43]/80 dark:shadow-none dark:hover:bg-[#163654] ${
                   compact ? "gap-0.5 px-1 py-2" : "gap-1 px-1 py-3"
                 }`}
               >
@@ -483,6 +529,7 @@ export function SphereHero({
                     {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {Math.abs(Math.round(delta))} pts
                   </span>
                 )}
+                <DigCue id={`pillar-tile-${p.id}`} compact />
               </button>
             );
           })}
@@ -499,12 +546,16 @@ export function SphereHero({
             {pillars.map((p, i) => {
               const t = tierOf(p.health, p.status);
               return (
-                <div
+                <button
                   key={p.id}
-                  className={`flex flex-col items-center rounded-2xl border border-[#DBEAFE] bg-white p-4 shadow-[0_12px_30px_rgba(16,42,67,0.06)] dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
+                  type="button"
+                  onClick={() => go(3, p.id)}
+                  aria-label={`${p.label} score ${fmtScore(p.health)}. Dig deeper.`}
+                  className={`health-pillar-card flex min-w-0 w-full cursor-pointer flex-col items-center rounded-2xl border border-[#DBEAFE] bg-white p-4 text-center shadow-[0_12px_30px_rgba(16,42,67,0.06)] transition hover:border-[#0B5FFF]/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/50 active:translate-y-px dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
                   style={reduceMotion ? undefined : { animationDelay: `${i * morphMs / 7}ms`, animationFillMode: "both" }}
                 >
                   <Sphere
+                    decorative
                     score={p.health}
                     tier={t}
                     label={p.label}
@@ -513,15 +564,12 @@ export function SphereHero({
                     glowRgb={PILLAR_GLOW}
                     numberClass={TIER_TEXT[t]}
                     icon={PILLAR_ICON[p.id]}
-                    onClick={() => go(3, p.id)}
                   />
                   {p.blurb && (
-                    <div className="mt-3 flex w-full items-center justify-between gap-1">
-                      <p className="text-xs leading-snug text-slate-400">{p.blurb}</p>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-[#0B5FFF]" />
-                    </div>
+                    <p className="mt-3 w-full text-xs leading-snug text-slate-400">{p.blurb}</p>
                   )}
-                </div>
+                  <DigCue id={`pillar-card-${p.id}`} compact />
+                </button>
               );
             })}
           </div>
@@ -542,6 +590,7 @@ export function SphereHero({
               numberClass={TIER_TEXT[tierOf(activePillar.health, activePillar.status)]}
               icon={PILLAR_ICON[activePillar.id]}
               onClick={() => go(2)}
+              ariaLabel={`${activePillar.label} score ${fmtScore(activePillar.health)}. Back to pillars.`}
             />
           </div>
 
@@ -560,9 +609,9 @@ export function SphereHero({
               const t = tierOf(d.health);
               const pct = isFinite(d.health) ? Math.max(2, Math.min(100, d.health)) : 0;
               const clickable = Boolean(onDriverClick);
-              const rowClass = `w-full animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-[#DBEAFE] bg-white p-3 text-left shadow-[0_8px_24px_rgba(16,42,67,0.06)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
+              const rowClass = `health-driver-row w-full min-w-0 animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-[#DBEAFE] bg-white p-3 text-left shadow-[0_8px_24px_rgba(16,42,67,0.06)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
                 clickable
-                  ? "cursor-pointer transition hover:border-[#0B5FFF]/50 hover:bg-[#F4F8FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/40 dark:hover:border-[#2563EB] dark:hover:bg-[#163654]"
+                  ? "cursor-pointer transition hover:border-[#0B5FFF]/50 hover:bg-[#F4F8FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B5FFF]/40 active:translate-y-px dark:hover:border-[#2563EB] dark:hover:bg-[#163654]"
                   : ""
               }`;
               const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
@@ -593,6 +642,11 @@ export function SphereHero({
                       }}
                     />
                   </div>
+                  {clickable ? (
+                    <DigCue id={`driver-${d.key}`} compact />
+                  ) : (
+                    <DigLeaf />
+                  )}
                 </>
               );
               if (clickable) {
@@ -601,7 +655,7 @@ export function SphereHero({
                     key={d.key}
                     type="button"
                     onClick={() => onDriverClick?.(d.key)}
-                    aria-label={`${d.label} — open money briefing`}
+                    aria-label={`${d.label} — open money briefing. Dig deeper.`}
                     className={rowClass}
                     style={rowStyle}
                   >
