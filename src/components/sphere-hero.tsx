@@ -656,8 +656,9 @@ export function SphereHero({
         </div>
       )}
 
-      {/* ── LEVEL 1 & 2: main sphere (morphs size) ── */}
-      {(variant === "orb" || level === 2) && level < 3 && (
+      {/* ── LEVEL 1 & 2: main sphere. The owner ring keeps this orb off
+          pillar and driver pages; only the top Health view shows the ring. ── */}
+      {variant === "orb" && level < 3 && (
         <>
           <div
             className={`flex flex-col items-center ${reduceMotion ? "" : "transition-all duration-500 ease-out"}`}
@@ -819,20 +820,22 @@ export function SphereHero({
       {/* ── LEVEL 3: pillar focus + driver rows ── */}
       {level === 3 && activePillar && (
         <>
-          <div className="animate-in fade-in zoom-in-90 duration-500" style={{ animationFillMode: "both" }}>
-            <Sphere
-              score={activePillar.health}
-              tier={tierOf(activePillar.health, activePillar.status)}
-              label={activePillar.label}
-              delta={activePillar.delta}
-              size={210}
-              glowRgb={ORB_GLOW}
-              numberClass={TIER_TEXT[tierOf(activePillar.health, activePillar.status)]}
-              icon={PILLAR_ICON[activePillar.id]}
-              onClick={() => go(2)}
-              ariaLabel={`${activePillar.label} score ${fmtScore(activePillar.health)}. Back to pillars.`}
-            />
-          </div>
+          {variant !== "ring" ? (
+            <div className="animate-in fade-in zoom-in-90 duration-500" style={{ animationFillMode: "both" }}>
+              <Sphere
+                score={activePillar.health}
+                tier={tierOf(activePillar.health, activePillar.status)}
+                label={activePillar.label}
+                delta={activePillar.delta}
+                size={210}
+                glowRgb={ORB_GLOW}
+                numberClass={TIER_TEXT[tierOf(activePillar.health, activePillar.status)]}
+                icon={PILLAR_ICON[activePillar.id]}
+                onClick={() => go(2)}
+                ariaLabel={`${activePillar.label} score ${fmtScore(activePillar.health)}. Back to pillars.`}
+              />
+            </div>
+          ) : null}
 
           <p className="mb-3 mt-5 text-[11px] font-semibold tracking-[0.04em] text-[#102A43] dark:text-[#F4F7FB]">
             {activePillar.label} drivers
