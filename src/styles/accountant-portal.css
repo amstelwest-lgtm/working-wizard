@@ -1896,6 +1896,44 @@ html.dark .health-plate{
   background:#102a43;
   border-color:#1e3a5f;
 }
+.accountant-portal .client-subpage-links{
+  list-style:none;
+  margin:8px 0 0;
+  padding:0;
+  display:grid;
+  gap:12px;
+}
+.accountant-portal .client-subpage-link{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:16px 18px;
+  border-radius:16px;
+  border:1px solid var(--line,#dbeafe);
+  background:var(--card,#fff);
+  text-decoration:none;
+  color:inherit;
+}
+.accountant-portal .client-subpage-link:hover{
+  border-color:#0b5fff;
+}
+.accountant-portal .client-subpage-link__label{
+  font-size:16px;
+  font-weight:700;
+  letter-spacing:-0.01em;
+}
+.accountant-portal .client-subpage-link__detail{
+  font-size:13px;
+  line-height:1.45;
+  color:var(--ink-dim,#3d5270);
+}
+.accountant-portal .crumb a.crumb-link{
+  color:inherit;
+  text-decoration:none;
+}
+.accountant-portal .crumb a.crumb-link:hover{
+  text-decoration:underline;
+}
 .accountant-portal .footer-tagline{color:var(--ink-dim,#3d5270);font-style:italic}
 .accountant-portal .followup-cta,
 .accountant-portal .attn-strip-go,

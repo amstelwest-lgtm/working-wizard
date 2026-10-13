@@ -32,8 +32,8 @@ assert(planSearch.tab === "plan" && planSearch.section === undefined, "tab=plan 
 assert(url.searchParams.get("coach") === "actions", "coach intent is actions");
 const actionsSearch = canonicalizeAccountantSearch({ tab: "actions" });
 assert(
-  actionsSearch.tab === "plan" && actionsSearch.section === undefined,
-  "legacy ?tab=actions still opens Action plan",
+  actionsSearch.tab === "plan" && actionsSearch.section === "open",
+  "legacy ?tab=actions opens Open work",
 );
 
 const tasks = botSignoffCtas({

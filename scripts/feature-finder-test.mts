@@ -74,7 +74,7 @@ assert(ids("sign-off", studio)[0] === "action-plan", "sign-off opens Action Plan
 assert(ids("paybles", studio)[0] === "payables", "fuzzy paybles opens Payables");
 
 assert(
-  href("health", studio) === `/clients/${CLIENT}?tab=health&focus=health`,
+  href("health", studio) === `/clients/${CLIENT}?tab=health&section=score&focus=health`,
   "Health is its own rail item",
 );
 assert(
@@ -100,15 +100,16 @@ assert(
 );
 assert(href("drafter", studio).includes("section=drafts"), "Advisory drafter opens Reports drafts");
 assert(
-  href("actions", studio) === `/clients/${CLIENT}?tab=plan`,
+  href("actions", studio) === `/clients/${CLIENT}?tab=plan&section=open`,
   "Action Plan is its own rail item",
 );
 assert(
-  href("sync", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}`,
+  href("sync", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}&section=${coach("data").section}`,
   "Data & sync opens Client portal",
 );
 assert(
-  href("upload", studio) === `/clients/${CLIENT}?tab=${coach("data").tab}&onboard=1`,
+  href("upload", studio) ===
+    `/clients/${CLIENT}?tab=${coach("data").tab}&section=${coach("data").section}&onboard=1`,
   "Upload reuses the onboard deep link on Client portal",
 );
 assert(href("clients", studio) === "/clients", "Clients opens the client list");

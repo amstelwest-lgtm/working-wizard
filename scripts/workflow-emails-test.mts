@@ -281,7 +281,7 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}â†
   );
   eq(
     workflowEmailHref("forecast_break", "accountant", CLIENT, site),
-    `https://www.milonfinance.com/clients/${CLIENT}?tab=cash`,
+    `https://www.milonfinance.com/clients/${CLIENT}?tab=cash&section=forecast`,
     "accountant cash link",
   );
 
@@ -301,7 +301,8 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}â†
     const m = renderWorkflowEmail({ ...base, intent, recipientName: "Thabo" });
     assert(m.subject.startsWith("New Co:"), `subject names the client: ${m.subject}`);
     assert(m.text.startsWith("Hi Thabo,"), "greets by name");
-    assert(m.text.includes(m.href) && m.html.includes(`href="${m.href}"`), "link in both bodies");
+    const htmlHref = m.href.replace(/&/g, "&amp;");
+    assert(m.text.includes(m.href) && m.html.includes(`href="${htmlHref}"`), "link in both bodies");
     assert(!/\/t\/|token=|\/ack\//.test(m.href), `no tokenised link: ${m.href}`);
     assert(m.text.endsWith("â€” MILÅŒN"), "signed");
   }

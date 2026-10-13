@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  accountantClientRouteSearch,
   accountantClientTabSearch,
   accountantValidatedSearch,
   canonicalizeAccountantSearch,
@@ -67,11 +68,11 @@ lands(
 );
 
 lands("profit", { tab: "profit" }, "?tab=profit opens Profit");
-lands("waterfall", { tab: "profit" }, "?tab=waterfall opens Profit");
-lands("profitability", { tab: "profit" }, "?tab=profitability opens Profit");
-lands("cash", { tab: "cash" }, "?tab=cash opens Cash flow");
-lands("forecast", { tab: "cash" }, "?tab=forecast opens Cash flow");
-lands("cash-forecast", { tab: "cash" }, "?tab=cash-forecast opens Cash flow");
+lands("waterfall", { tab: "profit", section: "waterfall" }, "?tab=waterfall opens the waterfall page");
+lands("profitability", { tab: "profit", section: "waterfall" }, "?tab=profitability opens the waterfall page");
+lands("cash", { tab: "cash" }, "?tab=cash opens the Cash flow overview");
+lands("forecast", { tab: "cash", section: "forecast" }, "?tab=forecast opens the forecast page");
+lands("cash-forecast", { tab: "cash", section: "forecast" }, "?tab=cash-forecast opens the forecast page");
 lands(
   "collections",
   { tab: "cash", section: "collections" },
@@ -92,14 +93,16 @@ lands("report", { tab: "reports" }, "?tab=report opens Reports");
 lands("advisory", { tab: "reports", section: "drafts" }, "?tab=advisory opens Reports drafts");
 lands("pack", { tab: "reports", section: "drafts" }, "?tab=pack opens Reports drafts");
 lands("drafter", { tab: "reports", section: "drafts" }, "?tab=drafter opens Reports drafts");
-lands("reports", { tab: "plan" }, "?tab=reports&section=plan opens Action plan", { section: "plan" });
+lands("reports", { tab: "plan", section: "open" }, "?tab=reports&section=plan opens Open work", {
+  section: "plan",
+});
 
 function routerSearch(raw: Record<string, unknown>) {
   return { ...raw, ...accountantValidatedSearch(raw) };
 }
 const planAlias = routerSearch({ tab: "reports", section: "plan", report: "scorecard", action: "preview" });
 assert(planAlias.tab === "plan", "the plan alias tab is plan");
-assert(planAlias.section === undefined, "the plan alias drops section=plan");
+assert(planAlias.section === "open", "the plan alias opens Open work");
 assert(planAlias.report === undefined && planAlias.action === undefined, "a report link does not stick to Action plan");
 const draftsAlias = routerSearch({ tab: "advisory" });
 assert(
@@ -120,17 +123,20 @@ const planFilter = routerSearch({ tab: "reports", section: "plan", filter: "over
 assert(planFilter.tab === "plan" && planFilter.filter === "overdue", "an overdue filter stays once the alias is Action plan");
 const bareReport = routerSearch({ report: "scorecard", action: "download" });
 assert(bareReport.report === "scorecard" && bareReport.action === "download", "a report param with no tab is kept");
-assert(!("section" in bareReport), "a report param with no tab does not invent a section");
-lands("plan", { tab: "plan" }, "?tab=plan opens Action Plan");
-lands("actions", { tab: "plan" }, "?tab=actions opens Action Plan");
-lands("action", { tab: "plan" }, "?tab=action opens Action Plan");
-lands("action-plan", { tab: "plan" }, "?tab=action-plan opens Action Plan");
-lands("tasks", { tab: "plan" }, "?tab=tasks opens Action Plan");
-lands("deliverables", { tab: "plan" }, "Deliverables plan section opens Action Plan", {
+assert(
+  bareReport.tab === "reports" && bareReport.section === "scorecard",
+  "a report param with no tab opens that Reports page",
+);
+lands("plan", { tab: "plan" }, "?tab=plan opens the Action plan overview");
+lands("actions", { tab: "plan", section: "open" }, "?tab=actions opens Open work");
+lands("action", { tab: "plan", section: "open" }, "?tab=action opens Open work");
+lands("action-plan", { tab: "plan", section: "open" }, "?tab=action-plan opens Open work");
+lands("tasks", { tab: "plan", section: "open" }, "?tab=tasks opens Open work");
+lands("deliverables", { tab: "plan", section: "open" }, "Deliverables plan section opens Open work", {
   section: "plan",
 });
 
-lands("overview", { tab: "cash" }, "old overview cash opens Cash flow", {
+lands("overview", { tab: "cash", section: "forecast" }, "old overview cash opens the forecast page", {
   section: "cash",
 });
 assert(
@@ -149,8 +155,8 @@ assert(
 );
 assert(
   canonicalizeAccountantSearch({ section: "cash" }).tab === "cash" &&
-    canonicalizeAccountantSearch({ section: "cash" }).section === undefined,
-  "?section=cash opens Cash flow",
+    canonicalizeAccountantSearch({ section: "cash" }).section === "forecast",
+  "?section=cash opens the forecast page",
 );
 assert(
   canonicalizeAccountantSearch({ section: "budget" }).tab === "budget",
@@ -172,12 +178,12 @@ assert(
   "a reports section on Deliverables opens Reports",
 );
 assert(
-  railSearchForHash("#cash")?.tab === "cash" && railSearchForHash("#cash")?.section === undefined,
-  "#cash opens Cash flow",
+  railSearchForHash("#cash")?.tab === "cash" && railSearchForHash("#cash")?.section === "forecast",
+  "#cash opens the forecast page",
 );
 assert(
-  railSearchForHash("#budget")?.tab === "budget" && railSearchForHash("#budget")?.section === undefined,
-  "#budget opens Budget",
+  railSearchForHash("#budget")?.tab === "budget" && railSearchForHash("#budget")?.section === "year",
+  "#budget opens This year",
 );
 assert(
   railSearchForHash("#advisory")?.tab === "reports" &&
@@ -319,5 +325,43 @@ const ranked = rankStrategicMoves({
 });
 assert(ranked[0]?.key === "grossMargin", "weaker health ranks above a healthy lever");
 assert(ranked.length === 2, "ranker keeps one row per move");
+
+const linesViaView = accountantClientRouteSearch({ tab: "profit", view: "lines" });
+assert(
+  linesViaView.tab === "profit" && linesViaView.section === "lines" && linesViaView.view === undefined,
+  "?tab=profit&view=lines redirects to the Product lines page",
+);
+const monthsViaView = accountantClientRouteSearch({ tab: "budget", view: "table" });
+assert(
+  monthsViaView.tab === "budget" && monthsViaView.section === "months" && monthsViaView.view === undefined,
+  "?view=table redirects to Month by month",
+);
+const weekView = accountantClientRouteSearch({ tab: "cash", section: "forecast", view: "13week" });
+assert(
+  weekView.section === "forecast" && weekView.view === "13week",
+  "the 13-week lens stays on the forecast page",
+);
+const collectionsHash = legacyHashDestination({ tab: "cash" }, "#pane-collections");
+assert(
+  collectionsHash?.tab === "cash" && collectionsHash.section === "collections",
+  "#pane-collections opens Who to chase",
+);
+const pillarsHash = legacyHashDestination({}, "#coach-pillars");
+assert(
+  pillarsHash?.tab === "health" && pillarsHash.section === "pillars",
+  "#coach-pillars opens Where it hurts",
+);
+const linesHash = legacyHashDestination({ tab: "profit" }, "#product-lines");
+assert(linesHash?.section === "lines", "#product-lines opens Product lines");
+const alreadyLines = legacyHashDestination({ tab: "profit", section: "lines" }, "#product-lines");
+assert(alreadyLines === null, "a Product lines page does not redirect again");
+const scoreNav = clientNavSearch({ tab: "home" }, "health", "score");
+assert(scoreNav.tab === "health" && scoreNav.section === "score", "Score is its own Health page");
+const cashParent = clientRailSelection({ tab: "cash" });
+assert(cashParent.headingId === "cash" && cashParent.subId === null, "Cash flow overview marks the parent");
+const linesRail = clientRailSelection({ tab: "profit", section: "lines" });
+assert(linesRail.headingId === "profit" && linesRail.subId === "lines", "Product lines marks its sub-item");
+assert(route.includes('id="lines"'), "Product lines renders on its own page");
+assert(!route.includes("<span className=\"eyebrow\">Product lines</span>"), "Product lines is not left inside the profit page");
 
 console.log("client-route-search-test: all assertions passed");
