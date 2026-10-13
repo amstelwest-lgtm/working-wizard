@@ -2223,9 +2223,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           </>
         ) : null}
 
-        <div className="footer-note">
-          MILŌN Practice Portal · <span className="serif footer-tagline">The passion to perform.</span>
-        </div>
+        <div className="footer-note">MILŌN Practice Portal</div>
           </div>
         </div>
       </main>
