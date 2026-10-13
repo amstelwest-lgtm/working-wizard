@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { openingCashByWeek } from "@/lib/client-metrics";
 import { cashBalanceSeries } from "@/lib/cash-forecast-view";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { cn } from "@/lib/utils";
@@ -197,7 +198,7 @@ export function CashThirteenWeekGrid({
   /** Extra classes for the scroll frame. The enlarge sheet fills the viewport. */
   scrollClassName?: string;
 }) {
-  const openings = closing.map((_, index) => (index === 0 ? opening : closing[index - 1]!));
+  const openings = openingCashByWeek(opening, closing);
   const series = cashBalanceSeries({ opening, closings: closing, floor });
   const openingBelow = series[0]?.belowFloor === true;
   const tight = series.slice(1).map((point) =>

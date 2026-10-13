@@ -42,6 +42,11 @@ export type OwnerBooks = {
   signedBy: string | null;
   signedOn: string | null;
   market: MoneyMarket;
+  /**
+   * Cash and floor from the same outlook Health uses.
+   * When set, the home card does not use the $50,000 comfort line.
+   */
+  cashPosition?: { cash: number; floor: number } | null;
 };
 
 export function ownerAmount(n: number, market: MoneyMarket): string {
@@ -161,6 +166,7 @@ export function guardOwnerLine(line: string): string {
 /** Home cash copy. The tile sentence stays long for the hold screen. */
 function cashHomeLine(sentence: string): string {
   if (sentence === CONNECT || sentence === "The 13-week line is not on file yet.") return sentence;
+  if (sentence.startsWith("Cash is ") && sentence.includes(" floor")) return guardOwnerLine(sentence);
   const amounts = amountsIn(sentence);
   if (sentence.includes("stays above") && amounts.length >= 2) {
     const [floor, low] = amounts;
@@ -205,8 +211,9 @@ function forecastLow(books: OwnerBooks): number | null {
  * debtors above zero, is Attention. The stronger tone wins on the analyst card.
  */
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
-  const low = forecastLow(books);
-  const floor = cashComfortThreshold(books.market.currency);
+  const positioned = canonicalCash(books);
+  const low = positioned ? positioned.cash : forecastLow(books);
+  const floor = positioned ? positioned.floor : cashComfortThreshold(books.market.currency);
   const cash: OwnerCardStatus | null =
     low != null && low < floor ? { tone: "critical", word: "Critical" } : null;
 
@@ -241,12 +248,34 @@ export function ownerHomeLines(
   };
 }
 
+function canonicalCash(books: OwnerBooks): { cash: number; floor: number } | null {
+  const position = books.cashPosition;
+  if (!position || !finite(position.cash) || !finite(position.floor)) return null;
+  return position;
+}
+
 function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: string): OwnerTile {
   const base = {
     id: "cash" as const,
     heading: "Cash over the next 13 weeks",
     ask: "financial_manager" as const,
   };
+  const positioned = canonicalCash(books);
+  if (positioned) {
+    const under = positioned.floor - positioned.cash;
+    const sentence =
+      under > 0
+        ? `Cash is ${money(under)} below the ${money(positioned.floor)} floor.`
+        : `Cash is ${money(positioned.cash)}, above the ${money(positioned.floor)} floor.`;
+    return {
+      ...base,
+      sentence,
+      source: `${booksSource}, 13-week forecast`,
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   const balances = closingBalancesFromCashflow(books.cashflow);
   if (!balances || balances.length === 0) {
     return {

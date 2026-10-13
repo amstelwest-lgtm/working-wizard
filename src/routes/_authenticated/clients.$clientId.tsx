@@ -863,20 +863,10 @@ function ClientView() {
       .then(() => toast.success("Action Plan PDF downloaded"))
       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "PDF export failed"));
   };
-  const [studioDeepLink, setStudioDeepLink] = useState<{
-    report?: string;
-    action?: "preview" | "download";
-  }>({});
   useEffect(() => {
     // Old ?tab= values are rewritten to tab + section in validateSearch.
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
-    if (search.report || search.action) {
-      setStudioDeepLink({
-        report: search.report,
-        action: search.action,
-      });
-    }
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
     if (search.profile === 1) setProfileOpen(true);
@@ -1109,9 +1099,7 @@ function ClientView() {
   // Bumped by the recommendations panel so the Next Step card re-resolves.
   const [advisoryBump, setAdvisoryBump] = useState(0);
   const [packSignoff, setPackSignoff] = useState<AdvisorySignoffAction | null>(null);
-  const [planSentence, setPlanSentence] = useState(
-    "No actions in the plan yet. Add the first one to get started.",
-  );
+  const [planSentence, setPlanSentence] = useState("Checking the action plan.");
   const [planCount, setPlanCount] = useState(0);
   const focusPlanAdd = useRef<(() => void) | null>(null);
   const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
@@ -2449,7 +2437,6 @@ function ClientView() {
   openFromBotRef.current = openCoach;
 
   const handleGenerateReport = useCallback(() => {
-    setStudioDeepLink({});
     revealTab("reports");
   }, [revealTab]);
 
@@ -2822,7 +2809,6 @@ function ClientView() {
   );
   const openReportPage = useCallback(
     (report: string, action?: "preview" | "download") => {
-      setStudioDeepLink({ report, action });
       const section =
         report === "scorecard" || report === "forecast" || report === "waterfall" ? report : "all";
       setActiveTab("reports");
@@ -2859,6 +2845,7 @@ function ClientView() {
       priorCogs: amount(priorFin?.cogs),
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
+      cashPosition: hasFigures ? { cash: cashOutlook.opening, floor: cashOutlook.floor } : null,
       openAction: overviewNextStep?.title ?? null,
       actionsReady: nextStepKnown,
       signedBy: null,
@@ -2873,6 +2860,8 @@ function ClientView() {
     financials,
     statementPosition.receivables,
     client?.cashflow,
+    cashOutlook.opening,
+    cashOutlook.floor,
     overviewNextStep,
     nextStepKnown,
     clientMarket,
@@ -3317,6 +3306,11 @@ function ClientView() {
                       key={homeAgent ?? "team"}
                       clientId={clientId}
                       agent={homeAgent}
+                      homeFinding={
+                        homeAgent
+                          ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")
+                          : null
+                      }
                       onSelectAgent={openHomeAgent}
                       onOpenApproved={(target) => {
                         if (target.screen === "accountant") {
@@ -4390,14 +4384,12 @@ function ClientView() {
                               key={`${client.id}-${search.section ?? "all"}`}
                               client={client.name}
                               clientId={client.id}
-                              report={
-                                search.section === "scorecard" ||
-                                search.section === "forecast" ||
-                                search.section === "waterfall"
-                                  ? search.section
-                                  : studioDeepLink.report
+                              report={search.section === "all" ? undefined : search.section}
+                              action={
+                                search.action === "preview" || search.action === "download"
+                                  ? search.action
+                                  : undefined
                               }
-                              action={studioDeepLink.action}
                               onlyKeys={
                                 search.section === "scorecard" ||
                                 search.section === "forecast" ||
@@ -4415,7 +4407,19 @@ function ClientView() {
                                   context={deliverableInputContext}
                                 />
                               }
-                              onSearchCleared={() => setStudioDeepLink({})}
+                              onSearchCleared={() => {
+                                void navigate({
+                                  to: "/clients/$clientId",
+                                  params: { clientId },
+                                  search: (prev) => {
+                                    const next = { ...(prev as Record<string, unknown>) };
+                                    delete next.report;
+                                    delete next.action;
+                                    return next;
+                                  },
+                                  replace: true,
+                                });
+                              }}
                             />
                           </Suspense>
                         </TabErrorBoundary>

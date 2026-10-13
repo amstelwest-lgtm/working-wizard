@@ -331,8 +331,8 @@ assert(
     pathname: "/settings/team",
     insightSeen: readInsightSeen("firm-b"),
     firmClientCount: 1,
-  }) === "require_billing",
-  "firm B after its insight still walls team settings",
+  }) === "allow",
+  "firm B after its insight can open team settings",
 );
 assert(
   decideFirmBillingPathGate({

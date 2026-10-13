@@ -400,20 +400,21 @@ export function PlaybookDrawer({
                 </div>
 
                 <div className="space-y-3">
-                  {phaseSteps.map((step) => {
+                  {phaseSteps.map((step, index) => {
                     const cat = CATEGORY_STYLES[step.category] ?? CATEGORY_STYLES.operations;
                     const CatIcon = cat.Icon;
+                    const displayNumber = index + 1;
                     return (
                       <div
                         key={step.step_number}
                         className={`rounded-lg border border-[#DBEAFE] dark:border-[#1e3a5f] border-l-2 ${tier.border} bg-[#F4F8FF] dark:bg-[#102A43] p-4`}
                       >
                         <div className="flex items-start gap-3">
-                          {/* Step number */}
+                          {/* Visible order. Sign-off still uses the stored step number. */}
                           <span
                             className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tier.stepDot}`}
                           >
-                            {step.step_number}
+                            {displayNumber}
                           </span>
 
                           <div className="min-w-0 flex-1">

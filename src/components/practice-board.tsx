@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -105,8 +105,10 @@ import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
+import { AgentStage } from "@/components/milon-team/agent-stage";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
+import { practiceAgentFromHash, practiceAgentHash } from "@/lib/practice-agent-hash";
 import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 
@@ -1125,6 +1127,7 @@ export type PracticeView = "home" | "clients" | "practice";
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const locationHash = useRouterState({ select: (s) => s.location.hash });
 
   // ── Role guard ────────────────────────────────────────────────────────────
   // Business-client credentials must not sit on the practice portal. Wait for
@@ -1619,6 +1622,30 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       ),
     [clientRows],
   );
+  const practiceBrief = useMemo(
+    () => ({
+      clientCount: clientRows.length,
+      avgHealth,
+      needAttention: attention.needAttention,
+      reviewNow: attention.reviewNow,
+      openQueries: openQueriesTotal,
+      followUps: followUpItems.length,
+    }),
+    [
+      clientRows.length,
+      avgHealth,
+      attention.needAttention,
+      attention.reviewNow,
+      openQueriesTotal,
+      followUpItems.length,
+    ],
+  );
+  const practiceLines = useMemo(
+    () => practiceHomeLines({ ...practiceBrief, loading: bookLoading }),
+    [practiceBrief, bookLoading],
+  );
+  const practiceStatus = useMemo(() => practiceCardStatuses(practiceBrief), [practiceBrief]);
+  const dashAgent = view === "home" ? practiceAgentFromHash(locationHash) : null;
 
   const openClientPlan = (clientId: string, overdue: boolean) =>
     navigate({
@@ -1769,35 +1796,41 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <div className="deliverable-main">
         {view === "home" ? (
           <div className="owner-door">
+            {dashAgent ? (
+              <div data-practice-agent={dashAgent}>
+                <button
+                  type="button"
+                  className="owner-back"
+                  onClick={() => {
+                    void navigate({ to: "/dashboard", hash: "" });
+                  }}
+                >
+                  Back to the team
+                </button>
+                <AgentStage
+                  agent={dashAgent}
+                  finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ") || null}
+                  onSelect={(agent) => {
+                    void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
+                  }}
+                />
+              </div>
+            ) : (
             <OwnerHome
               title="Your whole finance team"
               showInvite={false}
               variant="character"
               presence={ownerPresence(emptyAgentActivity())}
-              lines={practiceHomeLines({
-                clientCount: clientRows.length,
-                avgHealth,
-                needAttention: attention.needAttention,
-                reviewNow: attention.reviewNow,
-                openQueries: openQueriesTotal,
-                followUps: followUpItems.length,
-                loading: bookLoading,
-              })}
-              status={practiceCardStatuses({
-                clientCount: clientRows.length,
-                avgHealth,
-                needAttention: attention.needAttention,
-                reviewNow: attention.reviewNow,
-                openQueries: openQueriesTotal,
-                followUps: followUpItems.length,
-              })}
+              lines={practiceLines}
+              status={practiceStatus}
               onOpen={(agent) => {
-                void navigate({ to: "/dashboard", hash: `ask-${agent.replace(/_/g, "-")}` });
+                void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
               }}
               onAsk={(agent) => {
-                void navigate({ to: "/dashboard", hash: `ask-${agent.replace(/_/g, "-")}` });
+                void navigate({ to: "/dashboard", hash: practiceAgentHash(agent) });
               }}
             />
+            )}
           </div>
         ) : null}
         {view === "practice" ? (
@@ -1933,15 +1966,23 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         ) : null}
 
         {scoredRows.length > 0 ? <CheckoutAfterInsight /> : null}
-        {followUpItems.length > 0 ? (
-          <details className="home-fold" id="follow-up">
+        <details className="home-fold" id="follow-up">
             <summary>
               <span>Follow up</span>
               <span className="home-fold-meta">
-                {followUpItems.length} with open Action Plan work
+                {followUpItems.length > 0
+                  ? `${followUpItems.length} with open Action Plan work`
+                  : bookLoading
+                    ? "Loading"
+                    : "None open"}
               </span>
             </summary>
             <div className="home-fold-body">
+              {followUpItems.length === 0 ? (
+                <p className="sub">
+                  {bookLoading ? "Loading follow-ups…" : "No open Action Plan work to chase."}
+                </p>
+              ) : (
               <div className="followup-list">
                 {followUpItems.map((item) => (
                   <button
@@ -1960,9 +2001,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   </button>
                 ))}
               </div>
+              )}
             </div>
           </details>
-        ) : null}
 
         <details className="home-fold" id="portfolio-insights">
           <summary>
@@ -2059,7 +2100,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           <>
                 {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">
-          <h2>Clients</h2>
+          <h1>Clients</h1>
           <div className="search">
             <svg viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="7" />

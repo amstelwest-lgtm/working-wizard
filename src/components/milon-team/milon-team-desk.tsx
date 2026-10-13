@@ -158,7 +158,7 @@ export function MilonTeamDesk({
     const stamp = checkedStamp(latest[item.agent], feed.agents[item.agent]?.lastRunAt ?? null);
     return figuresCheckedLine(item.source.asOf, stamp ?? item.source.asOf, clock);
   }
-  const waiting = feed.loading && !feed.error && emptyFeed;
+  const waiting = feed.loading && !feed.error && emptyFeed && presentation !== "agent";
   const quietError = Boolean(feed.error) && emptyFeed;
 
   return (
