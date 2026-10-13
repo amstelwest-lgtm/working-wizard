@@ -11,6 +11,7 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import { HeroAgents } from "@/components/landing/hero-agents";
 import { LandingSignInButton } from "@/components/landing/landing-sign-in-button";
 import {
   DUAL_MARKET_BUILT,
@@ -2013,6 +2014,25 @@ function LandingPage() {
           </div>
 
           <div className="dash-stage hero-mock-fade">
+            <figure className="hero-shot">
+              <figcaption>
+                <span className="hero-shot-dots" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span>The accountant&apos;s home</span>
+              </figcaption>
+              <img
+                src="/hero/accountant-home-960.webp"
+                srcSet="/hero/accountant-home-640.webp 640w, /hero/accountant-home-960.webp 960w, /hero/accountant-home-1280.webp 1280w"
+                sizes="(min-width:1024px) 36vw, (min-width:768px) min(60vw, 528px), calc(100vw - 32px)"
+                width={1280}
+                height={336}
+                alt="The Milōn accountant home for a sample practice: client count, average health, a needs-attention list, and Milōn Financial Manager, Milōn Analyst and Milōn Advisor in the sidebar"
+                decoding="async"
+              />
+            </figure>
             <div className="dash" id="dash" role="img" aria-label={DASH_ARIA_LABEL}>
               <div className="dash-top">
                 <span className="brand">MILŌN</span>
@@ -2141,6 +2161,7 @@ function LandingPage() {
                 </div>
               </div>
             </div>
+            <HeroAgents />
             <div className="float-card fc-1">
               <span className="tag">Milōn Advisor draft · awaiting sign-off</span>
               <p>
