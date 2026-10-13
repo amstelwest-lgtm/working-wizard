@@ -17,6 +17,7 @@ import {
   routerHash,
   type CanonicalClientSearch,
 } from "../src/lib/client-route-search";
+import { askAgentFromHash, askHashForAgent, searchWithAskAgent } from "../src/lib/ask-agent";
 import { STRATEGIC_MOVE_CATALOG, rankStrategicMoves } from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
@@ -363,5 +364,27 @@ const linesRail = clientRailSelection({ tab: "profit", section: "lines" });
 assert(linesRail.headingId === "profit" && linesRail.subId === "lines", "Product lines marks its sub-item");
 assert(route.includes('id="lines"'), "Product lines renders on its own page");
 assert(!route.includes("<span className=\"eyebrow\">Product lines</span>"), "Product lines is not left inside the profit page");
+
+assert(askAgentFromHash("#ask-financial-manager") === "financial_manager", "FM hash opens the FM thread");
+assert(askAgentFromHash("ask-analyst") === "analyst", "analyst hash opens the analyst thread");
+assert(askAgentFromHash("#ask-advisor") === "advisor", "advisor hash opens the advisor thread");
+assert(askAgentFromHash("#cash") === null, "other hashes are not agents");
+assert(askHashForAgent("financial_manager") === "ask-financial-manager", "FM thread hash");
+const asked = searchWithAskAgent({ tab: "cash", section: "forecast", agent: "advisor" }, "financial_manager");
+assert(asked.tab === "home" && asked.agent === "financial_manager", "ask search lands on Home with that agent");
+assert(asked.section == null, "ask search drops the previous section");
+const keptAgent = accountantClientRouteSearch({ tab: "home", agent: "analyst" });
+assert(keptAgent.agent === "analyst" && keptAgent.tab === "home", "the client route keeps the agent");
+const droppedAgent = accountantClientRouteSearch({ tab: "home", agent: "bot" });
+assert(droppedAgent.agent == null, "an unknown agent does not stick");
+const practice = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
+assert(practice.includes("PracticeAgentThread"), "practice Home mounts the agent thread");
+assert(practice.includes("askAgentFromHash"), "practice Home reads the ask hash");
+assert(!practice.includes("hash: `ask-${agent.replace"), "practice Home no longer sets a dead ask hash");
+const rail = readFileSync(resolve("src/components/client-studio-chrome.tsx"), "utf8");
+assert(rail.includes("askHashForAgent"), "client agent links carry the ask hash");
+assert(rail.includes("searchWithAskAgent"), "client agent links open that agent's search");
+assert(route.includes("askAgentFromHash"), "a client #ask- hash opens the agent thread");
+assert(route.includes("searchWithAskAgent"), "Ask on the client file writes the agent search");
 
 console.log("client-route-search-test: all assertions passed");
