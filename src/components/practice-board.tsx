@@ -103,7 +103,7 @@ import {
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
 import { useFirmPortfolioRows } from "@/hooks/use-firm-portfolio";
 import { AccountantInbox } from "@/components/accountant-inbox";
-import { AccountantMenuButton, useAccountantDrawer } from "@/components/accountant-nav";
+import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { PracticeRail } from "@/components/practice-rail";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { practiceCardStatuses, practiceHomeLines } from "@/lib/owner-answers";
@@ -1259,7 +1259,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileNavOpen]);
-  useAccountantDrawer(mobileNavOpen);
+  useAccountantDrawer(mobileNavOpen, () => setMobileNavOpen(false));
   const [isItMember, setIsItMember] = useState(false);
 
   // Only known after mount — reading window.location.origin during render would
@@ -1742,13 +1742,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <span className="av">{profileInitials || "·"}</span>
             <span className="profile-name">{greetName}</span>
           </span>
-          <button
-            type="button"
-            className="topbar-backdrop"
-            aria-label="Close menu"
-            tabIndex={mobileNavOpen ? 0 : -1}
-            onClick={() => setMobileNavOpen(false)}
-          />
           <AccountantMenuButton
             open={mobileNavOpen}
             onClick={() => setMobileNavOpen((o) => !o)}
@@ -1771,6 +1764,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         </div>
 
         <div className="client-workspace">
+          <DrawerBackdrop open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
           <PracticeRail onNavigate={() => setMobileNavOpen(false)} />
           <div className="deliverable-main">
         {view === "home" ? (

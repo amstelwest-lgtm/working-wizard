@@ -209,6 +209,21 @@ html:not(.dark) .owner-door .owner-pillar-score.text-rose-400 {
   background: color-mix(in srgb, var(--gold) 18%, transparent);
 }
 
+/* Light mode: menu items inherit the charcoal topbar ink and disappear on the
+   white popover. Brand navy is the --navy token. */
+html:not(.dark) .owner-door .owner-menu,
+html:not(.dark) .owner-door .owner-menu-item,
+html:not(.dark) .owner-door .owner-menu .milon-settings-btn,
+html:not(.dark) .owner-door .owner-menu-theme {
+  color: var(--navy);
+}
+
+html:not(.dark) .owner-door .owner-menu-item:hover,
+html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
+  background: var(--pale);
+  color: var(--navy);
+}
+
 .owner-door .owner-menu-item:focus-visible,
 .owner-door .owner-menu .milon-settings-btn:focus-visible {
   outline: 2px solid var(--gold-bright);
@@ -454,7 +469,7 @@ html:not(.dark) .owner-door .owner-pillar-score.text-rose-400 {
   box-shadow: inset 3px 0 0 var(--cobalt);
 }
 
-/* Desktop rail is a full-height panel on the left edge. Phone keeps the pill row. */
+/* Desktop rail is a full-height panel on the left edge. Phone uses the drawer. */
 @media (min-width: 861px) {
   #board-pack.founder-shell > .owner-door.accountant-portal {
     width: 100vw;
@@ -1857,45 +1872,68 @@ html.dark .owner-status.is-attention {
   }
 }
 
-@media (max-width: 767px) {
-  .owner-door.accountant-portal .deliverable-rail {
-    flex-direction: row;
+/* Phone and tablet: the section list is a vertical drawer, not a sideways strip. */
+@media (max-width: 860px) {
+  .owner-door.accountant-portal .topbar-menu-btn {
+    display: grid;
+  }
+
+  .owner-door.accountant-portal:not(.nav-open) .deliverable-rail {
+    display: none;
+  }
+
+  .owner-door.accountant-portal.nav-open .topbar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    border: 0;
+    padding: 0;
+    background: rgba(16, 42, 67, 0.46);
+  }
+
+  .owner-door.accountant-portal.nav-open .topbar-menu-btn {
+    position: relative;
+    z-index: 90;
+  }
+
+  .owner-door.accountant-portal.nav-open .deliverable-rail {
+    position: fixed;
+    z-index: 80;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: auto;
+    display: flex;
+    flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-  }
-
-  .owner-door.accountant-portal .deliverable-rail .tab {
-    flex: 0 0 auto;
-    width: auto;
-    min-height: 44px;
-    font-size: 14px;
-    white-space: nowrap;
-  }
-
-  .owner-door.accountant-portal[data-screen="settings"] .deliverable-rail,
-  .owner-door.accountant-portal[data-screen="plan"] .deliverable-rail {
-    flex-wrap: wrap;
-    overflow: visible;
+    width: min(320px, 88vw);
+    max-width: 88vw;
     height: auto;
     max-height: none;
-    border-radius: 16px;
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 0;
+    padding: 12px 12px 24px;
     mask-image: none;
     -webkit-mask-image: none;
   }
 
-  .owner-door.accountant-portal[data-screen="settings"] .deliverable-rail .tab,
-  .owner-door.accountant-portal[data-screen="plan"] .deliverable-rail .tab {
-    flex: 1 1 calc(50% - 4px);
-    width: auto;
+  .owner-door.accountant-portal.nav-open .deliverable-rail .tab {
+    flex: none;
+    width: 100%;
     min-width: 0;
-    max-width: 100%;
-    height: auto;
+    min-height: 44px;
+    justify-content: flex-start;
+    text-align: left;
     white-space: normal;
     overflow-wrap: anywhere;
   }
+}
 
+@media (max-width: 767px) {
   .owner-door .owner-menu {
     position: fixed;
     top: var(--owner-menu-top, 64px);

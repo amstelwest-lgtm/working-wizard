@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
 import { EnlargeButton, EnlargeSheet } from "@/components/enlarge-sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -417,14 +417,14 @@ export function ProfitabilityWaterfall({
   const { money: fmt, moneyCompact: fmtCompact, market } = useMarketFormat();
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [narrow, setNarrow] = useState(false);
+  const [phone, setPhone] = useState(false);
   const [waterfallOpen, setWaterfallOpen] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 520px)");
-    const apply = () => setNarrow(mq.matches);
+  useLayoutEffect(() => {
+    const query = window.matchMedia("(max-width: 767px)");
+    const apply = () => setPhone(query.matches);
     apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
   }, []);
   const exportPdfRef = useRef<() => void>(() => {});
 
@@ -619,17 +619,63 @@ export function ProfitabilityWaterfall({
             </p>
           )}
 
-          <WaterfallFigure
-            steps={steps}
-            revenue={revenue}
-            fixedCosts={fixedCosts}
-            netProfit={netProfit}
-            taxNote={taxNote}
-            mounted={mounted}
-            negative={negative}
-            money={fmtCompact}
-            mode={narrow ? "fit" : "desk"}
-          />
+          {phone ? (
+            <ol className="m-0 flex list-none flex-col gap-3 p-0" data-waterfall-layout="horizontal">
+              {steps.map((s) => {
+                const isDec = s.kind === "decrease";
+                const negNet = s.kind === "total" && s.label === "Net Profit" && s.runningEnd < 0;
+                const span = Math.abs(isDec ? s.delta : s.runningEnd);
+                const width = Math.max(8, Math.min(100, (span / Math.max(Math.abs(revenue), 1)) * 100));
+                const valueText = isDec
+                  ? negative === "minus"
+                    ? ownerOutflow(fmtCompact(Math.abs(s.delta)))
+                    : `(${fmtCompact(Math.abs(s.delta))})`
+                  : fmtCompact(s.runningEnd);
+                return (
+                  <li key={s.label} className="min-w-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 text-xs font-bold uppercase leading-tight tracking-wide text-[#1e293b] dark:text-[#e2e8f0]">
+                        {s.label}
+                      </span>
+                      <span
+                        className="shrink-0 text-xs font-extrabold tabular-nums text-[#102A43] dark:text-[#F4F7FB]"
+                        style={{ color: isDec || negNet ? "#c0392b" : undefined }}
+                      >
+                        {valueText}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-[#e8eef5] dark:bg-slate-800">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${width}%`,
+                          background: negNet
+                            ? "#c0392b"
+                            : isDec
+                              ? "#c94b4b"
+                              : s.kind === "total"
+                                ? "#1a3a5c"
+                                : "#3f9c72",
+                        }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <WaterfallFigure
+              steps={steps}
+              revenue={revenue}
+              fixedCosts={fixedCosts}
+              netProfit={netProfit}
+              taxNote={taxNote}
+              mounted={mounted}
+              negative={negative}
+              money={fmtCompact}
+              mode="desk"
+            />
+          )}
           <EnlargeSheet
             open={waterfallOpen}
             onOpenChange={setWaterfallOpen}

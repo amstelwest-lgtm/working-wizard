@@ -276,6 +276,7 @@ export function AccountantNav({
       aria-label={label}
       onKeyDown={onKeyDown}
     >
+      {onNavigate ? <DrawerCloseButton onClose={onNavigate} /> : null}
       {back ? (
         <NavLink
           dest={back.to}
@@ -390,8 +391,10 @@ export function AccountantNav({
 }
 
 /** Phone drawer: lock the page, keep Tab inside, and return focus to Menu. */
-export function useAccountantDrawer(open: boolean) {
+export function useAccountantDrawer(open: boolean, onClose?: () => void) {
   const wasOpen = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const root = document.documentElement;
     if (!open) {
@@ -410,11 +413,16 @@ export function useAccountantDrawer(open: boolean) {
       rail?.querySelector<HTMLElement>("[data-nav-row]");
     current?.focus();
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCloseRef.current?.();
+        return;
+      }
       if (event.key !== "Tab") return;
       const menu = document.querySelector<HTMLElement>(".topbar-menu-btn");
+      const closeBtn = rail?.querySelector<HTMLElement>(".drawer-close");
       const stop = rail?.querySelector<HTMLElement>('[data-nav-row][tabindex="0"]');
       if (!menu || !stop) return;
-      const order = [menu, stop];
+      const order = [menu, closeBtn, stop].filter((node): node is HTMLElement => !!node);
       const index = order.indexOf(document.activeElement as HTMLElement);
       event.preventDefault();
       const next = event.shiftKey
@@ -428,6 +436,30 @@ export function useAccountantDrawer(open: boolean) {
       root.classList.remove("nav-drawer-open");
     };
   }, [open]);
+}
+
+/** Covers the page beside the phone drawer. Lives outside the top bar so the bar's blur does not shrink the hit area. */
+export function DrawerBackdrop({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      className="topbar-backdrop"
+      aria-label="Close menu"
+      tabIndex={open ? 0 : -1}
+      onClick={onClose}
+    />
+  );
+}
+
+/** Visible X in the phone drawer's top-right corner. Hidden on the desktop rail. */
+export function DrawerCloseButton({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" className="drawer-close" aria-label="Close menu" onClick={onClose}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M18 6L6 18M6 6l12 12" />
+      </svg>
+    </button>
+  );
 }
 
 export function AccountantMenuButton({ open, onClick }: { open: boolean; onClick: () => void }) {

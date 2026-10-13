@@ -165,6 +165,24 @@ const firmOnly: LandingSignInRoles = {
 
 assert(destinationAfterLandingSignIn(owner) === "/app", "owner sign-in opens /app");
 assert(
+  destinationAfterSignIn(owner, "accountant") === "/app",
+  "/auth sends a business owner to /app",
+);
+const ownerWithFirmRole: LandingSignInRoles = {
+  hasPracticeRole: true,
+  hasClientRole: true,
+  hasFirm: true,
+  practiceSignup: false,
+};
+assert(
+  destinationAfterSignIn(ownerWithFirmRole, "accountant") === "/app",
+  "/auth sends an owner with an auto-granted firm role to /app",
+);
+assert(
+  destinationAfterSignIn(dual, "accountant") === "/dashboard",
+  "/auth still sends a practice signup with a client seat to /dashboard",
+);
+assert(
   destinationAfterLandingSignIn(accountant) === "/dashboard",
   "practice-only sign-in opens /dashboard",
 );

@@ -164,6 +164,7 @@ assert(profitPane.includes("weekly figures the owner enters stay on their board"
 for (const banned of ["aggregated weekly data", "period inputs", "the ledger", "step by step"]) {
   assert(!waterfall.includes(banned), `waterfall omits ${banned}`);
 }
+assert(waterfall.includes('data-waterfall-layout="horizontal"'), "a phone waterfall lays the bars out in rows");
 assert(waterfall.includes("export function profitAnswerSentence"), "the sentence stays the existing subtitle");
 assert(waterfall.includes("Month to date"), "month to date stays a period label");
 

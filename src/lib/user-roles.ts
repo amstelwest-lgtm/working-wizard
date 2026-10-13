@@ -273,6 +273,10 @@ export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/ap
   // on /app even if leftover milon_force_portal=accountant remains from a prior
   // /auth visit. Practice-only accounts still follow leftover accountant force.
   if (d.intent === "owner" && d.hasClientRole) return "/app";
+  // A business owner who signs in at /auth. ensure_practice_firm often grants
+  // firm_admin without practice-signup metadata. That seat is not the practice
+  // portal. A real firm signup (signup_type or firm_name) still opens /dashboard.
+  if (d.hasClientRole && !d.practiceSignup) return "/app";
   if (d.force === "accountant") return "/dashboard";
   if (d.intent === "accountant") return "/dashboard";
 
@@ -307,6 +311,9 @@ export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: 
   if (d.actingAsClient) return false;
   if (d.force === "owner") return false;
   if (!canEnterAccountantPortal(d)) return false;
+  // Same owner exception as decidePostLoginPath: do not bounce them into
+  // the practice portal after /auth.
+  if (d.hasClientRole && !d.practiceSignup) return false;
   if (d.force === "accountant") return true;
   if (d.hasPracticeRole && !d.hasClientRole) return true;
   return false;

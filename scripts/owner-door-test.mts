@@ -663,6 +663,11 @@ assert(
 );
 assert(shell.includes("aria-label={item.label}"), "rail items expose their label to assistive tech");
 assert(shell.includes('label: "Accountant portal"'), "the phone pill and the rail share Accountant portal");
+assert(shell.includes("AccountantMenuButton"), "phone sections open from a menu button");
+assert(shell.includes('event.key !== "Escape"'), "escape closes the owner menu");
+assert(css.includes("color: var(--navy)"), "owner menu items use brand navy");
+assert(css.includes(".owner-door.accountant-portal.nav-open .deliverable-rail"), "phone nav is a vertical drawer");
+assert(!css.includes("overscroll-behavior-x: contain"), "the phone section menu is not a horizontal strip");
 const app = readFileSync("src/routes/app.tsx", "utf8");
 assert(app.includes("<OwnerHealthOrb"), "health keeps the orb");
 assert(app.includes("const OwnerHealthOrb = SphereHero"), "health reuses the sphere");
