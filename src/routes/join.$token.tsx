@@ -20,6 +20,7 @@ import {
   OwnerInviteShell,
 } from "@/components/owner-invite-shell";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { PasswordWithShow } from "@/components/show-password";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import {
   INVITE_LINK_INVALID,
@@ -311,19 +312,23 @@ function AccountantJoinPage() {
                     <OwnerInviteFieldLabel htmlFor="accInvitePassword">
                       Password
                     </OwnerInviteFieldLabel>
-                    <OwnerInviteInput
-                      id="accInvitePassword"
-                      type="password"
-                      required
-                      minLength={6}
-                      value={password}
-                      autoComplete={signInMode ? "current-password" : "new-password"}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        setSignInFailure(null);
-                      }}
-                      placeholder="At least 6 characters"
-                    />
+                    <PasswordWithShow id="accInvitePassword">
+                      {(type) => (
+                        <OwnerInviteInput
+                          id="accInvitePassword"
+                          type={type}
+                          required
+                          minLength={6}
+                          value={password}
+                          autoComplete={signInMode ? "current-password" : "new-password"}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            setSignInFailure(null);
+                          }}
+                          placeholder="At least 6 characters"
+                        />
+                      )}
+                    </PasswordWithShow>
                   </>
                 ) : null}
 

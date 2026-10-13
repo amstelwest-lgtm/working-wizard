@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { toast } from "sonner";
 import { ActionHandoffButtons } from "@/components/action-handoff-buttons";
 import { supabase } from "@/integrations/supabase/client";
@@ -74,6 +75,8 @@ export function HandToMenu({
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
+      if (!open) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onDown);

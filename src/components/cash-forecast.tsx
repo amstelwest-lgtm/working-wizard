@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, useId, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { forecastOpeningFromStored, isQboBalanceSheetHoldNote } from "@/lib/xero-opening";
 import { toast } from "sonner";
@@ -495,6 +495,28 @@ function runwayFromOpening(
     operatingCashflow: Number.isFinite(ocf) ? ocf : null,
     hasBankCashflow: opts?.hasBankCashflow,
   });
+}
+
+/** Owner forecast extras. Collapsed until the owner asks. */
+export function ForecastMoreDetail({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const panelId = `cash-more-${useId().replace(/:/g, "")}`;
+  return (
+    <section className="cash-more-detail">
+      <button
+        type="button"
+        className="cash-more-detail__toggle"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((next) => !next)}
+      >
+        More detail
+      </button>
+      <div id={panelId} className="cash-more-detail__panel" hidden={!open}>
+        {children}
+      </div>
+    </section>
+  );
 }
 
 export function CashForecastPanel({
@@ -1679,7 +1701,7 @@ export function CashForecastPanel({
           <p className="answer-strip__sentence" data-answer-sentence aria-busy="true">
             <span className="inline-block h-4 w-72 max-w-full animate-pulse rounded bg-slate-200/80 dark:bg-slate-800" />
           </p>
-        ) : answerSentence ? (
+        ) : !simplified && answerSentence ? (
           <p className="answer-strip__sentence" data-answer-sentence>
             {answerSentence}
           </p>
@@ -2012,8 +2034,7 @@ export function CashForecastPanel({
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
 
-  const graphPane = (
-    <>
+  const kpiTiles = (
       <div
         className={`cash-kpis mb-5 grid grid-cols-1 gap-3 ${simplified ? "sm:grid-cols-2 min-[1100px]:grid-cols-4" : "sm:grid-cols-3"}`}
       >
@@ -2092,6 +2113,9 @@ export function CashForecastPanel({
           </>
         )}
       </div>
+  );
+  const chartBody = (
+    <>
       {emptyPresentation.showChart ? (
         <>
           <div className="cash-legend" data-cash-legend>
@@ -2117,6 +2141,15 @@ export function CashForecastPanel({
       )}
     </>
   );
+  const graphPane = (
+    <>
+      {simplified ? null : kpiTiles}
+      {chartBody}
+    </>
+  );
+  const weekTableHint = readOnly
+    ? "Red marks cash under the runway floor."
+    : "Double-click a figure to edit. Red marks cash under the runway floor.";
 
 
   const forecastCard = (
@@ -2130,13 +2163,15 @@ export function CashForecastPanel({
       <CardContent className="pt-5">
         <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]">
+            <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
               {cashCopy.range || "Next 13 weeks"}
             </p>
             {simplified && cashCopy.ownerRollLine ? (
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{cashCopy.ownerRollLine}</p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
+                {cashCopy.ownerRollLine}
+              </p>
             ) : null}
-            {runwayAside ? (
+            {!simplified && runwayAside ? (
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
             ) : null}
           </div>
@@ -2144,7 +2179,7 @@ export function CashForecastPanel({
             <EnlargeButton label="cash flow graph" onClick={() => setCashEnlarge("chart")} />
           ) : null}
         </div>
-        {cashCopy.bullets.length > 0 ? (
+        {simplified ? null : cashCopy.bullets.length > 0 ? (
           <details className="cash-details">
             <summary>Details</summary>
             <ul>
@@ -2154,12 +2189,12 @@ export function CashForecastPanel({
             </ul>
           </details>
         ) : null}
-        {scenarioLabel ? (
+        {simplified ? null : scenarioLabel ? (
           <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
         ) : null}
-        {disagreeNotice}
-        {emptyNotice}
-        {exportError ? (
+        {simplified ? null : disagreeNotice}
+        {simplified ? null : emptyNotice}
+        {simplified ? null : exportError ? (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
             <span>{exportError}</span>
             <Button size="sm" variant="outline" className="h-8" onClick={() => window.location.reload()}>
@@ -2169,12 +2204,10 @@ export function CashForecastPanel({
         ) : null}
         <div aria-label="Graph">{graphPane}</div>
         <section id="detailed-forecast" className="mt-6" aria-label="13-week">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <p className="max-w-xl text-xs text-slate-600 dark:text-slate-400">
-              {readOnly
-                ? "Red marks cash under the runway floor."
-                : "Double-click a figure to edit. Red marks cash under the runway floor."}
-            </p>
+          <div className={`mb-3 flex items-start gap-3 ${simplified ? "justify-end" : "justify-between"}`}>
+            {simplified ? null : (
+              <p className="max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
+            )}
             <EnlargeButton label="cash flow table" onClick={() => setCashEnlarge("table")} />
           </div>
           <CashThirteenWeekGrid
@@ -2267,8 +2300,40 @@ export function CashForecastPanel({
     return (
       <div id="wizard-cash-outlook" className="space-y-0">
         {answerStrip}
-        {readOnly ? null : reviewInputs}
         {forecastCard}
+        <ForecastMoreDetail>
+          {answerSentence ? (
+            <p className="mb-3 text-sm text-slate-700 dark:text-slate-300" data-answer-sentence>
+              {answerSentence}
+            </p>
+          ) : null}
+          {runwayAside ? (
+            <p className="mb-3 text-xs text-slate-600 dark:text-slate-400">Runway {runwayAside}</p>
+          ) : null}
+          {cashCopy.bullets.length > 0 ? (
+            <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-300">
+              {cashCopy.bullets.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+          {scenarioLabel ? (
+            <p className="mb-3 text-xs font-semibold text-[#102A43] dark:text-[#F4F7FB]">{scenarioLabel}</p>
+          ) : null}
+          {disagreeNotice}
+          {emptyNotice}
+          {exportError ? (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e05c5c]/50 bg-[#e05c5c]/10 px-4 py-3 text-sm text-[#c0392b] dark:text-[#ef6b6b]">
+              <span>{exportError}</span>
+              <Button size="sm" variant="outline" className="h-8" onClick={() => window.location.reload()}>
+                Reload
+              </Button>
+            </div>
+          ) : null}
+          {kpiTiles}
+          <p className="max-w-xl text-xs text-slate-600 dark:text-slate-400">{weekTableHint}</p>
+          {readOnly ? null : reviewInputs}
+        </ForecastMoreDetail>
       </div>
     );
   }

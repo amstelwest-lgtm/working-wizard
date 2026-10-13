@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { BUSINESS_LOCATION_PROMPT, PRACTICE_LOCATION_PROMPT } from "@/lib/firm-signup-copy";
 import { US_STATES, type DraftMarket, type MarketId, type UsStateCode } from "@/lib/market";
 
@@ -24,6 +25,8 @@ function LandingStateMenu({
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
+      if (!open) return;
+      if (!overlayMayHandleKey(e)) return;
       if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);

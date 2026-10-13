@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { PeriodPill } from "@/components/chrome-icons";
 import { FeatureFinder } from "@/components/feature-finder";
 import { FirmSwitcher } from "@/components/firm-switcher";
@@ -40,6 +41,8 @@ export function SettingsShell({
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (event: KeyboardEvent) => {
+      if (!menuOpen) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") setMenuOpen(false);
     };
     window.addEventListener("keydown", onKey);

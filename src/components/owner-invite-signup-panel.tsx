@@ -7,6 +7,7 @@ import {
   OwnerInviteNote,
   OwnerInvitePrimaryButton,
 } from "@/components/owner-invite-shell";
+import { PasswordWithShow } from "@/components/show-password";
 import { t } from "@/lib/market/copy";
 
 export type OwnerInviteSignupPanelProps = {
@@ -151,15 +152,19 @@ export function OwnerInviteSignupPanel({
           {!sameAccount ? (
             <>
               <OwnerInviteFieldLabel htmlFor="ownerInvitePassword">Password</OwnerInviteFieldLabel>
-              <OwnerInviteInput
-                id="ownerInvitePassword"
-                type="password"
-                required
-                placeholder="At least 6 characters"
-                minLength={6}
-                value={regPassword}
-                onChange={(e) => onRegPasswordChange(e.target.value)}
-              />
+              <PasswordWithShow id="ownerInvitePassword">
+                {(type) => (
+                  <OwnerInviteInput
+                    id="ownerInvitePassword"
+                    type={type}
+                    required
+                    placeholder="At least 6 characters"
+                    minLength={6}
+                    value={regPassword}
+                    onChange={(e) => onRegPasswordChange(e.target.value)}
+                  />
+                )}
+              </PasswordWithShow>
             </>
           ) : null}
 

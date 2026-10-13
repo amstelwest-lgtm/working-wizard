@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { X, Mail, Copy, Check, ChevronRight } from "lucide-react";
 import { useResolvedCopyPack } from "@/contexts/market";
 import { t } from "@/lib/market";
@@ -41,6 +42,8 @@ export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (!open) return;
+      if (!overlayMayHandleKey(e)) return;
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -84,6 +87,7 @@ export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
     <div
       className={`fixed inset-0 z-[55] flex items-end justify-center md:items-center ${open ? "" : "pointer-events-none"}`}
       aria-hidden={!open}
+      inert={open ? undefined : true}
     >
       {/* Overlay */}
       <div

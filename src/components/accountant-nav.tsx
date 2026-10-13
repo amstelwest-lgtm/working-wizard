@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link } from "@tanstack/react-router";
 import { RailIcon } from "@/components/chrome-icons";
+import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { SettingsGear } from "@/components/settings-nav-button";
 import {
   closeNavGroup,
@@ -414,6 +415,8 @@ export function useAccountantDrawer(open: boolean, onClose?: () => void) {
       rail?.querySelector<HTMLElement>("[data-nav-row]");
     current?.focus();
     const onKey = (event: KeyboardEvent) => {
+      if (!document.documentElement.classList.contains("nav-drawer-open")) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") {
         onCloseRef.current?.();
         return;
@@ -455,7 +458,13 @@ export function DrawerBackdrop({ open, onClose }: { open: boolean; onClose: () =
 /** Visible X in the phone drawer's top-right corner. Hidden on the desktop rail. */
 export function DrawerCloseButton({ onClose }: { onClose: () => void }) {
   return (
-    <button type="button" className="drawer-close" aria-label="Close menu" onClick={onClose}>
+    <button
+      type="button"
+      className="drawer-close"
+      aria-label="Close menu"
+      tabIndex={-1}
+      onClick={onClose}
+    >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M18 6L6 18M6 6l12 12" />
       </svg>

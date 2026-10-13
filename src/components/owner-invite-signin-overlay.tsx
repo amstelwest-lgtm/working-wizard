@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordResetRequest } from "@/components/password-reset-request";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { PasswordWithShow } from "@/components/show-password";
 import {
   OwnerInviteCard,
   OwnerInviteFieldLabel,
@@ -116,15 +117,19 @@ export function OwnerInviteSigninOverlay({
                 <OwnerInviteFieldLabel htmlFor="ownerInviteSiPassword">
                   Password
                 </OwnerInviteFieldLabel>
-                <OwnerInviteInput
-                  id="ownerInviteSiPassword"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={siPassword}
-                  onChange={(e) => onSiPasswordChange(e.target.value)}
-                />
+                <PasswordWithShow id="ownerInviteSiPassword">
+                  {(type) => (
+                    <OwnerInviteInput
+                      id="ownerInviteSiPassword"
+                      type={type}
+                      required
+                      autoComplete="current-password"
+                      placeholder="••••••••"
+                      value={siPassword}
+                      onChange={(e) => onSiPasswordChange(e.target.value)}
+                    />
+                  )}
+                </PasswordWithShow>
 
                 <div className="mt-5">
                   <OwnerInvitePrimaryButton type="submit" disabled={siBusy} aria-busy={siBusy}>

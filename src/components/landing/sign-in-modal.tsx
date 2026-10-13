@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useId, useRef, type FormEvent } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { isTextEntry, overlayMayHandleKey } from "@/lib/dialog-focus";
+import { PasswordWithShow } from "@/components/show-password";
 import { t, type VisitorCopyPack } from "@/lib/market";
 import { billingStartPath, peekPendingCheckout } from "@/lib/pending-checkout";
 import { readInsightSeen } from "@/lib/funnel-timing";
@@ -68,6 +70,8 @@ export function LandingSignInModal({
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const title = fpMode
     ? fpDone
       ? "Check your email"
@@ -79,8 +83,8 @@ export function LandingSignInModal({
       : "Sign in to MILŌN";
 
   useEffect(() => {
-    restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const root = dialogRef.current;
+    restoreRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusables = () =>
       root
         ? [
@@ -90,13 +94,19 @@ export function LandingSignInModal({
           ]
         : [];
     const initial = window.setTimeout(() => {
-      const first = focusables()[0];
-      (first ?? root)?.focus();
+      if (!root) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && root.contains(active) && isTextEntry(active)) return;
+      const field = root.querySelector<HTMLElement>(
+        "input:not([disabled]), textarea:not([disabled])",
+      );
+      (field ?? root).focus();
     }, 0);
     const onKey = (event: KeyboardEvent) => {
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !root) return;
@@ -121,9 +131,10 @@ export function LandingSignInModal({
     return () => {
       window.clearTimeout(initial);
       document.removeEventListener("keydown", onKey);
-      restoreRef.current?.focus();
+      const active = document.activeElement;
+      if (active instanceof Node && root?.contains(active)) restoreRef.current?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="milon-signin-modal" onClick={onClose}>
@@ -222,15 +233,19 @@ export function LandingSignInModal({
               </div>
               <div className="field">
                 <label htmlFor="si-password">Password</label>
-                <input
-                  id="si-password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  placeholder="••••••••"
-                  value={siPassword}
-                  onChange={(e) => onSiPasswordChange(e.target.value)}
-                />
+                <PasswordWithShow id="si-password">
+                  {(type) => (
+                    <input
+                      id="si-password"
+                      type={type}
+                      autoComplete="current-password"
+                      required
+                      placeholder="••••••••"
+                      value={siPassword}
+                      onChange={(e) => onSiPasswordChange(e.target.value)}
+                    />
+                  )}
+                </PasswordWithShow>
                 <button
                   type="button"
                   onClick={onForgotPassword}

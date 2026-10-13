@@ -225,7 +225,7 @@ import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import { portalButtonClass } from "@/lib/client-chrome";
 import { requestRevealDataRequests } from "@/lib/reveal-data-requests";
-import { focusTrapTabIndex, listFocusable } from "@/lib/dialog-focus";
+import { focusTrapTabIndex, listFocusable, overlayMayHandleKey } from "@/lib/dialog-focus";
 import {
   buildFinancialSnapshot,
   describeBusiness,
@@ -1086,6 +1086,8 @@ function ClientView() {
     const initial = focusables();
     (initial[0] ?? root).focus();
     const onKey = (event: KeyboardEvent) => {
+      if (!uploadOpen) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -1167,6 +1169,8 @@ function ClientView() {
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (event: KeyboardEvent) => {
+      if (!mobileNavOpen) return;
+      if (!overlayMayHandleKey(event)) return;
       if (event.key === "Escape") setMobileNavOpen(false);
     };
     window.addEventListener("keydown", onKey);

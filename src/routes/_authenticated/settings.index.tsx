@@ -64,6 +64,7 @@ import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerPracticeAccessCard } from "@/components/owner-practice-access";
 import { pickOwnedSettingsClient, readStoredOwnerClientId } from "@/lib/owner-workspaces";
 import { SettingsShell } from "@/components/settings-shell";
+import { ChangePasswordCard } from "@/components/change-password-card";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -285,6 +286,8 @@ function SettingsPage() {
             <span className="settings-label">Signed in as</span>
             <p className="settings-value">{user?.email ?? "—"}</p>
           </div>
+
+          <ChangePasswordCard />
 
           {!isPractice && (
             <button
