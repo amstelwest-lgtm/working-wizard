@@ -11,7 +11,11 @@ import { ownerBotKey, runBotTransition } from "@/components/owner-door/owner-bot
 import { OwnerChat, type OwnerChatTurn } from "@/components/owner-door/owner-chat";
 import { OwnerHome } from "@/components/owner-door/owner-home";
 import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
-import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
+import {
+  ProfitabilityWaterfall,
+  ProfitLead,
+  priorMarginsFromFinancials,
+} from "@/components/profitability-waterfall";
 import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import {
@@ -112,7 +116,10 @@ const SIGNATURE =
     '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="36" viewBox="0 0 120 36"><path d="M4 28 C 18 6, 28 8, 40 24 S 72 42, 112 8" fill="none" stroke="#102A43" stroke-width="2"/></svg>',
   );
 
-function previewSignoff(scope: ReviewScope): { signoff: ClientReviewSignoff | null; stale: boolean } {
+function previewSignoff(scope: ReviewScope): {
+  signoff: ClientReviewSignoff | null;
+  stale: boolean;
+} {
   const mode = new URLSearchParams(window.location.search).get("signoff") ?? "stale";
   if (mode === "unsigned") return { signoff: null, stale: false };
   const signedAt = mode === "signed" ? "2026-10-02T12:00:00.000Z" : "2026-09-01T14:26:00.000Z";
@@ -445,8 +452,19 @@ export function OwnerDoorPreview({
       ) : null}
       {view === "profit" ? (
         <section className="owner-pane" data-owner-page="profit">
-          <h1 className="owner-title">Profit</h1>
+          <ProfitLead periodLabel="September 2026" />
           <ProfitabilityWaterfall
+            appearance="premium"
+            previousMargins={priorMarginsFromFinancials({
+              // August 2026 snapshot fixture — same bridge as the live board.
+              revenue: 171000,
+              cogs: 77000,
+              fixedCosts: 58000,
+              ebit: 32000,
+              interestExpense: 700,
+              tax: 7600,
+              netIncome: 44460,
+            })}
             headerAside={
               <OwnerSignoffMark
                 signoff={previewSignoff("profitability").signoff}
