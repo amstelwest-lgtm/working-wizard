@@ -11,6 +11,7 @@ import {
   submitTrialLead,
 } from "@/lib/trial-demo.functions";
 import type { TrialBoard, TrialCash, TrialFinding, TrialProfit } from "@/lib/trial-demo";
+import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
 import {
   TRIAL_DISCLAIMER,
   TURNSTILE_TEST_SITE_KEY,
@@ -21,9 +22,9 @@ import {
 export type TryPhase = "start" | "gate" | "reveal" | "findings";
 
 const FACES = [
-  { folder: "fm", name: "Milōn Financial Manager", role: "Financial Manager" },
-  { folder: "analyst", name: "Milōn Analyst", role: "Analyst" },
-  { folder: "advisor", name: "Milōn Advisor", role: "Advisor" },
+  { folder: "fm", agent: "financial_manager", role: "Financial Manager" },
+  { folder: "analyst", agent: "analyst", role: "Analyst" },
+  { folder: "advisor", agent: "advisor", role: "Advisor" },
 ] as const;
 
 type ChipId = "profit" | "cash" | null;
@@ -57,7 +58,12 @@ function TeamRow({ thinking }: { thinking?: boolean }) {
     <ul className="try-faces" aria-label={thinking ? "Milōn team, thinking" : "Milōn team"}>
       {FACES.map((face) =>
         thinking ? (
-          <ThinkingFace key={face.folder} folder={face.folder} name={face.name} role={face.role} />
+          <ThinkingFace
+            key={face.folder}
+            folder={face.folder}
+            name={AGENT_DISPLAY_NAME[face.agent]}
+            role={face.role}
+          />
         ) : (
           <StillFace key={face.folder} folder={face.folder} role={face.role} />
         ),
