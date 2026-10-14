@@ -21,9 +21,9 @@ import {
 export type TryPhase = "start" | "gate" | "reveal" | "findings";
 
 const FACES = [
-  { folder: "fm", name: "Milōn Financial Manager" },
-  { folder: "analyst", name: "Milōn Analyst" },
-  { folder: "advisor", name: "Milōn Advisor" },
+  { folder: "fm", name: "Milōn Financial Manager", role: "Financial Manager" },
+  { folder: "analyst", name: "Milōn Analyst", role: "Analyst" },
+  { folder: "advisor", name: "Milōn Advisor", role: "Advisor" },
 ] as const;
 
 type ChipId = "profit" | "cash" | null;
@@ -52,19 +52,40 @@ export type TryScreenProps = {
   onChip?: (chip: "profit" | "cash") => void;
 };
 
-function ThinkingFaces() {
+function TeamRow({ thinking }: { thinking?: boolean }) {
   return (
-    <ul className="try-faces" aria-label="Milōn team, thinking">
-      {FACES.map((face) => (
-        <Face key={face.folder} folder={face.folder} name={face.name} />
-      ))}
+    <ul className="try-faces" aria-label={thinking ? "Milōn team, thinking" : "Milōn team"}>
+      {FACES.map((face) =>
+        thinking ? (
+          <ThinkingFace key={face.folder} folder={face.folder} name={face.name} role={face.role} />
+        ) : (
+          <StillFace key={face.folder} folder={face.folder} role={face.role} />
+        ),
+      )}
     </ul>
   );
 }
 
-function Face({ folder, name }: { folder: string; name: string }) {
+function StillFace({ folder, role }: { folder: string; role: string }) {
+  return (
+    <li>
+      <figure className="try-face">
+        <div className="try-portrait">
+          <img src={`/avatars/${folder}/${folder}-poster.webp`} alt="" width={512} height={512} />
+        </div>
+        <figcaption>
+          <span>Milōn</span>
+          {role}
+        </figcaption>
+      </figure>
+    </li>
+  );
+}
+
+function ThinkingFace({ folder, name, role }: { folder: string; name: string; role: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [reduced, setReduced] = useState(false);
+  const [live, setLive] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => setReduced(media.matches);
@@ -78,34 +99,46 @@ function Face({ folder, name }: { folder: string; name: string }) {
     video.muted = true;
     video.defaultMuted = true;
     video.volume = 0;
-    void video.play().catch(() => {
-      /* Poster stays when autoplay is refused. */
-    });
+    const onPlaying = () => setLive(true);
+    video.addEventListener("playing", onPlaying);
+    const start = () => {
+      void video.play().catch(() => {
+        /* Poster stays when autoplay is refused. */
+      });
+    };
+    if (video.readyState >= 2) start();
+    else video.addEventListener("canplay", start, { once: true });
+    return () => video.removeEventListener("playing", onPlaying);
   }, [reduced]);
   const poster = `/avatars/${folder}/${folder}-poster.webp`;
   return (
     <li>
       <figure className="try-face">
-        {reduced ? (
-          <img src={poster} alt="" width={104} height={104} />
-        ) : (
-          <video
-            ref={ref}
-            muted
-            playsInline
-            loop
-            autoPlay
-            preload="metadata"
-            poster={poster}
-            width={104}
-            height={104}
-            aria-label={`${name}, thinking`}
-          >
-            <source src={`/avatars/${folder}/${folder}-thinking.webm`} type="video/webm" />
-            <source src={`/avatars/${folder}/${folder}-thinking.mp4`} type="video/mp4" />
-          </video>
-        )}
-        <figcaption>{name}</figcaption>
+        <div className="try-portrait">
+          <img src={poster} alt="" width={512} height={512} />
+          {reduced ? null : (
+            <video
+              ref={ref}
+              className={live ? "is-live" : undefined}
+              muted
+              playsInline
+              loop
+              autoPlay
+              preload="auto"
+              poster={poster}
+              width={512}
+              height={512}
+              aria-label={`${name}, thinking`}
+            >
+              <source src={`/avatars/${folder}/${folder}-thinking.webm`} type="video/webm" />
+              <source src={`/avatars/${folder}/${folder}-thinking.mp4`} type="video/mp4" />
+            </video>
+          )}
+        </div>
+        <figcaption>
+          <span>Milōn</span>
+          {role}
+        </figcaption>
       </figure>
     </li>
   );
@@ -199,11 +232,12 @@ export function TryScreen(props: TryScreenProps) {
     return (
       <Frame phase="start">
         <p className="try-kicker">Sample</p>
-        <h1 className="try-title">See a health score on sample figures.</h1>
+        <h1 className="try-title try-title-hero">See a health score on sample figures.</h1>
         <p className="try-lead">
           One services business, in your market. No books to connect. The board stays marked SAMPLE.
         </p>
-        <div className="try-card">
+        <div className="try-card try-start">
+          <TeamRow />
           <button type="button" className="try-cta" disabled={props.busy} onClick={props.onUseSample}>
             Use sample
           </button>
@@ -282,26 +316,34 @@ export function TryScreen(props: TryScreenProps) {
           </div>
           <span className="try-stamp">SAMPLE</span>
         </div>
+        <h2 className="try-section">Pillars</h2>
         <ul className="try-pillars">
-          {(board?.health.pillars ?? []).map((pillar) => (
-            <li key={pillar.id}>
-              <span>{pillar.label}</span>
-              <span>
-                {pillar.score == null ? "—" : Math.round(pillar.score)} · {pillar.status}
-              </span>
-            </li>
-          ))}
+          {(board?.health.pillars ?? []).map((pillar) => {
+            const width = pillar.score == null ? 0 : Math.max(0, Math.min(100, pillar.score));
+            return (
+              <li key={pillar.id}>
+                <span className="try-metric-name">{pillar.label}</span>
+                <span className="try-metric-value">
+                  {pillar.score == null ? "—" : Math.round(pillar.score)} · {pillar.status}
+                </span>
+                <span className="try-meter" aria-hidden="true">
+                  <span style={{ width: `${width}%` }} />
+                </span>
+              </li>
+            );
+          })}
         </ul>
+        <h2 className="try-section">Ratios</h2>
         <ul className="try-ratios">
           {(board?.ratios ?? []).map((ratio) => (
             <li key={ratio.name}>
               <span>{ratio.name}</span>
-              <span>{ratio.display}</span>
+              <span className="try-metric-value">{ratio.display}</span>
             </li>
           ))}
         </ul>
         {props.phase === "reveal" ? (
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 20 }}>
             <button type="button" className="try-cta" disabled={props.busy} onClick={props.onShowFindings}>
               Show findings
             </button>
@@ -314,7 +356,7 @@ export function TryScreen(props: TryScreenProps) {
         <section className="try-card" aria-label="Findings" data-try-findings="true">
           <h2 className="try-kicker">Findings</h2>
           {props.findingsPending ? <p className="try-lead">Reading the sample figures.</p> : null}
-          <ThinkingFaces />
+          <TeamRow thinking />
           {props.findings && props.findings.length > 0 ? (
             <div className="try-findings">
               {props.findings.slice(0, 3).map((finding) => (
@@ -343,24 +385,27 @@ export function TryScreen(props: TryScreenProps) {
             >
               13-week cash
             </button>
-            <button type="button" className="try-chip" disabled>
-              Budget <span className="try-soon">Coming soon</span>
-            </button>
-            <button type="button" className="try-chip" disabled>
-              Advisor pack <span className="try-soon">Coming soon</span>
-            </button>
-            <button type="button" className="try-chip" disabled>
-              Reports <span className="try-soon">Coming soon</span>
-            </button>
           </div>
+          <ul className="try-later">
+            <li>
+              Budget <em>Coming soon</em>
+            </li>
+            <li>
+              Advisor pack <em>Coming soon</em>
+            </li>
+            <li>
+              Reports <em>Coming soon</em>
+            </li>
+          </ul>
           {props.chipPending ? <p className="try-muted">Working from the sample figures.</p> : null}
           {props.chip === "profit" && props.profit ? (
             <div data-try-chip="profit">
+              <h3 className="try-panel-title">Profit bridge</h3>
               <ul className="try-steps">
                 {props.profit.steps.map((step) => (
                   <li key={step.label}>
                     <span>{step.label}</span>
-                    <span>{step.display}</span>
+                    <span className="try-metric-value">{step.display}</span>
                   </li>
                 ))}
               </ul>
@@ -368,25 +413,34 @@ export function TryScreen(props: TryScreenProps) {
           ) : null}
           {props.chip === "cash" && props.cash ? (
             <div data-try-chip="cash">
-              <p className="try-muted">
-                Opens at {props.cash.openingDisplay}. Low point {props.cash.lowDisplay}. {props.cash.note}
-              </p>
+              <h3 className="try-panel-title">13-week cash</h3>
+              <div className="try-stats">
+                <div className="try-stat">
+                  <span>Opens</span>
+                  <strong>{props.cash.openingDisplay}</strong>
+                </div>
+                <div className="try-stat">
+                  <span>Low point</span>
+                  <strong>{props.cash.lowDisplay}</strong>
+                </div>
+              </div>
+              <p className="try-note">{props.cash.note}</p>
               <ul className="try-weeks">
                 {props.cash.weeks.map((week) => (
                   <li key={week.week}>
                     <span>
                       Week {week.week} · {week.date}
                     </span>
-                    <span>{week.closeDisplay}</span>
+                    <span className="try-metric-value">{week.closeDisplay}</span>
                   </li>
                 ))}
               </ul>
             </div>
           ) : null}
           {props.error ? <p className="try-error">{props.error}</p> : null}
-          {props.runsLeft != null ? <p className="try-muted">Sample runs left: {props.runsLeft}</p> : null}
         </section>
       ) : null}
+      {props.runsLeft != null ? <p className="try-runs">Sample runs left: {props.runsLeft}</p> : null}
     </Frame>
   );
 }
