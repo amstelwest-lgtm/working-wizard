@@ -6,7 +6,14 @@ import { readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { ANALYST_READ_TOOLS } from "../src/lib/agent-analyst";
+import { TrySampleBoards } from "../src/components/try-sample-boards";
 import { TryScreen } from "../src/components/try-demo";
 import {
   buildTrialBoard,
@@ -336,6 +343,23 @@ const cash = buildTrialCash("US", new Date("2026-10-14T00:00:00Z"));
 assert(cash.weeks.length === 13, "cash line is 13 weeks");
 assert(cash.openingDisplay === "$0", "sample cash opens at zero");
 
+const sampleNow = new Date("2026-10-14T15:00:00Z");
+const boardsRoute = createRootRoute({
+  component: () =>
+    createElement(TrySampleBoards, {
+      market: "US",
+      profit: true,
+      cash: true,
+      now: sampleNow,
+    }),
+});
+const boardsRouter = createRouter({
+  routeTree: boardsRoute,
+  history: createMemoryHistory({ initialEntries: ["/"] }),
+});
+await boardsRouter.load();
+const boardsHtml = renderToStaticMarkup(createElement(RouterProvider, { router: boardsRouter }));
+
 const html = [
   renderToStaticMarkup(createElement(TryScreen, { phase: "start" })),
   renderToStaticMarkup(
@@ -354,19 +378,9 @@ const html = [
       phase: "findings",
       board: us,
       findings,
-      chip: "profit",
-      profit,
     }),
   ),
-  renderToStaticMarkup(
-    createElement(TryScreen, {
-      phase: "findings",
-      board: us,
-      findings,
-      chip: "cash",
-      cash,
-    }),
-  ),
+  boardsHtml,
 ].join("\n");
 
 assert(!html.includes("R299"), "US /try HTML has no R299");
@@ -388,7 +402,27 @@ assert(
   "the reveal points at the ratios",
 );
 assert(html.includes("SAMPLE"), "the board is SAMPLE-stamped");
-assert(html.includes("$1,150,000"), "US profitability is in dollars");
+assert(boardsHtml.includes("$1,150,000"), "US profitability is in dollars");
+assert(boardsHtml.includes("Profitability waterfall"), "profit chip renders the waterfall");
+assert(
+  boardsHtml.includes("Amount") && boardsHtml.includes("Percentage"),
+  "profit chip has the amount and percentage toggle",
+);
+assert(
+  boardsHtml.includes("Show figures as amounts or as percentages of revenue"),
+  "the toggle is the owner profit control",
+);
+assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip has the graph enlarge control");
+assert(boardsHtml.includes("Enlarge cash flow table"), "cash chip has the table enlarge control");
+assert(boardsHtml.includes("13-week cash model"), "cash chip renders the 13-week table");
+assert(boardsHtml.includes("Rolled forward"), "cash chip shows the rolled-forward line");
+assert(!boardsHtml.includes("Export PDF"), "sample chips have no export control");
+assert(!boardsHtml.includes("Upload bank statements"), "sample chips have no upload control");
+assert(!boardsHtml.includes("Forecast Setup"), "sample chips have no forecast setup");
+assert(
+  !boardsHtml.includes("R 1,150,000") && !boardsHtml.includes("R1,150,000"),
+  "US chips are not in rand",
+);
 assert(
   html.includes("AI-generated from sample figures, not reviewed by an accountant."),
   "findings carry the label",
@@ -417,11 +451,26 @@ const root = resolve(".");
 const seeds = [
   "src/routes/try.tsx",
   "src/components/try-demo.tsx",
+  "src/components/try-sample-boards.tsx",
   "src/lib/trial-demo.ts",
   "src/lib/trial-demo.functions.ts",
   "src/lib/trial-analyst.ts",
   "src/lib/trial-public.ts",
 ];
+
+const demoSource = readFileSync(join(root, "src/components/try-demo.tsx"), "utf8");
+assert(
+  demoSource.includes('import("@/components/try-sample-boards")'),
+  "chips load the real sample boards",
+);
+assert(
+  !/from\s+["']@\/components\/cash-forecast["']/.test(demoSource),
+  "try-demo does not statically import the cash forecast",
+);
+assert(
+  !/from\s+["']@\/components\/profitability-waterfall["']/.test(demoSource),
+  "try-demo does not statically import the waterfall",
+);
 
 function specsIn(text: string): { spec: string; typeOnly: boolean }[] {
   const out: { spec: string; typeOnly: boolean }[] = [];
