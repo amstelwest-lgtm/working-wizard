@@ -175,8 +175,17 @@ html:has(.try-page) body {
 }
 
 .try-form {
+  position: relative;
   display: grid;
   gap: 16px;
+}
+
+.try-hp {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }
 
 .try-field {

@@ -34,6 +34,8 @@ export type TryScreenProps = {
   busy?: boolean;
   error?: string | null;
   siteKey?: string | null;
+  /** False when production has no Turnstile keys. The widget stays off. */
+  turnstile?: boolean;
   board?: TrialBoard | null;
   findings?: TrialFinding[];
   findingsPending?: boolean;
@@ -49,6 +51,7 @@ export type TryScreenProps = {
     email: string;
     consent: boolean;
     turnstileToken: string;
+    milon_leave_blank: string;
   }) => void;
   onShowFindings?: () => void;
   onChip?: (chip: "profit" | "cash") => void;
@@ -265,6 +268,8 @@ export function TryScreen(props: TryScreenProps) {
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState("");
+  const [leaveBlank, setLeaveBlank] = useState("");
+  const showTurnstile = props.turnstile !== false && Boolean(props.siteKey);
 
   if (props.phase === "start") {
     return (
@@ -303,7 +308,13 @@ export function TryScreen(props: TryScreenProps) {
           className="try-card try-form"
           onSubmit={(event) => {
             event.preventDefault();
-            props.onSubmitGate?.({ name, email, consent, turnstileToken: token });
+            props.onSubmitGate?.({
+              name,
+              email,
+              consent,
+              turnstileToken: token,
+              milon_leave_blank: leaveBlank,
+            });
           }}
         >
           <label className="try-field">
@@ -334,8 +345,27 @@ export function TryScreen(props: TryScreenProps) {
             />
             <span>I agree Milōn may email me about this sample.</span>
           </label>
-          {props.siteKey ? <TurnstileBox siteKey={props.siteKey} onToken={setToken} /> : null}
-          <button type="submit" className="try-cta" disabled={props.busy || !props.siteKey}>
+          <div className="try-hp" aria-hidden="true">
+            <label>
+              Leave this blank
+              <input
+                type="text"
+                name="milon_leave_blank"
+                tabIndex={-1}
+                autoComplete="off"
+                value={leaveBlank}
+                onChange={(event) => setLeaveBlank(event.target.value)}
+              />
+            </label>
+          </div>
+          {showTurnstile && props.siteKey ? (
+            <TurnstileBox siteKey={props.siteKey} onToken={setToken} />
+          ) : null}
+          <button
+            type="submit"
+            className="try-cta"
+            disabled={props.busy || (props.turnstile !== false && !props.siteKey)}
+          >
             Show the score
           </button>
           {props.error ? <p className="try-error">{props.error}</p> : null}
@@ -555,6 +585,9 @@ export function TryDemo() {
   const [siteKey, setSiteKey] = useState<string | null>(() =>
     turnstileSiteKey(import.meta.env.VITE_TURNSTILE_SITE_KEY, import.meta.env.DEV),
   );
+  const [turnstile, setTurnstile] = useState(
+    () => turnstileSiteKey(import.meta.env.VITE_TURNSTILE_SITE_KEY, import.meta.env.DEV) != null,
+  );
   const [board, setBoard] = useState<TrialBoard | null>(null);
   const [findings, setFindings] = useState<TrialFinding[]>([]);
   const [source, setSource] = useState<"model" | "deterministic" | null>(null);
@@ -567,9 +600,15 @@ export function TryDemo() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadConfig().then((config) => {
-      if (!cancelled && config.siteKey) setSiteKey(config.siteKey);
-    });
+    void loadConfig()
+      .then((config) => {
+        if (cancelled) return;
+        setTurnstile(config.turnstile);
+        setSiteKey(config.turnstile ? config.siteKey : null);
+      })
+      .catch(() => {
+        /* A failed config read keeps the baked decision. The page stays up. */
+      });
     return () => {
       cancelled = true;
     };
@@ -581,6 +620,7 @@ export function TryDemo() {
       busy={busy}
       error={error}
       siteKey={siteKey}
+      turnstile={turnstile}
       board={board}
       findings={findings}
       source={source}
@@ -610,6 +650,7 @@ export function TryDemo() {
         void submit({ data: { ...input, utm: readUtm() } })
           .then((result) => {
             if (!result.ok) {
+              if ("silent" in result && result.silent) return;
               setError(result.error);
               return;
             }

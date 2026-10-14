@@ -10,8 +10,7 @@ export const TURNSTILE_TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX";
 
 export const TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
 
-export const TRIAL_DISCLAIMER =
-  "AI-generated from sample figures, not reviewed by an accountant.";
+export const TRIAL_DISCLAIMER = "AI-generated from sample figures, not reviewed by an accountant.";
 
 export function turnstileSiteKey(envValue: string | undefined, dev: boolean): string | null {
   const set = (envValue ?? "").trim();
@@ -23,4 +22,34 @@ export function turnstileSecret(envValue: string | undefined, dev: boolean): str
   const set = (envValue ?? "").trim();
   if (set) return set;
   return dev ? TURNSTILE_TEST_SECRET_KEY : null;
+}
+
+/**
+ * Both keys turn the check on. Dev with either key empty still uses the
+ * Cloudflare test keys. Production with either key empty leaves it off.
+ */
+export function turnstileEnabled(input: {
+  siteKey: string | undefined | null;
+  secret: string | undefined | null;
+  dev: boolean;
+}): boolean {
+  const site = (input.siteKey ?? "").trim();
+  const secret = (input.secret ?? "").trim();
+  if (site && secret) return true;
+  return input.dev;
+}
+
+let turnstileUnsetWarned = false;
+
+/** One server log when production is running without Turnstile. */
+export function warnTurnstileUnsetOnce(production: boolean, enabled: boolean): void {
+  if (!production || enabled || turnstileUnsetWarned) return;
+  turnstileUnsetWarned = true;
+  console.warn(
+    "Turnstile keys are unset. The sample gate is using the IP limit, the email limit, and a honeypot.",
+  );
+}
+
+export function resetTurnstileUnsetWarning(): void {
+  turnstileUnsetWarned = false;
 }

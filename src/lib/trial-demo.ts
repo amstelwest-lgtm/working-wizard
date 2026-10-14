@@ -21,8 +21,10 @@ import {
   TRIAL_DISCLAIMER,
   TURNSTILE_TEST_SECRET_KEY,
   TURNSTILE_TEST_TOKEN,
+  turnstileEnabled,
   turnstileSecret,
   turnstileSiteKey,
+  warnTurnstileUnsetOnce,
 } from "@/lib/trial-public";
 
 export { TRIAL_DISCLAIMER };
@@ -43,6 +45,10 @@ export type TrialGateInput = {
   email: string;
   consent: boolean;
   turnstileToken: string;
+  /** Default true. Production without Turnstile keys passes false. */
+  turnstileRequired?: boolean;
+  /** A non-empty value is a bot. The reject stays silent. */
+  honeypot?: string;
 };
 
 export function startOfUtcDay(now: Date): Date {
@@ -113,7 +119,11 @@ export function trialMarketFromCountry(country: string | null | undefined): Tria
 
 export function validateTrialGate(
   input: TrialGateInput,
-): { ok: true; name: string; email: string } | { ok: false; error: GateError } {
+):
+  | { ok: true; name: string; email: string }
+  | { ok: false; silent: true }
+  | { ok: false; error: GateError } {
+  if ((input.honeypot ?? "").length > 0) return { ok: false, silent: true };
   const name = input.name.trim().replace(/\s+/g, " ");
   if (name.length < 1 || name.length > 120) return { ok: false, error: "name" };
   const email = input.email.trim().toLowerCase();
@@ -121,7 +131,9 @@ export function validateTrialGate(
     return { ok: false, error: "email" };
   }
   if (input.consent !== true) return { ok: false, error: "consent" };
-  if (!input.turnstileToken.trim()) return { ok: false, error: "turnstile" };
+  if (input.turnstileRequired !== false && !input.turnstileToken.trim()) {
+    return { ok: false, error: "turnstile" };
+  }
   return { ok: true, name, email };
 }
 
@@ -183,7 +195,7 @@ export async function verifyTurnstileToken(input: {
   return token === TURNSTILE_TEST_TOKEN || token.length > 10;
 }
 
-export { turnstileSecret, turnstileSiteKey };
+export { turnstileEnabled, turnstileSecret, turnstileSiteKey, warnTurnstileUnsetOnce };
 
 export type TrialPillar = {
   id: string;

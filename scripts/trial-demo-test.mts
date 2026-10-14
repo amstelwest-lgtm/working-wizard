@@ -32,7 +32,13 @@ import {
   trialAnalystTools,
   trialAnalystUserMessage,
 } from "../src/lib/trial-analyst";
-import { TURNSTILE_TEST_SECRET_KEY, TURNSTILE_TEST_TOKEN } from "../src/lib/trial-public";
+import {
+  TURNSTILE_TEST_SECRET_KEY,
+  TURNSTILE_TEST_TOKEN,
+  resetTurnstileUnsetWarning,
+  turnstileEnabled,
+  warnTurnstileUnsetOnce,
+} from "../src/lib/trial-public";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -71,8 +77,71 @@ assert(
 assert(
   !validateTrialGate({ name: "Ada", email: "ada@example.com", consent: true, turnstileToken: "  " })
     .ok,
-  "turnstile token required",
+  "turnstile token required when the check is on",
 );
+const gateWithoutTurnstile = validateTrialGate({
+  name: "Ada",
+  email: "ada@example.com",
+  consent: true,
+  turnstileToken: "",
+  turnstileRequired: false,
+  honeypot: "",
+});
+assert(gateWithoutTurnstile.ok, "unset turnstile does not require a token");
+const honeypot = validateTrialGate({
+  name: "Ada",
+  email: "ada@example.com",
+  consent: true,
+  turnstileToken: "",
+  turnstileRequired: false,
+  honeypot: "filled by a bot",
+});
+assert(
+  !honeypot.ok && "silent" in honeypot && honeypot.silent,
+  "a filled honeypot is a silent reject",
+);
+assert(!("error" in honeypot), "a silent reject has no visitor-facing error");
+assert(
+  !JSON.stringify(honeypot).toLowerCase().includes("honeypot"),
+  "the reject does not name the honeypot",
+);
+assert(
+  turnstileEnabled({ siteKey: "site-key", secret: "secret-key", dev: false }),
+  "both keys enable turnstile in production",
+);
+assert(
+  !turnstileEnabled({ siteKey: "", secret: "secret-key", dev: false }),
+  "a missing site key disables turnstile in production",
+);
+assert(
+  !turnstileEnabled({ siteKey: "site-key", secret: "  ", dev: false }),
+  "a missing secret disables turnstile in production",
+);
+assert(
+  !turnstileEnabled({ siteKey: undefined, secret: undefined, dev: false }),
+  "unset keys disable turnstile in production",
+);
+assert(
+  turnstileEnabled({ siteKey: undefined, secret: undefined, dev: true }),
+  "dev keeps the test-key fallback",
+);
+resetTurnstileUnsetWarning();
+const turnstileWarnings: string[] = [];
+const warn = console.warn;
+console.warn = (message?: unknown) => {
+  turnstileWarnings.push(String(message));
+};
+warnTurnstileUnsetOnce(true, false);
+warnTurnstileUnsetOnce(true, false);
+warnTurnstileUnsetOnce(false, false);
+warnTurnstileUnsetOnce(true, true);
+console.warn = warn;
+assert(turnstileWarnings.length === 1, "unset turnstile warns once");
+assert(
+  /ip limit/i.test(turnstileWarnings[0] ?? "") && /honeypot/i.test(turnstileWarnings[0] ?? ""),
+  "the warning names the remaining checks",
+);
+resetTurnstileUnsetWarning();
 
 assert(
   ipSessionAllowed(0) && ipSessionAllowed(2) && !ipSessionAllowed(3),
@@ -303,6 +372,16 @@ const html = [
 assert(!html.includes("R299"), "US /try HTML has no R299");
 assert(!html.includes("R2,837"), "US /try HTML has no R2,837");
 assert(html.includes("Use sample"), "start has Use sample");
+assert(html.includes("try-turnstile"), "a configured gate renders the turnstile widget");
+const openGate = renderToStaticMarkup(
+  createElement(TryScreen, { phase: "gate", siteKey: null, turnstile: false }),
+);
+assert(!openGate.includes("try-turnstile"), "unset turnstile does not render the widget");
+assert(!openGate.includes("cf-turnstile"), "unset turnstile does not load the widget script");
+assert(!openGate.includes("disabled"), "the gate button stays enabled without turnstile");
+assert(openGate.includes('name="milon_leave_blank"'), "the gate includes the honeypot");
+assert(openGate.includes('tabindex="-1"'), "the honeypot is skipped by keyboard");
+assert(openGate.includes("Show the score"), "the gate still submits");
 assert(html.includes("try-ring"), "the reveal draws a health ring");
 assert(
   html.includes("The ratios below are what the Analyst reads."),

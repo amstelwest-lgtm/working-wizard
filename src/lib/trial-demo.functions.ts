@@ -3,8 +3,8 @@
  * is checked. The opaque token is stored as a hash.
  *
  * Env:
- * - TURNSTILE_SECRET_KEY (test secret when unset outside production)
- * - VITE_TURNSTILE_SITE_KEY (test site key when unset outside production)
+ * - TURNSTILE_SECRET_KEY (test secret when unset outside production; omitted in production skips the check)
+ * - VITE_TURNSTILE_SITE_KEY (test site key when unset outside production; omitted in production skips the widget)
  * - TRIAL_DAILY_AI_CAP (optional, default 100 model calls per UTC day)
  * - TRIAL_IP_SALT (optional)
  * - ANTHROPIC_API_KEY (analyst call; the fallback reading is only used when this key is missing)
@@ -43,10 +43,12 @@ import {
   trialAnalystMode,
   trialDailyCap,
   trialMarketFromCountry,
+  turnstileEnabled,
   turnstileSecret,
   turnstileSiteKey,
   validateTrialGate,
   verifyTurnstileToken,
+  warnTurnstileUnsetOnce,
   type TrialBoard,
   type TrialCash,
   type TrialFinding,
@@ -289,9 +291,22 @@ async function requireSession(): Promise<SessionRow | null> {
   return sessionByHash(hashToken(token), new Date().toISOString());
 }
 
+function turnstileOn(): boolean {
+  const dev = devRuntime();
+  const enabled = turnstileEnabled({
+    siteKey: process.env.VITE_TURNSTILE_SITE_KEY,
+    secret: process.env.TURNSTILE_SECRET_KEY,
+    dev,
+  });
+  warnTurnstileUnsetOnce(!dev, enabled);
+  return enabled;
+}
+
 export const readTrialPublicConfig = createServerFn({ method: "GET" }).handler(async () => {
+  const enabled = turnstileOn();
   return {
-    siteKey: turnstileSiteKey(process.env.VITE_TURNSTILE_SITE_KEY, devRuntime()),
+    siteKey: enabled ? turnstileSiteKey(process.env.VITE_TURNSTILE_SITE_KEY, devRuntime()) : null,
+    turnstile: enabled,
   };
 });
 
@@ -332,33 +347,43 @@ type LeadBody = {
   email?: string;
   consent?: boolean;
   turnstileToken?: string;
+  milon_leave_blank?: string;
   utm?: unknown;
 };
 
 export const submitTrialLead = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => (input ?? {}) as LeadBody)
   .handler(async ({ data }) => {
-    if (!storeReady())
-      return { ok: false as const, error: "The sample isn't available right now." };
+    const dev = devRuntime();
+    const enabled = turnstileOn();
     const gate = validateTrialGate({
       name: data.name ?? "",
       email: data.email ?? "",
       consent: data.consent === true,
       turnstileToken: data.turnstileToken ?? "",
+      turnstileRequired: enabled,
+      honeypot: data.milon_leave_blank ?? "",
     });
-    if (!gate.ok) return { ok: false as const, error: gateErrorCopy(gate.error) };
+    if (!gate.ok) {
+      if ("silent" in gate) return { ok: false as const, silent: true as const };
+      return { ok: false as const, error: gateErrorCopy(gate.error) };
+    }
+    if (!storeReady())
+      return { ok: false as const, error: "The sample isn't available right now." };
     const session = await requireSession();
     if (!session) return { ok: false as const, error: "Start again with Use sample." };
-    const secret = turnstileSecret(process.env.TURNSTILE_SECRET_KEY, devRuntime());
-    if (!secret) return { ok: false as const, error: "The check isn't available right now." };
     const req = requestOf();
-    const ip = clientIpFromHeaders(req?.headers ?? new Headers());
-    const passed = await verifyTurnstileToken({
-      token: data.turnstileToken ?? "",
-      secret,
-      remoteIp: ip,
-    });
-    if (!passed) return { ok: false as const, error: "The check didn't pass. Try it again." };
+    if (enabled) {
+      const secret = turnstileSecret(process.env.TURNSTILE_SECRET_KEY, dev);
+      if (!secret) return { ok: false as const, error: "The check isn't available right now." };
+      const ip = clientIpFromHeaders(req?.headers ?? new Headers());
+      const passed = await verifyTurnstileToken({
+        token: data.turnstileToken ?? "",
+        secret,
+        remoteIp: ip,
+      });
+      if (!passed) return { ok: false as const, error: "The check didn't pass. Try it again." };
+    }
     const leads = await countLeads(gate.email);
     if (!emailLeadAllowed(leads)) {
       return { ok: false as const, error: "That email has already opened two samples." };
