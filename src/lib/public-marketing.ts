@@ -15,3 +15,10 @@ export function isPublicMarketingPath(pathname: string): boolean {
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
   return (PUBLIC_MARKETING_PATHS as readonly string[]).includes(path);
 }
+
+/** Public pages that paint their own sheet and skip app chrome. */
+export function isBarePublicPath(pathname: string): boolean {
+  let path = pathname || "/";
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return path === "/try";
+}

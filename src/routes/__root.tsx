@@ -14,7 +14,7 @@ import { ChunkReloadNotice } from "@/components/chunk-reload-notice";
 import { CHUNK_RELOAD_BOOT_SCRIPT, installChunkReloadGuard, isChunkLoadError } from "@/lib/chunk-reload";
 import { reportClientError } from "@/lib/monitoring";
 import { StaleBundleBar } from "@/components/stale-bundle-bar";
-import { isPublicMarketingPath, PUBLIC_MARKETING_PATHS } from "@/lib/public-marketing";
+import { isBarePublicPath, isPublicMarketingPath, PUBLIC_MARKETING_PATHS } from "@/lib/public-marketing";
 import { AppChromeReadyContext } from "@/contexts/app-chrome-ready";
 
 import appCss from "../styles.css?url";
@@ -345,6 +345,7 @@ function DeferredPublicChrome() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const bare = isBarePublicPath(pathname);
   const onPublic = isPublicMarketingPath(pathname);
 
   useEffect(() => {
@@ -354,7 +355,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {onPublic ? (
+        {bare ? (
+          <Outlet />
+        ) : onPublic ? (
           <>
             <Outlet />
             <DeferredPublicChrome />

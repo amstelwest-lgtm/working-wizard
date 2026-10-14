@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session, User } from "@supabase/supabase-js";
 import { useRouterState } from "@tanstack/react-router";
 import { setMonitoringUser } from "@/lib/monitoring";
-import { isPublicMarketingPath } from "@/lib/public-marketing";
+import { isBarePublicPath, isPublicMarketingPath } from "@/lib/public-marketing";
 import { clearLegacyInsightSeen } from "@/lib/funnel-timing";
 
 type AuthCtx = {
@@ -51,7 +51,7 @@ function browserHasAuthToken(): boolean {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onPublic = isPublicMarketingPath(pathname);
+  const onPublic = isPublicMarketingPath(pathname) || isBarePublicPath(pathname);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [wake, setWake] = useState(0);
