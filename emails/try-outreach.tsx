@@ -20,8 +20,10 @@ import {
 import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 
 export const TRY_OUTREACH_SUBJECT = "Meet your AI finance team";
+export const TRY_OUTREACH_OPENING =
+  "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
 export const TRY_OUTREACH_PREVIEW =
-  "Milōn is your AI finance team. A click loads sample statements, and the agents analyze them in seconds. You get a health score, key ratios and next steps.";
+  "The Milōn AI finance team: the Financial Manager, the Analyst and the Advisor. Sample statements are loaded. The agents analyze them and give a health score, key ratios and next steps.";
 export const TRY_OUTREACH_TRY_URL = "https://www.milonfinance.com/try?utm_source=email";
 export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://www.milonfinance.com/unsubscribe";
 export const TRY_OUTREACH_ADDRESS =
@@ -77,7 +79,7 @@ const FONT = "Segoe UI, Arial, sans-serif";
 export const TRY_OUTREACH_TEXT = [
   TRY_OUTREACH_SUBJECT,
   "",
-  "Milōn is your AI finance team. When you click, a sample business's statements load and the agents analyze them in seconds. You get a health score, key ratios and next steps.",
+  TRY_OUTREACH_OPENING,
   "",
   "Financial Manager. Holds the 13-week cash line and the profit bridge.",
   "Analyst. Reads the ratios, the margins, and what is drifting.",
@@ -153,9 +155,7 @@ export default function TryOutreachEmail() {
               color: MUTED,
             }}
           >
-            Milōn is your AI finance team. When you click, a sample business&apos;s statements load
-            and the agents analyze them in seconds. You get a health score, key ratios and next
-            steps.
+            {TRY_OUTREACH_OPENING}
           </Text>
 
           {AGENTS.map((agent) => (
