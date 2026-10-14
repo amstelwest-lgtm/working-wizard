@@ -1,16 +1,20 @@
 /**
  * Public sample. One gold control per screen. Avatars stay muted.
  */
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   readTrialPublicConfig,
   runTrialAnalyst,
-  runTrialChip,
   startTrialSample,
   submitTrialLead,
 } from "@/lib/trial-demo.functions";
-import type { TrialBoard, TrialCash, TrialFinding, TrialProfit } from "@/lib/trial-demo";
+import type { TrialBoard, TrialFinding } from "@/lib/trial-demo";
+import type { MarketId } from "@/lib/market/types";
+
+const TrySampleBoards = lazy(() =>
+  import("@/components/try-sample-boards").then((mod) => ({ default: mod.TrySampleBoards })),
+);
 import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
 import {
   TRIAL_DISCLAIMER,
@@ -27,7 +31,7 @@ const FACES = [
   { folder: "advisor", agent: "advisor", role: "Advisor" },
 ] as const;
 
-type ChipId = "profit" | "cash" | null;
+export type TryChip = "profit" | "cash";
 
 const TRY_OPENING =
   "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
@@ -43,10 +47,7 @@ export type TryScreenProps = {
   findings?: TrialFinding[];
   findingsPending?: boolean;
   source?: "model" | "deterministic" | null;
-  chip?: ChipId;
-  chipPending?: boolean;
-  profit?: TrialProfit | null;
-  cash?: TrialCash | null;
+  openChips?: { profit: boolean; cash: boolean };
   runsLeft?: number | null;
   onUseSample?: () => void;
   onSubmitGate?: (input: {
@@ -57,7 +58,7 @@ export type TryScreenProps = {
     milon_leave_blank: string;
   }) => void;
   onShowFindings?: () => void;
-  onChip?: (chip: "profit" | "cash") => void;
+  onToggleChip?: (chip: TryChip) => void;
 };
 
 function TeamRow({ thinking }: { thinking?: boolean }) {
@@ -477,16 +478,16 @@ export function TryScreen(props: TryScreenProps) {
             <button
               type="button"
               className="try-chip"
-              aria-pressed={props.chip === "profit"}
-              onClick={() => props.onChip?.("profit")}
+              aria-pressed={props.openChips?.profit === true}
+              onClick={() => props.onToggleChip?.("profit")}
             >
               Profitability
             </button>
             <button
               type="button"
               className="try-chip"
-              aria-pressed={props.chip === "cash"}
-              onClick={() => props.onChip?.("cash")}
+              aria-pressed={props.openChips?.cash === true}
+              onClick={() => props.onToggleChip?.("cash")}
             >
               13-week cash
             </button>
@@ -502,57 +503,17 @@ export function TryScreen(props: TryScreenProps) {
               Reports <em>Coming soon</em>
             </li>
           </ul>
-          <div
-            className="try-chip-slot"
-            data-open={props.chip || props.chipPending ? "true" : "false"}
-          >
-            <p className="try-status" aria-live="polite">
-              {props.chipPending
-                ? "Working from the sample figures."
-                : props.chip
-                  ? "From the sample figures."
-                  : ""}
-            </p>
-            {props.chip === "profit" && props.profit ? (
-              <div data-try-chip="profit">
-                <h3 className="try-panel-title">Profit bridge</h3>
-                <ul className="try-steps">
-                  {props.profit.steps.map((step) => (
-                    <li key={step.label}>
-                      <span>{step.label}</span>
-                      <span className="try-metric-value">{step.display}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {props.chip === "cash" && props.cash ? (
-              <div data-try-chip="cash">
-                <h3 className="try-panel-title">13-week cash</h3>
-                <div className="try-stats">
-                  <div className="try-stat">
-                    <span>Opens</span>
-                    <strong>{props.cash.openingDisplay}</strong>
-                  </div>
-                  <div className="try-stat">
-                    <span>Low point</span>
-                    <strong>{props.cash.lowDisplay}</strong>
-                  </div>
-                </div>
-                <p className="try-note">{props.cash.note}</p>
-                <ul className="try-weeks">
-                  {props.cash.weeks.map((week) => (
-                    <li key={week.week}>
-                      <span>
-                        Week {week.week} · {week.date}
-                      </span>
-                      <span className="try-metric-value">{week.closeDisplay}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
+          {props.openChips?.profit || props.openChips?.cash ? (
+            <div className="try-chip-slot" data-open="true">
+              <Suspense fallback={<p className="try-status">Working from the sample figures.</p>}>
+                <TrySampleBoards
+                  market={(props.board?.market ?? "US") as MarketId}
+                  profit={props.openChips?.profit === true}
+                  cash={props.openChips?.cash === true}
+                />
+              </Suspense>
+            </div>
+          ) : null}
           {props.error ? <p className="try-error">{props.error}</p> : null}
         </section>
       ) : null}
@@ -578,7 +539,6 @@ export function TryDemo() {
   const start = useServerFn(startTrialSample);
   const submit = useServerFn(submitTrialLead);
   const analyst = useServerFn(runTrialAnalyst);
-  const chipFn = useServerFn(runTrialChip);
   const loadConfig = useServerFn(readTrialPublicConfig);
   const [phase, setPhase] = useState<TryPhase>("start");
   const [busy, setBusy] = useState(false);
@@ -593,10 +553,7 @@ export function TryDemo() {
   const [findings, setFindings] = useState<TrialFinding[]>([]);
   const [source, setSource] = useState<"model" | "deterministic" | null>(null);
   const [findingsPending, setFindingsPending] = useState(false);
-  const [chip, setChip] = useState<ChipId>(null);
-  const [chipPending, setChipPending] = useState(false);
-  const [profit, setProfit] = useState<TrialProfit | null>(null);
-  const [cash, setCash] = useState<TrialCash | null>(null);
+  const [openChips, setOpenChips] = useState({ profit: false, cash: false });
   const [runsLeft, setRunsLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -626,10 +583,7 @@ export function TryDemo() {
       findings={findings}
       source={source}
       findingsPending={findingsPending}
-      chip={chip}
-      chipPending={chipPending}
-      profit={profit}
-      cash={cash}
+      openChips={openChips}
       runsLeft={runsLeft}
       onUseSample={() => {
         setBusy(true);
@@ -678,22 +632,9 @@ export function TryDemo() {
           .catch(() => setError("The sample isn't available right now."))
           .finally(() => setFindingsPending(false));
       }}
-      onChip={(next) => {
-        setChip(next);
-        setChipPending(true);
+      onToggleChip={(next) => {
+        setOpenChips((current) => ({ ...current, [next]: !current[next] }));
         setError(null);
-        void chipFn({ data: { chip: next } })
-          .then((result) => {
-            if (!result.ok) {
-              setError(result.error);
-              return;
-            }
-            setRunsLeft(result.runsLeft);
-            if (result.chip === "profit") setProfit(result.profit);
-            if (result.chip === "cash") setCash(result.cash);
-          })
-          .catch(() => setError("The sample isn't available right now."))
-          .finally(() => setChipPending(false));
       }}
     />
   );

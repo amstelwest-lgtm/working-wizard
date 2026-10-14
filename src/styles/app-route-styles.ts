@@ -30,6 +30,13 @@ function sheetWithPreload(href: string): StyleLink[] {
   ];
 }
 
+/** Sample chips on /try. Same sheets as the owner Profit and Cash tabs. */
+export const trySampleLinks: StylesheetLink[] = [
+  sheet(accountantPortalHref),
+  sheet(premiumShineHref),
+  sheet(ownerPremiumHref),
+];
+
 /** Owner board. Trial-ended blocks use accountant-portal rules (the pin hide). */
 export const founderPortalLinks: StylesheetLink[] = [
   sheet(founderPortalHref),

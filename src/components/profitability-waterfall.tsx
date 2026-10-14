@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { resolveWaterfallFigures, type WaterfallFallback } from "@/lib/weekly-inputs";
-import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
@@ -783,7 +783,9 @@ export function ProfitabilityWaterfall({
   onExportReady?: (api: WaterfallExportApi) => void;
 }) {
   const { weeklyInputs } = useFinancialInputs();
-  const { profile, firmId } = useAccountantProfile();
+  const accountant = useOptionalAccountantProfile();
+  const profile = accountant?.profile ?? DEFAULT_PROFILE;
+  const firmId = accountant?.firmId ?? null;
   const { user } = useAuth();
   const { money: fmt, moneyCompact: fmtCompact, market } = useMarketFormat();
   const [mounted, setMounted] = useState(false);

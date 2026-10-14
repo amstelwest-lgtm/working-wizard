@@ -48,7 +48,7 @@ import {
   ReferenceDot,
   ReferenceLine,
 } from "recharts";
-import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { DEFAULT_PROFILE, useOptionalAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { useMarketFormat } from "@/contexts/market";
@@ -539,6 +539,7 @@ export function CashForecastPanel({
   statementChip = null,
   readOnly = false,
   onInvite,
+  preview = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -572,8 +573,24 @@ export function CashForecastPanel({
   readOnly?: boolean;
   /** Invite control shown when a read-only forecast has no lines yet. */
   onInvite?: () => void;
+  /**
+   * Read-only figures already on hand. Skips the client fetch and autosave
+   * so a public sample can show the same chart without a Supabase read.
+   */
+  preview?: {
+    startDate: string;
+    openingBalance: string;
+    revenue: LineItem[];
+    expenses: LineItem[];
+    other: LineItem[];
+    note: string | null;
+    cycleNote: string | null;
+    financials: Record<string, string | number | null | undefined> | null;
+  } | null;
 } = {}) {
-  const { profile, firmId } = useAccountantProfile();
+  const accountant = useOptionalAccountantProfile();
+  const profile = accountant?.profile ?? DEFAULT_PROFILE;
+  const firmId = accountant?.firmId ?? null;
   const { user } = useAuth();
   const { money: fullMoney, moneyCompact: compactMoney, date, market } = useMarketFormat();
   const sign = (text: string) => (simplified ? text.replace(/^-/, "−") : text);
@@ -591,15 +608,15 @@ export function CashForecastPanel({
     signoffProp ?? null,
   );
   const [lastForecastAt, setLastForecastAt] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState(() =>
-    forecastAnchorDate({ now: new Date(), timeZone: market.timezone }),
+  const [startDate, setStartDate] = useState(
+    () => preview?.startDate ?? forecastAnchorDate({ now: new Date(), timeZone: market.timezone }),
   );
   const [bankSeeded, setBankSeeded] = useState(false);
   const plEstimateRef = useRef(false);
-  const [openingBalance, setOpeningBalance] = useState("0");
-  const [revenue, setRevenue] = useState<LineItem[]>([]);
-  const [expenses, setExpenses] = useState<LineItem[]>(DEFAULT_EXPENSES);
-  const [other, setOther] = useState<LineItem[]>(DEFAULT_OTHER);
+  const [openingBalance, setOpeningBalance] = useState(preview?.openingBalance ?? "0");
+  const [revenue, setRevenue] = useState<LineItem[]>(preview?.revenue ?? []);
+  const [expenses, setExpenses] = useState<LineItem[]>(preview?.expenses ?? DEFAULT_EXPENSES);
+  const [other, setOther] = useState<LineItem[]>(preview?.other ?? DEFAULT_OTHER);
   const [revAdj, setRevAdj] = useState(100); // %
   const [expAdj, setExpAdj] = useState(100); // %
   const [collectDelay, setCollectDelay] = useState(0); // weeks shift inflows right
@@ -615,7 +632,7 @@ export function CashForecastPanel({
   const [inputFinancials, setInputFinancials] = useState<Record<
     string,
     string | number | null | undefined
-  > | null>(null);
+  > | null>(preview?.financials ?? null);
   const [inputProfile, setInputProfile] = useState<ClientOperatingProfile | null>(null);
   const [inputBudgetWc, setInputBudgetWc] = useState<{
     debtorDays: number;
@@ -632,9 +649,9 @@ export function CashForecastPanel({
   const skipNextAutosave = useRef(false);
   const loadedCashflowRef = useRef<Record<string, unknown> | null>(null);
   const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
-  const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(null);
-  const [xeroBankNote, setXeroBankNote] = useState<string | null>(null);
-  const xeroBankNoteRef = useRef<string | null>(null);
+  const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(preview?.cycleNote ?? null);
+  const [xeroBankNote, setXeroBankNote] = useState<string | null>(preview?.note ?? null);
+  const xeroBankNoteRef = useRef<string | null>(preview?.note ?? null);
   const xeroCashMarkers = useRef<{
     openingSource: "xero" | "qbo" | null;
     openingBalance: string | null;
@@ -747,7 +764,7 @@ export function CashForecastPanel({
   };
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!clientId || preview) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
         const row = signoffs.find((s) => s.scope === "cash_forecast") ?? null;
@@ -761,7 +778,7 @@ export function CashForecastPanel({
   }, [clientId]);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!clientId || preview) return;
     const applyRow = (data: Record<string, unknown> | null) => {
       setLastForecastAt((data?.last_forecast_at as string | null | undefined) ?? null);
       const cf = data?.cashflow as {
@@ -988,7 +1005,7 @@ export function CashForecastPanel({
   }, [clientId, reloadToken, initialBankDraft, market.timezone]);
 
   useEffect(() => {
-    if (!clientId || !loaded) return;
+    if (!clientId || preview || !loaded) return;
     if (skipNextAutosave.current) {
       skipNextAutosave.current = false;
       return;
@@ -1719,7 +1736,7 @@ export function CashForecastPanel({
             onChange={patchForecastSignoff}
           />
         ) : null}
-        {readOnly ? (
+        {readOnly && !preview ? (
           <OwnerSignoffMark signoff={forecastSignoff} isStale={forecastStale} />
         ) : null}
         {readOnly ? null : (
@@ -1733,16 +1750,18 @@ export function CashForecastPanel({
             Upload bank statements
           </Button>
         )}
-        <button
-          type="button"
-          className="answer-strip__icon"
-          aria-label="Export PDF"
-          title="Export PDF"
-          disabled={exporting}
-          onClick={exportPDF}
-        >
-          <Download className="h-3.5 w-3.5" />
-        </button>
+        {preview ? null : (
+          <button
+            type="button"
+            className="answer-strip__icon"
+            aria-label="Export PDF"
+            title="Export PDF"
+            disabled={exporting}
+            onClick={exportPDF}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
       <div className="answer-strip__meta">
         {stripChip ? (
@@ -1750,7 +1769,7 @@ export function CashForecastPanel({
             {stripChip}
           </span>
         ) : null}
-        {readOnly ? null : (
+        {readOnly || preview ? null : (
           <SignoffStatusChip
             clientId={clientId}
             scope="cash_forecast"
