@@ -68,15 +68,43 @@ export function trialDailyCap(raw: string | undefined): number {
   return TRIAL_DEFAULT_DAILY_AI_CAP;
 }
 
-/** Model call, or the deterministic findings when the cap or key is missing. */
+/**
+ * The deterministic reading is only for a missing model key.
+ * A present key calls the analyst. Past the daily cap, the call is paused
+ * rather than replaced with that reading.
+ */
 export function trialAnalystMode(input: {
   runsToday: number;
   cap: number;
   aiConfigured: boolean;
-}): "model" | "deterministic" {
+}): "model" | "deterministic" | "paused" {
   if (!input.aiConfigured) return "deterministic";
-  if (input.runsToday >= input.cap) return "deterministic";
+  if (input.runsToday >= input.cap) return "paused";
   return "model";
+}
+
+/** A finding that only repeats the health score is not a reading. */
+export function findingRestatesScore(finding: TrialFinding): boolean {
+  const text = `${finding.title} ${finding.detail}`.toLowerCase();
+  return /health score|weakest pillar|pillar score|overall health/.test(text);
+}
+
+export function deliverTrialFindings(input: {
+  mode: "model" | "deterministic" | "paused";
+  modelFindings: TrialFinding[];
+  fallback: TrialFinding[];
+}):
+  | { ok: true; findings: TrialFinding[]; delivered: "model" | "deterministic" }
+  | { ok: false; reason: "paused" | "empty" } {
+  if (input.mode === "paused") return { ok: false, reason: "paused" };
+  if (input.mode === "deterministic") {
+    return { ok: true, findings: input.fallback.slice(0, 3), delivered: "deterministic" };
+  }
+  const findings = input.modelFindings
+    .filter((finding) => !findingRestatesScore(finding))
+    .slice(0, 3);
+  if (findings.length === 0) return { ok: false, reason: "empty" };
+  return { ok: true, findings, delivered: "model" };
 }
 
 export function trialMarketFromCountry(country: string | null | undefined): TrialMarketId {
@@ -257,21 +285,6 @@ function ratioDisplay(name: string, value: number): string {
   return value.toFixed(2);
 }
 
-function severityFor(score: number): TrialFinding["severity"] {
-  if (score < 40) return "act";
-  if (score < 80) return "watch";
-  return "info";
-}
-
-function kindForRatio(name: string, score: number): string {
-  if (DAY_RATIOS.has(name)) return "working_capital_days";
-  if (name.includes("Margin")) return score < 50 ? "margin_compression" : "margin_improvement";
-  if (name.includes("Debt") || name.includes("Equity Multiplier")) return "leverage";
-  if (name === "Current Ratio") return "liquidity";
-  if (name.includes("Cost")) return "cost_ratio";
-  return "other";
-}
-
 export function buildTrialBoard(market: TrialMarketId): TrialBoard {
   const financials = sampleFinancialsFor(market);
   const scored = scoreMarket(market);
@@ -314,47 +327,87 @@ export function buildTrialBoard(market: TrialMarketId): TrialBoard {
   };
 }
 
-/** Three findings from the scored sample. Same input, same sentences. */
-export function deterministicTrialFindings(board: TrialBoard): TrialFinding[] {
-  const pillars = board.health.pillars.filter(
-    (pillar): pillar is TrialPillar & { score: number } =>
-      typeof pillar.score === "number" && Number.isFinite(pillar.score),
-  );
-  const weakest = [...pillars].sort((a, b) => a.score - b.score)[0];
-  const worstRatio = [...board.ratios].sort((a, b) => a.score - b.score)[0];
+export type TrialReading = {
+  grossMargin: string;
+  netMargin: string;
+  debtorDays: string;
+  creditorDays: string;
+  currentRatio: string;
+  revenue: string;
+  grossProfit: string;
+  operatingExpenses: string;
+  netProfit: string;
+  cashOpening: string;
+  cashLow: string;
+  cashClose: string;
+};
+
+function ratioText(board: TrialBoard, name: string): string {
+  return board.ratios.find((ratio) => ratio.name === name)?.display ?? "";
+}
+
+function stepText(profit: TrialProfit, label: string): string {
+  return profit.steps.find((step) => step.label === label)?.display ?? "";
+}
+
+/** Ratios, margins, and the cash line. No health score. */
+export function trialReading(board: TrialBoard, now = new Date()): TrialReading {
+  const profit = buildTrialProfit(board.market);
+  const cash = buildTrialCash(board.market, now);
+  return {
+    grossMargin: ratioText(board, "Gross Margin"),
+    netMargin: ratioText(board, "Net Margin"),
+    debtorDays: ratioText(board, "Debtor Days"),
+    creditorDays: ratioText(board, "Creditor Days"),
+    currentRatio: ratioText(board, "Current Ratio"),
+    revenue: stepText(profit, "Revenue"),
+    grossProfit: stepText(profit, "Gross profit"),
+    operatingExpenses: stepText(profit, "Operating expenses"),
+    netProfit: stepText(profit, "Net profit"),
+    cashOpening: cash.openingDisplay,
+    cashLow: cash.lowDisplay,
+    cashClose: cash.weeks[cash.weeks.length - 1]?.closeDisplay ?? cash.lowDisplay,
+  };
+}
+
+/**
+ * Three findings from the sample's ratios, margins, and cash line.
+ * Used only when the model key is missing. Same input, same sentences.
+ * They do not restate the health score.
+ */
+export function deterministicTrialFindings(board: TrialBoard, now = new Date()): TrialFinding[] {
+  const reading = trialReading(board, now);
   const findings: TrialFinding[] = [];
 
-  if (weakest) {
+  if (reading.grossMargin && reading.netMargin && reading.revenue && reading.netProfit) {
+    const expenses = reading.operatingExpenses
+      ? ` Operating expenses are ${reading.operatingExpenses}, which leaves net profit of ${reading.netProfit}.`
+      : ` Net profit is ${reading.netProfit}.`;
     findings.push({
-      kind: "weakest_pillar",
-      severity: severityFor(weakest.score),
-      title: `${weakest.label} is the weakest pillar on this sample, at ${Math.round(weakest.score)}.`,
-      detail: `${weakest.label} scores ${Math.round(weakest.score)} (${weakest.status}). It is the lowest of the four pillars on these sample figures.`,
+      kind: "margin_compression",
+      severity: "watch",
+      title: `Gross margin is ${reading.grossMargin}, and net margin is ${reading.netMargin}.`,
+      detail: `Revenue is ${reading.revenue} and gross profit is ${reading.grossProfit}.${expenses} The margin is made on the work, then given back in the cost of running the business.`,
     });
   }
 
-  if (worstRatio) {
+  if (reading.debtorDays && reading.creditorDays && reading.currentRatio) {
     findings.push({
-      kind: kindForRatio(worstRatio.name, worstRatio.score),
-      severity: severityFor(worstRatio.score),
-      title: `${worstRatio.name} on the sample is ${worstRatio.display}.`,
-      detail: `${worstRatio.name} is ${worstRatio.display}, which scores ${Math.round(worstRatio.score)} on the same scale as the health pillars.`,
+      kind: "working_capital_days",
+      severity: "info",
+      title: `Customers pay in ${reading.debtorDays}, and suppliers are paid in ${reading.creditorDays}.`,
+      detail: `Current assets cover current liabilities ${reading.currentRatio} times. Collection days and payment days sit close together on this sample.`,
     });
   }
 
-  const overall = board.health.score;
-  findings.push({
-    kind: "other",
-    severity: overall == null ? "info" : severityFor(overall),
-    title:
-      overall == null
-        ? "The sample does not have enough figures for a health score."
-        : `The sample health score is ${Math.round(overall)}, ${board.health.label}.`,
-    detail:
-      overall == null
-        ? "No pillar could be scored from the sample figures."
-        : `Overall health is ${Math.round(overall)} (${board.health.label}), an equal average of the pillars that could be scored. These are sample figures.`,
-  });
+  if (reading.cashOpening && reading.cashClose) {
+    findings.push({
+      kind: "liquidity",
+      severity: "watch",
+      title: "Cash runway is not measured, because the sample has no cash balance.",
+      detail: `The 13-week estimate opens at ${reading.cashOpening} and closes week 13 at ${reading.cashClose}. The low point is ${reading.cashLow}. It follows the monthly run-rate, and it is not a bank balance.`,
+    });
+  }
 
   return findings.slice(0, 3);
 }

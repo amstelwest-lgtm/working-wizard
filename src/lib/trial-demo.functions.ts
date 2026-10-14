@@ -7,7 +7,7 @@
  * - VITE_TURNSTILE_SITE_KEY (test site key when unset outside production)
  * - TRIAL_DAILY_AI_CAP (optional, default 100 model calls per UTC day)
  * - TRIAL_IP_SALT (optional)
- * - ANTHROPIC_API_KEY (analyst call; missing key stays deterministic)
+ * - ANTHROPIC_API_KEY (analyst call; the fallback reading is only used when this key is missing)
  * - SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (required in production)
  */
 
@@ -31,6 +31,7 @@ import {
   buildTrialCash,
   buildTrialProfit,
   clientIpFromHeaders,
+  deliverTrialFindings,
   deterministicTrialFindings,
   emailLeadAllowed,
   gateErrorCopy,
@@ -66,7 +67,9 @@ type TrialDb = {
   from(table: string): {
     select(cols: string, opts?: { count?: "exact"; head?: boolean }): TrialFilter;
     insert(row: Record<string, unknown>): {
-      select(cols: string): { single(): Promise<{ data: { id: string } | null; error: { message: string } | null }> };
+      select(cols: string): {
+        single(): Promise<{ data: { id: string } | null; error: { message: string } | null }>;
+      };
     };
   };
 };
@@ -155,7 +158,8 @@ function admin(): TrialDb | null {
 async function countSessions(ipHash: string, sinceIso: string): Promise<number> {
   const db = admin();
   if (!db) {
-    return memory.sessions.filter((row) => row.ip_hash === ipHash && row.created_at >= sinceIso).length;
+    return memory.sessions.filter((row) => row.ip_hash === ipHash && row.created_at >= sinceIso)
+      .length;
   }
   const { count, error } = await db
     .from("trial_sessions")
@@ -241,8 +245,9 @@ async function countRuns(sessionId: string): Promise<number> {
 async function countAnalystSince(sinceIso: string): Promise<number> {
   const db = admin();
   if (!db) {
-    return memory.usage.filter((row) => row.kind === "analyst" && row.tokens > 0 && row.created_at >= sinceIso)
-      .length;
+    return memory.usage.filter(
+      (row) => row.kind === "analyst" && row.tokens > 0 && row.created_at >= sinceIso,
+    ).length;
   }
   const { count, error } = await db
     .from("trial_usage")
@@ -333,7 +338,8 @@ type LeadBody = {
 export const submitTrialLead = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => (input ?? {}) as LeadBody)
   .handler(async ({ data }) => {
-    if (!storeReady()) return { ok: false as const, error: "The sample isn't available right now." };
+    if (!storeReady())
+      return { ok: false as const, error: "The sample isn't available right now." };
     const gate = validateTrialGate({
       name: data.name ?? "",
       email: data.email ?? "",
@@ -401,33 +407,47 @@ export const runTrialAnalyst = createServerFn({ method: "POST" }).handler(async 
   const aiConfigured = Boolean((process.env.ANTHROPIC_API_KEY ?? "").trim());
   const runsToday = await countAnalystSince(startOfUtcDay(new Date()).toISOString());
   const mode = trialAnalystMode({ runsToday, cap, aiConfigured });
-  let findings: TrialFinding[] = [];
+  if (mode === "paused") {
+    return { ok: false as const, error: "The sample review is paused until tomorrow." };
+  }
+  let modelFindings: TrialFinding[] = [];
   let tokens = 0;
-  let delivered: "model" | "deterministic" = "deterministic";
   if (mode === "model") {
     try {
       const called = await callTrialAnalyst(board);
-      findings = called.findings;
+      modelFindings = called.findings;
       tokens = called.tokens;
-      if (findings.length > 0) delivered = "model";
     } catch {
-      findings = [];
+      modelFindings = [];
       tokens = 0;
     }
   }
-  if (findings.length === 0) findings = deterministicTrialFindings(board);
-  const runsLeft = await spendRun(session.id, "analyst", tokens);
+  const delivered = deliverTrialFindings({
+    mode,
+    modelFindings,
+    fallback: deterministicTrialFindings(board),
+  });
+  if (!delivered.ok) {
+    return { ok: false as const, error: "The Analyst didn't return a reading. Try again." };
+  }
+  const runsLeft = await spendRun(
+    session.id,
+    "analyst",
+    delivered.delivered === "model" ? tokens : 0,
+  );
   if (runsLeft == null) return { ok: false as const, error: "This sample has used its ten runs." };
   return {
     ok: true as const,
-    findings,
-    mode: delivered,
+    findings: delivered.findings,
+    mode: delivered.delivered,
     runsLeft,
     disclaimer: TRIAL_DISCLAIMER,
   };
 });
 
-async function callTrialAnalyst(board: TrialBoard): Promise<{ findings: TrialFinding[]; tokens: number }> {
+async function callTrialAnalyst(
+  board: TrialBoard,
+): Promise<{ findings: TrialFinding[]; tokens: number }> {
   const apiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
   if (!apiKey) return { findings: [], tokens: 0 };
   const controller = new AbortController();
@@ -468,7 +488,8 @@ type ChipBody = { chip?: string };
 export const runTrialChip = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => (input ?? {}) as ChipBody)
   .handler(async ({ data }) => {
-    if (!storeReady()) return { ok: false as const, error: "The sample isn't available right now." };
+    if (!storeReady())
+      return { ok: false as const, error: "The sample isn't available right now." };
     const chip = data.chip;
     if (chip !== "profit" && chip !== "cash") {
       return { ok: false as const, error: "Coming soon." };
@@ -477,7 +498,8 @@ export const runTrialChip = createServerFn({ method: "POST" })
     if (!session) return { ok: false as const, error: "Start again with Use sample." };
     const kind = chip === "profit" ? "profitability" : "cash";
     const runsLeft = await spendRun(session.id, kind, 0);
-    if (runsLeft == null) return { ok: false as const, error: "This sample has used its ten runs." };
+    if (runsLeft == null)
+      return { ok: false as const, error: "This sample has used its ten runs." };
     if (chip === "profit") {
       const profit: TrialProfit = buildTrialProfit(session.country);
       return { ok: true as const, chip, profit, runsLeft };
