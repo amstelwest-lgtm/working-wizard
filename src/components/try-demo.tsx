@@ -277,7 +277,8 @@ export function TryScreen(props: TryScreenProps) {
         <p className="try-kicker">Sample</p>
         <h1 className="try-title try-title-hero">See a health score on sample figures.</h1>
         <p className="try-lead">
-          One services business, in your market. No books to connect. The board stays marked SAMPLE.
+          Milōn is your AI finance team. When you click, a sample business&apos;s statements load
+          and the agents analyze them in seconds. You get a health score, key ratios and next steps.
         </p>
         <div className="try-card try-start">
           <TeamRow thinking={props.busy} />
