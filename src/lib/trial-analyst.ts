@@ -6,7 +6,7 @@
 
 import { findingKindAllowed } from "@/lib/agent-analyst";
 import { claudeRequestFields } from "@/lib/claude-request";
-import type { TrialBoard, TrialFinding } from "@/lib/trial-demo";
+import { trialReading, type TrialBoard, type TrialFinding } from "@/lib/trial-demo";
 import {
   ANALYST_SYSTEM,
   analystToolSchemas,
@@ -33,9 +33,11 @@ export function trialAnalystSystem(): string {
   return `${ANALYST_SYSTEM}
 
 Trial mode, one call:
-- The user message is the only books. It is a sample, not a client ledger.
+- The user message is the only books. It is a sample, not a client ledger. Record findings from it. Do not wait for a tool.
 - ${LEDGER_READS.join(", ")} are not available. Do not call them.
-- Record at most three findings with record_finding, using only numbers from the user message, then call finish.
+- Do not restate a health score or a pillar score. Those numbers are not in the user message. Do not invent them.
+- Cash runway is not measurable: the sample has no cash balance. The 13-week closes in the message are an estimate from the profit run-rate, not a bank balance. You may quote them as an estimate.
+- Record three findings with record_finding: one on the margins, one on debtor and creditor days, one on cash. Quote only numbers from the user message, then call finish.
 - Do not name a model vendor.`;
 }
 
@@ -61,20 +63,27 @@ export function executeTrialAnalystGate(
 }
 
 export function trialAnalystUserMessage(board: TrialBoard): string {
+  const reading = trialReading(board);
   const evidence = {
     period_label: "Sample year",
-    overall: board.health.score,
-    pillars: Object.fromEntries(board.health.pillars.map((pillar) => [pillar.id, pillar.score])),
-    ratios: Object.fromEntries(board.ratios.map((ratio) => [ratio.name, ratio.value])),
+    gross_margin: reading.grossMargin,
+    net_margin: reading.netMargin,
+    revenue: reading.revenue,
+    gross_profit: reading.grossProfit,
+    operating_expenses: reading.operatingExpenses,
+    net_profit: reading.netProfit,
+    debtor_days: reading.debtorDays,
+    creditor_days: reading.creditorDays,
+    current_ratio: reading.currentRatio,
+    cash_opening: reading.cashOpening,
+    cash_low: reading.cashLow,
+    cash_week_13: reading.cashClose,
+    cash_runway: "not measurable",
   };
-  const keys = [
-    "overall",
-    ...board.health.pillars.map((pillar) => `pillar:${pillar.id}`),
-    ...board.ratios.map((ratio) => ratio.name),
-  ];
   return [
-    "Sample figures for this trial. There is no ledger. Quote only these numbers.",
-    `evidence keys you may cite: ${keys.join(", ")}`,
+    "Sample figures for this trial. There is no ledger. Quote only these numbers. Do not invent a summary score.",
+    "Cash runway is not measurable because the sample has no cash balance. cash_week_13 is an estimate from the profit run-rate, not a bank balance.",
+    `evidence keys you may cite: ${Object.keys(evidence).join(", ")}`,
     JSON.stringify(evidence),
   ].join("\n");
 }
@@ -131,10 +140,12 @@ export function findingsFromAnalystContent(content: unknown): TrialFinding[] {
   return out;
 }
 
-export function analystUsageTokens(usage: {
-  input_tokens?: number;
-  output_tokens?: number;
-} | null): number {
+export function analystUsageTokens(
+  usage: {
+    input_tokens?: number;
+    output_tokens?: number;
+  } | null,
+): number {
   const input = usage?.input_tokens ?? 0;
   const output = usage?.output_tokens ?? 0;
   const total = (Number.isFinite(input) ? input : 0) + (Number.isFinite(output) ? output : 0);

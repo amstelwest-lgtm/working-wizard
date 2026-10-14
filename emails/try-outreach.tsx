@@ -4,7 +4,6 @@
  */
 import {
   Body,
-  Button,
   Column,
   Container,
   Head,
@@ -16,46 +15,75 @@ import {
   Preview,
   Row,
   Section,
-  Tailwind,
   Text,
-  pixelBasedPreset,
 } from "react-email";
+import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 
-export const TRY_OUTREACH_SUBJECT = "See a health score on sample figures";
+export const TRY_OUTREACH_SUBJECT = "Meet your AI finance team";
+export const TRY_OUTREACH_PREVIEW =
+  "Health, margins, and cash on one sample business. No books to connect.";
 export const TRY_OUTREACH_TRY_URL = "https://milonfinance.com/try?utm_source=email";
 export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://milonfinance.com/unsubscribe";
 export const TRY_OUTREACH_ADDRESS =
   "Milon, Inc., 800 N King Street, Suite 304, PMB 3836, Wilmington, DE 19801";
 export const TRY_OUTREACH_SIGN_OFF = "The MILŌN Team";
+export const TRY_OUTREACH_EXAMPLE_SRC = "https://milonfinance.com/email/example-result.png";
 export const TRY_OUTREACH_HEADERS = {
   "List-Unsubscribe": `<${TRY_OUTREACH_UNSUBSCRIBE_URL}>, <mailto:hello@milonfinance.com?subject=unsubscribe>`,
   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
 } as const;
 
-const STILLS = [
+const EXAMPLE_BOARD = buildTrialBoard("US");
+const EXAMPLE_READING = trialReading(EXAMPLE_BOARD, new Date("2026-10-14T00:00:00Z"));
+
+export const TRY_OUTREACH_EXAMPLE_ALT = [
+  "Example result.",
+  `Health ${EXAMPLE_BOARD.health.score ?? "—"}, ${EXAMPLE_BOARD.health.label}.`,
+  `Gross margin ${EXAMPLE_READING.grossMargin}.`,
+  `Net margin ${EXAMPLE_READING.netMargin}.`,
+  `Current ratio ${EXAMPLE_READING.currentRatio}.`,
+  `Debtor days ${EXAMPLE_READING.debtorDays}.`,
+  "Cash runway is not measured.",
+].join(" ");
+
+const AGENTS = [
   {
     src: "https://milonfinance.com/email/fm.png",
     alt: "Milōn Financial Manager",
     role: "Financial Manager",
+    line: "Holds the 13-week cash line and the profit bridge.",
   },
   {
     src: "https://milonfinance.com/email/analyst.png",
     alt: "Milōn Analyst",
     role: "Analyst",
+    line: "Reads the ratios, the margins, and what is drifting.",
   },
   {
     src: "https://milonfinance.com/email/advisor.png",
     alt: "Milōn Advisor",
     role: "Advisor",
+    line: "Turns that reading into the next move.",
   },
 ] as const;
 
+const INK = "#102A43";
+const MUTED = "#3D5270";
+const QUIET = "#5C7190";
+const BLUE = "#0B5FFF";
+const LINE = "#DBEAFE";
+const FONT = "Segoe UI, Arial, sans-serif";
+
 export const TRY_OUTREACH_TEXT = [
-  "See a health score on sample figures.",
+  TRY_OUTREACH_SUBJECT,
   "",
-  "One services business, in your market. No books to connect. The board stays marked SAMPLE.",
+  "One services business. The Financial Manager, the Analyst, and the Advisor read the figures with you. Nothing to connect.",
   "",
-  "The Milōn Financial Manager, Analyst, and Advisor read the sample with you.",
+  "Financial Manager. Holds the 13-week cash line and the profit bridge.",
+  "Analyst. Reads the ratios, the margins, and what is drifting.",
+  "Advisor. Turns that reading into the next move.",
+  "",
+  TRY_OUTREACH_EXAMPLE_ALT,
   "",
   `Try Milōn: ${TRY_OUTREACH_TRY_URL}`,
   "",
@@ -68,89 +96,211 @@ export const TRY_OUTREACH_TEXT = [
 export default function TryOutreachEmail() {
   return (
     <Html lang="en">
-      <Tailwind config={{ presets: [pixelBasedPreset] }}>
-        <Head />
-        <Body className="m-0 bg-white font-sans text-[#102A43]">
-          <Preview>A sample health score, with the Milōn team. No books to connect.</Preview>
-          <Container className="mx-auto my-0 max-w-[600px] bg-white px-6 py-8">
-            <Section>
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>{`
+          @media only screen and (max-width: 600px) {
+            .email-pad { padding-left: 18px !important; padding-right: 18px !important; }
+          }
+        `}</style>
+      </Head>
+      <Body style={{ margin: 0, backgroundColor: "#ffffff", fontFamily: FONT, color: INK }}>
+        <Preview>{TRY_OUTREACH_PREVIEW}</Preview>
+        <Container
+          className="email-pad"
+          style={{
+            width: "100%",
+            maxWidth: 600,
+            margin: "0 auto",
+            backgroundColor: "#ffffff",
+            padding: "32px 28px 28px",
+          }}
+        >
+          <Text
+            style={{
+              margin: 0,
+              fontFamily: FONT,
+              fontSize: 20,
+              lineHeight: "24px",
+              fontWeight: 700,
+              letterSpacing: "-0.03em",
+              color: INK,
+            }}
+          >
+            Milōn
+          </Text>
+
+          <Heading
+            as="h1"
+            style={{
+              margin: "28px 0 0",
+              fontFamily: FONT,
+              fontSize: 32,
+              lineHeight: "38px",
+              fontWeight: 700,
+              letterSpacing: "-0.03em",
+              color: INK,
+            }}
+          >
+            Meet your AI finance team
+          </Heading>
+          <Text
+            style={{
+              margin: "12px 0 0",
+              fontFamily: FONT,
+              fontSize: 16,
+              lineHeight: "24px",
+              color: MUTED,
+            }}
+          >
+            One services business. The Financial Manager, the Analyst, and the Advisor read the
+            figures with you. Nothing to connect.
+          </Text>
+
+          {AGENTS.map((agent) => (
+            <Section key={agent.role} style={{ marginTop: 18 }}>
               <Row>
-                <Column>
-                  <Text className="m-0 text-[20px] font-bold leading-6 tracking-tight text-[#102A43]">
+                <Column style={{ width: 72, verticalAlign: "middle" }}>
+                  <Img
+                    src={agent.src}
+                    width="64"
+                    height="64"
+                    alt={agent.alt}
+                    style={{
+                      display: "block",
+                      width: 64,
+                      height: 64,
+                      borderRadius: 32,
+                      border: `1px solid ${LINE}`,
+                    }}
+                  />
+                </Column>
+                <Column style={{ verticalAlign: "middle", paddingLeft: 8 }}>
+                  <Text
+                    style={{
+                      margin: 0,
+                      fontFamily: FONT,
+                      fontSize: 11,
+                      lineHeight: "14px",
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: BLUE,
+                    }}
+                  >
                     Milōn
                   </Text>
-                </Column>
-                <Column align="right">
-                  <Text className="m-0 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-[#0B5FFF]">
-                    Sample
+                  <Text
+                    style={{
+                      margin: "2px 0 0",
+                      fontFamily: FONT,
+                      fontSize: 16,
+                      lineHeight: "20px",
+                      fontWeight: 700,
+                      color: INK,
+                    }}
+                  >
+                    {agent.role}
+                  </Text>
+                  <Text
+                    style={{
+                      margin: "2px 0 0",
+                      fontFamily: FONT,
+                      fontSize: 14,
+                      lineHeight: "20px",
+                      color: MUTED,
+                    }}
+                  >
+                    {agent.line}
                   </Text>
                 </Column>
               </Row>
             </Section>
+          ))}
 
-            <Section className="mt-8 rounded-[20px] border border-solid border-[#DBEAFE] bg-[#F4F8FF] px-4 py-5">
-              <Row>
-                {STILLS.map((still) => (
-                  <Column key={still.src} align="center" className="w-1/3 px-1 align-top">
-                    <Img
-                      src={still.src}
-                      width="96"
-                      height="96"
-                      alt={still.alt}
-                      className="mx-auto rounded-full"
-                      style={{ objectFit: "cover" }}
-                    />
-                    <Text className="m-0 mt-2 text-center text-[11px] font-bold uppercase tracking-[0.08em] text-[#0B5FFF]">
-                      Milōn
-                    </Text>
-                    <Text className="m-0 mt-1 text-center text-[13px] font-bold leading-4 text-[#102A43]">
-                      {still.role}
-                    </Text>
-                  </Column>
-                ))}
-              </Row>
-            </Section>
+          <Section
+            style={{
+              marginTop: 28,
+              border: `1px solid ${LINE}`,
+              borderRadius: 16,
+              padding: 12,
+            }}
+          >
+            <Img
+              src={TRY_OUTREACH_EXAMPLE_SRC}
+              width="520"
+              height="350"
+              alt={TRY_OUTREACH_EXAMPLE_ALT}
+              style={{
+                display: "block",
+                width: "100%",
+                maxWidth: 520,
+                height: "auto",
+                border: 0,
+                outline: "none",
+              }}
+            />
+          </Section>
 
-            <Heading className="mb-0 mt-8 text-[28px] font-bold leading-8 tracking-tight text-[#102A43]">
-              See a health score on sample figures.
-            </Heading>
-            <Text className="mb-0 mt-3 text-[16px] leading-6 text-[#3D5270]">
-              One services business, in your market. No books to connect. The board stays marked SAMPLE.
-            </Text>
-            <Text className="mb-0 mt-3 text-[16px] leading-6 text-[#3D5270]">
-              The Milōn Financial Manager, Analyst, and Advisor read the sample with you.
-            </Text>
+          <div
+            style={{ marginTop: 28 }}
+            dangerouslySetInnerHTML={{
+              __html: `<!--[if mso]>
+<v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${TRY_OUTREACH_TRY_URL}" style="height:48px;v-text-anchor:middle;width:544px;" arcsize="50%" stroke="t" strokecolor="#8d6a16" fillcolor="#d4af37">
+<w:anchorlock/>
+<center style="color:#1b1300;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:bold;">Try Mil&#333;n</center>
+</v:roundrect>
+<![endif]-->
+<!--[if !mso]><!-- -->
+<a href="${TRY_OUTREACH_TRY_URL}" style="display:block;background-color:#d4af37;background-image:linear-gradient(180deg,#fdee79 0%,#f0d56a 32%,#d4af37 64%,#b8891a 100%);color:#1b1300;border:1px solid #8d6a16;border-radius:999px;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;padding:14px 28px;">Try Milōn</a>
+<!--<![endif]-->`,
+            }}
+          />
 
-            <Section className="mt-6">
-              <Button
-                href={TRY_OUTREACH_TRY_URL}
-                className="box-border w-full rounded-full px-7 py-3 text-center text-[16px] font-bold no-underline"
-                style={{
-                  width: "100%",
-                  backgroundColor: "#d4af37",
-                  backgroundImage:
-                    "linear-gradient(180deg,#fdee79 0%,#f0d56a 32%,#d4af37 64%,#b8891a 100%)",
-                  color: "#1b1300",
-                  border: "1px solid #8d6a16",
-                }}
-              >
-                Try Milōn
-              </Button>
-            </Section>
+          <Text
+            style={{
+              margin: "28px 0 0",
+              fontFamily: FONT,
+              fontSize: 14,
+              lineHeight: "20px",
+              color: MUTED,
+            }}
+          >
+            {TRY_OUTREACH_SIGN_OFF}
+          </Text>
 
-            <Text className="mb-0 mt-8 text-[14px] text-[#3D5270]">{TRY_OUTREACH_SIGN_OFF}</Text>
+          <Hr
+            style={{
+              margin: "24px 0",
+              borderColor: LINE,
+              borderStyle: "solid",
+              borderWidth: "1px 0 0",
+            }}
+          />
 
-            <Hr className="my-6 border-solid border-[#DBEAFE]" />
-
-            <Text className="m-0 text-[12px] leading-5 text-[#5C7190]">
-              <Link href={TRY_OUTREACH_UNSUBSCRIBE_URL} className="text-[#0B5FFF] underline">
-                Unsubscribe
-              </Link>
-            </Text>
-            <Text className="mb-0 mt-2 text-[12px] leading-5 text-[#5C7190]">{TRY_OUTREACH_ADDRESS}</Text>
-          </Container>
-        </Body>
-      </Tailwind>
+          <Text
+            style={{ margin: 0, fontFamily: FONT, fontSize: 12, lineHeight: "18px", color: QUIET }}
+          >
+            <Link
+              href={TRY_OUTREACH_UNSUBSCRIBE_URL}
+              style={{ color: BLUE, textDecoration: "underline" }}
+            >
+              Unsubscribe
+            </Link>
+          </Text>
+          <Text
+            style={{
+              margin: "8px 0 0",
+              fontFamily: FONT,
+              fontSize: 12,
+              lineHeight: "18px",
+              color: QUIET,
+            }}
+          >
+            {TRY_OUTREACH_ADDRESS}
+          </Text>
+        </Container>
+      </Body>
     </Html>
   );
 }
