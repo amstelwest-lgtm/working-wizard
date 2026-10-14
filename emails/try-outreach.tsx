@@ -20,14 +20,16 @@ import {
 import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 
 export const TRY_OUTREACH_SUBJECT = "Meet your AI finance team";
+export const TRY_OUTREACH_OPENING =
+  "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
 export const TRY_OUTREACH_PREVIEW =
-  "Health, margins, and cash on one sample business. No books to connect.";
-export const TRY_OUTREACH_TRY_URL = "https://milonfinance.com/try?utm_source=email";
-export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://milonfinance.com/unsubscribe";
+  "The Milōn AI finance team: the Financial Manager, the Analyst and the Advisor. Sample statements are loaded. The agents analyze them and give a health score, key ratios and next steps.";
+export const TRY_OUTREACH_TRY_URL = "https://www.milonfinance.com/try?utm_source=email";
+export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://www.milonfinance.com/unsubscribe";
 export const TRY_OUTREACH_ADDRESS =
   "Milon, Inc., 800 N King Street, Suite 304, PMB 3836, Wilmington, DE 19801";
 export const TRY_OUTREACH_SIGN_OFF = "The MILŌN Team";
-export const TRY_OUTREACH_EXAMPLE_SRC = "https://milonfinance.com/email/example-result.png";
+export const TRY_OUTREACH_EXAMPLE_SRC = "https://www.milonfinance.com/email/example-result.png";
 export const TRY_OUTREACH_HEADERS = {
   "List-Unsubscribe": `<${TRY_OUTREACH_UNSUBSCRIBE_URL}>, <mailto:hello@milonfinance.com?subject=unsubscribe>`,
   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -48,19 +50,19 @@ export const TRY_OUTREACH_EXAMPLE_ALT = [
 
 const AGENTS = [
   {
-    src: "https://milonfinance.com/email/fm.png",
+    src: "https://www.milonfinance.com/email/fm.png",
     alt: "Milōn Financial Manager",
     role: "Financial Manager",
     line: "Holds the 13-week cash line and the profit bridge.",
   },
   {
-    src: "https://milonfinance.com/email/analyst.png",
+    src: "https://www.milonfinance.com/email/analyst.png",
     alt: "Milōn Analyst",
     role: "Analyst",
     line: "Reads the ratios, the margins, and what is drifting.",
   },
   {
-    src: "https://milonfinance.com/email/advisor.png",
+    src: "https://www.milonfinance.com/email/advisor.png",
     alt: "Milōn Advisor",
     role: "Advisor",
     line: "Turns that reading into the next move.",
@@ -77,7 +79,7 @@ const FONT = "Segoe UI, Arial, sans-serif";
 export const TRY_OUTREACH_TEXT = [
   TRY_OUTREACH_SUBJECT,
   "",
-  "One services business. The Financial Manager, the Analyst, and the Advisor read the figures with you. Nothing to connect.",
+  TRY_OUTREACH_OPENING,
   "",
   "Financial Manager. Holds the 13-week cash line and the profit bridge.",
   "Analyst. Reads the ratios, the margins, and what is drifting.",
@@ -153,8 +155,7 @@ export default function TryOutreachEmail() {
               color: MUTED,
             }}
           >
-            One services business. The Financial Manager, the Analyst, and the Advisor read the
-            figures with you. Nothing to connect.
+            {TRY_OUTREACH_OPENING}
           </Text>
 
           {AGENTS.map((agent) => (

@@ -29,6 +29,9 @@ const FACES = [
 
 type ChipId = "profit" | "cash" | null;
 
+const TRY_OPENING =
+  "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
+
 export type TryScreenProps = {
   phase: TryPhase;
   busy?: boolean;
@@ -276,9 +279,7 @@ export function TryScreen(props: TryScreenProps) {
       <Frame phase="start">
         <p className="try-kicker">Sample</p>
         <h1 className="try-title try-title-hero">See a health score on sample figures.</h1>
-        <p className="try-lead">
-          One services business, in your market. No books to connect. The board stays marked SAMPLE.
-        </p>
+        <p className="try-lead">{TRY_OPENING}</p>
         <div className="try-card try-start">
           <TeamRow thinking={props.busy} />
           <button
@@ -379,7 +380,7 @@ export function TryScreen(props: TryScreenProps) {
     <Frame phase={props.phase}>
       <p className="try-kicker">Sample</p>
       <h1 className="try-title">Sample health score</h1>
-      {board ? <p className="try-lead">{board.blurb}</p> : null}
+      <p className="try-lead">{TRY_OPENING}</p>
       <section className="try-card try-reveal" aria-label="Health score">
         <div className="try-hero">
           <HealthRing score={board?.health.score ?? null} label={board?.health.label ?? ""} />
