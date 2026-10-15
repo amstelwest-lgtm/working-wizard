@@ -106,7 +106,6 @@ import {
   resolveClientCash,
   resolveThirteenWeekForecast,
   blankForecastLines,
-  keepOutlookOpening,
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
@@ -934,14 +933,6 @@ export function CashForecastPanel({
           plEstimateRef.current = false;
         }
       } else if (cf) {
-        if (
-          !outlook.reanchored &&
-          !seededOpening &&
-          cf.openingBalance != null &&
-          !keepOutlookOpening(cf.openingBalance, outlook.opening)
-        ) {
-          setOpeningBalance(cf.openingBalance);
-        }
         if (cf.revenue && !blankForecastLines(cf.revenue)) setRevenue(cf.revenue);
         else if (!blankForecastLines(outlook.lines.revenue)) setRevenue(outlook.lines.revenue);
         else setRevenue([]);

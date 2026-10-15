@@ -1356,29 +1356,18 @@ export function resolveThirteenWeekForecast(input: {
           reanchored: false,
         };
       }
-      const weeklyNet = weeklyNetFromStored(cf);
-      // Budget lines, including ones that still carry seededFromBanksAt, are
-      // not a bank balance. With statement cash on file, leave that figure
-      // and skip the roll-forward banner. A real bank publish still rolls.
-      const realBankSeed = bankSeeded && !cashflowNamedFromBudget(cf);
-      const statementCash = finiteNum(fin?.cash);
-      const preferStatement = statementCash != null && !realBankSeed;
-      const opening = preferStatement
-        ? statementCash
-        : weeklyNet == null
-          ? rolled.opening
-          : Math.round((rolled.opening + (weeklyNet / 7) * gapDays) * 100) / 100;
+      // Opening stays the cash Health and the Financial Manager already
+      // resolved. Filling the gap with a weekly run-rate invented a second
+      // balance (the forecast figure) beside the cash on file.
+      const opening = finiteNum(input.openingCash) ?? rolled.opening;
       const closing = reclose(opening, rolled.inflow, rolled.outflow);
       const totals = seriesTotals(rolled.inflow, rolled.outflow, closing);
       const showShortfall =
         totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
-      const anchorNote = preferStatement
-        ? null
-        : gapDays <= 0
+      const anchorNote =
+        gapDays <= 0
           ? null
-          : weeklyNet == null
-            ? `${gapDays} days sit between ${startRaw} and this week (${anchor}). Opening cash is still the balance on ${startRaw}.`
-            : `Opening cash was rolled forward ${gapDays} days from ${startRaw} to this week (${anchor}).`;
+          : `${gapDays} days sit between ${startRaw} and this week (${anchor}). Opening cash stays the balance on file.`;
       return {
         source: "stored",
         startDate: anchor,

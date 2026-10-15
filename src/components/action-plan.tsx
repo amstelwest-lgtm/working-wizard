@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { browserAppUrl } from "@/lib/app-origin";
 import { HEALTH_BAND_TABLE } from "@/lib/ratios";
+import { stripMilonProjection } from "@/lib/milon-projection";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1122,7 +1123,7 @@ export default function ActionPlanPanel({
   const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
   useEffect(() => {
     if (loading) return;
-    onAnswer?.(items.map((item) => ({ title: item.title })));
+    onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title) })));
   }, [items, onAnswer, loading]);
   const filtered = useMemo(() => {
     let list = enriched;
@@ -2014,7 +2015,7 @@ function ItemRow({
   const h = healthMeta(item.health);
   const overdue = item.health === "overdue";
   const [editTitle, setEditTitle] = useState(false);
-  const [title, setTitle] = useState(item.title);
+  const [title, setTitle] = useState(() => stripMilonProjection(item.title));
   const [pickOwner, setPickOwner] = useState(false);
   const exp = expectedPct(item);
   const msDone = milestones.filter((m) => m.is_done).length;
@@ -2083,7 +2084,7 @@ function ItemRow({
                 : "Click row to open details"
             }
           >
-            {item.title}
+            {stripMilonProjection(item.title)}
           </button>
         )}
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
@@ -2097,7 +2098,7 @@ function ItemRow({
               {item.recommendation_title ? (
                 <span className="truncate font-medium normal-case tracking-normal text-slate-500 dark:text-slate-400">
                   {" "}
-                  · {item.recommendation_title}
+                  · {stripMilonProjection(item.recommendation_title)}
                 </span>
               ) : null}
             </span>
@@ -2966,7 +2967,7 @@ function ItemDrawer({
               {h.label}
             </span>
             <h3 className="mt-2 text-lg font-black leading-tight text-slate-950 dark:text-white">
-              {item.title}
+              {stripMilonProjection(item.title)}
             </h3>
             {item.recommendation_id ? (
               <p
@@ -2975,7 +2976,7 @@ function ItemDrawer({
               >
                 <Lightbulb className="h-3 w-3" />
                 From recommendation
-                {item.recommendation_title ? `: ${item.recommendation_title}` : ""}
+                {item.recommendation_title ? `: ${stripMilonProjection(item.recommendation_title)}` : ""}
                 {item.recommendation_metric && item.recommendation_amount != null
                   ? ` · expected ${expectedImpactLabel({
                       expected_impact_metric: item.recommendation_metric as never,
@@ -3025,7 +3026,7 @@ function ItemDrawer({
             </div>
             {item.status === "blocked" && item.blocker_note && (
               <p className="mt-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#ef4444]">
-                Blocker: {item.blocker_note}
+                Blocker: {stripMilonProjection(item.blocker_note)}
               </p>
             )}
             <div className={`mt-4 ${LABEL_CLS}`}>Progress — {item.progress_pct}%</div>
@@ -3047,7 +3048,7 @@ function ItemDrawer({
             </span>
             {item.status === "blocked" && item.blocker_note && (
               <p className="mt-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#ef4444]">
-                Blocker: {item.blocker_note}
+                Blocker: {stripMilonProjection(item.blocker_note)}
               </p>
             )}
             <div className={`mt-4 ${LABEL_CLS}`}>Progress — {item.progress_pct}%</div>

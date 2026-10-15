@@ -185,6 +185,36 @@ const BUSINESS_TYPE_LABEL: Record<string, string> = {
  * The operating-profile template wins (Labour & staffing). A bare business-type
  * id such as "service" never surfaces as SERVICE.
  */
+const NAME_INDUSTRY: Array<{ test: RegExp; label: string }> = [
+  { test: /\b(hotels?|lodges?|guesthouses?|b\s*&\s*b)\b/i, label: "Hotels & accommodation" },
+  { test: /\b(woodwork|timber|joinery|carpentry)\b/i, label: "Manufacturing" },
+];
+
+/**
+ * The business name wins when the stored template names a different sector.
+ * A hotel tagged as labour, or a woodwork shop tagged as hotels, shows the
+ * sector the name already states.
+ */
+export function clientIndustryDisplay(
+  businessName: string | null | undefined,
+  profile: { templateId?: string | null; businessTypeId?: string | null } | null | undefined,
+  businessType?: string | null,
+): string {
+  const stored = clientIndustryLabel(profile, businessType);
+  const name = (businessName ?? "").trim();
+  if (!name) return stored;
+  for (const row of NAME_INDUSTRY) {
+    if (!row.test.test(name)) continue;
+    if (stored === row.label) return stored;
+    if (stored === "—" || stored === "General SME") return row.label;
+    const storedFold = stored.toLowerCase();
+    const wanted = row.label.toLowerCase();
+    if (storedFold.includes(wanted.split(" ")[0] ?? wanted)) return stored;
+    return row.label;
+  }
+  return stored;
+}
+
 export function clientIndustryLabel(
   profile: { templateId?: string | null; businessTypeId?: string | null } | null | undefined,
   businessType?: string | null,

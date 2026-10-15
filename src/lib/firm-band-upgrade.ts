@@ -113,6 +113,9 @@ export function firmUsageLimit(
   band: FirmBandId | null,
   unitAmount?: number | null,
 ): number | null {
+  if (band === "starter" && (phase === "trialing" || phase === "active")) {
+    return FIRM_BAND_CATALOG.starter.clientLimit;
+  }
   if (phase === "trialing") return FIRM_TRIAL_CLIENT_LIMIT;
   if (phase === "active" && band === "starter") return starterClientLimit(unitAmount);
   if (phase === "active" && band) return FIRM_BAND_CATALOG[band].clientLimit;

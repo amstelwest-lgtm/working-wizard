@@ -480,6 +480,7 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
     return b === 0 ? 0 : a / b;
   };
 
+  if (n.revenue > 0 && n.cogs < 0) n.cogs = Math.abs(n.cogs);
   const operatingMargin = safe(n.ebit, n.revenue);
   const netMargin = safe(n.netIncome, n.revenue);
   const grossMargin = safe(n.revenue - n.cogs, n.revenue);

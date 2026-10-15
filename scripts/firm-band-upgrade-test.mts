@@ -1114,7 +1114,7 @@ const starterAtCap = decideFirmClientCreate({
   stripeConfigured: true,
   phase: "active",
   band: "starter",
-  clientCount: 3,
+  clientCount: 5,
   unitAmount: 0,
   starterTrialExpired: true,
 });
@@ -1122,8 +1122,9 @@ assert(
   !starterAtCap.allowed &&
     starterAtCap.code === "band_client_cap" &&
     starterAtCap.message.startsWith("You can't add another client on Starter.") &&
+    starterAtCap.message.includes("up to 5") &&
     !starterAtCap.message.includes("trial has ended"),
-  "legacy Starter at 3/3 explains the client limit and does not say the trial ended",
+  "Starter at 5/5 explains the client limit and does not say the trial ended",
 );
 const paidStarterAtCap = decideFirmClientCreate({
   stripeConfigured: true,

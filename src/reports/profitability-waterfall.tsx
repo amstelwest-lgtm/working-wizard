@@ -148,7 +148,7 @@ function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
   const steps: BridgeStep[] = [
     { label: "Revenue", delta: d.revenue, runningEnd: d.revenue, kind: "total" },
     { label: "COGS", delta: -cogs, runningEnd: d.gross_profit, kind: "decrease" },
-    { label: "Gross\nProfit", delta: d.gross_profit, runningEnd: d.gross_profit, kind: "subtotal" },
+    { label: "Gross profit", delta: d.gross_profit, runningEnd: d.gross_profit, kind: "subtotal" },
     {
       label: "Operating\nExpenses",
       delta: -opex,
@@ -262,7 +262,7 @@ function BridgeChart({ d, accent }: { d: ProfitabilityData; accent: string }) {
         </View>
         <View style={brStyles.legendItem}>
           <View style={[brStyles.legendDot, { backgroundColor: C.blueLight }]} />
-          <Text style={brStyles.legendText}>Profit subtotal</Text>
+          <Text style={brStyles.legendText}>Gross profit</Text>
         </View>
         <View style={brStyles.legendItem}>
           <View style={[brStyles.legendDot, { backgroundColor: C.red }]} />

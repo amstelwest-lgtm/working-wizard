@@ -59,7 +59,7 @@ import {
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { assessClientMetrics, runwayDisplayLabel, runwayTileValue } from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
-import { clientIndustryLabel } from "@/lib/profile-signals";
+import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -2135,7 +2135,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                         <div className="cname">{c.name}</div>
                         <div className="ctype">
                           {(() => {
-                            const industry = clientIndustryLabel(
+                            const industry = clientIndustryDisplay(
+                              c.name,
                               parseOperatingProfile(c.operating_profile),
                               c.business_type,
                             );

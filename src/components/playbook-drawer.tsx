@@ -24,6 +24,7 @@ import { useMarket } from "@/contexts/market";
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
 import { healthBandLabel } from "@/lib/ratios";
+import { groundPlaybookSteps } from "@/lib/intervention-grounding";
 import { DigLeaf } from "@/components/health-drill-cue";
 import { useOverlayHistory } from "@/lib/overlay-history";
 
@@ -123,6 +124,11 @@ interface PlaybookDrawerProps {
   fallbackSteps?: string[];
   /** Weak ratio → the evidence deliverable (cash, profitability, budget). */
   evidence?: { label: string; onOpen: () => void } | null;
+  /** Ratio on file. A positive net margin must not render the loss pack. */
+  ratioValue?: number | null;
+  revenue?: number | null;
+  netProfit?: number | null;
+  formatAmount?: (amount: number) => string;
 }
 
 export function PlaybookDrawer({
@@ -138,6 +144,10 @@ export function PlaybookDrawer({
   actualLine = null,
   fallbackSteps = [],
   evidence = null,
+  ratioValue = null,
+  revenue = null,
+  netProfit = null,
+  formatAmount,
 }: PlaybookDrawerProps) {
   const [steps, setSteps] = useState<PlaybookStep[]>([]);
   const [loading, setLoading] = useState(false);
@@ -199,12 +209,27 @@ export function PlaybookDrawer({
     };
   }, [open, signoffEnabled, clientId, ratioKey, loadSignoffs]);
 
-  const signoffCount = Object.keys(signoffs).length;
   const closeDrawer = useOverlayHistory(open, onClose);
-  const displayNumber = new Map(steps.map((step, index) => [step.step_number, index + 1]));
+  const grounded = useMemo(
+    () =>
+      groundPlaybookSteps(steps, {
+        ratioKey: ratioKey ?? "",
+        ratioName,
+        tier: healthTier,
+        value: ratioValue,
+        revenue,
+        netProfit,
+        formatMoney: formatAmount,
+      }),
+    [steps, ratioKey, ratioName, healthTier, ratioValue, revenue, netProfit, formatAmount],
+  );
+  const displaySteps = grounded.steps;
+  const displayTier = grounded.tier;
+  const signoffCount = displaySteps.filter((step) => signoffs[step.step_number]).length;
+  const displayNumber = new Map(displaySteps.map((step, index) => [step.step_number, index + 1]));
 
-  const tier = TIER_STYLES[healthTier] ?? TIER_STYLES.at_risk;
-  const grouped = groupByTimeframe(steps);
+  const tier = TIER_STYLES[displayTier] ?? TIER_STYLES.at_risk;
+  const grouped = groupByTimeframe(displaySteps);
 
   return (
     <Sheet
@@ -234,22 +259,22 @@ export function PlaybookDrawer({
           </div>
           <div className="mt-2 flex items-center justify-between gap-3">
             <p className="text-xs font-normal text-[#3D5270] dark:text-[#C5D4E4]">
-              {steps.length > 0
-                ? `${steps.length} action steps — ordered by priority and timeframe`
+              {displaySteps.length > 0
+                ? `${displaySteps.length} action steps — ordered by priority and timeframe`
                 : loading
                   ? "Loading playbook…"
                   : fallbackSteps.length > 0
                     ? "Working notes for this ratio — a full playbook pack is not published yet."
                     : "No playbook available for this ratio yet."}
             </p>
-            {signoffEnabled && steps.length > 0 && (
+            {signoffEnabled && displaySteps.length > 0 && (
               <p className="flex-shrink-0 text-[11px] font-normal text-[#3D5270] dark:text-[#C5D4E4]">
-                {signoffCount} of {steps.length} signed off
+                {signoffCount} of {displaySteps.length} signed off
               </p>
             )}
           </div>
           <DigLeaf source="From the figures on file." />
-          {evidence ? (
+          {evidence && displayTier !== "healthy" ? (
             <button type="button" className="pillar-evidence mt-3" onClick={evidence.onOpen}>
               {evidence.label}
             </button>

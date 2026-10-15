@@ -2228,9 +2228,8 @@ function Index() {
   const [actingClientId, setActingClientId] = useState<string | null>(null);
   const [actingClientName, setActingClientName] = useState<string | null>(null);
 
-  // Role guard — pure practice users belong in the portal, not the owner app.
-  // Dual-role founders keep /app unless they just signed in through the
-  // accountant door (force flag). Impersonating a client also stays.
+  // Role guard — a real firm membership belongs on My practice, not the owner app.
+  // An invite redeem (owner force) and impersonating a client stay on /app.
   useEffect(() => {
     if (!user) return;
     const acting =
@@ -2251,7 +2250,7 @@ function Index() {
       const bounce = await shouldBounceFromOwnerApp(user.id, false);
       if (!cancelled && bounce) {
         clearForcePortal();
-        navigate({ to: "/dashboard" });
+        navigate({ to: "/practice" });
       }
     })();
     return () => {
@@ -3603,12 +3602,11 @@ function Index() {
       ? ownerMetrics.runway.weeks
       : null;
   const ownerOutlook = ownerMetrics.outlook;
-  const cashText = String(v.cash ?? "").trim();
-  const cashBalance = cashText === "" ? null : Number(cashText);
+  const cashBalance = ownerMetrics.cash.amount;
   const overallHealth = computeOverallHealth({
     ratios: computedRatios as Record<string, number>,
-    cashRunwayWeeks: cashBalance != null && Number.isFinite(cashBalance) ? effectiveRunway : null,
-    cashBalance: cashBalance != null && Number.isFinite(cashBalance) ? cashBalance : null,
+    cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
+    cashBalance,
     market: boardMarket,
     shortfallWeek: ownerOutlook.shortfallWeek,
   });
@@ -3916,6 +3914,16 @@ function Index() {
                 periodEnd={v.periodEnd ?? null}
                 history={history}
                 cashflow={clientMeta?.cashflow ?? null}
+                cashOutlook={
+                  ownerMetrics.cash.amount != null
+                    ? {
+                        opening: ownerOutlook.opening,
+                        closing: ownerOutlook.closing,
+                        floor: ownerOutlook.floor,
+                        dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
+                      }
+                    : null
+                }
                 market={boardMarket}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>
                   row

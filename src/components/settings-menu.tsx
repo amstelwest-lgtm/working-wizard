@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import {
   applyPortalTheme,
@@ -44,6 +45,7 @@ export function SettingsMenu({
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<PortalTheme>("light");
   const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const sync = () => setTheme(resolvePortalTheme());
@@ -191,6 +193,18 @@ export function SettingsMenu({
           data-settings-menu
           onKeyDown={onMenuKeyDown}
         >
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={-1}
+            className="settings-menu-item"
+            onClick={() => {
+              close();
+              void navigate({ to: "/practice" });
+            }}
+          >
+            My practice
+          </button>
           <button
             type="button"
             role="menuitem"

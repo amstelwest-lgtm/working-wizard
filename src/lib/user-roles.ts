@@ -326,9 +326,9 @@ export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: 
   if (!canEnterAccountantPortal(d)) return false;
   // Auto-grant and pure owners stay on the business board.
   if (isAutoGrantedFirmRole(d) || isSmeOnly(d)) return false;
-  // Accountant door with a real firm seat does not stay on /app.
-  if (d.force === "accountant" && hasRealFirmMembership(d)) return true;
-  if (d.hasPracticeRole && !d.hasClientRole) return true;
+  // A firm seat, including one that also has a client workspace, belongs on
+  // My practice. The owner door (an invite redeem) stays on /app.
+  if (hasRealFirmMembership(d)) return true;
   return false;
 }
 

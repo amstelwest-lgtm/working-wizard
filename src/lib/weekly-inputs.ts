@@ -159,10 +159,20 @@ export function resolveWaterfallFigures(
   opts?: { preferPeriod?: boolean },
 ): ResolvedWaterfallFigures {
   const agg = aggregateWeeklyInputs(weekly);
-  const hasWeekly = hasWeeklyProfitFigures(weekly) && !opts?.preferPeriod;
+  // A negative weekly COGS is a sign error, not a second set of books.
+  // The statement period is what Ratios and the Analyst quote.
+  const weeklyCostsSane = agg.costOfSales >= 0;
+  const hasWeekly = hasWeeklyProfitFigures(weekly) && weeklyCostsSane && !opts?.preferPeriod;
+  const periodRevenue = fallback?.revenue ?? 0;
+  const periodCogs = fallback?.cogs ?? 0;
+  const cogs = hasWeekly
+    ? agg.costOfSales
+    : periodRevenue > 0 && periodCogs < 0
+      ? Math.abs(periodCogs)
+      : periodCogs;
   return {
-    revenue: hasWeekly ? agg.revenue : (fallback?.revenue ?? 0),
-    costOfSales: hasWeekly ? agg.costOfSales : (fallback?.cogs ?? 0),
+    revenue: hasWeekly ? agg.revenue : periodRevenue,
+    costOfSales: cogs,
     fixedCosts: hasWeekly ? agg.fixedCosts : (fallback?.fixedCosts ?? 0),
     depreciation: hasWeekly ? 0 : (fallback?.depreciation ?? 0),
     interest: hasWeekly ? agg.interest : (fallback?.interest ?? 0),

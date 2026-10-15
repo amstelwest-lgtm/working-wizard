@@ -69,9 +69,30 @@ export type PeriodProfitBridge = {
  * Any other gap stays inside operating expenses so operating profit still
  * equals the EBIT on the statement.
  */
+/**
+ * A cost stored as a credit (negative) is still a cost. Leaving the sign
+ * makes revenue − (−COGS) print a gross margin above 100%.
+ */
+export function costMagnitude(amount: number): number {
+  if (!Number.isFinite(amount)) return 0;
+  return amount < 0 ? Math.abs(amount) : amount;
+}
+
 export function periodProfitBridge(fields: Record<string, unknown>): PeriodProfitBridge {
   const revenue = fieldNum(fields, "revenue");
-  const cogs = fieldNum(fields, "cogs");
+  let cogs = revenue > 0 ? costMagnitude(fieldNum(fields, "cogs")) : fieldNum(fields, "cogs");
+  const statedGp = fieldPresent(fields, "grossProfit") ? fieldNum(fields, "grossProfit") : null;
+  if (
+    revenue > 0 &&
+    statedGp != null &&
+    statedGp >= 0 &&
+    statedGp <= revenue + PROFIT_RECONCILE_TOLERANCE
+  ) {
+    const fromCogs = revenue - cogs;
+    if (Math.abs(fromCogs - statedGp) > PROFIT_RECONCILE_TOLERANCE) {
+      cogs = Math.max(0, revenue - statedGp);
+    }
+  }
   const gross = revenue - cogs;
   const hasEbit = fieldPresent(fields, "ebit");
   const hasFixed = fieldPresent(fields, "fixedCosts");

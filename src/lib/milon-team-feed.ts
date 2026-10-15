@@ -1028,8 +1028,7 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
     fyStartMonth: input.fyStartMonth,
     timeZone: input.timeZone,
   });
-  const cashText = financials?.cash;
-  const cashBalance = finiteNum(cashText);
+  const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
   const healthRaw = scorecardHealthFromFinancials({

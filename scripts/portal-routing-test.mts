@@ -152,8 +152,8 @@ assert(
   "dashboard must not treat leftover intent as a just-signed-in accountant door",
 );
 assert(
-  decideOwnerAppBounce({ ...dual, actingAsClient: false }) === false,
-  "dual-role later visit to /app (no force) is allowed",
+  decideOwnerAppBounce({ ...dual, actingAsClient: false }) === true,
+  "a firm member who opens /app is sent to My practice",
 );
 
 // ── Pure practice / pure client ─────────────────────────────────────────────

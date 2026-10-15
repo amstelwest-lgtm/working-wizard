@@ -61,9 +61,8 @@ assert(
   "starter annual line keeps the per-client clause",
 );
 assert(
-  formatFirmPlanStatus({ phase: "trialing", band: "starter" }).detail ===
-    "Up to 3 clients · Starter includes up to 5 clients after the trial",
-  "a Starter trial names the 3-client trial and the 5-client band",
+  formatFirmPlanStatus({ phase: "trialing", band: "starter" }).detail === "Up to 5 clients",
+  "a Starter trial uses the 5-client band",
 );
 assert(
   formatFirmPlanStatus({ phase: "active", band: "starter" }).detail === "Up to 5 active clients",
@@ -146,10 +145,38 @@ assert(
     stripeConfigured: true,
     phase: "active",
     band: "starter",
-    clientCount: 3,
+    clientCount: 4,
     unitAmount: 0,
-  }).allowed === false,
-  "legacy $0 Starter still caps at 3",
+  }).allowed,
+  "Starter allows a 5th client; the band limit is 5",
+);
+assert(
+  !decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "active",
+    band: "starter",
+    clientCount: 5,
+    unitAmount: 0,
+  }).allowed,
+  "Starter stops at 5 even when the price amount is 0",
+);
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "trialing",
+    band: "starter",
+    clientCount: 4,
+  }).allowed,
+  "a Starter trial allows a 5th client",
+);
+assert(
+  !decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "trialing",
+    band: "starter",
+    clientCount: 5,
+  }).allowed,
+  "a Starter trial stops at 5",
 );
 const paidStarterRoom = decideFirmClientCreate({
   stripeConfigured: true,
