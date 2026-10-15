@@ -35,6 +35,7 @@ import { PersonaCritPreview } from "./persona-crit-preview";
 import { Retest560Preview } from "./retest-560-preview";
 import { FmBriefPreview } from "./fm-brief-preview";
 import { PracticeTodayPreview } from "./practice-today-preview";
+import { ActionPlanPreview } from "./action-plan-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -460,6 +461,18 @@ const retest560Route = createRoute({
   component: Retest560Preview,
 });
 
+const actionPlanRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/action-plan",
+  component: function ActionPlanHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <ActionPlanPreview />
+      </MarketProvider>
+    );
+  },
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -499,6 +512,7 @@ const routeTree = rootRoute.addChildren([
   retest560Route,
   fmBriefRoute,
   practiceTodayRoute,
+  actionPlanRoute,
 ]);
 const router = createRouter({
   routeTree,

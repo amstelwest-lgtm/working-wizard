@@ -39,6 +39,8 @@ import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
+import { planAutomation } from "@/lib/action-plan-automation";
+import { ActionPlanAutomation } from "@/components/action-plan-automation";
 import {
   createActionFromRecommendation,
   listRecommendations,
@@ -1139,6 +1141,24 @@ export default function ActionPlanPanel({
 
   // ── Derived views ─────────────────────────────────────────────────────────────
   const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
+  const automation = useMemo(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return planAutomation(
+      enriched.map((item) => ({
+        id: item.id,
+        title: stripMilonProjection(item.title),
+        ownerId: item.owner_id,
+        ownerName: item.owner_name ?? null,
+        dueDate: item.due_date,
+        status: item.status,
+        createdAt: item.created_at,
+        lastNudgeAt: lastNudgeEmails[item.id]?.sent_at ?? null,
+      })),
+      employees.map((employee) => ({ id: employee.id, name: employee.name })),
+      today,
+    );
+  }, [enriched, employees, lastNudgeEmails]);
   useEffect(() => {
     if (loading) return;
     onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title), status: item.status })));
@@ -1451,6 +1471,31 @@ export default function ActionPlanPanel({
           )}
         </CardHeader>
         <CardContent className="px-0 pb-2 pt-0">
+          <ActionPlanAutomation
+            rows={automation.rows}
+            duplicates={automation.duplicates}
+            contradictions={automation.contradictions}
+            canEdit={isOwner}
+            onConfirm={(row) => {
+              const item = items.find((entry) => entry.id === row.id);
+              if (!item) return;
+              if (row.dueSuggested && row.dueDate) {
+                void patchItem(row.id, { due_date: row.dueDate }, { note: "Confirmed suggested due date" });
+              }
+              if (row.ownerSuggested && row.owner?.kind === "team") {
+                void patchItem(
+                  row.id,
+                  { owner_id: row.owner.id, owner_name: row.owner.name },
+                  { note: `Confirmed suggestion: ${row.owner.name}` },
+                );
+              } else if (row.ownerSuggested && row.owner?.kind === "bot") {
+                void assignToAgent(item, row.owner.id);
+              }
+            }}
+            onDrop={(id, note) => {
+              void patchItem(id, { status: "done" }, { note });
+            }}
+          />
           {filtered.length === 0 && (
             <div className="px-6 py-8 text-center">
               <p className="text-sm text-slate-500 dark:text-slate-400">
