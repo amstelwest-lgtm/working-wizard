@@ -112,7 +112,9 @@ export function planAutomation(
     const hasOwner = Boolean(item.ownerId || item.ownerName?.trim());
     const owner = hasOwner ? null : suggestOwner(item.title, team);
     const dueSuggested = !item.dueDate;
-    const dueDate = item.dueDate ?? (dueSuggested ? addDays(item.createdAt, 14) : null);
+    const suggestedDue = dueSuggested ? addDays(item.createdAt, 14) : null;
+    // A created-date plus 14 that is already past is not a due the row has.
+    const dueDate = item.dueDate ?? (suggestedDue && suggestedDue >= today ? suggestedDue : null);
     let followUp: FollowUpState = "none";
     if (item.status === "done") followUp = "done";
     else if (item.dueDate && item.dueDate < today) followUp = "overdue";

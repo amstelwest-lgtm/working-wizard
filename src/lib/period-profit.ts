@@ -78,6 +78,16 @@ export function costMagnitude(amount: number): number {
   return amount < 0 ? Math.abs(amount) : amount;
 }
 
+/** Gross profit ÷ revenue from the same bridge the waterfall prints. Null when revenue is missing. */
+export function statementGrossMarginFraction(
+  fields: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!fields) return null;
+  const bridge = periodProfitBridge(fields);
+  if (!(bridge.revenue > 0) || !Number.isFinite(bridge.grossProfit)) return null;
+  return bridge.grossProfit / bridge.revenue;
+}
+
 export function periodProfitBridge(fields: Record<string, unknown>): PeriodProfitBridge {
   const revenue = fieldNum(fields, "revenue");
   let cogs = revenue > 0 ? costMagnitude(fieldNum(fields, "cogs")) : fieldNum(fields, "cogs");

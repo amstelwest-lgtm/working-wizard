@@ -35,7 +35,7 @@ import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { computeIsStale } from "@/components/review-signoff";
+import { budgetSignoffIsStale } from "@/lib/signoff-status";
 import {
   parseOperatingProfile,
   profileToBudgetQualification,
@@ -235,8 +235,8 @@ export function BudgetPanel({
   };
 
   useEffect(() => {
-    onReviewStale?.(computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc?.updatedAt ?? null));
-  }, [onReviewStale, budgetSignoff, budgetUpdatedAt, doc?.updatedAt]);
+    onReviewStale?.(budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt));
+  }, [onReviewStale, budgetSignoff, budgetUpdatedAt]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -612,7 +612,7 @@ export function BudgetPanel({
         clientId={clientId}
         clientName={clientName}
         signoff={budgetSignoff}
-        isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
+        isStale={budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt)}
         canSign={Boolean(canSign && clientId)}
         onSignoffChange={patchBudgetSignoff}
         signoffKnown={signoffKnown}

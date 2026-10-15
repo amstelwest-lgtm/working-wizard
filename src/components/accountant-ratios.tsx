@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
-import { computeRatios, healthBandLabel, scoreTier } from "@/lib/ratios";
+import { computeRatios, formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
@@ -131,7 +131,7 @@ type RatioRow = {
   nextSteps: string[];
 };
 
-function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET) {
+function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET, ratioName?: string) {
   if (!isFinite(v)) return "—";
   switch (f) {
     case "pct":
@@ -139,7 +139,8 @@ function fmt(v: number, f: RatioRow["format"], market: MoneyMarket = ZA_MARKET) 
     case "x":
       return `${v.toFixed(2)}×`;
     case "days":
-      return `${Math.round(v)} d`;
+      if (ratioName === "Working Capital Days") return formatQuotedDays(ratioName, v);
+      return `${Math.abs(Math.round(v))} d`;
     case "money":
       return formatMoney(v, market);
   }
@@ -758,11 +759,11 @@ export function AccountantRatiosPanel({
     const lows = worst3
       .map(
         (r, i) =>
-          `${i + 1}. ${r.friendly} (${localizeCopy(r.technical, market)}): ${fmt(r.value, r.format, market)} — benchmark ${r.benchmark}\n   Suggested next step: ${localizeCopy(r.nextSteps[0], market)}`,
+          `${i + 1}. ${r.friendly} (${localizeCopy(r.technical, market)}): ${fmt(r.value, r.format, market, r.technical)} — benchmark ${r.benchmark}\n   Suggested next step: ${localizeCopy(r.nextSteps[0], market)}`,
       )
       .join("\n\n");
     const high = best1
-      ? `${best1.friendly}: ${fmt(best1.value, best1.format, market)} (benchmark ${best1.benchmark})`
+      ? `${best1.friendly}: ${fmt(best1.value, best1.format, market, best1.technical)} (benchmark ${best1.benchmark})`
       : "—";
     const subject = `${clientName} — financial health update & 3 priority actions`;
     const body = `Hi ${clientName},
@@ -785,10 +786,10 @@ Your Milōn accountant`;
   const buildWhatsapp = () => {
     const w = worst3[0];
     const wTxt = w
-      ? `${w.friendly} is at ${fmt(w.value, w.format, market)} (benchmark ${w.benchmark}) — worth a closer look.`
+      ? `${w.friendly} is at ${fmt(w.value, w.format, market, w.technical)} (benchmark ${w.benchmark}) — worth a closer look.`
       : "";
     const bTxt = best1
-      ? `Good news: ${best1.friendly} is healthy at ${fmt(best1.value, best1.format, market)}.`
+      ? `Good news: ${best1.friendly} is healthy at ${fmt(best1.value, best1.format, market, best1.technical)}.`
       : "";
     return `Hi ${clientName}, quick Milōn update.\n\n${bTxt}\n${wTxt}\n\nWant to set up a short call to discuss ${w?.friendly ?? "your numbers"}?`;
   };
@@ -831,7 +832,7 @@ Your Milōn accountant`;
         return [
           r.friendly,
           localizeCopy(r.technical, market),
-          fmt(r.value, r.format, market),
+          fmt(r.value, r.format, market, r.technical),
           r.benchmark,
           isFinite(r.health) ? `${Math.round(r.health)}%` : "—",
           health,
@@ -975,7 +976,7 @@ Your Milōn accountant`;
                         {localizeCopy(r.formula, market)}
                       </td>
                       <td className="p-3 text-right font-semibold tabular-nums r">
-                        {fmt(r.value, r.format, market)}
+                        {fmt(r.value, r.format, market, r.technical)}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
@@ -1037,7 +1038,7 @@ Your Milōn accountant`;
             <DialogTitle>{openRow?.friendly}</DialogTitle>
             <DialogDescription>
               {openRow ? localizeCopy(openRow.technical, market) : ""} ·{" "}
-              {openRow ? fmt(openRow.value, openRow.format, market) : ""} · benchmark{" "}
+              {openRow ? fmt(openRow.value, openRow.format, market, openRow.technical) : ""} · benchmark{" "}
               {openRow?.benchmark}
             </DialogDescription>
           </DialogHeader>

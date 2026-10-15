@@ -23,6 +23,33 @@ export type OwnerNeedsView = {
   syncLines: string[];
 };
 
+/**
+ * What needs you → Action plan. Unknown is not "No open work".
+ * Titles are the open rows already on the plan.
+ */
+export function homeActionNeeds(input: {
+  known: boolean;
+  unavailable?: boolean;
+  titles: readonly string[];
+  overdue: number;
+}): { heading: string; lines: string[] } {
+  if (!input.known) return { heading: "Action plan", lines: ["Checking the action plan."] };
+  if (input.unavailable) return { heading: "Action plan", lines: ["Open actions aren't available yet."] };
+  const titles = input.titles.map((title) => title.trim()).filter(Boolean);
+  if (titles.length === 0) return { heading: "Action plan", lines: ["No open work."] };
+  const heading =
+    input.overdue > 0 ? `${titles.length} open, ${input.overdue} overdue` : `${titles.length} open`;
+  return { heading, lines: titles.slice(0, 2) };
+}
+
+/** Same open-action sentence the Financial Manager card and the hub count. */
+export function openActionSentence(titles: readonly string[]): string | null {
+  const clean = titles.map((title) => title.trim()).filter(Boolean);
+  if (clean.length === 0) return null;
+  if (clean.length === 1) return clean[0]!;
+  return `${clean.length} open actions.`;
+}
+
 function countPhrase(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }

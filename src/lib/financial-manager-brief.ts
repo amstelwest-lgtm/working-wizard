@@ -135,6 +135,8 @@ export function buildFinancialManagerBrief(input: {
   currentPeriodEnd?: string | null;
   snapshots: readonly BriefSnapshot[];
   openActionTitle?: string | null;
+  /** Open plan rows. When set, these are the same titles the hub and the card count. */
+  openActionTitles?: readonly string[] | null;
   overdueActions?: number;
   cashDipWeek?: number | null;
   receivables?: number | null;
@@ -159,14 +161,25 @@ export function buildFinancialManagerBrief(input: {
 
   const actions: BriefAction[] = [];
   const overdue = input.overdueActions ?? 0;
-  const openTitle = input.openActionTitle?.trim() || "";
-  if (input.actionsReady !== false && openTitle) {
-    actions.push({
-      id: "open-action",
-      title: openTitle,
-      reason: "First open item on the action plan.",
-      button: "hand",
-      tab: "plan",
+  const titled = (
+    input.openActionTitles != null
+      ? input.openActionTitles
+      : input.openActionTitle
+        ? [input.openActionTitle]
+        : []
+  )
+    .map((title) => title.trim())
+    .filter(Boolean);
+  const openTitles = [...new Set(titled)];
+  if (input.actionsReady !== false) {
+    openTitles.forEach((title, index) => {
+      actions.push({
+        id: index === 0 ? "open-action" : `open-action-${index}`,
+        title,
+        reason: "Open item on the action plan.",
+        button: "hand",
+        tab: "plan",
+      });
     });
   }
   const receivables =

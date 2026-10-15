@@ -249,7 +249,7 @@ import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves } from "@/lib/strategic-moves";
-import { periodProfitBridge } from "@/lib/period-profit";
+import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import {
   hashFigures,
   latestSnapshotId,
@@ -272,7 +272,7 @@ import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-u
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
 import { ownerPresence } from "@/lib/owner-presence";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
-import { booksSyncCopy, type BooksLink } from "@/lib/owner-needs";
+import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
@@ -1514,17 +1514,20 @@ function ClientView() {
       money: budgetMoney,
     });
   }
+  const statementGrossMargin = statementGrossMarginFraction(financials);
   const statementFigureFacts = {
-    grossMargin: ratios["Gross Margin"],
+    grossMargin: statementGrossMargin ?? ratios["Gross Margin"],
     operatingMargin: ratios["Operating Margin"],
     netMargin: ratios["Net Margin"],
     periodLabel: figuresPeriodLabel,
   };
   const clientProfitBridge = periodProfitBridge(financials);
+  const debtorDaysForMoves = ratios["Debtor Days"];
   const strategicMoves = rankStrategicMoves({
     healthByKey: healthMap,
     profile: briefingProfile,
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
+    debtorDays: Number.isFinite(debtorDaysForMoves) ? debtorDaysForMoves : null,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -1608,12 +1611,48 @@ function ClientView() {
     moves: strategicMoves[0]?.title ?? null,
     books: booksLines.figure,
   }, booksLines.detail ? { books: booksLines.detail } : undefined);
-  const [overviewNextStep, setOverviewNextStep] = useState<NextStep | null>(null);
-  const [nextStepKnown, setNextStepKnown] = useState(false);
-  const onOverviewNextStep = useCallback((step: NextStep | null) => {
-    setOverviewNextStep(step);
-    setNextStepKnown(true);
+  const [openPlanTitles, setOpenPlanTitles] = useState<string[] | null>(null);
+  const [openPlanOverdue, setOpenPlanOverdue] = useState(0);
+  const [openPlanUnavailable, setOpenPlanUnavailable] = useState(false);
+  const [openPlanTick, setOpenPlanTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setOpenPlanTick((n) => n + 1);
+    window.addEventListener("milon-action-plan-refresh", bump);
+    return () => window.removeEventListener("milon-action-plan-refresh", bump);
   }, []);
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    setOpenPlanTitles(null);
+    setOpenPlanUnavailable(false);
+    void (async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("action_items")
+        .select("title, due_date, status")
+        .eq("client_id", clientId)
+        .neq("status", "done")
+        .order("seq");
+      if (cancelled) return;
+      if (error) {
+        setOpenPlanUnavailable(true);
+        setOpenPlanTitles([]);
+        setOpenPlanOverdue(0);
+        return;
+      }
+      const rows = (data ?? []) as { title?: string | null; due_date?: string | null }[];
+      const titles = rows.flatMap((row) => {
+        const title = row.title?.trim() ?? "";
+        return title ? [title] : [];
+      });
+      setOpenPlanUnavailable(false);
+      setOpenPlanTitles(titles);
+      setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, openPlanTick]);
   const workflowCtx: WorkflowContext = {
     clientName: client?.name ?? "",
     profile: briefingProfile,
@@ -2919,8 +2958,12 @@ function ClientView() {
         floor: cashOutlook.floor,
         dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
       },
-      openAction: overviewNextStep?.title ?? null,
-      actionsReady: nextStepKnown,
+      openAction: openPlanUnavailable
+        ? "Open actions aren't available yet."
+        : openPlanTitles == null
+          ? null
+          : openActionSentence(openPlanTitles),
+      actionsReady: openPlanUnavailable || openPlanTitles != null,
       signedBy: null,
       signedOn: null,
       market: clientMarket,
@@ -2937,8 +2980,8 @@ function ClientView() {
     cashOutlook.closing,
     cashOutlook.floor,
     cashOutlook.dipsBelowFloorWeek,
-    overviewNextStep,
-    nextStepKnown,
+    openPlanTitles,
+    openPlanUnavailable,
     clientMarket,
   ]);
   const homeLines = useMemo(
@@ -2951,18 +2994,14 @@ function ClientView() {
   // "Cannot access '…' before initialization" on every /clients/:id render.
   const reportsIssued = client?.reports_issued_count ?? 0;
   const homeNeeds = useMemo(() => {
-    const open = overviewNextStep?.outstanding.openActions ?? 0;
-    const overdue = overviewNextStep?.outstanding.overdueActions ?? 0;
-    const actionsHeading = !nextStepKnown
-      ? "Action plan"
-      : open > 0
-        ? overdue > 0
-          ? `${open} open, ${overdue} overdue`
-          : `${open} open`
-        : "Action plan";
-    const actionLines = !nextStepKnown
-      ? ["Checking the action plan."]
-      : [overviewNextStep?.title ?? "No open work."];
+    const planNeeds = homeActionNeeds({
+      known: openPlanTitles != null,
+      unavailable: openPlanUnavailable,
+      titles: openPlanTitles ?? [],
+      overdue: openPlanOverdue,
+    });
+    const actionsHeading = planNeeds.heading;
+    const actionLines = planNeeds.lines;
     const waiting = homeActivity.findings.filter(
       (row) =>
         row.status !== "approved" &&
@@ -3001,8 +3040,9 @@ function ClientView() {
       syncLines: [booksLine],
     };
   }, [
-    overviewNextStep,
-    nextStepKnown,
+    openPlanTitles,
+    openPlanOverdue,
+    openPlanUnavailable,
     homeActivity,
     qboLink,
     xeroLink,
@@ -3022,8 +3062,8 @@ function ClientView() {
           periodLabel: row.period_label,
           financials: row.financials,
         })),
-        openActionTitle: overviewNextStep?.title ?? null,
-        overdueActions: overviewNextStep?.outstanding.overdueActions ?? 0,
+        openActionTitles: openPlanTitles ?? [],
+        overdueActions: openPlanOverdue,
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
@@ -3033,7 +3073,7 @@ function ClientView() {
           return title ? [{ id: row.id, title }] : [];
         }),
         draftsReady: !homeActivity.loading && !homeActivity.error,
-        actionsReady: nextStepKnown,
+        actionsReady: openPlanTitles != null && !openPlanUnavailable,
         formatMoney: (amount) => formatMoney(amount, clientMarket),
       }),
     [
@@ -3041,11 +3081,12 @@ function ClientView() {
       financials,
       statementMeta.periodEnd,
       snapshots,
-      overviewNextStep,
+      openPlanTitles,
+      openPlanOverdue,
+      openPlanUnavailable,
       cashOutlook.dipsBelowFloorWeek,
       statementPosition.receivables,
       homeActivity,
-      nextStepKnown,
       clientMarket,
     ],
   );
@@ -3238,7 +3279,6 @@ function ClientView() {
                   refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
                   onAct={handleNextStepAct}
                   hideCta
-                  onResolved={onOverviewNextStep}
                 />
                 </div>
                 </div>
@@ -3928,9 +3968,11 @@ function ClientView() {
                           ? ratios["Net Margin"] * 100
                           : null,
                       grossMarginPct:
-                        typeof ratios["Gross Margin"] === "number" && Number.isFinite(ratios["Gross Margin"])
-                          ? ratios["Gross Margin"] * 100
-                          : null,
+                        statementGrossMargin != null
+                          ? statementGrossMargin * 100
+                          : typeof ratios["Gross Margin"] === "number" && Number.isFinite(ratios["Gross Margin"])
+                            ? ratios["Gross Margin"] * 100
+                            : null,
                     })}
                     chip={healthChip}
                     scope="profitability"

@@ -29,6 +29,7 @@ import {
   practiceNeedsAttention,
   portfolioSummaryLine,
   revenueOf,
+  trendColumnVisible,
   trendDelta30d,
   type ScoreHistoryPoint,
 } from "@/lib/portfolio-dashboard";
@@ -120,7 +121,7 @@ import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
 import { PracticeAgentThread } from "@/components/practice-agent-thread";
 import { clientHomeSearch } from "@/lib/client-home-search";
-import { loadClientDisplayNames } from "@/lib/client-display-name";
+import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import type { ChaseDraftInput } from "@/lib/chase-draft";
 import { KpiTrendline } from "@/components/kpi-trendline";
@@ -1409,6 +1410,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     } catch {
       /* keep the stored name when the lookup cannot run */
     }
+    rawClients = collapseDuplicateClientShells(rawClients);
 
     // Attach legacy null-firm practice clients to the active firm so they stay visible.
     if (!isIt && activeFirmId && rawClients.some((c) => !c.firm_id)) {
@@ -1780,6 +1782,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const filteredRows = clientRows.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+  const showTrendColumn = trendColumnVisible(clientRows.map((c) => c.scoreSeries));
 
   // ── Playbook grid grouped by category ────────────────────────────────────
   const playbookByCategory: Record<string, PlaybookMeta[]> = {};
@@ -2202,7 +2205,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 <tr>
                   <th>Client</th>
                   <th>Health</th>
-                  <th>Trend</th>
+                  {showTrendColumn ? <th>Trend</th> : null}
                   <th>Runway</th>
                   <th id="wizard-dash-queries">Queries</th>
                   <th>Op. profit (MTD)</th>
@@ -2265,22 +2268,24 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                           </span>
                         </div>
                       </td>
-                      <td data-label="Trend" data-client-trend={c.scoreSeries.length >= 2 ? "yes" : "no"}>
-                        {c.scoreSeries.length >= 2 ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <KpiTrendline values={c.scoreSeries} width={56} height={18} />
-                            <span className="text-[11px] font-semibold text-slate-500">
-                              {c.scoreSeries[c.scoreSeries.length - 1]! > c.scoreSeries[0]!
-                                ? "Up"
-                                : c.scoreSeries[c.scoreSeries.length - 1]! < c.scoreSeries[0]!
-                                  ? "Down"
-                                  : "Flat"}
+                      {showTrendColumn ? (
+                        <td data-label="Trend" data-client-trend={c.scoreSeries.length >= 2 ? "yes" : "no"}>
+                          {c.scoreSeries.length >= 2 ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <KpiTrendline values={c.scoreSeries} width={56} height={18} />
+                              <span className="text-[11px] font-semibold text-slate-500">
+                                {c.scoreSeries[c.scoreSeries.length - 1]! > c.scoreSeries[0]!
+                                  ? "Up"
+                                  : c.scoreSeries[c.scoreSeries.length - 1]! < c.scoreSeries[0]!
+                                    ? "Down"
+                                    : "Flat"}
+                              </span>
                             </span>
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      ) : null}
                       <td className="num" data-label="Runway" title={runwayStr(c)}>
                         <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
                       </td>

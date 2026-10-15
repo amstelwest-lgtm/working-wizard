@@ -33,6 +33,34 @@ export function cashEmptyPresentation(input: {
   };
 }
 
+/**
+ * Chat quotes the same closings as the cash screen.
+ * A P&L that looks cash generative does not hide a negative week or a week under the floor.
+ */
+export function forecastChatFacts(input: {
+  closings: readonly number[];
+  floor: number;
+  plCashGenerative?: boolean;
+}): {
+  cashGenerative: boolean;
+  negativeWeeks: number;
+  weeksBelowFloor: number;
+  shortfall: boolean;
+} {
+  const negativeWeeks = input.closings.filter((value) => Number.isFinite(value) && value < 0).length;
+  const weeksBelowFloor =
+    Number.isFinite(input.floor)
+      ? input.closings.filter((value) => Number.isFinite(value) && value < input.floor).length
+      : 0;
+  const dipped = negativeWeeks > 0 || weeksBelowFloor > 0;
+  return {
+    cashGenerative: input.plCashGenerative === true && !dipped,
+    negativeWeeks,
+    weeksBelowFloor,
+    shortfall: dipped,
+  };
+}
+
 export function forecastLowestPoint(
   opening: number,
   closings: readonly number[],

@@ -411,6 +411,20 @@ export const FLOW_FIELD_KEYS = [
   "laborCost",
 ] as const satisfies readonly (keyof RatioInputs)[];
 
+/**
+ * Day counts quoted on Roadmap and in chat.
+ * Component days are never printed negative. A negative working-capital cycle
+ * is flagged — creditors fund it — instead of a bare minus.
+ */
+export function formatQuotedDays(name: string, days: number): string {
+  if (!Number.isFinite(days)) return "—";
+  const rounded = Math.round(days);
+  if (name === "Working Capital Days" && rounded < 0) {
+    return `Creditors fund the cycle · ${Math.abs(rounded)} days`;
+  }
+  return `${Math.abs(rounded)} days`;
+}
+
 /** Period length recorded on a financials blob; 12 when missing or invalid. */
 export function periodMonthsOf(fin: Record<string, unknown> | null | undefined): number {
   const raw = fin?.[PERIOD_MONTHS_KEY];

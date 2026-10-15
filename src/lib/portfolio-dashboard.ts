@@ -131,6 +131,11 @@ export function trendDelta30d(
   return Math.round(scores[scores.length - 1] - scores[0]);
 }
 
+/** The Clients table shows Trend only when some row has two stored scores. */
+export function trendColumnVisible(series: readonly (readonly number[])[]): boolean {
+  return series.some((points) => points.filter((score) => Number.isFinite(score)).length >= 2);
+}
+
 /** Bubble / chart colour from display status. */
 export function statusColor(status: HealthTier | null | undefined): string {
   if (status === "healthy") return "var(--ok)";

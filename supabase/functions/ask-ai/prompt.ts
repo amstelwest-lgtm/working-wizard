@@ -254,24 +254,37 @@ export function buildPrompt(
 
   if (ctx.cashForecast?.hasData) {
     const c = ctx.cashForecast;
+    const weeksBelow = c.weeksBelowFloor ?? 0;
+    const dipped = weeksBelow > 0 || c.negativeWeeks > 0;
     lines.push(
       "\nCash forecast outlook (13-week trajectory). Cash on file, when listed under OVERVIEW FIGURES, is not missing:",
     );
-    lines.push(
-      `  ${
-        c.shortfall
-          ? `Shortfall in week ${c.lowestWeek}${c.timingNote ? ` (${c.timingNote})` : ""}`
-          : "In the black across the horizon"
-      }`,
-    );
-    if (c.cashGenerative) {
-      lines.push("  Cash runway: cash generative — not counted as zero weeks");
-    } else if (c.runwayWeeks != null) {
+    if (dipped) {
+      const parts = [
+        weeksBelow > 0 ? `${weeksBelow} of ${c.horizonWeeks} weeks below the floor` : null,
+        c.negativeWeeks > 0 ? `${c.negativeWeeks} weeks close under zero` : null,
+        c.lowestWeek ? `first dip in week ${c.lowestWeek}` : null,
+        c.timingNote,
+      ].filter(Boolean);
+      lines.push(`  ${parts.join("; ")}`);
+      lines.push("  Do not call this cash generative, in the black, or 0 negative weeks.");
+    } else {
       lines.push(
-        `  Cash runway: ${c.runwayWeeks >= c.horizonWeeks ? `${c.horizonWeeks}+` : c.runwayWeeks} weeks`,
+        `  ${
+          c.shortfall
+            ? `Shortfall in week ${c.lowestWeek}${c.timingNote ? ` (${c.timingNote})` : ""}`
+            : "In the black across the horizon"
+        }`,
       );
+      if (c.cashGenerative) {
+        lines.push("  Cash runway: cash generative — not counted as zero weeks");
+      } else if (c.runwayWeeks != null) {
+        lines.push(
+          `  Cash runway: ${c.runwayWeeks >= c.horizonWeeks ? `${c.horizonWeeks}+` : c.runwayWeeks} weeks`,
+        );
+      }
+      lines.push(`  Negative weeks: ${c.negativeWeeks}`);
     }
-    lines.push(`  Negative weeks: ${c.negativeWeeks}`);
     if (c.trajectory) {
       lines.push(`  Trajectory: ${c.trajectory} · week-13 close vs opening: ${c.closingVsOpening}`);
     }
