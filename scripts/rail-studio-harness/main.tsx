@@ -491,6 +491,23 @@ const cashSuggestRoute = createRoute({
   },
 });
 
+const cashOnceOffRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cash-once-off",
+  component: function CashOnceOffHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <div className="min-h-screen bg-[#F4F7FB] p-4">
+          <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#102A43]">
+            Fixture proof — not a client file
+          </p>
+          <CashForecastPanel clientId="harness-client" clientName="Harbour Glass" />
+        </div>
+      </MarketProvider>
+    );
+  },
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -532,6 +549,7 @@ const routeTree = rootRoute.addChildren([
   practiceTodayRoute,
   actionPlanRoute,
   cashSuggestRoute,
+  cashOnceOffRoute,
 ]);
 const router = createRouter({
   routeTree,
