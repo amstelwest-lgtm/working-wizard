@@ -17,6 +17,7 @@ import { advisoryPackFiguresChanged, livePackMetrics } from "@/lib/advisory-pack
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
+import { loadClientDisplayNames } from "@/lib/client-display-name";
 import {
   rankPortfolio,
   summarisePortfolio,
@@ -117,7 +118,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const { data: clientsRaw, error } = await sb
       .from("clients")
       .select(
-        "id, name, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, financials, cashflow, market, operating_profile",
+        "id, name, owner_user_id, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, financials, cashflow, market, operating_profile",
       )
       .eq("firm_id", data.firmId)
       .order("name")
@@ -126,6 +127,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const clients = (clientsRaw ?? []) as Array<{
       id: string;
       name: string;
+      owner_user_id?: string | null;
       advisory_state: string | null;
       advisory_cycle_id: string | null;
       next_review_at: string | null;
@@ -139,6 +141,27 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     if (clients.length === 0) {
       return { rows: [], summary: summarisePortfolio([]), generatedAt: now };
     }
+    const viewerId = (context as { userId?: string }).userId;
+    let viewerName: string | null = null;
+    if (viewerId) {
+      try {
+        const profile = await sb.from("profiles").select("full_name").eq("id", viewerId).maybeSingle();
+        const fullName = profile?.data?.full_name;
+        viewerName = typeof fullName === "string" ? fullName : null;
+      } catch {
+        viewerName = null;
+      }
+    }
+    try {
+      const displayNames = await loadClientDisplayNames(sb, clients, viewerName);
+      for (const client of clients) {
+        const next = displayNames.get(client.id);
+        if (next) client.name = next;
+      }
+    } catch {
+      /* keep the stored name */
+    }
+
     const ids = clients.map((c) => c.id);
     const cycleIds = clients.map((c) => c.advisory_cycle_id).filter((x): x is string => Boolean(x));
 

@@ -39,6 +39,8 @@ export function PracticeAgentThread({
     if (!el || !clientId) return;
     let cancelled = false;
     el.dataset.clientId = clientId;
+    el.dataset.agent = agent;
+    el.dispatchEvent(new Event("ask-ai-context"));
     if (el.dataset.askAiMounted === "1" && el.dataset.askAiClient === clientId) return;
     el.innerHTML = "";
     delete el.dataset.askAiMounted;
@@ -71,7 +73,7 @@ export function PracticeAgentThread({
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, agent]);
 
   return (
     <div className="practice-agent-thread" data-practice-agent-thread={agent}>

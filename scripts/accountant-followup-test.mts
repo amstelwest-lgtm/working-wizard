@@ -38,11 +38,11 @@ assert(capped.length === 8, "follow-up queue is capped");
 const dashSrc = readFileSync(resolve("src/components/practice-board.tsx"), "utf8");
 assert(dashSrc.includes('id="follow-up"'), "dashboard has follow-up panel");
 assert(dashSrc.includes("buildFollowUpQueue"), "dashboard uses follow-up queue");
-assert(dashSrc.includes('tab: "plan"'), "Chase opens Action Plan tab");
-assert(dashSrc.includes('filter: "overdue"'), "overdue Chase deep-links filter=overdue");
+assert(dashSrc.includes("ChaseDraftDialog"), "Chase opens a draft");
+assert(dashSrc.includes("openChase"), "follow-up chase builds that draft");
+assert(!dashSrc.includes("openClientPlan"), "Chase does not navigate to the plan");
 assert(!dashSrc.includes("Follow up on Action Plan"), "follow-up is not a button on the client row");
 assert(dashSrc.includes("Chase →"), "the practice follow-up list still chases");
-assert(dashSrc.includes("openClientPlan"), "attention cards can open the plan");
 
 const practiceAt = dashSrc.indexOf('view === "practice"');
 const clientsAt = dashSrc.indexOf('view === "clients"');

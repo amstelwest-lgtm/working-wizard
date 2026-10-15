@@ -159,7 +159,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
     void navigate({
       to: "/clients/$clientId",
       params: { clientId: id },
-      search: {},
+      search: { tab: "home" },
     });
   };
 

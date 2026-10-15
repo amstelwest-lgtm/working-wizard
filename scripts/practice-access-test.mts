@@ -17,6 +17,7 @@ import {
   classesAtOrBelow,
   effectiveClassification,
   parseClassification,
+  practiceRoleLabel,
 } from "../src/lib/practice-access";
 import { createHash } from "node:crypto";
 import { accessApproveUrl, accessGrantedEmail, firmInviteEmail, publicEmailError } from "../src/lib/practice-access-email";
@@ -41,6 +42,8 @@ assert(parseClassification("nope") === "staff", "unknown classification falls ba
 assert(accessTokenFromNext("/access/abc123") === "abc123", "parses access next path");
 assert(accessApproveUrl("tok").endsWith("/access/tok"), "approve url points at /access/:token");
 
+assert(practiceRoleLabel("staff", true) === "Owner", "firm owner is labelled Owner");
+assert(practiceRoleLabel("staff", false) === "Staff", "staff stays Staff");
 assert(canPractice("staff", "sign_off") === false, "1. Staff cannot sign off");
 assert(canPractice("bookkeeper", "sign_off") === false, "Staff=books staff: no sign-off");
 assert(canPractice("manager", "sign_off") === false, "2. Manager cannot sign off");

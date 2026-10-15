@@ -33,6 +33,23 @@ export const CLASSIFICATION_LABELS: Record<PracticeClassification, string> = {
   read_only: "Read only",
 };
 
+/**
+ * Label for a person on a client. The firm owner stays "Owner" even when the
+ * stored per-client classification is staff. This does not change that
+ * classification or sign-off.
+ */
+export function practiceRoleLabel(
+  classification: string | null | undefined,
+  isFirmOwner: boolean,
+): string {
+  if (isFirmOwner) return "Owner";
+  if (!classification) return "";
+  if ((CLASSIFICATIONS as readonly string[]).includes(classification)) {
+    return CLASSIFICATION_LABELS[classification as PracticeClassification];
+  }
+  return classification.replaceAll("_", " ");
+}
+
 export const MEMBERSHIP_LABELS: Record<MembershipRole, string> = {
   owner: "Practice owner",
   admin: "Firm admin",

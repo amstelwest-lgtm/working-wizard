@@ -228,9 +228,11 @@ export function mountAskAi(container, options) {
   let signoffCtas = [];
   let lastQuestion = "";
   let boundClientId = null;
+  let boundAgent = "";
   let requestGen = 0;
 
   const THREAD_PREFIX = "milon-bot-thread:";
+  const THREAD_AGENTS = new Set(["financial_manager", "analyst", "advisor"]);
 
   function currentClientId() {
     return (
@@ -238,6 +240,16 @@ export function mountAskAi(container, options) {
       (typeof window !== "undefined" && window.__askAiClientId) ||
       ""
     );
+  }
+
+  function currentAgent() {
+    const agent = container.dataset.agent || "";
+    return THREAD_AGENTS.has(agent) ? agent : "";
+  }
+
+  function threadStorageKey(clientId, agent) {
+    if (!clientId) return "";
+    return agent ? THREAD_PREFIX + clientId + ":" + agent : THREAD_PREFIX + clientId;
   }
 
   function sessionStore() {
@@ -250,12 +262,22 @@ export function mountAskAi(container, options) {
     }
   }
 
-  function readThread(clientId) {
+  function readThread(clientId, agent) {
     if (!clientId) return [];
     try {
       const store = sessionStore();
       if (!store) return [];
-      const raw = store.getItem(THREAD_PREFIX + clientId);
+      const scoped = agent || "";
+      const key = threadStorageKey(clientId, scoped);
+      let raw = store.getItem(key);
+      // A thread written before agents were split stays with Financial Manager.
+      if (!raw && scoped === "financial_manager") {
+        const legacy = store.getItem(THREAD_PREFIX + clientId);
+        if (legacy) {
+          store.setItem(key, legacy);
+          raw = legacy;
+        }
+      }
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
@@ -285,12 +307,12 @@ export function mountAskAi(container, options) {
     }
   }
 
-  function writeThread(clientId, turns) {
+  function writeThread(clientId, turns, agent) {
     if (!clientId) return;
     try {
       const store = sessionStore();
       if (!store) return;
-      const key = THREAD_PREFIX + clientId;
+      const key = threadStorageKey(clientId, agent == null ? boundAgent : agent);
       if (!turns.length) {
         store.removeItem(key);
         return;
@@ -303,10 +325,23 @@ export function mountAskAi(container, options) {
 
   function syncThreadClient() {
     const id = String(currentClientId() || "");
-    if (id === boundClientId) return;
-    if (boundClientId) writeThread(boundClientId, history);
+    const agent = currentAgent();
+    if (id === boundClientId && agent === boundAgent) return;
+    if (boundClientId) writeThread(boundClientId, history, boundAgent);
     boundClientId = id;
-    history = readThread(id);
+    boundAgent = agent;
+    history = readThread(id, agent);
+  }
+
+  function refreshThreadFromContext() {
+    const id = String(currentClientId() || "");
+    const agent = currentAgent();
+    if (id === boundClientId && agent === boundAgent) return;
+    syncThreadClient();
+    question = "";
+    answer = "";
+    errorMsg = "";
+    render();
   }
 
   function render() {
@@ -1026,4 +1061,25 @@ export function mountAskAi(container, options) {
   }
 
   render();
+
+  if (container.__askContextRefresh && typeof container.removeEventListener === "function") {
+    container.removeEventListener("ask-ai-context", container.__askContextRefresh);
+  }
+  container.__askContextRefresh = refreshThreadFromContext;
+  container.addEventListener("ask-ai-context", refreshThreadFromContext);
+  try {
+    if (container.__askThreadObserver && typeof container.__askThreadObserver.disconnect === "function") {
+      container.__askThreadObserver.disconnect();
+    }
+    if (typeof MutationObserver === "function") {
+      const observer = new MutationObserver(() => refreshThreadFromContext());
+      observer.observe(container, {
+        attributes: true,
+        attributeFilter: ["data-agent", "data-client-id"],
+      });
+      container.__askThreadObserver = observer;
+    }
+  } catch {
+    /* the event above is enough when the host cannot observe attributes */
+  }
 }
