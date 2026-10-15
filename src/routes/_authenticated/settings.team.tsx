@@ -28,6 +28,7 @@ import {
 import {
   CLASSIFICATION_HELP,
   CLASSIFICATION_LABELS,
+  practiceRoleLabel,
   CLASSIFICATIONS,
   CLASS_RANK,
   FIRM_PERMISSION_HELP,
@@ -765,7 +766,7 @@ function TeamAccessPage() {
                             {m.name}
                           </td>
                           <td data-label="Class" className="py-2 pr-3 text-slate-400">
-                            {a ? CLASSIFICATION_LABELS[a.classification] : "—"}
+                            {a ? practiceRoleLabel(a.classification, m.isFirmOwner) : "—"}
                           </td>
                           <td data-label="Status" className="py-2 pr-3 text-xs text-slate-400">
                             {a?.status}

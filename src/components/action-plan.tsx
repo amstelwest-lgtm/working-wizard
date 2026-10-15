@@ -37,7 +37,8 @@ import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
-import { planConfidenceDisplay } from "@/lib/plan-confidence-display";
+import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
+import { practiceRoleLabel } from "@/lib/practice-access";
 import {
   createActionFromRecommendation,
   listRecommendations,
@@ -183,7 +184,7 @@ interface Props {
   /** Same stamp the tab sign-off prints. Unsigned exports say Draft. */
   reviewSignoff?: ReportSignoffStamp | null;
   /** Titles already on the list, in stored order. The strip sentence uses them. */
-  onAnswer?: (actions: readonly { title: string }[]) => void;
+  onAnswer?: (actions: readonly { title: string; status?: string | null }[]) => void;
   /** The strip's Add action uses this same focus. */
   onRegisterAdd?: (focus: () => void) => void;
   /**
@@ -492,7 +493,8 @@ export default function ActionPlanPanel({
   ownerSignoffStale = false,
 }: Props) {
   const { date } = useMarketFormat();
-  const { profile } = useAccountantProfile();
+  const { profile, firms, firmId } = useAccountantProfile();
+  const firmOwnerUserId = firms.find((firm) => firm.id === firmId)?.owner_user_id ?? null;
   const [plan, setPlan] = useState<Plan | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
@@ -1139,7 +1141,7 @@ export default function ActionPlanPanel({
   const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
   useEffect(() => {
     if (loading) return;
-    onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title) })));
+    onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title), status: item.status })));
   }, [items, onAnswer, loading]);
   const filtered = useMemo(() => {
     let list = enriched;
@@ -1160,10 +1162,11 @@ export default function ActionPlanPanel({
   }, [enriched, filter, ownerFilter, sortBy]);
 
   const confidence = useMemo(() => {
-    const open = enriched.filter(Boolean);
-    if (!open.length) return null;
-    return Math.round(100 * (open.reduce((s, i) => s + itemScore(i), 0) / open.length));
-  }, [enriched]);
+    if (!enriched.length || !plan) return null;
+    const average = Math.round(100 * (enriched.reduce((s, i) => s + itemScore(i), 0) / enriched.length));
+    const gap = planPaceGapPoints(enriched, plan.created_at, plan.target_date);
+    return planConfidencePercent(average, gap);
+  }, [enriched, plan]);
 
   const healthCounts = useMemo(() => {
     const c: Record<Health, number> = {
@@ -1499,6 +1502,7 @@ export default function ActionPlanPanel({
                 onDrop={() => onDropRow(it.id)}
                 onOpen={() => setDrawerId(it.id)}
                 onPatch={(patch, log) => patchItem(it.id, patch, log)}
+                firmOwnerUserId={firmOwnerUserId}
                 onAddEmployee={addEmployee}
                 onManageTeam={() => {
                   setDrawerId(null);
@@ -1620,6 +1624,7 @@ export default function ActionPlanPanel({
       {teamOpen && (
         <TeamPanel
           employees={employees}
+          firmOwnerUserId={firmOwnerUserId}
           onClose={() => setTeamOpen(false)}
           onAdd={addEmployee}
           onPatch={patchEmployee}
@@ -1759,6 +1764,14 @@ function GoalHeader({
               <>
                 <h2 className="mt-2 text-2xl font-black uppercase leading-tight tracking-tight text-slate-950 dark:text-white">
                   {stripMilonProjection(plan.outcome_goal)}
+                  {planTargetIsOverdue(plan.target_date) ? (
+                    <span
+                      data-goal-overdue=""
+                      className="ml-2 inline-flex align-middle rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
+                    >
+                      Overdue
+                    </span>
+                  ) : null}
                 </h2>
                 {stripMilonProjection(plan.why_statement) ? (
                   <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
@@ -1774,7 +1787,7 @@ function GoalHeader({
                     year: "numeric",
                   })}
                   {planTargetIsOverdue(plan.target_date) ? (
-                    <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Overdue</span>
+                    <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Target date has passed</span>
                   ) : null}
                 </p>
               </>
@@ -2014,6 +2027,7 @@ function ItemRow({
   onDrop,
   onOpen,
   onPatch,
+  firmOwnerUserId = null,
   onAddEmployee,
   onManageTeam,
   onHandOff,
@@ -2033,6 +2047,7 @@ function ItemRow({
   onDrop: () => void;
   onOpen: () => void;
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
+  firmOwnerUserId?: string | null;
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
   onManageTeam?: () => void;
   /** Owner and accountant. Asks owner-handoff. The browser does not insert agent_runs. */
@@ -2153,6 +2168,7 @@ function ItemRow({
         {isOwner && pickOwner ? (
           <OwnerPicker
             employees={employees}
+            firmOwnerUserId={firmOwnerUserId}
             onPick={(id, name) => {
               setPickOwner(false);
               if (id) {
@@ -2324,12 +2340,14 @@ function ItemRow({
 
 function OwnerPicker({
   employees,
+  firmOwnerUserId = null,
   onPick,
   onAdd,
   onManageTeam,
   onClose,
 }: {
   employees: Employee[];
+  firmOwnerUserId?: string | null;
   onPick: (id: string | null, name?: string | null) => void;
   onAdd: (name: string, email: string) => Promise<Employee | null>;
   onManageTeam?: () => void;
@@ -2375,9 +2393,9 @@ function OwnerPicker({
                 onClick={() => onPick(e.id, e.name)}
               >
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{e.name}</span>
-                {e.practiceUserId && e.role ? (
-                  <span className="ml-1 text-[10px] uppercase tracking-wide text-slate-400">
-                    {e.role.replaceAll("_", " ")}
+                {e.practiceUserId && (e.role || e.practiceUserId === firmOwnerUserId) ? (
+                  <span className="ml-1 text-[10px] uppercase tracking-wide text-slate-400" data-practice-role>
+                    {practiceRoleLabel(e.role, e.practiceUserId === firmOwnerUserId)}
                   </span>
                 ) : null}
                 {!e.email && <span className="ml-1 text-[10px] text-[#3D5270]">no email</span>}
@@ -2713,12 +2731,14 @@ function FromRecommendationsPanel({
 // ═══ Team members ════════════════════════════════════════════════════════════
 function TeamPanel({
   employees,
+  firmOwnerUserId = null,
   onClose,
   onAdd,
   onPatch,
   onRemove,
 }: {
   employees: Employee[];
+  firmOwnerUserId?: string | null;
   onClose: () => void;
   onAdd: (name: string, email: string) => Promise<Employee | null>;
   onPatch: (id: string, patch: Partial<Pick<Employee, "name" | "email">>) => Promise<boolean>;
@@ -2834,8 +2854,8 @@ function TeamPanel({
                     <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
                       {e.email || <span className="text-[#3D5270]">no email</span>}
                       {e.practiceUserId ? (
-                        <span className="ml-1 uppercase tracking-wide text-slate-400">
-                          · Practice {e.role ? e.role.replaceAll("_", " ") : "member"}
+                        <span className="ml-1 uppercase tracking-wide text-slate-400" data-practice-role>
+                          · {practiceRoleLabel(e.role, e.practiceUserId === firmOwnerUserId) || "Practice member"}
                         </span>
                       ) : null}
                     </span>
@@ -3494,12 +3514,12 @@ function BurnUp({
   const actual = items.length
     ? items.reduce((s, i) => s + i.progress_pct, 0) / items.length / 100
     : 0;
+  const gap = planPaceGapPoints(items, plan.created_at, plan.target_date);
   const W = 240,
     H = 96,
     P = 8;
   const x = (f: number) => P + f * (W - 2 * P);
   const y = (f: number) => H - P - f * (H - 2 * P);
-  const gap = Math.round((actual - nowFrac) * 100);
   return (
     <VizCard title="Burn-up · planned vs actual">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">

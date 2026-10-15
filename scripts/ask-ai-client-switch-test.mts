@@ -60,6 +60,11 @@ class FakeElement {
     this._handlers[event].push(fn);
   }
 
+  dispatchEvent(event: { type?: string }) {
+    const type = event?.type ?? "";
+    for (const fn of this._handlers[type] ?? []) fn(event);
+  }
+
   /** Simulate a user click */
   click() {
     for (const fn of this._handlers["click"] ?? []) fn({});
@@ -1000,6 +1005,57 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
       restored?.find((el) => el.className.includes("precard-cap-button"))?.textContent === "Add a card",
       "the restored card still has the button",
     );
+  } finally {
+    if (previous) (globalThis as { sessionStorage?: Storage }).sessionStorage = previous;
+    else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  }
+});
+
+await test("Scenario 13: Financial Manager, Analyst and Advisor keep separate threads", async () => {
+  const store = new Map<string, string>();
+  const previous = (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  (globalThis as { sessionStorage?: unknown }).sessionStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  };
+  try {
+    (globalThis as Record<string, unknown>).fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: "Noted.", chips: [] }),
+    });
+    const el = makeContainer("client-1");
+    el.dataset.agent = "financial_manager";
+    mountAskAi(el, {
+      endpoint: "https://example.com/functions/v1/ask-ai",
+      variant: "studio",
+      getToken: async () => "test-token",
+    });
+    el.find((node) => node.className.includes("ask-ai-textarea"))?.input("FM question");
+    el.find((node) => node.className.includes("ask-ai-send"))?.click();
+    await new Promise((r) => setTimeout(r, 0));
+    assert(store.has("milon-bot-thread:client-1:financial_manager"), "the FM thread is keyed by agent");
+
+    el.dataset.agent = "analyst";
+    el.dispatchEvent({ type: "ask-ai-context" });
+    const fmStill = el.findAll((node) => node.className.includes("ask-ai-turn-user"));
+    assert(
+      !fmStill.some((node) => (node.textContent ?? "").includes("FM question")),
+      "switching to Analyst does not show the FM thread",
+    );
+    el.find((node) => node.className.includes("ask-ai-textarea"))?.input("Analyst question");
+    el.find((node) => node.className.includes("ask-ai-send"))?.click();
+    await new Promise((r) => setTimeout(r, 0));
+    assert(store.has("milon-bot-thread:client-1:analyst"), "the Analyst thread is a different key");
+    const fmRaw = store.get("milon-bot-thread:client-1:financial_manager") ?? "";
+    const analystRaw = store.get("milon-bot-thread:client-1:analyst") ?? "";
+    assert(fmRaw.includes("FM question") && !fmRaw.includes("Analyst question"), "FM keeps only its own turns");
+    assert(analystRaw.includes("Analyst question") && !analystRaw.includes("FM question"), "Analyst keeps only its own turns");
   } finally {
     if (previous) (globalThis as { sessionStorage?: Storage }).sessionStorage = previous;
     else delete (globalThis as { sessionStorage?: Storage }).sessionStorage;

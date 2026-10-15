@@ -119,6 +119,11 @@ import { ownerPresence } from "@/lib/owner-presence";
 import { emptyAgentActivity } from "@/lib/milon-team-activity";
 import { askAgentFromHash, askHashForAgent } from "@/lib/ask-agent";
 import { PracticeAgentThread } from "@/components/practice-agent-thread";
+import { clientHomeSearch } from "@/lib/client-home-search";
+import { loadClientDisplayNames } from "@/lib/client-display-name";
+import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
+import type { ChaseDraftInput } from "@/lib/chase-draft";
+import { KpiTrendline } from "@/components/kpi-trendline";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,6 +140,7 @@ type Client = {
   last_forecast_at: string | null;
   last_login_at: string | null;
   firm_id: string | null;
+  owner_user_id?: string | null;
   financials: Record<string, string | number | null> | null;
   financials_updated_at?: string | null;
   cashflow?: unknown;
@@ -149,6 +155,10 @@ type ClientRow = Client & {
   health: OverallHealth;
   /** ~30-day health delta from score history. The Practice chart holds the trend. */
   trendDelta: number | null;
+  /** Dated scores already on file, oldest first. Empty when history has fewer than two points. */
+  scoreSeries: number[];
+  /** Open action titles already on the plan. Used only to draft a chase. */
+  chaseActions: { title: string; overdue: boolean }[];
   /** Resolved runway (persisted or derived from cashflow). */
   runwayWeeks: number | null;
   /** Same label Overview prints, including Cash generative. */
@@ -1082,6 +1092,7 @@ function toClientRow(
   openActions: number,
   overdueActions: number,
   openQueries: number,
+  chaseActions: { title: string; overdue: boolean }[] = [],
 ): ClientRow {
   try {
     const clientMarket = resolveMarket(
@@ -1125,6 +1136,8 @@ function toClientRow(
       score: health.overall,
       health,
       trendDelta: trendDelta30d(history, health.overall),
+      scoreSeries: history.map((point) => point.score).filter((score) => Number.isFinite(score)),
+      chaseActions,
       runwayWeeks,
       runwayLabel,
       openQueries,
@@ -1139,6 +1152,8 @@ function toClientRow(
       score: null,
       health: UNSCORED_HEALTH,
       trendDelta: null,
+      scoreSeries: [],
+      chaseActions,
       runwayWeeks: null,
       runwayLabel: null,
       openQueries,
@@ -1312,7 +1327,17 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const loadGen = useRef(0);
 
   // ── Load ──────────────────────────────────────────────────────────────────
-  const load = async (activeFirmId: string | null, userId: string | undefined) => {
+  const [chaseDraft, setChaseDraft] = useState<ChaseDraftInput | null>(null);
+  const openChase = (clientId: string, clientName: string) => {
+    const row = clientRows.find((client) => client.id === clientId);
+    setChaseDraft({
+      clientName,
+      firmName: firm?.name ?? null,
+      actions: row?.chaseActions ?? [],
+    });
+  };
+
+  const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
     setLoading(true);
     setCountsReady(false);
@@ -1356,6 +1381,19 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     const { data: cs, error } = await query;
     if (error) toast.error(error.message);
     let rawClients = (cs ?? []) as Client[];
+    try {
+      const displayNames = await loadClientDisplayNames(
+        supabase as never,
+        rawClients,
+        viewerName,
+      );
+      rawClients = rawClients.map((client) => {
+        const name = displayNames.get(client.id);
+        return name && name !== client.name ? { ...client, name } : client;
+      });
+    } catch {
+      /* keep the stored name when the lookup cannot run */
+    }
 
     // Attach legacy null-firm practice clients to the active firm so they stay visible.
     if (!isIt && activeFirmId && rawClients.some((c) => !c.firm_id)) {
@@ -1420,12 +1458,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     // Open action-plan items (non-fatal if RLS/table missing)
     const openActionsMap: Record<string, number> = {};
     const overdueActionsMap: Record<string, number> = {};
+    const chaseActionsMap: Record<string, { title: string; overdue: boolean }[]> = {};
     if (rawClients.length > 0) {
       try {
         const today = new Date().toISOString().slice(0, 10);
         const { data: actions, error: actErr } = await supabase
           .from("action_items")
-          .select("client_id, status, due_date")
+          .select("client_id, status, due_date, title")
           .in(
             "client_id",
             rawClients.map((c) => c.id),
@@ -1434,8 +1473,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         if (!actErr && actions) {
           for (const a of actions) {
             openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
-            if (a.due_date && a.due_date < today) {
+            const overdue = Boolean(a.due_date && a.due_date < today);
+            if (overdue) {
               overdueActionsMap[a.client_id] = (overdueActionsMap[a.client_id] ?? 0) + 1;
+            }
+            const title = typeof a.title === "string" ? a.title.trim() : "";
+            if (title) {
+              chaseActionsMap[a.client_id] = chaseActionsMap[a.client_id] ?? [];
+              chaseActionsMap[a.client_id].push({ title, overdue });
             }
           }
         }
@@ -1461,6 +1506,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           openActionsMap[c.id] ?? 0,
           overdueActionsMap[c.id] ?? 0,
           openQueriesMap[c.id] ?? 0,
+          chaseActionsMap[c.id] ?? [],
         ),
       ),
     );
@@ -1476,9 +1522,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   useEffect(() => {
     if (!portalReady || brandLoading) return;
-    void load(firmId, user?.id);
+    void load(firmId, user?.id, greetingSource);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading, user?.id, portalReady]);
+  }, [firmId, brandLoading, user?.id, portalReady, greetingSource]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -1685,13 +1731,6 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   );
   const practiceStatus = useMemo(() => practiceCardStatuses(practiceBrief), [practiceBrief]);
   const dashAgent = view === "home" ? practiceAgent : null;
-
-  const openClientPlan = (clientId: string, overdue: boolean) =>
-    navigate({
-      to: "/clients/$clientId",
-      params: { clientId },
-      search: overdue ? { tab: "plan", filter: "overdue" } : { tab: "plan" },
-    });
 
   const scatterClients = useMemo(
     () =>
@@ -1937,6 +1976,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             hideWhenClear
             queue={attentionBook.items}
             className="mb-3"
+            onChase={(clientId, name) => openChase(clientId, name)}
           />
         ) : null}
 
@@ -1984,7 +2024,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                     key={item.clientId}
                     type="button"
                     className="followup-row"
-                    onClick={() => openClientPlan(item.clientId, item.overdueActions > 0)}
+                    onClick={() => openChase(item.clientId, item.name)}
                   >
                     <span className="followup-name">{item.name}</span>
                     <span className={`followup-count${item.overdueActions > 0 ? " overdue" : ""}`}>
@@ -2012,7 +2052,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 navigate({
                   to: "/clients/$clientId",
                   params: { clientId },
-                  search: {},
+                  search: clientHomeSearch(),
                 })
               }
             />
@@ -2046,7 +2086,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           </div>
         </details>
 
-        <AccountantInbox firmId={firmId} quiet onChanged={() => void load(firmId, user?.id)} />
+        <AccountantInbox firmId={firmId} quiet onChanged={() => void load(firmId, user?.id, greetingSource)} />
 
         {/* ===== PLAYBOOK LIBRARY ===== */}
         <details className="home-fold" id="playbooks">
@@ -2147,6 +2187,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 <tr>
                   <th>Client</th>
                   <th>Health</th>
+                  <th>Trend</th>
                   <th>Runway</th>
                   <th id="wizard-dash-queries">Queries</th>
                   <th>Op. profit (MTD)</th>
@@ -2166,7 +2207,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                         navigate({
                           to: "/clients/$clientId",
                           params: { clientId: c.id },
-                          search: {},
+                          search: clientHomeSearch(),
                         })
                       }
                     >
@@ -2208,6 +2249,22 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                             <span className="ring-score">{score ?? "—"}</span>
                           </span>
                         </div>
+                      </td>
+                      <td data-label="Trend" data-client-trend={c.scoreSeries.length >= 2 ? "yes" : "no"}>
+                        {c.scoreSeries.length >= 2 ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <KpiTrendline values={c.scoreSeries} width={56} height={18} />
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              {c.scoreSeries[c.scoreSeries.length - 1]! > c.scoreSeries[0]!
+                                ? "Up"
+                                : c.scoreSeries[c.scoreSeries.length - 1]! < c.scoreSeries[0]!
+                                  ? "Down"
+                                  : "Flat"}
+                            </span>
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="num" data-label="Runway" title={runwayStr(c)}>
                         <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
@@ -2255,7 +2312,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             setAddOpen(false);
             void (async () => {
               await refreshFirms();
-              void load(created.firm_id ?? firmId, user.id);
+              void load(created.firm_id ?? firmId, user.id, greetingSource);
             })();
             if (wasFirst && created.id) {
               navigate({
@@ -2296,6 +2353,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           onSend={() => void sendInviteDraft()}
         />
       )}
+
+      {chaseDraft ? <ChaseDraftDialog draft={chaseDraft} onClose={() => setChaseDraft(null)} /> : null}
 
       {/* ===== PLAYBOOK DRAWER ===== */}
       <PlaybookDrawer

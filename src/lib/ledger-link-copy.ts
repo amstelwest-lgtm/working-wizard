@@ -127,6 +127,8 @@ export function figureSourceChipLabel(source: string | null | undefined): string
       return "QuickBooks";
     case "sage":
       return "Sage";
+    case "invoices":
+      return "Sales invoices";
     case "upload":
     case "pdf_upload":
       return "Uploaded statement";

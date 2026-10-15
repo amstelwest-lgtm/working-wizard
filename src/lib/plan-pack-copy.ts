@@ -99,10 +99,19 @@ export function packStripStatus(
 
 const PLAN_EMPTY_SENTENCE = "No actions in the plan yet. Add the first one to get started.";
 
-/** Same lead-in as Moves. The first title is the first action already in the list. */
-export function planAnswerSentence(actions: readonly { title: string }[]): string {
+function planActionIsOpen(status: string | null | undefined): boolean {
+  const text = (status ?? "").trim().toLowerCase();
+  return text !== "done" && text !== "complete";
+}
+
+/** Same lead-in as Moves. Start with the first action that is still open. */
+export function planAnswerSentence(
+  actions: readonly { title: string; status?: string | null }[],
+): string {
   if (actions.length === 0) return PLAN_EMPTY_SENTENCE;
-  const title = actions[0]?.title.trim() ?? "";
+  const open = actions.filter((action) => planActionIsOpen(action.status));
+  if (open.length === 0) return "Nothing left open.";
+  const title = open[0]?.title.trim() ?? "";
   const lead = actions.length === 1 ? "1 action in the plan" : `${actions.length} actions in the plan`;
   if (!title) return `${lead}.`;
   const shown = /^[A-Z][a-z]/.test(title)

@@ -17,7 +17,7 @@ import {
   packStripStatus,
   planAnswerSentence,
 } from "../src/lib/plan-pack-copy";
-import { planConfidenceDisplay } from "../src/lib/plan-confidence-display";
+import { planConfidenceDisplay, planConfidencePercent } from "../src/lib/plan-confidence-display";
 import { PAGE_FIGURES_CHANGED_CLAUSE, signoffStatusLine } from "../src/lib/signoff-status";
 
 const september = { periodLabel: "September 2026", sectionCount: 6 };
@@ -114,6 +114,20 @@ assert.equal(
   planAnswerSentence([{ title: "AI review of pricing" }, { title: "File the return" }]),
   "2 actions in the plan. Start with: AI review of pricing.",
 );
+assert.equal(
+  planAnswerSentence([
+    { title: "File the return", status: "done" },
+    { title: "Call the oldest account", status: "open" },
+  ]),
+  "2 actions in the plan. Start with: call the oldest account.",
+);
+assert.equal(
+  planAnswerSentence([{ title: "File the return", status: "done" }]),
+  "Nothing left open.",
+);
+assert.equal(planConfidencePercent(100, -67), 33);
+assert.equal(planConfidencePercent(80, 4), 80);
+assert.equal(planConfidencePercent(null, -67), null);
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const draftsAt = clientSrc.indexOf('id="reports-drafts"');

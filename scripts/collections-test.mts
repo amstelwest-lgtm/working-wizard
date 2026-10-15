@@ -16,7 +16,9 @@ import {
   COLLECTIONS_QBO_CTA,
   COLLECTIONS_UPLOAD_CTA,
   COLLECTIONS_XERO_CTA,
+  collectionsFromSalesInvoices,
   finalizeCollections,
+  salesInvoiceFactFromExtraction,
   hasStatementWorkingCapital,
   parseQboAgedReceivables,
   parseXeroAgedReceivablesByContact,
@@ -425,5 +427,29 @@ assert(
 );
 assert(rail.includes("onConnectQbo"), "Collections can open the QuickBooks dialog");
 assert(rail.includes("Upload aged debtors and creditors"), "the upload dialog names the aged report");
+
+const invoice = salesInvoiceFactFromExtraction({
+  recipient_name: { value: "Northwind" },
+  total: { value: 1200 },
+  invoice_number: { value: "INV-9" },
+  due_date: { value: "2020-01-01" },
+  supplier_name: { value: "Not the customer" },
+});
+eq(invoice?.recipientName, "Northwind", "sales invoice customer is the recipient");
+eq(invoice?.total, 1200, "sales invoice keeps the total");
+const invoiceSnap = collectionsFromSalesInvoices(
+  [
+    invoice!,
+    { recipientName: "Northwind", total: 50, invoiceNumber: "INV-10" },
+    { recipientName: "", total: 80 },
+  ],
+  "2026-10-15T00:00:00.000Z",
+  "2026-10-15",
+);
+eq(invoiceSnap?.source, "invoices", "invoice chase list is not a ledger pull");
+eq(invoiceSnap?.contactCount, 1, "blank customers are dropped");
+eq(invoiceSnap?.contacts[0]?.overdue, 1200, "only a past due date counts as overdue");
+eq(invoiceSnap?.contacts[0]?.outstanding, 1250, "both invoices stay outstanding");
+eq(salesInvoiceFactFromExtraction({ supplier_name: { value: "Vendor" }, total: { value: 10 } }), null, "supplier name is not a customer");
 
 console.log("collections-test ok");

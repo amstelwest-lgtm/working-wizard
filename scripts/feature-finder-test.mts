@@ -389,8 +389,8 @@ assert(
   "firm dashboard turns section keywords into per-client jumps",
 );
 assert(
-  finderSrc.includes('to: "/clients/$clientId"') && finderSrc.includes("search: {}"),
-  "selecting a client opens the dashboard client route",
+  finderSrc.includes('to: "/clients/$clientId"') && finderSrc.includes('tab: "home"'),
+  "selecting a client opens Home",
 );
 assert(!finderSrc.includes("No matching features"), "empty copy is not features-only");
 assert(

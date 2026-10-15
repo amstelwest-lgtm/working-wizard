@@ -16,6 +16,7 @@ import {
   type AttentionItem,
   type MergedAttention,
 } from "@/lib/portfolio-dashboard";
+import { clientHomeSearch } from "@/lib/client-home-search";
 
 type Props = {
   firmId: string | null;
@@ -37,6 +38,8 @@ type Props = {
    * When set, the strip renders these rows and does not fetch a second book.
    */
   queue?: readonly MergedAttention[];
+  /** Chase → opens a draft for this client. It does not send. */
+  onChase?: (clientId: string, name: string) => void;
 };
 
 const SEV_CLASS: Record<1 | 2 | 3, string> = {
@@ -45,11 +48,8 @@ const SEV_CLASS: Record<1 | 2 | 3, string> = {
   3: "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:border-white/15 dark:text-slate-300",
 };
 
-function attentionSearch(row: MergedAttention): Record<string, string> {
-  if (row.tab === "plan" && row.overdue) return { tab: "plan", filter: "overdue" };
-  if (row.tab) return { tab: row.tab };
-  if (row.openQueries) return { queries: "open" };
-  return {};
+function wantsChase(row: MergedAttention): boolean {
+  return row.tab === "plan" && (row.openPlan || row.overdue);
 }
 
 export function PortfolioExceptions({
@@ -59,6 +59,7 @@ export function PortfolioExceptions({
   hideWhenClear,
   healthItems,
   queue,
+  onChase,
 }: Props) {
   const fetch = useServerFn(getFirmPortfolio);
   const [data, setData] = useState<PortfolioResult | null>(null);
@@ -101,21 +102,35 @@ export function PortfolioExceptions({
         <h2>Needs attention</h2>
         <ul>
           {shown.map((row) => (
-            <li key={row.clientId}>
+            <li key={row.clientId} className="attn-strip-row" data-client={row.clientId}>
               <Link
                 to="/clients/$clientId"
                 params={{ clientId: row.clientId }}
-                search={attentionSearch(row) as never}
-                className="attn-strip-row"
-                data-client={row.clientId}
+                search={clientHomeSearch()}
+                className="attn-strip-name"
               >
-                <span className="attn-strip-name">{row.name}</span>
-                <span className="attn-strip-reason">{row.reason}</span>
-                {row.detail ? <span className="attn-strip-detail">{row.detail}</span> : null}
-                <span className="attn-strip-go">
-                  {row.tab === "plan" && (row.openPlan || row.overdue) ? "Chase →" : "Open →"}
-                </span>
+                {row.name}
               </Link>
+              <span className="attn-strip-reason">{row.reason}</span>
+              {row.detail ? <span className="attn-strip-detail">{row.detail}</span> : null}
+              {wantsChase(row) ? (
+                <button
+                  type="button"
+                  className="attn-strip-go"
+                  onClick={() => onChase?.(row.clientId, row.name)}
+                >
+                  Chase →
+                </button>
+              ) : (
+                <Link
+                  to="/clients/$clientId"
+                  params={{ clientId: row.clientId }}
+                  search={clientHomeSearch()}
+                  className="attn-strip-go"
+                >
+                  Open →
+                </Link>
+              )}
             </li>
           ))}
           {more > 0 ? (
@@ -191,6 +206,7 @@ export function PortfolioExceptions({
                 <Link
                   to="/clients/$clientId"
                   params={{ clientId: r.clientId }}
+                  search={clientHomeSearch()}
                   className="text-[13.5px] font-semibold text-[#102A43] underline-offset-2 hover:underline dark:text-[#F4F7FB]"
                 >
                   {r.name}
@@ -209,7 +225,7 @@ export function PortfolioExceptions({
                       key={e.kind}
                       to="/clients/$clientId"
                       params={{ clientId: r.clientId }}
-                      search={{ tab: e.tab } as never}
+                      search={clientHomeSearch()}
                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-[2px] text-[10.5px] font-semibold ${SEV_CLASS[e.severity]}`}
                       data-exception={e.kind}
                     >

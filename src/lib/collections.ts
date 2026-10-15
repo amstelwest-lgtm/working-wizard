@@ -4,7 +4,7 @@
  * Milōn reads the books. It does not send chases or record receipts.
  */
 
-export type CollectionsSource = "xero" | "qbo" | "sage";
+export type CollectionsSource = "xero" | "qbo" | "sage" | "invoices";
 export type CollectionsStatus = "applied" | "empty" | "skipped";
 
 export type CollectionsInvoice = {
@@ -73,7 +73,7 @@ export type XeroContactCandidate = {
   hasBalances: boolean;
 };
 
-const SOURCES = new Set<CollectionsSource>(["xero", "qbo", "sage"]);
+const SOURCES = new Set<CollectionsSource>(["xero", "qbo", "sage", "invoices"]);
 const STATUSES = new Set<CollectionsStatus>(["applied", "empty", "skipped"]);
 
 export const XERO_AGED_RECONNECT =
@@ -352,14 +352,126 @@ export function chooseCollections(
   })[0];
 }
 
+export type SalesInvoiceFact = {
+  recipientName: string;
+  total: number;
+  invoiceNumber?: string | null;
+  issuedOn?: string | null;
+  dueDate?: string | null;
+};
+
+function extractionText(raw: unknown): string | null {
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  if (raw && typeof raw === "object" && "value" in raw) return extractionText((raw as { value: unknown }).value);
+  return null;
+}
+
+function extractionMoney(raw: unknown): number | null {
+  const text = extractionText(raw);
+  if (text == null) return null;
+  const n = Number(text.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function isoDayOrNull(raw: string | null): string | null {
+  if (!raw) return null;
+  const day = raw.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
+/** A sales invoice already extracted. The customer is the recipient, never the supplier. */
+export function salesInvoiceFactFromExtraction(fields: unknown): SalesInvoiceFact | null {
+  if (!fields || typeof fields !== "object") return null;
+  const record = fields as Record<string, unknown>;
+  const recipientName = extractionText(record.recipient_name);
+  const total = extractionMoney(record.total);
+  if (!recipientName || total == null || !(total > 0)) return null;
+  const due = isoDayOrNull(
+    extractionText(record.due_date) ?? extractionText(record.due_on) ?? extractionText(record.due),
+  );
+  return {
+    recipientName,
+    total,
+    invoiceNumber: extractionText(record.invoice_number),
+    issuedOn: isoDayOrNull(extractionText(record.date) ?? extractionText(record.issued_on)),
+    dueDate: due,
+  };
+}
+
+/**
+ * Who to chase from sales invoices already on file.
+ * A row is overdue only when it has a due date that is before `today`.
+ * Returns null when no named customer has a positive total.
+ */
+export function collectionsFromSalesInvoices(
+  facts: readonly SalesInvoiceFact[],
+  syncedAt: string,
+  today: string,
+): CollectionsSnapshot | null {
+  const todayDay = today.slice(0, 10);
+  const groups = new Map<string, CollectionsContact>();
+  for (const fact of facts) {
+    const name = fact.recipientName.trim();
+    if (!name || !(fact.total > 0)) continue;
+    const due = isoDayOrNull(fact.dueDate ?? null);
+    const overdueAmount = due && due < todayDay ? fact.total : 0;
+    const reference = fact.invoiceNumber?.trim() || "";
+    const invoice: CollectionsInvoice | null = reference
+      ? {
+          invoiceId: null,
+          reference,
+          dueDate: due,
+          amount: moneyOrZero(fact.total),
+          ageBucket: overdueAmount > 0 ? "Overdue" : "Current",
+        }
+      : null;
+    const key = name.toLowerCase();
+    const prev = groups.get(key);
+    if (!prev) {
+      groups.set(key, {
+        contactId: `sales-invoice:${key}`,
+        name,
+        outstanding: moneyOrZero(fact.total),
+        overdue: moneyOrZero(overdueAmount),
+        ageBucket: overdueAmount > 0 ? "Overdue" : "Current",
+        buckets: [],
+        invoices: invoice ? [invoice] : [],
+      });
+      continue;
+    }
+    prev.outstanding = moneyOrZero(prev.outstanding + fact.total);
+    prev.overdue = moneyOrZero(prev.overdue + overdueAmount);
+    if (prev.overdue > 0) prev.ageBucket = "Overdue";
+    if (invoice) prev.invoices.push(invoice);
+  }
+  if (groups.size === 0) return null;
+  return finalizeCollections({
+    source: "invoices",
+    asOf: null,
+    syncedAt,
+    contacts: [...groups.values()],
+    note: "Named from sales invoices already on file. Overdue only where that invoice has a due date that has passed.",
+  });
+}
+
 export function sourceLabel(source: CollectionsSource): string {
   if (source === "xero") return "Xero";
   if (source === "sage") return "Sage";
+  if (source === "invoices") return "Sales invoices";
   return "QuickBooks";
 }
 
 export function agedArProofLine(snap: CollectionsSnapshot | null | undefined): string {
   if (!snap) return AGED_AR_PENDING;
+  if (snap.source === "invoices") {
+    const contacts = `${snap.contactCount} customer${snap.contactCount === 1 ? "" : "s"}`;
+    const invoices =
+      snap.invoiceCount > 0
+        ? ` · ${snap.invoiceCount} invoice${snap.invoiceCount === 1 ? "" : "s"}`
+        : "";
+    return `Sales invoices on file · ${contacts}${invoices}`;
+  }
   if (snap.status === "skipped") return snap.skipReason ?? "Aged receivables were not applied";
   const when = snap.asOf ? `as of ${snap.asOf}` : "applied";
   if (snap.contactCount === 0) {

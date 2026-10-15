@@ -121,6 +121,7 @@ import { overviewBudgetTileFigure } from "@/lib/budget-chart-table";
 import { parseBudgetDocument } from "@/lib/budget-pdf";
 import { budgetSeededFromStatement, budgetVersusStatement } from "@/lib/budget.bridges";
 import { planAnswerSentence } from "@/lib/plan-pack-copy";
+import { loadClientDisplayNames } from "@/lib/client-display-name";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
@@ -711,7 +712,7 @@ function ClientView() {
   } = useNotes();
   const navigate = useNavigate();
   const firmDashboardLinked = firmDashboardCrumbIsLink(useFirmBillingEntitled());
-  const { profile, firmId } = useAccountantProfile();
+  const { profile, firmId, greetingSource } = useAccountantProfile();
   const track = useTrack();
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showXeroDialog, setShowXeroDialog] = useState(false);
@@ -1126,7 +1127,7 @@ function ClientView() {
   const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusPlanAdd = useRef<(() => void) | null>(null);
-  const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
+  const onPlanAnswer = useCallback((actions: readonly { title: string; status?: string | null }[]) => {
     setPlanKnown(true);
     setPlanCount(actions.length);
     setPlanSentence(planAnswerSentence(actions));
@@ -1167,6 +1168,15 @@ function ClientView() {
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
   }, [search]);
+  useEffect(() => {
+    if (search.tab || search.section || search.agent || search.report) return;
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => ({ ...prev, tab: "home" }),
+      replace: true,
+    });
+  }, [search.tab, search.section, search.agent, search.report, clientId, navigate]);
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -1675,6 +1685,13 @@ function ClientView() {
     // Always refresh the client context — submit() reads dataset.clientId at
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
+    const askAgent =
+      search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
+        ? search.agent
+        : "";
+    if (askAgent) el.dataset.agent = askAgent;
+    else delete el.dataset.agent;
+    el.dispatchEvent(new Event("ask-ai-context"));
     // Remount once figures land so the pre-figures note disappears (same
     // pattern as the owner board's useAskAiMount).
     const wantMode = hasFigures ? "live" : "pre-figures";
@@ -1720,7 +1737,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [client, clientId, activeTab, hasFigures]);
+  }, [client, clientId, activeTab, hasFigures, search.agent]);
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1837,6 +1854,26 @@ function ClientView() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
+
+  useEffect(() => {
+    if (!client?.id) return;
+    let cancelled = false;
+    void loadClientDisplayNames(
+      supabase as never,
+      [{ id: client.id, name: client.name, financials: client.financials }],
+      greetingSource,
+    ).then((names) => {
+      if (cancelled) return;
+      const next = names.get(client.id);
+      if (!next || next === client.name) return;
+      setClient((current) => (current && current.id === client.id ? { ...current, name: next } : current));
+    }).catch(() => {
+      /* keep the stored name when the lookup cannot run */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client?.id, client?.name, client?.financials, greetingSource]);
 
   // Load financial snapshots for variance / prior period
   useEffect(() => {
