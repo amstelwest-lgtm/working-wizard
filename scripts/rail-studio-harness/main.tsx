@@ -31,6 +31,7 @@ import { AgentStagePreview } from "./agent-stage-preview";
 import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { ProofLandingPreview } from "./proof-preview";
+import { PersonaCritPreview } from "./persona-crit-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -420,6 +421,18 @@ const reportsRoute = createRoute({
   },
 });
 
+const personaCritRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/persona-crit",
+  component: function PersonaCritHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <PersonaCritPreview />
+      </MarketProvider>
+    );
+  },
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -455,6 +468,7 @@ const routeTree = rootRoute.addChildren([
   settingsBrandRoute,
   settingsTeamRoute,
   proofLandingRoute,
+  personaCritRoute,
 ]);
 const router = createRouter({
   routeTree,
