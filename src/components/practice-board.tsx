@@ -57,7 +57,7 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { forecastRunwayHeadlineShared } from "@/lib/cash-forecast-parity";
+import { clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import {
   assessClientMetrics,
   forecastIsCashGenerative,
@@ -1109,27 +1109,42 @@ function toClientRow(
         ? assessed.runway.weeks
         : null;
     const outlook = assessed.outlook;
-    const runwayLabel =
-      outlook.closing.length > 0
-        ? forecastRunwayHeadlineShared({
-            opening: outlook.opening,
-            closings: outlook.closing,
-            floor: outlook.floor,
-            runwayLabel: runwayDisplayLabel(assessed.runway),
-            cashGenerative:
-              assessed.runway.kind === "cash_generative" &&
-              forecastIsCashGenerative(outlook.totalInflow, outlook.totalOutflow),
-          }).headline
-        : runwayDisplayLabel(assessed.runway);
     const fyStartMonth =
       parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
-    const health = scorecardHealthFromFinancials({
+    const scored = scorecardHealthFromFinancials({
       financials: c.financials,
       fyStartMonth,
       periodMonths: periodMonthsOf(c.financials),
       cashRunwayWeeks: runwayWeeks,
       market: clientMarket,
       shortfallWeek: assessed.outlook.shortfallWeek,
+    });
+    const statusWord = clientListStatusWord({
+      healthLabel: scored.displayLabel,
+      healthOverall: scored.overall,
+      source: outlook.source,
+      opening: outlook.opening,
+      floor: outlook.floor,
+      dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
+      totalInflow: outlook.totalInflow,
+      totalOutflow: outlook.totalOutflow,
+    });
+    const health =
+      statusWord === "Critical"
+        ? { ...scored, displayStatus: "critical" as const, displayLabel: "Critical" }
+        : scored;
+    const runwayLabel = clientListRunwayHeadline({
+      source: outlook.source,
+      opening: outlook.opening,
+      closings: outlook.closing,
+      floor: outlook.floor,
+      totalInflow: outlook.totalInflow,
+      totalOutflow: outlook.totalOutflow,
+      runwayLabel: runwayDisplayLabel(assessed.runway),
+      cashGenerative:
+        assessed.runway.kind === "cash_generative" &&
+        forecastIsCashGenerative(outlook.totalInflow, outlook.totalOutflow),
+      healthOverall: scored.overall,
     });
     return {
       ...c,

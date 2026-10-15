@@ -52,6 +52,90 @@ export function forecastLowestPoint(
   return { amount, week, isOpening };
 }
 
+/**
+ * A stored series, or a derived series with operating outflows, is a forecast.
+ * A derived sketch with no costs uses the R50,000 fallback floor. Thirteen
+ * zeros under that line are not a forecast.
+ */
+export function forecastHasCashEvidence(input: {
+  source?: "stored" | "derived" | null;
+  opening: number;
+  totalInflow?: number | null;
+  totalOutflow?: number | null;
+}): boolean {
+  const openingSet = Number.isFinite(input.opening) && Math.abs(input.opening) >= 0.5;
+  const inflow = (input.totalInflow ?? 0) > 0.5;
+  const outflow = (input.totalOutflow ?? 0) > 0.5;
+  if (input.source === "stored") return openingSet || inflow || outflow;
+  return outflow;
+}
+
+/**
+ * Same Critical check as the Financial Manager card: opening under the floor,
+ * or any closing under it.
+ */
+export function cashOutlookIsCritical(input: {
+  opening: number;
+  floor: number;
+  dipsBelowFloorWeek?: number | null;
+} | null | undefined): boolean {
+  if (!input || !Number.isFinite(input.opening) || !Number.isFinite(input.floor)) return false;
+  return input.opening < input.floor || input.dipsBelowFloorWeek != null;
+}
+
+/**
+ * Clients-table runway. No forecast evidence, and an unscored derived sketch,
+ * stay blank. A real series uses the shared floor headline.
+ */
+export function clientListRunwayHeadline(input: {
+  source?: "stored" | "derived" | null;
+  opening: number;
+  closings: readonly number[];
+  floor: number;
+  totalInflow?: number | null;
+  totalOutflow?: number | null;
+  runwayLabel?: string | null;
+  cashGenerative?: boolean;
+  /** Null when the row has no health score. */
+  healthOverall?: number | null;
+}): string {
+  const unscoredSketch = input.source !== "stored" && input.healthOverall == null;
+  if (
+    unscoredSketch ||
+    !forecastHasCashEvidence(input) ||
+    input.closings.length === 0
+  ) {
+    return "—";
+  }
+  return forecastRunwayHeadlineShared({
+    opening: input.opening,
+    closings: input.closings,
+    floor: input.floor,
+    runwayLabel: input.runwayLabel,
+    cashGenerative: input.cashGenerative,
+  }).headline;
+}
+
+/**
+ * Clients-table status. Cash under the floor uses the Financial Manager word.
+ * An unscored row stays blank, including when the empty series sits under the
+ * fallback floor.
+ */
+export function clientListStatusWord(input: {
+  healthLabel: string;
+  healthOverall: number | null;
+  source?: "stored" | "derived" | null;
+  opening: number;
+  floor: number;
+  dipsBelowFloorWeek?: number | null;
+  totalInflow?: number | null;
+  totalOutflow?: number | null;
+}): string {
+  if (input.healthOverall == null) return "—";
+  if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input)) return "Critical";
+  return input.healthLabel;
+}
+
 export function forecastFloorPosition(input: {
   opening: number;
   closings: readonly number[];

@@ -91,9 +91,13 @@ assert(firmBandPriceLabel("solo", "year", "USD") === "$950", "solo yearly is the
 assert(FIRM_BAND_CATALOG.solo.clientLimit === 15, "solo limit stays 15");
 assert(FIRM_BAND_CATALOG.scale.clientLimit === 500, "scale limit stays 500");
 
-assert(formatFirmClientUsage(3, 3) === "3 of 3 clients", "usage reads 3 of 3 clients");
-assert(formatFirmClientUsage(3, 15) === "3 of 15 clients", "usage uses the paid limit");
-assert(formatFirmClientUsage(4, null) === "4 clients", "unlimited band has no denominator");
+assert(
+  formatFirmClientUsage(8, 5, "Starter") === "8 active clients · Starter limit 5",
+  "over the limit names the plan",
+);
+assert(formatFirmClientUsage(3, 15, "Solo") === "3 active clients · Solo limit 15", "usage uses the paid limit");
+assert(formatFirmClientUsage(3, 3) === "3 active clients · limit 3", "usage without a plan name still states the limit");
+assert(formatFirmClientUsage(4, null) === "4 active clients", "unlimited band has no denominator");
 
 const zarIncomplete = firmUpgradePriceCurrency({
   billingCurrency: "zar",

@@ -53,7 +53,7 @@ const action = stripMilonProjection(
 
 export function PersonaCritPreview() {
   const waterfall = derivePeriodWaterfallFallback(FIXTURE);
-  const usage = formatFirmClientUsage(4, firmUsageLimit("active", "starter", 0));
+  const usage = formatFirmClientUsage(4, firmUsageLimit("active", "starter", 0), "Starter");
   const hotel = clientIndustryDisplay("Karoo Lodge", { templateId: "day_labour" }, null);
   const wood = clientIndustryDisplay("Cedar Woodwork", { templateId: "hospitality_rooms" }, null);
   const step = plan.steps[0];

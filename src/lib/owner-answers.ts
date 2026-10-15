@@ -9,6 +9,7 @@ import {
 } from "@/lib/cash-runway";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
 import { periodProfitBridge } from "@/lib/period-profit";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
@@ -238,7 +239,7 @@ function forecastLow(books: OwnerBooks): number | null {
 function outlookUnderFloor(books: OwnerBooks): boolean | null {
   const outlook = books.cashOutlook;
   if (!outlook || !finite(outlook.opening) || !finite(outlook.floor)) return null;
-  return outlook.opening < outlook.floor || outlook.dipsBelowFloorWeek != null;
+  return cashOutlookIsCritical(outlook);
 }
 
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {

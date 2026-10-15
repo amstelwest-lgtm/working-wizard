@@ -37,6 +37,7 @@ import { FmBriefPreview } from "./fm-brief-preview";
 import { PracticeTodayPreview } from "./practice-today-preview";
 import { ActionPlanPreview } from "./action-plan-preview";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { Retest568Preview } from "./retest-568-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -508,6 +509,12 @@ const cashOnceOffRoute = createRoute({
   },
 });
 
+const retest568Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/retest-568",
+  component: Retest568Preview,
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -550,6 +557,7 @@ const routeTree = rootRoute.addChildren([
   actionPlanRoute,
   cashSuggestRoute,
   cashOnceOffRoute,
+  retest568Route,
 ]);
 const router = createRouter({
   routeTree,
