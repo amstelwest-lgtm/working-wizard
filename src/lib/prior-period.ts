@@ -3,6 +3,7 @@
  */
 
 import { scoreRatio } from "./health-score.ts";
+import { statementGrossMarginFraction } from "./period-profit.ts";
 import { scoreTier } from "./ratios.ts";
 
 export type SnapshotRow = {
@@ -139,12 +140,16 @@ export function buildVarianceChips(input: {
   const curCogs = numFromFin(curFin, "cogs");
   const priorCogs = numFromFin(priorFin, "cogs");
 
-  const curGm = Number.isFinite(curRatios["Gross Margin"])
-    ? curRatios["Gross Margin"]
-    : margin(curRev, curRev != null && curCogs != null ? curRev - curCogs : null);
-  const priorGm = Number.isFinite(priorRatios["Gross Margin"])
-    ? priorRatios["Gross Margin"]
-    : margin(priorRev, priorRev != null && priorCogs != null ? priorRev - priorCogs : null);
+  const curGm =
+    statementGrossMarginFraction(curFin) ??
+    (Number.isFinite(curRatios["Gross Margin"])
+      ? curRatios["Gross Margin"]
+      : margin(curRev, curRev != null && curCogs != null ? curRev - curCogs : null));
+  const priorGm =
+    statementGrossMarginFraction(priorFin) ??
+    (Number.isFinite(priorRatios["Gross Margin"])
+      ? priorRatios["Gross Margin"]
+      : margin(priorRev, priorRev != null && priorCogs != null ? priorRev - priorCogs : null));
 
   const curOm = Number.isFinite(curRatios["Operating Margin"])
     ? curRatios["Operating Margin"]

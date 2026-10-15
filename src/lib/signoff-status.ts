@@ -120,6 +120,21 @@ function periodKey(snap: SignoffPeriodSnapshot): string {
  * figures on screen. Same idea as `advisoryPackFiguresChanged`: compare what
  * was current at sign-off with what is current now. Does not write.
  */
+/**
+ * Budget stamp only. A missing budget_updated_at is not stale, and a
+ * rewritten document timestamp is not the clock.
+ */
+export function budgetSignoffIsStale(
+  signoff: { signed_off_at: string } | null | undefined,
+  budgetUpdatedAt: string | null | undefined,
+): boolean {
+  if (!signoff || !budgetUpdatedAt) return false;
+  return reviewFiguresChanged({
+    signedOffAt: signoff.signed_off_at,
+    dataUpdatedAt: budgetUpdatedAt,
+  });
+}
+
 export function reviewFiguresChanged(input: {
   signedOffAt?: string | null;
   dataUpdatedAt?: string | null;

@@ -4,7 +4,7 @@
  */
 
 import { formatMoneyCompact, ZA_MARKET, type MoneyMarket } from "@/lib/market";
-import { healthBandLabel, scoreTier } from "@/lib/ratios";
+import { formatQuotedDays, healthBandLabel, scoreTier } from "@/lib/ratios";
 
 export function pct(x: number) {
   if (!isFinite(x)) return "—";
@@ -15,10 +15,14 @@ export function formatVal(
   v: number,
   f: "x" | "pct" | "days" | "money",
   market: MoneyMarket = ZA_MARKET,
+  ratioName?: string,
 ) {
   if (!isFinite(v)) return "—";
   if (f === "pct") return pct(v);
-  if (f === "days") return `${v.toFixed(1)} d`;
+  if (f === "days") {
+    if (ratioName === "Working Capital Days") return formatQuotedDays(ratioName, v);
+    return `${Math.abs(Math.round(v))} d`;
+  }
   if (f === "money") return formatMoneyCompact(v, market);
   return `${v.toFixed(3)}×`;
 }

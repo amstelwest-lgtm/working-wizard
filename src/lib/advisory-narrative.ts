@@ -5,7 +5,7 @@
  * Qualitative claims follow the same score bands as the Scorecard.
  */
 import { overviewRatios, scoreRatio } from "./health-score.ts";
-import { healthBandLabel, periodMonthsOf, scoreTier } from "./ratios.ts";
+import { formatQuotedDays, healthBandLabel, periodMonthsOf, scoreTier } from "./ratios.ts";
 
 const DAYS_RATIOS = new Set([
   "Debtor Days",
@@ -27,7 +27,7 @@ const MULTIPLE_RATIOS = new Set([
 /** Days rounded, margins as percents. Sales-per-employee stays a plain number. */
 export function formatSnapshotRatio(name: string, v: number): string {
   if (!Number.isFinite(v)) return "—";
-  if (DAYS_RATIOS.has(name)) return `${Math.round(v)} days`;
+  if (DAYS_RATIOS.has(name)) return formatQuotedDays(name, v);
   if (MULTIPLE_RATIOS.has(name)) return `${v.toFixed(2)}×`;
   if (name === "Sales-per-Employee Ratio") return `${Math.round(v)}`;
   return `${(v * 100).toFixed(1)}%`;

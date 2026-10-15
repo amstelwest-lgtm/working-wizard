@@ -3675,6 +3675,7 @@ function Index() {
     healthByKey: healthMap,
     profile: operatingProfile,
     suppressKeys: profitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
+    debtorDays,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -6784,7 +6785,7 @@ function Ratio({
           </p>
         </div>
         <p className={`shrink-0 font-mono text-lg font-bold tabular-nums ${t.text}`}>
-          {formatVal(value, format, market)}
+          {formatVal(value, format, market, meta.techName)}
         </p>
       </div>
       <p className="mt-2 text-xs text-slate-400">{localizeCopy(meta.hint, market)}</p>

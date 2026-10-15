@@ -5,6 +5,7 @@
  */
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profilePriorityWeight } from "@/lib/profile-signals";
+import { metricDirection } from "@/lib/ratios";
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
 export type StrategicEisenhower = "Do" | "Decide" | "Delegate" | "Delete";
@@ -359,10 +360,23 @@ export function rankStrategicMoves(input: {
   entries?: readonly StrategicMoveEntry[];
   /** Drop moves that would be ranked on a figure the bridge does not trust. */
   suppressKeys?: readonly string[];
+  /** Stored debtor days. At or under the healthy max, "pay faster" is not suggested. */
+  debtorDays?: number | null;
   limit?: number;
 }): RankedStrategicMove[] {
   const suppressed = new Set(input.suppressKeys ?? []);
-  const entries = (input.entries ?? STRATEGIC_MOVE_CATALOG).filter((entry) => !suppressed.has(entry.key));
+  const debtorMax = metricDirection("debtorDays")?.healthyMax;
+  const debtorsAlreadyQuick =
+    input.debtorDays != null &&
+    Number.isFinite(input.debtorDays) &&
+    debtorMax != null &&
+    input.debtorDays <= debtorMax;
+  const payFaster = /pay faster/i;
+  const entries = (input.entries ?? STRATEGIC_MOVE_CATALOG).filter((entry) => {
+    if (suppressed.has(entry.key)) return false;
+    if (debtorsAlreadyQuick && payFaster.test(entry.title)) return false;
+    return true;
+  });
   const healthByKey = input.healthByKey ?? {};
   const limit = input.limit ?? 10;
   return entries
@@ -371,9 +385,12 @@ export function rankStrategicMoves(input: {
       const health = typeof raw === "number" && Number.isFinite(raw) ? raw : Number.NaN;
       const urgency = Number.isFinite(health) ? 100 - health : 50;
       const score = urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName);
+      const actions = debtorsAlreadyQuick
+        ? entry.actions.filter((action) => !payFaster.test(action))
+        : [...entry.actions];
       return {
         ...entry,
-        actions: [...entry.actions],
+        actions,
         health,
         score,
         eisenhower: eisenhowerOf(health, entry.impact),

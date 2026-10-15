@@ -19,10 +19,12 @@ import {
 import {
   creditorDaysHealthyBand,
   currentRatioValue,
+  formatQuotedDays,
   healthBandLabel,
   peerMedian,
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
+import { statementGrossMarginFraction } from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   figuresPeriodLabelFrom,
@@ -200,8 +202,8 @@ function pct(fraction: number): string {
   return formatStatementMargin(fraction) ?? "—";
 }
 
-function days(n: number): string {
-  return `${Math.round(n)} days`;
+function days(n: number, name = "Debtor Days"): string {
+  return formatQuotedDays(name, n);
 }
 
 function finiteOrNull(n: number | null | undefined): number | null {
@@ -249,7 +251,7 @@ const OVERVIEW_RATIO_NAMES = [
 ] as const;
 
 function formatOverviewRatio(name: string, value: number, copyPack: OverviewCopyPack): string {
-  if (name.endsWith("Days")) return `${name}: ${days(value)}`;
+  if (name.endsWith("Days")) return `${name}: ${days(value, name)}`;
   if (
     name.endsWith("Margin") ||
     name === "Fixed Cost Ratio" ||
@@ -379,7 +381,9 @@ export function buildOverviewBrief(input: {
     periodEnd: statement?.periodEnd ?? null,
     figuresSource: figuresSourcePhrase(statement?.statementSource),
     yearToDateEnd: storedYearToDateEnd(financials, fyStartMonth),
-    grossMargin: Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null,
+    grossMargin:
+      statementGrossMarginFraction(financials) ??
+      (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
     grossProfit: asNumber(financials?.grossProfit),
@@ -439,14 +443,14 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     const median = peerMedian("debtorDays");
     lines.push(
       median != null
-        ? `Debtor days: ${days(brief.debtorDays)} (peer median ${median} days)`
-        : `Debtor days: ${days(brief.debtorDays)}`,
+        ? `Debtor days: ${days(brief.debtorDays, "Debtor Days")} (peer median ${median} days)`
+        : `Debtor days: ${days(brief.debtorDays, "Debtor Days")}`,
     );
   }
   if (brief.creditorDays != null) {
     const band = creditorDaysHealthyBand();
     lines.push(
-      `Creditor days: ${days(brief.creditorDays)} (healthy band ${band.min}–${band.max} days)`,
+      `Creditor days: ${days(brief.creditorDays, "Creditor Days")} (healthy band ${band.min}–${band.max} days)`,
     );
   }
   if (brief.inventoryDays != null) {
@@ -458,8 +462,8 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
       .join(", ");
     lines.push(
       where
-        ? `Inventory days: ${days(brief.inventoryDays)} (${where})`
-        : `Inventory days: ${days(brief.inventoryDays)}`,
+        ? `Inventory days: ${days(brief.inventoryDays, "Inventory Days")} (${where})`
+        : `Inventory days: ${days(brief.inventoryDays, "Inventory Days")}`,
     );
   }
   if (brief.currentRatio != null) {

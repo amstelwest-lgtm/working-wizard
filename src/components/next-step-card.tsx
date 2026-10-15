@@ -107,8 +107,14 @@ export function NextStepCard({
   }, [fixtureStep]);
 
   useEffect(() => {
-    onResolved?.(fixtureStep ? fixtureStep : step);
-  }, [fixtureStep, step, onResolved]);
+    if (fixtureStep) {
+      onResolved?.(fixtureStep);
+      return;
+    }
+    // A null step before the fetch settles is not "no open work".
+    if (loading && !error) return;
+    onResolved?.(step);
+  }, [fixtureStep, step, onResolved, loading, error]);
 
   useEffect(() => {
     if (fixtureStep || !clientId) {

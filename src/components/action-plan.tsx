@@ -40,6 +40,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
 import { planAutomation } from "@/lib/action-plan-automation";
+import { actionPace, deriveActionHealth } from "@/lib/action-item-health";
 import { ActionPlanAutomation } from "@/components/action-plan-automation";
 import {
   createActionFromRecommendation,
@@ -86,7 +87,7 @@ const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Status = "not_started" | "in_progress" | "done" | "blocked";
-type Health = "on_track" | "at_risk" | "off_track" | "overdue" | "complete";
+type Health = "on_track" | "at_risk" | "off_track" | "overdue" | "complete" | "not_started";
 
 type Plan = {
   id: string;
@@ -207,24 +208,11 @@ interface Props {
 function deriveHealth(
   it: Pick<Item, "status" | "due_date" | "progress_pct" | "created_at">,
 ): Health {
-  if (it.status === "done") return "complete";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (it.due_date && new Date(it.due_date + "T00:00:00") < today) return "overdue";
-  if (it.status === "blocked") return "off_track";
-  if (!it.due_date) return "on_track";
-  const pace = paceOf(it);
-  if (pace >= 0.9) return "on_track";
-  if (pace >= 0.6) return "at_risk";
-  return "off_track";
+  return deriveActionHealth(it);
 }
-/** actual progress ÷ expected progress by now (0..∞, clamped later) */
+/** actual progress ÷ expected progress by now. No due date is not a full pace. */
 function paceOf(it: Pick<Item, "due_date" | "progress_pct" | "created_at">): number {
-  if (!it.due_date) return 1;
-  const created = new Date(it.created_at).getTime();
-  const due = new Date(it.due_date + "T23:59:59").getTime();
-  const expected = Math.max((100 * (Date.now() - created)) / Math.max(due - created, 1), 5);
-  return it.progress_pct / expected;
+  return actionPace(it);
 }
 /** expected % complete today, for the pace marker */
 function expectedPct(it: Pick<Item, "due_date" | "created_at">): number | null {
@@ -240,6 +228,7 @@ const HEALTH_META: Record<Health, { label: string; color: string; bg: string }> 
   at_risk: { label: "At risk", color: "#B7791F", bg: "rgba(183,121,31,0.12)" },
   off_track: { label: "Off track", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
   overdue: { label: "Overdue", color: "#ef4444", bg: "rgba(239,68,68,0.16)" },
+  not_started: { label: "Not started", color: "#64748b", bg: "rgba(100,116,139,0.14)" },
   complete: { label: "Done", color: "#8a938c", bg: "rgba(138,147,140,0.15)" },
 };
 export function healthMeta(h?: string | null) {
@@ -470,6 +459,7 @@ export function planTargetIsOverdue(targetDate: string, now = new Date()): boole
 function itemScore(it: Item): number {
   const h = deriveHealth(it);
   if (h === "complete") return 1;
+  if (h === "not_started") return 0;
   if (h === "overdue" || it.status === "blocked") return 0.2;
   return Math.max(0, Math.min(1, paceOf(it)));
 }
@@ -1194,6 +1184,7 @@ export default function ActionPlanPanel({
       at_risk: 0,
       off_track: 0,
       overdue: 0,
+      not_started: 0,
       complete: 0,
     };
     enriched.forEach((i) => {
@@ -3435,8 +3426,10 @@ function VizCard({ title, children }: { title: string; children: React.ReactNode
  * read as four actions on track. The leading number is how many are still open.
  */
 export function formatActionHealthSummary(counts: Record<Health, number>): string {
-  const open = counts.on_track + counts.at_risk + counts.off_track + counts.overdue;
+  const open =
+    counts.on_track + counts.at_risk + counts.off_track + counts.overdue + (counts.not_started ?? 0);
   const parts = [`${open} open`];
+  if (counts.not_started) parts.push(`${counts.not_started} not started`);
   if (counts.on_track) parts.push(`${counts.on_track} on track`);
   if (counts.at_risk) parts.push(`${counts.at_risk} at risk`);
   if (counts.off_track) parts.push(`${counts.off_track} off track`);
@@ -3454,9 +3447,10 @@ function HealthDonut({
   total: number;
   onPick: (h: Health) => void;
 }) {
-  const order: Health[] = ["on_track", "at_risk", "off_track", "overdue", "complete"];
+  const order: Health[] = ["not_started", "on_track", "at_risk", "off_track", "overdue", "complete"];
   const summary = formatActionHealthSummary(counts);
-  const open = counts.on_track + counts.at_risk + counts.off_track + counts.overdue;
+  const open =
+    counts.on_track + counts.at_risk + counts.off_track + counts.overdue + (counts.not_started ?? 0);
   const r = 42,
     cx = 55,
     cy = 55,

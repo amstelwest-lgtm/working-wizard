@@ -78,6 +78,8 @@ export interface CashForecastSummary {
   shortfall: boolean;
   lowestWeek: number | null;
   negativeWeeks: number;
+  /** Closings under the same floor the cash screen uses. */
+  weeksBelowFloor?: number;
   /** Why a shortfall is a timing dip rather than a structural burn. */
   timingNote?: string | null;
   trajectory: "up" | "down" | "flat" | null;

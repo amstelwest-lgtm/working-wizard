@@ -27,6 +27,82 @@ export function businessNameFromFinancials(financials: unknown): string | null {
   return null;
 }
 
+function amountOf(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/** Revenue, cash, or a cash-flow line. An empty shell has none of these. */
+export function clientHasBooks(client: { financials?: unknown; cashflow?: unknown }): boolean {
+  const fin = client.financials;
+  if (fin && typeof fin === "object") {
+    const record = fin as Record<string, unknown>;
+    for (const key of ["revenue", "cash", "cogs", "netIncome", "receivables", "payables"]) {
+      const amount = amountOf(record[key]);
+      if (amount != null && Math.abs(amount) > 0.5) return true;
+    }
+  }
+  const flow = client.cashflow;
+  if (flow && typeof flow === "object") {
+    const record = flow as Record<string, unknown>;
+    const opening = amountOf(record.openingBalance);
+    if (opening != null && Math.abs(opening) > 0.5) return true;
+    for (const key of ["revenue", "expenses", "other"]) {
+      const lines = record[key];
+      if (!Array.isArray(lines)) continue;
+      for (const line of lines) {
+        if (!line || typeof line !== "object") continue;
+        const amount = amountOf((line as { amount?: unknown }).amount);
+        if (amount != null && Math.abs(amount) > 0.5) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Rows that share a display name and have no books collapse to the oldest.
+ * A row with its own books stays, even when the name matches.
+ */
+export function collapseDuplicateClientShells<
+  T extends { id: string; name: string; created_at?: string | null; financials?: unknown; cashflow?: unknown },
+>(clients: readonly T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const client of clients) {
+    const key = clean(client.name).toLowerCase();
+    if (!key) continue;
+    const list = groups.get(key) ?? [];
+    list.push(client);
+    groups.set(key, list);
+  }
+  const drop = new Set<string>();
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const empty = list.filter((client) => !clientHasBooks(client));
+    if (empty.length === 0) continue;
+    if (empty.length < list.length) {
+      for (const shell of empty) drop.add(shell.id);
+      continue;
+    }
+    const oldest = [...empty].sort((a, b) => {
+      const aAt = a.created_at ?? "";
+      const bAt = b.created_at ?? "";
+      if (aAt && bAt && aAt !== bAt) return aAt.localeCompare(bAt);
+      if (aAt && !bAt) return -1;
+      if (!aAt && bAt) return 1;
+      return a.id.localeCompare(b.id);
+    })[0];
+    for (const shell of empty) {
+      if (shell.id !== oldest?.id) drop.add(shell.id);
+    }
+  }
+  return clients.filter((client) => !drop.has(client.id));
+}
+
 export function clientDisplayName(input: {
   storedName: string;
   ownerFullName?: string | null;

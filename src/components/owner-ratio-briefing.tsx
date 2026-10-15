@@ -235,7 +235,7 @@ export function OwnerRatioBriefing({
               </SheetTitle>
               <SheetDescription className="text-[12px] text-slate-500">
                 {localizeCopy(meta.techName, briefingMarket)}
-                {Number.isFinite(value) ? ` · ${formatVal(value, format, briefingMarket)}` : ""}
+                {Number.isFinite(value) ? ` · ${formatVal(value, format, briefingMarket, meta.techName)}` : ""}
               </SheetDescription>
             </SheetHeader>
 

@@ -810,6 +810,8 @@ export function plBankDisagreement(input: {
 }): PlBankDisagreement | null {
   const cf = asRecord(input.cashflow);
   if (!cf || !cashflowIsRealBankSeed(cf)) return null;
+  // Estimated lines are not bank receipts. A real bank seed still disagrees when the gap is material.
+  if (cf.forecastLinesSource === "pl-estimate") return null;
   const fin = asRecord(input.financials);
   if (!fin) return null;
   const months = periodMonthsOf(fin);

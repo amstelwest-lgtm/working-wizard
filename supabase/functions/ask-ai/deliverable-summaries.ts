@@ -4,6 +4,7 @@
  * Keep Deno-free so scripts can import this file directly.
  */
 
+import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
 import {
   baseCashflow,
   rollForwardForecast,
@@ -376,12 +377,18 @@ export function summarizeCashForecast(
     });
     const hasFlow = outlook.totalInflow > 0 || outlook.totalOutflow > 0 || outlook.opening !== 0;
     if (!hasFlow) return null;
+    const facts = forecastChatFacts({
+      closings: outlook.closing,
+      floor: outlook.floor,
+      plCashGenerative: opts.cashGenerative === true || runway.kind === "cash_generative",
+    });
     const lowest = Math.min(...outlook.closing);
     const lowestWeek = outlook.closing.indexOf(lowest) + 1;
+    const floorWeek = outlook.closing.findIndex((c) => c < outlook.floor);
     const closing = outlook.closing[outlook.closing.length - 1] ?? outlook.opening;
     const delta = closing - outlook.opening;
     const traj = Math.abs(delta) < 1 ? "flat" : delta > 0 ? "up" : "down";
-    const breach = outlook.closing.findIndex((c) => c < RUNWAY_FLOOR);
+    const breach = outlook.closing.findIndex((c) => c < outlook.floor);
     const derivedRunway = breach === -1 ? HORIZON : breach;
     const sharedWeeks =
       opts.runway && (opts.runway.kind === "weeks" || opts.runway.kind === "zero")
@@ -395,12 +402,13 @@ export function summarizeCashForecast(
           : derivedRunway;
     return {
       hasData: true,
-      runwayWeeks: opts.cashGenerative || runway.kind === "cash_generative" ? null : runwayWeeks,
-      cashGenerative: opts.cashGenerative === true || runway.kind === "cash_generative",
+      runwayWeeks: facts.cashGenerative ? null : runwayWeeks,
+      cashGenerative: facts.cashGenerative,
       horizonWeeks: HORIZON,
-      shortfall: outlook.shortfall,
-      lowestWeek: outlook.shortfall ? outlook.shortfallWeek : lowestWeek,
-      negativeWeeks: outlook.shortfall ? outlook.closing.filter((c) => c < 0).length : 0,
+      shortfall: facts.shortfall,
+      lowestWeek: facts.weeksBelowFloor > 0 && floorWeek >= 0 ? floorWeek + 1 : lowestWeek,
+      negativeWeeks: facts.negativeWeeks,
+      weeksBelowFloor: facts.weeksBelowFloor,
       trajectory: traj,
       closingVsOpening: traj === "up" ? "higher" : traj === "down" ? "lower" : "flat",
       timingNote: outlook.timingNote,
@@ -415,12 +423,17 @@ export function summarizeCashForecast(
   }
   const closings = closingBalancesFromCashflow(source);
   if (!closings) return null;
+  const facts = forecastChatFacts({
+    closings,
+    floor: RUNWAY_FLOOR,
+    plCashGenerative: opts?.cashGenerative === true,
+  });
   const opening = parseFloat(source?.openingBalance ?? "0") || 0;
   const lowest = Math.min(...closings);
   const lowestWeek = closings.indexOf(lowest) + 1;
-  const negativeWeeks = closings.filter((c) => c < 0).length;
+  const floorWeek = closings.findIndex((c) => c < RUNWAY_FLOOR);
   const closing = closings[closings.length - 1] ?? opening;
-  const breach = closings.findIndex((c) => c < RUNWAY_FLOOR);
+  const breach = floorWeek;
   const derivedRunway = breach === -1 ? HORIZON : breach;
   const runway =
     storedRunway != null && Number.isFinite(Number(storedRunway))
@@ -430,12 +443,13 @@ export function summarizeCashForecast(
   const traj = Math.abs(delta) < 1 ? "flat" : delta > 0 ? "up" : "down";
   return {
     hasData: true,
-    runwayWeeks: opts?.cashGenerative ? null : runway,
-    cashGenerative: opts?.cashGenerative === true,
+    runwayWeeks: facts.cashGenerative ? null : runway,
+    cashGenerative: facts.cashGenerative,
     horizonWeeks: HORIZON,
-    shortfall: lowest < 0,
-    lowestWeek,
-    negativeWeeks,
+    shortfall: facts.shortfall,
+    lowestWeek: facts.weeksBelowFloor > 0 && floorWeek >= 0 ? floorWeek + 1 : lowestWeek,
+    negativeWeeks: facts.negativeWeeks,
+    weeksBelowFloor: facts.weeksBelowFloor,
     trajectory: traj,
     closingVsOpening: traj === "up" ? "higher" : traj === "down" ? "lower" : "flat",
   };
