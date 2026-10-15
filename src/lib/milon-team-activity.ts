@@ -7,7 +7,7 @@ import { formatMoney, type MoneyMarket } from "./market/format";
 import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
-import { metricDirection } from "./ratios";
+import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
 
 export const TODAY_RATIO_CAP = 3;
 
@@ -205,6 +205,50 @@ export function findingPeriod(row: Pick<AgentFindingRow, "evidence" | "as_of">):
   return row.as_of;
 }
 
+type FigureKind = "gross" | "debtor" | "inventory" | "creditor" | "wc" | "other";
+
+function figureKind(key: string): FigureKind {
+  const compact = key.toLowerCase().replace(/[\s_-]+/g, "");
+  if (compact === "grossmargin" || compact === "gm") return "gross";
+  if (compact === "workingcapitaldays" || compact === "ccc") return "wc";
+  if (compact === "debtordays" || compact === "dso" || compact === "daysar") return "debtor";
+  if (compact === "inventorydays" || compact === "dio" || compact === "stockdays") return "inventory";
+  if (compact === "creditordays" || compact === "dpo" || compact === "daysap") return "creditor";
+  return "other";
+}
+
+/** Sign-corrected quote. Component days stay non-negative. A margin above 100% is the signed-cost reading. */
+function correctQuotedFigure(key: string, value: number): number {
+  if (!Number.isFinite(value)) return value;
+  const kind = figureKind(key);
+  if (kind === "gross") {
+    const fraction = correctedGrossMarginFraction(value);
+    return Math.abs(value) <= 1.5 ? fraction : fraction * 100;
+  }
+  if ((kind === "inventory" || kind === "creditor" || kind === "debtor") && value < 0) {
+    return Math.abs(value);
+  }
+  return value;
+}
+
+function correctQuotedFigures(entries: { key: string; value: number }[]): { key: string; value: number }[] {
+  const corrected = entries.map((entry) => ({
+    key: entry.key,
+    value: correctQuotedFigure(entry.key, entry.value),
+  }));
+  const pick = (kind: FigureKind) => corrected.find((entry) => figureKind(entry.key) === kind);
+  const debtor = pick("debtor");
+  const inventory = pick("inventory");
+  const creditor = pick("creditor");
+  const wc = workingCapitalFromDayParts(
+    debtor?.value ?? Number.NaN,
+    inventory?.value ?? Number.NaN,
+    creditor?.value ?? Number.NaN,
+  );
+  if (!Number.isFinite(wc)) return corrected;
+  return corrected.map((entry) => (figureKind(entry.key) === "wc" ? { ...entry, value: wc } : entry));
+}
+
 function formatFigure(key: string, value: number, market: MoneyMarket): string {
   const compact = key.toLowerCase().replace(/[\s_-]+/g, "");
   const spec = metricDirection(key) ?? metricDirection(compact);
@@ -305,7 +349,8 @@ export function formatFindingProse(
   figures?: Record<string, number> | readonly { key: string; value: number }[] | null,
   market: MoneyMarket = ZA_MARKET,
 ): string {
-  return tidyRatioPercent(scrubRawDecimals(text, figures ?? {}, market)).replace(/\s+/g, " ").trim();
+  const corrected = correctQuotedFigures(figureEntries(figures));
+  return tidyRatioPercent(scrubRawDecimals(text, corrected, market)).replace(/\s+/g, " ").trim();
 }
 
 const METRIC_WORD =
@@ -387,7 +432,7 @@ const MARGIN_RANK: Record<string, number> = {
 /** Structured figures as one muted line. Days round; a margin is a percent. */
 export function findingMetricContext(evidence: unknown, market: MoneyMarket = ZA_MARKET): string | null {
   const clauses: { kind: number; rank: number; label: string; amount: string; days: boolean }[] = [];
-  for (const { key, value } of findingDisplayFigures(evidence)) {
+  for (const { key, value } of correctQuotedFigures(findingDisplayFigures(evidence))) {
     if (skipFigureKey(key)) continue;
     const formatted = tidyRatioPercent(formatFigure(key, value, market));
     if (/^-?\d+\.\d+$/.test(formatted)) continue;

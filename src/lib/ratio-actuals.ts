@@ -1,4 +1,5 @@
-import { annualiseFinancials, type RatioInputs } from "@/lib/ratios";
+import { annualiseFinancials, operatingCycleDays, type RatioInputs } from "@/lib/ratios";
+import { costMagnitude } from "@/lib/period-profit";
 import { RATIO_NAME_TO_KEY, pillarForRatioName, type HealthPillarId } from "@/lib/health-score";
 
 export type RatioExplain = {
@@ -490,7 +491,8 @@ export function ratioActualLine(
   } else if (name === "Operating Margin" && missing.length === 0) {
     calculation = `${fmt(ebit)} / ${fmt(r)} = ${pct(ebit / r)}`;
   } else if (name === "Gross Margin" && missing.length === 0) {
-    calculation = `(${fmt(r)} − ${fmt(cogs)}) / ${fmt(r)} = ${pct((r - cogs) / r)}`;
+    const cost = r > 0 ? costMagnitude(cogs) : cogs;
+    calculation = `(${fmt(r)} − ${fmt(cost)}) / ${fmt(r)} = ${pct(r ? (r - cost) / r : 0)}`;
   } else if (name === "Return on Equity" && missing.length === 0) {
     calculation =
       equity > 0 ? `${fmt(ni)} / ${fmt(equity)} = ${pct(ni / equity)}` : "n/m — equity is not positive";
@@ -511,14 +513,34 @@ export function ratioActualLine(
   } else if (name === "Debtor Days" && missing.length === 0) {
     calculation = `(${fmt(rec)} / ${fmt(r)}) × 365 = ${days((rec / r) * 365)}`;
   } else if (name === "Inventory Days" && missing.length === 0) {
-    calculation = `(${fmt(inv)} / ${fmt(cogs)}) × 365 = ${days((inv / cogs) * 365)}`;
+    const cycle = operatingCycleDays({
+      revenue: r,
+      cogs,
+      receivables: rec,
+      inventory: inv,
+      payables: pay,
+    });
+    const cost = r > 0 ? costMagnitude(cogs) : cogs;
+    calculation = `(${fmt(inv)} / ${fmt(cost)}) × 365 = ${days(cycle.inventoryDays)}`;
   } else if (name === "Creditor Days" && missing.length === 0) {
-    calculation = `(${fmt(pay)} / ${fmt(cogs)}) × 365 = ${days((pay / cogs) * 365)}`;
+    const cycle = operatingCycleDays({
+      revenue: r,
+      cogs,
+      receivables: rec,
+      inventory: inv,
+      payables: pay,
+    });
+    const cost = r > 0 ? costMagnitude(cogs) : cogs;
+    calculation = `(${fmt(pay)} / ${fmt(cost)}) × 365 = ${days(cycle.creditorDays)}`;
   } else if (name === "Working Capital Days" && missing.length === 0) {
-    const dd = Math.round((rec / r) * 365);
-    const id = Math.round((inv / cogs) * 365);
-    const cd = Math.round((pay / cogs) * 365);
-    calculation = `${days(dd)} + ${days(id)} - ${days(cd)} = ${days(dd + id - cd)}`;
+    const cycle = operatingCycleDays({
+      revenue: r,
+      cogs,
+      receivables: rec,
+      inventory: inv,
+      payables: pay,
+    });
+    calculation = `${days(cycle.debtorDays)} + ${days(cycle.inventoryDays)} - ${days(cycle.creditorDays)} = ${days(cycle.workingCapitalDays)}`;
   } else if (name === "Fixed Cost Ratio" && missing.length === 0) {
     const periodFixed = parseField(String(inputs.fixedCosts ?? ""));
     const periodRevenue = parseField(String(inputs.revenue ?? ""));
@@ -531,7 +553,8 @@ export function ratioActualLine(
   } else if (name === "Top-5 Customer Share" && missing.length === 0) {
     calculation = `${fmt(n.top5Revenue)} / ${fmt(r)} = ${pct(n.top5Revenue / r)}`;
   } else if (name === "Gross Profit / Labor" && missing.length === 0) {
-    calculation = `(${fmt(r)} − ${fmt(cogs)}) / ${fmt(n.laborCost)} = ${times((r - cogs) / n.laborCost)}`;
+    const cost = r > 0 ? costMagnitude(cogs) : cogs;
+    calculation = `(${fmt(r)} − ${fmt(cost)}) / ${fmt(n.laborCost)} = ${times(n.laborCost ? (r - cost) / n.laborCost : 0)}`;
   } else if (name === "Sales-per-Employee Ratio" && missing.length === 0) {
     calculation = `${fmt(r)} / ${n.employees} people = ${fmt(r / n.employees)} / head`;
   } else if (name === "OCF / EBITDA" && missing.length === 0) {

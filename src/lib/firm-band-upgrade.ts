@@ -128,6 +128,25 @@ export function formatFirmClientUsage(count: number, limit: number | null): stri
 }
 
 /**
+ * Shown on Settings → Plan when the practice has more active clients than the
+ * band allows. Demo rows are not in `count`. There is no archived flag on
+ * clients, and each row is one client even when two share a name.
+ */
+export function formatFirmOverLimitNote(input: {
+  count: number | null | undefined;
+  limit: number | null | undefined;
+  planName?: string | null;
+}): string | null {
+  const count = input.count;
+  const limit = input.limit;
+  if (count == null || limit == null || !Number.isFinite(count) || !Number.isFinite(limit)) return null;
+  if (count <= limit) return null;
+  const name = input.planName?.trim() || "This plan";
+  const extra = count - limit;
+  return `${name} includes ${limit} active clients. This practice has ${count} active clients, ${extra} over the limit. Upgrade to raise it.`;
+}
+
+/**
  * True when the band's catalog limit is a number strictly below the current
  * client count. Equal is allowed. Unlimited (null) is allowed. An unknown
  * count is not treated as a block.

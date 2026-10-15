@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { stripMilonProjection } from "@/lib/milon-projection";
 
 /**
  * Public tokenised task page — /t/:token
@@ -258,7 +259,7 @@ function TaskPage() {
 
       <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">Your task</p>
       <h1 className="mt-2 text-[26px] font-black uppercase leading-[1.05] tracking-tight text-[#e8ede9]">
-        {item.title}
+        {stripMilonProjection(item.title)}
       </h1>
       {(dueStr || daysLeft != null) && (
         <p className="mt-3 text-sm text-[#8a938c]">
@@ -271,15 +272,17 @@ function TaskPage() {
         </p>
       )}
 
-      {item.outcome_why && (
+      {stripMilonProjection(item.outcome_why) ? (
         <div className="mt-6">
           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">Why this matters</p>
-          <p className="mt-2 text-sm leading-relaxed text-[#c6cec8]">{item.outcome_why}</p>
-          {plan?.outcome_goal && (
-            <p className="mt-2 text-xs text-[#8a938c]">It moves the company toward: {plan.outcome_goal}</p>
-          )}
+          <p className="mt-2 text-sm leading-relaxed text-[#c6cec8]">{stripMilonProjection(item.outcome_why)}</p>
+          {stripMilonProjection(plan?.outcome_goal) ? (
+            <p className="mt-2 text-xs text-[#8a938c]">
+              It moves the company toward: {stripMilonProjection(plan?.outcome_goal)}
+            </p>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       {/* Status */}
       <div className="mt-8">

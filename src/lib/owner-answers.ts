@@ -9,6 +9,7 @@ import {
 } from "@/lib/cash-runway";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { periodProfitBridge } from "@/lib/period-profit";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
 
@@ -32,6 +33,11 @@ export type OwnerBooks = {
   priorRevenue: number | null;
   cogs: number | null;
   priorCogs: number | null;
+  /** Stated gross profit on the statement. The waterfall uses this when it is in range. */
+  grossProfit?: number | null;
+  priorGrossProfit?: number | null;
+  /** Stated net profit. Shown beside gross profit with that label. */
+  netIncome?: number | null;
   receivables: number | null;
   /** Aged overdue balance. Null when the collections snapshot is not loaded. */
   overdueReceivables?: number | null;
@@ -184,15 +190,29 @@ function cashHomeLine(sentence: string): string {
   return guardOwnerLine(sentence);
 }
 
-/** Home profit copy. The tile sentence stays long for the hold screen. */
+/** Home profit copy. Labels stay Gross profit and Net profit, the same words as the waterfall. */
 function profitHomeLine(sentence: string): string {
   if (sentence === CONNECT || sentence === "Profit is not on file yet.") return sentence;
-  const [amount] = amountsIn(sentence);
-  if (!amount) return guardOwnerLine(sentence);
-  if (sentence.includes("more than the prior")) return `Profit is ${amount}, up on last period.`;
-  if (sentence.includes("less than the prior")) return `Profit is ${amount}, down on last period.`;
-  if (sentence.includes("the same as the prior")) return `Profit is ${amount}, the same as last period.`;
-  return `Profit is ${amount}.`;
+  const amounts = amountsIn(sentence);
+  const [gross, net] = amounts;
+  if (!gross) return guardOwnerLine(sentence);
+  const netBit = sentence.includes("Net profit") && net ? ` Net profit is ${net}.` : "";
+  let head = `Gross profit is ${gross}.`;
+  if (sentence.includes("more than the prior")) head = `Gross profit is ${gross}, up on last period.`;
+  else if (sentence.includes("less than the prior")) head = `Gross profit is ${gross}, down on last period.`;
+  else if (sentence.includes("the same as the prior")) head = `Gross profit is ${gross}, the same as last period.`;
+  return `${head}${netBit}`;
+}
+
+/** Gross profit the waterfall prints: stated gross profit when it is in range, otherwise revenue minus the cost. */
+function waterfallGross(
+  revenue: number,
+  cogs: number,
+  stated: number | null | undefined,
+): number {
+  const fields: Record<string, unknown> = { revenue, cogs };
+  if (stated != null && Number.isFinite(stated)) fields.grossProfit = stated;
+  return periodProfitBridge(fields).grossProfit;
 }
 
 export type OwnerStatusTone = "attention" | "critical";
@@ -231,10 +251,12 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
       : null;
 
   const gross =
-    finite(books.revenue) && finite(books.cogs) ? books.revenue - books.cogs : null;
+    finite(books.revenue) && finite(books.cogs)
+      ? waterfallGross(books.revenue, books.cogs, books.grossProfit)
+      : null;
   const prior =
     finite(books.priorRevenue) && finite(books.priorCogs)
-      ? books.priorRevenue - books.priorCogs
+      ? waterfallGross(books.priorRevenue, books.priorCogs, books.priorGrossProfit)
       : null;
   const profitDown = gross != null && prior != null && gross < prior;
   const overdue = finite(books.overdueReceivables ?? null) && (books.overdueReceivables ?? 0) > 0;
@@ -336,16 +358,18 @@ function profitTile(
       empty: true,
     };
   }
-  const gross = books.revenue - books.cogs;
+  const gross = waterfallGross(books.revenue, books.cogs, books.grossProfit);
   let sentence = `Gross profit is ${money(gross)}.`;
+  if (finite(books.netIncome)) sentence += ` Net profit is ${money(books.netIncome)}.`;
   if (finite(books.priorRevenue) && finite(books.priorCogs)) {
-    const prior = books.priorRevenue - books.priorCogs;
-    sentence =
+    const prior = waterfallGross(books.priorRevenue, books.priorCogs, books.priorGrossProfit);
+    const compared =
       gross < prior
         ? `Gross profit is ${money(gross)}, less than the prior period.`
         : gross > prior
           ? `Gross profit is ${money(gross)}, more than the prior period.`
           : `Gross profit is ${money(gross)}, the same as the prior period.`;
+    sentence = finite(books.netIncome) ? `${compared} Net profit is ${money(books.netIncome)}.` : compared;
   }
   return {
     ...base,

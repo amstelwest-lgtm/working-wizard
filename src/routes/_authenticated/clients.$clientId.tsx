@@ -2863,6 +2863,9 @@ function ClientView() {
       priorRevenue: amount(priorFin?.revenue),
       cogs: amount(financials.cogs),
       priorCogs: amount(priorFin?.cogs),
+      grossProfit: amount(financials.grossProfit),
+      priorGrossProfit: amount(priorFin?.grossProfit),
+      netIncome: amount(financials.netIncome),
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
       cashOutlook: {

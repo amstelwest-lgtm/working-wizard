@@ -38,6 +38,7 @@ import {
 import { billingStartPath, peekPendingCheckout } from "./pending-checkout.ts";
 import { firmSignupCheckoutIntent } from "./stripe-plans.ts";
 import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
+import { stripMilonProjection } from "./milon-projection.ts";
 
 export {
   routeMilonIntent,
@@ -519,9 +520,9 @@ export function mountAskAi(container, options) {
             bubble.appendChild(title);
             bubble.appendChild(link);
           } else if (turn.role === "user") {
-            bubble.textContent = turn.content;
+            bubble.textContent = stripMilonProjection(turn.content);
           } else {
-            bubble.innerHTML = renderMarkdown(turn.content);
+            bubble.innerHTML = renderMarkdown(stripMilonProjection(turn.content));
           }
           if (latestAssistant) {
             decorateLatestAnswer(bubble);
