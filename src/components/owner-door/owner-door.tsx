@@ -440,6 +440,8 @@ export function OwnerDoor({
       priorRevenue: parseOwnerNumber(priorRevenue) ?? parseOwnerNumber(priorFin?.revenue),
       cogs: parseOwnerNumber(cogs),
       priorCogs: parseOwnerNumber(priorFin?.cogs),
+      priorGrossProfit: parseOwnerNumber(priorFin?.grossProfit),
+      netIncome: parseOwnerNumber(netIncome),
       receivables: parseOwnerNumber(receivables),
       cashflow,
       cashOutlook: cashOutlook ?? undefined,

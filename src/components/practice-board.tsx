@@ -57,7 +57,13 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { assessClientMetrics, runwayDisplayLabel, runwayTileValue } from "@/lib/client-metrics";
+import { forecastRunwayHeadlineShared } from "@/lib/cash-forecast-parity";
+import {
+  assessClientMetrics,
+  forecastIsCashGenerative,
+  runwayDisplayLabel,
+  runwayTileValue,
+} from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
@@ -1090,7 +1096,19 @@ function toClientRow(
       assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
         ? assessed.runway.weeks
         : null;
-    const runwayLabel = runwayDisplayLabel(assessed.runway);
+    const outlook = assessed.outlook;
+    const runwayLabel =
+      outlook.closing.length > 0
+        ? forecastRunwayHeadlineShared({
+            opening: outlook.opening,
+            closings: outlook.closing,
+            floor: outlook.floor,
+            runwayLabel: runwayDisplayLabel(assessed.runway),
+            cashGenerative:
+              assessed.runway.kind === "cash_generative" &&
+              forecastIsCashGenerative(outlook.totalInflow, outlook.totalOutflow),
+          }).headline
+        : runwayDisplayLabel(assessed.runway);
     const fyStartMonth =
       parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
     const health = scorecardHealthFromFinancials({

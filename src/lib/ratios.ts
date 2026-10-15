@@ -1,3 +1,5 @@
+import { costMagnitude } from "@/lib/period-profit";
+
 export type HealthTier = "critical" | "at_risk" | "healthy";
 
 export type HealthBandLabel = "Critical" | "Watch" | "Healthy";
@@ -458,6 +460,72 @@ export const BUSINESS_TYPE_TO_BENCHMARK: Record<string, string> = {
   hybrid: "other",
 };
 
+/**
+ * Debtor, inventory, and creditor days, then working-capital days.
+ * A cost stored as a credit is still a cost, so inventory and creditor days
+ * stay non-negative. Working-capital days are the net of those three and
+ * can be negative. Roadmap, ratios, and the action formula all call this.
+ */
+export function operatingCycleDays(input: {
+  revenue: number;
+  cogs: number;
+  receivables: number;
+  payables: number;
+  inventory: number;
+}): {
+  debtorDays: number;
+  inventoryDays: number;
+  creditorDays: number;
+  workingCapitalDays: number;
+} {
+  const revenue = input.revenue;
+  const cogs = revenue > 0 ? costMagnitude(input.cogs) : input.cogs;
+  const safe = (a: number, b: number) => {
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return Number.NaN;
+    return b === 0 ? 0 : a / b;
+  };
+  const roundDay = (days: number) => (Number.isFinite(days) ? Math.round(days) : days);
+  const debtorDays = roundDay(safe(input.receivables, revenue) * 365);
+  let inventoryDays = roundDay(safe(input.inventory, cogs) * 365);
+  let creditorDays = roundDay(safe(input.payables, cogs) * 365);
+  if (Number.isFinite(inventoryDays) && inventoryDays < 0) inventoryDays = Math.abs(inventoryDays);
+  if (Number.isFinite(creditorDays) && creditorDays < 0) creditorDays = Math.abs(creditorDays);
+  const workingCapitalDays = [debtorDays, inventoryDays, creditorDays].every((days) =>
+    Number.isFinite(days),
+  )
+    ? debtorDays + inventoryDays - creditorDays
+    : Number.NaN;
+  return { debtorDays, inventoryDays, creditorDays, workingCapitalDays };
+}
+
+/**
+ * Working-capital days from day counts already on a line.
+ * Component days are taken as non-negative. The net can stay negative.
+ */
+export function workingCapitalFromDayParts(
+  debtorDays: number,
+  inventoryDays: number,
+  creditorDays: number,
+): number {
+  if (![debtorDays, inventoryDays, creditorDays].every((days) => Number.isFinite(days))) {
+    return Number.NaN;
+  }
+  return (
+    Math.round(debtorDays) + Math.round(Math.abs(inventoryDays)) - Math.round(Math.abs(creditorDays))
+  );
+}
+
+/**
+ * A gross margin above 100% is the signed-cost reading (revenue − a credit).
+ * The corrected margin is the one the waterfall prints.
+ */
+export function correctedGrossMarginFraction(value: number): number {
+  if (!Number.isFinite(value)) return value;
+  const fraction = Math.abs(value) <= 1.5 ? value : value / 100;
+  if (fraction > 1 && fraction < 2) return 2 - fraction;
+  return fraction;
+}
+
 export function computeRatios(v: RatioInputs): Record<string, number> {
   // A blank field means "no data", not "zero" — parsing it to NaN lets that
   // distinction flow through every formula below (arithmetic on NaN yields
@@ -480,7 +548,7 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
     return b === 0 ? 0 : a / b;
   };
 
-  if (n.revenue > 0 && n.cogs < 0) n.cogs = Math.abs(n.cogs);
+  if (n.revenue > 0 && n.cogs < 0) n.cogs = costMagnitude(n.cogs);
   const operatingMargin = safe(n.ebit, n.revenue);
   const netMargin = safe(n.netIncome, n.revenue);
   const grossMargin = safe(n.revenue - n.cogs, n.revenue);
@@ -493,14 +561,17 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   // loss-making, negative-equity business showing a spectacular positive
   // ROE. Force these to NaN ("n/m" — not meaningful) instead.
   const roe = n.equity > 0 ? roa * equityMultiplier : NaN;
-  const roundDay = (days: number) => (Number.isFinite(days) ? Math.round(days) : days);
-  const debtorDays = roundDay(safe(n.receivables, n.revenue) * 365);
-  const inventoryDays = roundDay(safe(n.inventory, n.cogs) * 365);
-  const creditorDays = roundDay(safe(n.payables, n.cogs) * 365);
-  const wcDays =
-    [debtorDays, inventoryDays, creditorDays].every((days) => Number.isFinite(days))
-      ? debtorDays + inventoryDays - creditorDays
-      : Number.NaN;
+  const cycle = operatingCycleDays({
+    revenue: n.revenue,
+    cogs: n.cogs,
+    receivables: n.receivables,
+    inventory: n.inventory,
+    payables: n.payables,
+  });
+  const debtorDays = cycle.debtorDays;
+  const inventoryDays = cycle.inventoryDays;
+  const creditorDays = cycle.creditorDays;
+  const wcDays = cycle.workingCapitalDays;
   const fcr = safe(n.fixedCosts, n.revenue);
   const cm = n.revenue - n.variableCosts;
   const dol = safe(cm, n.ebit);

@@ -147,7 +147,7 @@ assert(
 );
 assert(homeLines.financial_manager[1] === "Approve the payroll run.", "the waiting answer stays under the financial manager");
 assert(
-  /^Profit is \$[\d,]+, up on last period\.$/.test(homeLines.analyst[0] ?? ""),
+  /^Gross profit is \$[\d,]+, up on last period\.$/.test(homeLines.analyst[0] ?? ""),
   `profit on home is a sentence (${homeLines.analyst[0]})`,
 );
 assert(homeLines.analyst[1]?.startsWith("Customers owe"), "debtors stay under the analyst");

@@ -1,6 +1,7 @@
 import {
   Body, Button, Container, Head, Heading, Html, Preview, Section, Text,
 } from '@react-email/components'
+import { stripMilonProjection } from '@/lib/milon-projection'
 import type { TemplateEntry } from './registry'
 
 interface ActionTaskProps {
@@ -35,6 +36,8 @@ const ActionTaskEmail = ({
   clientName,
   emailType = 'assignment',
 }: ActionTaskProps) => {
+  const title = stripMilonProjection(taskTitle) || 'Your task'
+  const whyText = stripMilonProjection(outcomeWhy)
   const intro =
     emailType === 'nudge'
       ? `A reminder — this one is due soon:`
@@ -44,18 +47,18 @@ const ActionTaskEmail = ({
   return (
     <Html lang="en" dir="ltr">
       <Head />
-      <Preview>{taskTitle ? `${taskTitle}${dueDate ? ` — due ${dueDate}` : ''}` : 'Your task'}</Preview>
+      <Preview>{title ? `${title}${dueDate ? ` — due ${dueDate}` : ''}` : 'Your task'}</Preview>
       <Body style={main}>
         <Container style={container}>
           <Heading style={h1}>{employeeName ? `Hi ${employeeName},` : 'Hello,'}</Heading>
           <Text style={text}>{intro}</Text>
 
           <Section style={card}>
-            <Text style={taskTitleStyle}>{(taskTitle ?? 'Your task').toUpperCase()}</Text>
+            <Text style={taskTitleStyle}>{title.toUpperCase()}</Text>
             {dueDate ? <Text style={meta}>Due {dueDate}</Text> : null}
-            {outcomeWhy ? (
+            {whyText ? (
               <Text style={why}>
-                <strong>Why it matters:</strong> {outcomeWhy}
+                <strong>Why it matters:</strong> {whyText}
               </Text>
             ) : null}
             {milestones && milestones.length > 0 ? (

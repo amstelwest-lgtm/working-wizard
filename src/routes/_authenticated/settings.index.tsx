@@ -22,7 +22,7 @@ import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
-import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import { formatFirmOverLimitNote, UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import {
   createBillingPortalSession,
@@ -234,6 +234,14 @@ function SettingsPage() {
     plan != null &&
     plan.configured !== false &&
     showStarterTrialEndedCopy(plan.phase, plan.starterTrial?.expired);
+  const overLimitNote =
+    plan && plan.configured !== false
+      ? formatFirmOverLimitNote({
+          count: plan.clientCount,
+          limit: plan.clientLimit,
+          planName: plan.headline,
+        })
+      : null;
 
   return (
     <SettingsShell
@@ -402,6 +410,11 @@ function SettingsPage() {
                       {plan?.usageLabel ? (
                         <p className="text-xs text-[var(--ink-dim)]">{plan.usageLabel}</p>
                       ) : null}
+                      {overLimitNote ? (
+                        <p role="status" className="text-sm font-semibold text-[var(--risk,#9b2c2c)]">
+                          {overLimitNote}
+                        </p>
+                      ) : null}
                     </>
                   )}
                 </>
@@ -429,6 +442,9 @@ function SettingsPage() {
               </div>
             ) : plan && plan.configured !== false ? (
               <div className="mb-3">
+                {overLimitNote ? (
+                  <p className="mb-2 text-sm font-semibold">Upgrade</p>
+                ) : null}
                 <FirmBandUpgrade
                   currentBand={plan.band}
                   interval={plan.interval ?? "month"}

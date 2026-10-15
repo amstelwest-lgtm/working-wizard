@@ -115,7 +115,11 @@ type FirmSelect = {
     data: FirmRow | null;
     error: { message: string } | null;
   }>;
-} & Promise<{ count: number | null; error: { message: string } | null }>;
+} & Promise<{
+  data?: Array<{ id?: string | null; name?: string | null }> | null;
+  count: number | null;
+  error: { message: string } | null;
+}>;
 
 type CapDb = {
   from: (table: string) => {
@@ -344,13 +348,21 @@ async function loadMembershipRole(
 }
 
 async function countFirmClients(db: CapDb, firmId: string): Promise<number> {
-  const { count, error } = await db
+  // One row is one client. `clients` has no archived or deleted column, so a
+  // hidden archive cannot inflate this. Demo rows are left out. Two rows with
+  // the same name are two clients and both count.
+  const { data, error } = await db
     .from("clients")
-    .select("id", { count: "exact", head: true })
+    .select("id, name")
     .eq("firm_id", firmId)
     .eq("is_demo", false);
   if (error) throw new Error(error.message);
-  return count ?? 0;
+  const ids = new Set<string>();
+  for (const row of data ?? []) {
+    const id = row?.id ? String(row.id) : "";
+    if (id) ids.add(id);
+  }
+  return ids.size;
 }
 
 async function billingEmailForFirm(

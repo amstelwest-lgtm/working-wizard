@@ -18,6 +18,7 @@ import {
   type ChatMessage,
 } from "@/lib/lighthouse-agent-chat";
 import { askLighthouseAgent } from "@/lib/lighthouse-agent-chat.functions";
+import { stripMilonProjection } from "@/lib/milon-projection";
 
 export function LighthouseAgentChat({
   adminKey,
@@ -299,7 +300,7 @@ export function LighthouseAgentChatView({
                     : "bg-[var(--ops-bg)] text-[var(--ops-ink)]"
                 }`}
               >
-                {message.content}
+                {stripMilonProjection(message.content)}
               </div>
               {message.chips.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">

@@ -1,5 +1,6 @@
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
+import { stripMilonProjection } from "@/lib/milon-projection";
 import type { ActionPlanPdfItem } from "@/reports/action-plan";
 
 export type DeliverablePdfSource = {
@@ -22,19 +23,19 @@ export function completeDeliverablePdfItems(
   const fromPlan = planItems
     .filter((item) => item.title?.trim())
     .map((item) => ({
-      title: item.title.trim(),
+      title: stripMilonProjection(item.title.trim()),
       status: item.status ?? "not_started",
       dueDate: item.dueDate ?? null,
-      outcomeWhy: item.outcomeWhy ?? null,
+      outcomeWhy: stripMilonProjection(item.outcomeWhy) || null,
       ownerName: item.ownerName ?? null,
     }));
   const seen = new Set(fromPlan.map((item) => item.title.toLowerCase()));
   const extras: ActionPlanPdfItem[] = created
     .filter((item) => item.title?.trim() && !seen.has(item.title.trim().toLowerCase()))
     .map((item) => ({
-      title: item.title!.trim(),
+      title: stripMilonProjection(item.title!.trim()),
       status: "not_started",
-      outcomeWhy: item.outcomeWhy ?? null,
+      outcomeWhy: stripMilonProjection(item.outcomeWhy) || null,
     }));
   return fromPlan.length ? [...fromPlan, ...extras] : extras;
 }

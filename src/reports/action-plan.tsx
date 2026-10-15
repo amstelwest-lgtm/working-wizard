@@ -7,6 +7,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type ReportSignoffStamp, type SmeData } from "@/components/pdf/pdf-document";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { C } from "@/components/pdf/theme";
+import { stripMilonProjection } from "@/lib/milon-projection";
 
 export type ActionPlanPdfItem = {
   title: string;
@@ -75,20 +76,26 @@ export function ActionPlanPDF({
       reviewSignoff={reviewSignoff}
     >
       <ReportTitle kicker="Advisory" title="Action Plan" subtitle={smeData.period} />
-      {outcomeGoal ? <Text style={S.goal}>{outcomeGoal}</Text> : null}
-      {headline ? <Text style={S.goal}>{headline}</Text> : null}
+      {stripMilonProjection(outcomeGoal) ? (
+        <Text style={S.goal}>{stripMilonProjection(outcomeGoal)}</Text>
+      ) : null}
+      {stripMilonProjection(headline) ? (
+        <Text style={S.goal}>{stripMilonProjection(headline)}</Text>
+      ) : null}
       {items.length === 0 ? (
         <Text style={S.empty}>No actions on this plan yet.</Text>
       ) : (
         items.map((item, i) => (
           <View key={`${item.title}-${i}`} style={S.row}>
-            <Text style={S.title}>{item.title}</Text>
+            <Text style={S.title}>{stripMilonProjection(item.title)}</Text>
             <Text style={S.meta}>
               {statusLabel(item.status)}
               {item.dueDate ? ` · due ${item.dueDate}` : ""}
               {item.ownerName ? ` · ${item.ownerName}` : ""}
             </Text>
-            {item.outcomeWhy ? <Text style={S.why}>{item.outcomeWhy}</Text> : null}
+            {stripMilonProjection(item.outcomeWhy) ? (
+              <Text style={S.why}>{stripMilonProjection(item.outcomeWhy)}</Text>
+            ) : null}
           </View>
         ))
       )}

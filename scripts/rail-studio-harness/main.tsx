@@ -32,6 +32,7 @@ import { OwnerCashBoard, RailStudio } from "./studio";
 import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { ProofLandingPreview } from "./proof-preview";
 import { PersonaCritPreview } from "./persona-crit-preview";
+import { Retest560Preview } from "./retest-560-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -433,6 +434,12 @@ const personaCritRoute = createRoute({
   },
 });
 
+const retest560Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/retest-560",
+  component: Retest560Preview,
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -469,6 +476,7 @@ const routeTree = rootRoute.addChildren([
   settingsTeamRoute,
   proofLandingRoute,
   personaCritRoute,
+  retest560Route,
 ]);
 const router = createRouter({
   routeTree,

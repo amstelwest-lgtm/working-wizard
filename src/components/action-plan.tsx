@@ -760,7 +760,7 @@ export default function ActionPlanPanel({
           title: item.title,
           status: item.status,
           dueDate: item.due_date,
-          outcomeWhy: item.outcome_why,
+          outcomeWhy: stripMilonProjection(item.outcome_why),
           ownerName: item.owner_name,
         })),
         profile,
@@ -1001,7 +1001,7 @@ export default function ActionPlanPanel({
         templateData: {
           employeeName: owner.name.split(" ")[0],
           taskTitle: it.title,
-          outcomeWhy: it.outcome_why ?? undefined,
+          outcomeWhy: stripMilonProjection(it.outcome_why) || undefined,
           dueDate: it.due_date
             ? date(it.due_date + "T00:00:00", { day: "numeric", month: "long", year: "numeric" })
             : undefined,
@@ -1693,7 +1693,15 @@ function GoalHeader({
   const { date, number } = useMarketFormat();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(plan);
-  useEffect(() => setDraft(plan), [plan]);
+  useEffect(
+    () =>
+      setDraft({
+        ...plan,
+        outcome_goal: stripMilonProjection(plan.outcome_goal),
+        why_statement: stripMilonProjection(plan.why_statement),
+      }),
+    [plan],
+  );
 
   const { metric_start: s, metric_target: t, metric_current: c } = plan;
   const hasBar = s != null && t != null && t !== s;
@@ -1727,13 +1735,13 @@ function GoalHeader({
             {!editing ? (
               <>
                 <h2 className="mt-2 text-2xl font-black uppercase leading-tight tracking-tight text-slate-950 dark:text-white">
-                  {plan.outcome_goal}
+                  {stripMilonProjection(plan.outcome_goal)}
                 </h2>
-                {plan.why_statement && (
+                {stripMilonProjection(plan.why_statement) ? (
                   <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
-                    {plan.why_statement}
+                    {stripMilonProjection(plan.why_statement)}
                   </p>
-                )}
+                ) : null}
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   <CalendarDays className="mr-1 inline h-3.5 w-3.5" />
                   Target{" "}
@@ -2107,7 +2115,9 @@ function ItemRow({
               <Sparkles className="h-2.5 w-2.5" /> From strategic moves
             </span>
           ) : null}
-          {item.outcome_why && <span className="truncate">{item.outcome_why}</span>}
+          {stripMilonProjection(item.outcome_why) ? (
+            <span className="truncate">{stripMilonProjection(item.outcome_why)}</span>
+          ) : null}
         </div>
       </div>
 
@@ -2641,7 +2651,11 @@ function FromRecommendationsPanel({
                   <span className="block text-[11px] text-slate-500 dark:text-slate-400">
                     {priorityLabel(r.priority)}
                     {impact ? ` · ${impact}` : ""}
-                    {r.problem ? ` · ${r.problem}` : r.rationale ? ` · ${r.rationale}` : ""}
+                    {r.problem
+                      ? ` · ${stripMilonProjection(r.problem)}`
+                      : r.rationale
+                        ? ` · ${stripMilonProjection(r.rationale)}`
+                        : ""}
                   </span>
                 </span>
               </button>
@@ -2986,9 +3000,11 @@ function ItemDrawer({
                   : ""}
               </p>
             ) : null}
-            {item.outcome_why && (
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.outcome_why}</p>
-            )}
+            {stripMilonProjection(item.outcome_why) ? (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {stripMilonProjection(item.outcome_why)}
+              </p>
+            ) : null}
           </div>
           <button onClick={onClose} aria-label="Close">
             <X className="h-4 w-4 text-slate-400" />
