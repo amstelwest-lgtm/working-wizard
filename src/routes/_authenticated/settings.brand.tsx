@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
 import { BackLink } from "@/components/back-link";
@@ -183,9 +183,23 @@ function HeaderPreview() {
 }
 
 function BrandSettingsPage() {
-  const { profile, updateProfile, saveProfile, canEditBrand, brandLoading, firmId } =
+  const { profile, updateProfile, saveProfile, canEditBrand, brandLoading, firmId, firms } =
     useAccountantProfile();
   const [saving, setSaving] = useState(false);
+  const [firmNameTouched, setFirmNameTouched] = useState(false);
+  const firmNamePrefilled = useRef(false);
+  const firmRowName = (firms.find((firm) => firm.id === firmId)?.name ?? "").trim();
+
+  useEffect(() => {
+    if (brandLoading || firmNamePrefilled.current) return;
+    if (profile.firmName.trim()) {
+      firmNamePrefilled.current = true;
+      return;
+    }
+    if (!firmRowName) return;
+    firmNamePrefilled.current = true;
+    updateProfile({ firmName: firmRowName });
+  }, [brandLoading, firmRowName, profile.firmName, updateProfile]);
   const [saved, setSaved] = useState(false);
   const [emailPlaceholder, setEmailPlaceholder] = useState("jane@clarity.co.za");
 
@@ -274,8 +288,12 @@ function BrandSettingsPage() {
                   Firm Name <span className="text-[var(--risk)]">*</span>
                 </Label>
                 <Input
-                  value={profile.firmName}
-                  onChange={(e) => updateProfile({ firmName: e.target.value })}
+                  value={profile.firmName || (firmNameTouched ? "" : firmRowName)}
+                  onChange={(e) => {
+                    firmNamePrefilled.current = true;
+                    setFirmNameTouched(true);
+                    updateProfile({ firmName: e.target.value });
+                  }}
                   placeholder="e.g. Clarity Accounting"
                   disabled={readOnly}
                 />

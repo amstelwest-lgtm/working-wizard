@@ -499,6 +499,7 @@ export default function ActionPlanPanel({
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [filter, setFilter] = useState<ActionPlanFilter>(initialFilter ?? "all");
   const [ownerFilter, setOwnerFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"seq" | "due" | "owner" | "status">("seq");
@@ -739,8 +740,23 @@ export default function ActionPlanPanel({
   );
 
   useEffect(() => {
+    let live = true;
     setLoading(true);
-    refresh();
+    setLoadTimedOut(false);
+    const timer = window.setTimeout(() => {
+      if (!live) return;
+      setLoadTimedOut(true);
+      setLoading(false);
+    }, 10_000);
+    void refresh().finally(() => {
+      if (!live) return;
+      window.clearTimeout(timer);
+      setLoadTimedOut(false);
+    });
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -1217,10 +1233,17 @@ export default function ActionPlanPanel({
     setSortBy("seq");
   };
 
-  if (loading) {
+  if (loading && !loadTimedOut) {
     return (
       <div className="rounded-xl border border-[#DBEAFE] bg-white p-8 text-sm font-semibold text-[#102A43]">
         Loading the plan…
+      </div>
+    );
+  }
+  if (loadTimedOut && !plan) {
+    return (
+      <div className="rounded-xl border border-[#DBEAFE] bg-white p-6 text-sm text-[#102A43]">
+        Couldn't load the plan.
       </div>
     );
   }

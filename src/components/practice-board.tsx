@@ -66,6 +66,7 @@ import {
 } from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
+import { operatingProfitLabel } from "@/lib/operating-profit-display";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -1199,6 +1200,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // ── State ─────────────────────────────────────────────────────────────────
   const [clientRows, setClientRows] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Open queries and follow-ups stay on a loading state until enrichment lands. */
+  const [countsReady, setCountsReady] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
@@ -1312,11 +1315,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const load = async (activeFirmId: string | null, userId: string | undefined) => {
     const gen = ++loadGen.current;
     setLoading(true);
+    setCountsReady(false);
     try {
 
     if (!userId) {
       setClientRows([]);
       setIsItMember(false);
+      setCountsReady(true);
       setLoading(false);
       return;
     }
@@ -1375,6 +1380,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     // used to leave Home on "0 clients on the book." and Clients empty.
     if (gen !== loadGen.current) return;
     setClientRows(rawClients.map((c) => toClientRow(c, [], 0, 0, 0)));
+    if (rawClients.length === 0) setCountsReady(true);
     setLoading(false);
 
     // Score history — query defensively; the table may not exist yet
@@ -1461,7 +1467,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     } catch (err) {
       console.error("practice book:", err);
     } finally {
-      if (gen === loadGen.current) setLoading(false);
+      if (gen === loadGen.current) {
+        setLoading(false);
+        setCountsReady(true);
+      }
     }
   };
 
@@ -1585,6 +1594,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const greetName = firstNameOf(greetingSource);
   const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
+  const countsLoading = !countsReady;
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();
 
@@ -1732,11 +1742,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     const revenue = parseFloat(String(f.revenue ?? ""));
     if (!isFinite(ebit)) return "—";
     const market = resolveMarket(parseMarketSelection(c.market) ?? coerceMarketSelection(c.market));
-    if (isFinite(revenue) && revenue > 0) {
-      const pct = ((ebit / revenue) * 100).toFixed(1);
-      return `${pct}% ${formatMoney(ebit, market)}`;
-    }
-    return formatMoney(ebit, market);
+    return operatingProfitLabel({
+      ebit,
+      revenue: isFinite(revenue) ? revenue : null,
+      market,
+      financials: f,
+    });
   }
 
   function runwayStr(c: ClientRow): string {
@@ -1799,12 +1810,15 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <span className="av">{profileInitials || "·"}</span>
             <span className="profile-name">{greetName}</span>
           </span>
+          <span className="topbar-theme">
+            <ThemeToggle />
+          </span>
           <AccountantMenuButton
             open={mobileNavOpen}
             onClick={() => setMobileNavOpen((o) => !o)}
           />
-          <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
-            {isItMember ? (
+          {isItMember ? (
+            <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
               <button
                 className="tb-btn"
                 type="button"
@@ -1815,9 +1829,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               >
                 Milōn IT
               </button>
-            ) : null}
-            <ThemeToggle />
-          </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="client-workspace">
@@ -1903,8 +1916,14 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                   </svg>
                 }
-                value={openQueriesTotal}
-                footnote={openQueriesTotal > 0 ? "Waiting on a reply" : "No open queries"}
+                value={countsLoading ? "…" : openQueriesTotal}
+                footnote={
+                  countsLoading
+                    ? "Loading"
+                    : openQueriesTotal > 0
+                      ? "Waiting on a reply"
+                      : "No open queries"
+                }
                 link={queriesDestination ?? undefined}
               />
             </>
@@ -1912,7 +1931,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         </div>
 
         {/* One queue: health alerts and pack sign-off, not two strips. */}
-        {!bookLoading ? (
+        {!bookLoading && !countsLoading ? (
           <PortfolioExceptions
             firmId={firmId}
             hideWhenClear
@@ -1944,17 +1963,19 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             <summary>
               <span>Follow up</span>
               <span className="home-fold-meta">
-                {followUpItems.length > 0
-                  ? `${followUpItems.length} with open Action Plan work`
-                  : bookLoading
-                    ? "Loading"
+                {countsLoading || bookLoading
+                  ? "Loading"
+                  : followUpItems.length > 0
+                    ? `${followUpItems.length} with open Action Plan work`
                     : "None open"}
               </span>
             </summary>
             <div className="home-fold-body">
-              {followUpItems.length === 0 ? (
+              {countsLoading || bookLoading || followUpItems.length === 0 ? (
                 <p className="sub">
-                  {bookLoading ? "Loading follow-ups…" : "No open Action Plan work to chase."}
+                  {countsLoading || bookLoading
+                    ? "Loading follow-ups…"
+                    : "No open Action Plan work to chase."}
                 </p>
               ) : (
               <div className="followup-list">
@@ -2192,9 +2213,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                         <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
                       </td>
                       <td className="num" data-label="Queries">
-                        {c.openQueries > 0 ? c.openQueries : "—"}
+                        {countsLoading ? "…" : c.openQueries > 0 ? c.openQueries : "—"}
                       </td>
-                      <td className="num" data-label="Op. profit">
+                      <td className="num" data-label="Op. profit" style={{ whiteSpace: "nowrap" }}>
                         {opMarginStr(c)}
                       </td>
                       <td data-label="Status">

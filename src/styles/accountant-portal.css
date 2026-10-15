@@ -801,6 +801,7 @@ html.dark .accountant-portal .milon-status-pill--warn{color:#f0d59a;background:r
 }
 .accountant-portal .topbar-menu-btn svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .accountant-portal .topbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;flex-shrink:0}
+.accountant-portal .topbar-theme{display:flex;align-items:center;flex:none}
 .accountant-portal .ctable-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .accountant-portal .debt-line{
   display:grid;grid-template-columns:1.4fr 1fr .7fr .7fr auto;gap:8px;align-items:end;
@@ -1652,8 +1653,9 @@ html[data-theme="light"] .accountant-portal .data-fresh{
   .accountant-portal .topbar{flex-wrap:nowrap;height:66px}
   .accountant-portal .topbar .topbar-actions{order:1}
   .accountant-portal .topbar .settings-gear{order:2}
-  .accountant-portal .topbar .topbar-profile{order:3}
-  .accountant-portal .topbar .topbar-menu-btn{order:4}
+  .accountant-portal .topbar .topbar-theme{order:3}
+  .accountant-portal .topbar .topbar-profile{order:4}
+  .accountant-portal .topbar .topbar-menu-btn{order:5}
 }
 @media (max-width:760px){
   .accountant-portal .topbar .profile-chip.topbar-profile{display:inline-flex;flex-shrink:0;padding-right:5px}

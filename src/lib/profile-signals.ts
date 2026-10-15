@@ -284,15 +284,20 @@ const PAY_MOTION_LABEL: Record<ClientOperatingProfile["payMotion"], string> = {
 export function profileDisplayRows(
   profile: ClientOperatingProfile,
   market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+  actualDebtorDays?: number | null,
 ): Array<{ label: string; value: string }> {
   const payTiming =
-    profile.debtorDaysDefault === 0
-      ? "Cash / card on sale"
-      : profile.debtorDaysDefault <= 30
-        ? `Around ${profile.debtorDaysDefault} days`
-        : profile.debtorDaysDefault <= 45
-          ? "Milestone / ~45 days"
-          : `${profile.debtorDaysDefault}+ days`;
+    actualDebtorDays != null && Number.isFinite(actualDebtorDays)
+      ? actualDebtorDays <= 0
+        ? "Cash / card on sale"
+        : `${Math.round(actualDebtorDays)} days`
+      : profile.debtorDaysDefault === 0
+        ? "Cash / card on sale"
+        : profile.debtorDaysDefault <= 30
+          ? `Around ${profile.debtorDaysDefault} days`
+          : profile.debtorDaysDefault <= 45
+            ? "Milestone / ~45 days"
+            : `${Math.round(profile.debtorDaysDefault)} days`;
 
   const secondary =
     profile.secondaryVolumeUnits?.length > 0
