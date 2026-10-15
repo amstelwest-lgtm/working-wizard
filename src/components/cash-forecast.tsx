@@ -145,6 +145,12 @@ import {
   type ConfirmedCashSuggestions,
   type TrailingMonthInput,
 } from "@/lib/cash-forecast-suggestions";
+import {
+  onceOffDirty,
+  onceOffLines,
+  linesForSilentSave,
+  silentForecastKey,
+} from "@/lib/cash-once-off-save";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -672,6 +678,14 @@ export function CashForecastPanel({
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
   const loadedCashflowRef = useRef<Record<string, unknown> | null>(null);
+  const savedRevenueOnceOff = useRef<LineItem[]>([]);
+  const savedExpensesOnceOff = useRef<LineItem[]>([]);
+  const savedOtherOnceOff = useRef<LineItem[]>([]);
+  const silentBaselineRef = useRef("");
+  const hydrateOnceOff = useRef(false);
+  const saveTicket = useRef(0);
+  const [onceOffStatus, setOnceOffStatus] = useState<string | null>(null);
+  const [onceOffSaving, setOnceOffSaving] = useState(false);
   const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
   const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(preview?.cycleNote ?? null);
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(preview?.note ?? null);
@@ -738,6 +752,19 @@ export function CashForecastPanel({
       setXeroBankNote(null);
     }
 
+    savedRevenueOnceOff.current = onceOffLines(payload.revenue as LineItem[]);
+    savedExpensesOnceOff.current = onceOffLines(payload.expenses as LineItem[]);
+    savedOtherOnceOff.current = onceOffLines(payload.other as LineItem[]);
+    silentBaselineRef.current = silentForecastKey({
+      startDate: payload.startDate,
+      openingBalance: payload.openingBalance,
+      revenue: payload.revenue as LineItem[],
+      expenses: payload.expenses as LineItem[],
+      other: payload.other as LineItem[],
+      savedRevenue: savedRevenueOnceOff.current,
+      savedExpenses: savedExpensesOnceOff.current,
+      savedOther: savedOtherOnceOff.current,
+    });
     if (!clientId) {
       onBankPublish?.(payload);
       return;
@@ -1008,6 +1035,7 @@ export function CashForecastPanel({
         setConfiguredFloor(null);
       }
       skipNextAutosave.current = true;
+      hydrateOnceOff.current = true;
       setLoaded(true);
     };
     supabase
@@ -1029,6 +1057,27 @@ export function CashForecastPanel({
         applyRow((data as Record<string, unknown> | null) ?? null);
       });
   }, [clientId, reloadToken, initialBankDraft, market.timezone]);
+
+  if (loaded && hydrateOnceOff.current) {
+    hydrateOnceOff.current = false;
+    savedRevenueOnceOff.current = onceOffLines(revenue);
+    savedExpensesOnceOff.current = onceOffLines(expenses);
+    savedOtherOnceOff.current = onceOffLines(other);
+    silentBaselineRef.current = silentForecastKey({
+      startDate,
+      openingBalance,
+      revenue,
+      expenses,
+      other,
+      savedRevenue: savedRevenueOnceOff.current,
+      savedExpenses: savedExpensesOnceOff.current,
+      savedOther: savedOtherOnceOff.current,
+    });
+  }
+  const onceOffNeedsSave =
+    onceOffDirty(revenue, savedRevenueOnceOff.current) ||
+    onceOffDirty(expenses, savedExpensesOnceOff.current) ||
+    onceOffDirty(other, savedOtherOnceOff.current);
 
   useEffect(() => {
     if (!clientId || preview) return;
@@ -1065,18 +1114,35 @@ export function CashForecastPanel({
       skipNextAutosave.current = false;
       return;
     }
+    const silentRevenue = linesForSilentSave(revenue, savedRevenueOnceOff.current);
+    const silentExpenses = linesForSilentSave(expenses, savedExpensesOnceOff.current);
+    const silentOther = linesForSilentSave(other, savedOtherOnceOff.current);
+    const key = silentForecastKey({
+      startDate,
+      openingBalance,
+      revenue,
+      expenses,
+      other,
+      savedRevenue: savedRevenueOnceOff.current,
+      savedExpenses: savedExpensesOnceOff.current,
+      savedOther: savedOtherOnceOff.current,
+    });
+    if (key === silentBaselineRef.current) return;
+    const ticket = saveTicket.current;
     const t = setTimeout(async () => {
+      if (ticket !== saveTicket.current) return;
       const markers = xeroCashMarkers.current;
       const linesUntouched =
         markers.linesSource != null &&
-        JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
+        JSON.stringify({ revenue: silentRevenue, expenses: silentExpenses, other: silentOther }) ===
+          markers.linesKey;
       const payload = {
         ...(loadedCashflowRef.current ?? {}),
         startDate,
         openingBalance,
-        revenue,
-        expenses,
-        other,
+        revenue: silentRevenue,
+        expenses: silentExpenses,
+        other: silentOther,
         ...baseCashflow({}),
         ...(markers.openingSource && openingBalance === markers.openingBalance
           ? { openingBalanceSource: markers.openingSource }
@@ -1108,10 +1174,12 @@ export function CashForecastPanel({
           cash_runway_weeks: persistedRunwayWeeks(assessed.runway),
         })
         .eq("id", clientId);
+      if (ticket !== saveTicket.current) return;
       if (error) toast.error(`Cash forecast save failed: ${error.message}`);
       else {
         setLastForecastAt(forecastUpdatedAt);
         loadedCashflowRef.current = payload;
+        silentBaselineRef.current = key;
       }
     }, 800);
     return () => clearTimeout(t);
@@ -1127,6 +1195,97 @@ export function CashForecastPanel({
     inputHasBankDraft,
     market.timezone,
   ]);
+
+  const saveOnceOff = async () => {
+    if (!clientId || preview || onceOffSaving || !onceOffNeedsSave) return;
+    const ticket = ++saveTicket.current;
+    setOnceOffSaving(true);
+    const markers = xeroCashMarkers.current;
+    const linesUntouched =
+      markers.linesSource != null &&
+      JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
+    const payload = {
+      ...(loadedCashflowRef.current ?? {}),
+      startDate,
+      openingBalance,
+      revenue,
+      expenses,
+      other,
+      ...baseCashflow({}),
+      ...(markers.openingSource && openingBalance === markers.openingBalance
+        ? { openingBalanceSource: markers.openingSource }
+        : {}),
+      ...(linesUntouched && markers.linesSource
+        ? {
+            forecastLinesSource: markers.linesSource,
+            ...(xeroBankNoteRef.current ? { forecastLinesNote: xeroBankNoteRef.current } : {}),
+          }
+        : plEstimateRef.current
+          ? {
+              forecastLinesSource: "pl-estimate" as const,
+              forecastLinesNote: "Estimated from the P&L",
+            }
+          : {}),
+    };
+    const forecastUpdatedAt = new Date().toISOString();
+    const assessed = assessClientMetrics({
+      financials: inputFinancials,
+      cashflow: payload,
+      timeZone: market.timezone,
+      fyStartMonth: inputProfile?.fyStartMonth ?? market.fyStartMonthDefault,
+    });
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        cashflow: payload as never,
+        last_forecast_at: forecastUpdatedAt,
+        cash_runway_weeks: persistedRunwayWeeks(assessed.runway),
+      })
+      .eq("id", clientId);
+    if (ticket !== saveTicket.current) return;
+    setOnceOffSaving(false);
+    if (error) {
+      setOnceOffStatus(`Could not save: ${error.message}`);
+      return;
+    }
+    savedRevenueOnceOff.current = onceOffLines(revenue);
+    savedExpensesOnceOff.current = onceOffLines(expenses);
+    savedOtherOnceOff.current = onceOffLines(other);
+    silentBaselineRef.current = silentForecastKey({
+      startDate,
+      openingBalance,
+      revenue,
+      expenses,
+      other,
+      savedRevenue: savedRevenueOnceOff.current,
+      savedExpenses: savedExpensesOnceOff.current,
+      savedOther: savedOtherOnceOff.current,
+    });
+    loadedCashflowRef.current = payload;
+    setLastForecastAt(forecastUpdatedAt);
+    setOnceOffStatus("Saved");
+  };
+
+  const onceOffSaveBar =
+    !clientId || preview || readOnly ? null : (
+      <div className="mb-3 flex flex-wrap items-center gap-3" data-once-off-save="true">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!onceOffNeedsSave || onceOffSaving}
+          onClick={() => void saveOnceOff()}
+        >
+          Save once-off rows
+        </Button>
+        <span role="status" className="text-sm text-slate-600 dark:text-slate-300">
+          {onceOffSaving
+            ? "Saving…"
+            : onceOffNeedsSave
+              ? "Once-off rows are not saved yet."
+              : (onceOffStatus ?? "")}
+        </span>
+      </div>
+    );
 
   const weekIsos = useMemo(() => weekDatesFrom(startDate, WEEKS), [startDate]);
 
@@ -2469,6 +2628,7 @@ export function CashForecastPanel({
       <div id="wizard-cash-outlook" className="space-y-0">
         {answerStrip}
         {cashSuggestionCard}
+        {onceOffSaveBar}
         {forecastCard}
         <ForecastMoreDetail>
           {answerSentence ? (
@@ -2512,6 +2672,7 @@ export function CashForecastPanel({
     <div id="wizard-cash-outlook" className="space-y-5">
       {answerStrip}
       {cashSuggestionCard}
+      {onceOffSaveBar}
       {readOnly ? null : reviewInputs}
       {forecastCard}
       {readOnly ? null : (
