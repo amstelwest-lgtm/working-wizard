@@ -1312,7 +1312,7 @@ export function resolveThirteenWeekForecast(input: {
   }
 
   // Week 1 is already in the past (the day after an older bank line). Keep the
-  // lines, move the start to this week, and roll the opening across the gap.
+  // lines and the opening on file, and move the start to this week.
   if (
     rolled &&
     cf &&

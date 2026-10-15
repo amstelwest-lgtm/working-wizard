@@ -32,7 +32,7 @@ const SIT =
 export type CashExplainerCopy = {
   /** Visible horizon. Human dates, sentence case. */
   range: string;
-  /** Owner glance line. Null when opening cash was not rolled to this week. */
+  /** Owner glance line when the forecast start moved. Null when it did not. */
   ownerRollLine: string | null;
   /** Closed-by-default Details. Short bullets, human dates. */
   bullets: string[];
@@ -73,6 +73,7 @@ export function cashExplainerCopy(input: {
     const days = sit[1]!;
     const from = humanCalendarDay(sit[2]!);
     const to = humanCalendarDay(sit[3]!);
+    ownerRollLine = "Opening cash stays the balance on file";
     bullets.push(
       `Opening cash is still the ${from} balance. ${days} days sit before this week (${to}).`,
     );

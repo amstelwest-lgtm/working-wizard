@@ -1,7 +1,7 @@
 /**
  * Read-only figures for the public sample chips.
  * Same sample business as the trial board. A stored forecast dated before
- * this week is what the cash tab rolls forward — no client row, no ledger.
+ * this week keeps its opening cash and notes the gap — no client row, no ledger.
  */
 import { resolveThirteenWeekForecast } from "@/lib/client-metrics";
 import { resolveMarket } from "@/lib/market/resolve";
@@ -57,8 +57,8 @@ function shiftIso(iso: string, days: number): string {
 
 /**
  * Client-shaped cash row from the sample P&L. Week 1 sits three weeks back
- * so the forecast component rolls opening cash to this week, the same way a
- * stale bank line does inside Milōn.
+ * so the forecast notes the gap and keeps opening cash, the same way a stale
+ * bank line does inside Milōn.
  */
 export function trialCashPreview(market: MarketId, now = new Date()): TrialCashPreview {
   const financials = sampleFinancialsFor(market);

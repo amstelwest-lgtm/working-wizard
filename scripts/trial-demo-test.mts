@@ -426,7 +426,10 @@ assert(
 assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip has the graph enlarge control");
 assert(boardsHtml.includes("Enlarge cash flow table"), "cash chip has the table enlarge control");
 assert(boardsHtml.includes("13-week cash model"), "cash chip renders the 13-week table");
-assert(boardsHtml.includes("Rolled forward"), "cash chip shows the rolled-forward line");
+assert(
+  boardsHtml.includes("stays the balance on file"),
+  "cash chip keeps opening cash on file across the date gap",
+);
 assert(!boardsHtml.includes("Export PDF"), "sample chips have no export control");
 assert(!boardsHtml.includes("Upload bank statements"), "sample chips have no upload control");
 assert(!boardsHtml.includes("Forecast Setup"), "sample chips have no forecast setup");
