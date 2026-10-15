@@ -22,7 +22,8 @@ import {
 } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
-import { BUDGET_TEMPLATES, industryBudgetTemplate } from "@/lib/budget.templates";
+import { industryBudgetTemplate } from "@/lib/budget-industry";
+import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import type { BudgetQualification, BudgetTemplateId } from "@/lib/budget.types";
 import {
   Dialog,

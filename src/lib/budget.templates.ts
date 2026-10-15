@@ -10,7 +10,6 @@ import type {
   BudgetVolumeUnit,
   BudgetWc,
 } from "./budget.types.ts";
-import { clientIndustryDisplay } from "./profile-signals.ts";
 import {
   migrateLegacyQualification,
   resolveKitFromPath,
@@ -444,35 +443,6 @@ export const OVERHEAD_BUCKETS: Array<{ bucket: BudgetOverheadLine["bucket"]; nam
 
 export function newId(prefix = "b"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-const INDUSTRY_BUDGET_TEMPLATE: Record<string, BudgetTemplateId> = {
-  "Hotels & accommodation": "hospitality_rooms",
-};
-
-/**
- * The budget driver follows the client's industry when the stored template
- * names a different sector. A hotel kept on the labour kit shows room-nights,
- * not days and shifts.
- */
-export function industryBudgetTemplate(
-  businessName: string | null | undefined,
-  profile: { templateId?: string | null; businessTypeId?: string | null } | null | undefined,
-  businessType?: string | null,
-): BudgetTemplateId | null {
-  const industry = clientIndustryDisplay(businessName, profile, businessType ?? profile?.businessTypeId);
-  return INDUSTRY_BUDGET_TEMPLATE[industry] ?? null;
-}
-
-export function budgetVolumeLabel(
-  storedTemplate: BudgetTemplateId,
-  displayTemplate: BudgetTemplateId,
-  lineLabel: string | null | undefined,
-): string {
-  const storedSeed = BUDGET_TEMPLATES[storedTemplate]?.revenueSeeds[0]?.volumeLabel ?? "Volume";
-  const displaySeed = BUDGET_TEMPLATES[displayTemplate]?.revenueSeeds[0]?.volumeLabel ?? storedSeed;
-  if (displayTemplate !== storedTemplate && (!lineLabel || lineLabel === storedSeed)) return displaySeed;
-  return lineLabel || displaySeed;
 }
 
 /** Resolve template from new funnel path. */

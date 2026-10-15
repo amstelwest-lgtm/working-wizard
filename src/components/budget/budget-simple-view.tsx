@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import type { BudgetActuals, BudgetDocument, BudgetTemplateId } from "@/lib/budget.types";
-import { BUDGET_TEMPLATES, budgetVolumeLabel } from "@/lib/budget.templates";
+import { budgetVolumeLabel } from "@/lib/budget-industry";
+import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
   plainBudgetWindowHeading,
   currentBudgetMonth,

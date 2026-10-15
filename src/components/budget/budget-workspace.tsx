@@ -14,7 +14,8 @@ import type {
   BudgetTemplateId,
   UnmappedDriver,
 } from "@/lib/budget.types";
-import { BUDGET_TEMPLATES, budgetVolumeLabel, newId } from "@/lib/budget.templates";
+import { budgetVolumeLabel } from "@/lib/budget-industry";
+import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {

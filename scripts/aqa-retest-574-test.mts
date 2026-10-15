@@ -14,7 +14,7 @@ import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import { summarizeCashForecast } from "../supabase/functions/ask-ai/deliverable-summaries.ts";
 import { shapeCash } from "../supabase/functions/milon-bot/tools.ts";
 import { plainBudgetWindowHeading } from "../src/lib/budget.months.ts";
-import { budgetVolumeLabel, industryBudgetTemplate } from "../src/lib/budget.templates.ts";
+import { budgetVolumeLabel, industryBudgetTemplate } from "../src/lib/budget-industry.ts";
 import { formatVariancePct, varianceLine } from "../src/lib/budget.variance.ts";
 import { workflowInputsHash, workflowPrompt } from "../src/lib/client-briefing.ts";
 import { forecastAnchorDate } from "../src/lib/client-metrics.ts";
