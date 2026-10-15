@@ -277,7 +277,10 @@ function TryConversation({
 }) {
   const remaining = TRY_TOPICS.filter((topic) => !picks.includes(topic));
   return (
-    <section className="try-card try-chat" aria-label="Talk to the Milōn Financial Manager">
+    <section
+      className="try-card try-chat"
+      aria-label={`Talk to the ${AGENT_DISPLAY_NAME.financial_manager}`}
+    >
       <div className="try-chat-team" aria-label="The Milōn team on this sample">
         {FACES.map((face) => (
           <span key={face.folder} className="try-chat-team-member">
