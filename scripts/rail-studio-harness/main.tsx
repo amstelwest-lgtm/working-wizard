@@ -33,6 +33,7 @@ import { OwnerDoorPreview, type OwnerPreviewView } from "./owner-door-preview";
 import { ProofLandingPreview } from "./proof-preview";
 import { PersonaCritPreview } from "./persona-crit-preview";
 import { Retest560Preview } from "./retest-560-preview";
+import { FmBriefPreview } from "./fm-brief-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -422,6 +423,18 @@ const reportsRoute = createRoute({
   },
 });
 
+const fmBriefRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/fm-brief",
+  component: function FmBriefHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <FmBriefPreview />
+      </MarketProvider>
+    );
+  },
+});
+
 const personaCritRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/persona-crit",
@@ -477,6 +490,7 @@ const routeTree = rootRoute.addChildren([
   proofLandingRoute,
   personaCritRoute,
   retest560Route,
+  fmBriefRoute,
 ]);
 const router = createRouter({
   routeTree,

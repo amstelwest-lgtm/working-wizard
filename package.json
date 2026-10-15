@@ -52,6 +52,7 @@
     "test:aqa-persona-crit": "vite-node --config scripts/vite-test.config.ts scripts/aqa-persona-crit-test.mts",
     "test:aqa-retest-560": "vite-node --config scripts/vite-test.config.ts scripts/aqa-retest-560-test.mts",
     "test:aqa-low-findings": "vite-node --config scripts/vite-test.config.ts scripts/aqa-low-findings-test.mts",
+    "test:financial-manager-brief": "vite-node --config scripts/vite-test.config.ts scripts/financial-manager-brief-test.mts",
     "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",
     "test:product-mix": "vite-node --config scripts/vite-test.config.ts scripts/product-mix-test.mts",
     "test:notes-archive": "vite-node --config scripts/vite-test.config.ts scripts/notes-archive-test.mts",
