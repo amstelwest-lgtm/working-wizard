@@ -1945,7 +1945,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                     key={item.clientId}
                     type="button"
                     className="followup-row"
-                    onClick={() => openClientPlan(item.clientId, item.overdueActions > 0)}
+                    onClick={() =>
+                      navigate({
+                        to: "/clients/$clientId",
+                        params: { clientId: item.clientId },
+                        search: { tab: "cash", section: "collections" },
+                      })
+                    }
                   >
                     <span className="followup-name">{item.name}</span>
                     <span className={`followup-count${item.overdueActions > 0 ? " overdue" : ""}`}>
@@ -2108,6 +2114,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 <tr>
                   <th>Client</th>
                   <th>Health</th>
+                  <th>Trend</th>
                   <th>Runway</th>
                   <th id="wizard-dash-queries">Queries</th>
                   <th>Op. profit (MTD)</th>
@@ -2127,7 +2134,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                         navigate({
                           to: "/clients/$clientId",
                           params: { clientId: c.id },
-                          search: {},
+                          search: { tab: "home" },
                         })
                       }
                     >
@@ -2161,6 +2168,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                             );
                           })()}
                         </div>
+                      </td>
+                      <td data-label="Trend">
+                        {c.trendDelta == null
+                          ? "—"
+                          : `${c.trendDelta > 0 ? "+" : ""}${Math.round(c.trendDelta)}`}
                       </td>
                       <td data-label="Health">
                         <div className="cell-health">

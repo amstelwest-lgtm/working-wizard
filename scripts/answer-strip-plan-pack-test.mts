@@ -114,6 +114,20 @@ assert.equal(
   planAnswerSentence([{ title: "AI review of pricing" }, { title: "File the return" }]),
   "2 actions in the plan. Start with: AI review of pricing.",
 );
+assert.equal(
+  planAnswerSentence([
+    { title: "File the return", status: "done" },
+    { title: "Chase the oldest invoice", status: "open" },
+  ]),
+  "1 action in the plan. Start with: chase the oldest invoice.",
+);
+assert.equal(
+  planAnswerSentence([
+    { title: "File the return", status: "done" },
+    { title: "Call the oldest account", status: "open", dueDate: "2020-01-01" },
+  ]),
+  "1 overdue. Start with: call the oldest account.",
+);
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 const draftsAt = clientSrc.indexOf('id="reports-drafts"');

@@ -190,7 +190,9 @@ export function mountAskAi(container, options) {
     // Accountant studio: open the deliverable this answer is about, with coach intent.
     onOpenDeliverable = null,
     onPersistedCreate = null,
+    threadScope: threadScopeRaw = "",
   } = options || {};
+  const threadScope = typeof threadScopeRaw === "string" ? threadScopeRaw.trim() : "";
   const studio = variant === "studio";
   const accountant = audience === "accountant";
   const botEndpoint = botEndpointOverride || deriveMilonBotEndpoint(endpoint);
@@ -254,7 +256,7 @@ export function mountAskAi(container, options) {
     try {
       const store = sessionStore();
       if (!store) return [];
-      const raw = store.getItem(THREAD_PREFIX + clientId);
+      const raw = store.getItem(THREAD_PREFIX + clientId + (threadScope ? `:${threadScope}` : ""));
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
@@ -289,7 +291,7 @@ export function mountAskAi(container, options) {
     try {
       const store = sessionStore();
       if (!store) return;
-      const key = THREAD_PREFIX + clientId;
+      const key = THREAD_PREFIX + clientId + (threadScope ? `:${threadScope}` : "");
       if (!turns.length) {
         store.removeItem(key);
         return;

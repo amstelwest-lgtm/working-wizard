@@ -11,6 +11,7 @@ import { getCollections } from "@/lib/collections.functions";
 import {
   agedArProofLine,
   buildCollectionsDraft,
+  buildStatementChaseDraft,
   calendarMonthFigures,
   collectionsAnswerSentence,
   collectionsNoFiguresLead,
@@ -112,7 +113,9 @@ export function CollectionsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, fixtureSnapshot]);
 
-  const draft = buildCollectionsDraft(snapshot);
+  const draft =
+    buildCollectionsDraft(snapshot) ??
+    buildStatementChaseDraft(position, (amount) => money(amount, market));
   const fromStatements = hasStatementWorkingCapital(position);
   const namedList =
     snapshot != null && snapshot.status === "applied" && snapshot.contacts.length > 0;
@@ -164,7 +167,7 @@ export function CollectionsPanel({
         : null;
 
   const primary =
-    namedList && draft ? (
+    draft ? (
       <button
         type="button"
         className={`${ARAP_GOLD_BTN} disabled:cursor-not-allowed disabled:opacity-40`}

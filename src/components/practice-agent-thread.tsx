@@ -35,11 +35,17 @@ export function PracticeAgentThread({
   }, [clients, clientId]);
 
   useEffect(() => {
-    const el = document.getElementById("ask-ai-accountant");
+    const el = document.getElementById(`ask-ai-accountant-${agent}`);
     if (!el || !clientId) return;
     let cancelled = false;
     el.dataset.clientId = clientId;
-    if (el.dataset.askAiMounted === "1" && el.dataset.askAiClient === clientId) return;
+    if (
+      el.dataset.askAiMounted === "1" &&
+      el.dataset.askAiClient === clientId &&
+      el.dataset.askAiAgent === agent
+    ) {
+      return;
+    }
     el.innerHTML = "";
     delete el.dataset.askAiMounted;
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -47,11 +53,12 @@ export function PracticeAgentThread({
     void import("../lib/ask-ai.js")
       .then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
         if (cancelled || typeof mod.mountAskAi !== "function") return;
-        const node = document.getElementById("ask-ai-accountant");
+        const node = document.getElementById(`ask-ai-accountant-${agent}`);
         if (!node) return;
         node.dataset.clientId = clientId;
         node.dataset.askAiMounted = "1";
         node.dataset.askAiClient = clientId;
+        node.dataset.askAiAgent = agent;
         const base = import.meta.env.VITE_SUPABASE_URL;
         mod.mountAskAi(node, {
           endpoint: `${base}/functions/v1/ask-ai`,
@@ -59,6 +66,7 @@ export function PracticeAgentThread({
           variant: "studio",
           audience: "accountant",
           note: null,
+          threadScope: agent,
           getToken: async () => {
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token ?? null;
@@ -71,7 +79,7 @@ export function PracticeAgentThread({
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [agent, clientId]);
 
   return (
     <div className="practice-agent-thread" data-practice-agent-thread={agent}>
@@ -102,7 +110,7 @@ export function PracticeAgentThread({
         )}
         {clientId ? (
           <div className="milon-desk-host">
-            <div id="ask-ai-accountant" className="ask-ai-studio-shell" />
+            <div id={`ask-ai-accountant-${agent}`} className="ask-ai-studio-shell" />
           </div>
         ) : null}
       </AgentStage>

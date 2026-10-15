@@ -414,7 +414,7 @@ export function collectionsFiguresSentence(
   if (!position || !finite(position.receivables) || !finite(position.debtorDays)) {
     return collectionsNoFiguresLead();
   }
-  return `${money(position.receivables)} is owed to you and customers take ${position.debtorDays} days to pay. Upload the aged debtors report to see who to chase.`;
+  return `${money(position.receivables)} is owed to you and customers take ${position.debtorDays} days to pay. The chase draft uses that balance. An aged report is what names the customers.`;
 }
 
 /**
@@ -944,6 +944,48 @@ export function collectionsPromptBlock(snap: CollectionsSnapshot | null): string
     "Do not invent customers or invoices beyond this list. Milōn does not send the chase or record the receipt.",
   );
   return lines.join("\n");
+}
+
+/**
+ * A chase from the statement totals when no aged report has named anyone.
+ * The draft cites the receivables balance and debtor days. It does not invent a customer.
+ */
+export function buildStatementChaseDraft(
+  position: StatementWorkingCapital | null | undefined,
+  money: (n: number) => string,
+): CollectionsDraft | null {
+  if (!position || !finite(position.receivables) || position.receivables < 0.005) return null;
+  const days = finite(position.debtorDays) ? position.debtorDays : null;
+  const amount = money(position.receivables);
+  const dayBit = days == null ? "" : ` Customers take ${days} days to pay.`;
+  return {
+    title: "Chase the receivables on the statements",
+    problem: `${amount} is owed on the statements.${dayBit} This draft does not name a customer. An aged debtors report is what names who to chase.`,
+    rationale: [
+      `${amount} of receivables is already on the statements.${dayBit}`,
+      "No customer or invoice was invented. Milōn does not email the customer or record a receipt.",
+      "Upload an aged debtors report when you need the names and the age buckets.",
+    ].join("\n"),
+    assumptions: [
+      "Built from the statement receivables total and debtor days. No customer was invented.",
+    ],
+    evidence: [
+      {
+        kind: "transaction",
+        key: "statement:receivables",
+        label: "Receivables on the statements",
+        value: position.receivables,
+      },
+    ],
+    priority: "high",
+    dataDepth: "transaction",
+    expectedImpact: {
+      metric: "cash",
+      amount: position.receivables,
+      horizonDays: days != null && days > 0 ? days : 30,
+      note: "The receivables total on the statements, not a forecast.",
+    },
+  };
 }
 
 export function buildCollectionsDraft(snap: CollectionsSnapshot | null): CollectionsDraft | null {

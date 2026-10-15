@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import {
   agedArProofLine,
+  buildStatementChaseDraft,
   collectionsAnswerSentence,
   collectionsNoFiguresLead,
   collectionsStatementLead,
@@ -133,7 +134,7 @@ assert(
 );
 assert(
   collectionsAnswerSentence(null, position, money) ===
-    "R 92 000 is owed to you and customers take 48 days to pay. Upload the aged debtors report to see who to chase.",
+    "R 92 000 is owed to you and customers take 48 days to pay. The chase draft uses that balance. An aged report is what names the customers.",
   "collections leads with the statement figures",
 );
 assert(
@@ -148,6 +149,14 @@ assert(
   collectionsAnswerSentence(null, null, money) === collectionsNoFiguresLead(),
   "no statement figures keeps the collections empty sentence",
 );
+const statementDraft = buildStatementChaseDraft(position, money);
+assert(statementDraft != null, "statement receivables produce a chase draft");
+assert(
+  statementDraft?.problem.includes("R 92 000") === true &&
+    !/customer named|Acme/i.test(statementDraft?.problem ?? ""),
+  "the statement draft cites the balance and does not invent a customer",
+);
+assert(buildStatementChaseDraft({ ...position, receivables: 0 }, money) == null, "a zero balance is not a chase");
 
 const supplied = finalizePayables({
   source: "qbo",

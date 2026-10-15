@@ -99,11 +99,24 @@ export function packStripStatus(
 
 const PLAN_EMPTY_SENTENCE = "No actions in the plan yet. Add the first one to get started.";
 
-/** Same lead-in as Moves. The first title is the first action already in the list. */
-export function planAnswerSentence(actions: readonly { title: string }[]): string {
+/** Same lead-in as Moves. The first open action is the one to start. A done row is not. */
+export function planAnswerSentence(
+  actions: readonly { title: string; status?: string | null; dueDate?: string | null }[],
+): string {
   if (actions.length === 0) return PLAN_EMPTY_SENTENCE;
-  const title = actions[0]?.title.trim() ?? "";
-  const lead = actions.length === 1 ? "1 action in the plan" : `${actions.length} actions in the plan`;
+  const open = actions.filter((action) => action.status !== "done");
+  if (open.length === 0) return "Every action in the plan is done.";
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = open.filter((action) => action.dueDate && action.dueDate < today);
+  const title = (overdue[0] ?? open[0])?.title.trim() ?? "";
+  if (overdue.length > 0 && title) {
+    const count = `${overdue.length} overdue`;
+    const shown = /^[A-Z][a-z]/.test(title)
+      ? `${title.charAt(0).toLowerCase()}${title.slice(1)}`
+      : title;
+    return `${count}. Start with: ${shown.endsWith(".") ? shown : `${shown}.`}`;
+  }
+  const lead = open.length === 1 ? "1 action in the plan" : `${open.length} actions in the plan`;
   if (!title) return `${lead}.`;
   const shown = /^[A-Z][a-z]/.test(title)
     ? `${title.charAt(0).toLowerCase()}${title.slice(1)}`

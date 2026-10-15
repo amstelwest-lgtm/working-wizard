@@ -765,7 +765,11 @@ function TeamAccessPage() {
                             {m.name}
                           </td>
                           <td data-label="Class" className="py-2 pr-3 text-slate-400">
-                            {a ? CLASSIFICATION_LABELS[a.classification] : "—"}
+                            {a
+                              ? m.isFirmOwner && a.classification === "staff"
+                                ? "Practice owner"
+                                : CLASSIFICATION_LABELS[a.classification]
+                              : "—"}
                           </td>
                           <td data-label="Status" className="py-2 pr-3 text-xs text-slate-400">
                             {a?.status}

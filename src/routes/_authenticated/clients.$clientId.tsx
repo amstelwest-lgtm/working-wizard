@@ -1126,11 +1126,14 @@ function ClientView() {
   const [planKnown, setPlanKnown] = useState(false);
   const [planCount, setPlanCount] = useState(0);
   const focusPlanAdd = useRef<(() => void) | null>(null);
-  const onPlanAnswer = useCallback((actions: readonly { title: string }[]) => {
-    setPlanKnown(true);
-    setPlanCount(actions.length);
-    setPlanSentence(planAnswerSentence(actions));
-  }, []);
+  const onPlanAnswer = useCallback(
+    (actions: readonly { title: string; status?: string | null; dueDate?: string | null }[]) => {
+      setPlanKnown(true);
+      setPlanCount(actions.length);
+      setPlanSentence(planAnswerSentence(actions));
+    },
+    [],
+  );
   const registerPlanAdd = useCallback((focus: () => void) => {
     focusPlanAdd.current = focus;
   }, []);

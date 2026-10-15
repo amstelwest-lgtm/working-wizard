@@ -183,7 +183,9 @@ interface Props {
   /** Same stamp the tab sign-off prints. Unsigned exports say Draft. */
   reviewSignoff?: ReportSignoffStamp | null;
   /** Titles already on the list, in stored order. The strip sentence uses them. */
-  onAnswer?: (actions: readonly { title: string }[]) => void;
+  onAnswer?: (
+    actions: readonly { title: string; status?: string | null; dueDate?: string | null }[],
+  ) => void;
   /** The strip's Add action uses this same focus. */
   onRegisterAdd?: (focus: () => void) => void;
   /**
@@ -1123,7 +1125,13 @@ export default function ActionPlanPanel({
   const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
   useEffect(() => {
     if (loading) return;
-    onAnswer?.(items.map((item) => ({ title: stripMilonProjection(item.title) })));
+    onAnswer?.(
+      items.map((item) => ({
+        title: stripMilonProjection(item.title),
+        status: item.status,
+        dueDate: item.due_date,
+      })),
+    );
   }, [items, onAnswer, loading]);
   const filtered = useMemo(() => {
     let list = enriched;
@@ -1570,7 +1578,7 @@ export default function ActionPlanPanel({
                   }
             }
           />
-          <BurnUp plan={plan} items={enriched} confidence={confidence} />
+          <BurnUp plan={plan} items={enriched} />
           {ownerView ? null : (
             <OwnerLoad items={enriched} employees={employees} onPick={setOwnerFilter} />
           )}
@@ -3442,11 +3450,9 @@ function HealthDonut({
 function BurnUp({
   plan,
   items,
-  confidence,
 }: {
   plan: Plan;
   items: Item[];
-  confidence: number | null;
 }) {
   // Planned: straight line from plan start → target date. Actual: mean progress today.
   const start = new Date(plan.created_at).getTime();
@@ -3461,6 +3467,7 @@ function BurnUp({
   const x = (f: number) => P + f * (W - 2 * P);
   const y = (f: number) => H - P - f * (H - 2 * P);
   const gap = Math.round((actual - nowFrac) * 100);
+  const goalOverdue = plan.target_date < new Date().toISOString().slice(0, 10);
   return (
     <VizCard title="Burn-up · planned vs actual">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
@@ -3501,6 +3508,7 @@ function BurnUp({
         />
       </svg>
       <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+        {goalOverdue ? <span className="font-bold text-[#ef4444]">The goal date has passed. </span> : null}
         {gap >= 0 ? (
           <>
             <span className="font-bold text-[#22c55e]">{gap}pt ahead</span> of the planned line.
@@ -3508,8 +3516,7 @@ function BurnUp({
         ) : (
           <>
             <span className="font-bold text-[#ef4444]">{Math.abs(gap)}pt behind</span> the planned
-            line — that gap is the confidence number
-            {planConfidenceDisplay(confidence).hint ? "" : ` (${planConfidenceDisplay(confidence).value})`}.
+            line.
           </>
         )}
       </p>
