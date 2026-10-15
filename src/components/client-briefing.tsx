@@ -472,7 +472,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
           </DialogHeader>
           {p.profile ? (
             <dl className="mt-2 grid gap-x-8 gap-y-3 border-t border-[#0B5FFF]/20 pt-4 text-sm sm:grid-cols-[minmax(0,11rem)_1fr]">
-              {profileDisplayRows(p.profile, market, p.debtorDays).map((r) => (
+              {profileDisplayRows(p.profile, market, p.debtorDays, p.industryLabel).map((r) => (
                 <div key={r.label} className="contents">
                   <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#102A43] sm:pt-0.5">
                     {r.label}

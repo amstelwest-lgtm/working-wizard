@@ -1469,3 +1469,68 @@ export function resolveThirteenWeekForecast(input: {
 
   return buildDerived();
 }
+
+/**
+ * The 13-week series the Cash page renders.
+ * Chat used to pass a P&L runway that is "cash generative" whenever a ledger
+ * opening is on file. That discarded a structural stored forecast and replaced
+ * it with a P&L sketch that never crosses the floor. The cash screen does not:
+ * only a published bank stamp (`seededFromBanksAt`) counts as bank evidence
+ * for this runway, and the opening is the same balance the grid loads.
+ */
+export function resolveCashScreenForecast(input: {
+  financials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+  financialsUpdatedAt?: string | null;
+  now?: Date;
+  periodEnd?: string | null;
+  timeZone?: string | null;
+  fyStartMonth?: number | null;
+}): ThirteenWeekForecast {
+  const fin = asRecord(input.financials);
+  const cf = asRecord(input.cashflow);
+  const bankAt =
+    cf && typeof cf.seededFromBanksAt === "string" && cf.seededFromBanksAt.length > 0
+      ? cf.seededFromBanksAt
+      : null;
+  const resolved = resolveClientCash({
+    publishedBankBalance: bankAt ? finiteNum(cf?.openingBalance) : null,
+    bankPublishedAt: bankAt,
+    periodCash: finiteNum(fin?.cash),
+    periodUpdatedAt: input.financialsUpdatedAt ?? null,
+  });
+  const runwayCash = resolved.amount ?? finiteNum(cf?.openingBalance);
+  const runway = clientRunway({
+    cash: runwayCash,
+    netIncome: finiteNum(fin?.netIncome),
+    periodExpenses: fin ? periodOperatingOutflows(fin) : null,
+    periodMonths: fin ? periodMonthsOf(fin) : null,
+    operatingCashflow: finiteNum(fin?.operatingCashflow),
+    hasBankCashflow: Boolean(bankAt),
+  });
+  return resolveThirteenWeekForecast({
+    financials: input.financials,
+    cashflow: input.cashflow,
+    openingCash: resolved.amount,
+    runway,
+    now: input.now,
+    periodEnd: input.periodEnd ?? (typeof fin?.periodEnd === "string" ? fin.periodEnd : null),
+    timeZone: input.timeZone,
+    fyStartMonth: input.fyStartMonth,
+  });
+}
+
+/** Floor the cash grid draws: a confirmed threshold, otherwise four weeks of outflows. */
+export function cashScreenFloor(
+  cashflow: unknown,
+  weeklyOutflows: Array<number | null | undefined> | null | undefined,
+): number {
+  const cf = asRecord(cashflow);
+  const confirm = cf?.suggestionConfirm;
+  const configured =
+    confirm && typeof confirm === "object" ? finiteNum((confirm as { floor?: unknown }).floor) : null;
+  return forecastMinimumCash({
+    configured: configured != null && configured > 0 ? configured : null,
+    weeklyOutflows,
+  });
+}

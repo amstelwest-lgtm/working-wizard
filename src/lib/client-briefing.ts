@@ -10,7 +10,7 @@
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { redactForModel, type RedactionSession } from "@/lib/redact-identifiers";
 import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
-import { profileIndustryLabel, profileAiContext } from "@/lib/profile-signals";
+import { clientIndustryDisplay, profileIndustryLabel, profileAiContext } from "@/lib/profile-signals";
 import type { VarianceChip } from "@/lib/prior-period";
 import { ratioAttentionSignals } from "@/lib/data-requests";
 import { formatDate, formatMoneyCompact, type ResolvedMarket, ZA_MARKET } from "@/lib/market";
@@ -232,8 +232,13 @@ export function describeBusiness(
   profile: ClientOperatingProfile | null | undefined,
   fallbackType: string | null | undefined,
   actualDebtorDays?: number | null,
+  business?: { name?: string | null; businessType?: string | null },
 ): string | null {
-  const industry = profileIndustryLabel(profile, fallbackType ?? "");
+  const templateIndustry = profileIndustryLabel(profile, fallbackType ?? "");
+  const named = business?.name?.trim()
+    ? clientIndustryDisplay(business.name, profile, business.businessType ?? fallbackType)
+    : "";
+  const industry = named && named !== "—" ? named : templateIndustry;
   if (!profile) return industry ? `${industry} business.` : null;
   const parts: string[] = [];
   const base = industry ? `${industry} business` : "Business";
@@ -241,7 +246,11 @@ export function describeBusiness(
   parts.push(`${base} focused on ${goal}.`);
   const colour: string[] = [];
   const pay = PAY_PHRASE[profile.payMotion];
-  if (pay && profile.payMotion !== "mix") colour.push(pay);
+  // A hotel stored under the labour template must not keep "sells time".
+  const industryOverrodeTemplate = Boolean(
+    named && named !== "—" && templateIndustry && named !== templateIndustry,
+  );
+  if (pay && profile.payMotion !== "mix" && !industryOverrodeTemplate) colour.push(pay);
   if (actualDebtorDays != null && Number.isFinite(actualDebtorDays) && actualDebtorDays > 0) {
     colour.push(`customers pay in ${Math.round(actualDebtorDays)} days`);
   } else if (

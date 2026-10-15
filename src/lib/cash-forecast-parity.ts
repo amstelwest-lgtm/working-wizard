@@ -81,6 +81,24 @@ export function forecastLowestPoint(
 }
 
 /**
+ * Opening at zero plus only dust flows (the floor then collapses to a few
+ * rand, such as R69) is a placeholder, not a forecast. A real burn from a
+ * zero opening is larger than this and still counts.
+ */
+const NEAR_EMPTY_FLOW = 1_000;
+
+export function forecastIsNearEmptyPlaceholder(input: {
+  opening: number;
+  totalInflow?: number | null;
+  totalOutflow?: number | null;
+}): boolean {
+  const openingEmpty = !Number.isFinite(input.opening) || Math.abs(input.opening) < 0.5;
+  if (!openingEmpty) return false;
+  const flow = Math.abs(input.totalInflow ?? 0) + Math.abs(input.totalOutflow ?? 0);
+  return flow < NEAR_EMPTY_FLOW;
+}
+
+/**
  * A stored series, or a derived series with operating outflows, is a forecast.
  * A derived sketch with no costs uses the R50,000 fallback floor. Thirteen
  * zeros under that line are not a forecast.
@@ -91,11 +109,19 @@ export function forecastHasCashEvidence(input: {
   totalInflow?: number | null;
   totalOutflow?: number | null;
 }): boolean {
+  if (forecastIsNearEmptyPlaceholder(input)) return false;
   const openingSet = Number.isFinite(input.opening) && Math.abs(input.opening) >= 0.5;
   const inflow = (input.totalInflow ?? 0) > 0.5;
   const outflow = (input.totalOutflow ?? 0) > 0.5;
   if (input.source === "stored") return openingSet || inflow || outflow;
   return outflow;
+}
+
+/** Total column for Opening cash. Week 1's opening, not the last week's. */
+export function forecastOpeningColumnTotal(openings: readonly number[], fallback = 0): number {
+  if (!openings.length) return fallback;
+  const first = openings[0];
+  return Number.isFinite(first) ? first! : fallback;
 }
 
 /**

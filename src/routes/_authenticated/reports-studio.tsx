@@ -2187,7 +2187,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budget: (signoffRes.data ?? []).find((s) => s.scope === "budget") ?? null,
   };
   const storedBudget = parseBudgetDocument(clientRow?.budget);
-  const budgetUpdatedAt = clientRow?.budget_updated_at ?? storedBudget?.updatedAt ?? null;
+  const budgetUpdatedAt = clientRow?.budget_updated_at ?? null;
   const uploadedBudgetActuals = await loadBudgetActualsForPdf(clientId);
   const rawFinancials =
     clientRow?.financials && typeof clientRow.financials === "object"

@@ -104,7 +104,7 @@ import {
   plBankDisagreement,
   runwayDisplayLabel,
   resolveClientCash,
-  resolveThirteenWeekForecast,
+  resolveCashScreenForecast,
   blankForecastLines,
   weekDatesFrom,
   type ClientRunway,
@@ -943,13 +943,10 @@ export function CashForecastPanel({
       }
       setBankSeeded(Boolean(bankAt));
       const loadedProfile = parseOperatingProfileUnknown(data?.operating_profile);
-      const outlook = resolveThirteenWeekForecast({
+      const outlook = resolveCashScreenForecast({
         financials: finRecord,
         cashflow: cf,
-        openingCash: resolvedCash.amount,
-        runway: runwayFromOpening(resolvedCash.amount ?? cf?.openingBalance, finRecord, {
-          hasBankCashflow: Boolean(bankAt),
-        }),
+        financialsUpdatedAt: (data?.financials_updated_at as string | null | undefined) ?? null,
         periodEnd: typeof finRecord?.periodEnd === "string" ? finRecord.periodEnd : null,
         timeZone: market.timezone,
         fyStartMonth: loadedProfile?.fyStartMonth ?? market.fyStartMonthDefault,

@@ -15,6 +15,7 @@ import {
   budgetScaleBreak,
   budgetVersusStatement,
   budgetWasRebuiltFromActuals,
+  budgetPlanFiguresChanged,
   publishBudgetDocument,
   reseedBudgetIfScaleBroken,
   seedBudgetFromFinancials,
@@ -208,9 +209,7 @@ export function BudgetPanel({
             cashflow: row?.cashflow,
             financialsUpdatedAt: row?.financials_updated_at ?? null,
           });
-          const before = JSON.stringify({ ...normalized, updatedAt: "" });
-          const after = JSON.stringify({ ...next, updatedAt: "" });
-          const changed = before !== after;
+          const changed = budgetPlanFiguresChanged(normalized, next);
           skipAutosave.current = !changed;
           budgetDirty.current = changed;
           setDoc(next);
