@@ -1867,6 +1867,8 @@ function ClientView() {
       const next = names.get(client.id);
       if (!next || next === client.name) return;
       setClient((current) => (current && current.id === client.id ? { ...current, name: next } : current));
+    }).catch(() => {
+      /* keep the stored name when the lookup cannot run */
     });
     return () => {
       cancelled = true;
