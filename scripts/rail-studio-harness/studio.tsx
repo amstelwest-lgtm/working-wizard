@@ -99,6 +99,7 @@ import {
 import { ClientRail } from "@/components/client-studio-chrome";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { SettingsMenu } from "@/components/settings-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const CLIENT_ID = "harness-client";
 /** Same freshness line the Books pane already shows. */
@@ -194,6 +195,9 @@ export function RailStudio() {
               void navigate({ to: "/settings", hash: "firm-billing" });
             }}
           />
+          <span className="topbar-theme">
+            <ThemeToggle />
+          </span>
           <AccountantMenuButton open={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
           <div className={`topbar-actions${menuOpen ? " open" : ""}`} />
         </div>
