@@ -179,9 +179,10 @@ assert(
   "summary net margin is the same ratio engine as Overview",
 );
 assert(
-  clientSrc.includes('grossMargin: ratios["Gross Margin"]') &&
+  clientSrc.includes("statementGrossMarginFraction") &&
+    clientSrc.includes("grossMargin: statementGrossMargin ?? ratios[\"Gross Margin\"]") &&
     clientSrc.includes('operatingMargin: ratios["Operating Margin"]'),
-  "summary GM/OM are the Overview ratio fields",
+  "summary GM uses the waterfall bridge, and OM stays the Overview ratio",
 );
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(
