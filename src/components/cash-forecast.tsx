@@ -153,6 +153,7 @@ import {
   silentForecastKey,
 } from "@/lib/cash-once-off-save";
 import {
+  onceOffSaveEnabled,
   showSuggestOnceOffs,
   suggestOnceOffRows,
   type SuggestedOnceOffLine,
@@ -687,6 +688,9 @@ export function CashForecastPanel({
   const savedRevenueOnceOff = useRef<LineItem[]>([]);
   const savedExpensesOnceOff = useRef<LineItem[]>([]);
   const savedOtherOnceOff = useRef<LineItem[]>([]);
+  const heldRevenue = useRef<Record<string, LineItem>>({});
+  const heldExpenses = useRef<Record<string, LineItem>>({});
+  const heldOther = useRef<Record<string, LineItem>>({});
   const silentBaselineRef = useRef("");
   const hydrateOnceOff = useRef(false);
   const saveTicket = useRef(0);
@@ -1124,9 +1128,9 @@ export function CashForecastPanel({
       skipNextAutosave.current = false;
       return;
     }
-    const silentRevenue = linesForSilentSave(revenue, savedRevenueOnceOff.current);
-    const silentExpenses = linesForSilentSave(expenses, savedExpensesOnceOff.current);
-    const silentOther = linesForSilentSave(other, savedOtherOnceOff.current);
+    const silentRevenue = linesForSilentSave(revenue, savedRevenueOnceOff.current, heldRevenue.current);
+    const silentExpenses = linesForSilentSave(expenses, savedExpensesOnceOff.current, heldExpenses.current);
+    const silentOther = linesForSilentSave(other, savedOtherOnceOff.current, heldOther.current);
     const key = silentForecastKey({
       startDate,
       openingBalance,
@@ -1136,6 +1140,9 @@ export function CashForecastPanel({
       savedRevenue: savedRevenueOnceOff.current,
       savedExpenses: savedExpensesOnceOff.current,
       savedOther: savedOtherOnceOff.current,
+      heldRevenue: heldRevenue.current,
+      heldExpenses: heldExpenses.current,
+      heldOther: heldOther.current,
     });
     if (key === silentBaselineRef.current) return;
     const ticket = saveTicket.current;
@@ -1207,7 +1214,13 @@ export function CashForecastPanel({
   ]);
 
   const saveOnceOff = async () => {
-    if (!clientId || preview || onceOffSaving || !onceOffNeedsSave) return;
+    if (!clientId || preview || onceOffSaving) return;
+    if (!onceOffSaveEnabled({ dirty: onceOffNeedsSave, staged: stagedOnceOffs.length })) return;
+    if (!onceOffNeedsSave) {
+      setStagedOnceOffs([]);
+      setOnceOffStatus("Saved");
+      return;
+    }
     const ticket = ++saveTicket.current;
     setOnceOffSaving(true);
     const markers = xeroCashMarkers.current;
@@ -1258,6 +1271,9 @@ export function CashForecastPanel({
       setOnceOffStatus(`Could not save: ${error.message}`);
       return;
     }
+    heldRevenue.current = {};
+    heldExpenses.current = {};
+    heldOther.current = {};
     savedRevenueOnceOff.current = onceOffLines(revenue);
     savedExpensesOnceOff.current = onceOffLines(expenses);
     savedOtherOnceOff.current = onceOffLines(other);
@@ -1550,6 +1566,9 @@ export function CashForecastPanel({
       toast.error(`Could not confirm: ${error.message}`);
       return;
     }
+    heldRevenue.current = {};
+    heldExpenses.current = {};
+    heldOther.current = {};
     savedRevenueOnceOff.current = onceOffLines(revenue);
     savedExpensesOnceOff.current = onceOffLines(nextExpenses);
     savedOtherOnceOff.current = onceOffLines(other);
@@ -1578,19 +1597,53 @@ export function CashForecastPanel({
     />
   );
   const stageSuggestedOnceOffs = () => {
+    const markers = xeroCashMarkers.current;
+    const linesMatch =
+      markers.linesKey != null &&
+      JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
+    const linesAreBank =
+      linesMatch && (markers.linesSource ? forecastChipSource(markers.linesSource) === "bank_pack" : bankSeeded);
+    const withSide = (list: LineItem[], side: SuggestedOnceOffLine["side"]) =>
+      list.map((line) => ({ ...line, side }));
+    const forecastLines = [
+      ...withSide(revenue, "revenue"),
+      ...withSide(expenses, "expenses"),
+      ...withSide(other, "other"),
+    ];
     const result = suggestOnceOffRows({
       bankDraft: bankHistory,
-      existing: [...revenue, ...expenses, ...other],
+      existing: forecastLines,
+      forecastLines,
+      bankSourced: linesAreBank,
     });
     if (!result.lines.length) {
       setStagedOnceOffs([]);
       setOnceOffStatus(result.empty);
       return;
     }
+    const stagedById = new Map(result.lines.map((line) => [line.id, line]));
+    const present = new Set(forecastLines.map((line) => line.id));
+    const retarget = (list: LineItem[], held: { current: Record<string, LineItem> }) =>
+      list.map((line) => {
+        const next = stagedById.get(line.id);
+        if (!next) return line;
+        const sameAmount = Math.abs((parseFloat(line.amount) || 0) - (parseFloat(next.amount) || 0)) < 0.005;
+        if (line.frequency === "once-off" && sameAmount && line.startWeek === next.startWeek) {
+          return line;
+        }
+        if (!held.current[line.id]) held.current = { ...held.current, [line.id]: line };
+        return {
+          ...line,
+          amount: next.amount,
+          frequency: "once-off" as const,
+          startWeek: next.startWeek,
+          splitCount: 1,
+        };
+      });
     const add = (list: LineItem[], side: SuggestedOnceOffLine["side"]) => [
-      ...list,
+      ...retarget(list, side === "revenue" ? heldRevenue : side === "expenses" ? heldExpenses : heldOther),
       ...result.lines
-        .filter((line) => line.side === side)
+        .filter((line) => line.side === side && !present.has(line.id))
         .map((line) => ({
           id: line.id,
           name: line.name,
@@ -1613,7 +1666,7 @@ export function CashForecastPanel({
           suggestionCount: cashSuggestions.suggestions.length,
           lineAmounts: [...revenue, ...expenses, ...other].map((line) => parseFloat(line.amount) || 0),
         })}
-        needsSave={onceOffNeedsSave}
+        needsSave={onceOffSaveEnabled({ dirty: onceOffNeedsSave, staged: stagedOnceOffs.length })}
         saving={onceOffSaving}
         status={onceOffStatus ?? ""}
         staged={stagedOnceOffs.map((line) => ({
