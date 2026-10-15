@@ -11,9 +11,10 @@ import type {
   BudgetActuals,
   BudgetDocument,
   BudgetScenarioId,
+  BudgetTemplateId,
   UnmappedDriver,
 } from "@/lib/budget.types";
-import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
+import { BUDGET_TEMPLATES, budgetVolumeLabel, newId } from "@/lib/budget.templates";
 import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import {
@@ -79,6 +80,7 @@ export function BudgetWorkspace({
   priorYear = null,
   priorYearLabel = null,
   priorYearMonths = null,
+  displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -104,6 +106,7 @@ export function BudgetWorkspace({
   priorYear?: BudgetYearMoney | null;
   priorYearLabel?: string | null;
   priorYearMonths?: number | null;
+  displayTemplateId?: BudgetTemplateId | null;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -137,6 +140,7 @@ export function BudgetWorkspace({
           priorYear={priorYear}
           priorYearLabel={priorYearLabel}
           priorYearMonths={priorYearMonths}
+          displayTemplateId={displayTemplateId}
         />
       </div>
     );
@@ -163,6 +167,7 @@ export function BudgetWorkspace({
       lens={lens}
       onLensChange={onLensChange}
       actualMonths={actualMonths}
+      displayTemplateId={displayTemplateId}
     />
   );
 }
@@ -277,6 +282,7 @@ function BudgetComplexWorkspace({
   lens,
   onLensChange,
   actualMonths,
+  displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -297,6 +303,7 @@ function BudgetComplexWorkspace({
   lens?: BudgetLens;
   onLensChange?: (next: BudgetLens) => void;
   actualMonths?: readonly BudgetActualMonth[];
+  displayTemplateId?: BudgetTemplateId | null;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -313,6 +320,7 @@ function BudgetComplexWorkspace({
   const baseFocus = baseResults.find((r) => r.month === focusMonth) ?? baseResults[0];
   const trough = useMemo(() => lowestCashTrough(results), [results]);
   const tpl = BUDGET_TEMPLATES[doc.templateId];
+  const shownTpl = displayTemplateId ? BUDGET_TEMPLATES[displayTemplateId] : tpl;
   const fyTotals = useMemo(() => {
     const sum = (fn: (r: (typeof results)[0]) => number) => results.reduce((a, r) => a + fn(r), 0);
     return {
@@ -661,7 +669,7 @@ function BudgetComplexWorkspace({
         </>,
       )}
       <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
-        {plainBudgetWindowHeading(tpl.label, doc, market)}
+        {plainBudgetWindowHeading(shownTpl.label, doc, market)}
       </p>
 
       {/* Revenue drivers */}
@@ -754,7 +762,9 @@ function BudgetComplexWorkspace({
               </thead>
               <tbody>
                 <tr>
-                  <td className="px-3 py-1 text-slate-500">{localizeCopy(line.volumeLabel, market)}</td>
+                  <td className="px-3 py-1 text-slate-500">
+                    {localizeCopy(budgetVolumeLabel(doc.templateId, shownTpl.id, line.volumeLabel), market)}
+                  </td>
                   {focusMonths.map((m) => (
                     <td key={m} className="px-1 py-1">
                       <Input

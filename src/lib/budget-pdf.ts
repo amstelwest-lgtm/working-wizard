@@ -66,6 +66,7 @@ export type BudgetPdfRow = {
   actual: number | null;
   delta: number | null;
   deltaPct: number | null;
+  deltaPctNote?: string | null;
   signal: VarianceSignal | null;
   /** Material and adverse — the row the PDF tints. */
   material: boolean;
@@ -211,6 +212,7 @@ function budgetOnlyRow(label: string, budget: number, emphasis = false): BudgetP
     actual: null,
     delta: null,
     deltaPct: null,
+    deltaPctNote: null,
     signal: null,
     material: false,
     emphasis,
@@ -224,6 +226,7 @@ function fromVariance(v: VarianceLine, label: string, emphasis = false): BudgetP
     actual: v.actual,
     delta: v.delta,
     deltaPct: v.deltaPct,
+    deltaPctNote: v.deltaPctNote,
     signal: v.signal,
     material: v.signal === "adverse" && isMaterialVariance(v),
     emphasis,
@@ -309,7 +312,7 @@ function headlineFor(
   }
   const top = adverse[0];
   const dir = (top.delta ?? 0) > 0 ? "over" : "under";
-  const pct = formatVariancePct(top.deltaPct);
+  const pct = formatVariancePct(top.deltaPct, top.deltaPctNote);
   return `${draftBit}${top.label} is ${dir} budget by ${money(Math.abs(top.delta ?? 0), market)} (${pct}).`;
 }
 

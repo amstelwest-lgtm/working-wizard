@@ -69,6 +69,8 @@ export type VarianceLine = {
   actual: number;
   delta: number;
   deltaPct: number | null;
+  /** Set when a percent would mislead: the budget is negative or near zero. */
+  deltaPctNote?: string | null;
   /** For cost lines, higher actual is adverse; for revenue, higher is favourable. */
   higherIsBetter: boolean;
   signal: VarianceSignal;
@@ -124,8 +126,21 @@ export function normalizeTaxonomyTotals(
 /** Material if |Δ| ≥ R5,000 and |Δ%| ≥ 5% (when budget ≠ 0). */
 export function isMaterialVariance(line: Pick<VarianceLine, "budget" | "delta" | "deltaPct">): boolean {
   if (Math.abs(line.delta) < 5_000) return false;
-  if (line.budget === 0) return Math.abs(line.delta) >= 5_000;
-  return line.deltaPct != null && Math.abs(line.deltaPct) >= 5;
+  if (line.budget === 0 || line.budget < 0 || line.deltaPct == null) return Math.abs(line.delta) >= 5_000;
+  return Math.abs(line.deltaPct) >= 5;
+}
+
+/** A percent off a negative or tiny budget (for example −R750 → +7673%) is not a variance. */
+export function variancePercent(
+  budget: number,
+  delta: number,
+): { pct: number | null; note: string | null } {
+  if (!Number.isFinite(budget) || !Number.isFinite(delta)) return { pct: null, note: null };
+  if (budget < 0) return { pct: null, note: "budget is negative" };
+  if (Math.abs(budget) < 1) return { pct: null, note: "budget is near zero" };
+  const pct = (delta / Math.abs(budget)) * 100;
+  if (Math.abs(pct) > 999) return { pct: null, note: "budget is near zero" };
+  return { pct, note: null };
 }
 
 function signalFor(
@@ -149,7 +164,8 @@ export function varianceLine(
   higherIsBetter: boolean,
 ): VarianceLine {
   const delta = actual - budget;
-  const deltaPct = budget !== 0 ? (delta / Math.abs(budget)) * 100 : null;
+  const percent = variancePercent(budget, delta);
+  const deltaPct = percent.pct;
   return {
     key,
     label,
@@ -157,6 +173,7 @@ export function varianceLine(
     actual,
     delta,
     deltaPct,
+    deltaPctNote: percent.note,
     higherIsBetter,
     signal: signalFor(delta, deltaPct, higherIsBetter),
   };
@@ -324,7 +341,8 @@ function num(v: number | null | undefined): number {
   return v;
 }
 
-export function formatVariancePct(pct: number | null): string {
+export function formatVariancePct(pct: number | null, note?: string | null): string {
+  if ((pct == null || !Number.isFinite(pct)) && note) return note;
   if (pct == null || !Number.isFinite(pct)) return "—";
   if (Math.abs(pct) < 0.05) return "0.0%";
   const sign = pct > 0 ? "+" : "";

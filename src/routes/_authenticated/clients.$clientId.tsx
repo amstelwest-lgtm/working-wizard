@@ -1665,6 +1665,7 @@ function ClientView() {
     cashRunwayWeeks: effectiveRunway,
     whatMatters: briefingMatters,
     openQueries: openQueriesCount,
+    debtorDays: actualDebtorDays,
   };
   const workflowHash = workflowInputsHash(workflowCtx);
   const [workflow, setWorkflow] = useState<BriefingWorkflow | null>(null);

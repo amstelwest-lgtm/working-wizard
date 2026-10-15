@@ -80,6 +80,8 @@ const InputSchema = z.object({
     cashRunwayWeeks: z.number().nullable(),
     whatMatters: z.string().max(600).nullable(),
     openQueries: z.number().int().nullable().optional(),
+    /** Ratios debtor days. Absent on older clients; the template default must not fill it. */
+    debtorDays: z.number().nullable().optional(),
   }),
 });
 

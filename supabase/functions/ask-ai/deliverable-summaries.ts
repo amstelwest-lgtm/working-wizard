@@ -389,7 +389,7 @@ export function summarizeCashForecast(
       plCashGenerative: opts.cashGenerative === true || runway.kind === "cash_generative",
     });
     const lowest = Math.min(...outlook.closing);
-    const lowestWeek = outlook.closing.indexOf(lowest) + 1;
+    const lowestCashWeek = outlook.closing.indexOf(lowest) + 1;
     const floorWeek = outlook.closing.findIndex((c) => c < floor);
     const closing = outlook.closing[outlook.closing.length - 1] ?? outlook.opening;
     const delta = closing - outlook.opening;
@@ -412,7 +412,10 @@ export function summarizeCashForecast(
       cashGenerative: facts.cashGenerative,
       horizonWeeks: HORIZON,
       shortfall: facts.shortfall,
-      lowestWeek: facts.weeksBelowFloor > 0 && floorWeek >= 0 ? floorWeek + 1 : lowestWeek,
+      lowestWeek: facts.weeksBelowFloor > 0 && floorWeek >= 0 ? floorWeek + 1 : lowestCashWeek,
+      lowestCash: lowest,
+      lowestCashWeek,
+      floor,
       negativeWeeks: facts.negativeWeeks,
       weeksBelowFloor: facts.weeksBelowFloor,
       trajectory: traj,
@@ -454,6 +457,9 @@ export function summarizeCashForecast(
     horizonWeeks: HORIZON,
     shortfall: facts.shortfall,
     lowestWeek: facts.weeksBelowFloor > 0 && floorWeek >= 0 ? floorWeek + 1 : lowestWeek,
+    lowestCash: lowest,
+    lowestCashWeek: lowestWeek,
+    floor: RUNWAY_FLOOR,
     negativeWeeks: facts.negativeWeeks,
     weeksBelowFloor: facts.weeksBelowFloor,
     trajectory: traj,

@@ -8,8 +8,8 @@ import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
-import type { BudgetActuals, BudgetDocument } from "@/lib/budget.types";
-import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
+import type { BudgetActuals, BudgetDocument, BudgetTemplateId } from "@/lib/budget.types";
+import { BUDGET_TEMPLATES, budgetVolumeLabel } from "@/lib/budget.templates";
 import {
   plainBudgetWindowHeading,
   currentBudgetMonth,
@@ -113,6 +113,7 @@ export function BudgetSimpleView({
   priorYear = null,
   priorYearLabel = null,
   priorYearMonths = null,
+  displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -135,6 +136,8 @@ export function BudgetSimpleView({
   priorYearLabel?: string | null;
   /** Months the prior books cover. A different length is not a percent change. */
   priorYearMonths?: number | null;
+  /** Industry template when it disagrees with the stored labour kit. */
+  displayTemplateId?: BudgetTemplateId | null;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -151,7 +154,9 @@ export function BudgetSimpleView({
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
   const trough = useMemo(() => lowestCashTrough(results), [results]);
   const tpl = BUDGET_TEMPLATES[doc.templateId];
+  const shownTpl = displayTemplateId ? BUDGET_TEMPLATES[displayTemplateId] : tpl;
   const line = doc.revenueLines[0];
+  const volumeLabel = budgetVolumeLabel(doc.templateId, shownTpl.id, line?.volumeLabel);
   const cell = line?.months[focusMonth] ?? { volume: 0, price: 0 };
   const focusIdx = months.indexOf(focusMonth);
 
@@ -275,7 +280,7 @@ export function BudgetSimpleView({
       ) : null}
       {readOnly ? null : (
       <p className="text-sm font-semibold text-[#102A43] dark:text-slate-100">
-        {plainBudgetWindowHeading(tpl.label, doc, market)}
+        {plainBudgetWindowHeading(shownTpl.label, doc, market)}
       </p>
       )}
 
@@ -347,7 +352,7 @@ export function BudgetSimpleView({
         <div className="mt-5 grid items-stretch gap-3 pl-3 sm:pl-4 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
           <DriverPad
             kicker="How many"
-            label={localizeCopy(line?.volumeLabel ?? "Volume", market)}
+            label={localizeCopy(volumeLabel, market)}
             hint={line?.name ? `${line.name}` : "Units they move this month"}
           >
             {readOnly ? (
@@ -356,7 +361,7 @@ export function BudgetSimpleView({
             <Input
               type="number"
               inputMode="decimal"
-              aria-label={localizeCopy(line?.volumeLabel ?? "Volume", market)}
+              aria-label={localizeCopy(volumeLabel, market)}
               className="budget-driver-input mt-2 h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
               value={cell.volume}
               onChange={(e) => patchFocus({ volume: parseFloat(e.target.value) || 0 })}

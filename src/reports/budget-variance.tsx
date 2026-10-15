@@ -161,7 +161,7 @@ function VarianceTable({
               )}
             </View>
             <Text style={[styles.cell, { flex: 0.7, textAlign: "right", color }]}>
-              {row.deltaPct == null ? "—" : formatVariancePct(row.deltaPct)}
+              {formatVariancePct(row.deltaPct, row.deltaPctNote)}
             </Text>
           </View>
         );
