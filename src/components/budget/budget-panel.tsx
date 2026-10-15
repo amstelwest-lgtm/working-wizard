@@ -22,6 +22,7 @@ import {
 } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
+import { industryBudgetTemplate } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import type { BudgetQualification, BudgetTemplateId } from "@/lib/budget.types";
 import {
@@ -348,11 +349,11 @@ export function BudgetPanel({
     if (clientId && loadedFor.current !== clientId) return;
     seededFromProfile.current = true;
     startFresh({
-      templateId: profile.templateId,
+      templateId: industryBudgetTemplate(clientName, profile, businessTypeId) ?? profile.templateId,
       qualification: profileToBudgetQualification(profile, "none"),
       fyStartMonth: profile.fyStartMonth || fyDefault,
     });
-  }, [loaded, doc, profile, fyDefault, startFresh, clientId]);
+  }, [loaded, doc, profile, fyDefault, startFresh, clientId, clientName, businessTypeId]);
 
   const rebuildFromActuals = () => {
     const seedFrom =
@@ -623,6 +624,7 @@ export function BudgetPanel({
         priorYear={priorYear}
         priorYearLabel={priorYearLabel}
         priorYearMonths={priorYearMonths}
+        displayTemplateId={industryBudgetTemplate(clientName, profile, businessTypeId)}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>

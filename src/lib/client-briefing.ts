@@ -477,6 +477,8 @@ export type WorkflowContext = {
   cashRunwayWeeks: number | null | undefined;
   whatMatters: string | null;
   openQueries?: number | null;
+  /** Ratios debtor days. The workflow must not quote the template default instead. */
+  debtorDays?: number | null;
 };
 
 /** Stable key for caching: regenerate only when the inputs change. */
@@ -496,6 +498,7 @@ export function workflowInputsHash(ctx: WorkflowContext): string {
       .map((m) => [m.key, m.value, m.delta?.text ?? ""]),
     r: ctx.cashRunwayWeeks ?? null,
     w: ctx.whatMatters,
+    d: ctx.debtorDays ?? null,
   });
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -511,7 +514,11 @@ function workflowPromptBody(ctx: WorkflowContext): string {
     )
     .join("\n");
   const profile =
-    profileAiContext(ctx.profile) ?? `Business type: ${ctx.businessType ?? "unknown"}`;
+    profileAiContext(ctx.profile, {
+      name: ctx.clientName,
+      businessType: ctx.businessType,
+      debtorDays: ctx.debtorDays,
+    }) ?? `Business type: ${ctx.businessType ?? "unknown"}`;
   return `You are writing one line of a monthly client briefing for an accountant who uses Milōn, an advisory tool that sits on top of the client's figures.
 
 MILŌN — WHAT IT CAN DO TODAY (the only capabilities you may reference):

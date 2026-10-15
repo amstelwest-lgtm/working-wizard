@@ -259,6 +259,18 @@ export function buildPrompt(
     lines.push(
       "\nCash forecast outlook (13-week trajectory). Cash on file, when listed under OVERVIEW FIGURES, is not missing:",
     );
+    if (c.floor != null && Number.isFinite(c.floor)) {
+      lines.push(`  Floor: ${Math.round(c.floor)}`);
+    }
+    if (c.lowestCash != null && Number.isFinite(c.lowestCash)) {
+      lines.push(
+        `  Lowest cash point: ${Math.round(c.lowestCash)} in week ${c.lowestCashWeek ?? c.lowestWeek}`,
+      );
+    }
+    if (!dipped || c.negativeWeeks > 0) {
+      lines.push(`  Negative weeks: ${c.negativeWeeks} of ${c.horizonWeeks}`);
+    }
+    lines.push(`  Weeks below the floor: ${weeksBelow} of ${c.horizonWeeks}`);
     if (dipped) {
       const parts = [
         weeksBelow > 0 ? `${weeksBelow} of ${c.horizonWeeks} weeks below the floor` : null,
@@ -283,7 +295,6 @@ export function buildPrompt(
           `  Cash runway: ${c.runwayWeeks >= c.horizonWeeks ? `${c.horizonWeeks}+` : c.runwayWeeks} weeks`,
         );
       }
-      lines.push(`  Negative weeks: ${c.negativeWeeks}`);
     }
     if (c.trajectory) {
       lines.push(`  Trajectory: ${c.trajectory} · week-13 close vs opening: ${c.closingVsOpening}`);

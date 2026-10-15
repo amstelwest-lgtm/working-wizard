@@ -496,20 +496,26 @@ export async function executeAgentTool(
   if (name === "get_cash_flow") {
     const { data } = await ctx.userClient
       .from("clients")
-      .select("cashflow, cash_runway_weeks, financials, financials_updated_at")
+      .select("cashflow, cash_runway_weeks, financials, financials_updated_at, operating_profile, market")
       .eq("id", ctx.clientId)
       .maybeSingle();
     const financials = (data?.financials ?? null) as Record<string, unknown> | null;
+    const copyPack = copyPackFromMarket((data as { market?: unknown } | null)?.market);
     const metrics = assessClientMetrics({
       financials,
       cashflow: data?.cashflow,
       financialsUpdatedAt: (data?.financials_updated_at as string | null) ?? null,
+      fyStartMonth: overviewFyStartMonth(copyPack, (data as { operating_profile?: unknown } | null)?.operating_profile),
+      timeZone: copyPack === "za" ? "Africa/Johannesburg" : null,
     });
     return shapeCash(data?.cashflow, persistedRunwayWeeks(metrics.runway), {
       financials,
       openingCash: metrics.cash.amount,
       runway: metrics.runway,
       periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
+      financialsUpdatedAt: (data?.financials_updated_at as string | null) ?? null,
+      timeZone: copyPack === "za" ? "Africa/Johannesburg" : null,
+      fyStartMonth: overviewFyStartMonth(copyPack, (data as { operating_profile?: unknown } | null)?.operating_profile),
     });
   }
 

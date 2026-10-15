@@ -448,7 +448,7 @@ export function BudgetVariancePanel({
                       {money(l.delta)}
                     </td>
                     <td data-label="Δ%" className="px-2 py-1.5 text-right tabular-nums text-slate-500">
-                      {formatVariancePct(l.deltaPct)}
+                      {formatVariancePct(l.deltaPct, l.deltaPctNote)}
                     </td>
                   </tr>
                 ))}

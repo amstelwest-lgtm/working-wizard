@@ -54,7 +54,7 @@ function Delta({
         : "text-slate-500";
   return (
     <span className={`font-semibold tabular-nums ${tone}`}>
-      {signedMoney(line.delta, market)}, {formatVariancePct(pct)}
+      {signedMoney(line.delta, market)}, {formatVariancePct(pct, line.deltaPctNote)}
     </span>
   );
 }

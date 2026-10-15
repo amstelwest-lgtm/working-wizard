@@ -195,6 +195,9 @@ export function shapeCash(
     openingCash?: number | null;
     runway?: ClientRunway | null;
     periodEnd?: string | null;
+    financialsUpdatedAt?: string | null;
+    timeZone?: string | null;
+    fyStartMonth?: number | null;
   },
 ): Record<string, unknown> {
   const summary = summarizeCashForecast(
@@ -207,6 +210,9 @@ export function shapeCash(
           financials: context.financials,
           runway: context.runway,
           periodEnd: context.periodEnd,
+          financialsUpdatedAt: context.financialsUpdatedAt,
+          timeZone: context.timeZone,
+          fyStartMonth: context.fyStartMonth,
         }
       : undefined,
   );

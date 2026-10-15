@@ -332,14 +332,29 @@ export function profileDisplayRows(
 /** Compact context string for AI prompts / advisory drafting. */
 export function profileAiContext(
   profile: ClientOperatingProfile | null | undefined,
+  facts?: {
+    name?: string | null;
+    businessType?: string | null;
+    /** Ratios debtor days. Wins over the template default. */
+    debtorDays?: number | null;
+  },
 ): string | null {
   if (!profile) return null;
+  const named = facts?.name?.trim()
+    ? clientIndustryDisplay(facts.name, profile, facts.businessType)
+    : "";
+  const industry = named && named !== "—" ? named : profileIndustryLabel(profile, profile.businessTypeId);
+  const actualDays = facts?.debtorDays;
   const payTiming =
-    profile.debtorDaysDefault === 0
-      ? "paid cash on sale"
-      : `customers pay around ${profile.debtorDaysDefault} days`;
+    actualDays != null && Number.isFinite(actualDays)
+      ? actualDays <= 0
+        ? "paid cash on sale"
+        : `customers pay in ${Math.round(actualDays)} days`
+      : profile.debtorDaysDefault === 0
+        ? "paid cash on sale"
+        : `customers pay around ${profile.debtorDaysDefault} days`;
   return [
-    `Business model: ${profileIndustryLabel(profile, profile.businessTypeId)}`,
+    `Business model: ${industry}`,
     `Revenue driver: ${profile.volumeUnit.replace(/_/g, " ")}`,
     `Cash timing: ${payTiming}`,
     `Cost base: ${profile.costShape.replace(/_/g, " ")}`,

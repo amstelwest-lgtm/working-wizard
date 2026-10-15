@@ -77,6 +77,11 @@ export interface CashForecastSummary {
   horizonWeeks: number;
   shortfall: boolean;
   lowestWeek: number | null;
+  /** Lowest closing on the same series the cash screen draws, and its week (1–13). */
+  lowestCash?: number | null;
+  lowestCashWeek?: number | null;
+  /** Floor in currency units. The cash screen's threshold, not a second line. */
+  floor?: number | null;
   negativeWeeks: number;
   /** Closings under the same floor the cash screen uses. */
   weeksBelowFloor?: number;
