@@ -421,6 +421,22 @@ export function practiceNeedsAttention(
 }
 
 /**
+ * Practice home digest. Same rows and reasons as the Needs attention queue,
+ * already ranked (review now, then watching, then name).
+ */
+export function needsAttentionToday(items: readonly MergedAttention[]): MergedAttention[] {
+  return [...items];
+}
+
+/** One-click label for a digest row. The destination stays the row's existing tab. */
+export function todayAttentionAction(
+  row: Pick<MergedAttention, "tab" | "openPlan" | "overdue">,
+): "Chase →" | "Open →" {
+  if (row.tab === "plan" && (row.openPlan || row.overdue)) return "Chase →";
+  return "Open →";
+}
+
+/**
  * The client with the most unresolved notes, or null when none are open.
  * The Open queries tile uses a non-null result only to decide the practice
  * list is worth opening. It does not navigate to this client.
