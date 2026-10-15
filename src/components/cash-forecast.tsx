@@ -137,6 +137,7 @@ import {
   type WeekOverrides,
 } from "@/lib/cash-week-overrides";
 import { CashSuggestionCard } from "@/components/cash-suggestion-card";
+import { OnceOffSuggestBar } from "@/components/once-off-suggest-bar";
 import {
   ledgerFromOpeningSource,
   suggestCashForecast,
@@ -151,6 +152,11 @@ import {
   linesForSilentSave,
   silentForecastKey,
 } from "@/lib/cash-once-off-save";
+import {
+  showSuggestOnceOffs,
+  suggestOnceOffRows,
+  type SuggestedOnceOffLine,
+} from "@/lib/cash-once-off-suggest";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -686,6 +692,8 @@ export function CashForecastPanel({
   const saveTicket = useRef(0);
   const [onceOffStatus, setOnceOffStatus] = useState<string | null>(null);
   const [onceOffSaving, setOnceOffSaving] = useState(false);
+  const [bankHistory, setBankHistory] = useState<unknown>(initialBankDraft);
+  const [stagedOnceOffs, setStagedOnceOffs] = useState<SuggestedOnceOffLine[]>([]);
   const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
   const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(preview?.cycleNote ?? null);
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(preview?.note ?? null);
@@ -745,6 +753,7 @@ export function CashForecastPanel({
     setShowBankUpload(false);
     toast.success("Cash forecast updated from bank statements.");
     setInputHasBankDraft(true);
+    setBankHistory(payload);
     setBankSeeded(true);
     plEstimateRef.current = false;
     if (xeroBankNoteRef.current === "Estimated from the P&L") {
@@ -1026,6 +1035,7 @@ export function CashForecastPanel({
       const fromDraft = bankAccountsFromDraft(data?.cashflow_bank_draft);
       setInputBankAccounts(fromDraft.length ? fromDraft : bankAccountsFromDraft(initialBankDraft));
       setInputHasBankDraft(Boolean(data?.cashflow_bank_draft) || Boolean(initialBankDraft));
+      setBankHistory(data?.cashflow_bank_draft ?? initialBankDraft ?? null);
       const storedConfirm = (cf as { suggestionConfirm?: ConfirmedCashSuggestions } | null)?.suggestionConfirm;
       if (storedConfirm && typeof storedConfirm === "object") {
         setSuggestionConfirm(storedConfirm);
@@ -1263,29 +1273,9 @@ export function CashForecastPanel({
     });
     loadedCashflowRef.current = payload;
     setLastForecastAt(forecastUpdatedAt);
+    setStagedOnceOffs([]);
     setOnceOffStatus("Saved");
   };
-
-  const onceOffSaveBar =
-    !clientId || preview || readOnly ? null : (
-      <div className="mb-3 flex flex-wrap items-center gap-3" data-once-off-save="true">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!onceOffNeedsSave || onceOffSaving}
-          onClick={() => void saveOnceOff()}
-        >
-          Save once-off rows
-        </Button>
-        <span role="status" className="text-sm text-slate-600 dark:text-slate-300">
-          {onceOffSaving
-            ? "Saving…"
-            : onceOffNeedsSave
-              ? "Once-off rows are not saved yet."
-              : (onceOffStatus ?? "")}
-        </span>
-      </div>
-    );
 
   const weekIsos = useMemo(() => weekDatesFrom(startDate, WEEKS), [startDate]);
 
@@ -1560,6 +1550,21 @@ export function CashForecastPanel({
       toast.error(`Could not confirm: ${error.message}`);
       return;
     }
+    savedRevenueOnceOff.current = onceOffLines(revenue);
+    savedExpensesOnceOff.current = onceOffLines(nextExpenses);
+    savedOtherOnceOff.current = onceOffLines(other);
+    silentBaselineRef.current = silentForecastKey({
+      startDate,
+      openingBalance: nextOpening,
+      revenue,
+      expenses: nextExpenses,
+      other,
+      savedRevenue: savedRevenueOnceOff.current,
+      savedExpenses: savedExpensesOnceOff.current,
+      savedOther: savedOtherOnceOff.current,
+    });
+    if (onceOffNeedsSave) setOnceOffStatus("Saved");
+    setStagedOnceOffs([]);
     setSuggestionConfirm(confirmed);
     setLastForecastAt(forecastUpdatedAt);
   };
@@ -1572,6 +1577,54 @@ export function CashForecastPanel({
       onConfirm={() => void confirmCashSuggestions()}
     />
   );
+  const stageSuggestedOnceOffs = () => {
+    const result = suggestOnceOffRows({
+      bankDraft: bankHistory,
+      existing: [...revenue, ...expenses, ...other],
+    });
+    if (!result.lines.length) {
+      setStagedOnceOffs([]);
+      setOnceOffStatus(result.empty);
+      return;
+    }
+    const add = (list: LineItem[], side: SuggestedOnceOffLine["side"]) => [
+      ...list,
+      ...result.lines
+        .filter((line) => line.side === side)
+        .map((line) => ({
+          id: line.id,
+          name: line.name,
+          amount: line.amount,
+          frequency: line.frequency,
+          startWeek: line.startWeek,
+          splitCount: line.splitCount,
+        })),
+    ];
+    setRevenue(add(revenue, "revenue"));
+    setExpenses(add(expenses, "expenses"));
+    setOther(add(other, "other"));
+    setStagedOnceOffs(result.lines);
+    setOnceOffStatus(null);
+  };
+  const onceOffSaveBar =
+    !clientId || preview || readOnly ? null : (
+      <OnceOffSuggestBar
+        showSuggest={showSuggestOnceOffs({
+          suggestionCount: cashSuggestions.suggestions.length,
+          lineAmounts: [...revenue, ...expenses, ...other].map((line) => parseFloat(line.amount) || 0),
+        })}
+        needsSave={onceOffNeedsSave}
+        saving={onceOffSaving}
+        status={onceOffStatus ?? ""}
+        staged={stagedOnceOffs.map((line) => ({
+          id: line.id,
+          name: line.name,
+          amountLabel: fullMoney(parseFloat(line.amount) || 0),
+        }))}
+        onSuggest={stageSuggestedOnceOffs}
+        onSave={() => void saveOnceOff()}
+      />
+    );
   const balanceSeries = cashBalanceSeries({
     opening: baseCalc.opening,
     closings: baseCalc.closing,
@@ -2801,6 +2854,7 @@ export function CashForecastPanel({
         onSaveDraft={
           clientId
             ? async (draft) => {
+                setBankHistory(draft);
                 await supabase
                   .from("clients")
                   .update({ cashflow_bank_draft: draft as never })
