@@ -265,6 +265,8 @@ import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { OwnerHome } from "@/components/owner-door/owner-home";
+import { FinancialManagerBrief } from "@/components/financial-manager-brief";
+import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
@@ -3009,6 +3011,44 @@ function ClientView() {
     clientMarket,
     reportsIssued,
   ]);
+  const homeBrief = useMemo(
+    () =>
+      buildFinancialManagerBrief({
+        clientName: client?.name ?? "",
+        currentFinancials: financials,
+        currentPeriodEnd: statementMeta.periodEnd,
+        snapshots: snapshots.map((row) => ({
+          periodDate: row.period_date,
+          periodLabel: row.period_label,
+          financials: row.financials,
+        })),
+        openActionTitle: overviewNextStep?.title ?? null,
+        overdueActions: overviewNextStep?.outstanding.overdueActions ?? 0,
+        cashDipWeek: cashOutlook.dipsBelowFloorWeek,
+        receivables: statementPosition.receivables ?? null,
+        drafts: homeActivity.findings.flatMap((row) => {
+          if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
+          if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
+          const title = row.title?.trim() ?? "";
+          return title ? [{ id: row.id, title }] : [];
+        }),
+        draftsReady: !homeActivity.loading && !homeActivity.error,
+        actionsReady: nextStepKnown,
+        formatMoney: (amount) => formatMoney(amount, clientMarket),
+      }),
+    [
+      client?.name,
+      financials,
+      statementMeta.periodEnd,
+      snapshots,
+      overviewNextStep,
+      cashOutlook.dipsBelowFloorWeek,
+      statementPosition.receivables,
+      homeActivity,
+      nextStepKnown,
+      clientMarket,
+    ],
+  );
   const homeSignoffLine = signoffStatusLine({
     kind: signoffStatusKind({
       hasSignoff: Boolean(advisorySignoff),
@@ -3166,6 +3206,11 @@ function ClientView() {
                   id="pane-overview"
                 >
                 <div className="owner-door" data-client-home="true">
+                  <FinancialManagerBrief
+                    brief={homeBrief}
+                    onHandToBot={() => openHomeAgent("financial_manager")}
+                    onOpen={(tab) => openHomeSection(tab)}
+                  />
                   <OwnerHome
                     title="Your whole finance team"
                     variant="character"
