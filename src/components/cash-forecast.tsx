@@ -136,6 +136,15 @@ import {
   setWeekOverride,
   type WeekOverrides,
 } from "@/lib/cash-week-overrides";
+import { CashSuggestionCard } from "@/components/cash-suggestion-card";
+import {
+  ledgerFromOpeningSource,
+  suggestCashForecast,
+  suggestionsMatchConfirm,
+  type CashLedger,
+  type ConfirmedCashSuggestions,
+  type TrailingMonthInput,
+} from "@/lib/cash-forecast-suggestions";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -637,6 +646,11 @@ export function CashForecastPanel({
   const [capexAmount, setCapexAmount] = useState("0");
   const [capexWeek, setCapexWeek] = useState(1);
   const [loaded, setLoaded] = useState(!clientId);
+  const [resolvedOpening, setResolvedOpening] = useState<number | null>(null);
+  const [cashLedger, setCashLedger] = useState<CashLedger>("On file");
+  const [configuredFloor, setConfiguredFloor] = useState<number | null>(null);
+  const [suggestionConfirm, setSuggestionConfirm] = useState<ConfirmedCashSuggestions | null>(null);
+  const [trailingSnapshots, setTrailingSnapshots] = useState<TrailingMonthInput[]>([]);
   const [mounted, setMounted] = useState(false);
   const [showBankUpload, setShowBankUpload] = useState(false);
   const [inputFinancials, setInputFinancials] = useState<Record<
@@ -827,6 +841,8 @@ export function CashForecastPanel({
         periodCash: Number.isFinite(periodCash) ? periodCash : null,
         periodUpdatedAt: (data?.financials_updated_at as string | null | undefined) ?? null,
       });
+      setResolvedOpening(resolvedCash.amount);
+      setCashLedger(ledgerFromOpeningSource(cf?.openingBalanceSource));
       const seededOpening = forecastOpeningFromStored(cf?.openingBalance, resolvedCash.amount);
       if (seededOpening) setOpeningBalance(seededOpening);
       const shownOpening =
@@ -983,6 +999,14 @@ export function CashForecastPanel({
       const fromDraft = bankAccountsFromDraft(data?.cashflow_bank_draft);
       setInputBankAccounts(fromDraft.length ? fromDraft : bankAccountsFromDraft(initialBankDraft));
       setInputHasBankDraft(Boolean(data?.cashflow_bank_draft) || Boolean(initialBankDraft));
+      const storedConfirm = (cf as { suggestionConfirm?: ConfirmedCashSuggestions } | null)?.suggestionConfirm;
+      if (storedConfirm && typeof storedConfirm === "object") {
+        setSuggestionConfirm(storedConfirm);
+        setConfiguredFloor(typeof storedConfirm.floor === "number" && storedConfirm.floor > 0 ? storedConfirm.floor : null);
+      } else {
+        setSuggestionConfirm(null);
+        setConfiguredFloor(null);
+      }
       skipNextAutosave.current = true;
       setLoaded(true);
     };
@@ -1005,6 +1029,35 @@ export function CashForecastPanel({
         applyRow((data as Record<string, unknown> | null) ?? null);
       });
   }, [clientId, reloadToken, initialBankDraft, market.timezone]);
+
+  useEffect(() => {
+    if (!clientId || preview) return;
+    let cancelled = false;
+    supabase
+      .from("client_financial_snapshots")
+      .select("period_date, financials")
+      .eq("client_id", clientId)
+      .order("period_date", { ascending: false })
+      .limit(12)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = Array.isArray(data) ? data : [];
+        const next: TrailingMonthInput[] = [];
+        for (const row of rows) {
+          const record = row as { period_date?: unknown; financials?: unknown };
+          if (typeof record.period_date !== "string" || !record.period_date) continue;
+          const financials =
+            record.financials && typeof record.financials === "object"
+              ? (record.financials as Record<string, unknown>)
+              : null;
+          next.push({ periodDate: record.period_date, financials });
+        }
+        setTrailingSnapshots(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, preview, reloadToken]);
 
   useEffect(() => {
     if (!clientId || preview || !loaded) return;
@@ -1267,8 +1320,98 @@ export function CashForecastPanel({
     [openingBalance, inputFinancials, publishedBankEvidence],
   );
   const minimumCash = useMemo(
-    () => forecastMinimumCash({ weeklyOutflows: baseCalc.outflow }),
-    [baseCalc.outflow],
+    () => forecastMinimumCash({ configured: configuredFloor, weeklyOutflows: baseCalc.outflow }),
+    [baseCalc.outflow, configuredFloor],
+  );
+  const cashSuggestions = useMemo(
+    () =>
+      suggestCashForecast({
+        ledger: cashLedger,
+        openingCash: resolvedOpening,
+        currentFinancials: inputFinancials,
+        currentPeriodEnd:
+          typeof inputFinancials?.periodEnd === "string" ? inputFinancials.periodEnd : null,
+        trailing: trailingSnapshots,
+        forecastWeeklyOutflows: baseCalc.outflow,
+        forecastHasMovement:
+          baseCalc.inflow.some((n) => n > 0) || baseCalc.outflow.some((n) => n > 0),
+      }),
+    [cashLedger, resolvedOpening, inputFinancials, trailingSnapshots, baseCalc],
+  );
+  const suggestionsConfirmed = suggestionsMatchConfirm(cashSuggestions.suggestions, suggestionConfirm);
+  const confirmCashSuggestions = async () => {
+    if (!clientId || preview || suggestionsConfirmed) return;
+    const opening = cashSuggestions.suggestions.find((row) => row.key === "opening");
+    const floor = cashSuggestions.suggestions.find((row) => row.key === "floor");
+    const fixed = cashSuggestions.suggestions.find((row) => row.key === "fixed");
+    const nextOpening = opening ? String(Math.round(opening.amount * 100) / 100) : openingBalance;
+    let nextExpenses = expenses;
+    if (!cashSuggestions.fixedAlreadyInForecast && fixed) {
+      const line: LineItem = {
+        id: "suggested-fixed-costs",
+        name: "Recurring fixed costs",
+        amount: String(fixed.amount),
+        frequency: "recurring-monthly",
+        startWeek: 1,
+        splitCount: 1,
+      };
+      const existing = expenses.findIndex((row) => row.id === line.id);
+      nextExpenses =
+        existing >= 0
+          ? expenses.map((row, index) => (index === existing ? { ...row, ...line } : row))
+          : [...expenses, line];
+    }
+    const confirmed: ConfirmedCashSuggestions = {
+      opening: opening?.amount ?? null,
+      floor: floor?.amount ?? null,
+      fixedMonthly: fixed?.amount ?? null,
+      at: new Date().toISOString(),
+    };
+    const payload = {
+      ...(loadedCashflowRef.current ?? {}),
+      startDate,
+      openingBalance: nextOpening,
+      revenue,
+      expenses: nextExpenses,
+      other,
+      ...baseCashflow({}),
+      suggestionConfirm: confirmed,
+    };
+    loadedCashflowRef.current = payload;
+    skipNextAutosave.current = true;
+    setOpeningBalance(nextOpening);
+    setExpenses(nextExpenses);
+    setConfiguredFloor(floor && floor.amount > 0 ? floor.amount : configuredFloor);
+    const forecastUpdatedAt = new Date().toISOString();
+    const assessed = assessClientMetrics({
+      financials: inputFinancials,
+      cashflow: payload,
+      timeZone: market.timezone,
+      fyStartMonth: inputProfile?.fyStartMonth ?? market.fyStartMonthDefault,
+    });
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        cashflow: payload as never,
+        last_forecast_at: forecastUpdatedAt,
+        cash_runway_weeks: persistedRunwayWeeks(assessed.runway),
+      })
+      .eq("id", clientId);
+    if (error) {
+      toast.error(`Could not confirm: ${error.message}`);
+      return;
+    }
+    setSuggestionConfirm(confirmed);
+    setLastForecastAt(forecastUpdatedAt);
+  };
+  const cashSuggestionCard = readOnly ? null : (
+    <CashSuggestionCard
+      model={cashSuggestions}
+      confirmed={suggestionsConfirmed}
+      formatAmount={fullMoney}
+      canConfirm={Boolean(clientId) && !preview}
+      onConfirm={() => void confirmCashSuggestions()}
+    />
   );
   const balanceSeries = cashBalanceSeries({
     opening: baseCalc.opening,
@@ -2325,6 +2468,7 @@ export function CashForecastPanel({
     return (
       <div id="wizard-cash-outlook" className="space-y-0">
         {answerStrip}
+        {cashSuggestionCard}
         {forecastCard}
         <ForecastMoreDetail>
           {answerSentence ? (
@@ -2367,6 +2511,7 @@ export function CashForecastPanel({
   return (
     <div id="wizard-cash-outlook" className="space-y-5">
       {answerStrip}
+      {cashSuggestionCard}
       {readOnly ? null : reviewInputs}
       {forecastCard}
       {readOnly ? null : (
