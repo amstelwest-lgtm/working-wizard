@@ -21,10 +21,15 @@ import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 
 export const TRY_OUTREACH_SUBJECT = "Meet your AI finance team";
 export const TRY_OUTREACH_OPENING =
-  "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
+  "Milōn gives accountants and their business-owner clients an AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
 export const TRY_OUTREACH_PREVIEW =
   "The Milōn AI finance team: the Financial Manager, the Analyst and the Advisor. Sample statements are loaded. The agents analyze them and give a health score, key ratios and next steps.";
 export const TRY_OUTREACH_TRY_URL = "https://www.milonfinance.com/try?utm_source=email";
+export const TRY_OUTREACH_CTA_LABEL = "Talk to your AI finance team";
+/** Same accountant signup route as firmSignupHref() — Create Firm, Solo monthly. */
+export const TRY_OUTREACH_SIGNUP_URL =
+  "https://www.milonfinance.com/auth?signup=true&plan=solo&interval=month&utm_source=email";
+export const TRY_OUTREACH_SIGNUP_LABEL = "Start free trial";
 export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://www.milonfinance.com/unsubscribe";
 export const TRY_OUTREACH_ADDRESS =
   "Milon, Inc., 800 N King Street, Suite 304, PMB 3836, Wilmington, DE 19801";
@@ -87,7 +92,8 @@ export const TRY_OUTREACH_TEXT = [
   "",
   TRY_OUTREACH_EXAMPLE_ALT,
   "",
-  `Try Milōn: ${TRY_OUTREACH_TRY_URL}`,
+  `${TRY_OUTREACH_CTA_LABEL}: ${TRY_OUTREACH_TRY_URL}`,
+  `${TRY_OUTREACH_SIGNUP_LABEL}: ${TRY_OUTREACH_SIGNUP_URL}`,
   "",
   TRY_OUTREACH_SIGN_OFF,
   "",
@@ -249,14 +255,33 @@ export default function TryOutreachEmail() {
               __html: `<!--[if mso]>
 <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${TRY_OUTREACH_TRY_URL}" style="height:48px;v-text-anchor:middle;width:544px;" arcsize="50%" stroke="t" strokecolor="#8d6a16" fillcolor="#d4af37">
 <w:anchorlock/>
-<center style="color:#1b1300;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:bold;">Try Mil&#333;n</center>
+<center style="color:#1b1300;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:bold;">${TRY_OUTREACH_CTA_LABEL}</center>
 </v:roundrect>
 <![endif]-->
 <!--[if !mso]><!-- -->
-<a href="${TRY_OUTREACH_TRY_URL}" style="display:block;background-color:#d4af37;background-image:linear-gradient(180deg,#fdee79 0%,#f0d56a 32%,#d4af37 64%,#b8891a 100%);color:#1b1300;border:1px solid #8d6a16;border-radius:999px;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;padding:14px 28px;">Try Milōn</a>
+<a href="${TRY_OUTREACH_TRY_URL}" style="display:block;background-color:#d4af37;background-image:linear-gradient(180deg,#fdee79 0%,#f0d56a 32%,#d4af37 64%,#b8891a 100%);color:#1b1300;border:1px solid #8d6a16;border-radius:999px;font-family:Segoe UI, Arial, sans-serif;font-size:16px;font-weight:700;line-height:20px;text-align:center;text-decoration:none;padding:14px 28px;">${TRY_OUTREACH_CTA_LABEL}</a>
 <!--<![endif]-->`,
             }}
           />
+
+          <Text
+            style={{
+              margin: "14px 0 0",
+              fontFamily: FONT,
+              fontSize: 14,
+              lineHeight: "20px",
+              textAlign: "center" as const,
+              color: MUTED,
+            }}
+          >
+            Ready to run it on your own clients?{" "}
+            <Link
+              href={TRY_OUTREACH_SIGNUP_URL}
+              style={{ color: BLUE, fontWeight: 700, textDecoration: "underline" }}
+            >
+              {TRY_OUTREACH_SIGNUP_LABEL}
+            </Link>
+          </Text>
 
           <Text
             style={{

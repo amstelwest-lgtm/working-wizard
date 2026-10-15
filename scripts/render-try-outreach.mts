@@ -10,11 +10,14 @@ import { chromium } from "@playwright/test";
 import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 import TryOutreachEmail, {
   TRY_OUTREACH_ADDRESS,
+  TRY_OUTREACH_CTA_LABEL,
   TRY_OUTREACH_EXAMPLE_ALT,
   TRY_OUTREACH_EXAMPLE_SRC,
   TRY_OUTREACH_HEADERS,
   TRY_OUTREACH_PREVIEW,
   TRY_OUTREACH_SIGN_OFF,
+  TRY_OUTREACH_SIGNUP_LABEL,
+  TRY_OUTREACH_SIGNUP_URL,
   TRY_OUTREACH_SUBJECT,
   TRY_OUTREACH_TEXT,
   TRY_OUTREACH_TRY_URL,
@@ -159,7 +162,8 @@ const required = [
   TRY_OUTREACH_SUBJECT,
   TRY_OUTREACH_PREVIEW,
   TRY_OUTREACH_TRY_URL,
-  "Try Milōn",
+  TRY_OUTREACH_CTA_LABEL,
+  TRY_OUTREACH_SIGNUP_LABEL,
   TRY_OUTREACH_UNSUBSCRIBE_URL,
   TRY_OUTREACH_ADDRESS,
   TRY_OUTREACH_SIGN_OFF,
@@ -189,8 +193,17 @@ if (/>\s*Sample\s*</i.test(html) || html.includes("SAMPLE")) {
 if (html.includes("R299") || html.includes("R2,837") || /\bR\s\d/.test(html)) {
   throw new Error("email shows a rand amount");
 }
+if (
+  !html.includes(TRY_OUTREACH_SIGNUP_URL.replace(/&/g, "&amp;")) &&
+  !html.includes(TRY_OUTREACH_SIGNUP_URL)
+) {
+  throw new Error("html missing the signup link");
+}
 if (!text.includes(TRY_OUTREACH_SUBJECT)) throw new Error("text missing the subject");
-if (!text.includes("Try Milōn")) throw new Error("text missing the button label");
+if (!text.includes(TRY_OUTREACH_CTA_LABEL)) throw new Error("text missing the button label");
+if (!text.includes(`${TRY_OUTREACH_SIGNUP_LABEL}: ${TRY_OUTREACH_SIGNUP_URL}`)) {
+  throw new Error("text missing the signup link");
+}
 if (!text.includes(TRY_OUTREACH_EXAMPLE_ALT)) throw new Error("text missing the example result");
 if (!headers.includes("List-Unsubscribe:")) throw new Error("missing List-Unsubscribe header");
 if (!headers.includes("List-Unsubscribe-Post:"))

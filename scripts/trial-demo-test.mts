@@ -15,6 +15,9 @@ import {
 import { ANALYST_READ_TOOLS } from "../src/lib/agent-analyst";
 import { TrySampleBoards } from "../src/components/try-sample-boards";
 import { TryScreen } from "../src/components/try-demo";
+import { firmSignupHref } from "../src/lib/firm-signup-copy";
+import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
+import { SAMPLE_BUSINESS_NAME } from "../src/lib/sample-business";
 import {
   buildTrialBoard,
   buildTrialCash,
@@ -40,6 +43,9 @@ import {
   trialAnalystUserMessage,
 } from "../src/lib/trial-analyst";
 import {
+  TRIAL_CTA_LABEL,
+  TRIAL_SIGNUP_HREF,
+  TRIAL_SIGNUP_SENTENCE,
   TURNSTILE_TEST_SECRET_KEY,
   TURNSTILE_TEST_TOKEN,
   resetTurnstileUnsetWarning,
@@ -49,6 +55,11 @@ import {
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
+}
+
+/** renderToStaticMarkup escapes text and attribute values. */
+function esc(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;").replace(/"/g, "&quot;");
 }
 
 const gateOk = validateTrialGate({
@@ -438,9 +449,82 @@ assert(
   ).includes("Prepared from the sample ratios, margins, and cash line."),
   "a missing key is labelled as a prepared reading",
 );
-assert(html.includes("Coming soon"), "unfinished chips say coming soon");
 assert(html.includes("The MILŌN Team"), "the page signs The MILŌN Team");
 assert(html.includes("muted"), "avatar clips are muted");
+assert(!html.includes("<audio"), "the page has no audio element");
+
+// ── The Financial Manager conversation after the reveal ────────────────
+assert(TRIAL_SIGNUP_HREF === firmSignupHref(), "the trial CTA is the accountant signup route");
+assert(TRIAL_SIGNUP_SENTENCE === FIRM_TRIAL_SENTENCE, "the trial sentence matches the catalog");
+
+const talk = renderToStaticMarkup(
+  createElement(TryScreen, { phase: "findings", board: us, findings, picks: [] }),
+);
+assert(talk.includes(esc(SAMPLE_BUSINESS_NAME)), "the FM names the sample business");
+assert(talk.includes("sign-off"), "the FM bubble offers the work for sign-off");
+assert(
+  talk.includes("Profit report") &&
+    talk.includes("Cash forecast") &&
+    talk.includes("Advisory pack"),
+  "the FM offers all three replies",
+);
+assert(talk.includes("fm-idle"), "the FM portrait uses the idle clip");
+assert(!talk.includes("<audio"), "the FM stays silent — no audio element");
+assert(
+  talk.includes("Financial Manager") && talk.includes("Analyst") && talk.includes("Advisor"),
+  "the three-agent team is named",
+);
+assert(talk.includes(TRIAL_CTA_LABEL), "the trial CTA is on the page");
+assert(talk.includes(esc(TRIAL_SIGNUP_HREF)), "the trial CTA links to the signup route");
+assert(talk.includes(esc(TRIAL_SIGNUP_SENTENCE)), "the trial terms are stated");
+assert(talk.includes("try-ctabar"), "the trial CTA bar is persistent");
+assert(
+  renderToStaticMarkup(createElement(TryScreen, { phase: "start" })).includes("try-ctabar"),
+  "the trial bar is on the start screen too",
+);
+const goldCtas = talk.match(/class="try-cta[ "]/g) ?? [];
+assert(goldCtas.length === 2, "gold is only the two trial CTAs (bar and conversation)");
+
+const profitTalk = renderToStaticMarkup(
+  createElement(TryScreen, { phase: "findings", board: us, findings, picks: ["profit"] }),
+);
+assert(profitTalk.includes("Show me the profit report."), "the pick becomes a user message");
+assert(profitTalk.includes("profit bridge"), "the FM answers the profit pick");
+assert(
+  profitTalk.includes("Cash forecast") && profitTalk.includes("Advisory pack"),
+  "the remaining options are offered again",
+);
+assert(
+  profitTalk.includes("Want the cash forecast or the advisory pack next?"),
+  "the FM offers the remaining options by name",
+);
+
+const advisoryTalk = renderToStaticMarkup(
+  createElement(TryScreen, { phase: "findings", board: us, findings, picks: ["advisory"] }),
+);
+assert(
+  advisoryTalk.includes("Preparing your advisory pack") && advisoryTalk.includes("coming next"),
+  "the advisory pack is an honest preparing state",
+);
+assert(
+  !advisoryTalk.includes("Profitability waterfall") && !advisoryTalk.includes("13-week cash model"),
+  "the preparing state fakes nothing",
+);
+assert(
+  advisoryTalk.includes("Want the profit report or the cash forecast next?"),
+  "advisory still re-offers the real reports",
+);
+
+const doneTalk = renderToStaticMarkup(
+  createElement(TryScreen, {
+    phase: "findings",
+    board: us,
+    findings,
+    picks: ["profit", "cash", "advisory"],
+  }),
+);
+assert(!doneTalk.includes("try-reply"), "no replies remain once all three are picked");
+assert(doneTalk.includes(TRIAL_CTA_LABEL), "the conversation ends on the trial CTA");
 assert(!/whatsapp/i.test(html), "no WhatsApp");
 assert(
   !html.includes("/api/xero") && !html.includes("/api/qbo") && !html.includes("/api/sage"),

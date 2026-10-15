@@ -76,3 +76,10 @@ export function sampleFinancialsFor(country: MarketId): SampleFinancials {
 
 export const SAMPLE_BUSINESS_BLURB =
   "A 12-person services business with some stock, customers paying in about 45 days and a little asset finance. Every number on the board is illustrative.";
+
+/**
+ * The sample client's display name. Matches the named sample client used for
+ * the outreach PDFs (scripts/seed-outreach-sample.sql) so the public sample
+ * and the collateral tell one story. Always shown beside a SAMPLE stamp.
+ */
+export const SAMPLE_BUSINESS_NAME = "Harbor & Pine Supply Co.";
