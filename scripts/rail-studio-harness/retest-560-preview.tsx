@@ -6,7 +6,7 @@ import { findingMetricContext } from "@/lib/milon-team-activity";
 import { stripMilonProjection } from "@/lib/milon-projection";
 import { ownerAmount, ownerAnswerTiles, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { operatingCycleDays } from "@/lib/ratios";
-import { formatFirmOverLimitNote } from "@/lib/firm-band-upgrade";
+import { formatFirmClientUsage, formatFirmOverLimitNote } from "@/lib/firm-band-upgrade";
 import { forecastRunwayHeadlineShared } from "@/lib/cash-forecast-parity";
 import { ZA_MARKET } from "@/lib/market";
 
@@ -100,7 +100,7 @@ export function Retest560Preview() {
         <h2 className="text-sm font-semibold">Plan</h2>
         <p className="mt-2 text-sm">Starter</p>
         <p className="text-xs text-[#3D5270]">Up to 5 active clients</p>
-        <p className="text-xs text-[#3D5270]">8 of 5 clients</p>
+        <p className="text-xs text-[#3D5270]">{formatFirmClientUsage(8, 5, "Starter")}</p>
         <p className="mt-2 text-sm font-semibold text-[#9b2c2c]" role="status">
           {over}
         </p>

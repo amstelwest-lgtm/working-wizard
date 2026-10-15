@@ -35,7 +35,7 @@ import {
 } from "@/lib/firm-band-upgrade";
 import { isOwnerCatalogPrice } from "@/lib/owner-price";
 import { parseMarketSelection } from "@/lib/market/parse";
-import { isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
+import { FIRM_BAND_CATALOG, isFirmCheckoutBand, type FirmBandId, type FirmInterval } from "@/lib/stripe-plans";
 import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
@@ -692,7 +692,11 @@ async function buildUpgradeSnapshot(input: {
     phase,
     clientCount: input.clientCount,
     clientLimit,
-    usageLabel: formatFirmClientUsage(input.clientCount, clientLimit),
+    usageLabel: formatFirmClientUsage(
+      input.clientCount,
+      clientLimit,
+      band ? FIRM_BAND_CATALOG[band].name : null,
+    ),
     priceCurrency: firmUpgradePriceCurrency({
       billingCurrency,
       interval,

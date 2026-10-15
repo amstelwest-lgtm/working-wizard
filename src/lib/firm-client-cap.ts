@@ -197,7 +197,7 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   configured: boolean;
   clientCount: number | null;
   clientLimit: number | null;
-  /** e.g. "3 of 3 clients". Null when the plan could not be loaded. */
+  /** e.g. "8 active clients · Starter limit 5". Null when the plan could not be loaded. */
   usageLabel: string | null;
   canUpgrade: boolean;
   priceCurrency: "USD" | "zar";

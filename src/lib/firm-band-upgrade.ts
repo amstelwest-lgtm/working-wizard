@@ -68,7 +68,7 @@ export type FirmUpgradeSnapshot = {
   phase: FirmSubscriptionPhase;
   clientCount: number;
   clientLimit: number | null;
-  /** e.g. "3 of 3 clients". */
+  /** e.g. "8 active clients · Starter limit 5". */
   usageLabel: string;
   /** Single currency for every price in the upgrade list. */
   priceCurrency: FirmPriceCurrency;
@@ -122,9 +122,15 @@ export function firmUsageLimit(
   return null;
 }
 
-export function formatFirmClientUsage(count: number, limit: number | null): string {
-  if (limit == null) return `${count} clients`;
-  return `${count} of ${limit} clients`;
+export function formatFirmClientUsage(
+  count: number,
+  limit: number | null,
+  planName?: string | null,
+): string {
+  if (limit == null) return `${count} active clients`;
+  const name = planName?.trim();
+  if (name) return `${count} active clients · ${name} limit ${limit}`;
+  return `${count} active clients · limit ${limit}`;
 }
 
 /**
