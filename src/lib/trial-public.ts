@@ -12,6 +12,26 @@ export const TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
 
 export const TRIAL_DISCLAIMER = "AI-generated from sample figures, not reviewed by an accountant.";
 
+/**
+ * Accountant signup (Create Firm, Solo monthly preselected). Must stay equal
+ * to firmSignupHref() in firm-signup-copy.ts — asserted by test:trial-demo.
+ * Duplicated here so the /try client chunk does not pull the Stripe catalog.
+ */
+export const TRIAL_SIGNUP_HREF = "/auth?signup=true&plan=solo&interval=month";
+
+/** Must stay equal to FIRM_TRIAL_SENTENCE in stripe-plans.ts — asserted by test:trial-demo. */
+export const TRIAL_SIGNUP_SENTENCE = "14-day free trial · up to 3 clients";
+
+export const TRIAL_CTA_LABEL = "Start free trial";
+
+/** One line saying what Milōn is and who it is for. */
+export const TRIAL_VALUE_PROP =
+  "Milōn is an AI finance team for accountants and the business owners they advise — three agents prepare the work, the accountant signs off.";
+
+/** Short form for the persistent CTA bar. */
+export const TRIAL_VALUE_PROP_SHORT =
+  "An AI finance team for accountants and their business-owner clients.";
+
 export function turnstileSiteKey(envValue: string | undefined, dev: boolean): string | null {
   const set = (envValue ?? "").trim();
   if (set) return set;

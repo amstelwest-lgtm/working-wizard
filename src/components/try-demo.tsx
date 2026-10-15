@@ -1,7 +1,8 @@
 /**
- * Public sample. One gold control per screen. Avatars stay muted.
+ * Public sample. Gold is the Start free trial CTA only — every in-flow step
+ * is cobalt. Avatars stay muted and silent.
  */
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   readTrialPublicConfig,
@@ -16,8 +17,14 @@ const TrySampleBoards = lazy(() =>
   import("@/components/try-sample-boards").then((mod) => ({ default: mod.TrySampleBoards })),
 );
 import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
+import { SAMPLE_BUSINESS_NAME } from "@/lib/sample-business";
 import {
+  TRIAL_CTA_LABEL,
   TRIAL_DISCLAIMER,
+  TRIAL_SIGNUP_HREF,
+  TRIAL_SIGNUP_SENTENCE,
+  TRIAL_VALUE_PROP,
+  TRIAL_VALUE_PROP_SHORT,
   TURNSTILE_TEST_SITE_KEY,
   TURNSTILE_TEST_TOKEN,
   turnstileSiteKey,
@@ -31,7 +38,33 @@ const FACES = [
   { folder: "advisor", agent: "advisor", role: "Advisor" },
 ] as const;
 
-export type TryChip = "profit" | "cash";
+/** Conversation topics the Financial Manager offers after the reveal. */
+export type TryTopic = "profit" | "cash" | "advisory";
+
+export const TRY_TOPICS: readonly TryTopic[] = ["profit", "cash", "advisory"] as const;
+
+export const TRY_TOPIC_LABEL: Record<TryTopic, string> = {
+  profit: "Profit report",
+  cash: "Cash forecast",
+  advisory: "Advisory pack",
+};
+
+const TOPIC_USER_LINE: Record<TryTopic, string> = {
+  profit: "Show me the profit report.",
+  cash: "Show me the cash forecast.",
+  advisory: "Show me the advisory pack.",
+};
+
+const TOPIC_FM_REPLY: Record<TryTopic, string> = {
+  profit: `Here it is — ${SAMPLE_BUSINESS_NAME}'s revenue walked down to net profit, step by step. I hold the profit bridge; the Analyst reads the margins.`,
+  cash: `Here's the 13-week cash line. The sample has no bank balance, so it opens at zero and follows the monthly run-rate — an estimate, not a bank balance.`,
+  advisory: `The Advisor is still turning this diagnosis into the advisory pack — it isn't ready on the sample yet. I'll only show you real work, so here's where it stands.`,
+};
+
+export const FM_INTRO = `We've diagnosed ${SAMPLE_BUSINESS_NAME}'s financials. The profitability report and the 13-week cash forecast are built and waiting for your sign-off. Where should we start — the profit report, the cash forecast, or the advisory pack based on this diagnosis?`;
+
+const FM_CLOSING =
+  "That's the sample end to end. On a live client, the team prepares all of this from the books — and you sign off.";
 
 const TRY_OPENING =
   "This is Milōn's AI finance team: the Financial Manager, the Analyst and the Advisor. We've loaded a sample business's financial statements. The agents analyze them and give a health score, key ratios and next steps.";
@@ -47,7 +80,8 @@ export type TryScreenProps = {
   findings?: TrialFinding[];
   findingsPending?: boolean;
   source?: "model" | "deterministic" | null;
-  openChips?: { profit: boolean; cash: boolean };
+  /** Topics the visitor has asked the Financial Manager for, in order. */
+  picks?: TryTopic[];
   runsLeft?: number | null;
   onUseSample?: () => void;
   onSubmitGate?: (input: {
@@ -58,7 +92,7 @@ export type TryScreenProps = {
     milon_leave_blank: string;
   }) => void;
   onShowFindings?: () => void;
-  onToggleChip?: (chip: TryChip) => void;
+  onPickTopic?: (topic: TryTopic) => void;
 };
 
 function TeamRow({ thinking }: { thinking?: boolean }) {
@@ -77,6 +111,18 @@ function TeamRow({ thinking }: { thinking?: boolean }) {
   );
 }
 
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReduced(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+  return reduced;
+}
+
 function Face({
   folder,
   name,
@@ -89,15 +135,8 @@ function Face({
   thinking?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const [reduced, setReduced] = useState(false);
+  const reduced = usePrefersReducedMotion();
   const [live, setLive] = useState(false);
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setReduced(media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
   useEffect(() => {
     const video = ref.current;
     if (!video || reduced || !thinking) return;
@@ -147,6 +186,179 @@ function Face({
         </figcaption>
       </figure>
     </li>
+  );
+}
+
+/** The Financial Manager's portrait. Silent — idle motion only, always muted. */
+function FmPortrait({ large }: { large?: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || reduced) return;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.volume = 0;
+    const onPlaying = () => setLive(true);
+    video.addEventListener("playing", onPlaying);
+    const start = () => {
+      void video.play().catch(() => {
+        /* Poster stays when autoplay is refused. */
+      });
+    };
+    if (video.readyState >= 2) start();
+    else video.addEventListener("canplay", start, { once: true });
+    return () => video.removeEventListener("playing", onPlaying);
+  }, [reduced]);
+  const poster = "/avatars/fm/fm-poster.webp";
+  return (
+    <div className={large ? "try-portrait try-portrait-lg" : "try-portrait try-portrait-sm"}>
+      <img src={poster} alt="" width={512} height={512} />
+      {!reduced ? (
+        <video
+          ref={ref}
+          className={live ? "is-live" : undefined}
+          muted
+          playsInline
+          loop
+          autoPlay
+          preload="auto"
+          poster={poster}
+          width={512}
+          height={512}
+          aria-label={`${AGENT_DISPLAY_NAME.financial_manager}, listening`}
+        >
+          <source src="/avatars/fm/fm-idle.webm" type="video/webm" />
+          <source src="/avatars/fm/fm-idle.mp4" type="video/mp4" />
+        </video>
+      ) : null}
+    </div>
+  );
+}
+
+function TrialCta({ className }: { className?: string }) {
+  return (
+    <a className={className ? `try-cta ${className}` : "try-cta"} href={TRIAL_SIGNUP_HREF}>
+      {TRIAL_CTA_LABEL}
+    </a>
+  );
+}
+
+function repliesPrompt(picked: number, remaining: TryTopic[]): string {
+  if (picked === 0) return "Pick one — it opens right here in the conversation.";
+  const labels = remaining.map((topic) => TRY_TOPIC_LABEL[topic].toLowerCase());
+  if (labels.length === 2) return `Want the ${labels[0]} or the ${labels[1]} next?`;
+  return `Want the ${labels[0]} too?`;
+}
+
+function FmBubble({ children, intro }: { children: React.ReactNode; intro?: boolean }) {
+  return (
+    <div className={intro ? "try-turn try-turn-fm try-turn-intro" : "try-turn try-turn-fm"}>
+      <FmPortrait large={intro} />
+      <div className="try-bubble try-bubble-fm">
+        <p className="try-bubble-who">
+          <span>Milōn</span> Financial Manager
+        </p>
+        <p className="try-bubble-text">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function TryConversation({
+  picks,
+  market,
+  onPick,
+}: {
+  picks: TryTopic[];
+  market: MarketId;
+  onPick?: (topic: TryTopic) => void;
+}) {
+  const remaining = TRY_TOPICS.filter((topic) => !picks.includes(topic));
+  return (
+    <section className="try-card try-chat" aria-label="Talk to the Milōn Financial Manager">
+      <div className="try-chat-team" aria-label="The Milōn team on this sample">
+        {FACES.map((face) => (
+          <span key={face.folder} className="try-chat-team-member">
+            <img
+              src={`/avatars/${face.folder}/${face.folder}-poster.webp`}
+              alt=""
+              width={64}
+              height={64}
+            />
+            {face.role}
+          </span>
+        ))}
+        <span className="try-stamp">SAMPLE</span>
+      </div>
+      <div className="try-chat-thread">
+        <FmBubble intro>{FM_INTRO}</FmBubble>
+        {picks.map((topic) => (
+          <Fragment key={topic}>
+            <div className="try-turn try-turn-user">
+              <div className="try-bubble try-bubble-user">
+                <p className="try-bubble-who">You</p>
+                <p className="try-bubble-text">{TOPIC_USER_LINE[topic]}</p>
+              </div>
+            </div>
+            <FmBubble>{TOPIC_FM_REPLY[topic]}</FmBubble>
+            {topic === "advisory" ? (
+              <div className="try-pack-preparing" role="status">
+                <p className="try-chat-board-who">
+                  <span>Milōn</span> Advisor
+                </p>
+                <strong>Preparing your advisory pack — coming next.</strong>
+                <p>
+                  The Advisor turns this diagnosis into recommended moves. The pack isn't ready on
+                  the sample yet, and we don't show a mock-up in its place.
+                </p>
+              </div>
+            ) : (
+              <div className="try-chat-board">
+                <p className="try-chat-board-caption">
+                  <span className="try-stamp">SAMPLE</span>
+                  <span className="try-chat-board-who">
+                    <span>Milōn</span> Financial Manager
+                  </span>
+                  {topic === "profit" ? "Profit report" : "13-week cash forecast"}
+                </p>
+                <Suspense fallback={<p className="try-status">Working from the sample figures.</p>}>
+                  <TrySampleBoards
+                    market={market}
+                    profit={topic === "profit"}
+                    cash={topic === "cash"}
+                  />
+                </Suspense>
+              </div>
+            )}
+          </Fragment>
+        ))}
+      </div>
+      {remaining.length > 0 ? (
+        <div className="try-replies">
+          <p className="try-replies-prompt">{repliesPrompt(picks.length, remaining)}</p>
+          <div className="try-replies-row">
+            {remaining.map((topic) => (
+              <button
+                key={topic}
+                type="button"
+                className="try-reply"
+                onClick={() => onPick?.(topic)}
+              >
+                {TRY_TOPIC_LABEL[topic]}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="try-chat-close">
+        {remaining.length === 0 ? <p className="try-chat-close-line">{FM_CLOSING}</p> : null}
+        <p className="try-value">{TRIAL_VALUE_PROP}</p>
+        <TrialCta className="try-cta-close" />
+        <p className="try-trial-terms">{TRIAL_SIGNUP_SENTENCE}</p>
+      </div>
+    </section>
   );
 }
 
@@ -263,6 +475,14 @@ function Frame({ phase, children }: { phase: TryPhase; children: React.ReactNode
         {children}
         <p className="try-sign">The MILŌN Team</p>
       </div>
+      <div className="try-ctabar" aria-label="Start a free trial">
+        <p className="try-ctabar-copy">
+          <strong>Milōn</strong>
+          <span>{TRIAL_VALUE_PROP_SHORT}</span>
+          <small>{TRIAL_SIGNUP_SENTENCE}</small>
+        </p>
+        <TrialCta className="try-ctabar-btn" />
+      </div>
     </main>
   );
 }
@@ -281,11 +501,12 @@ export function TryScreen(props: TryScreenProps) {
         <p className="try-kicker">Sample</p>
         <h1 className="try-title try-title-hero">See a health score on sample figures.</h1>
         <p className="try-lead">{TRY_OPENING}</p>
+        <p className="try-value">{TRIAL_VALUE_PROP}</p>
         <div className="try-card try-start">
           <TeamRow thinking={props.busy} />
           <button
             type="button"
-            className="try-cta"
+            className="try-step"
             disabled={props.busy}
             onClick={props.onUseSample}
           >
@@ -365,7 +586,7 @@ export function TryScreen(props: TryScreenProps) {
           ) : null}
           <button
             type="submit"
-            className="try-cta"
+            className="try-step"
             disabled={props.busy || (props.turnstile !== false && !props.siteKey)}
           >
             Show the score
@@ -424,7 +645,7 @@ export function TryScreen(props: TryScreenProps) {
           <div style={{ marginTop: 20 }}>
             <button
               type="button"
-              className="try-cta"
+              className="try-step"
               disabled={props.busy}
               onClick={props.onShowFindings}
             >
@@ -474,49 +695,16 @@ export function TryScreen(props: TryScreenProps) {
               ? "Prepared from the sample ratios, margins, and cash line. Not reviewed by an accountant."
               : TRIAL_DISCLAIMER}
           </p>
-          <div className="try-chips">
-            <button
-              type="button"
-              className="try-chip"
-              aria-pressed={props.openChips?.profit === true}
-              onClick={() => props.onToggleChip?.("profit")}
-            >
-              Profitability
-            </button>
-            <button
-              type="button"
-              className="try-chip"
-              aria-pressed={props.openChips?.cash === true}
-              onClick={() => props.onToggleChip?.("cash")}
-            >
-              13-week cash
-            </button>
-          </div>
-          <ul className="try-later">
-            <li>
-              Budget <em>Coming soon</em>
-            </li>
-            <li>
-              Advisor pack <em>Coming soon</em>
-            </li>
-            <li>
-              Reports <em>Coming soon</em>
-            </li>
-          </ul>
-          {props.openChips?.profit || props.openChips?.cash ? (
-            <div className="try-chip-slot" data-open="true">
-              <Suspense fallback={<p className="try-status">Working from the sample figures.</p>}>
-                <TrySampleBoards
-                  market={(props.board?.market ?? "US") as MarketId}
-                  profit={props.openChips?.profit === true}
-                  cash={props.openChips?.cash === true}
-                />
-              </Suspense>
-            </div>
-          ) : null}
           {props.error ? <p className="try-error">{props.error}</p> : null}
         </section>
       ) : null}
+
+      <TryConversation
+        picks={props.picks ?? []}
+        market={(board?.market ?? "US") as MarketId}
+        onPick={props.onPickTopic}
+      />
+
       {props.runsLeft != null ? (
         <p className="try-runs">Sample runs left: {props.runsLeft}</p>
       ) : null}
@@ -553,7 +741,7 @@ export function TryDemo() {
   const [findings, setFindings] = useState<TrialFinding[]>([]);
   const [source, setSource] = useState<"model" | "deterministic" | null>(null);
   const [findingsPending, setFindingsPending] = useState(false);
-  const [openChips, setOpenChips] = useState({ profit: false, cash: false });
+  const [picks, setPicks] = useState<TryTopic[]>([]);
   const [runsLeft, setRunsLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -583,7 +771,7 @@ export function TryDemo() {
       findings={findings}
       source={source}
       findingsPending={findingsPending}
-      openChips={openChips}
+      picks={picks}
       runsLeft={runsLeft}
       onUseSample={() => {
         setBusy(true);
@@ -632,8 +820,8 @@ export function TryDemo() {
           .catch(() => setError("The sample isn't available right now."))
           .finally(() => setFindingsPending(false));
       }}
-      onToggleChip={(next) => {
-        setOpenChips((current) => ({ ...current, [next]: !current[next] }));
+      onPickTopic={(topic) => {
+        setPicks((current) => (current.includes(topic) ? current : [...current, topic]));
         setError(null);
       }}
     />
