@@ -231,6 +231,7 @@ const PAY_PHRASE: Partial<Record<ClientOperatingProfile["payMotion"], string>> =
 export function describeBusiness(
   profile: ClientOperatingProfile | null | undefined,
   fallbackType: string | null | undefined,
+  actualDebtorDays?: number | null,
 ): string | null {
   const industry = profileIndustryLabel(profile, fallbackType ?? "");
   if (!profile) return industry ? `${industry} business.` : null;
@@ -241,8 +242,14 @@ export function describeBusiness(
   const colour: string[] = [];
   const pay = PAY_PHRASE[profile.payMotion];
   if (pay && profile.payMotion !== "mix") colour.push(pay);
-  if (profile.debtorDaysDefault >= 45)
-    colour.push(`customers pay in ${profile.debtorDaysDefault}+ days`);
+  if (actualDebtorDays != null && Number.isFinite(actualDebtorDays) && actualDebtorDays > 0) {
+    colour.push(`customers pay in ${Math.round(actualDebtorDays)} days`);
+  } else if (
+    (actualDebtorDays == null || !Number.isFinite(actualDebtorDays)) &&
+    profile.debtorDaysDefault >= 45
+  ) {
+    colour.push(`customers pay in ${profile.debtorDaysDefault} days`);
+  }
   if (profile.seasonality === "strong") colour.push("strongly seasonal");
   if (profile.costShape === "payroll_heavy") colour.push("payroll-heavy cost base");
   if (colour.length) {

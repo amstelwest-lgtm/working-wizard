@@ -23,6 +23,11 @@ export type PeriodFinancials = RatioInputs & {
   nonCurrentLiabilities: string;
   hasCashFlow: string;
   periodProfitInEquity: string;
+  /**
+   * How the printed statement was scaled. Money fields stay as printed.
+   * Display applies this; ratios that are percentages do not.
+   */
+  statementUnits?: "actual" | "thousands" | "millions" | "";
 };
 
 /** Shown wherever a plugged equity total appears, so it is not read as reported equity. */
@@ -355,6 +360,7 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
     employees: "",
     founderHours: "",
     cash: money(cash),
+    statementUnits: prepared.units ?? "",
   };
 }
 

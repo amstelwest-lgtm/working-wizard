@@ -14,8 +14,15 @@ import {
   resolveMarket,
   SALES_TAX_HONESTY,
   formatPercentRate,
+  ZA_VAT_RATE,
   type DraftMarket,
 } from "@/lib/market";
+import {
+  readZaMarketExtras,
+  ZA_PROVINCES,
+  zaMarketExtrasJson,
+  type ZaMarketExtras,
+} from "@/lib/market/za-provinces";
 
 export function MarketSettingsCard({
   kind,
@@ -30,11 +37,13 @@ export function MarketSettingsCard({
     const sel = parseMarketSelection(initial) ?? coerceMarketSelection(initial);
     return { country: sel.country, regionCode: sel.regionCode };
   });
+  const [zaExtras, setZaExtras] = useState<ZaMarketExtras>(() => readZaMarketExtras(initial));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const sel = parseMarketSelection(initial) ?? coerceMarketSelection(initial);
     setDraft({ country: sel.country, regionCode: sel.regionCode });
+    setZaExtras(readZaMarketExtras(initial));
   }, [initial]);
 
   const sel = draftToSelection(draft);
@@ -49,13 +58,17 @@ export function MarketSettingsCard({
     setSaving(true);
     try {
       const table = kind === "firm" ? "firms" : "clients";
+      const market =
+        next.country === "ZA"
+          ? { ...marketToJson(next), ...zaMarketExtrasJson(zaExtras) }
+          : marketToJson(next);
       const payload =
         kind === "client"
           ? {
-              market: marketToJson(next),
+              market,
               financial_year_start_month: next.country === "US" ? 1 : 3,
             }
-          : { market: marketToJson(next) };
+          : { market };
       const { error } = await supabase.from(table).update(payload).eq("id", recordId);
       if (error) throw error;
       toast.success("Region saved. New budgets will use this tax setting.");
@@ -78,6 +91,77 @@ export function MarketSettingsCard({
       description="South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax for budgets. Changing region does not convert historical figures."
     >
       <MarketPicker value={draft} onChange={setDraft} />
+      {draft.country === "ZA" ? (
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]" htmlFor="milon-za-province">
+              Province
+            </label>
+            <select
+              id="milon-za-province"
+              className="mt-1.5 w-full rounded-xl border border-[var(--line,#DBEAFE)] bg-transparent px-3 py-2.5 text-sm text-[var(--ink,#102A43)]"
+              value={zaExtras.provinceCode ?? ""}
+              onChange={(e) =>
+                setZaExtras((current) => ({
+                  ...current,
+                  provinceCode: e.target.value
+                    ? (e.target.value as ZaMarketExtras["provinceCode"])
+                    : null,
+                }))
+              }
+            >
+              <option value="">Select a province</option>
+              {ZA_PROVINCES.map((province) => (
+                <option key={province.code} value={province.code}>
+                  {province.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <fieldset className="space-y-2">
+            <legend className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]">
+              VAT
+            </legend>
+            <label className="flex items-center gap-2 text-sm text-[var(--ink,#102A43)]">
+              <input
+                type="checkbox"
+                checked={zaExtras.vatRegistered}
+                onChange={(e) =>
+                  setZaExtras((current) => ({ ...current, vatRegistered: e.target.checked }))
+                }
+              />
+              Registered for VAT ({formatPercentRate(ZA_VAT_RATE)})
+            </label>
+            {zaExtras.vatRegistered ? (
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ["exclusive", "Prices exclude VAT"],
+                    ["inclusive", "Prices include VAT"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`rounded-xl border px-3 py-2 text-left text-sm ${
+                      zaExtras.vatMode === mode
+                        ? "border-[#0B5FFF] bg-[#DBEAFE] text-[#102A43]"
+                        : "border-[var(--line,#DBEAFE)] bg-transparent text-[var(--ink,#102A43)]"
+                    }`}
+                    onClick={() => setZaExtras((current) => ({ ...current, vatMode: mode }))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--ink-dim)]">
+                Budgets will not add a VAT line while the practice is not VAT registered.
+              </p>
+            )}
+          </fieldset>
+        </div>
+      ) : null}
       {resolved?.tax.regime === "sales_tax" && (
         <p className="mt-3 text-xs leading-relaxed text-[var(--ink-dim)]">
           Default combined rate {formatPercentRate(resolved.tax.combinedRate)} (

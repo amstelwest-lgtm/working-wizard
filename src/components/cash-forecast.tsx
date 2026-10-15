@@ -110,6 +110,11 @@ import {
   type ClientRunway,
 } from "@/lib/client-metrics";
 import {
+  displayForecastFrequency,
+  groupSmallForecastRows,
+  isDisplayOnceOff,
+} from "@/lib/cash-forecast-rows";
+import {
   cashEmptyPresentation,
   forecastFloorPosition,
   forecastLinesSourceLabel,
@@ -186,7 +191,13 @@ const DEFAULT_EXPENSES: LineItem[] = EXPENSE_PRESETS.map((n) => makeLine(n));
 const DEFAULT_OTHER: LineItem[] = [makeLine("Other expenses")];
 
 function distribute(line: LineItem): number[] {
-  return distributeForecastLine(line, WEEKS);
+  return distributeForecastLine(
+    {
+      ...line,
+      frequency: displayForecastFrequency(line.name, line.frequency) as LineItem["frequency"],
+    },
+    WEEKS,
+  );
 }
 
 // ── Brand palette (matches profitability waterfall / accountant reports) ─────
@@ -1107,28 +1118,32 @@ export function CashForecastPanel({
       return out;
     };
     const growthMul = (i: number) => Math.pow(1 + opts.revGrowthPct / 100, i);
-    const revRows = revenue.map((l) => ({
-      id: l.id,
-      bucket: "revenue" as const,
-      name: l.name,
-      vals: applyWeekOverrides(
-        shiftVals(distribute(l).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
-        l.weekOverrides,
-      ),
-    }));
+    const revRows = groupSmallForecastRows(
+      revenue.map((l) => ({
+        id: l.id,
+        bucket: "revenue" as const,
+        name: l.name,
+        onceOff: isDisplayOnceOff(l.name, l.frequency),
+        vals: applyWeekOverrides(
+          shiftVals(distribute(l).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          l.weekOverrides,
+        ),
+      })),
+    );
     const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
       id: l.id,
       bucket,
       name: l.name,
+      onceOff: isDisplayOnceOff(l.name, l.frequency),
       vals: applyWeekOverrides(
         distribute(l).map((v) => v * opts.eMul),
         l.weekOverrides,
       ),
     });
-    const expRows = [
+    const expRows = groupSmallForecastRows([
       ...expenses.map((l) => mapExp(l, "expenses")),
       ...other.map((l) => mapExp(l, "other")),
-    ];
+    ]);
     const headcountWeekly = (opts.headcountDelta * opts.avgSalary) / 4.33;
     const fixedWeekly = opts.fixedCostDelta / 4.33;
     const scenarioRows: Array<{
@@ -2224,10 +2239,10 @@ export function CashForecastPanel({
             weeks={weeks}
             opening={baseCalc.opening}
             receipts={baseCalc.revRows.map((row) => ({
-              id: row.id,
+              id: row.id ?? row.name,
               name: row.name,
               vals: row.vals,
-              bucket: "revenue",
+              bucket: row.id ? ("revenue" as const) : undefined,
             }))}
             payments={baseCalc.expRows.map((row) => ({
               id: row.id ?? row.name,
@@ -2274,10 +2289,10 @@ export function CashForecastPanel({
         weeks={weeks}
         opening={baseCalc.opening}
         receipts={baseCalc.revRows.map((row) => ({
-          id: row.id,
+          id: row.id ?? row.name,
           name: row.name,
           vals: row.vals,
-          bucket: "revenue",
+          bucket: row.id ? ("revenue" as const) : undefined,
         }))}
         payments={baseCalc.expRows.map((row) => ({
           id: row.id ?? row.name,

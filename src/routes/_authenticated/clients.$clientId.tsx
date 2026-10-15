@@ -1546,7 +1546,13 @@ function ClientView() {
           }
         : null,
   });
-  const briefingAbout = describeBusiness(briefingProfile, client?.business_type ?? null);
+  const debtorDaysFigure = ratios["Debtor Days"];
+  const actualDebtorDays = Number.isFinite(debtorDaysFigure) ? debtorDaysFigure : null;
+  const briefingAbout = describeBusiness(
+    briefingProfile,
+    client?.business_type ?? null,
+    actualDebtorDays,
+  );
   const briefingMatters = whatMatters({
     healthScore: overallHealth.overall,
     healthStatus: overallHealth.displayStatus,
@@ -3063,10 +3069,10 @@ function ClientView() {
                   void navigate({ to: "/settings", hash: "firm-billing" });
                 }}
               />
-              <AccountantMenuButton open={mobileNavOpen} onClick={() => setMobileNavOpen((o) => !o)} />
-              <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
+              <span className="topbar-theme">
                 <ThemeToggle />
-              </div>
+              </span>
+              <AccountantMenuButton open={mobileNavOpen} onClick={() => setMobileNavOpen((o) => !o)} />
             </div>
 
             {/* ===== BREADCRUMB ===== */}
@@ -3463,6 +3469,7 @@ function ClientView() {
                   snapshot={briefingSnapshot}
                   about={briefingAbout}
                   profile={briefingProfile}
+                  debtorDays={actualDebtorDays}
                   onEditProfile={() => setProfileOpen(true)}
                   whatMatters={briefingMatters}
                   hideWhatMatters
