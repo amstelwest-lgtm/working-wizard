@@ -34,6 +34,7 @@ import { ProofLandingPreview } from "./proof-preview";
 import { PersonaCritPreview } from "./persona-crit-preview";
 import { Retest560Preview } from "./retest-560-preview";
 import { FmBriefPreview } from "./fm-brief-preview";
+import { PracticeTodayPreview } from "./practice-today-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -435,6 +436,12 @@ const fmBriefRoute = createRoute({
   },
 });
 
+const practiceTodayRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/practice-today",
+  component: PracticeTodayPreview,
+});
+
 const personaCritRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/persona-crit",
@@ -491,6 +498,7 @@ const routeTree = rootRoute.addChildren([
   personaCritRoute,
   retest560Route,
   fmBriefRoute,
+  practiceTodayRoute,
 ]);
 const router = createRouter({
   routeTree,

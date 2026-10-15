@@ -13,6 +13,8 @@ import type { PortfolioRow } from "@/lib/portfolio";
 import { getFirmPortfolio, type PortfolioResult } from "@/lib/portfolio.functions";
 import {
   mergeNeedsAttention,
+  needsAttentionToday,
+  todayAttentionAction,
   type AttentionItem,
   type MergedAttention,
 } from "@/lib/portfolio-dashboard";
@@ -88,7 +90,7 @@ export function PortfolioExceptions({
   if (!firmId) return null;
 
   if (hideWhenClear) {
-    const merged = queue ?? mergeNeedsAttention(healthItems ?? [], data?.rows ?? []);
+    const merged = needsAttentionToday(queue ?? mergeNeedsAttention(healthItems ?? [], data?.rows ?? []));
     if ((!data && loading && merged.length === 0) || merged.length === 0) return null;
     const shown = merged.slice(0, 6);
     const more = merged.length - shown.length;
@@ -96,20 +98,21 @@ export function PortfolioExceptions({
       <section
         className={["attn-strip", className].filter(Boolean).join(" ")}
         id="needs-attention"
-        aria-label="Needs attention"
+        aria-label="Needs attention today"
         data-attention={merged.length}
+        data-today="true"
       >
-        <h2>Needs attention</h2>
+        <h2>Needs attention today</h2>
         <ul>
-          {shown.map((row) => (
-            <li key={row.clientId} className="attn-strip-row" data-client={row.clientId}>
+          {shown.map((row, index) => (
+            <li key={row.clientId} className="attn-strip-row" data-client={row.clientId} data-reason={row.reason}>
               <Link
                 to="/clients/$clientId"
                 params={{ clientId: row.clientId }}
                 search={clientHomeSearch()}
                 className="attn-strip-name"
               >
-                {row.name}
+                {index + 1}. {row.name}
               </Link>
               <span className="attn-strip-reason">{row.reason}</span>
               {row.detail ? <span className="attn-strip-detail">{row.detail}</span> : null}
@@ -119,7 +122,7 @@ export function PortfolioExceptions({
                   className="attn-strip-go"
                   onClick={() => onChase?.(row.clientId, row.name)}
                 >
-                  Chase →
+                  {todayAttentionAction(row)}
                 </button>
               ) : (
                 <Link
@@ -128,7 +131,7 @@ export function PortfolioExceptions({
                   search={clientHomeSearch()}
                   className="attn-strip-go"
                 >
-                  Open →
+                  {todayAttentionAction(row)}
                 </Link>
               )}
             </li>
