@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { forecastOpeningColumnTotal } from "@/lib/cash-forecast-parity";
 import { cashBalanceSeries } from "@/lib/cash-forecast-view";
 import { figureSourceChipLabel } from "@/lib/ledger-link-copy";
 import { cn } from "@/lib/utils";
@@ -235,7 +236,7 @@ export function CashThirteenWeekGrid({
           name: "Opening cash",
           chip: openingChip,
           values: openings,
-          total: openings.length ? openings[openings.length - 1]! : opening,
+          total: forecastOpeningColumnTotal(openings, opening),
           kind: "balance",
           blankZero: false,
           tone: "plain",
@@ -538,6 +539,7 @@ function SectionRows({
             );
           })}
           <td
+            data-cash-total={row.key}
             className={cn(
               "border-b border-l border-[#DBEAFE]/80 px-2 py-1.5 text-right align-middle font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:text-slate-50",
               TONE_BG[row.tone],

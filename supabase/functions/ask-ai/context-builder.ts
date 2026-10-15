@@ -292,6 +292,9 @@ export async function buildContext(
           financials,
           runway: metrics?.runway ?? null,
           periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
+          financialsUpdatedAt,
+          timeZone: copyPack === "za" ? "Africa/Johannesburg" : null,
+          fyStartMonth: overviewFyStartMonth(copyPack, operatingProfile),
         });
 
   // Rank next moves from the full ratio set (not the focused subset).

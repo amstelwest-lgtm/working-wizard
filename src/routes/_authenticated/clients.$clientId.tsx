@@ -1567,6 +1567,7 @@ function ClientView() {
     briefingProfile,
     client?.business_type ?? null,
     actualDebtorDays,
+    { name: client?.name ?? null, businessType: client?.business_type ?? null },
   );
   const briefingMatters = whatMatters({
     healthScore: overallHealth.overall,

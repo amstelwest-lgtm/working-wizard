@@ -314,12 +314,14 @@ export function buildOverviewBrief(input: {
   const runway = asNumber(input.runwayWeeks);
   // Same pillar math as Overview / the scorecard. A year-span health score
   // (creditor days 28) must not sit next to the stored-cover days (37).
+  const cashOnFile = input.cash !== undefined ? input.cash : asNumber(financials?.cash);
   const scored = financials
     ? scorecardHealthFromFinancials({
         financials,
         fyStartMonth,
         periodMonths,
         cashRunwayWeeks: runway,
+        cashBalance: cashOnFile,
         shortfallWeek: input.shortfallWeek,
         market,
       })

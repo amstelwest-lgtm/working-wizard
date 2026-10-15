@@ -7,8 +7,9 @@
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
 import {
   baseCashflow,
+  cashScreenFloor,
   rollForwardForecast,
-  resolveThirteenWeekForecast,
+  resolveCashScreenForecast,
   type ClientRunway,
 } from "../../../src/lib/client-metrics.ts";
 import type {
@@ -359,6 +360,9 @@ export function summarizeCashForecast(
     runway?: ClientRunway | null;
     now?: Date;
     periodEnd?: string | null;
+    financialsUpdatedAt?: string | null;
+    timeZone?: string | null;
+    fyStartMonth?: number | null;
   },
 ): CashForecastSummary | null {
   if (opts?.financials || opts?.runway) {
@@ -367,28 +371,30 @@ export function summarizeCashForecast(
       (opts.cashGenerative
         ? { weeks: null, kind: "cash_generative", label: "Cash generative" }
         : { weeks: null, kind: "unknown", label: "—" });
-    const outlook = resolveThirteenWeekForecast({
+    const outlook = resolveCashScreenForecast({
       financials: opts.financials,
       cashflow: cf,
-      openingCash: opts.openingCash,
-      runway,
+      financialsUpdatedAt: opts.financialsUpdatedAt ?? null,
       now: opts.now,
       periodEnd: opts.periodEnd,
+      timeZone: opts.timeZone,
+      fyStartMonth: opts.fyStartMonth,
     });
     const hasFlow = outlook.totalInflow > 0 || outlook.totalOutflow > 0 || outlook.opening !== 0;
     if (!hasFlow) return null;
+    const floor = cashScreenFloor(cf, outlook.outflow);
     const facts = forecastChatFacts({
       closings: outlook.closing,
-      floor: outlook.floor,
+      floor,
       plCashGenerative: opts.cashGenerative === true || runway.kind === "cash_generative",
     });
     const lowest = Math.min(...outlook.closing);
     const lowestWeek = outlook.closing.indexOf(lowest) + 1;
-    const floorWeek = outlook.closing.findIndex((c) => c < outlook.floor);
+    const floorWeek = outlook.closing.findIndex((c) => c < floor);
     const closing = outlook.closing[outlook.closing.length - 1] ?? outlook.opening;
     const delta = closing - outlook.opening;
     const traj = Math.abs(delta) < 1 ? "flat" : delta > 0 ? "up" : "down";
-    const breach = outlook.closing.findIndex((c) => c < outlook.floor);
+    const breach = outlook.closing.findIndex((c) => c < floor);
     const derivedRunway = breach === -1 ? HORIZON : breach;
     const sharedWeeks =
       opts.runway && (opts.runway.kind === "weeks" || opts.runway.kind === "zero")

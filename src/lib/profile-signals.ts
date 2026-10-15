@@ -285,6 +285,7 @@ export function profileDisplayRows(
   profile: ClientOperatingProfile,
   market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
   actualDebtorDays?: number | null,
+  industryLabel?: string | null,
 ): Array<{ label: string; value: string }> {
   const payTiming =
     actualDebtorDays != null && Number.isFinite(actualDebtorDays)
@@ -305,7 +306,10 @@ export function profileDisplayRows(
       : "None";
 
   return [
-    { label: "Model", value: profileIndustryLabel(profile, profile.businessTypeId) },
+    {
+      label: "Model",
+      value: industryLabel?.trim() || profileIndustryLabel(profile, profile.businessTypeId),
+    },
     { label: "How they earn", value: PAY_MOTION_LABEL[profile.payMotion] },
     { label: "Sales unit", value: profile.volumeUnit.replace(/_/g, " ") },
     { label: "Second stream", value: secondary },

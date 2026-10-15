@@ -723,6 +723,47 @@ export function publishBudgetDocument(
   });
 }
 
+function stablePlanValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stablePlanValue);
+  if (value && typeof value === "object") {
+    const src = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(src).sort()) out[key] = stablePlanValue(src[key]);
+    return out;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100) / 100;
+  return value;
+}
+
+/** Plan figures the Budget & Variance page shows. Order, clocks, and source labels are not figures. */
+export function budgetPlanSnapshot(doc: BudgetDocument): unknown {
+  return {
+    fyStart: doc.fyStart,
+    fyStartMonth: doc.fyStartMonth,
+    activeScenario: doc.activeScenario,
+    openingCash: doc.openingCash,
+    gpPct: doc.gpPct,
+    cogsMode: doc.cogsMode,
+    cogsPerUnit: doc.cogsPerUnit ?? {},
+    statementDepreciation: doc.statementDepreciation ?? 0,
+    wc: {
+      debtorDays: doc.wc?.debtorDays ?? 0,
+      creditorDays: doc.wc?.creditorDays ?? 0,
+      inventoryDays: doc.wc?.inventoryDays ?? 0,
+    },
+    revenueLines: (doc.revenueLines ?? []).map((line) => ({ name: line.name, months: line.months })),
+    overheads: (doc.overheads ?? []).map((line) => ({ name: line.name, months: line.months })),
+    capex: (doc.capex ?? []).map((line) => ({ amount: line.amount, month: line.month })),
+  };
+}
+
+export function budgetPlanFiguresChanged(before: BudgetDocument, after: BudgetDocument): boolean {
+  return (
+    JSON.stringify(stablePlanValue(budgetPlanSnapshot(before))) !==
+    JSON.stringify(stablePlanValue(budgetPlanSnapshot(after)))
+  );
+}
+
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "Jan–Sep 2026" for the months a statement comparison actually covers. */

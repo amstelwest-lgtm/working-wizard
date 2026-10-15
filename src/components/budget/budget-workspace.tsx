@@ -388,7 +388,7 @@ function BudgetComplexWorkspace({
             clientId={clientId}
             clientName={clientName}
             signoff={signoff}
-            budgetUpdatedAt={doc.updatedAt}
+            isStale={isStale}
           />
         }
       />

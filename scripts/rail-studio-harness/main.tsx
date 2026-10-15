@@ -39,6 +39,7 @@ import { ActionPlanPreview } from "./action-plan-preview";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { Retest568Preview } from "./retest-568-preview";
 import { AqaFollowupPreview } from "./aqa-followup-preview";
+import { AqaRetest573Preview } from "./aqa-retest-573-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -516,6 +517,18 @@ const retest568Route = createRoute({
   component: Retest568Preview,
 });
 
+const aqaRetest573Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/aqa-retest-573",
+  component: function AqaRetest573Harness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <AqaRetest573Preview />
+      </MarketProvider>
+    );
+  },
+});
+
 const aqaFollowupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/aqa-followup",
@@ -572,6 +585,7 @@ const routeTree = rootRoute.addChildren([
   cashOnceOffRoute,
   retest568Route,
   aqaFollowupRoute,
+  aqaRetest573Route,
 ]);
 const router = createRouter({
   routeTree,

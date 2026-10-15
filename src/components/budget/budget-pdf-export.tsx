@@ -21,7 +21,6 @@ import {
 import { getDeliverableWorkflow } from "@/lib/review-signoffs.functions";
 import { listBudgetMonthActuals } from "@/lib/budget-actuals.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { computeIsStale } from "@/components/review-signoff";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   hashFigures,
@@ -36,14 +35,15 @@ export function BudgetPdfExportButton({
   clientId,
   clientName,
   signoff,
-  budgetUpdatedAt,
+  isStale = false,
   quiet = false,
 }: {
   doc: BudgetDocument;
   clientId?: string;
   clientName?: string;
   signoff?: ClientReviewSignoff | null;
-  budgetUpdatedAt?: string | null;
+  /** Same clock as the Budget tab. A rewritten document timestamp is not stale. */
+  isStale?: boolean;
   /** Icon on the answer strip. The download still says Export PDF to assistive tech. */
   quiet?: boolean;
 }) {
@@ -72,7 +72,7 @@ export function BudgetPdfExportButton({
       }
 
       const model = buildBudgetPdfModel(doc, actuals, market);
-      const stale = computeIsStale(signoff ?? null, budgetUpdatedAt ?? doc.updatedAt);
+      const stale = isStale;
       let workflowStatus: "draft" | "ready_for_review" | "signed_off" | null = null;
       if (clientId) {
         try {

@@ -27,15 +27,16 @@ export function PlBankDisagreeNotice({
       </span>
       <div className="pl-disagree-body">
         <div className="pl-disagree-title text-sm font-semibold text-slate-900 dark:text-slate-100">
-          P&amp;L and bank data disagree
+          Invoiced sales and cash collected are different figures
         </div>
         <p className="pl-disagree-line mt-1 text-xs leading-relaxed">
-          P&amp;L revenue {monthly(disagreement.plRevenueMonthly, market)} · Bank receipts{" "}
-          {monthly(disagreement.bankInflowMonthly, market)}
+          P&amp;L revenue is invoiced sales, {monthly(disagreement.plRevenueMonthly, market)}. Bank
+          receipts are cash collected in the 13-week forecast,{" "}
+          {monthly(disagreement.bankInflowMonthly, market)}.
         </p>
         <p className="pl-disagree-line text-xs leading-relaxed">
-          P&amp;L costs {monthly(disagreement.plCostMonthly, market)} · Bank payments{" "}
-          {monthly(disagreement.bankOutflowMonthly, market)}
+          P&amp;L costs are expenses on the statement, {monthly(disagreement.plCostMonthly, market)}.
+          Bank payments are cash paid in that forecast, {monthly(disagreement.bankOutflowMonthly, market)}.
         </p>
       </div>
     </div>
