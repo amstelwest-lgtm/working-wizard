@@ -36,6 +36,7 @@ import { Retest560Preview } from "./retest-560-preview";
 import { FmBriefPreview } from "./fm-brief-preview";
 import { PracticeTodayPreview } from "./practice-today-preview";
 import { ActionPlanPreview } from "./action-plan-preview";
+import { CashForecastPanel } from "@/components/cash-forecast";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
 import { Route as PracticeRoute } from "@/routes/_authenticated/practice";
@@ -473,6 +474,23 @@ const actionPlanRoute = createRoute({
   },
 });
 
+const cashSuggestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cash-suggest",
+  component: function CashSuggestHarness() {
+    return (
+      <MarketProvider selection={{ country: "ZA", regionCode: null }}>
+        <div className="min-h-screen bg-[#F4F7FB] p-4">
+          <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#102A43]">
+            Fixture proof — not a client file
+          </p>
+          <CashForecastPanel clientId="harness-client" clientName="Harbour Glass" />
+        </div>
+      </MarketProvider>
+    );
+  },
+});
+
 const proofLandingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/proof-landing",
@@ -513,6 +531,7 @@ const routeTree = rootRoute.addChildren([
   fmBriefRoute,
   practiceTodayRoute,
   actionPlanRoute,
+  cashSuggestRoute,
 ]);
 const router = createRouter({
   routeTree,
