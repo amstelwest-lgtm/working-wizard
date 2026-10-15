@@ -28,6 +28,8 @@ assert(menu.includes('aria-haspopup="menu"'), "the trigger announces a menu");
 assert(menu.includes('role="menuitemcheckbox"'), "theme is a toggle item");
 assert(menu.includes('role="separator"'), "sign out sits under a divider");
 assert(menu.includes("Settings"), "settings is a menu item");
+assert(menu.includes("My practice"), "the account menu switches to My practice");
+assert(menu.includes('navigate({ to: "/practice" })'), "My practice opens /practice");
 assert(menu.includes("Plan & billing"), "plan and billing is a menu item");
 assert(menu.includes("Theme"), "theme is a menu item");
 assert(menu.includes("Help"), "help is a menu item");

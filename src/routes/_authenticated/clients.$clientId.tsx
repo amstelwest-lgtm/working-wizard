@@ -54,6 +54,7 @@ import {
   parseMarketSelection,
   resolveMarket,
 } from "@/lib/market";
+import { formatMoney } from "@/lib/market/format";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption, healthAnswerSentence } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
@@ -145,7 +146,7 @@ import {
   stampProfileProvenance,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
-import { clientIndustryLabel } from "@/lib/profile-signals";
+import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
@@ -1180,6 +1181,9 @@ function ClientView() {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
   const [drawerTier, setDrawerTier] = useState<HealthTier>("at_risk");
+  const [drawerRatioValue, setDrawerRatioValue] = useState<number | null>(null);
+  const [drawerRevenue, setDrawerRevenue] = useState<number | null>(null);
+  const [drawerNetProfit, setDrawerNetProfit] = useState<number | null>(null);
 
   /** Unresolved client notes — live open-query count for triage. */
   const [openQueriesCount, setOpenQueriesCount] = useState(0);
@@ -1268,9 +1272,8 @@ function ClientView() {
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
-  const cashText = String(financials.cash ?? "").trim();
-  const cashBalance = cashText === "" ? null : Number(cashText);
-  const cashKnown = cashBalance != null && Number.isFinite(cashBalance);
+  const cashBalance = assessed.cash.amount;
+  const cashKnown = cashBalance != null;
   const overallHealth: OverallHealth = scorecardHealthFromFinancials({
     financials,
     fyStartMonth,
@@ -2689,6 +2692,12 @@ function ClientView() {
         actual.calculation ?? (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null),
       );
       setDrawerFallbackSteps(actual.steps);
+      const rawValue = (ratios as Record<string, number>)[ratioName];
+      setDrawerRatioValue(typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : null);
+      const revenue = Number(ratioInputs.revenue);
+      const netProfit = Number(ratioInputs.netIncome);
+      setDrawerRevenue(Number.isFinite(revenue) ? revenue : null);
+      setDrawerNetProfit(Number.isFinite(netProfit) ? netProfit : null);
       setDrawerOpen(true);
       track("playbook_opened", {
         surface: "accountant_portal",
@@ -2697,7 +2706,7 @@ function ClientView() {
         ratioName,
       });
     },
-    [clientId, clientMarket, firmId, ratioInputs, track],
+    [clientId, clientMarket, firmId, ratioInputs, ratios, track],
   );
 
   const openDrawerFromUiKey = useCallback(
@@ -3435,7 +3444,7 @@ function ClientView() {
                 <ClientBriefing
                   clientName={client.name}
                   clientCode={client.client_code}
-                  industryLabel={clientIndustryLabel(briefingProfile, client.business_type)}
+                  industryLabel={clientIndustryDisplay(client.name, briefingProfile, client.business_type)}
                   ring={
                     <HealthRing
                       id="overview-health"
@@ -4491,6 +4500,10 @@ function ClientView() {
             formula={drawerFormula}
             actualLine={drawerActual}
             fallbackSteps={drawerFallbackSteps}
+            ratioValue={drawerRatioValue}
+            revenue={drawerRevenue}
+            netProfit={drawerNetProfit}
+            formatAmount={(amount) => formatMoney(amount, clientMarket)}
             evidence={(() => {
               if (!drawerRatioKey || drawerTier === "healthy") return null;
               const related = relatedTabForRatio(drawerRatioKey);

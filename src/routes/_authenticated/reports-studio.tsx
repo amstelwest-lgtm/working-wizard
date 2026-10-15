@@ -113,6 +113,8 @@ import {
 } from "@/lib/budget-pdf";
 import { publishBudgetDocument } from "@/lib/budget.bridges";
 import { periodProfitBridge } from "@/lib/period-profit";
+import { groundPlaybookSteps } from "@/lib/intervention-grounding";
+import { formatMoney as formatReportMoney } from "@/lib/market/format";
 import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton } from "@/components/review-signoff";
@@ -1919,6 +1921,11 @@ function buildCashForecastFromSavedCashflow(
 async function buildInterventions(
   ratioResults: RatioResult[],
   profile?: ClientOperatingProfile | null,
+  figures?: {
+    revenue?: number | null;
+    netProfit?: number | null;
+    formatMoney?: (amount: number) => string;
+  },
 ): Promise<Intervention[]> {
   // Map the snake_case ratio_key from ratioResults back to camelCase playbook keys
   const KEY_MAP: Record<string, string> = {
@@ -1971,9 +1978,21 @@ async function buildInterventions(
       });
       continue;
     }
-    if (steps.length > 0) {
-      result.push({ ...steps[0], ratio_name: rr.ratio_name, health_tier: rr.health_tier });
-    }
+    if (steps.length === 0) continue;
+    const chosen = { ...steps[0], ratio_name: rr.ratio_name, health_tier: rr.health_tier };
+    const grounded = groundPlaybookSteps([chosen], {
+      ratioKey: playbookKey,
+      ratioName: rr.ratio_name,
+      tier: rr.health_tier,
+      value: rr.current_value,
+      formattedValue: rr.formatted_value,
+      revenue: figures?.revenue,
+      netProfit: figures?.netProfit,
+      formatMoney: figures?.formatMoney,
+    });
+    if (grounded.tier === "healthy" || grounded.steps.length === 0) continue;
+    const step = grounded.steps[0];
+    result.push({ ...step, ratio_name: rr.ratio_name, health_tier: grounded.tier });
   }
   if (result.length === 0) return [];
 
@@ -2579,7 +2598,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const isDemo = !cd;
       const interventions = isDemo
         ? MOCK_INTERVENTIONS
-        : await buildInterventions(cd!.ratioResults, operatingProfile);
+        : await buildInterventions(cd!.ratioResults, operatingProfile, {
+            revenue: cd!.profitability?.revenue ?? null,
+            netProfit: cd!.profitability?.net_profit ?? null,
+            formatMoney: (amount) => formatReportMoney(amount, market),
+          });
       return renderToBlob(InterventionPriorityPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         interventions,

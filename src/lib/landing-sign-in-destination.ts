@@ -1,12 +1,12 @@
 /**
  * Where a successful sign-in goes. The landing modal and /auth share this.
  *
- * The landing door sends a pure owner to /app. /auth and any real firm
- * membership (a firm row, or a practice role that is not the auto-grant)
- * open /dashboard. An explicit owner door still keeps a dual-role account
- * on /app. firm_admin with no firm row and no practice-signup metadata is
- * the old auto-grant and stays on /app. An empty role read is not a new
- * owner: practice signup metadata still opens /dashboard, and a read that
+ * The landing door sends a pure owner to /app. A real firm membership
+ * (a firm row, a practice signup, or a practice role that is not the
+ * auto-grant) opens /practice, including when the same email also has a
+ * client seat. firm_admin with no firm row and no practice-signup metadata
+ * is the old auto-grant and stays on /app. An empty role read is not a new
+ * owner: practice signup metadata still opens /practice, and a read that
  * has not finished stays pending instead of pinning /app.
  *
  * Supabase stays behind the dynamic imports in resolveSignedInDestination.
@@ -14,6 +14,7 @@
 import {
   decidePostLoginPath,
   forcePortal,
+  isAutoGrantedFirmRole,
   isPracticeSignupMeta,
   summarizeRoles,
   type AppRole,
@@ -30,7 +31,7 @@ export type LandingSignInRoles = Omit<PortalRouteDecision, "force" | "intent"> &
 
 export type SignInDoor = "landing" | "accountant";
 
-export type SignInDestination = "/dashboard" | "/app" | "pending";
+export type SignInDestination = "/practice" | "/app" | "pending";
 
 /** Owner door unless this account is practice-only (no client seat). */
 export function destinationAfterLandingSignIn(d: LandingSignInRoles): SignInDestination {
@@ -41,7 +42,7 @@ export function destinationAfterLandingSignIn(d: LandingSignInRoles): SignInDest
  * Shared with /auth (`door: "accountant"`) and the landing modal
  * (`door: "landing"`). `pending` means the profile is not loaded and nothing
  * in the session says this is a practice account — do not open either board
- * yet. /auth sends a real firm member to /dashboard. A pure owner, and an
+ * yet. /auth sends a real firm member to /practice. A pure owner, and an
  * auto-granted firm_admin with no firm row, still land on /app.
  */
 export function destinationAfterSignIn(
@@ -50,16 +51,26 @@ export function destinationAfterSignIn(
 ): SignInDestination {
   const profileLoaded = d.profileLoaded !== false;
   const practiceEvidence = d.hasPracticeRole || d.hasFirm || d.practiceSignup;
+  const autoGrant = isAutoGrantedFirmRole({
+    hasPracticeRole: d.hasPracticeRole,
+    hasClientRole: d.hasClientRole,
+    hasFirm: d.hasFirm,
+    practiceSignup: d.practiceSignup,
+  });
+  // A firm account opens My practice, including when the same email also
+  // has one client seat. That seat must not open the owner board.
+  const firmAccount = (d.hasFirm || d.practiceSignup || d.hasPracticeRole) && !autoGrant;
 
   if (!profileLoaded) {
-    if (!d.hasClientRole && practiceEvidence) return "/dashboard";
-    // An unfinished read with no practice evidence is not an accountant yet.
-    // /auth must wait and retry so a business owner is not dropped on /dashboard.
+    if (!d.hasClientRole && practiceEvidence) return "/practice";
     if (!practiceEvidence && !d.hasClientRole) return "pending";
   }
 
+  if (firmAccount && (profileLoaded || practiceEvidence)) return "/practice";
+
   if (door === "accountant") {
-    return decidePostLoginPath({ ...d, intent: "accountant", force: "accountant" });
+    const decided = decidePostLoginPath({ ...d, intent: "accountant", force: "accountant" });
+    return decided === "/dashboard" ? "/practice" : decided;
   }
 
   const ownerDoor =
@@ -67,11 +78,12 @@ export function destinationAfterSignIn(
   if (ownerDoor) {
     return decidePostLoginPath({ ...d, intent: "owner", force: "owner" });
   }
-  return decidePostLoginPath({ ...d, intent: "accountant", force: "accountant" });
+  const decided = decidePostLoginPath({ ...d, intent: "accountant", force: "accountant" });
+  return decided === "/dashboard" ? "/practice" : decided;
 }
 
-export function landingSignInForce(path: "/dashboard" | "/app"): "owner" | "accountant" {
-  return path === "/dashboard" ? "accountant" : "owner";
+export function landingSignInForce(path: "/practice" | "/dashboard" | "/app"): "owner" | "accountant" {
+  return path === "/app" ? "owner" : "accountant";
 }
 
 export async function loadSignInRoleSnapshot(
@@ -147,7 +159,7 @@ export async function resolveSignedInDestination(
     knownMeta?: Record<string, unknown> | null;
     load?: () => Promise<LandingSignInRoles>;
   },
-): Promise<"/dashboard" | "/app"> {
+): Promise<"/practice" | "/app"> {
   const read = async () =>
     withKnownMeta(
       opts.load ? await opts.load() : await loadSignInRoleSnapshot(userId, opts.knownMeta),
@@ -162,8 +174,8 @@ export async function resolveSignedInDestination(
     }
     path = destinationAfterSignIn(snapshot, opts.door);
   }
-  if (path !== "/dashboard" && path !== "/app") {
-    path = opts.door === "accountant" ? "/dashboard" : "/app";
+  if (path !== "/practice" && path !== "/app") {
+    path = opts.door === "accountant" ? "/practice" : "/app";
   }
   forcePortal(landingSignInForce(path));
   return path;
@@ -173,6 +185,6 @@ export async function resolveLandingSignInDestination(
   userId: string,
   load?: () => Promise<LandingSignInRoles>,
   knownMeta?: Record<string, unknown> | null,
-): Promise<"/dashboard" | "/app"> {
+): Promise<"/practice" | "/app"> {
   return resolveSignedInDestination(userId, { door: "landing", load, knownMeta });
 }

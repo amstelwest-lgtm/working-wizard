@@ -231,8 +231,12 @@ assert(pastBank.source === "stored" && pastBank.replaceStored === false, "bank l
 assert(pastBank.startDate === "2026-10-05", `bank week 1 should be this week, got ${pastBank.startDate}`);
 assert(pastBank.reanchored === true, "past bank start is reanchored");
 assert(pastBank.weekDates[0] === "2026-10-05", "reanchored week label date is the week start");
-assert(pastBank.opening !== -9150, "opening was rolled across the gap");
-assert(pastBank.anchorNote?.includes("12 days") === true, pastBank.anchorNote ?? "missing roll note");
+assert(pastBank.opening === -9150, `opening stays the balance on file, got ${pastBank.opening}`);
+assert(pastBank.anchorNote?.includes("12 days") === true, pastBank.anchorNote ?? "missing gap note");
+assert(
+  pastBank.anchorNote?.includes("stays the balance on file") === true,
+  pastBank.anchorNote ?? "missing stay note",
+);
 
 const disagree = plBankDisagreement({
   financials: { revenue: 50000, cogs: 20000, fixedCosts: 0, periodMonths: "1" },

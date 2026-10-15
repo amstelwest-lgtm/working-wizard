@@ -175,8 +175,8 @@ const ownerWithFirmRole: LandingSignInRoles = {
   practiceSignup: false,
 };
 assert(
-  destinationAfterSignIn(ownerWithFirmRole, "accountant") === "/dashboard",
-  "/auth sends a firm member who also has a client seat to /dashboard",
+  destinationAfterSignIn(ownerWithFirmRole, "accountant") === "/practice",
+  "/auth sends a firm member who also has a client seat to /practice",
 );
 const autoGrantedOwner: LandingSignInRoles = {
   hasPracticeRole: true,
@@ -193,20 +193,20 @@ assert(
   "the owner door keeps an auto-granted firm_admin on /app",
 );
 assert(
-  destinationAfterSignIn(dual, "accountant") === "/dashboard",
-  "/auth still sends a practice signup with a client seat to /dashboard",
+  destinationAfterSignIn(dual, "accountant") === "/practice",
+  "/auth sends a practice signup with a client seat to /practice",
 );
 assert(
-  destinationAfterLandingSignIn(accountant) === "/dashboard",
-  "practice-only sign-in opens /dashboard",
+  destinationAfterLandingSignIn(accountant) === "/practice",
+  "practice-only sign-in opens /practice",
 );
 assert(
-  destinationAfterLandingSignIn(dual) === "/app",
-  "owner door keeps a dual-role account on /app",
+  destinationAfterLandingSignIn(dual) === "/practice",
+  "a dual-role firm account opens /practice",
 );
 assert(
-  destinationAfterLandingSignIn(firmOnly) === "/dashboard",
-  "firm account with no client seat opens /dashboard",
+  destinationAfterLandingSignIn(firmOnly) === "/practice",
+  "firm account with no client seat opens /practice",
 );
 assert(
   destinationAfterLandingSignIn({
@@ -225,12 +225,12 @@ const precardEmpty: LandingSignInRoles = {
   profileLoaded: true,
 };
 assert(
-  destinationAfterLandingSignIn(precardEmpty) === "/dashboard",
-  "pre-card practice account with no business seat opens /dashboard",
+  destinationAfterLandingSignIn(precardEmpty) === "/practice",
+  "pre-card practice account with no business seat opens /practice",
 );
 assert(
-  destinationAfterSignIn(precardEmpty, "accountant") === "/dashboard",
-  "/auth sends the same pre-card account to /dashboard",
+  destinationAfterSignIn(precardEmpty, "accountant") === "/practice",
+  "/auth sends the same pre-card account to /practice",
 );
 const profileNotLoaded: LandingSignInRoles = {
   hasPracticeRole: false,
@@ -240,12 +240,12 @@ const profileNotLoaded: LandingSignInRoles = {
   profileLoaded: false,
 };
 assert(
-  destinationAfterLandingSignIn(profileNotLoaded) === "/dashboard",
-  "practice signup whose profile is not loaded yet opens /dashboard",
+  destinationAfterLandingSignIn(profileNotLoaded) === "/practice",
+  "practice signup whose profile is not loaded yet opens /practice",
 );
 assert(
-  destinationAfterSignIn(profileNotLoaded, "accountant") === "/dashboard",
-  "/auth sends an unloaded practice profile to /dashboard",
+  destinationAfterSignIn(profileNotLoaded, "accountant") === "/practice",
+  "/auth sends an unloaded practice profile to /practice",
 );
 assert(
   destinationAfterLandingSignIn({
@@ -287,7 +287,7 @@ const prevWindow = g.window;
 g.window = { sessionStorage: sessionStore, localStorage: localStore };
 
 const accountantPath = await resolveLandingSignInDestination("acct", async () => accountant);
-assert(accountantPath === "/dashboard", "stubbed accountant sign-in navigates to /dashboard");
+assert(accountantPath === "/practice", "stubbed accountant sign-in navigates to /practice");
 assert(peekForcePortal() === "accountant", "accountant sign-in pins the accountant door");
 assert(
   sessionStore.getItem(PORTAL_FORCE_KEY) === "accountant",
@@ -300,8 +300,8 @@ assert(ownerPath === "/app", "stubbed owner sign-in navigates to /app");
 assert(peekForcePortal() === "owner", "owner sign-in pins the owner door");
 
 const dualPath = await resolveLandingSignInDestination("dual", async () => dual);
-assert(dualPath === "/app", "stubbed dual-role sign-in stays on the owner door");
-assert(peekForcePortal() === "owner", "dual-role owner door force stays owner");
+assert(dualPath === "/practice", "stubbed dual-role sign-in opens My practice");
+assert(peekForcePortal() === "accountant", "dual-role firm sign-in pins the accountant door");
 clearForcePortal();
 
 const unloadedPath = await resolveSignedInDestination("precard", {
@@ -309,7 +309,7 @@ const unloadedPath = await resolveSignedInDestination("precard", {
   knownMeta: { signup_type: "accountant", firm_name: "Precard Practice" },
   load: async () => profileNotLoaded,
 });
-assert(unloadedPath === "/dashboard", "unloaded practice profile navigates to /dashboard");
+assert(unloadedPath === "/practice", "unloaded practice profile navigates to /practice");
 assert(peekForcePortal() === "accountant", "unloaded practice profile pins the accountant door");
 clearForcePortal();
 

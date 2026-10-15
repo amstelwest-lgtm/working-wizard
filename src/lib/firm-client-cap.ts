@@ -146,12 +146,21 @@ export function decideFirmClientCreate(input: {
   }
 
   if (input.phase === "trialing") {
-    if (input.clientCount >= FIRM_TRIAL_CLIENT_LIMIT) {
+    const trialLimit =
+      input.band === "starter"
+        ? (FIRM_BAND_CATALOG.starter.clientLimit ?? FIRM_TRIAL_CLIENT_LIMIT)
+        : FIRM_TRIAL_CLIENT_LIMIT;
+    if (input.clientCount >= trialLimit) {
+      const bandName = input.band ? FIRM_BAND_CATALOG[input.band].name : null;
+      const message =
+        input.band === "starter"
+          ? `You can't add another client on Starter. Starter includes up to ${trialLimit} active clients.`
+          : `${FIRM_TRIAL_SENTENCE}. This practice already has ${trialLimit} clients. Upgrade to a paid plan to add another.`;
       return {
         allowed: false,
         code: "trial_client_cap",
-        bandName: input.band ? FIRM_BAND_CATALOG[input.band].name : null,
-        message: `${FIRM_TRIAL_SENTENCE}. This practice already has ${FIRM_TRIAL_CLIENT_LIMIT} clients. Upgrade to a paid plan to add another.`,
+        bandName,
+        message,
       };
     }
     return { allowed: true };
@@ -159,7 +168,8 @@ export function decideFirmClientCreate(input: {
 
   if (input.phase === "active" && input.band && isFirmBandId(input.band)) {
     const band = FIRM_BAND_CATALOG[input.band];
-    const clientLimit = band.id === "starter" ? starterClientLimit(input.unitAmount) : band.clientLimit;
+    const clientLimit =
+      band.id === "starter" ? FIRM_BAND_CATALOG.starter.clientLimit : band.clientLimit;
     if (clientLimit == null) return { allowed: true };
     if (input.clientCount >= clientLimit) {
       return {
@@ -233,10 +243,12 @@ export function formatFirmPlanStatus(input: {
         : days <= 0
           ? "Trial — ends today"
           : `Trial — ${days} day${days === 1 ? "" : "s"} left`;
-    const cap = `Up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
+    const capLimit =
+      band === "starter" ? FIRM_BAND_CATALOG.starter.clientLimit : FIRM_TRIAL_CLIENT_LIMIT;
+    const cap = `Up to ${capLimit} clients`;
     const after =
       band === "starter"
-        ? `${bandName} includes up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients after the trial`
+        ? null
         : bandName
           ? `${bandName} after the trial`
           : null;

@@ -227,7 +227,7 @@ function AuthCallbackPage() {
           user.id,
           user.user_metadata as Record<string, unknown> | undefined,
         );
-        if (destinationAfterSignIn(landingRoles, "landing") === "/dashboard") {
+        if (destinationAfterSignIn(landingRoles, "landing") === "/practice") {
           intent = "accountant";
         }
       }
@@ -365,7 +365,7 @@ function AuthCallbackPage() {
         /* ignore */
       }
 
-      let path: "/app" | "/dashboard" | "/ops" = "/app";
+      let path: "/app" | "/practice" | "/ops" = "/app";
       let opsTab: string | undefined;
       if (goOps || isOpsNext(next)) {
         path = "/ops";

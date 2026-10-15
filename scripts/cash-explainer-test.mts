@@ -39,6 +39,25 @@ assert(
 );
 assert(!rolled.bullets.some((line) => /\d{4}-\d{2}-\d{2}/.test(line)), "ISO date leaked into bullets");
 
+const stayed = cashExplainerCopy({
+  rangeStart: "2026-10-12",
+  rangeEnd: "2027-01-04",
+  floorText: "R 50k",
+  anchorNote:
+    "21 days sit between 2026-09-21 and this week (2026-10-12). Opening cash stays the balance on file.",
+  cycleNote: null,
+  otherNote: null,
+  timingNote: null,
+});
+assert(
+  stayed.ownerRollLine === "Opening cash stays the balance on file",
+  stayed.ownerRollLine ?? "missing stay line",
+);
+assert(
+  stayed.bullets.some((line) => line.startsWith("Opening cash is still the 21 Sep 2026 balance.")),
+  stayed.bullets.join(" | "),
+);
+
 const quiet = cashExplainerCopy({
   rangeStart: "2026-10-12",
   rangeEnd: "2027-01-04",

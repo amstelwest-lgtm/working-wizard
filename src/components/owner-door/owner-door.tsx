@@ -99,6 +99,7 @@ export function OwnerDoor({
   periodEnd,
   history,
   cashflow,
+  cashOutlook = null,
   market,
   signoffs,
   firmId,
@@ -133,6 +134,13 @@ export function OwnerDoor({
   periodEnd: string | null;
   history: SnapshotRow[];
   cashflow: SavedCashflowLike | null;
+  /** Same opening and floor as Health and the 13-week forecast. */
+  cashOutlook?: {
+    opening: number;
+    closing: number[];
+    floor: number;
+    dipsBelowFloorWeek: number | null;
+  } | null;
   market: ResolvedMarket;
   signoffs: Signoff[];
   firmId: string | null;
@@ -434,6 +442,7 @@ export function OwnerDoor({
       priorCogs: parseOwnerNumber(priorFin?.cogs),
       receivables: parseOwnerNumber(receivables),
       cashflow,
+      cashOutlook: cashOutlook ?? undefined,
       openAction,
       actionsReady,
       signedBy: latest?.signed_off_by_name ?? null,
@@ -447,6 +456,7 @@ export function OwnerDoor({
     priorRevenue,
     cogs,
     receivables,
+    cashOutlook,
     netIncome,
     periodEnd,
     history,

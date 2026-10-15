@@ -231,11 +231,19 @@ export function fallbackIndustryPulse(
   const sector =
     key.includes("retail") || key.includes("ecom")
       ? "retail"
-      : key.includes("construct") || key.includes("build")
+      :     key.includes("construct") || key.includes("build")
         ? "construction"
-        : key.includes("hospital") || key.includes("restaurant") || key.includes("food")
+        : key.includes("hotel") ||
+            key.includes("lodge") ||
+            key.includes("accommodation") ||
+            key.includes("hospital") ||
+            key.includes("restaurant") ||
+            key.includes("food")
           ? "hospitality"
-          : key.includes("manufactur") || key.includes("factory")
+          : key.includes("wood") ||
+              key.includes("timber") ||
+              key.includes("manufactur") ||
+              key.includes("factory")
             ? "manufacturing"
             : key.includes("logistics") || key.includes("transport")
               ? "logistics"

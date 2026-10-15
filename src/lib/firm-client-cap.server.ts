@@ -105,26 +105,21 @@ type LooseQuery = {
   }>;
 };
 
+type FirmSelect = {
+  eq: (column: string, value: string | boolean) => FirmSelect;
+  limit: (n: number) => Promise<{
+    data: FirmRow[] | null;
+    error: { message: string } | null;
+  }>;
+  maybeSingle: () => Promise<{
+    data: FirmRow | null;
+    error: { message: string } | null;
+  }>;
+} & Promise<{ count: number | null; error: { message: string } | null }>;
+
 type CapDb = {
   from: (table: string) => {
-    select: (
-      columns: string,
-      options?: { count: "exact"; head: true },
-    ) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        limit: (n: number) => Promise<{
-          data: FirmRow[] | null;
-          error: { message: string } | null;
-        }>;
-        maybeSingle: () => Promise<{
-          data: FirmRow | null;
-          error: { message: string } | null;
-        }>;
-      } & Promise<{ count: number | null; error: { message: string } | null }>;
-    };
+    select: (columns: string, options?: { count: "exact"; head: true }) => FirmSelect;
   };
   auth?: {
     getUser: () => Promise<{ data: { user: { email?: string | null } | null } }>;
@@ -352,7 +347,8 @@ async function countFirmClients(db: CapDb, firmId: string): Promise<number> {
   const { count, error } = await db
     .from("clients")
     .select("id", { count: "exact", head: true })
-    .eq("firm_id", firmId);
+    .eq("firm_id", firmId)
+    .eq("is_demo", false);
   if (error) throw new Error(error.message);
   return count ?? 0;
 }

@@ -545,7 +545,7 @@ function LandingPage() {
       if (pendingCheckout) {
         if (!cancelled) {
           await setLandingPortal("accountant");
-          navigate({ to: "/dashboard", replace: true });
+          navigate({ to: "/practice", replace: true });
         }
         return;
       }
@@ -556,7 +556,7 @@ function LandingPage() {
           if (firms.some((f) => f.owner_user_id === user.id)) {
             if (!cancelled) {
               await setLandingPortal("accountant");
-              navigate({ to: "/dashboard", replace: true });
+              navigate({ to: "/practice", replace: true });
             }
             return;
           }
@@ -577,7 +577,7 @@ function LandingPage() {
         const practice = isPracticeSignupMeta(
           user.user_metadata as Record<string, unknown> | undefined,
         );
-        if (!cancelled) navigate({ to: practice ? "/dashboard" : "/app", replace: true });
+        if (!cancelled) navigate({ to: practice ? "/practice" : "/app", replace: true });
       }
     })();
     return () => {
@@ -956,7 +956,7 @@ function LandingPage() {
             replace: true,
           });
         } else {
-          void navigate({ to: "/dashboard", replace: true });
+          void navigate({ to: "/practice", replace: true });
         }
         return;
       }
@@ -1012,7 +1012,7 @@ function LandingPage() {
             });
             if (resume === "workspace") {
               await setLandingPortal("accountant");
-              void navigate({ to: "/dashboard", replace: true });
+              void navigate({ to: "/practice", replace: true });
               return;
             }
             if (resume) {

@@ -56,7 +56,7 @@ type WfStep = {
 const COMPACT_LABEL: Record<string, string> = {
   Revenue: "Revenue",
   "Cost of Sales": "COS",
-  "Gross Profit": "Gross",
+  "Gross profit": "Gross profit",
   "Operating Expenses": "Op. exp.",
   Depreciation: "Deprec.",
   "Operating Profit": "Op. profit",
@@ -71,7 +71,7 @@ function pct(n: number, total: number) {
 }
 
 const STEP_RATIO: Record<string, string> = {
-  "Gross Profit": "Gross Margin",
+  "Gross profit": "Gross Margin",
   "Operating Profit": "Operating Margin",
   "Net Profit": "Net Margin",
 };
@@ -847,7 +847,7 @@ export function ProfitabilityWaterfall({
       showStatus: false,
     },
     {
-      label: "Gross Profit",
+      label: "Gross profit",
       delta: grossProfit,
       runningEnd: grossProfit,
       kind: "subtotal",
@@ -1297,7 +1297,7 @@ export function ProfitabilityWaterfall({
         <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 border-t border-amber-900/10 pt-3 dark:border-slate-800">
           {[
             { c: "linear-gradient(180deg, #2c5580, #1a3a5c)", t: "Revenue / Net Profit" },
-            { c: "linear-gradient(180deg, #5cc492, #3f9c72)", t: "Profit subtotal" },
+            { c: "linear-gradient(180deg, #5cc492, #3f9c72)", t: "Gross profit" },
             { c: "linear-gradient(180deg, #e05c5c, #c94b4b)", t: "Cost step" },
           ].map((l) => (
             <span
