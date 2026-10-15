@@ -89,7 +89,10 @@ assert(
   "a changed once-off amount is dirty",
 );
 
-const source = readFileSync("src/components/cash-forecast.tsx", "utf8");
+const source = [
+  readFileSync("src/components/cash-forecast.tsx", "utf8"),
+  readFileSync("src/components/once-off-suggest-bar.tsx", "utf8"),
+].join("\n");
 assert(source.includes("Save once-off rows"), "the forecast has an explicit once-off save");
 assert(source.includes('role="status"'), "save confirmation is a status message");
 assert(source.includes("silentForecastKey"), "autosave compares the silent forecast");
