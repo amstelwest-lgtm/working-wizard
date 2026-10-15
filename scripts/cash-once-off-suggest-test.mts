@@ -6,8 +6,8 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { OnceOffSuggestBar } from "../src/components/once-off-suggest-bar";
-import { onceOffDirty } from "../src/lib/cash-once-off-save";
-import { showSuggestOnceOffs, suggestOnceOffRows } from "../src/lib/cash-once-off-suggest";
+import { onceOffDirty, silentForecastKey } from "../src/lib/cash-once-off-save";
+import { onceOffSaveEnabled, showSuggestOnceOffs, suggestOnceOffRows } from "../src/lib/cash-once-off-suggest";
 import { buildDraftLinesFromExtract } from "../src/lib/cash-from-banks.pattern";
 import type { CashBankExtract } from "../src/lib/cash-from-banks.types";
 
@@ -66,6 +66,52 @@ const fromLines = suggestOnceOffRows({
   existing: [{ id: "rent", name: "Rent", amount: "8500", frequency: "recurring-monthly" }],
 });
 assert(fromLines.lines.length === 1 && fromLines.lines[0]?.amount === "15000", "classified bank lines suggest the same once-off");
+
+const bankGrid = [
+  { id: "seminar", name: "Andre Galvao Seminar", amount: "16800", frequency: "once-off", startWeek: 1, side: "revenue" as const },
+  { id: "greeff", name: "Greeff Properties", amount: "28000", frequency: "once-off", startWeek: 1, side: "expenses" as const },
+  { id: "rent", name: "Rent", amount: "8500", frequency: "recurring-monthly", startWeek: 1, side: "expenses" as const },
+];
+const fromGrid = suggestOnceOffRows({
+  bankDraft: null,
+  existing: bankGrid,
+  forecastLines: bankGrid,
+  bankSourced: true,
+});
+assert(fromGrid.empty == null, "bank grid lines are a source even when the draft is empty");
+assert(fromGrid.lines.some((line) => line.name === "Andre Galvao Seminar" && line.amount === "16800"), "Suggest stages the seminar receipt");
+assert(fromGrid.lines.some((line) => line.name === "Greeff Properties" && line.amount === "28000"), "Suggest stages the property payment");
+assert(!fromGrid.lines.some((line) => line.name === "Rent"), "a recurring bank line is not a once-off");
+const stagedIds = fromGrid.lines.map((line) => ({ id: line.id, frequency: line.frequency }));
+assert(
+  onceOffSaveEnabled({ dirty: onceOffDirty(stagedIds, stagedIds), staged: fromGrid.lines.length }),
+  "Save enables once a bank once-off is staged",
+);
+
+const storedOnce = [{ id: "seminar", name: "Andre Galvao Seminar", amount: "16800", frequency: "once", startWeek: 1 }];
+const converted = storedOnce.map((line) => ({ ...line, frequency: "once-off" }));
+const before = silentForecastKey({
+  startDate: "2026-10-05",
+  openingBalance: "44480",
+  revenue: storedOnce,
+  expenses: [],
+  other: [],
+  savedRevenue: [],
+  savedExpenses: [],
+  savedOther: [],
+});
+const after = silentForecastKey({
+  startDate: "2026-10-05",
+  openingBalance: "44480",
+  revenue: converted,
+  expenses: [],
+  other: [],
+  savedRevenue: [],
+  savedExpenses: [],
+  savedOther: [],
+  heldRevenue: { seminar: storedOnce[0]! },
+});
+assert(before === after, "staging a bank once-off does not change the silent forecast");
 
 const none = suggestOnceOffRows({ bankDraft: null, existing: [] });
 assert(none.lines.length === 0 && none.empty?.includes("No once-off"), "missing bank history invents nothing");

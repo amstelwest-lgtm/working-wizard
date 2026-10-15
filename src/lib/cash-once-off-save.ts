@@ -20,6 +20,8 @@ export function onceOffLines<T extends OnceOffLine>(lines: readonly T[]): T[] {
 export function linesForSilentSave<T extends OnceOffLine>(
   current: readonly T[],
   savedOnceOff: readonly T[],
+  /** Lines converted to once-off stay on their on-file copy until Save. */
+  held?: Readonly<Record<string, T>>,
 ): T[] {
   const savedById = new Map(savedOnceOff.map((line) => [line.id, line]));
   const used = new Set<string>();
@@ -27,7 +29,11 @@ export function linesForSilentSave<T extends OnceOffLine>(
   for (const line of current) {
     const saved = savedById.get(line.id);
     if (saved || line.frequency === "once-off") {
-      if (!saved) continue;
+      if (!saved) {
+        const prior = held?.[line.id];
+        if (prior) out.push(prior);
+        continue;
+      }
       out.push(saved);
       used.add(line.id);
       continue;
@@ -56,12 +62,15 @@ export function silentForecastKey<T extends OnceOffLine>(input: {
   savedRevenue: readonly T[];
   savedExpenses: readonly T[];
   savedOther: readonly T[];
+  heldRevenue?: Readonly<Record<string, T>>;
+  heldExpenses?: Readonly<Record<string, T>>;
+  heldOther?: Readonly<Record<string, T>>;
 }): string {
   return JSON.stringify({
     startDate: input.startDate,
     openingBalance: input.openingBalance,
-    revenue: linesForSilentSave(input.revenue, input.savedRevenue),
-    expenses: linesForSilentSave(input.expenses, input.savedExpenses),
-    other: linesForSilentSave(input.other, input.savedOther),
+    revenue: linesForSilentSave(input.revenue, input.savedRevenue, input.heldRevenue),
+    expenses: linesForSilentSave(input.expenses, input.savedExpenses, input.heldExpenses),
+    other: linesForSilentSave(input.other, input.savedOther, input.heldOther),
   });
 }

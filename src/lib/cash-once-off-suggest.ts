@@ -5,6 +5,8 @@
  */
 import { buildDraftLinesFromExtract } from "./cash-from-banks.pattern.ts";
 import type { CashBankExtract, CashBucket, CashForecastDraftLine } from "./cash-from-banks.types.ts";
+import { displayForecastFrequency } from "./cash-forecast-rows.ts";
+import { distributeForecastLine } from "./client-metrics.ts";
 
 export type SuggestedOnceOffLine = {
   id: string;
@@ -28,6 +30,61 @@ const EMPTY = "No once-off bank lines are on file.";
 const ALREADY = "Those once-off bank lines are already on the forecast.";
 
 type ExistingLine = { id?: string; name?: string; amount?: string; frequency?: string };
+
+export type ForecastGridLine = {
+  id: string;
+  name: string;
+  amount: string;
+  frequency: string;
+  startWeek?: number;
+  splitCount?: number;
+  weekOverrides?: Record<string, number> | null;
+  side: "revenue" | "expenses" | "other";
+};
+
+/** Save is on once a once-off is staged, even when that row was already stored. */
+export function onceOffSaveEnabled(input: { dirty: boolean; staged: number }): boolean {
+  return input.dirty || input.staged > 0;
+}
+
+/**
+ * Bank-tagged grid rows that land in a single week. The amount is that
+ * week's figure, which is already on the line. Recurring rows are left out.
+ */
+export function onceOffsOnBankForecast(lines: readonly ForecastGridLine[]): SuggestedOnceOffLine[] {
+  const out: SuggestedOnceOffLine[] = [];
+  for (const line of lines) {
+    const name = line.name.trim();
+    if (!name || !line.id) continue;
+    const vals = distributeForecastLine(
+      {
+        amount: line.amount,
+        frequency: displayForecastFrequency(line.name, line.frequency),
+        startWeek: line.startWeek,
+        splitCount: line.splitCount,
+        weekOverrides: line.weekOverrides ?? undefined,
+      },
+      13,
+    );
+    const hits: { week: number; amount: number }[] = [];
+    vals.forEach((value, index) => {
+      if (Math.abs(value) > 0.005) hits.push({ week: index + 1, amount: value });
+    });
+    if (hits.length !== 1) continue;
+    const amount = Math.round(hits[0]!.amount * 100) / 100;
+    if (!(amount > 0)) continue;
+    out.push({
+      id: line.id,
+      name,
+      amount: String(amount),
+      frequency: "once-off",
+      startWeek: hits[0]!.week,
+      splitCount: 1,
+      side: line.side,
+    });
+  }
+  return out;
+}
 
 /** The button is on the cash page when the forecast already has figures. */
 export function showSuggestOnceOffs(input: {
@@ -151,16 +208,25 @@ function draftLinesFromHistory(bankDraft: unknown): CashForecastDraftLine[] {
 export function suggestOnceOffRows(input: {
   bankDraft: unknown;
   existing: readonly ExistingLine[];
+  /** Lines already on the 13-week grid. Used when those rows are the bank source. */
+  forecastLines?: readonly ForecastGridLine[];
+  bankSourced?: boolean;
 }): OnceOffSuggestResult {
+  const onGrid = input.bankSourced ? onceOffsOnBankForecast(input.forecastLines ?? []) : [];
   const history = draftLinesFromHistory(input.bankDraft);
-  if (!history.length) return { lines: [], empty: EMPTY };
-
-  const names = new Set(input.existing.map((line) => norm(line.name ?? "")).filter(Boolean));
-  const used = new Set(input.existing.map((line) => line.id).filter((id): id is string => Boolean(id)));
+  const names = new Set<string>();
+  const used = new Set<string>();
   const lines: SuggestedOnceOffLine[] = [];
+  for (const row of onGrid) {
+    names.add(norm(row.name));
+    used.add(row.id);
+    lines.push(row);
+  }
   for (const row of history) {
     if (names.has(norm(row.name))) continue;
     if (row.id && used.has(row.id)) continue;
+    if (input.existing.some((line) => norm(line.name ?? "") === norm(row.name))) continue;
+    if (row.id && input.existing.some((line) => line.id === row.id)) continue;
     const id = allocateId(row.name, used);
     names.add(norm(row.name));
     lines.push({
@@ -173,6 +239,6 @@ export function suggestOnceOffRows(input: {
       side: sideFor(row),
     });
   }
-  if (!lines.length) return { lines: [], empty: ALREADY };
+  if (!lines.length) return { lines: [], empty: history.length ? ALREADY : EMPTY };
   return { lines, empty: null };
 }
