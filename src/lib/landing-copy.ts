@@ -110,7 +110,7 @@ export const ACCOUNTANT_TEASER = {
   label: "For accounting firms",
   title: "The accountant's view",
   meta: "0:30",
-  videoId: "J4vJki7HcIs",
+  videoId: "oILDudRd7Qk",
   accessibleName:
     "Milōn for accountants: 30-second walkthrough of the AI finance team drafting a client advisory pack",
   imageAlt:
@@ -121,7 +121,7 @@ export const OWNER_TEASER = {
   label: "For business owners",
   title: "The owner's view",
   meta: "0:30",
-  videoId: "k3aRM4toTvU",
+  videoId: "EhIFIdez-1M",
   accessibleName:
     "Milōn for owners: 30-second walkthrough of the health score, 13-week cash forecast and next moves",
   imageAlt:

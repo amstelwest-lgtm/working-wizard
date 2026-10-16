@@ -2,9 +2,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import { LiteYouTube } from "@/components/lite-youtube";
 import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { FIRM_NOT_A_BOOKKEEPER, FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
+import { ACCOUNTANT_TEASER, FIRM_NOT_A_BOOKKEEPER, FIRM_TEAM_BULLETS } from "@/lib/landing-copy";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
@@ -191,6 +192,16 @@ function ForAccountantsPage() {
           </div>
         </li>
       </ol>
+
+      <figure className="mk-video mk-print-hide">
+        <p className="mk-video-label">{ACCOUNTANT_TEASER.label}</p>
+        <LiteYouTube
+          videoId={ACCOUNTANT_TEASER.videoId}
+          title={ACCOUNTANT_TEASER.title}
+          accessibleName={ACCOUNTANT_TEASER.accessibleName}
+          imageAlt={ACCOUNTANT_TEASER.imageAlt}
+        />
+      </figure>
 
       <h2>{saPricing?.heading ?? "Pricing for firms"}</h2>
       <p>

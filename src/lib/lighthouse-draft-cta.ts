@@ -1,6 +1,6 @@
 /** Locked accountant_v1 v3 assets. */
-export const ACCOUNTANT_TEASER_PRACTICE = "https://youtu.be/J4vJki7HcIs";
-export const ACCOUNTANT_TEASER_OWNER = "https://youtu.be/k3aRM4toTvU";
+export const ACCOUNTANT_TEASER_PRACTICE = "https://youtu.be/oILDudRd7Qk";
+export const ACCOUNTANT_TEASER_OWNER = "https://youtu.be/EhIFIdez-1M";
 export const ACCOUNTANT_ONE_PAGER_PATH = "/lighthouse/milon-one-pager-accountants.pdf";
 export const LIGHTHOUSE_TEAM_VOICE = "The Milōn Team";
 

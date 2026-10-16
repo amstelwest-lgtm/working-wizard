@@ -90,7 +90,7 @@ During dry-run, **every other address fails closed** at send time.
 5. **Send now** → confirm toast *Sent*; check the inbox (and spam).
 6. Repeat for a second persona / step if you want to exercise `asset_fallback`.
 7. **Day 3 (step 2) only** — draft/send a touch and confirm the body gifts **both** teaser links
-   (owner: `https://youtu.be/k3aRM4toTvU`, practice: `https://youtu.be/J4vJki7HcIs`). **Day 0 (step 1)
+   (owner: `https://youtu.be/EhIFIdez-1M`, practice: `https://youtu.be/oILDudRd7Qk`). **Day 0 (step 1)
    must still have no video link.**
 8. Click opt-out link in a test email → lead should flip **Do not contact**; a second send must fail.
 9. Reply to a test send → webhook `email.received` should surface in the lead drawer (needs webhook).
@@ -108,7 +108,7 @@ During dry-run, **every other address fails closed** at send time.
 | `accountant_v1` sequence | **DB seed** | Applied via migration; 5 steps with `asset_fallback` on steps 2–3 |
 | Opt-out | **Code + DB** | Per-lead `optout_token`; RFC 8058 headers at send; routes `/unsubscribe`, `/lh/unsubscribe` |
 | `asset_fallback` | **Code + DB** | Drafter uses `[asset, asset_fallback]` via `firstReadyAsset()` — only `status=ready` assets link |
-| Teaser videos | **Ready** | `teaser_owner` → `https://youtu.be/k3aRM4toTvU`; `teaser_accountant` → `https://youtu.be/J4vJki7HcIs`. Both wired on `accountant_v1` and `owner_v1` step 2; sequence goal says gift **both** on Day 3. Day 0 has no video. |
+| Teaser videos | **Ready** | `teaser_owner` → `https://youtu.be/EhIFIdez-1M`; `teaser_accountant` → `https://youtu.be/oILDudRd7Qk`. Both wired on `accountant_v1` and `owner_v1` step 2; sequence goal says gift **both** on Day 3. Day 0 has no video. |
 | Assets default | **Manual — Theo** | Non-teaser slots (case study, 3-min demo) may still be `in_progress`; flip to **ready** in `/ops` → Assets after reading copy |
 | One-pager PDFs | **Ready** | `/lighthouse/milon-one-pager-accountants.pdf` and `/lighthouse/milon-one-pager-owners.pdf` — each includes both teaser URLs in the video strip |
 | Owner gate | **Env** | `MILON_OWNER_EMAILS` + passphrase; not auth/#140 |

@@ -183,8 +183,8 @@ assert(prompt.includes("hello@milonfinance.com"), "prompt locks Reply-To");
 assert(prompt.includes("The MILŌN Team"), "prompt locks the signer");
 assert(prompt.includes("auto_send is false"), "prompt locks auto_send");
 assert(/never send, approve, or schedule/i.test(prompt) || prompt.includes('Never "send"'), "prompt forbids send");
-assert(prompt.includes(CHAT_TEASER_ACCOUNTANT) && prompt.includes("https://youtu.be/J4vJki7HcIs"), "accountant teaser");
-assert(prompt.includes(CHAT_TEASER_OWNER) && prompt.includes("https://youtu.be/k3aRM4toTvU"), "owner teaser");
+assert(prompt.includes(CHAT_TEASER_ACCOUNTANT) && prompt.includes("https://youtu.be/oILDudRd7Qk"), "accountant teaser");
+assert(prompt.includes(CHAT_TEASER_OWNER) && prompt.includes("https://youtu.be/EhIFIdez-1M"), "owner teaser");
 assert(/50% discount only when the firm geo is SA/i.test(prompt), "SA discount is SA-only in the prompt");
 assert(/outsourced cfo/i.test(prompt), "prompt bans OCFO wording");
 assert(!/claude|anthropic/i.test(prompt.replace(/Never name a model, Claude, or Anthropic\./, "")), "prompt does not brand the model");
@@ -452,8 +452,8 @@ assert(!/status:\s*"sent"/.test(persistSrc), "shared draft write never sets sent
   assert(row?.status === "draft", "saved touch stays draft");
   const body = String(row?.body ?? "");
   assert(/QuickBooks Online/i.test(body) && /Xero/i.test(body), "loader draft leads with QBO and Xero");
-  assert(body.includes("https://youtu.be/J4vJki7HcIs"), "loader draft includes the accountant teaser");
-  assert(body.includes("https://youtu.be/k3aRM4toTvU"), "loader draft includes the owner teaser");
+  assert(body.includes("https://youtu.be/oILDudRd7Qk"), "loader draft includes the accountant teaser");
+  assert(body.includes("https://youtu.be/EhIFIdez-1M"), "loader draft includes the owner teaser");
   assert(body.includes("The MILŌN Team"), "loader draft signs as the team");
   assert(!/50\s*%|discount/i.test(body), "US firm from the loader gets no SA discount");
 }
@@ -604,8 +604,8 @@ assert(!/status:\s*"sent"/.test(persistSrc), "shared draft write never sets sent
   const body = String(inserted?.body ?? "");
   assert(/QuickBooks Online/i.test(body) && /Xero/i.test(body), "draft leads with QBO and Xero");
   assert(/autonomous agent/i.test(body), "draft calls Milōn an autonomous agent");
-  assert(body.includes("https://youtu.be/J4vJki7HcIs"), "draft includes the accountant teaser");
-  assert(body.includes("https://youtu.be/k3aRM4toTvU"), "draft includes the owner teaser");
+  assert(body.includes("https://youtu.be/oILDudRd7Qk"), "draft includes the accountant teaser");
+  assert(body.includes("https://youtu.be/EhIFIdez-1M"), "draft includes the owner teaser");
   assert(body.includes("The MILŌN Team"), "draft signs as the team");
   assert(!/50\s*%|discount/i.test(body), "US draft has no SA discount");
   assert(!/theo|founder|outsourced cfo|ocfo|claude|anthropic/i.test(body), "US draft has no person, OCFO, or model");

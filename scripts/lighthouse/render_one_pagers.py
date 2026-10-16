@@ -5,8 +5,8 @@ from fpdf import FPDF
 ASSETS = Path(__file__).resolve().parent
 FONTS = ASSETS / "fonts"
 REPO_ROOT = ASSETS.parent.parent
-TEASER_OWNER = "https://youtu.be/k3aRM4toTvU"
-TEASER_ACCOUNTANT = "https://youtu.be/J4vJki7HcIs"
+TEASER_OWNER = "https://youtu.be/EhIFIdez-1M"
+TEASER_ACCOUNTANT = "https://youtu.be/oILDudRd7Qk"
 NAVY = (15, 32, 64)
 NAVY_MID = (30, 55, 95)
 ACCENT = (20, 80, 140)

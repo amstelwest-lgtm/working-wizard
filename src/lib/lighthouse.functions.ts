@@ -1434,7 +1434,7 @@ Non-negotiable rules:
 - From display name is The MILŌN Team. Do not sign with a personal name or a Founder title.
 - From is team@trymilon.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.
 - Day 0: capacity-ceiling observation and a soft ask. No URLs at all.
-- Day 4: must include BOTH https://youtu.be/J4vJki7HcIs and https://youtu.be/k3aRM4toTvU. No trial link.
+- Day 4: must include BOTH https://youtu.be/oILDudRd7Qk and https://youtu.be/EhIFIdez-1M. No trial link.
 - Day 9: only CTA is the free-trial link. Must include the practice one-pager URL when provided. No other CTAs.
 - Day 17: unusual-question bait. No URLs and no PDF.
 - Day 28: capacity close. Include the trial link, BOTH YouTube teasers, and the one-pager URL when provided.
@@ -1463,7 +1463,7 @@ Non-negotiable rules:
 - Truth only. Never invent client names, results, percentages, awards, peer benchmarks, or case studies.
 - Plain text, no HTML, no markdown, no emoji, no exclamation marks.
 - Length may stay long — do not cut this down to a drip-style 120-word note.
-- Keep BOTH YouTube URLs exactly: https://youtu.be/J4vJki7HcIs and https://youtu.be/k3aRM4toTvU.
+- Keep BOTH YouTube URLs exactly: https://youtu.be/oILDudRd7Qk and https://youtu.be/EhIFIdez-1M.
 - Keep BOTH one-pager URLs exactly: https://www.milonfinance.com/lighthouse/milon-one-pager-accountants.pdf and https://www.milonfinance.com/lighthouse/milon-one-pager-owners.pdf.
 - KEEP the line that we will call shortly after they have looked through the videos and one-pagers. Do not strip the call, and do not replace it with a trial-only ask.
 - Sign off as The Milōn Team.

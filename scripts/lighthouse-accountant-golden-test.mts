@@ -47,16 +47,16 @@ for (const email of ACCOUNTANT_V1_GOLDEN) {
 
 assert(!ACCOUNTANT_V1_GOLDEN[0].body.includes("http"), "day 0 has no links");
 assert(!ACCOUNTANT_V1_GOLDEN[0].body.includes("{{trial_link}}"), "day 0 has no trial token");
-assert(ACCOUNTANT_V1_GOLDEN[1].body.includes("https://youtu.be/J4vJki7HcIs"), "day 4 firm teaser");
-assert(ACCOUNTANT_V1_GOLDEN[1].body.includes("https://youtu.be/k3aRM4toTvU"), "day 4 owner teaser");
+assert(ACCOUNTANT_V1_GOLDEN[1].body.includes("https://youtu.be/oILDudRd7Qk"), "day 4 firm teaser");
+assert(ACCOUNTANT_V1_GOLDEN[1].body.includes("https://youtu.be/EhIFIdez-1M"), "day 4 owner teaser");
 assert(!ACCOUNTANT_V1_GOLDEN[1].body.includes("{{trial_link}}"), "day 4 has no trial token");
 assert(ACCOUNTANT_V1_GOLDEN[2].body.includes("{{trial_link}}"), "day 9 trial token");
 assert(!ACCOUNTANT_V1_GOLDEN[2].body.includes("youtu.be"), "day 9 has no video links");
 assert(!ACCOUNTANT_V1_GOLDEN[3].body.includes("http"), "day 17 has no links");
 assert(!ACCOUNTANT_V1_GOLDEN[3].body.includes("{{trial_link}}"), "day 17 has no trial token");
 assert(ACCOUNTANT_V1_GOLDEN[4].body.includes("{{trial_link}}"), "day 28 trial token");
-assert(ACCOUNTANT_V1_GOLDEN[4].body.includes("https://youtu.be/J4vJki7HcIs"), "day 28 firm teaser");
-assert(ACCOUNTANT_V1_GOLDEN[4].body.includes("https://youtu.be/k3aRM4toTvU"), "day 28 owner teaser");
+assert(ACCOUNTANT_V1_GOLDEN[4].body.includes("https://youtu.be/oILDudRd7Qk"), "day 28 firm teaser");
+assert(ACCOUNTANT_V1_GOLDEN[4].body.includes("https://youtu.be/EhIFIdez-1M"), "day 28 owner teaser");
 
 assert(firstNameFromLeadName("Jane Doe") === "Jane", "first name from full name");
 assert(firstNameFromLeadName("Theo") === "Theo", "single name");
@@ -128,8 +128,8 @@ assert(ACCOUNTANT_ONESHOT_TEMPLATE.kind === "oneshot", "oneshot kind");
 assert(accountantOneshotCopyReady(), "oneshot copy is in repo");
 assert(ACCOUNTANT_ONESHOT_GOLDEN.subject === "A better way to grow advisory", "oneshot subject");
 assert(ACCOUNTANT_ONESHOT_GOLDEN.body.includes("{{name}}"), "oneshot has {{name}}");
-assert(ACCOUNTANT_ONESHOT_GOLDEN.body.includes("https://youtu.be/J4vJki7HcIs"), "oneshot accountant teaser");
-assert(ACCOUNTANT_ONESHOT_GOLDEN.body.includes("https://youtu.be/k3aRM4toTvU"), "oneshot owner teaser");
+assert(ACCOUNTANT_ONESHOT_GOLDEN.body.includes("https://youtu.be/oILDudRd7Qk"), "oneshot accountant teaser");
+assert(ACCOUNTANT_ONESHOT_GOLDEN.body.includes("https://youtu.be/EhIFIdez-1M"), "oneshot owner teaser");
 assert(
   ACCOUNTANT_ONESHOT_GOLDEN.body.includes(ACCOUNTANT_ONESHOT_ACCOUNTANT_PAGER_URL),
   "oneshot accountant one-pager URL",

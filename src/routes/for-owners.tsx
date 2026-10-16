@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { LiteYouTube } from "@/components/lite-youtube";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { readMarketingVisitor } from "@/lib/geo-country.functions";
-import { OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
+import { OWNER_PLAN_EARLY_US, OWNER_TEASER } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
@@ -154,6 +155,16 @@ function ForOwnersPage() {
       </div>
 
       <OwnerInviteNudge variant="marketing" />
+
+      <figure className="mk-video mk-print-hide">
+        <p className="mk-video-label">{OWNER_TEASER.label}</p>
+        <LiteYouTube
+          videoId={OWNER_TEASER.videoId}
+          title={OWNER_TEASER.title}
+          accessibleName={OWNER_TEASER.accessibleName}
+          imageAlt={OWNER_TEASER.imageAlt}
+        />
+      </figure>
 
       <h2>The short version</h2>
       <p>

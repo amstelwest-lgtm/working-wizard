@@ -219,8 +219,15 @@ assert(!migration.includes('"day":12'), "v3 does not keep day 12");
 assert(!migration.includes('"day":18'), "v3 does not keep day 18");
 assert(migration.includes("teaser_accountant"), "day4 primary teaser");
 assert(migration.includes("teaser_owner"), "day4 fallback teaser");
-assert(migration.includes(ACCOUNTANT_TEASER_PRACTICE), "practice YT in goals");
-assert(migration.includes(ACCOUNTANT_TEASER_OWNER), "owner YT in goals");
+const founderTeasers = readFileSync(
+  resolve("supabase/migrations/20261016183000_lighthouse_founder_teaser_videos.sql"),
+  "utf8",
+);
+assert(founderTeasers.includes(ACCOUNTANT_TEASER_PRACTICE), "practice YT in goals");
+assert(founderTeasers.includes(ACCOUNTANT_TEASER_OWNER), "owner YT in goals");
+assert(founderTeasers.includes("teaser_accountant"), "founder migration updates the practice asset");
+assert(founderTeasers.includes("teaser_owner"), "founder migration updates the owner asset");
+assert(!founderTeasers.includes("WHERE key = 'owner_v1'"), "founder migration does not rewrite owner_v1");
 assert(migration.includes("one_pager_accountant"), "day9/28 one-pager asset");
 assert(migration.includes("hello@milon.co.za"), "v3 reply_to lock targets hello@milon.co.za");
 assert(migration.includes("team@milonfinance.com"), "v3 reply_to lock historically wrote team@");
