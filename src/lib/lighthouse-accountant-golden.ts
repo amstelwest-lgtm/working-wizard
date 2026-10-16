@@ -63,8 +63,8 @@ The idea is pretty simple: make the accounting workflow work around the accounta
 
 Two 30-second clips that show both sides of the same workspace (not a pitch):
 
-How it looks for the firm: https://youtu.be/J4vJki7HcIs
-How it looks for the owner: https://youtu.be/k3aRM4toTvU
+How it looks for the firm: https://youtu.be/oILDudRd7Qk
+How it looks for the owner: https://youtu.be/EhIFIdez-1M
 
 We’re building it specifically for accounting firms, and I’d be interested to hear whether client chasing is a meaningful headache for you guys.
 
@@ -125,8 +125,8 @@ Firm signup (invite one client → first branded score):
 {{trial_link}}
 
 Quick picture of both sides if useful:
-Firm: https://youtu.be/J4vJki7HcIs
-Owner: https://youtu.be/k3aRM4toTvU
+Firm: https://youtu.be/oILDudRd7Qk
+Owner: https://youtu.be/EhIFIdez-1M
 
 The Milōn Team`,
   },
@@ -177,9 +177,9 @@ We’d like to explore whether your firm could be one of them.
 
 We’ve included two short videos and one-pagers for both the accountant and business-owner sides of Milōn:
 
-Accountant overview: https://youtu.be/J4vJki7HcIs
+Accountant overview: https://youtu.be/oILDudRd7Qk
 
-Business-owner overview: https://youtu.be/k3aRM4toTvU
+Business-owner overview: https://youtu.be/EhIFIdez-1M
 
 Accountant one-pager: https://www.milonfinance.com/lighthouse/milon-one-pager-accountants.pdf
 

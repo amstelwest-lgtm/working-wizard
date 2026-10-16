@@ -58,8 +58,8 @@ assertClean("filled oneshot body", filledOneshot.body);
 
 const oneshot = ACCOUNTANT_ONESHOT_GOLDEN.body;
 assert(oneshot.includes("our AI agent"), "oneshot says our AI agent");
-assert(oneshot.includes("https://youtu.be/J4vJki7HcIs"), "oneshot keeps the firm teaser");
-assert(oneshot.includes("https://youtu.be/k3aRM4toTvU"), "oneshot keeps the owner teaser");
+assert(oneshot.includes("https://youtu.be/oILDudRd7Qk"), "oneshot keeps the firm teaser");
+assert(oneshot.includes("https://youtu.be/EhIFIdez-1M"), "oneshot keeps the owner teaser");
 assert(oneshot.trimEnd().endsWith("The Milōn Team"), "oneshot signs The Milōn Team");
 assert(oneshot.includes("We’ll give you a call shortly"), "oneshot keeps the follow-up call");
 assert(!/\btheo\b/i.test(oneshot), "oneshot has no founder name");
@@ -88,8 +88,8 @@ for (const geo of ["US", "SA"] as const) {
   assertClean(`${geo} follow-up subject`, draft.subject);
   assertClean(`${geo} follow-up body`, draft.body);
   assert(/QuickBooks/i.test(draft.body) && /Xero/i.test(draft.body), `${geo} follow-up keeps the QBO and Xero lead`);
-  assert(draft.body.includes("https://youtu.be/J4vJki7HcIs"), `${geo} follow-up keeps the firm teaser`);
-  assert(draft.body.includes("https://youtu.be/k3aRM4toTvU"), `${geo} follow-up keeps the owner teaser`);
+  assert(draft.body.includes("https://youtu.be/oILDudRd7Qk"), `${geo} follow-up keeps the firm teaser`);
+  assert(draft.body.includes("https://youtu.be/EhIFIdez-1M"), `${geo} follow-up keeps the owner teaser`);
 }
 
 const locked = lockChatDraft({
