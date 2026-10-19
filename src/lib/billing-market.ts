@@ -43,7 +43,7 @@ export function firmBillingResumeIntent(
 ): PendingCheckout {
   const market = stripePlanMarketFromFirm(firmMarket);
   const plan: FirmCheckoutBand =
-    pending?.plan && isFirmCheckoutBand(pending.plan) ? pending.plan : "solo";
+    pending?.plan && isFirmCheckoutBand(pending.plan) ? pending.plan : "starter";
   const interval: FirmInterval = pending?.interval === "year" ? "year" : "month";
   const promo =
     typeof pending?.promo === "string" && pending.promo.trim() ? pending.promo.trim() : undefined;
@@ -76,5 +76,5 @@ export async function checkoutIntentForUser(
   if (firm) return firmBillingResumeIntent(firm.market, pending);
   const market: StripePlanMarket = visitorMarket === "za" ? "za" : "us";
   if (pending) return { ...pending, market };
-  return { plan: "solo", interval: "month", market };
+  return { plan: "starter", interval: "month", market };
 }

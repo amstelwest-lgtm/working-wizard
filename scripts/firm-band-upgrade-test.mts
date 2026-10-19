@@ -78,7 +78,7 @@ function assert(cond: boolean, msg: string) {
 assert(nextBandUp("starter") === "solo", "starter's next band is Solo");
 assert(nextBandUp("solo") === "small", "solo's next band is Small");
 assert(nextBandUp("scale") === null, "scale has no self-serve band above it");
-assert(nextBandUp(null) === "solo", "no band preselects Solo");
+assert(nextBandUp(null) === "starter", "no band preselects Starter");
 assert(
   nextBandUp("starter", 20) === "small",
   "a starter practice with 20 clients skips Solo 15",

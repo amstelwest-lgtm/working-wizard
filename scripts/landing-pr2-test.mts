@@ -8,6 +8,7 @@ import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
 import { loadSaPricingCopy } from "../src/lib/pricing/za-pricing-chunk.server";
 import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import {
+  FIRM_TRIAL_EXPLORE,
   HOMEPAGE_COST_QUESTION,
   NAV_TRIAL_ARIA,
   NAV_TRIAL_LABEL,
@@ -122,11 +123,13 @@ assert(!usCost!.answer.includes("R299") && !usCost!.answer.includes("R799"), "US
 assert(zaCost!.answer.includes("Business owners pay R 299/mo"), "SA owners see the rand price");
 assert(!zaCost!.answer.includes("Business owners pay $39/mo"), "SA owners do not see the dollar owner price");
 assert(
-  PRICING_TRIAL_AFTER ===
-    "Free to explore your first client — no card. Trial covers up to 3 clients for 14 days.",
+  PRICING_TRIAL_AFTER === "On Starter. A card is required at signup. Then $39/mo.",
   "VERIFY-2 trial sentence lives on the pricing section",
 );
-assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 3 clients", "trial sentence unchanged");
+assert(FIRM_TRIAL_SENTENCE === "14-day free trial · up to 5 clients", "trial sentence is the Starter cap");
+assert(FIRM_TRIAL_EXPLORE.startsWith(FIRM_TRIAL_SENTENCE), "hero note starts from the locked sentence");
+assert(!FIRM_TRIAL_EXPLORE.toLowerCase().includes("no card"), "hero note does not say no card");
+assert(!/R\s?\d/.test(FIRM_TRIAL_EXPLORE), "the shared hero note has no rand amount");
 
 assert(css.includes(".reveal,") && css.includes("opacity:1"), "reveal content is visible by default");
 const chrome = readFileSync(resolve(root, "src/components/app-chrome.tsx"), "utf8");

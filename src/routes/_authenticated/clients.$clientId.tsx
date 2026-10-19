@@ -286,6 +286,7 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
+import { handoffRowStillWorking } from "@/lib/agent-activity-poll";
 import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
@@ -1753,6 +1754,7 @@ function ClientView() {
           assignee: item?.assigneeName ?? row.assigneeName,
           agent: item?.agent ?? null,
           notes: notes.get(row.id) ?? [],
+          openedAt: item?.openedAt,
           run: runs.get(row.id) ?? null,
         };
       }),
@@ -1812,6 +1814,7 @@ function ClientView() {
               assignee: name,
               agent,
               notes: detail.note ? withPendingNote(current?.notes ?? [], detail.note) : current?.notes ?? [],
+              openedAt: agent ? detail.since : undefined,
               run: agent ? { agent, status: "queued" as const, at: detail.since ?? new Date().toISOString() } : null,
             };
             const next = rows.map((row) => (row.id === detail.actionItemId ? { ...row, ...patched } : row));
@@ -3269,7 +3272,8 @@ function ClientView() {
     [clientId, hasFigures, navigate],
   );
 
-  const homeActivity = useAgentActivity(clientId);
+  const awaitingRun = assignmentRows.filter((row) => row.open).map((row) => ({ openedAt: row.openedAt }));
+  const homeActivity = useAgentActivity(clientId, awaitingRun);
   const settledRows = useMemo(
     () =>
       applyLiveRuns(
@@ -3283,14 +3287,18 @@ function ClientView() {
       ),
     [assignmentRows, homeActivity.runs],
   );
-  const openAgents = useMemo(() => openHandoffAgents(settledRows), [settledRows]);
+  const workingRows = useMemo(
+    () => settledRows.map((row) => (handoffRowStillWorking(row, homeActivity.runs) ? row : { ...row, open: false })),
+    [settledRows, homeActivity.runs],
+  );
+  const openAgents = useMemo(() => openHandoffAgents(workingRows), [workingRows]);
   const homeCardRuns = useMemo(
     () =>
       withCardHandoffRuns(
         withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
-        settledRows,
+        workingRows,
       ),
-    [homeActivity.runs, settledRows],
+    [homeActivity.runs, settledRows, workingRows],
   );
   const homePresence = useMemo(
     () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
@@ -3305,15 +3313,17 @@ function ClientView() {
           const at = run.finished_at || run.queued_at;
           if (!live || at > live.at) live = { agent: run.agent, status: run.status, at };
         }
-        if (!live || !row.agent || live.agent !== row.agent) return row;
+        const settled = settledRows.find((item) => item.id === row.id);
+        const missed = Boolean(settled?.open && !handoffRowStillWorking(settled, homeActivity.runs));
+        if (!live || !row.agent || live.agent !== row.agent) return { ...row, missed };
         const current = row.run;
         const currentOpen = current?.status === "queued" || current?.status === "running";
         if (currentOpen && live.at < (current.at ?? "") && live.status !== "queued" && live.status !== "running") {
-          return row;
+          return { ...row, missed };
         }
-        return { ...row, run: live };
+        return { ...row, run: live, missed: false };
       }),
-    [openPlanHandoffs, homeActivity.runs],
+    [openPlanHandoffs, homeActivity.runs, settledRows],
   );
   const notedFinish = useRef(new Set<string>());
   useEffect(() => {

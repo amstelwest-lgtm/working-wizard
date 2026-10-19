@@ -11,8 +11,10 @@ import { applyLedgerSyncFinancials } from "@/lib/ledger-sync-financials";
 import { agedApProofLine } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import {
+  SAGE_CONNECTION_UNAVAILABLE,
   SAGE_EMPTY_COMPANY_MESSAGE,
   sageCompanyIdIsValid,
+  sagePublicError,
   sageSyncWriteDecision,
 } from "@/lib/sage";
 import { decryptSagePasswordDetailed, encryptSagePassword } from "@/lib/sage-password";
@@ -222,9 +224,7 @@ export async function executeSageSync(input: {
 
   try {
     if (!sageCredentialsConfigured()) {
-      throw new Error(
-        "SAGE_SA_API_KEY or SAGE_SA_PASSWORD_KEY is not set. Overview figures were left unchanged.",
-      );
+      throw new Error(SAGE_CONNECTION_UNAVAILABLE);
     }
     const username = String(conn.username ?? "").trim();
     const companyId = String(conn.company_id ?? "").trim();
@@ -429,8 +429,9 @@ export async function executeSageSync(input: {
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown sync error";
+    const raw = err instanceof Error ? err.message : "Unknown sync error";
+    const msg = sagePublicError(raw);
     await markSync(input.clientId, { sync_status: "error", sync_error: msg.slice(0, 500) });
-    throw new Error(`Sync failed: ${msg}`);
+    throw new Error(msg === SAGE_CONNECTION_UNAVAILABLE ? msg : `Sync failed: ${msg}`);
   }
 }

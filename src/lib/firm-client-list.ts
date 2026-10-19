@@ -28,7 +28,7 @@ export async function listFirmClients(input: {
   try {
     let query = supabase
       .from("clients")
-      .select("id, name, client_code")
+      .select("id, name, client_code, firms(name)")
       .order("created_at", { ascending: false });
     if (firmId) {
       query = query.or(firmClientOrFilter(firmId, userId));
@@ -44,10 +44,13 @@ export async function listFirmClients(input: {
     for (const row of data ?? []) {
       const name = row.name?.trim();
       if (!row.id || !name) continue;
+      const firmJoin = row.firms as { name?: string | null } | { name?: string | null }[] | null;
+      const firmRecord = Array.isArray(firmJoin) ? firmJoin[0] : firmJoin;
       rows.push({
         id: row.id,
         name,
         clientCode: row.client_code?.trim() || null,
+        firmName: firmRecord?.name?.trim() || null,
       });
     }
     return rows;

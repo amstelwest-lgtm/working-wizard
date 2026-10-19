@@ -367,6 +367,14 @@ html:not(.dark) .accountant-portal .deliverable-main {
     padding: 16px 14px 24px;
   }
 }
+/* At 390 the pencil sits in the right corner. The 16px inset let the next
+   card's last line run under it. */
+@media (max-width: 390px) {
+  html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
+  html:not(.dark) .owner-door:not([data-screen="chat"]) .deliverable-main {
+    padding-right: 28px;
+  }
+}
 
 /* ===== cards: hairlines, radii, soft shadows ===== */
 html:not(.dark) .accountant-portal .card {

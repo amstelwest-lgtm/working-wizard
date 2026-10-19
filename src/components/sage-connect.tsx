@@ -11,7 +11,7 @@ import {
 } from "@/lib/sage.functions";
 import { Unlink, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { BrandConnectButton } from "@/components/brand-connect-button";
-import { sageSyncPopulatedFields } from "@/lib/sage";
+import { SAGE_CONNECTION_UNAVAILABLE, sageSyncPopulatedFields } from "@/lib/sage";
 
 type Props = {
   clientId: string | null;
@@ -154,7 +154,7 @@ export function SageConnectCard({
     return (
       <div className="ledger-connect ledger-connect--dashed" data-sage-connect="soon">
         <p className="ledger-connect__kicker">Sage Accounting</p>
-        <p className="ledger-connect__body">Coming soon</p>
+        <p className="ledger-connect__body">{SAGE_CONNECTION_UNAVAILABLE}</p>
       </div>
     );
   }
