@@ -229,6 +229,7 @@ export function mountAskAi(container, options) {
   let lastQuestion = "";
   let boundClientId = null;
   let boundAgent = "";
+  let boundForecastKey = "";
   let requestGen = 0;
 
   const THREAD_PREFIX = "milon-bot-thread:";
@@ -262,6 +263,10 @@ export function mountAskAi(container, options) {
     }
   }
 
+  function currentForecastKey() {
+    return container.dataset.forecastKey || "";
+  }
+
   function readThread(clientId, agent) {
     if (!clientId) return [];
     try {
@@ -279,7 +284,15 @@ export function mountAskAi(container, options) {
         }
       }
       if (!raw) return [];
-      const parsed = JSON.parse(raw);
+      let parsed = JSON.parse(raw);
+      const forecastKey = currentForecastKey();
+      if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.turns)) {
+        if (forecastKey && parsed.key !== forecastKey) return [];
+        parsed = parsed.turns;
+      } else if (Array.isArray(parsed) && forecastKey) {
+        // An answer stored before the forecast key is stale once figures are keyed.
+        return [];
+      }
       if (!Array.isArray(parsed)) return [];
       return parsed
         .filter(
@@ -307,7 +320,7 @@ export function mountAskAi(container, options) {
     }
   }
 
-  function writeThread(clientId, turns, agent) {
+  function writeThread(clientId, turns, agent, forecastKey) {
     if (!clientId) return;
     try {
       const store = sessionStore();
@@ -317,7 +330,13 @@ export function mountAskAi(container, options) {
         store.removeItem(key);
         return;
       }
-      store.setItem(key, JSON.stringify(turns.slice(-16)));
+      store.setItem(
+        key,
+        JSON.stringify({
+          key: forecastKey == null ? currentForecastKey() : forecastKey,
+          turns: turns.slice(-16),
+        }),
+      );
     } catch {
       /* private mode or a full store — the in-memory thread still shows */
     }
@@ -326,17 +345,21 @@ export function mountAskAi(container, options) {
   function syncThreadClient() {
     const id = String(currentClientId() || "");
     const agent = currentAgent();
-    if (id === boundClientId && agent === boundAgent) return;
-    if (boundClientId) writeThread(boundClientId, history, boundAgent);
+    const forecastKey = currentForecastKey();
+    if (id === boundClientId && agent === boundAgent && forecastKey === boundForecastKey) return;
+    const switchingThread = boundClientId && (id !== boundClientId || agent !== boundAgent);
+    if (switchingThread) writeThread(boundClientId, history, boundAgent, boundForecastKey);
     boundClientId = id;
     boundAgent = agent;
+    boundForecastKey = forecastKey;
     history = readThread(id, agent);
   }
 
   function refreshThreadFromContext() {
     const id = String(currentClientId() || "");
     const agent = currentAgent();
-    if (id === boundClientId && agent === boundAgent) return;
+    const forecastKey = currentForecastKey();
+    if (id === boundClientId && agent === boundAgent && forecastKey === boundForecastKey) return;
     syncThreadClient();
     question = "";
     answer = "";
@@ -1075,7 +1098,7 @@ export function mountAskAi(container, options) {
       const observer = new MutationObserver(() => refreshThreadFromContext());
       observer.observe(container, {
         attributes: true,
-        attributeFilter: ["data-agent", "data-client-id"],
+        attributeFilter: ["data-agent", "data-client-id", "data-forecast-key"],
       });
       container.__askThreadObserver = observer;
     }

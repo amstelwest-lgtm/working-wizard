@@ -43,7 +43,6 @@ function inferFormat(camelKey: string): string {
   if (
     camelKey.endsWith("Margin") ||
     camelKey.endsWith("Ratio") ||
-    camelKey.endsWith("Burden") ||
     camelKey.endsWith("Rate") ||
     camelKey.endsWith("Structure") ||
     camelKey.endsWith("Utilization") ||

@@ -11,8 +11,9 @@ export function useAskAiMount(deps: {
   activeTab: string;
   viewMode: string;
   hasRealFinancials: boolean;
+  forecastKey?: string | null;
 }) {
-  const { effectiveClientId, activeTab, viewMode, hasRealFinancials } = deps;
+  const { effectiveClientId, activeTab, viewMode, hasRealFinancials, forecastKey } = deps;
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +40,9 @@ export function useAskAiMount(deps: {
       if (effectiveClientId) {
         (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
         for (const el of allContainers) el.dataset.clientId = effectiveClientId;
+      }
+      if (forecastKey) {
+        for (const el of allContainers) el.dataset.forecastKey = forecastKey;
       }
 
       // The widget mounts with or without figures — before them it carries a

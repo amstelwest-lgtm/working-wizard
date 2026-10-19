@@ -1,8 +1,10 @@
 /**
  * Recurring bank payees. The same payee, at roughly the same amount, on a
  * monthly or weekly cadence already in the bank history, is projected through
- * the 13-week horizon. A single hit stays in its one week. Amounts stay the
- * stored line amount.
+ * the 13-week horizon. A supplier purchase that appears once stays in its
+ * week. Rent, payroll, insurance, debit orders, subscriptions, and — when
+ * the history is a single month — receipts are still projected monthly.
+ * Amounts stay the stored line amount. See cash-forecast-rows.ts.
  */
 import { buildDraftLinesFromExtract, payeeGroupKey } from "./cash-from-banks.pattern.ts";
 import type { CashBankExtract } from "./cash-from-banks.types.ts";
@@ -71,8 +73,8 @@ export function isRecurringPayee(
 
 /**
  * Display cadence. History wins when the same payee already repeats.
- * A single month of rent, payroll, insurance, a debit order or a subscription
- * is still projected monthly. The stored frequency is left unchanged.
+ * Otherwise the single-month assumption in cash-forecast-rows applies.
+ * The stored frequency is left unchanged.
  */
 export function projectForecastFrequency(
   name: string,

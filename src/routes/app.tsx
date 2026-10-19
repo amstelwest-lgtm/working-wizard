@@ -113,6 +113,7 @@ import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
+import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
@@ -3037,7 +3038,13 @@ function Index() {
     return () => clearTimeout(t);
   }, [v, weeklyInputs, productMix, effectiveClientId, hydratedClientId, hasRealFinancials]);
 
-  useAskAiMount({ effectiveClientId, activeTab, viewMode, hasRealFinancials });
+  useAskAiMount({
+    effectiveClientId,
+    activeTab,
+    viewMode,
+    hasRealFinancials,
+    forecastKey: forecastPlFingerprint(clientMeta?.cashflow, v),
+  });
 
   const exitImpersonation = async () => {
     if (actingClientId) {
