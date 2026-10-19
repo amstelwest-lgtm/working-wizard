@@ -14,7 +14,8 @@
 
 .milon-skeleton {
   border-radius: 8px;
-  background: color-mix(in srgb, var(--brand-border, var(--milon-border)) 55%, transparent);
+  background: #e4eaf2;
+  background: color-mix(in srgb, var(--brand-border, #d5deea) 55%, #f4f6fa);
   position: relative;
   overflow: hidden;
 }
@@ -127,4 +128,11 @@
     animation: none;
     transform: none;
   }
+}
+
+/* Chart ticks stay inside the plot. A zero-width measure pass used to paint them on the page. */
+.recharts-responsive-container {
+  overflow: hidden;
+  contain: paint;
+  min-width: 0;
 }

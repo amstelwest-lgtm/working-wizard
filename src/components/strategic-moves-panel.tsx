@@ -67,7 +67,7 @@ export function StrategicMovesPanel({
         <section className="card pad">
           <span className="eyebrow">Strategic Moves</span>
           <ol className="brain-list" style={{ marginTop: 14 }}>
-            {moves.map((move, index) => (
+            {moves.map((move) => (
               <li key={move.key} className="brain-row">
                 <div>
                   <div className="brain-row-title">
@@ -82,17 +82,15 @@ export function StrategicMovesPanel({
                     title={move.title}
                     outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
                   />
-                  {index === 0 ? null : (
-                    <AddToPlanButton
-                      clientId={clientId}
-                      moveKey={move.key}
-                      title={move.title}
-                      outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
-                      onAssign={onOpenPlan}
-                      variant="studio"
-                      tone="quiet"
-                    />
-                  )}
+                  <AddToPlanButton
+                    clientId={clientId}
+                    moveKey={move.key}
+                    title={move.title}
+                    outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
+                    onAssign={onOpenPlan}
+                    variant="studio"
+                    tone="quiet"
+                  />
                 </div>
               </li>
             ))}

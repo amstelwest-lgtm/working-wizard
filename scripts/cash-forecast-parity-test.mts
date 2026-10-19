@@ -21,6 +21,7 @@ import {
   cashEmptyPresentation,
   forecastLowestPoint,
   forecastPositionPhrase,
+  clientListRunwayCell,
   forecastRunwayHeadlineShared,
   openingSourceLabel,
 } from "../src/lib/cash-forecast-parity";
@@ -59,6 +60,15 @@ const story = forecastRunwayHeadlineShared({
   runwayLabel: "21 weeks",
 });
 assert(story.headline === "2 weeks below", story.headline);
+const weeksCell = clientListRunwayCell({ weeks: 13, reason: "13 weeks below" });
+assert(weeksCell.value === "13 weeks" && weeksCell.title == null, "a counted runway is weeks");
+const missingCell = clientListRunwayCell({ weeks: 13, reason: "Opening balance missing" });
+assert(
+  missingCell.value === "—" && missingCell.title === "Opening balance missing",
+  "a missing opening is an em dash with the reason",
+);
+const oneWeek = clientListRunwayCell({ weeks: 1, reason: null });
+assert(oneWeek.value === "1 week", "one week stays singular");
 assert(story.note.includes("week 2"), story.note);
 
 const clear = forecastRunwayHeadlineShared({

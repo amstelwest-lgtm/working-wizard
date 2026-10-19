@@ -27,6 +27,7 @@ import {
   formatMarginPct,
   formatRand,
   hasProductMixAnswer,
+  visibleProductLines,
   linesFromNames,
   namedProductLines,
   productMixSummary,
@@ -461,7 +462,7 @@ function ProductMixFunnel({
 function MixBars({ mix }: { mix: ProductMix }) {
   const { market } = useMarketFormat();
   const fmt = (n: number | undefined) => formatRand(n, market);
-  const ranked = rankProductLines(mix);
+  const ranked = rankProductLines({ ...mix, lines: visibleProductLines(mix) });
   if (!ranked.length) return null;
   const stated = mix.totalRevenue ?? 0;
   const allocated = allocatedRevenue(mix.lines);
@@ -605,7 +606,13 @@ export function ProductMixPanel({
             Marked as a single-line business. Update the breakdown if that changes.
           </p>
         )}
-        {answered && productMix.active && (
+        {answered && productMix.active && visibleProductLines(productMix).length === 0 && (
+          <p className="text-xs text-slate-600 dark:text-[#C5D4E4]">
+            Add the real product names. Lines named product 1, product 2, and so on stay hidden
+            until they are real products.
+          </p>
+        )}
+        {answered && productMix.active && visibleProductLines(productMix).length > 0 && (
           <>
             <MixBars mix={productMix} />
             <p className="mt-3 text-[10px] text-slate-500 dark:text-[#C5D4E4]">
