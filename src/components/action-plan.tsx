@@ -38,7 +38,9 @@ import {
   clearOptimisticHandoff,
   commitActionHandoff,
   loadActionHandoffRuns,
-  readOptimisticHandoff,
+  optimisticNoteHidden,
+  readOptimisticHandoffs,
+  stripSuppressedNotes,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
 import { latestStoredAssignment, withPendingNote } from "@/lib/open-plan-home";
@@ -165,31 +167,43 @@ type Item = {
 
 type Employee = ActionPlanEmployee;
 
-type PlanPickup = { agent: AgentKey; status: string; at: string };
+type PlanPickup = { id?: string; agent: AgentKey; status: string; at: string };
 
-/** Keep a click's assignee, note, and queued run until the stored copy arrives. */
+/** Keep each click's assignee, note, and queued run until that action's stored copy arrives. */
 function applyOptimisticPlan(input: {
   items: Item[];
   notes: Record<string, AssignmentNoteRow[]>;
   pickups: Record<string, PlanPickup>;
 }): { items: Item[]; notes: Record<string, AssignmentNoteRow[]>; pickups: Record<string, PlanPickup> } {
-  const pending = readOptimisticHandoff();
-  if (!pending) return input;
-  const mergedNotes = withPendingNote(input.notes[pending.actionItemId] ?? [], pending.note);
-  const landed = mergedNotes.some((row) => row.note === pending.note.note && row.at !== pending.note.at);
-  if (landed) {
-    clearOptimisticHandoff(pending.actionItemId);
-    return { ...input, notes: { ...input.notes, [pending.actionItemId]: mergedNotes } };
-  }
-  const pickup = input.pickups[pending.actionItemId];
-  const keepServerRun =
-    pending.agent != null &&
-    pickup != null &&
-    pickup.agent === pending.agent &&
-    (pickup.status === "queued" || pickup.status === "running") &&
-    pickup.at >= pending.since;
-  return {
-    items: input.items.map((item) =>
+  const pendings = readOptimisticHandoffs();
+  if (pendings.length === 0) return { ...input, notes: stripSuppressedNotes(input.notes) };
+  let items = input.items;
+  let notes = { ...input.notes };
+  let pickups = { ...input.pickups };
+  for (const pending of pendings) {
+    const currentNotes = notes[pending.actionItemId] ?? [];
+    const mergedNotes = pending.note ? withPendingNote(currentNotes, pending.note) : currentNotes;
+    const landed = Boolean(
+      pending.note &&
+        mergedNotes.some(
+          (row) =>
+            row.note === pending.note?.note &&
+            row.at !== pending.note.at &&
+            Date.parse(row.at) + 1500 >= Date.parse(pending.note.at),
+        ),
+    );
+    if (landed) {
+      clearOptimisticHandoff(pending.actionItemId);
+      notes = {
+        ...notes,
+        [pending.actionItemId]: mergedNotes.filter((row) => row.at !== pending.since),
+      };
+      continue;
+    }
+    if (pending.note && !optimisticNoteHidden(pending.actionItemId, pending.since)) {
+      notes = { ...notes, [pending.actionItemId]: mergedNotes };
+    }
+    items = items.map((item) =>
       item.id !== pending.actionItemId
         ? item
         : {
@@ -198,16 +212,29 @@ function applyOptimisticPlan(input: {
             owner_id: pending.agent ? null : item.owner_id,
             owner_email: pending.agent ? null : item.owner_email,
           },
-    ),
-    notes: { ...input.notes, [pending.actionItemId]: mergedNotes },
-    pickups:
-      pending.agent && !keepServerRun
-        ? {
-            ...input.pickups,
-            [pending.actionItemId]: { agent: pending.agent, status: "queued", at: pending.since },
-          }
-        : input.pickups,
-  };
+    );
+    const pickup = pickups[pending.actionItemId];
+    const keepServerRun =
+      pending.runId != null
+        ? pickup?.id === pending.runId && (pickup.status === "queued" || pickup.status === "running")
+        : pending.agent != null &&
+          pickup != null &&
+          pickup.agent === pending.agent &&
+          (pickup.status === "queued" || pickup.status === "running") &&
+          pickup.at >= pending.since;
+    if (pending.agent && !keepServerRun) {
+      pickups = {
+        ...pickups,
+        [pending.actionItemId]: {
+          id: pending.runId ?? undefined,
+          agent: pending.agent,
+          status: "queued",
+          at: pending.since,
+        },
+      };
+    }
+  }
+  return { items, notes: stripSuppressedNotes(notes), pickups };
 }
 type Milestone = {
   id: string;
@@ -619,7 +646,7 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
-  const [pickups, setPickups] = useState<Record<string, { agent: AgentKey; status: string; at: string }>>({});
+  const [pickups, setPickups] = useState<Record<string, { id?: string; agent: AgentKey; status: string; at: string }>>({});
   const [itemNotes, setItemNotes] = useState<Record<string, AssignmentNoteRow[]>>({});
   const draftActivity = useAgentActivity(clientId);
   const draftFindings = useMemo(
@@ -755,7 +782,7 @@ export default function ActionPlanPanel({
         loadedPickups = next;
       }
       const painted = applyOptimisticPlan({ items: shown, notes: loadedNotes, pickups: loadedPickups });
-      setItemNotes(painted.notes);
+      setItemNotes(stripSuppressedNotes(painted.notes));
       setItems(painted.items);
       setPickups(painted.pickups);
       setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
@@ -863,30 +890,85 @@ export default function ActionPlanPanel({
 
   const planSnap = useRef({ items, notes: itemNotes, pickups });
   planSnap.current = { items, notes: itemNotes, pickups };
-  const priorPlan = useRef<{
-    since: string;
-    items: Item[];
-    notes: Record<string, AssignmentNoteRow[]>;
-    pickups: Record<string, PlanPickup>;
-  } | null>(null);
+  const priorPlan = useRef(
+    new Map<
+      string,
+      { since: string; item: Item | null; notes: AssignmentNoteRow[]; pickup: PlanPickup | null }
+    >(),
+  );
+  const [handoffErrors, setHandoffErrors] = useState<Record<string, { message: string; agent: AgentKey | null }>>({});
   useEffect(() => {
     const onRefresh = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (detail?.failed && detail.actionItemId) {
-        const prior = priorPlan.current;
+        const id = detail.actionItemId;
+        const prior = priorPlan.current.get(id);
         if (prior && detail.since && prior.since === detail.since) {
-          setItems(prior.items);
-          setItemNotes(prior.notes);
-          setPickups(prior.pickups);
+          setItems((current) =>
+            prior.item ? current.map((row) => (row.id === id ? prior.item! : row)) : current.filter((row) => row.id !== id),
+          );
+          setItemNotes((current) =>
+            stripSuppressedNotes({
+              ...current,
+              [id]: (prior.notes ?? []).filter((row) => row.at !== detail.since),
+            }),
+          );
+          setPickups((current) => {
+            const next = { ...current };
+            if (prior.pickup) next[id] = prior.pickup;
+            else delete next[id];
+            return next;
+          });
+        } else {
+          setItemNotes((current) => stripSuppressedNotes(current));
+        }
+        if (detail.error) {
+          setHandoffErrors((current) => ({
+            ...current,
+            [id]: { message: detail.error!, agent: detail.agent ?? null },
+          }));
+        }
+        void refresh();
+        return;
+      }
+      if (detail?.actionItemId && detail.reused) {
+        const id = detail.actionItemId;
+        setHandoffErrors((current) => {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+        setItemNotes((current) =>
+          stripSuppressedNotes({
+            ...current,
+            [id]: (current[id] ?? []).filter((row) => row.at !== detail.since),
+          }),
+        );
+        if (detail.agent && detail.runId) {
+          setPickups((current) => ({
+            ...current,
+            [id]: { id: detail.runId, agent: detail.agent as AgentKey, status: "queued", at: detail.since ?? "" },
+          }));
         }
         void refresh();
         return;
       }
       if (detail?.since && detail.note && detail.assigneeName && detail.actionItemId) {
-        if (priorPlan.current?.since !== detail.since) {
-          priorPlan.current = { since: detail.since, ...planSnap.current };
-        }
         const id = detail.actionItemId;
+        if (priorPlan.current.get(id)?.since !== detail.since) {
+          const snap = planSnap.current;
+          priorPlan.current.set(id, {
+            since: detail.since,
+            item: snap.items.find((row) => row.id === id) ?? null,
+            notes: snap.notes[id] ?? [],
+            pickup: snap.pickups[id] ?? null,
+          });
+        }
+        setHandoffErrors((current) => {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
         setItemNotes((current) => ({
           ...current,
           [id]: withPendingNote(current[id] ?? [], detail.note!),
@@ -906,7 +988,12 @@ export default function ActionPlanPanel({
         if (detail.agent) {
           setPickups((current) => ({
             ...current,
-            [id]: { agent: detail.agent as AgentKey, status: "queued", at: detail.since ?? "" },
+            [id]: {
+              id: detail.runId,
+              agent: detail.agent as AgentKey,
+              status: "queued",
+              at: detail.since ?? "",
+            },
           }));
         }
       }
@@ -924,6 +1011,7 @@ export default function ActionPlanPanel({
       if (!id || (run.status !== "succeeded" && run.status !== "partial")) continue;
       const pickup = pickups[id];
       if (!pickup || pickup.agent !== run.agent) continue;
+      if (pickup.id && pickup.id !== run.id) continue;
       if (pickup.status !== "queued" && pickup.status !== "running") continue;
       const key = `${id}:${run.id}`;
       if (refreshedFinish.current.has(key)) continue;
@@ -1773,16 +1861,17 @@ export default function ActionPlanPanel({
                 pickupLabel={(() => {
                   const notes = itemNotes[it.id] ?? [];
                   const stored = pickups[it.id] ?? null;
-                  let live: { agent: AgentKey; status: string; at: string; summary: string } | null = null;
+                  let live: { id: string; agent: AgentKey; status: string; at: string; summary: string } | null = null;
                   for (const run of draftActivity.runs) {
                     if (run.action_item_id !== it.id) continue;
+                    if (stored?.id && run.id !== stored.id) continue;
                     const at = run.finished_at || run.queued_at;
                     if (!live || at > live.at) {
-                      live = { agent: run.agent, status: run.status, at, summary: run.summary ?? "" };
+                      live = { id: run.id, agent: run.agent, status: run.status, at, summary: run.summary ?? "" };
                     }
                   }
                   const run =
-                    live && stored && live.agent === stored.agent && live.at >= (stored.at || "")
+                    live && stored && live.agent === stored.agent && (stored.id ? live.id === stored.id : live.at >= (stored.at || ""))
                       ? { agent: live.agent, status: live.status, at: live.at }
                       : stored;
                   const storedResult = latestHandoffResult(notes);
@@ -1801,19 +1890,21 @@ export default function ActionPlanPanel({
                 })()}
                 pickupRun={(() => {
                   const stored = pickups[it.id] ?? null;
-                  let live: { agent: AgentKey; status: string; at: string } | null = null;
+                  let live: { id: string; agent: AgentKey; status: string; at: string } | null = null;
                   for (const run of draftActivity.runs) {
                     if (run.action_item_id !== it.id) continue;
+                    if (stored?.id && run.id !== stored.id) continue;
                     const at = run.finished_at || run.queued_at;
-                    if (!live || at > live.at) live = { agent: run.agent, status: run.status, at };
+                    if (!live || at > live.at) live = { id: run.id, agent: run.agent, status: run.status, at };
                   }
-                  if (live && stored && live.agent === stored.agent && live.at >= (stored.at || "")) {
+                  if (live && stored && live.agent === stored.agent && (stored.id ? live.id === stored.id : live.at >= (stored.at || ""))) {
                     return { status: live.status, at: live.at };
                   }
                   return stored ? { status: stored.status, at: stored.at } : null;
                 })()}
+                handoffError={handoffErrors[it.id]?.message ?? null}
                 onRetry={(() => {
-                  const agent = pickups[it.id]?.agent;
+                  const agent = handoffErrors[it.id]?.agent ?? pickups[it.id]?.agent;
                   if (!agent) return undefined;
                   return () => {
                     void commitActionHandoff({
@@ -2366,6 +2457,7 @@ function ItemRow({
   comingSoon,
   pickupLabel,
   pickupRun = null,
+  handoffError = null,
   onRetry,
   notes = [],
   focused,
@@ -2396,6 +2488,7 @@ function ItemRow({
   /** Set when a queued run for this action has started or finished. */
   pickupLabel?: string | null;
   pickupRun?: { status: string; at?: string | null } | null;
+  handoffError?: string | null;
   onRetry?: () => void;
   notes?: readonly AssignmentNoteRow[];
 }) {
@@ -2663,7 +2756,7 @@ function ItemRow({
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
       </div>
-      {onHandOff || pickupLabel || pickupRun || notes.length > 0 ? (
+      {onHandOff || pickupLabel || pickupRun || notes.length > 0 || handoffError ? (
         <div className="px-3 pb-3 sm:px-4" onClick={(event) => event.stopPropagation()}>
           {onHandOff ? (
             <HandToMenu
@@ -2692,6 +2785,7 @@ function ItemRow({
           <HandoffRunStatus
             run={pickupRun}
             caption={pickupLabel}
+            error={handoffError}
             missed={(() => {
               if (pickupRun && (pickupRun.status === "queued" || pickupRun.status === "running")) return false;
               if (pickupRun) return false;

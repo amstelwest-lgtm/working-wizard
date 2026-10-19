@@ -10,12 +10,11 @@ import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.
 import {
   HANDOFF_TRIGGER,
   callerMayHandOff,
-  handoffAgainInputs,
+  handoffCollisionResult,
   handoffDecision,
-  handoffInputs,
-  handoffNeedsFreshRun,
   handoffRequestNote,
   personAssignmentNote,
+  planHandoffRun,
   runnerEnabled,
 } from "../../../src/lib/owner-handoff.ts";
 
@@ -202,8 +201,32 @@ Deno.serve(async (req) => {
     });
   }
 
-  const inputs = handoffInputs(actionItemId);
-  let invokeInputs = inputs;
+  const { data: newestRows, error: newestError } = await admin
+    .from("agent_runs")
+    .select("id, status")
+    .eq("action_item_id", actionItemId)
+    .eq("agent", decision.agent)
+    .order("queued_at", { ascending: false })
+    .limit(1);
+  if (newestError) return json({ error: "run_lookup_failed" }, 500);
+  const newestRow = (newestRows?.[0] ?? null) as { id?: string; status?: string } | null;
+  const plan = planHandoffRun(
+    newestRow?.id ? { id: newestRow.id, status: typeof newestRow.status === "string" ? newestRow.status : "" } : null,
+    actionItemId,
+  );
+  if (plan.action === "reuse") {
+    return json({
+      ok: true,
+      reused: true,
+      noted: false,
+      runId: plan.runId,
+      status: plan.status,
+      runner: decision.runner,
+    });
+  }
+
+  const inputs = plan.inputs;
+  const invokeInputs = inputs;
   const idempotencyKey = await agentIdempotencyKey({
     agent: decision.agent,
     clientId,
@@ -211,7 +234,7 @@ Deno.serve(async (req) => {
     inputs,
   });
   const inputHash = await agentInputHash(inputs);
-  let invokeCorrelation = crypto.randomUUID();
+  const invokeCorrelation = crypto.randomUUID();
 
   const { data: inserted, error: insertError } = await admin
     .from("agent_runs")
@@ -231,98 +254,23 @@ Deno.serve(async (req) => {
     .select("id, status")
     .maybeSingle();
 
-  let runId = inserted?.id as string | undefined;
-  let status = (inserted?.status as string | undefined) ?? "queued";
-  let created = Boolean(runId);
   if (insertError) {
-    if (insertError.code !== "23505") return json({ error: "run_not_queued" }, 500);
-    const { data: existing, error: existingError } = await admin
+    if (insertError.code !== "23505") return json({ error: "run_insert_failed" }, 500);
+    const { data: winner, error: winnerError } = await admin
       .from("agent_runs")
       .select("id, status")
       .eq("agent", decision.agent)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
-    if (existingError || !existing?.id) return json({ error: "run_not_queued" }, 500);
-    runId = existing.id as string;
-    status = existing.status as string;
-    created = false;
+    if (winnerError || !winner?.id) return json({ error: "run_lookup_failed" }, 500);
+    const collision = handoffCollisionResult({
+      id: winner.id as string,
+      status: typeof winner.status === "string" ? winner.status : "queued",
+    });
+    return json({ ...collision, ok: true, runner: decision.runner });
   }
-  if (!runId) return json({ error: "run_not_queued" }, 500);
-
-  if (!created) {
-    // The first run for this action and bot already exists. Reuse it while it
-    // is still queued or running. A finished run is not the current assignment:
-    // handing the action over again starts a new queued run and a new note.
-    // Either way the note and the row assignee are written.
-    if (runId && !handoffNeedsFreshRun(status)) {
-      const failed = await writeAssignment(admin, {
-        clientId,
-        actionItemId,
-        ownerId: null,
-        actorType: "owner_app",
-        actorLabel: handoffActor,
-        note: handoffRequestNote(decision.displayName),
-      });
-      if (failed) return json({ error: failed }, 500);
-      return json({ ok: true, noted: true, runId, status, already: true, runner: decision.runner });
-    }
-    let guard = 0;
-    while (runId && handoffNeedsFreshRun(status) && guard < 5) {
-      guard += 1;
-      const againInputs = handoffAgainInputs(actionItemId, runId);
-      const againKey = await agentIdempotencyKey({
-        agent: decision.agent,
-        clientId,
-        trigger: HANDOFF_TRIGGER,
-        inputs: againInputs,
-      });
-      const againHash = await agentInputHash(againInputs);
-      const againCorrelation = crypto.randomUUID();
-      const { data: againInserted, error: againError } = await admin
-        .from("agent_runs")
-        .insert({
-          agent: decision.agent,
-          client_id: clientId,
-          firm_id: (client.firm_id as string | null) ?? null,
-          trigger: HANDOFF_TRIGGER,
-          audience: "owner",
-          idempotency_key: againKey,
-          input_hash: againHash,
-          correlation_id: againCorrelation,
-          status: "queued",
-          action_item_id: actionItemId,
-          attempt: 1,
-        })
-        .select("id, status")
-        .maybeSingle();
-      if (!againError && againInserted?.id) {
-        runId = againInserted.id as string;
-        status = "queued";
-        created = true;
-        invokeCorrelation = againCorrelation;
-        invokeInputs = againInputs;
-        break;
-      }
-      if (againError?.code !== "23505") return json({ error: "run_not_queued" }, 500);
-      const { data: existingAgain, error: againLookupError } = await admin
-        .from("agent_runs")
-        .select("id, status")
-        .eq("agent", decision.agent)
-        .eq("idempotency_key", againKey)
-        .maybeSingle();
-      if (againLookupError || !existingAgain?.id) return json({ error: "run_not_queued" }, 500);
-      runId = existingAgain.id as string;
-      status = existingAgain.status as string;
-      invokeInputs = againInputs;
-      if (!handoffNeedsFreshRun(status)) {
-        // Reuse this queued or running row and start it with the again key.
-        // Another insert would be a third run, and the original key matches the finished one.
-        created = true;
-        break;
-      }
-    }
-    if (!created) return json({ error: "run_not_queued" }, 500);
-  }
+  const runId = inserted?.id as string | undefined;
+  if (!runId) return json({ error: "run_insert_failed" }, 500);
 
   const { error: invokeError } = await admin.rpc("agent_invoke", {
     p_function: decision.runner,
