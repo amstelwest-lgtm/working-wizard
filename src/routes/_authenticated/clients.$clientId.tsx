@@ -189,8 +189,14 @@ import {
   persistedRunwayWeeks,
   plBankDisagreement,
   runwayDisplayLabel,
+  storedOpeningIsMissing,
 } from "@/lib/client-metrics";
-import { forecastLowestPoint, forecastRunwayHeadlineShared, overviewCashTileFigure } from "@/lib/cash-forecast-parity";
+import {
+  clientListStatusWord,
+  forecastLowestPoint,
+  forecastRunwayHeadlineShared,
+  overviewCashTileFigure,
+} from "@/lib/cash-forecast-parity";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
@@ -250,6 +256,7 @@ import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
 import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
+import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import {
   hashFigures,
   latestSnapshotId,
@@ -1295,6 +1302,19 @@ function ClientView() {
     market: clientMarket,
     shortfallWeek: cashOutlook.shortfallWeek,
   });
+  const openingMissing = storedOpeningIsMissing(client?.cashflow);
+  const bookStatusWord = clientListStatusWord({
+    healthLabel: overallHealth.displayLabel,
+    healthOverall: overallHealth.overall,
+    source: cashOutlook.source,
+    opening: cashOutlook.opening,
+    floor: cashOutlook.floor,
+    dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+    totalInflow: cashOutlook.totalInflow,
+    totalOutflow: cashOutlook.totalOutflow,
+    openingMissing,
+  });
+  const bookStatusCritical = bookStatusWord.startsWith("Critical");
   const plVersusBank = useMemo(
     () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
     [financials, client?.cashflow],
@@ -1347,7 +1367,7 @@ function ClientView() {
   const healthSentence = healthAnswerSentence({
     caption: healthCaption,
     score: Number.isFinite(avgHealth) ? avgHealth : null,
-    bandLabel: overallHealth.displayLabel,
+    bandLabel: bookStatusWord,
     pillars: healthPillarLines,
     includeScore: search.focus === "pillars",
   });
@@ -1538,6 +1558,7 @@ function ClientView() {
         floor: cashOutlook.floor,
         runwayLabel: runwayDisplayLabel(metricRunway),
         cashGenerative: metricRunway.kind === "cash_generative",
+        openingMissing,
       }).headline
     : null;
   const cashLowPoint = hasFigures
@@ -1584,7 +1605,7 @@ function ClientView() {
   const overviewSentence = overviewAnswerSentence({
     whatMatters: briefingMatters,
     score: hasFigures ? overallHealth.overall : null,
-    label: overallHealth.displayLabel,
+    label: bookStatusWord,
   });
   const statementPosition = ratiosStatementFigures(financials);
   const booksLines = booksTileLines({
@@ -1594,7 +1615,7 @@ function ClientView() {
     syncedStamp: snapshotFigure(briefingSnapshot, "updated"),
   });
   const overviewCards = overviewSectionCards({
-    health: hasFigures ? healthHeadline(overallHealth.overall, overallHealth.displayLabel) : null,
+    health: hasFigures ? healthHeadline(overallHealth.overall, bookStatusWord) : null,
     cash:
       overviewCashTileFigure({
         headline: cashRunwayHeadline,
@@ -1661,7 +1682,7 @@ function ClientView() {
     profile: briefingProfile,
     businessType: client?.business_type ?? null,
     healthScore: overallHealth.overall,
-    healthLabel: overallHealth.displayLabel,
+    healthLabel: bookStatusWord,
     snapshot: briefingSnapshot,
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
@@ -2669,8 +2690,8 @@ function ClientView() {
   const handleEmailDraft = useCallback(async () => {
     if (!client) return;
     const score = healthScoreRounded;
-    const tierLabel = overallHealth.displayLabel;
-    const runway = runwayDisplayLabel(metricRunway) ?? "—";
+    const tierLabel = bookStatusWord;
+    const runway = cashRunwayHeadline ?? runwayDisplayLabel(metricRunway) ?? "—";
     const weak =
       overallHealth.weakestPillar != null
         ? `\nWeakest pillar: ${overallHealth.weakestPillar.label} (${overallHealth.weakestPillar.score})\n`
@@ -2713,6 +2734,8 @@ function ClientView() {
     profile,
     effectiveRunway,
     metricRunway.label,
+    cashRunwayHeadline,
+    bookStatusWord,
     openQueriesCount,
     user,
     financials,
@@ -2723,11 +2746,11 @@ function ClientView() {
   const handleWhatsApp = useCallback(async () => {
     if (!client) return;
     const score = healthScoreRounded;
-    const tierLabel = overallHealth.displayLabel;
+    const tierLabel = bookStatusWord;
     const text =
       `${client.name} Financial Health Update\n` +
       `Health Score: ${score}/100 (${tierLabel})\n` +
-      `Cash Runway: ${runwayDisplayLabel(metricRunway) ?? "—"}\n` +
+      `Cash Runway: ${cashRunwayHeadline ?? runwayDisplayLabel(metricRunway) ?? "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
     let shareText = text;
@@ -2756,6 +2779,8 @@ function ClientView() {
     profile,
     effectiveRunway,
     metricRunway.label,
+    cashRunwayHeadline,
+    bookStatusWord,
     openQueriesCount,
     user,
     financials,
@@ -2954,6 +2979,8 @@ function ClientView() {
       grossProfit: amount(financials.grossProfit),
       priorGrossProfit: amount(priorFin?.grossProfit),
       netIncome: amount(financials.netIncome),
+      operatingProfit: clientProfitBridge.ebit,
+      openingMissing,
       receivables: statementPosition.receivables ?? null,
       cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
       cashOutlook: {
@@ -2987,6 +3014,8 @@ function ClientView() {
     openPlanTitles,
     openPlanUnavailable,
     clientMarket,
+    openingMissing,
+    clientProfitBridge.ebit,
   ]);
   const homeLines = useMemo(
     () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null),
@@ -3071,6 +3100,7 @@ function ClientView() {
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
         cashOpening: hasFigures ? cashOutlook.opening : null,
         cashFloor: hasFigures ? cashOutlook.floor : null,
+        openingMissing,
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
@@ -3094,6 +3124,7 @@ function ClientView() {
       hasFigures,
       cashOutlook.opening,
       cashOutlook.floor,
+      openingMissing,
       statementPosition.receivables,
       homeActivity,
       clientMarket,
@@ -3581,6 +3612,11 @@ function ClientView() {
                 ) : null}
 
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
+                {statementSampleImplausible(financials) ? (
+                  <p className="mb-4 text-sm text-[#3D5270] dark:text-slate-300" role="status">
+                    {IMPLAUSIBLE_SAMPLE_NOTE}
+                  </p>
+                ) : null}
                 {plVersusBank ? (
                   <PlBankDisagreeNotice disagreement={plVersusBank} market={clientMarket} />
                 ) : null}
@@ -3599,8 +3635,8 @@ function ClientView() {
                     />
                   }
                   healthScore={hasFigures ? overallHealth.overall : null}
-                  healthLabel={overallHealth.displayLabel}
-                  healthStatus={hasFigures ? overallHealth.displayStatus : null}
+                  healthLabel={bookStatusWord}
+                  healthStatus={hasFigures ? (bookStatusCritical ? "critical" : overallHealth.displayStatus) : null}
                   snapshot={briefingSnapshot}
                   about={briefingAbout}
                   profile={briefingProfile}
@@ -3836,7 +3872,8 @@ function ClientView() {
                           caption={HEALTH_RING_CAPTION}
                           hideCaption
                           overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
-                          displayStatus={overallHealth.displayStatus}
+                          displayStatus={bookStatusCritical ? "critical" : overallHealth.displayStatus}
+                          statusLabel={bookStatusCritical ? bookStatusWord : null}
                           pillars={spherePillars}
                           queryCounts={ratioQueryCounts}
                           drillTo={healthDrill}
@@ -3973,7 +4010,7 @@ function ClientView() {
                     sentence={profitAnswerSentence({
                       currency: currencySymbol(clientMarket),
                       periodLabel: figuresPeriodLabel,
-                      preferPeriod: statementDated || Boolean(figuresPeriodLabel),
+                      preferPeriod: statementDated,
                       revenueText:
                         Number(financials.revenue) > 0
                           ? formatMoneyCompact(Number(financials.revenue), clientMarket)
@@ -4040,7 +4077,7 @@ function ClientView() {
                       clientName={client?.name}
                       clientId={client?.id}
                       periodLabel={figuresPeriodLabel}
-                      preferPeriod={statementDated || Boolean(figuresPeriodLabel)}
+                      preferPeriod={statementDated}
                       yearToDate={statementYearLine(financials)}
                       statementSource={figureSource}
                       periodNote={
@@ -4380,7 +4417,7 @@ function ClientView() {
                             />
                           }
                           currentFigures={{
-                            runwayLabel: runwayDisplayLabel(metricRunway),
+                            runwayLabel: cashRunwayHeadline ?? runwayDisplayLabel(metricRunway),
                             cash: cashOutlook.opening,
                             healthScore: overallHealth.overall,
                           }}

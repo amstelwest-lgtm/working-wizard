@@ -5,7 +5,7 @@
 import type { BudgetActuals, BudgetDocument } from "@/lib/budget.types";
 import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
-import { newId } from "@/lib/budget.templates";
+import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { assessClientMetrics } from "@/lib/client-metrics";
@@ -291,6 +291,71 @@ function exceedsMultiple(budget: number, actual: number | null, multiple: number
  * cost of sales more than about 3× the annualised actual. Callers prompt.
  * An order-of-magnitude gap is rebuilt by {@link reseedBudgetIfScaleBroken}.
  */
+/**
+ * Display copy of an untouched template. Gross margin and operating expenses
+ * come from the statement bridge. Rent is not invented when the statement
+ * has no premises line. `updatedAt` is left alone so a load cannot stamp a rewrite.
+ */
+export function statementBudgetRead(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, unknown> | null | undefined,
+): { doc: BudgetDocument; fromStatement: boolean } {
+  if (!periodFinancials) return { doc, fromStatement: false };
+  const template = BUDGET_TEMPLATES[doc.templateId];
+  if (!template) return { doc, fromStatement: false };
+  if (Math.abs(doc.gpPct - template.defaultGpPct) > 0.05) return { doc, fromStatement: false };
+  const overheadsBlank = doc.overheads.every((line) =>
+    Object.values(line.months).every((amount) => amount == null || Math.abs(Number(amount)) < 0.5),
+  );
+  if (!overheadsBlank) return { doc, fromStatement: false };
+  const bridge = periodProfitBridge(periodFinancials);
+  if (!(bridge.revenue > 0)) return { doc, fromStatement: false };
+  const gpPct = Math.round((bridge.grossProfit / bridge.revenue) * 1000) / 10;
+  const annualOpex = bridge.operatingExpenses + bridge.depreciation;
+  const monthlyOpex = annualOpex / 12;
+  const labor = presentNumber(
+    periodFinancials.laborCost as string | number | null | undefined,
+    periodFinancials.labourCost as string | number | null | undefined,
+  );
+  let people = 0;
+  let ops = monthlyOpex;
+  if (labor != null && labor > 0 && annualOpex > labor) {
+    people = labor / 12;
+    ops = monthlyOpex - people;
+  }
+  const months = fyMonths(doc.fyStart);
+  const bucketAmount = (bucket: string): number | null => {
+    if (bucket === "people") return round2(people);
+    if (bucket === "ops") return round2(ops);
+    return null;
+  };
+  const monthlyRevenue = round2(bridge.revenue / 12);
+  return {
+    fromStatement: true,
+    doc: {
+      ...doc,
+      gpPct,
+      cogsMode: "gp_pct",
+      revenueLines: doc.revenueLines.map((line, index) => {
+        if (index !== 0) return line;
+        const keys = Object.keys(line.months);
+        const targets = keys.length > 0 ? keys : months;
+        return {
+          ...line,
+          months: Object.fromEntries(targets.map((month) => [month, { volume: 1, price: monthlyRevenue }])),
+        };
+      }),
+      overheads: doc.overheads.map((line) => {
+        const amount = bucketAmount(line.bucket);
+        if (amount == null) return line;
+        const keys = Object.keys(line.months);
+        const targets = keys.length > 0 ? keys : months;
+        return { ...line, months: Object.fromEntries(targets.map((month) => [month, amount])) };
+      }),
+    },
+  };
+}
+
 export function budgetIsImplausible(
   doc: BudgetDocument,
   periodFinancials: Record<string, string | number | null | undefined> | null | undefined,

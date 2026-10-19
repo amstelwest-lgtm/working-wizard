@@ -78,7 +78,10 @@ const below = books({
 });
 const belowLine = ownerHomeLines(ownerAnswerTiles(below), null).financial_manager[0] ?? "";
 assert(belowLine.includes("under") && belowLine.includes("36,900"), `a shortfall names the floor (${belowLine})`);
-assert(ownerCardStatuses(below).financial_manager?.word === "Critical", "cash under the floor is Critical");
+assert(
+  ownerCardStatuses(below).financial_manager?.word === "Critical: cash below floor",
+  "cash under the floor is Critical",
+);
 assert(!belowLine.includes("▸"), "the cash line has no stray marker");
 
 const quiet = varianceLine("revenue", "Revenue", 100_000, 99_980, true);

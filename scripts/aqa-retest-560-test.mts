@@ -77,9 +77,10 @@ const cycle = operatingCycleDays({
   inventory: (93 * 56_000) / 365,
   payables: (248 * 56_000) / 365,
 });
-assert(cycle.inventoryDays === 93, `inventory days ${cycle.inventoryDays}`);
-assert(cycle.creditorDays === 248, `creditor days ${cycle.creditorDays}`);
-assert(cycle.inventoryDays >= 0 && cycle.creditorDays >= 0, "component days stay non-negative");
+assert(Number.isFinite(cycle.debtorDays), `debtor days stay ${cycle.debtorDays}`);
+assert(Number.isNaN(cycle.inventoryDays), `inventory days are not meaningful (${cycle.inventoryDays})`);
+assert(Number.isNaN(cycle.creditorDays), `creditor days are not meaningful (${cycle.creditorDays})`);
+assert(Number.isNaN(cycle.workingCapitalDays), `working-capital days are not meaningful (${cycle.workingCapitalDays})`);
 const ratios = computeRatios({
   revenue: "1215000",
   cogs: "-56000",
@@ -101,7 +102,10 @@ const ratios = computeRatios({
   founderHours: "",
   periodMonths: "12",
 });
-assert(ratios["Working Capital Days"] === cycle.workingCapitalDays, "ratios and the cycle share one total");
+assert(
+  Number.isNaN(ratios["Working Capital Days"]) && Number.isNaN(cycle.workingCapitalDays),
+  "ratios and the cycle both leave working-capital days not meaningful",
+);
 assert(Math.abs((ratios["Gross Margin"] ?? 0) - 1_159_000 / 1_215_000) < 0.002, "GM matches the waterfall");
 const actual = ratioActualLine(
   "Working Capital Days",
@@ -128,7 +132,7 @@ const actual = ratioActualLine(
   },
   (n) => String(Math.round(n)),
 );
-assert(actual.calculation?.includes(String(cycle.workingCapitalDays)), actual.calculation ?? "");
+assert(actual.calculation === "not meaningful", actual.calculation ?? "");
 assert(!actual.calculation?.includes("161.6"), actual.calculation ?? "");
 
 const note = formatFirmOverLimitNote({ count: 8, limit: 5, planName: "Starter" });

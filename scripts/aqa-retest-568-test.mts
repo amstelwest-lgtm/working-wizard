@@ -77,7 +77,7 @@ assert(
     healthLabel: "Watch",
     healthOverall: 71,
     ...dipped,
-  }) === "Critical",
+  }) === "Critical: cash below floor",
   "a floor dip uses the Financial Manager word",
 );
 const runway = clientListRunwayHeadline({
@@ -112,7 +112,7 @@ const books: OwnerBooks = {
   market: ZA_MARKET,
 };
 assert(
-  ownerCardStatuses(books).financial_manager?.word === "Critical",
+  ownerCardStatuses(books).financial_manager?.word === "Critical: cash below floor",
   "the Financial Manager card is Critical on the same outlook",
 );
 assert(

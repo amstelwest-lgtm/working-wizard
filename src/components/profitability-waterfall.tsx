@@ -34,7 +34,8 @@ import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { profitStepBand } from "@/lib/health-score";
 import { estimatedTaxNote } from "@/lib/estimated-tax-note";
 import { ownerOutflow } from "@/lib/owner-money";
-import { periodProfitBridge } from "@/lib/period-profit";
+import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
+import { FULL_YEAR_ON_FILE } from "@/lib/statement-period";
 import "./profitability-waterfall.css";
 
 export type { WaterfallFallback };
@@ -595,7 +596,8 @@ export function profitAnswerSentence(input: {
   }
   const how = `How ${input.currency}1 of revenue becomes profit`;
   if (!periodBit) return how;
-  return input.preferPeriod ? `${how} · Month to date · ${periodBit}` : `${how} · ${periodBit}`;
+  const monthToDate = input.preferPeriod && periodBit !== FULL_YEAR_ON_FILE;
+  return monthToDate ? `${how} · Month to date · ${periodBit}` : `${how} · ${periodBit}`;
 }
 
 export type WaterfallExportApi = {
@@ -626,12 +628,13 @@ export function priorMarginsFromFinancials(
     statedNetRaw == null || String(statedNetRaw).trim() === ""
       ? null
       : Number(String(statedNetRaw).replace(/,/g, ""));
-  const net =
-    statedNet != null && Number.isFinite(statedNet)
-      ? statedNet
-      : bridge.interestIsFact && bridge.taxIsFact
-        ? bridge.ebit - bridge.interest - bridge.tax
-        : null;
+  const statedUsable =
+    statedNet != null && Number.isFinite(statedNet) && statedNetIsUsable(bridge.ebit, statedNet);
+  const net = statedUsable
+    ? statedNet
+    : bridge.interestIsFact && bridge.taxIsFact
+      ? bridge.ebit - bridge.interest - bridge.tax
+      : bridge.ebit;
   return {
     gross: bridge.grossProfit / bridge.revenue,
     operating: bridge.ebit / bridge.revenue,
@@ -831,8 +834,8 @@ export function ProfitabilityWaterfall({
   const computedNet = ebt - tax;
   const statedNet = figures.statedNetIncome;
   const netProfit =
-    (!interestIsFact || !taxIsFact) && statedNet != null && Number.isFinite(statedNet)
-      ? statedNet
+    (!interestIsFact || !taxIsFact) && statedNetIsUsable(operatingProfit, statedNet)
+      ? statedNet!
       : computedNet;
   const taxNote = estimatedTaxNote({ clientName, tax, operatingProfit });
   const showDepreciation = Math.abs(depreciation) >= 0.5;

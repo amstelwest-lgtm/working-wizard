@@ -64,10 +64,16 @@ import {
   forecastIsCashGenerative,
   runwayDisplayLabel,
   runwayTileValue,
+  storedOpeningIsMissing,
 } from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryDisplay } from "@/lib/profile-signals";
-import { operatingProfitLabel } from "@/lib/operating-profit-display";
+import {
+  IMPLAUSIBLE_SAMPLE_NOTE,
+  operatingProfitColumnHeading,
+  operatingProfitLabel,
+  statementSampleImplausible,
+} from "@/lib/operating-profit-display";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
@@ -1129,11 +1135,11 @@ function toClientRow(
       dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
       totalInflow: outlook.totalInflow,
       totalOutflow: outlook.totalOutflow,
+      openingMissing: storedOpeningIsMissing(c.cashflow),
     });
-    const health =
-      statusWord === "Critical"
-        ? { ...scored, displayStatus: "critical" as const, displayLabel: "Critical" }
-        : scored;
+    const health = statusWord.startsWith("Critical")
+      ? { ...scored, displayStatus: "critical" as const, displayLabel: statusWord }
+      : scored;
     const runwayLabel = clientListRunwayHeadline({
       source: outlook.source,
       opening: outlook.opening,
@@ -2230,7 +2236,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   {showTrendColumn ? <th>Trend</th> : null}
                   <th>Runway</th>
                   <th id="wizard-dash-queries">Queries</th>
-                  <th>Op. profit (MTD)</th>
+                  <th>{operatingProfitColumnHeading(filteredRows)}</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -2253,6 +2259,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                     >
                       <td>
                         <div className="cname">{c.name}</div>
+                        {statementSampleImplausible(c.financials) ? (
+                          <div className="ctype" style={{ textTransform: "none", letterSpacing: "normal" }}>
+                            {IMPLAUSIBLE_SAMPLE_NOTE}
+                          </div>
+                        ) : null}
                         <div className="ctype">
                           {(() => {
                             const industry = clientIndustryDisplay(

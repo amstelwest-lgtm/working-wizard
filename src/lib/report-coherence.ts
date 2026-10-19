@@ -411,6 +411,13 @@ export function burdenDisplay(kind: "interest" | "tax", ebit: number, ebt: numbe
  * Ratios that stay on the scorecard when the input is missing. A blank cash
  * flow is "Not scored", never 0.00×. Everything else is omitted until it exists.
  */
+/** Day counts that stay on the page as "not meaningful" instead of a fake number. */
+const DAYS_NOT_MEANINGFUL_ROWS = new Set([
+  "Creditor Days",
+  "Inventory Days",
+  "Working Capital Days",
+]);
+
 const LIST_WHEN_MISSING = new Set([
   "OCF / EBITDA",
   "Interest Burden",
@@ -467,6 +474,16 @@ export function presentScorecardRatio(input: {
     };
   }
   if (!Number.isFinite(input.value)) {
+    if (DAYS_NOT_MEANINGFUL_ROWS.has(input.name)) {
+      return {
+        include: true,
+        text: "not meaningful",
+        headline: "not meaningful",
+        scoredValue: null,
+        note: null,
+        unscored: true,
+      };
+    }
     if (!LIST_WHEN_MISSING.has(input.name)) {
       return { include: false, text: null, headline: null, scoredValue: null, note: null, unscored: true };
     }

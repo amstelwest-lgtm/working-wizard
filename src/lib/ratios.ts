@@ -1,4 +1,4 @@
-import { costMagnitude } from "@/lib/period-profit";
+import { costMagnitude } from "./period-profit.ts";
 
 export type HealthTier = "critical" | "at_risk" | "healthy";
 
@@ -288,6 +288,37 @@ export function creditorDaysPaysSlowly(days: number): boolean {
   return Number.isFinite(days) && days > max;
 }
 
+/** Shown wherever a day count would be invented from a tiny or absurd cost. */
+export const DAYS_NOT_MEANINGFUL = "not meaningful";
+
+/**
+ * Cost of sales under this share of revenue cannot support creditor or
+ * inventory days. Chill Pepper's R56,000 cost on R1,215,000 revenue is under it.
+ */
+export const COGS_SHARE_FOR_DAYS = 0.05;
+
+/** A day count past a full year is not a usable term. */
+export const IMPLAUSIBLE_DAY_COUNT = 365;
+
+/**
+ * Creditor days, inventory days, and the working-capital net of those days
+ * are not meaningful when cost of sales is a sliver of revenue, or when the
+ * day count itself runs past a year.
+ */
+export function costDaysNotMeaningful(input: {
+  revenue: number;
+  cogs: number;
+  days?: number | null;
+}): boolean {
+  if (!(input.revenue > 0) || !Number.isFinite(input.cogs)) return false;
+  if (costMagnitude(input.cogs) / input.revenue < COGS_SHARE_FOR_DAYS) return true;
+  return (
+    input.days != null &&
+    Number.isFinite(input.days) &&
+    Math.abs(input.days) > IMPLAUSIBLE_DAY_COUNT
+  );
+}
+
 /** Step 1 copy for #02 when creditor days are above the healthy band. */
 export const SLOW_CREDITOR_DAYS_STEP = {
   step_title: "High creditor days — suppliers are being paid slowly",
@@ -504,6 +535,17 @@ export function operatingCycleDays(input: {
   let creditorDays = roundDay(safe(input.payables, cogs) * 365);
   if (Number.isFinite(inventoryDays) && inventoryDays < 0) inventoryDays = Math.abs(inventoryDays);
   if (Number.isFinite(creditorDays) && creditorDays < 0) creditorDays = Math.abs(creditorDays);
+  const suppressed =
+    costDaysNotMeaningful({ revenue, cogs: input.cogs, days: creditorDays }) ||
+    costDaysNotMeaningful({ revenue, cogs: input.cogs, days: inventoryDays });
+  if (suppressed) {
+    return {
+      debtorDays,
+      inventoryDays: Number.NaN,
+      creditorDays: Number.NaN,
+      workingCapitalDays: Number.NaN,
+    };
+  }
   const workingCapitalDays = [debtorDays, inventoryDays, creditorDays].every((days) =>
     Number.isFinite(days),
   )

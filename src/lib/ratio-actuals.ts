@@ -521,7 +521,9 @@ export function ratioActualLine(
       payables: pay,
     });
     const cost = r > 0 ? costMagnitude(cogs) : cogs;
-    calculation = `(${fmt(inv)} / ${fmt(cost)}) × 365 = ${days(cycle.inventoryDays)}`;
+    calculation = Number.isFinite(cycle.inventoryDays)
+      ? `(${fmt(inv)} / ${fmt(cost)}) × 365 = ${days(cycle.inventoryDays)}`
+      : "not meaningful";
   } else if (name === "Creditor Days" && missing.length === 0) {
     const cycle = operatingCycleDays({
       revenue: r,
@@ -531,7 +533,9 @@ export function ratioActualLine(
       payables: pay,
     });
     const cost = r > 0 ? costMagnitude(cogs) : cogs;
-    calculation = `(${fmt(pay)} / ${fmt(cost)}) × 365 = ${days(cycle.creditorDays)}`;
+    calculation = Number.isFinite(cycle.creditorDays)
+      ? `(${fmt(pay)} / ${fmt(cost)}) × 365 = ${days(cycle.creditorDays)}`
+      : "not meaningful";
   } else if (name === "Working Capital Days" && missing.length === 0) {
     const cycle = operatingCycleDays({
       revenue: r,
@@ -540,7 +544,12 @@ export function ratioActualLine(
       inventory: inv,
       payables: pay,
     });
-    calculation = `${days(cycle.debtorDays)} + ${days(cycle.inventoryDays)} - ${days(cycle.creditorDays)} = ${days(cycle.workingCapitalDays)}`;
+    calculation =
+      Number.isFinite(cycle.workingCapitalDays) &&
+      Number.isFinite(cycle.inventoryDays) &&
+      Number.isFinite(cycle.creditorDays)
+        ? `${days(cycle.debtorDays)} + ${days(cycle.inventoryDays)} - ${days(cycle.creditorDays)} = ${days(cycle.workingCapitalDays)}`
+        : "not meaningful";
   } else if (name === "Fixed Cost Ratio" && missing.length === 0) {
     const periodFixed = parseField(String(inputs.fixedCosts ?? ""));
     const periodRevenue = parseField(String(inputs.revenue ?? ""));
