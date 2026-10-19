@@ -1,15 +1,18 @@
 /**
  * Schedule a call on the public sample. The offered instants stay on the
- * SAST window. The buttons show the visitor's local time, labelled with
- * that zone. Booking goes through a server function the page passes in.
+ * SAST window. Buttons show the visitor's own zone, named after mount so
+ * the server render matches the first client render. Booking goes through
+ * a server function the page passes in.
  */
 import { useEffect, useMemo, useState } from "react";
 import {
   callSlots,
-  displaySlotZone,
+  detectedVisitorZone,
   formatSlotButton,
   formatSlotDay,
-  formatSlotZoneLong,
+  marketFallbackZone,
+  slotClockLead,
+  visitorTimeZone,
   type CallSlot,
 } from "@/lib/trial-call-slots";
 
@@ -43,6 +46,11 @@ function pageMarket(): "US" | "ZA" | null {
   return raw === "US" || raw === "ZA" ? raw : null;
 }
 
+function fallbackMarket(market: "US" | "ZA" | null | undefined): "US" | "ZA" {
+  if (market === "ZA" || market === "US") return market;
+  return pageMarket() ?? "US";
+}
+
 export function TrySchedule({
   now,
   timeZone,
@@ -51,18 +59,30 @@ export function TrySchedule({
 }: {
   now?: Date;
   timeZone?: string;
-  /** A US sample is not labelled with the SAST window. */
+  /** Fallback zone when the browser zone cannot be read. */
   market?: "US" | "ZA" | null;
   onBook?: (input: TryCallInput) => Promise<TryCallResult>;
 }) {
-  // Slot labels depend on the visitor's zone. The server render stays blank
-  // so it matches the first client render, then the effect fills the times.
-  const [frozenNow, setFrozenNow] = useState<Date | null>(now ?? null);
-  const [zone, setZone] = useState(timeZone ? displaySlotZone(timeZone, market ?? null) : "");
+  // The server does not know the laptop zone. A passed `timeZone` is the
+  // visitor's zone (tests). Otherwise the first paint stays neutral and the
+  // effect reads Intl after mount, so hydration cannot disagree.
+  const passed = visitorTimeZone(timeZone);
+  const [frozenNow, setFrozenNow] = useState<Date | null>(passed ? (now ?? null) : null);
+  const [zone, setZone] = useState(passed ?? "");
+  const [local, setLocal] = useState(passed != null);
+  const [shownMarket, setShownMarket] = useState<"US" | "ZA">(market === "ZA" ? "ZA" : "US");
   useEffect(() => {
-    const browser = timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
-    setFrozenNow(now ?? new Date());
-    setZone(displaySlotZone(browser, market ?? pageMarket()));
+    const detected = visitorTimeZone(timeZone) ?? detectedVisitorZone();
+    const nextMarket = fallbackMarket(market);
+    setFrozenNow((current) => current ?? now ?? new Date());
+    setShownMarket(nextMarket);
+    if (detected) {
+      setZone(detected);
+      setLocal(true);
+      return;
+    }
+    setZone(marketFallbackZone(nextMarket));
+    setLocal(false);
   }, [now, timeZone, market]);
   const groups = useMemo(
     () => (frozenNow ? groupByDay(callSlots(frozenNow), zone || "UTC") : []),
@@ -84,8 +104,7 @@ export function TrySchedule({
     <section className="try-card try-schedule" aria-label="Schedule a call" data-try-schedule>
       <h2 className="try-kicker">Schedule a call</h2>
       <p className="try-schedule-lead">
-        Pick a time. Shown in your local time
-        {zone && frozenNow ? ` (${formatSlotZoneLong(frozenNow, zone)})` : ""}.
+        {slotClockLead({ local, zone, when: frozenNow, market: shownMarket })}
       </p>
       {!frozenNow ? <p className="try-status">Loading times.</p> : null}
       {done ? (
@@ -153,23 +172,27 @@ export function TrySchedule({
               More days
             </button>
           ) : null}
-          <label className="try-field">
+          <label className="try-field" htmlFor="try-call-name">
             Name
             <input
+              id="try-call-name"
+              name="call_name"
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              autoComplete="name"
+              autoComplete="section-try-call name"
               required
             />
           </label>
-          <label className="try-field">
+          <label className="try-field" htmlFor="try-call-email">
             Email
             <input
+              id="try-call-email"
+              name="call_email"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
+              autoComplete="section-try-call email"
               required
             />
           </label>

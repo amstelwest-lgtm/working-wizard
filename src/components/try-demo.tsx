@@ -507,14 +507,99 @@ function Frame({
   );
 }
 
-export function TryScreen(props: TryScreenProps) {
+function SampleGateForm({
+  busy,
+  error,
+  siteKey,
+  turnstile,
+  onSubmit,
+}: {
+  busy?: boolean;
+  error?: string | null;
+  siteKey?: string | null;
+  turnstile?: boolean;
+  onSubmit?: TryScreenProps["onSubmitGate"];
+}) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   const [token, setToken] = useState("");
   const [leaveBlank, setLeaveBlank] = useState("");
-  const showTurnstile = props.turnstile !== false && Boolean(props.siteKey);
+  const showTurnstile = turnstile !== false && Boolean(siteKey);
+  return (
+    <form
+      className="try-card try-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit?.({
+          name,
+          email,
+          consent,
+          turnstileToken: token,
+          milon_leave_blank: leaveBlank,
+        });
+      }}
+    >
+      <label className="try-field" htmlFor="try-gate-name">
+        Name
+        <input
+          id="try-gate-name"
+          name="sample_name"
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          autoComplete="section-try-gate name"
+          required
+        />
+      </label>
+      <label className="try-field" htmlFor="try-gate-email">
+        Email
+        <input
+          id="try-gate-email"
+          name="sample_email"
+          type="email"
+          inputMode="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          autoComplete="section-try-gate email"
+          required
+        />
+      </label>
+      <label className="try-consent">
+        <input
+          type="checkbox"
+          checked={consent}
+          onChange={(event) => setConsent(event.target.checked)}
+        />
+        <span>I agree Milōn may email me about this sample.</span>
+      </label>
+      <div className="try-hp" aria-hidden="true">
+        <label>
+          Leave this blank
+          <input
+            type="text"
+            name="milon_leave_blank"
+            tabIndex={-1}
+            autoComplete="off"
+            value={leaveBlank}
+            onChange={(event) => setLeaveBlank(event.target.value)}
+          />
+        </label>
+      </div>
+      {showTurnstile && siteKey ? <TurnstileBox siteKey={siteKey} onToken={setToken} /> : null}
+      <button
+        type="submit"
+        className="try-step"
+        disabled={busy || (turnstile !== false && !siteKey)}
+      >
+        Show the score
+      </button>
+      {error ? <p className="try-error">{error}</p> : null}
+    </form>
+  );
+}
 
+export function TryScreen(props: TryScreenProps) {
   if (props.phase === "start") {
     return (
       <Frame phase="start" onBookCall={props.onBookCall}>
@@ -547,72 +632,13 @@ export function TryScreen(props: TryScreenProps) {
           Your name, email, and a yes. Then the sample health score. Nothing is sent to an
           accountant.
         </p>
-        <form
-          className="try-card try-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            props.onSubmitGate?.({
-              name,
-              email,
-              consent,
-              turnstileToken: token,
-              milon_leave_blank: leaveBlank,
-            });
-          }}
-        >
-          <label className="try-field">
-            Name
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoComplete="name"
-              required
-            />
-          </label>
-          <label className="try-field">
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
-          <label className="try-consent">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(event) => setConsent(event.target.checked)}
-            />
-            <span>I agree Milōn may email me about this sample.</span>
-          </label>
-          <div className="try-hp" aria-hidden="true">
-            <label>
-              Leave this blank
-              <input
-                type="text"
-                name="milon_leave_blank"
-                tabIndex={-1}
-                autoComplete="off"
-                value={leaveBlank}
-                onChange={(event) => setLeaveBlank(event.target.value)}
-              />
-            </label>
-          </div>
-          {showTurnstile && props.siteKey ? (
-            <TurnstileBox siteKey={props.siteKey} onToken={setToken} />
-          ) : null}
-          <button
-            type="submit"
-            className="try-step"
-            disabled={props.busy || (props.turnstile !== false && !props.siteKey)}
-          >
-            Show the score
-          </button>
-          {props.error ? <p className="try-error">{props.error}</p> : null}
-        </form>
+        <SampleGateForm
+          busy={props.busy}
+          error={props.error}
+          siteKey={props.siteKey}
+          turnstile={props.turnstile}
+          onSubmit={props.onSubmitGate}
+        />
       </Frame>
     );
   }

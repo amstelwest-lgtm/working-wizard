@@ -372,7 +372,10 @@ assert(profit.steps[0]?.display === "$1,150,000", "US revenue uses dollars");
 const cash = buildTrialCash("US", new Date("2026-10-14T00:00:00Z"));
 assert(cash.weeks.length === 13, "cash line is 13 weeks");
 assert(cash.openingDisplay === "$82,000", "US sample cash opens at the balance-sheet residual");
-assert(cash.lowDisplay === cash.openingDisplay, "the quoted low point is the opening of this series");
+assert(
+  cash.lowDisplay === cash.openingDisplay,
+  "the quoted low point is the opening of this series",
+);
 assert(!cash.openingDisplay.includes("R"), "US cash display has no rand");
 
 const za = buildTrialBoard("ZA");
@@ -383,12 +386,21 @@ assert(!zaText.includes("R 6,400,000"), "ZA findings do not use comma grouping")
 assert(zaText.includes("R 450 000"), "ZA findings open at the sample bank balance");
 assert(!/no cash balance/i.test(zaText), "ZA findings do not deny the bank balance");
 const zaCash = buildTrialCash("ZA", new Date("2026-10-14T00:00:00Z"));
-assert(zaCash.openingDisplay === "R 450 000" && zaCash.lowDisplay === "R 450 000", "ZA low point matches the opening");
+assert(
+  zaCash.openingDisplay === "R 450 000" && zaCash.lowDisplay === "R 450 000",
+  "ZA low point matches the opening",
+);
 const zaSeries = trialCashSeries("ZA", new Date("2026-10-14T00:00:00Z"));
-assert(zaSeries.floor === 433846, `ZA runway floor is four weeks of payments, got ${zaSeries.floor}`);
+assert(
+  zaSeries.floor === 433846,
+  `ZA runway floor is four weeks of payments, got ${zaSeries.floor}`,
+);
 assert(zaSeries.opening > zaSeries.floor, "opening cash sits above the runway floor");
 assert(zaSeries.low === zaSeries.opening, "the chart series low point is the opening");
-assert(zaText.includes("Opens at the sample bank balance on file."), "findings name the sample opening balance");
+assert(
+  zaText.includes("Opens at the sample bank balance on file."),
+  "findings name the sample opening balance",
+);
 assert(formatMoneyCompact(656_000, ZA_MARKET) === "R 656k", "ZA abbreviations keep a space");
 assert(
   formatMoneyCompact(656_000, { currency: "USD", locale: "en-US" }) === "$656k",
@@ -404,8 +416,15 @@ assert(
 const [belowLo, belowHi] = cashYDomainIncludingFloor(0, 200_000, zaSeries.floor);
 assert(belowHi > zaSeries.floor, "a floor above the line stays inside the y-domain");
 assert(belowLo < 0, "the domain still starts below a zero opening");
-const [nearLo, nearHi] = cashYDomainIncludingFloor(zaSeries.opening, zaSeries.closing[12] ?? zaSeries.opening, zaSeries.floor);
-assert(nearLo < zaSeries.floor && nearHi > zaSeries.opening, "the floor stays on the axis beside the opening");
+const [nearLo, nearHi] = cashYDomainIncludingFloor(
+  zaSeries.opening,
+  zaSeries.closing[12] ?? zaSeries.opening,
+  zaSeries.floor,
+);
+assert(
+  nearLo < zaSeries.floor && nearHi > zaSeries.opening,
+  "the floor stays on the axis beside the opening",
+);
 
 const sampleNow = new Date("2026-10-14T15:00:00Z");
 const boardsRoute = createRootRoute({
@@ -460,6 +479,11 @@ assert(!openGate.includes("disabled"), "the gate button stays enabled without tu
 assert(openGate.includes('name="milon_leave_blank"'), "the gate includes the honeypot");
 assert(openGate.includes('tabindex="-1"'), "the honeypot is skipped by keyboard");
 assert(openGate.includes("Show the score"), "the gate still submits");
+assert(openGate.includes('id="try-gate-name"'), "the name field has a stable id");
+assert(openGate.includes('id="try-gate-email"'), "the email field has a stable id");
+assert(openGate.includes("section-try-gate name"), "the name field is its own autofill section");
+assert(openGate.includes("section-try-gate email"), "the email field is its own autofill section");
+assert(!/autoFocus|autofocus/.test(openGate), "the gate does not autofocus a field");
 assert(html.includes("try-ring"), "the reveal draws a health ring");
 assert(
   html.includes("The ratios below are what the Analyst reads."),
@@ -476,8 +500,21 @@ assert(
   boardsHtml.includes("Show figures as amounts or as percentages of revenue"),
   "the toggle is the owner profit control",
 );
-assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip has the graph enlarge control");
-assert(boardsHtml.includes("Enlarge cash flow table"), "cash chip has the table enlarge control");
+assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip keeps the graph enlarge control");
+assert(
+  boardsHtml.includes('aria-label="Enlarge cash flow table"'),
+  "the shared forecast still has its table enlarge control",
+);
+const tryStyles = readFileSync(join(resolve("."), "src/styles/try.css"), "utf8");
+assert(
+  tryStyles.includes('[aria-label="Enlarge cash flow table"]') &&
+    tryStyles.includes("display: none"),
+  "the sample hides the stray Enlarge row above the forecast table",
+);
+assert(
+  !tryStyles.includes("Enlarge cash flow graph"),
+  "the sample does not hide the graph enlarge control",
+);
 assert(boardsHtml.includes("13-week cash model"), "cash chip renders the 13-week table");
 assert(
   boardsHtml.includes("Opens at the sample bank balance on file."),
@@ -525,8 +562,14 @@ assert(
 assert(trialMarketForVisitor("US", "ZA") === "US", "a US visitor stays on the dollar sample");
 assert(trialMarketForVisitor("US", "us") === "US", "a US visitor with ?market=us stays on dollars");
 assert(trialMarketForVisitor("ZA", null) === "ZA", "a ZA visitor without ?market= stays on rand");
-assert(trialMarketForVisitor("ZA", "us") === "US", "?market=us opens the US sample for a ZA visitor");
-assert(trialMarketForVisitor("ZA", "US") === "US", "?market=US opens the US sample for a ZA visitor");
+assert(
+  trialMarketForVisitor("ZA", "us") === "US",
+  "?market=us opens the US sample for a ZA visitor",
+);
+assert(
+  trialMarketForVisitor("ZA", "US") === "US",
+  "?market=US opens the US sample for a ZA visitor",
+);
 assert(
   trialMarketForVisitor("ZA", "country") === "ZA",
   "?country= and ?region= are not a market override",
@@ -601,16 +644,19 @@ assert(
   advisoryTalk.includes("sample supply and distribution business"),
   "the pack describes a supply business",
 );
-assert(!advisoryTalk.includes("sample services business"), "the pack does not call it a services business");
 assert(
-  advisoryTalk.includes("Cut or reprice one operating cost"),
-  "the margin move is an action",
+  !advisoryTalk.includes("sample services business"),
+  "the pack does not call it a services business",
 );
+assert(advisoryTalk.includes("Cut or reprice one operating cost"), "the margin move is an action");
 assert(
   !advisoryTalk.includes("The gap is the cost of running the business."),
   "the margin line is no longer only an observation",
 );
-assert(advisoryTalk.includes("try-cta-quiet"), "the in-conversation trial link is not the gold primary");
+assert(
+  advisoryTalk.includes("try-cta-quiet"),
+  "the in-conversation trial link is not the gold primary",
+);
 assert(advisoryTalk.includes("try-ctabar-btn"), "the sticky trial link stays");
 assert(
   advisoryTalk.includes("Not reviewed by an accountant") &&
@@ -634,12 +680,21 @@ assert(
   !cashTalk.includes("Opening cash stays the balance on file"),
   "the cash copy does not use the old opening line",
 );
-assert(!cashTalk.includes("opens at zero") && !cashTalk.includes("no bank balance"), "cash copy does not open at zero");
+assert(
+  !cashTalk.includes("opens at zero") && !cashTalk.includes("no bank balance"),
+  "cash copy does not open at zero",
+);
 const tryCss = readFileSync(join(resolve("."), "src/styles/try.css"), "utf8");
 assert(!tryCss.includes("min(1100px"), "opening a report does not widen the column");
 assert(tryCss.includes("#0b5fff") && tryCss.includes(".try-signoff-btn"), "Sign off is cobalt");
-const signoffRule = tryCss.slice(tryCss.indexOf(".try-signoff-btn {"), tryCss.indexOf(".try-signoff-btn:disabled"));
-assert(!signoffRule.includes("#d4af37") && signoffRule.includes("#0b5fff"), "the Sign off button is not gold");
+const signoffRule = tryCss.slice(
+  tryCss.indexOf(".try-signoff-btn {"),
+  tryCss.indexOf(".try-signoff-btn:disabled"),
+);
+assert(
+  !signoffRule.includes("#d4af37") && signoffRule.includes("#0b5fff"),
+  "the Sign off button is not gold",
+);
 
 const doneTalk = renderToStaticMarkup(
   createElement(TryScreen, {
@@ -681,9 +736,14 @@ assert(
   !/from\s+["']@\/components\/profitability-waterfall["']/.test(demoSource),
   "try-demo does not statically import the waterfall",
 );
-assert(demoSource.includes("readRequestedMarket"), "the page sends ?market= when the sample starts");
 assert(
-  readFileSync(join(root, "src/lib/trial-demo.functions.ts"), "utf8").includes("trialMarketForVisitor"),
+  demoSource.includes("readRequestedMarket"),
+  "the page sends ?market= when the sample starts",
+);
+assert(
+  readFileSync(join(root, "src/lib/trial-demo.functions.ts"), "utf8").includes(
+    "trialMarketForVisitor",
+  ),
   "starting the sample uses the landing market override",
 );
 
@@ -763,5 +823,142 @@ assert(/delete from public\.trial_sessions/i.test(sql), "cleanup deletes session
 assert(!/delete from public\.trial_leads/i.test(sql), "cleanup keeps leads");
 assert(sql.includes("trial-demo-cleanup"), "cron job is named");
 assert(sql.includes("interval '7 days'"), "retention is 7 days");
+
+const gateSource = readFileSync(join(root, "src/components/try-demo.tsx"), "utf8");
+const scheduleSource = readFileSync(join(root, "src/components/try-schedule.tsx"), "utf8");
+assert(
+  gateSource.indexOf("function SampleGateForm") !== -1 &&
+    gateSource.indexOf("function SampleGateForm") < gateSource.indexOf("export function TryScreen"),
+  "the sample gate form is a stable component, not declared inside render",
+);
+assert(
+  !gateSource.includes("autoFocus") && !gateSource.includes(".focus("),
+  "the sample gate does not move focus",
+);
+assert(
+  !scheduleSource.includes("autoFocus") && !scheduleSource.includes(".focus("),
+  "the call form does not move focus",
+);
+
+const { Window } = await import("happy-dom");
+const view = new Window({
+  url: "http://127.0.0.1:5000/try?market=us",
+  width: 1280,
+  height: 800,
+  settings: {
+    disableJavaScriptEvaluation: true,
+    disableJavaScriptFileLoading: true,
+    disableCSSFileLoading: true,
+  },
+});
+for (const key of [
+  "window",
+  "document",
+  "navigator",
+  "HTMLElement",
+  "HTMLInputElement",
+  "HTMLButtonElement",
+  "HTMLFormElement",
+  "Element",
+  "Node",
+  "Document",
+  "Event",
+  "InputEvent",
+  "MouseEvent",
+  "FocusEvent",
+  "KeyboardEvent",
+  "getComputedStyle",
+  "requestAnimationFrame",
+  "cancelAnimationFrame",
+  "MutationObserver",
+] as const) {
+  Object.defineProperty(globalThis, key, {
+    configurable: true,
+    writable: true,
+    value: view[key],
+  });
+}
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
+  configurable: true,
+  writable: true,
+  value: true,
+});
+
+const { useState: useGateState, useLayoutEffect, createElement: h } = await import("react");
+const { act } = await import("react");
+const { createRoot } = await import("react-dom/client");
+const { TryScreen: GateScreen } = await import("../src/components/try-demo");
+
+let flipGate: () => void = () => {};
+function GateHost() {
+  const [error, setError] = useGateState<string | null>(null);
+  const [siteKey, setSiteKey] = useGateState<string | null>(null);
+  useLayoutEffect(() => {
+    document.getElementById("try-gate-name")?.focus();
+  }, []);
+  flipGate = () => {
+    setError("Try again.");
+    setSiteKey("site-key");
+  };
+  return h(GateScreen, {
+    phase: "gate",
+    error,
+    siteKey,
+    turnstile: true,
+    onSubmitGate: () => {},
+  });
+}
+
+const mount = document.createElement("div");
+document.body.appendChild(mount);
+const gateRoot = createRoot(mount);
+await act(async () => {
+  gateRoot.render(h(GateHost));
+});
+
+const gateName = document.getElementById("try-gate-name") as HTMLInputElement | null;
+const gateEmail = document.getElementById("try-gate-email") as HTMLInputElement | null;
+assert(
+  gateName instanceof HTMLInputElement && gateEmail instanceof HTMLInputElement,
+  "gate fields mounted",
+);
+assert(document.activeElement === gateName, "mounting the call slots left the name field focused");
+
+const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+assert(typeof valueSetter === "function", "input value setter exists");
+let typed = "";
+for (const ch of "Sam QAAMste") {
+  assert(
+    document.activeElement === gateName,
+    `focus left the name field before ${JSON.stringify(ch)}`,
+  );
+  typed += ch;
+  await act(async () => {
+    valueSetter!.call(gateName, typed);
+    gateName!.dispatchEvent(
+      new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }),
+    );
+  });
+  if (typed === "Sam ") {
+    await act(async () => {
+      flipGate();
+    });
+    assert(
+      document.body.textContent?.includes("Try again."),
+      "a parent update re-rendered the gate",
+    );
+    assert(
+      document.querySelector(".try-turnstile"),
+      "the turnstile slot can mount without taking the field",
+    );
+  }
+  assert(document.activeElement === gateName, `focus left the name field on ${JSON.stringify(ch)}`);
+  assert(gateName!.value === typed, `name field is ${JSON.stringify(gateName!.value)}`);
+  assert(gateEmail!.value === "", `email field received ${JSON.stringify(gateEmail!.value)}`);
+}
+
+await act(async () => {
+  gateRoot.unmount();
+});
 
 console.log(`trial-demo: ok (${seen.size} files in the try graph)`);

@@ -24,11 +24,14 @@ import {
   CALL_CLOSE_MINUTES,
   CALL_OPEN_MINUTES,
   callSlots,
-  displaySlotZone,
   formatSlotButton,
   formatSlotClock24,
   formatSlotZoneLong,
   isOfferedSlot,
+  marketFallbackZone,
+  marketFallbackZoneLabel,
+  slotClockLead,
+  visitorTimeZone,
 } from "../src/lib/trial-call-slots";
 import {
   TEAM_ALERT_FROM,
@@ -124,18 +127,48 @@ assert(
   formatSlotClock24(mondaySlots[0]!.start, "America/New_York") === "10:30",
   "a US visitor sees 10:30",
 );
-assert(displaySlotZone("America/New_York", "US") === "America/New_York", "a US clock stays local");
+assert(visitorTimeZone("America/New_York") === "America/New_York", "a US clock stays local");
 assert(
-  displaySlotZone("America/Los_Angeles", "US") === "America/Los_Angeles",
+  visitorTimeZone("America/Los_Angeles") === "America/Los_Angeles",
   "a Pacific clock stays local on the US sample",
 );
 assert(
-  displaySlotZone("Africa/Johannesburg", "US") === "America/New_York",
-  "a US sample does not keep the Johannesburg clock",
+  visitorTimeZone("Africa/Johannesburg") === "Africa/Johannesburg",
+  "a Johannesburg clock stays the visitor zone on every sample",
+);
+assert(visitorTimeZone("Not/A Zone") === null, "an unreadable zone is not treated as local");
+assert(marketFallbackZone("US") === "America/New_York", "a failed read falls back to US Eastern");
+assert(
+  marketFallbackZone("ZA") === "Africa/Johannesburg",
+  "a failed read on the ZA sample falls back to Johannesburg",
+);
+assert(marketFallbackZoneLabel("US") === "US Eastern Time", "the US fallback is named explicitly");
+assert(
+  marketFallbackZoneLabel("ZA") === "South Africa time",
+  "the ZA fallback is named explicitly",
 );
 assert(
-  displaySlotZone("Africa/Johannesburg", "ZA") === "Africa/Johannesburg",
-  "a ZA sample keeps the local Johannesburg clock",
+  !marketFallbackZoneLabel("US").includes("your local time") &&
+    !marketFallbackZoneLabel("ZA").includes("your local time"),
+  "a fallback never claims to be the visitor's local time",
+);
+assert(
+  slotClockLead({
+    local: false,
+    zone: "America/New_York",
+    when: mondaySlots[0]!.start,
+    market: "US",
+  }) === "Pick a time. Shown in US Eastern Time.",
+  "a failed US detection says US Eastern Time",
+);
+assert(
+  slotClockLead({
+    local: true,
+    zone: "Africa/Johannesburg",
+    when: mondaySlots[0]!.start,
+    market: "US",
+  }).includes("your local time"),
+  "a detected zone may say your local time",
 );
 assert(
   formatSlotButton(mondaySlots[0]!.start, "America/New_York") === "10:30 AM EDT",
@@ -144,6 +177,10 @@ assert(
 assert(
   formatSlotZoneLong(mondaySlots[0]!.start, "America/New_York") === "Eastern Time",
   "the US lead names Eastern Time",
+);
+assert(
+  formatSlotZoneLong(mondaySlots[0]!.start, "Africa/Johannesburg") === "South Africa Standard Time",
+  "Johannesburg's readable name comes from the clock",
 );
 assert(
   formatSlotButton(mondaySlots[0]!.start, "Africa/Johannesburg") === "4:30 PM SAST",
@@ -168,10 +205,22 @@ const usFromJohannesburg = renderToStaticMarkup(
   }),
 );
 assert(
-  usFromJohannesburg.includes("10:30 AM EDT") && usFromJohannesburg.includes("Eastern Time"),
-  "market=us from a Johannesburg clock still shows Eastern time",
+  usFromJohannesburg.includes("4:30 PM SAST") && usFromJohannesburg.includes("your local time"),
+  "market=us from a Johannesburg clock shows that clock",
 );
-assert(!usFromJohannesburg.includes("SAST"), "market=us does not label SAST");
+assert(!usFromJohannesburg.includes("EDT"), "a Johannesburg clock is not labelled EDT");
+assert(
+  !usFromJohannesburg.includes("Eastern Time"),
+  "a Johannesburg clock is not labelled Eastern Time",
+);
+const pendingSchedule = renderToStaticMarkup(createElement(TrySchedule, { market: "US" }));
+assert(pendingSchedule.includes("Pick a time."), "the server lead is neutral");
+assert(!pendingSchedule.includes("your local time"), "the server lead does not claim a local zone");
+assert(
+  !pendingSchedule.includes("EDT") && !pendingSchedule.includes("SAST"),
+  "the server paints no slot clocks",
+);
+assert(pendingSchedule.includes("Loading times"), "slot clocks wait until the zone is known");
 const zaSchedule = renderToStaticMarkup(
   createElement(TrySchedule, {
     now: mondayMorning,
