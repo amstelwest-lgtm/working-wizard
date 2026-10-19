@@ -26,6 +26,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
 import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
+import { handoffStillAwaitingRun } from "@/lib/agent-activity-poll";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
@@ -2688,7 +2689,17 @@ function ItemRow({
               }}
             />
           ) : null}
-          <HandoffRunStatus run={pickupRun} caption={pickupLabel} onRetry={onRetry} />
+          <HandoffRunStatus
+            run={pickupRun}
+            caption={pickupLabel}
+            missed={(() => {
+              if (pickupRun && (pickupRun.status === "queued" || pickupRun.status === "running")) return false;
+              if (pickupRun) return false;
+              const stored = latestStoredAssignment(notes);
+              return stored?.kind === "bot" && !handoffStillAwaitingRun(stored.at);
+            })()}
+            onRetry={onRetry}
+          />
           <AssignmentNotes notes={notes} />
         </div>
       ) : null}

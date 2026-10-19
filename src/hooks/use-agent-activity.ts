@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { pollAfterTick } from "@/lib/agent-activity-poll";
 import { dispatchActionPlanRefresh } from "@/lib/owner-handoff-client";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
@@ -23,12 +24,23 @@ import {
 import type { AgentKey } from "@/lib/milon-team-feed";
 
 const ROW_LIMIT = 20;
-/** While a run is queued or running, Home reloads runs and notes, then stops. */
+/** While any run for this client is queued or running, Home reloads, then stops. */
 const ACTIVE_POLL_MS = 5000;
 const CLIENT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function runIsOpen(status: string): boolean {
   return status === "queued" || status === "running";
+}
+
+async function fetchClientRuns(clientId: string): Promise<AgentRunRow[]> {
+  const runsRes = await table("agent_runs")
+    .select("id, agent, client_id, status, summary, trigger, queued_at, started_at, finished_at, action_item_id")
+    .eq("client_id", clientId)
+    .order("queued_at", { ascending: false })
+    .limit(ROW_LIMIT);
+  if (agentActivityUnavailable(runsRes.error)) return [];
+  if (runsRes.error) throw new Error(runsRes.error.message ?? "Could not load runs");
+  return rowsOf(runsRes.data).map(parseRun).filter((row): row is AgentRunRow => Boolean(row));
 }
 
 type QueryError = { message?: string; code?: string } | null;
@@ -121,7 +133,10 @@ function parseMessage(row: Record<string, unknown>): AgentMessageRow | null {
   };
 }
 
-export function useAgentActivity(clientId: string): AgentActivity {
+export function useAgentActivity(
+  clientId: string,
+  awaiting: readonly { openedAt?: string | null }[] = [],
+): AgentActivity {
   const [reload, setReload] = useState(0);
   const refresh = useCallback(() => setReload((n) => n + 1), []);
   const [state, setState] = useState<AgentActivitySnapshot & { loading: boolean; error: string | null }>({
@@ -129,6 +144,12 @@ export function useAgentActivity(clientId: string): AgentActivity {
     loading: true,
     error: null,
   });
+  const awaitingRef = useRef(awaiting);
+  awaitingRef.current = awaiting;
+  const awaitingKey = awaiting.map((row) => row.openedAt ?? "").join("\n");
+  const runsRef = useRef(state.runs);
+  runsRef.current = state.runs;
+  const armRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const id = clientId.trim();
@@ -229,21 +250,61 @@ export function useAgentActivity(clientId: string): AgentActivity {
     };
   }, [clientId, reload]);
 
-  const active = state.runs.some((run) => runIsOpen(run.status));
-  const wasActive = useRef(false);
+  // One timer for this client. A render that looks idle must not clear it:
+  // the tick fetches again and continues while any fresh run is still open.
   useEffect(() => {
-    if (wasActive.current && !active && !state.loading) dispatchActionPlanRefresh();
-    wasActive.current = active;
-  }, [active, state.loading]);
+    const id = clientId.trim();
+    if (!CLIENT_UUID.test(id)) return;
+
+    let cancelled = false;
+    let timer: number | undefined;
+    let generation = 0;
+
+    const arm = () => {
+      if (cancelled || timer !== undefined) return;
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        void tick();
+      }, ACTIVE_POLL_MS);
+    };
+
+    const tick = async () => {
+      const gen = ++generation;
+      let fresh: AgentRunRow[] | null = null;
+      try {
+        fresh = await fetchClientRuns(id);
+      } catch {
+        if (
+          !cancelled &&
+          gen === generation &&
+          (runsRef.current.some((run) => runIsOpen(run.status)) || pollAfterTick([], awaitingRef.current) === "continue")
+        ) {
+          arm();
+        }
+        return;
+      }
+      if (cancelled || gen !== generation || !fresh) return;
+      setState((current) => ({ ...current, runs: fresh ?? current.runs, loading: false }));
+      dispatchActionPlanRefresh();
+      if (pollAfterTick(fresh, awaitingRef.current) === "continue") arm();
+    };
+
+    armRef.current = arm;
+    if (runsRef.current.some((run) => runIsOpen(run.status)) || pollAfterTick([], awaitingRef.current) === "continue") arm();
+
+    return () => {
+      cancelled = true;
+      generation += 1;
+      if (timer !== undefined) window.clearTimeout(timer);
+      armRef.current = () => {};
+    };
+  }, [clientId]);
 
   useEffect(() => {
-    if (!clientId.trim() || state.loading || !active) return;
-    const timer = window.setInterval(() => {
-      refresh();
-      dispatchActionPlanRefresh();
-    }, ACTIVE_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [active, clientId, refresh, state.loading]);
+    if (state.runs.some((run) => runIsOpen(run.status)) || pollAfterTick([], awaitingRef.current) === "continue") {
+      armRef.current();
+    }
+  }, [awaitingKey, state.runs]);
 
   return { ...state, refresh };
 }
