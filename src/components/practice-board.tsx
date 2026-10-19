@@ -1,6 +1,8 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
+import { reportClientError } from "@/lib/monitoring";
+import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -1262,12 +1264,26 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // the stay check before painting the board so we never flash firm UI or
   // trigger add-client against an owner login.
   const [portalReady, setPortalReady] = useState(false);
+  const portalUserId = user?.id ?? null;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   useEffect(() => {
-    if (!user) return;
+    if (!portalUserId) return;
     let cancelled = false;
     setPortalReady(false);
-    void shouldStayOnAccountantPortal(user.id).then((stay) => {
+    const timer = window.setTimeout(() => {
       if (cancelled) return;
+      console.warn(
+        "[practice-board] role check timed out; opening the board. An owner session still redirects to /app when the check finishes.",
+      );
+      reportClientError(new Error("practice portal role check timed out"), {
+        source: "practice-board",
+      });
+      setPortalReady(true);
+    }, SHELL_GATE_TIMEOUT_MS);
+    void shouldStayOnAccountantPortal(portalUserId).then((stay) => {
+      if (cancelled) return;
+      window.clearTimeout(timer);
       if (stay) {
         setPortalIntent("accountant");
         clearForcePortal();
@@ -1276,12 +1292,13 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       }
       clearForcePortal();
       setPortalIntent("owner");
-      navigate({ to: "/app" });
+      navigateRef.current({ to: "/app" });
     });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [user, navigate]);
+  }, [portalUserId]);
 
   const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, firmMarket } =
     useAccountantProfile();
@@ -1643,7 +1660,21 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   useEffect(() => {
     if (!portalReady || brandLoading) return;
-    void load(firmId, user?.id, greetingSource);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      console.warn("[practice-board] client book timed out; showing what has loaded");
+      reportClientError(new Error("practice book load timed out"), { source: "practice-board" });
+      setLoading(false);
+      setCountsReady(true);
+    }, SHELL_GATE_TIMEOUT_MS);
+    void load(firmId, user?.id, greetingSource).finally(() => {
+      window.clearTimeout(timer);
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firmId, brandLoading, user?.id, portalReady, greetingSource]);
 
@@ -1772,13 +1803,28 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     let cancelled = false;
     setQueryRowsReady(false);
     const ids = clientIdKey ? clientIdKey.split("\n") : [];
-    void listOpenQueries(ids).then((rows) => {
+    const timer = window.setTimeout(() => {
       if (cancelled) return;
-      setQueryRows(rows);
+      console.warn("[practice-board] open queries timed out");
+      reportClientError(new Error("open queries timed out"), { source: "practice-board" });
       setQueryRowsReady(true);
-    });
+    }, SHELL_GATE_TIMEOUT_MS);
+    void listOpenQueries(ids)
+      .then((rows) => {
+        if (cancelled) return;
+        setQueryRows(rows);
+        setQueryRowsReady(true);
+      })
+      .catch((err) => {
+        console.warn("[practice-board] open queries failed", err);
+        if (!cancelled) setQueryRowsReady(true);
+      })
+      .finally(() => {
+        window.clearTimeout(timer);
+      });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [view, countsReady, clientIdKey]);
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
