@@ -992,8 +992,8 @@ export function mountAskAi(container, options) {
                 ...(accountant ? { audience: "accountant" } : {}),
               },
       );
-      const send = (bearer) =>
-        fetch(url, {
+      const send = (bearer) => {
+        return fetch(url, {
           method: "POST",
           signal: controller.signal,
           headers: {
@@ -1002,6 +1002,7 @@ export function mountAskAi(container, options) {
           },
           body,
         });
+      };
       let res = await send(token);
       const plan = await authRetryPlanFromResponse(res);
       if (!plan) return res;
