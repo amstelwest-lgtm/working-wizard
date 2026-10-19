@@ -268,6 +268,124 @@ async function expectCashLine(cashScore: number, status: "at_risk" | "critical",
 await expectCashLine(71, "at_risk", "Watch", ownerFloor.healthCue!);
 await expectCashLine(25, "critical", "Critical", accountantFloor.healthCue!);
 
+const { SimplifiedRatios } = await import("../src/components/simplified-ratios");
+const { OwnerHome } = await import("../src/components/owner-door/owner-home");
+const { steerAssignedWork } = await import("../src/lib/owner-presence");
+
+let floorOpens = 0;
+const ringStop = await mount(
+  createElement(SphereHero, {
+    variant: "ring",
+    overallHealth: 73,
+    pillars: healthPillars(71, "at_risk"),
+    cashFloorCue: ownerFloor.healthCue,
+    onCashFloor: () => {
+      floorOpens += 1;
+    },
+  }),
+);
+assert(document.body.textContent?.includes("Health by pillar") === true, "the owner page is the pillar grid");
+const ringCash = [...document.querySelectorAll("button")].find((button) =>
+  button.getAttribute("aria-label")?.startsWith("Cash score"),
+);
+assert(ringCash instanceof HTMLButtonElement, "the cash card is on the pillar grid");
+const ringCue = ringCash.querySelector("[data-cash-floor-cue]");
+assert(ringCue?.textContent === ownerFloor.healthCue, "the cue is the shared floor line");
+await act(async () => {
+  ringCue?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+});
+assert(floorOpens === 1, "the cash line opens FM");
+assert(!document.body.textContent?.includes("drivers"), "the line does not drill the card");
+await act(async () => {
+  ringCash.click();
+});
+assert(document.body.textContent?.includes("Cash drivers") === true, "the rest of the card drills");
+await ringStop();
+
+let pillarOpens = 0;
+let pillarFm = 0;
+const pillarStop = await mount(
+  createElement(SimplifiedRatios, {
+    sections: [
+      { id: "profit", label: "Profit", health: 70, status: "at_risk", series: [] },
+      { id: "cash", label: "Cash", health: 25, status: "critical", series: [] },
+    ],
+    onAddPastPeriod: () => undefined,
+    onOpenEvidence: () => undefined,
+    onOpenPillar: () => {
+      pillarOpens += 1;
+    },
+    cashFloorCue: accountantFloor.healthCue,
+    onCashFloor: () => {
+      pillarFm += 1;
+    },
+  }),
+);
+const pillarCard = [...document.querySelectorAll(".health-summary-card")].find((card) =>
+  card.textContent?.includes("Cash"),
+);
+assert(pillarCard instanceof HTMLElement, "the accountant cash pillar is the summary card");
+const pillarCash = pillarCard.querySelector("button");
+assert(pillarCash instanceof HTMLButtonElement, "the cash summary drills from a button");
+assert(pillarCard.textContent?.includes("Tap to see more") === true, "the drill cue stays");
+assert(pillarCard.textContent?.includes("Add a past period") === true, "the past-period link stays on the card");
+assert(pillarCard.textContent?.includes("See it on Cash") === true, "the cash evidence link stays");
+assert(pillarCard.textContent?.includes(accountantFloor.healthCue!) === true, "the floor line is on the cash card");
+await act(async () => {
+  pillarCash.querySelector("[data-cash-floor-cue]")?.dispatchEvent(
+    new MouseEvent("click", { bubbles: true, cancelable: true }),
+  );
+});
+assert(pillarFm === 1 && pillarOpens === 0, "the line opens FM and the card does not drill");
+await act(async () => {
+  pillarCash.click();
+});
+assert(pillarOpens === 1, "the rest of the card still drills");
+await pillarStop();
+
+const homePresence = steerAssignedWork(
+  {
+    agents: [
+      { agent: "financial_manager", motion: "found", sentence: "Found.", lookAt: null, fmClip: null },
+      { agent: "analyst", motion: "found", sentence: "Found.", lookAt: null, fmClip: null },
+      { agent: "advisor", motion: "found", sentence: "Found.", lookAt: null, fmClip: null },
+    ],
+    handoff: null,
+  },
+  "advisor",
+  null,
+);
+const homeStop = await mount(
+  createElement(OwnerHome, {
+    variant: "orb",
+    presence: homePresence,
+    lines: {
+      financial_manager: ["Cash $4,335, $45,665 below your $50,000 minimum."],
+      analyst: ["Gross profit is $241,000."],
+      advisor: ["Move fixed contracts to variable / usage-based pricing."],
+    },
+    showInvite: false,
+    marketCountry: "US",
+    onOpen: () => undefined,
+    onAsk: () => undefined,
+  }),
+);
+const label = (agent: string) =>
+  document.querySelector(`[data-agent-card="${agent}"] .owner-motion-label`)?.textContent ?? "";
+assert(label("advisor") === "Working…", `advisor shows Working, saw ${label("advisor")}`);
+assert(label("analyst") === "Found something", `analyst drops the previous Working, saw ${label("analyst")}`);
+await homeStop();
+
+const appSrc = readFileSync("src/routes/app.tsx", "utf8");
+const cueAt = appSrc.indexOf("const ownerCashFloorCue");
+assert(cueAt > 0 && appSrc.slice(cueAt, cueAt + 500).includes("cashflow:"), "owner Health passes the card cashflow");
+const clientSrc = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+assert(clientSrc.includes("cashFloorCue={homeBrief.healthCue}"), "accountant Health uses the brief floor line");
+assert(
+  clientSrc.includes('openHomeAgent("financial_manager")'),
+  "the accountant cash line opens the Financial Manager",
+);
+
 const heroSrc = readFileSync("src/components/sphere-hero.tsx", "utf8");
 assert(heroSrc.includes('variant === "orb" && level < 3'), "the big orb is not forced onto the owner ring drill");
 assert(heroSrc.includes('variant !== "ring"'), "the pillar sphere is not on the owner driver page");
