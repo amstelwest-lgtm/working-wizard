@@ -11,6 +11,8 @@ interface SectionCard {
   series: number[];
   /** Capped pillar band from computeOverallHealth. Falls back to the score table. */
   status?: HealthTier;
+  /** Shown in place of a band when the pillar has no score. */
+  unscoredLabel?: string | null;
 }
 
 interface SimplifiedRatiosProps {
@@ -22,8 +24,6 @@ interface SimplifiedRatiosProps {
   onOpenPillar?: (pillarId: string) => void;
   /** Same floor line as the Health ring. Cash only. */
   cashFloorCue?: string | null;
-  /** Shown in place of a band when the pillar has no score. */
-  unscoredLabel?: string | null;
   /** Opens the Financial Manager. The rest of the card still drills. */
   onCashFloor?: () => void;
 }

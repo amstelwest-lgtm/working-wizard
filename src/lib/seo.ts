@@ -1,4 +1,4 @@
-import { HEALTH_RATIO_COUNT } from "./health-score";
+import { HEALTH_RATIO_COUNT } from "./health-catalogue";
 import { COMPANY_POSTAL_ADDRESS, LEGAL_ENTITY } from "./legal";
 import { LIST_PRICES } from "./market/marketing";
 

@@ -27,6 +27,13 @@ const titles = ["Collect the deposit", "File the VAT return"];
 const needs = homeActionNeeds({ known: true, titles, overdue: 1 });
 assert(needs.heading === "2 open, 1 overdue", needs.heading);
 assert(needs.lines.join(" | ") === titles.join(" | "), needs.lines.join(" | "));
+const five = homeActionNeeds({
+  known: true,
+  titles: ["One", "Two", "Three", "Four", "Five"],
+  overdue: 0,
+});
+assert(five.heading === "Showing 3 of 5", five.heading);
+assert(five.lines.length === 3 && five.lines[0] === "One" && five.lines[2] === "Three", five.lines.join(" | "));
 assert(!needs.lines.includes("No open work."), "open rows are not no open work");
 assert(openActionSentence(titles) === "2 open actions.", openActionSentence(titles) ?? "");
 assert(openActionSentence([]) === null, "no open rows stay empty");

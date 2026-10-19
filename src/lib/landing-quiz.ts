@@ -2,7 +2,7 @@
  * Landing diagnostic. Loaded when the quiz nears the viewport or a persona
  * card is chosen — not on first paint.
  */
-import { HEALTH_RATIO_COUNT } from "@/lib/health-score";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import type { DraftMarket } from "@/lib/market";
 
 type QuizStep = { q: string; hint: string; opts: string[][]; key: string; reward: string };

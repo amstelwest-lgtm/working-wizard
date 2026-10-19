@@ -38,7 +38,7 @@ import {
   signupLooksAlreadyRegistered,
 } from "@/lib/invite-handoff";
 import { browserAppUrl } from "@/lib/app-origin";
-import { HEALTH_RATIO_COUNT } from "@/lib/health-score";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import {
   billingStartPath,
   billingStartSearch,

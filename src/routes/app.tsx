@@ -3754,6 +3754,9 @@ function Index() {
     overallHealth: avgHealth,
     pillarHealths,
     pillarStatus,
+    pillarNotes: Object.fromEntries(
+      overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
+    ),
     healthMap,
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),

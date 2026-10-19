@@ -10,7 +10,7 @@ import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
-import { HEALTH_RATIO_COUNT } from "@/lib/health-score";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 

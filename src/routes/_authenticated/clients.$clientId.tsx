@@ -1432,18 +1432,18 @@ function ClientView() {
     [clientMarket],
   );
 
+  const pillarNotes = Object.fromEntries(
+    overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", string | null>;
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
     pillarStatus,
+    pillarNotes,
     healthMap,
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
   });
-
-  const pillarNotes = Object.fromEntries(
-    overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
-  ) as Record<"profit" | "assets" | "financing" | "cash", string | null>;
   const simplifiedSections = [
     {
       id: "profit",

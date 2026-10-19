@@ -53,6 +53,8 @@ export type BuildSphereArgs = {
   pillarHealths: Record<SpherePillar["id"], number>;
   /** Capped pillar bands from computeOverallHealth. */
   pillarStatus?: Partial<Record<SpherePillar["id"], HealthTier>>;
+  /** Unscored reason, such as a missing opening balance. */
+  pillarNotes?: Partial<Record<SpherePillar["id"], string | null>>;
   /** per-pillar deltas, if you track them; otherwise omit */
   pillarDeltas?: Partial<Record<SpherePillar["id"], number>>;
   /** healthMap from app.tsx: ratioKey -> 0..100 */
@@ -64,7 +66,7 @@ export type BuildSphereArgs = {
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
-  const { pillarHealths, pillarDeltas, healthMap, ratioMeta, pillarStatus } = args;
+  const { pillarHealths, pillarDeltas, healthMap, ratioMeta, pillarStatus, pillarNotes } = args;
   return (Object.keys(PILLAR_DRIVER_KEYS) as SpherePillar["id"][]).map((id) => {
     const drivers = PILLAR_DRIVER_KEYS[id].map((k) => {
       const noStock = k === "inventoryDays" && args.inventoryApplies === false;
@@ -86,13 +88,15 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
     // Drivers with no score still render as "—" so the owner sees what's missing.
     // Pillar health itself comes from computeOverallHealth (finite scores only).
     const health = pillarHealths[id];
+    const note = pillarNotes?.[id] ?? null;
     return {
       id,
       label: PILLAR_SHORT_LABELS[id],
       health,
       status: pillarStatus?.[id],
+      note,
       delta: pillarDeltas?.[id],
-      blurb: blurbFor(id, health),
+      blurb: note && !Number.isFinite(health) ? note : blurbFor(id, health),
       drivers,
     };
   });

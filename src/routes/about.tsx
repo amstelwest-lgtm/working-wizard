@@ -4,7 +4,7 @@ import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
-import { HEALTH_RATIO_COUNT } from "@/lib/health-score";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 

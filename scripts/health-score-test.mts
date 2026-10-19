@@ -329,7 +329,8 @@ assert(PILLAR_LABELS.assets === "Assets" && PILLAR_LABELS.cash === "Cash", "cano
 assert(HEALTH_RATIO_COUNT === 20, `catalogue is 20 ratios, got ${HEALTH_RATIO_COUNT}`);
 assert(grossMarginLooksImplausible(0.954, "Hotels & accommodation"), "a hotel margin above 85% is implausible");
 assert(!grossMarginLooksImplausible(0.954, "SaaS & software"), "software can carry a high gross margin");
-assert(grossMarginLooksImplausible(0.9, null), "an unknown industry still flags a 90% gross margin");
+assert(!grossMarginLooksImplausible(0.9, null), "no industry label leaves the ratio scored");
+assert(grossMarginLooksImplausible(0.9, "General SME"), "a named non-software industry flags a 90% gross margin");
 
 const floored = cashPillarFollowsForecast(stillHealthy, {
   opening: 10,

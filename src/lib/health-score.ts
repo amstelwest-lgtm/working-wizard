@@ -1,3 +1,4 @@
+import { HEALTH_RATIO_COUNT, PILLAR_RATIO_NAMES } from "./health-catalogue.ts";
 import { withCanonicalDebtorCreditorDays } from "./deliverable-input-config.ts";
 import { coherentEquity, effectivePeriodMonths } from "./equity-coherence.ts";
 import {
@@ -90,8 +91,9 @@ export const GROSS_MARGIN_MAPPING_NOTE = "Check cost of sales mapping";
 const SOFTWARE_INDUSTRY = /saas|software/i;
 
 /**
- * A margin above 85% is implausible for hospitality and most other industries.
- * Software is exempt. An unknown industry is flagged.
+ * A margin above 85% is implausible for hospitality and most other named
+ * industries. Software is exempt. No industry label leaves the ratio scored,
+ * so a pack that has not been told the industry still matches Overview.
  */
 export function grossMarginLooksImplausible(
   margin: number,
@@ -99,7 +101,7 @@ export function grossMarginLooksImplausible(
 ): boolean {
   if (!Number.isFinite(margin) || margin <= IMPLAUSIBLE_GROSS_MARGIN) return false;
   const label = (industry ?? "").trim();
-  if (label && SOFTWARE_INDUSTRY.test(label)) return false;
+  if (!label || SOFTWARE_INDUSTRY.test(label)) return false;
   return true;
 }
 
@@ -214,27 +216,7 @@ export function scorePlaybookCatalogue<T extends { ratio_key: string }>(
   });
 }
 
-/** Which ratios feed each pillar (human names from `computeRatios`). */
-export const PILLAR_RATIO_NAMES: Record<HealthPillarId, readonly string[]> = {
-  profit: [
-    "Gross Margin",
-    "Operating Margin",
-    "Net Margin",
-    "Fixed Cost Ratio",
-    "Degree of Operating Leverage",
-    "Gross Profit / Labor",
-    "Top-5 Customer Share",
-  ],
-  assets: ["Asset Turnover", "Return on Assets", "Inventory Days", "Sales-per-Employee Ratio"],
-  financing: ["Equity Multiplier", "Debt-to-Equity", "Interest Burden", "Tax Burden", "Return on Equity"],
-  cash: ["Debtor Days", "Creditor Days", "Working Capital Days", "OCF / EBITDA"],
-};
-
-/** Catalogue size. Marketing copy and the scorecard derive their ratio count from this. */
-export const HEALTH_RATIO_COUNT = (Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).reduce(
-  (sum, id) => sum + PILLAR_RATIO_NAMES[id].length,
-  0,
-);
+export { HEALTH_RATIO_COUNT, PILLAR_RATIO_NAMES };
 
 const ALL_PILLARS: HealthPillarId[] = ["profit", "assets", "financing", "cash"];
 
