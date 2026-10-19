@@ -3632,19 +3632,23 @@ function Index() {
   };
   const cashBalance = ownerMetrics.cash.amount;
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
-  // Same floor the forecast already resolved (forecastMinimumCash on the outlook).
+  // Same reading as the Financial Manager card. An outlook uses its stored
+  // floor. With no outlook, the card's cashflow is included so Health cannot
+  // drop the line the card already shows.
+  const ownerDoorOutlook =
+    cashBalance != null
+      ? {
+          opening: ownerOutlook.opening,
+          closing: ownerOutlook.closing,
+          floor: ownerOutlook.floor,
+          dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
+        }
+      : null;
   const ownerCashFloorCue =
     cashFloorForHome({
       openingMissing: ownerOpeningMissing,
-      cashOutlook:
-        cashBalance != null
-          ? {
-              opening: ownerOutlook.opening,
-              closing: ownerOutlook.closing,
-              floor: ownerOutlook.floor,
-              dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
-            }
-          : null,
+      cashOutlook: ownerDoorOutlook,
+      cashflow: clientMeta?.cashflow ?? null,
       market: boardMarket,
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
@@ -3994,16 +3998,7 @@ function Index() {
                     ? IMPLAUSIBLE_SAMPLE_NOTE
                     : null
                 }
-                cashOutlook={
-                  ownerMetrics.cash.amount != null
-                    ? {
-                        opening: ownerOutlook.opening,
-                        closing: ownerOutlook.closing,
-                        floor: ownerOutlook.floor,
-                        dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
-                      }
-                    : null
-                }
+                cashOutlook={ownerDoorOutlook}
                 openingMissing={ownerOpeningMissing}
                 cashPillarStatus={pillarStatus.cash ?? null}
                 market={boardMarket}

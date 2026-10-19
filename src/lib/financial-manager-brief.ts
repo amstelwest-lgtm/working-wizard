@@ -228,9 +228,8 @@ export function buildFinancialManagerBrief(input: {
   const cashFloor = input.cashFloor;
   const pillarAgrees =
     input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
-  const cashCopy =
+  const floorCopy =
     !input.openingMissing &&
-    !pillarAgrees &&
     cashOpening != null &&
     cashFloor != null &&
     Number.isFinite(cashOpening) &&
@@ -244,6 +243,9 @@ export function buildFinancialManagerBrief(input: {
           market: input.market,
         })
       : null;
+  // Watch and Healthy keep the card sentence off the floor. The Health pillar
+  // still uses this same floor reading, so its line is not cleared with the chip.
+  const cashCopy = pillarAgrees ? null : floorCopy;
   const cashFloorLine = input.openingMissing
     ? `${OPENING_BALANCE_MISSING}.`
     : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
@@ -303,6 +305,6 @@ export function buildFinancialManagerBrief(input: {
     chase,
     cashFloorLine,
     cashFloorChip,
-    healthCue: input.openingMissing ? null : (cashCopy?.healthCue ?? null),
+    healthCue: input.openingMissing ? null : (floorCopy?.healthCue ?? null),
   };
 }

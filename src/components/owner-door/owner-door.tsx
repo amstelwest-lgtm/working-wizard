@@ -40,7 +40,7 @@ import {
   loadLatestHandoffAgents,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { handedHomeAction, openPlanTitles } from "@/lib/open-plan-home";
+import { handedHomeAction, openPlanTitles, preferPendingHandoff } from "@/lib/open-plan-home";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
@@ -455,17 +455,16 @@ export function OwnerDoor({
         : [new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
-      const handed =
-        handedHomeAction(openRows, notes, runs) ??
-        (pending && pending.agent !== "financial_manager"
-          ? {
-              id: pending.actionItemId,
-              title: pending.title,
-              agent: pending.agent,
-              run: { agent: pending.agent, status: "queued" as const },
-            }
-          : null);
-      if (handed && notes.has(handed.id)) pendingHandoff.current = null;
+      const handed = preferPendingHandoff(
+        handedHomeAction(openRows, notes, runs),
+        pending
+          ? { id: pending.actionItemId, title: pending.title, agent: pending.agent }
+          : null,
+        notes,
+      );
+      if (pending && notes.get(pending.actionItemId)?.agent === pending.agent) {
+        pendingHandoff.current = null;
+      }
       const titles = openPlanTitles(openRows);
       if (pending && !titles.includes(pending.title)) titles.push(pending.title);
       setActionRows(titles.map((title) => ({ title, email: null })));

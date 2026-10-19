@@ -388,8 +388,8 @@ export function cashFloorCopy(input: {
 
 /**
  * The cash reading the owner Financial Manager card shows.
- * Health uses this same result, so the pillar line appears whenever the card
- * says below the minimum.
+ * Health calls this with the same outlook and, when the card has no outlook,
+ * the same cashflow. The pillar band does not clear the health line.
  */
 export function cashFloorForHome(input: {
   openingMissing?: boolean;

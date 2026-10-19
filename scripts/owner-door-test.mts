@@ -14,6 +14,7 @@ import {
   ownerCardStatuses,
   ownerHomeLines,
   cashFloorCopy,
+  cashFloorForHome,
   practiceCardStatuses,
   practiceHomeLines,
   ownerTileLabel,
@@ -52,7 +53,7 @@ import {
   nextFmIdleLoops,
 } from "../src/lib/fm-avatar-state.ts";
 import { ownerPresence, steerAssignedWork } from "../src/lib/owner-presence.ts";
-import { handedHomeAction } from "../src/lib/open-plan-home.ts";
+import { handedHomeAction, preferPendingHandoff } from "../src/lib/open-plan-home.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -491,7 +492,44 @@ const picked = handedHomeAction(
 );
 assert(picked?.title === "Audit and renegotiate your top 5 supplier contracts", "home follows the handed action, not the first row");
 assert(picked?.agent === "advisor" && picked.run?.status === "queued", "the handed action is Working");
+const reassigned = handedHomeAction(
+  [
+    { id: "older", title: "Collect the two largest invoices" },
+    { id: "newer", title: "Set a quarterly revenue target" },
+  ],
+  new Map([
+    ["older", { agent: "analyst", at: "2026-10-01T00:00:00.000Z" }],
+    ["newer", { agent: "advisor", at: "2026-10-05T00:00:00.000Z" }],
+  ]),
+  new Map([["older", { agent: "analyst", status: "running", at: "2026-10-01T00:00:01.000Z" }]]),
+);
+assert(reassigned?.agent === "advisor", "a newer hand-off replaces the previous Working assignee");
+const pendingAdvisor = preferPendingHandoff(
+  reassigned && reassigned.agent === "analyst" ? reassigned : { id: "older", title: "Collect the two largest invoices", agent: "analyst", run: { agent: "analyst", status: "running" } },
+  { id: "newer", title: "Set a quarterly revenue target", agent: "advisor" },
+  new Map([["older", { agent: "analyst" }]]),
+);
+assert(pendingAdvisor?.agent === "advisor" && pendingAdvisor.run?.status === "queued", "a hand-off in flight stays on the new assignee");
+const confirmed = preferPendingHandoff(
+  reassigned,
+  { id: "newer", title: "Set a quarterly revenue target", agent: "advisor" },
+  new Map([["newer", { agent: "advisor" }]]),
+);
+assert(confirmed?.agent === "advisor", "a stored note keeps the new assignee");
 const floorMarket = { currency: "USD" as const, locale: "en-US" };
+const comfortCue = cashFloorForHome({
+  cashOutlook: null,
+  cashflow: {
+    openingBalance: "4335",
+    expenses: [{ name: "Rent", amount: "100", frequency: "once-off", startWeek: 1 }],
+  },
+  market: floorMarket,
+  money: (amount) => `$${Math.round(amount)}`,
+});
+assert(
+  comfortCue?.healthCue === "Below your $50k minimum · see FM",
+  comfortCue?.healthCue ?? "health uses the card cashflow when there is no outlook",
+);
 const belowCue = cashFloorCopy({
   opening: 4335,
   floor: 50000,
@@ -717,6 +755,8 @@ assert(
 );
 assert(video.includes('"ended"'), "the next clip starts when the current one ends");
 assert(video.includes("avatarClipAtEnd"), "the swap uses the file's own last frame");
+assert(video.includes("incoming.loop = false"), "a clip ends so the next one can start");
+assert(video.includes('agent === "tax_specialist" && desired === "idle"'), "tax opens on a moving flourish");
 assert(video.includes("holdLastFrame"), "the last frame stays up so the hand-off is not blank");
 assert(!video.includes("currentTime < 0.15"), "clips do not switch mid-play");
 assert(!video.includes("121"), "the player does not assume a 121-frame clip");

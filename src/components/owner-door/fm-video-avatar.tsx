@@ -245,6 +245,9 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
     let budget = agent === "tax_specialist" ? 1 : fmIdleBudget(Math.random());
     let flourish: FmIdleFlourish = fmIdleFlourish(Math.random());
     let queued: FmAvatarClip = desired;
+    // tax-idle is almost a still, especially at pill size. Open on a moving flourish.
+    let intro: FmAvatarClip | null =
+      agent === "tax_specialist" && desired === "idle" ? flourish : null;
     let fade = 0;
     let endTimer = 0;
     let ending = false;
@@ -300,18 +303,20 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
       const outgoing = videos[visibleSlot];
       if (!incoming || cancelled) return;
       if (revealed && incoming === outgoing) return;
-      const name = revealed ? queued : desired;
+      const opening = intro ?? desired;
+      const name = revealed ? queued : opening;
       await prepare(nextSlot, name);
       if (cancelled || token !== generation) return;
       if (revealed && incoming === videos[visibleSlot]) return;
-      const clipName = revealed ? queued : desired;
+      const clipName = revealed ? queued : opening;
+      if (!revealed) intro = null;
       if (incoming.dataset.clip !== clipName) {
         await prepare(nextSlot, clipName);
         if (cancelled || token !== generation) return;
       }
       silence(incoming);
       incoming.autoplay = true;
-      incoming.loop = true;
+      incoming.loop = false;
       const waiter = waitToShow(incoming);
       try {
         await incoming.play();
@@ -344,7 +349,7 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
         clipName !== desired
       ) {
         flourish = fmIdleFlourish(Math.random());
-        budget = fmIdleBudget(Math.random());
+        budget = agent === "tax_specialist" ? 1 : fmIdleBudget(Math.random());
       }
       holding = true;
       setHold(previousSlot === nextSlot ? null : previousSlot);
@@ -475,7 +480,6 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
             ref={firstRef}
             className={clipClass(0)}
             autoPlay
-            loop
             muted
             playsInline
             preload="none"
@@ -486,7 +490,6 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
             ref={secondRef}
             className={clipClass(1)}
             autoPlay
-            loop
             muted
             playsInline
             preload="none"
