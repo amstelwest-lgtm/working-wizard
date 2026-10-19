@@ -108,6 +108,7 @@ import {
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
+import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
@@ -3763,6 +3764,7 @@ function Index() {
     healthMap,
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
+    dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.

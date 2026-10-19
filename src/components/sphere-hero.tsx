@@ -41,6 +41,11 @@ export type SphereDriver = {
   health: number;
   /** No-inventory industries. The score reads N/A instead of a number. */
   na?: boolean;
+  /**
+   * Day-count drivers. Includes the real days and names the 0–100 figure
+   * as a score, so the row is not read as a day count.
+   */
+  reading?: string;
 };
 
 export type SpherePillar = {
@@ -939,24 +944,41 @@ export function SphereHero({
                   : ""
               }`;
               const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
+              const title = d.reading ?? d.label;
               const body = (
                 <>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {d.label}
+                      <p
+                        className={`text-sm font-medium text-slate-900 dark:text-slate-100 ${
+                          d.reading ? "leading-snug" : "truncate"
+                        }`}
+                      >
+                        {title}
                         <QueryBadge count={queryCounts?.[d.key] ?? 0} />
                       </p>
                       {d.description && (
                         <p className="truncate text-xs text-slate-500">{d.description}</p>
                       )}
                     </div>
-                    <div className="text-right">
-                      <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
-                        {d.na ? "N/A" : fmtScore(d.health)}
-                      </p>
-                      {d.na ? null : (
-                        <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                    <div className="shrink-0 text-right">
+                      {d.reading ? (
+                        d.na ? (
+                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>N/A</p>
+                        ) : (
+                          <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>
+                            {isFinite(d.health) ? TIER_LABEL[t] : "—"}
+                          </p>
+                        )
+                      ) : (
+                        <>
+                          <p className={`text-lg font-bold leading-none ${TIER_TEXT[t]}`}>
+                            {d.na ? "N/A" : fmtScore(d.health)}
+                          </p>
+                          {d.na ? null : (
+                            <p className={`text-xs font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -979,7 +1001,7 @@ export function SphereHero({
                     key={d.key}
                     type="button"
                     onClick={() => onDriverClick?.(d.key)}
-                    aria-label={`${d.label} — open money briefing`}
+                    aria-label={`${title} — open money briefing`}
                     className={rowClass}
                     style={rowStyle}
                   >

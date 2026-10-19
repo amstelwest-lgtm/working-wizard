@@ -227,6 +227,23 @@ export function computedDaysAp(financials: DayCoverFinancials): number | null {
   return days;
 }
 
+/** Inventory days from stock ÷ annualised COGS. Blank stock is unknown. A stored 0 stays 0. */
+export function computedDaysInventory(financials: DayCoverFinancials): number | null {
+  const stock = statementStockAmount(financials?.inventory);
+  if (stock == null) return null;
+  const revenue = num(financials?.revenue);
+  const rawCogs = num(financials?.cogs);
+  const cogs = revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
+  if (cogs <= 0) return null;
+  const months = periodMonthsOf(financials as Record<string, unknown> | null);
+  const annualCogs = months > 0 && months < 12 ? cogs * (12 / months) : cogs;
+  const annualRevenue = months > 0 && months < 12 ? revenue * (12 / months) : revenue;
+  if (annualCogs <= 0) return null;
+  const days = Math.round((stock / annualCogs) * 365);
+  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return null;
+  return days;
+}
+
 /** Blank stocks stay off the tile. A real zero is kept. Same parser as the day formulas. */
 function statementStockAmount(raw: unknown): number | null {
   if (raw == null) return null;
