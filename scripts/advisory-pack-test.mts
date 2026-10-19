@@ -202,7 +202,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   // Headline names the drag and the cash break.
   const head = a.sections[0].body;
   assert(
-    /New Co is (at risk|watch|healthy) at \d+\/100/i.test(head),
+    /New Co is (at risk|watch|healthy) at \d+/i.test(head) && !/\d+\s*\/\s*100/.test(head),
     `headline has score: ${head}`,
   );
   assert(/cash goes negative in week 6/.test(head), `headline names the break week: ${head}`);

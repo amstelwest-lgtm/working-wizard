@@ -188,6 +188,7 @@ import {
   rewriteDraftMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
+import { canonicalScoreProse } from "@/lib/score-prose";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -2977,7 +2978,7 @@ function ClientView() {
     const subjectText = `${client.name} — Financial Health Update`;
     const bodyText =
       `Hi,\n\nHere is a brief financial health summary for ${client.name}.\n\n` +
-      `Overall Health Score: ${score}/100 (${tierLabel})\n` +
+      `Overall Health Score: ${score} (${tierLabel})\n` +
       `Cash Runway: ${runway}` +
       weak +
       `Open Queries: ${openQueriesCount}\n\n` +
@@ -3027,7 +3028,7 @@ function ClientView() {
     const tierLabel = bookStatusWord;
     const text =
       `${client.name} Financial Health Update\n` +
-      `Health Score: ${score}/100 (${tierLabel})\n` +
+      `Health Score: ${score} (${tierLabel})\n` +
       `Cash Runway: ${cashRunwayHeadline ?? runwayDisplayLabel(metricRunway) ?? "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
@@ -3394,7 +3395,7 @@ function ClientView() {
       : homeActivity.error
         ? ["Drafts aren't available yet."]
         : waiting.length
-          ? [rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
+          ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
           : ["No draft waiting."];
     const booksLine = booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -5007,6 +5008,7 @@ function ClientView() {
                                 ? search.filter
                                 : undefined
                           }
+                          pillars={overallHealth.pillars}
                           moves={strategicMoves.map((move) =>
                             attachPillarScore(
                               {

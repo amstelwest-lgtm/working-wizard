@@ -3,6 +3,7 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { canonicalScoreProse } from "@/lib/score-prose";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import { openPlanTitles } from "@/lib/open-plan-home";
@@ -71,7 +72,7 @@ export function ownerDraftTitles(findings: readonly AgentFindingRow[]): string[]
     if (!isVisibleAgentFinding(row)) return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_OWNER) return [];
     const title = row.title.trim();
-    return title ? [title] : [];
+    return title ? [canonicalScoreProse(title)] : [];
   });
 }
 
@@ -82,7 +83,7 @@ export function advisoryDeliverableTitles(findings: readonly AgentFindingRow[]):
     if (draftFindingKindLabel(row) !== "Advisory") return [];
     if (draftFindingLabel(row) !== DRAFT_NEEDS_ACCOUNTANT) return [];
     const title = row.title.trim();
-    return title ? [title] : [];
+    return title ? [canonicalScoreProse(title)] : [];
   });
 }
 

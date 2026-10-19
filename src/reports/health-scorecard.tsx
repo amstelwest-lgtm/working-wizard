@@ -197,7 +197,6 @@ function PillarBox({
         <Text style={[styles.pillarScore, { color: scoreColor(rounded!) }]}>
           {rounded}
         </Text>
-        <Text style={styles.pillarOutOf}>/ 100</Text>
       </View>
       <View style={styles.pillarGaugeRow}>
         <HealthScoreGauge score={rounded!} height={5} />
@@ -333,7 +332,7 @@ export function HealthScorecardPDF({
               ? "down"
               : "flat",
       good: priorAvg == null || overallScore == null ? undefined : overallScore >= priorAvg,
-      note: "out of 100",
+      note: "",
     },
     {
       label: "Strongest Pillar",
@@ -399,7 +398,7 @@ export function HealthScorecardPDF({
           <Text style={[styles.overallNumber, { color: "#0B5FFF" }]}>
             {overallScore != null ? overallScore : "—"}
           </Text>
-          <Text style={styles.outOf}>OVERALL SCORE / 100</Text>
+          <Text style={styles.outOf}>OVERALL SCORE</Text>
           <View style={[styles.tierBadge, { backgroundColor: overallColor }]}>
             <Text style={styles.tierBadgeText}>{TIER_META[overallTier].label}</Text>
           </View>

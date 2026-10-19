@@ -999,7 +999,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   const stateLines: string[] = [];
   if (health && health.overall !== null) {
     stateLines.push(
-      `${name} scores ${health.overall} out of 100 (${health.label.toLowerCase()})${
+      `${name} scores ${health.overall} (${health.label.toLowerCase()})${
         input.periodLabel ? ` on the ${input.periodLabel} figures` : ""
       }.`,
     );
@@ -1067,7 +1067,7 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   }
   for (const r of weakRatios.slice(0, 3)) {
     mattersBullets.push(
-      `${r.name} is ${r.formatted} (scores ${r.score}/100) — ${weakRatioWhy(r.name)}`,
+      `${r.name} is ${r.formatted} (${r.score}) — ${weakRatioWhy(r.name)}`,
     );
   }
   if (forecast?.breachesZero) {
@@ -1245,7 +1245,7 @@ function buildHeadline(
 ): string {
   const parts: string[] = [];
   if (health && health.overall !== null) {
-    parts.push(`${name} is ${health.label.toLowerCase()} at ${health.overall}/100`);
+    parts.push(`${name} is ${health.label.toLowerCase()} at ${health.overall}`);
     if (health.weakest) parts.push(`${health.weakest} is the drag`);
   } else {
     parts.push(`${name} has no health score yet`);

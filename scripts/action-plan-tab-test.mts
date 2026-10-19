@@ -26,6 +26,7 @@ import {
   overdueActionsLabel,
 } from "../src/lib/action-plan-counts";
 import { deriveActionHealth } from "../src/lib/action-item-health";
+import { actionPlanPillarTiles } from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -289,5 +290,21 @@ assert(
   mergeActionPlanTeam([], []).length === 0,
   "empty client employees and no access still shows no team",
 );
+
+const tiles = actionPlanPillarTiles(
+  [
+    { id: "profit", score: 72, note: null },
+    { id: "assets", score: 80, note: null },
+    { id: "financing", score: 64, note: null },
+    { id: "cash", score: null, note: "Needs opening balance" },
+  ],
+  [{ key: "operatingMargin", ratioName: "Profit Power" }],
+);
+const profit = tiles.find((tile) => tile.id === "profit");
+const cash = tiles.find((tile) => tile.id === "cash");
+assert(profit?.label === "Profit" && profit.score === 72 && profit.factor === "Profit power", "the Profit tile uses the Health score");
+assert(profit?.score !== 14, "Profit power's ratio score is not the tile");
+assert(cash?.score == null && cash?.note === "Needs opening balance", "an unscored Cash tile keeps the Health note");
+assert(!tiles.some((tile) => tile.label === "Profit Power"), "a ratio nickname is not a pillar tile");
 
 console.log("action-plan-tab-test: ok");

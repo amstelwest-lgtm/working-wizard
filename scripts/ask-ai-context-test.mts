@@ -217,7 +217,7 @@ const { system, user } = buildPrompt("What should I focus on this month?", ctx, 
 assert(user.includes("Company profile answers"), "prompt includes profile");
 assert(user.includes("Key ratios"), "prompt includes ratios");
 assert(user.includes("Score breakdown by category"), "prompt includes category scores");
-assert(user.includes("Profitability:"), "prompt names profitability pillar");
+assert(user.includes("Profit:"), "prompt names the Profit pillar");
 assert(user.includes("Profitability waterfall"), "prompt includes waterfall");
 assert(user.includes("Cash forecast outlook"), "prompt includes cash");
 assert(user.includes("Product lines"), "prompt includes products");
@@ -291,7 +291,7 @@ assert(overview.creditorDays != null && Math.round(overview.creditorDays) === 32
 assert(overview.debtorDays != null && Math.round(overview.debtorDays) === 32, "debtor days");
 assert(overview.grossMargin != null && overview.grossMargin > 0.9, "gross margin on file");
 const grounded = formatOverviewForPrompt(overview, "accountant");
-assert(grounded.includes("71/100 (Watch)"), "prompt quotes overview health");
+assert(grounded.includes("71 (Watch)"), "prompt quotes overview health");
 assert(grounded.includes("$7,430"), "prompt quotes cash");
 assert(grounded.includes("$8,634"), "prompt quotes revenue");
 assert(grounded.includes("329 days"), "prompt quotes creditor days");
@@ -304,7 +304,7 @@ assert(/never ask/i.test(grounded), "prompt forbids asking for figures already o
 assert(!/you are the/i.test(grounded), "accountant voice");
 assert(!grounded.includes("86/100"), "stale score is not the overview");
 const withOverview = buildPrompt("How healthy is this client?", { ...ctx, overview, scores: { overall_score: 86 } }, "full", "accountant");
-assert(withOverview.user.includes("71/100 (Watch)"), "ask-ai prompt uses live health over a stale score");
+assert(withOverview.user.includes("71 (Watch)"), "ask-ai prompt uses live health over a stale score");
 assert(!withOverview.user.includes("86/100"), "stale 86 is not shown once overview is loaded");
 assert(withOverview.user.includes("$7,430"), "ask-ai prompt includes cash");
 const moves = planActionsFromOverview(overview);

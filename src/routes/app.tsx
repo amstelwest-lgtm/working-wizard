@@ -195,7 +195,7 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { clientIndustryDisplay, profileIndustryLabel } from "@/lib/profile-signals";
-import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
+import { attachPillarScore, rankStrategicMoves, stockSittingApplies, strategicMovePillar } from "@/lib/strategic-moves";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
@@ -4218,6 +4218,7 @@ function Index() {
                               actionPlanSignoff,
                               clientMeta?.financials_updated_at ?? null,
                             )}
+                            pillars={overallHealth.pillars}
                             moves={nextSteps.map((s) =>
                               attachPillarScore(
                                 {
@@ -4310,6 +4311,7 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
+                            pillars={overallHealth.pillars}
                             moves={nextSteps.map((s) =>
                               attachPillarScore(
                                 {
@@ -5271,7 +5273,17 @@ function Index() {
                                             description:
                                               nextSteps[0].key === "debtorDays"
                                                 ? "Cash conversion is your biggest constraint."
-                                                : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
+                                                : (() => {
+                                                    const pillarId = strategicMovePillar(nextSteps[0].key);
+                                                    const pillar = pillarId
+                                                      ? overallHealth.pillars.find((row) => row.id === pillarId)
+                                                      : null;
+                                                    const lever =
+                                                      pillar?.score != null
+                                                        ? `${pillar.label} ${Math.round(pillar.score)}`
+                                                        : (pillar?.label ?? "Profit");
+                                                    return `${lever} is your highest-impact lever right now.`;
+                                                  })(),
                                             actions: nextSteps[0].actions,
                                             impactLabel: nextMoveImpactLabel,
                                           }
@@ -5979,6 +5991,7 @@ function Index() {
                               actionPlanSignoff,
                               clientMeta?.financials_updated_at ?? null,
                             )}
+                            pillars={overallHealth.pillars}
                             moves={nextSteps.map((s) =>
                               attachPillarScore(
                                 {

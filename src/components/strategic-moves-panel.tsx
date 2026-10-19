@@ -3,7 +3,7 @@ import { MoveHandTo } from "@/components/hand-to-menu";
 import { ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
 import { movesAnswerSentence } from "@/lib/overview-moves-copy";
-import type { RankedStrategicMove } from "@/lib/strategic-moves";
+import { moveFactorLabel, type RankedStrategicMove } from "@/lib/strategic-moves";
 
 /**
  * Accountant Moves tab. Same ranked list the Action Plan imports.
@@ -32,7 +32,7 @@ export function StrategicMovesPanel({
                 clientId={clientId}
                 moveKey={first.key}
                 title={first.title}
-                outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+                outcomeWhy={first.impactLine || `Improves ${moveFactorLabel(first)}.`}
                 onAssign={onOpenPlan}
                 variant="studio"
                 tone="strip"
@@ -41,7 +41,7 @@ export function StrategicMovesPanel({
                 clientId={clientId}
                 moveKey={first.key}
                 title={first.title}
-                outcomeWhy={first.impactLine || `Improves ${first.ratioName}.`}
+                outcomeWhy={first.impactLine || `Improves ${moveFactorLabel(first)}.`}
               />
             </>
           ) : null
@@ -73,20 +73,20 @@ export function StrategicMovesPanel({
                   <div className="brain-row-title">
                     {index + 1}. {move.title}
                   </div>
-                  <div className="brain-row-meta">{move.ratioName}</div>
+                  <div className="brain-row-meta">{moveFactorLabel(move)}</div>
                 </div>
                 <div className="brain-row-actions">
                   <MoveHandTo
                     clientId={clientId}
                     moveKey={move.key}
                     title={move.title}
-                    outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
+                    outcomeWhy={move.impactLine || `Improves ${moveFactorLabel(move)}.`}
                   />
                   <AddToPlanButton
                     clientId={clientId}
                     moveKey={move.key}
                     title={move.title}
-                    outcomeWhy={move.impactLine || `Improves ${move.ratioName}.`}
+                    outcomeWhy={move.impactLine || `Improves ${moveFactorLabel(move)}.`}
                     onAssign={onOpenPlan}
                     variant="studio"
                     tone="quiet"

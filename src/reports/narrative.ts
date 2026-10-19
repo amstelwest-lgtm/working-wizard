@@ -133,7 +133,7 @@ export function healthNarrative(
   const overallBand = healthBandLabel(tier);
   const weakBand = healthBandLabel(scoreTier(weakest.score));
   const base =
-    `At ${Math.round(overallScore)}/100 the overall band is ${overallBand}. ` +
+    `At ${Math.round(overallScore)} the overall band is ${overallBand}. ` +
     `${strongest.label} is the strongest pillar (${Math.round(strongest.score)}), ` +
     `while ${weakest.label} is ${weakBand} at ${Math.round(weakest.score)}. ` +
     dupont.sentence;

@@ -5,7 +5,11 @@
  */
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { PILLAR_LABELS, type HealthPillarId } from "@/lib/health-score";
+import { moveFactorLabel, strategicMovePillar } from "@/lib/move-pillars";
 import { profilePriorityWeight } from "@/lib/profile-signals";
+import { factorDisplayName } from "@/lib/score-prose";
+
+export { moveFactorLabel, strategicMovePillar };
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
 export type StrategicEisenhower = "Do" | "Decide" | "Delegate" | "Delete";
@@ -347,43 +351,6 @@ const PAY_FASTER_MAX_DAYS = 30;
 const COLLECTIONS_ADVICE =
   /pay faster|collect earlier|shorten debtor|reduce debtor|invoice faster|invoice same-day|collect more aggressively|speed up receivables|tighten receivables/i;
 
-const MOVE_PILLAR: Record<string, HealthPillarId> = {
-  operatingMargin: "profit",
-  netMargin: "profit",
-  grossMargin: "profit",
-  directCostsRatio: "profit",
-  fixedCostRatio: "profit",
-  dol: "profit",
-  gpToLabor: "profit",
-  customerConcentration: "profit",
-  revenueGrowth: "profit",
-  assetTurnover: "assets",
-  roa: "assets",
-  inventoryDays: "assets",
-  salesPerEmployee: "assets",
-  fixedCapitalUtilization: "assets",
-  assetReinvestmentRatio: "assets",
-  capexIntensity: "assets",
-  taxBurden: "financing",
-  interestBurden: "financing",
-  equityMultiplier: "financing",
-  roe: "financing",
-  fundingStructure: "financing",
-  debtToEquity: "financing",
-  debtToAssets: "financing",
-  debtorDays: "cash",
-  creditorDays: "cash",
-  workingCapitalDays: "cash",
-  workingCapitalUtilization: "cash",
-  workingCapitalFunding: "cash",
-  ocfToEbitda: "cash",
-  currentRatio: "cash",
-};
-
-export function strategicMovePillar(key: string): HealthPillarId | null {
-  return MOVE_PILLAR[key] ?? null;
-}
-
 /** Pillar name and the shared pillar score, so a ratio nickname is not the pillar. */
 export function attachPillarScore<T extends { key: string }>(
   move: T,
@@ -396,6 +363,42 @@ export function attachPillarScore<T extends { key: string }>(
     pillarLabel: id ? PILLAR_LABELS[id] : null,
     pillarScore: pillar?.score ?? null,
   };
+}
+
+export type ActionPlanPillarTile = {
+  id: HealthPillarId;
+  label: string;
+  /** Same rounded pillar score Health shows. Null when the pillar is unscored. */
+  score: number | null;
+  note: string | null;
+  /** Top move in this pillar, without its own score. */
+  factor: string | null;
+  moveKey: string | null;
+};
+
+const PILLAR_TILE_ORDER: readonly HealthPillarId[] = ["profit", "assets", "financing", "cash"];
+
+/**
+ * Action-plan tiles. The number is the Health pillar score, never the
+ * ratio score sitting under a nickname such as Profit power.
+ */
+export function actionPlanPillarTiles(
+  pillars: readonly { id: HealthPillarId; score: number | null; note?: string | null }[] | null | undefined,
+  moves: readonly { key: string; ratioName: string }[] = [],
+): ActionPlanPillarTile[] {
+  return PILLAR_TILE_ORDER.map((id) => {
+    const pillar = pillars?.find((row) => row.id === id);
+    const move = moves.find((row) => strategicMovePillar(row.key) === id);
+    const raw = pillar?.score;
+    return {
+      id,
+      label: PILLAR_LABELS[id],
+      score: raw != null && Number.isFinite(raw) ? Math.round(raw) : null,
+      note: pillar?.note?.trim() || null,
+      factor: move ? factorDisplayName(move.ratioName) : null,
+      moveKey: move?.key ?? null,
+    };
+  });
 }
 
 const NO_STOCK_TEMPLATES = new Set([
