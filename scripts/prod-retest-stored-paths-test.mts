@@ -89,10 +89,11 @@ assert(
   `QA runway ${qaStory.assessed.runway.label}`,
 );
 assert(qaStory.assessed.runway.weeks === null, "a cash-in base series does not store burn weeks");
-assert(Math.abs(qaNet - 4840) < 1, `QA forecast net ${qaNet}`);
+// Monthly lines from 1 Oct land in weeks 1, 5 and 9. Net per month is 1 210.
+assert(Math.abs(qaNet - 3630) < 1, `QA forecast net ${qaNet}`);
 assert(Math.abs(qaStory.assessed.outlook.opening - 25000) < 1, `QA opening ${qaStory.assessed.outlook.opening}`);
 assert(
-  Math.abs((qaStory.assessed.outlook.closing.at(-1) ?? 0) - 29840) < 1,
+  Math.abs((qaStory.assessed.outlook.closing.at(-1) ?? 0) - 28630) < 1,
   `QA ending cash ${qaStory.assessed.outlook.closing.at(-1)}`,
 );
 assert(qaStory.assessed.outlook.dipsBelowFloorWeek == null, `QA dip week ${qaStory.assessed.outlook.dipsBelowFloorWeek}`);

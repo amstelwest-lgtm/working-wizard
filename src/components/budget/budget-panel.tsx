@@ -40,7 +40,8 @@ import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { budgetSignoffIsStale } from "@/lib/signoff-status";
+import { budgetSignoffIsStale, inputsChangedSinceSignoff } from "@/lib/signoff-status";
+import { applyForecastRent, forecastRentPayment } from "@/lib/budget-forecast-rent";
 import {
   parseOperatingProfile,
   profileToBudgetQualification,
@@ -136,6 +137,7 @@ export function BudgetPanel({
   } | null>(null);
   const [lowOverlapOpen, setLowOverlapOpen] = useState(false);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
+  const [financialsUpdatedAt, setFinancialsUpdatedAt] = useState<string | null>(null);
   const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(
     signoffProp ?? null,
   );
@@ -202,6 +204,7 @@ export function BudgetPanel({
         loadedFinancialsRef.current = row?.financials ?? null;
         loadedCashflowRef.current = row?.cashflow ?? null;
         setBudgetUpdatedAt(row?.budget_updated_at ?? null);
+        setFinancialsUpdatedAt(row?.financials_updated_at ?? null);
         const fromDb = parseOperatingProfile(row?.operating_profile);
         if (fromDb) setProfile(fromDb);
         loadedFor.current = requestedId;
@@ -210,10 +213,13 @@ export function BudgetPanel({
           const normalized = normalizeBudgetDocument(budget);
           // A 10× plan stays on screen as a suggestion. Opening cash and
           // days still come from this client. Nothing is rebuilt on load.
-          const next = publishBudgetDocument(normalized, financials, {
-            cashflow: row?.cashflow,
-            financialsUpdatedAt: row?.financials_updated_at ?? null,
-          });
+          const next = applyForecastRent(
+            publishBudgetDocument(normalized, financials, {
+              cashflow: row?.cashflow,
+              financialsUpdatedAt: row?.financials_updated_at ?? null,
+            }),
+            row?.cashflow,
+          );
           const changed = budgetPlanFiguresChanged(normalized, next);
           skipAutosave.current = !changed;
           budgetDirty.current = changed;
@@ -262,7 +268,9 @@ export function BudgetPanel({
     if (!next) setSignedBudgetSnapshot(null);
     onSignoffChange?.(next);
   };
-  const budgetFiguresChanged = budgetSignedFiguresChanged(signedBudgetSnapshot, doc);
+  const budgetFiguresChanged =
+    budgetSignedFiguresChanged(signedBudgetSnapshot, doc) ||
+    inputsChangedSinceSignoff(budgetSignoff?.signed_off_at, financialsUpdatedAt);
 
   useEffect(() => {
     onReviewStale?.(budgetSignoffIsStale(budgetSignoff, budgetUpdatedAt, budgetFiguresChanged));
@@ -360,7 +368,10 @@ export function BudgetPanel({
       const seeded = hasFigures ? seedBudgetFromFinancials(next, seedFrom!) : null;
       if (seeded) next = seeded.doc;
       if (seedFrom) {
-        next = publishBudgetDocument(next, seedFrom, { cashflow: loadedCashflowRef.current });
+        next = applyForecastRent(
+          publishBudgetDocument(next, seedFrom, { cashflow: loadedCashflowRef.current }),
+          loadedCashflowRef.current,
+        );
       }
       skipAutosave.current = false;
       budgetDirty.current = true;
@@ -395,9 +406,14 @@ export function BudgetPanel({
       ? { doc: reseedBudgetIfScaleBroken(doc, seedFrom), changes: [] as string[] }
       : seedBudgetFromFinancials(doc, seedFrom);
     budgetDirty.current = true;
-    setDoc(publishBudgetDocument(seeded.doc, seedFrom, {
-      cashflow: loadedCashflowRef.current,
-    }));
+    setDoc(
+      applyForecastRent(
+        publishBudgetDocument(seeded.doc, seedFrom, {
+          cashflow: loadedCashflowRef.current,
+        }),
+        loadedCashflowRef.current,
+      ),
+    );
     toast.success("Budget rebuilt from the saved statement", {
       description: seeded.changes[0],
     });
@@ -661,6 +677,7 @@ export function BudgetPanel({
         priorYearLabel={priorYearLabel}
         priorYearMonths={priorYearMonths}
         displayTemplateId={industryBudgetTemplate(clientName, profile, businessTypeId)}
+        forecastRent={forecastRentPayment(loadedCashflowRef.current)}
       />
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>

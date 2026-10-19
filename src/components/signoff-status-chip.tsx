@@ -67,15 +67,18 @@ export function SignoffStatusChip({
   });
   if (hideDraft && kind === "draft") return null;
   const when = shown?.signed_off_at ? formatReviewDateTime(shown.signed_off_at, market) : "";
+  const budgetStale = scope === "budget" && kind === "stale";
+  const dated = when && when !== "—" ? when : null;
 
   return (
     <p data-signoff-status data-signoff-scope={scope} className="answer-strip__status">
       {signoffStatusLine({
         kind,
         name: shown?.signed_off_by_name,
-        date: kind === "signed" && when && when !== "—" ? when : null,
+        date: kind === "signed" || budgetStale ? dated : null,
         variant: "short",
         scopeLabel: signoffScopeLabel(scope),
+        staleClause: budgetStale ? "figures changed since sign-off" : null,
       })}
     </p>
   );

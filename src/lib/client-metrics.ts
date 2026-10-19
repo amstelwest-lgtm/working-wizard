@@ -7,6 +7,7 @@
  */
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
+import { monthlyOccurrenceWeeks } from "./cash-cadence.ts";
 import { bankHistoryIsSingleMonth, displayForecastFrequency } from "./cash-forecast-rows.ts";
 import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
@@ -879,19 +880,11 @@ export function plBankDisagreement(input: {
   const plCostMonthly = costs == null ? null : costs / months;
 
   const weeks = CASH_FORECAST_WEEK_COUNT;
-  const inflow = new Array(weeks).fill(0);
-  const outflow = new Array(weeks).fill(0);
-  for (const line of asForecastLines(cf.revenue)) {
-    distributeForecastLine(line, weeks).forEach((n, i) => {
-      inflow[i] += n;
-    });
-  }
-  for (const line of [...asForecastLines(cf.expenses), ...asForecastLines(cf.other)]) {
-    distributeForecastLine(line, weeks).forEach((n, i) => {
-      outflow[i] += n;
-    });
-  }
+  const rolled = rollForwardForecast(cf, weeks);
+  if (!rolled) return null;
   const monthly = (xs: number[]) => (xs.reduce((sum, n) => sum + n, 0) / xs.length) * (52 / 12);
+  const inflow = rolled.inflow;
+  const outflow = rolled.outflow;
   const bankInflowMonthly = monthly(inflow);
   const bankOutflowMonthly = monthly(outflow);
   if (bankInflowMonthly < 1 && bankOutflowMonthly < 1) return null;
@@ -936,12 +929,17 @@ export function weeklyRunRate(input: {
 export function distributeForecastLine(
   line: StoredForecastLine,
   weeks = CASH_FORECAST_WEEK_COUNT,
+  weekDates?: readonly string[] | null,
 ): number[] {
   const out = new Array(weeks).fill(0);
   const amt = parseFloat(line.amount ?? "0") || 0;
   if (amt === 0) return out;
   const start = Math.max(1, Math.min(weeks, line.startWeek ?? 1)) - 1;
   const freq = line.frequency ?? "recurring-monthly";
+  const landMonthly = (count: number, each: number) => {
+    const hits = monthlyOccurrenceWeeks(start, weeks, weekDates).slice(0, count);
+    for (const week of hits) out[week] = each;
+  };
   switch (freq) {
     case "recurring-weekly":
     case "weekly":
@@ -960,15 +958,11 @@ export function distributeForecastLine(
     }
     case "split-months": {
       const n = Math.max(1, line.splitCount ?? 3);
-      const per = amt / n;
-      for (let i = 0; i < n; i++) {
-        const w = start + i * 4;
-        if (w < weeks) out[w] = per;
-      }
+      landMonthly(n, amt / n);
       break;
     }
     default:
-      for (let i = start; i < weeks; i += 4) out[i] = amt;
+      landMonthly(weeks, amt);
   }
   return applyWeekOverrides(out, line.weekOverrides);
 }
@@ -1036,9 +1030,9 @@ export function keepOutlookOpening(
 }
 
 /**
- * Roll a saved forecast forward. Same rules as the cash screen: monthly
- * lines land every four weeks, collection delay shifts receipts, and a
- * headcount change can reduce outflow.
+ * Roll a saved forecast forward. Same rules as the cash screen: a monthly
+ * line lands once a month on its start week's day, collection delay shifts
+ * receipts, and a headcount change can reduce outflow.
  */
 export function rollForwardForecast(
   cf: Record<string, unknown> | null | undefined,
@@ -1076,6 +1070,8 @@ export function rollForwardForecast(
 
   const inflow = new Array(weeks).fill(0);
   const outflow = new Array(weeks).fill(0);
+  const startIso = typeof cf.startDate === "string" ? cf.startDate : "";
+  const weekDates = /^\d{4}-\d{2}-\d{2}/.test(startIso) ? weekDatesFrom(startIso, weeks) : undefined;
   // Same display cadence as the Cash page: category outflows, and receipts
   // when this file is only one month. The stored frequency is not rewritten.
   const singleMonth = bankHistoryIsSingleMonth({
@@ -1090,19 +1086,19 @@ export function rollForwardForecast(
     frequency: displayForecastFrequency(line.name ?? "", line.frequency, { side, singleMonth }),
   });
   for (const line of revenue) {
-    shiftVals(distributeForecastLine(screenLine(line, "revenue"), weeks).map((v) => v * revAdj)).forEach((v, i) => {
+    shiftVals(distributeForecastLine(screenLine(line, "revenue"), weeks, weekDates).map((v) => v * revAdj)).forEach((v, i) => {
       inflow[i] += v * growthMul(i);
     });
   }
   for (const line of expenses) {
-    distributeForecastLine(screenLine(line, "expenses"), weeks)
+    distributeForecastLine(screenLine(line, "expenses"), weeks, weekDates)
       .map((v) => v * expAdj)
       .forEach((v, i) => {
         outflow[i] += v;
       });
   }
   for (const line of other) {
-    distributeForecastLine(screenLine(line, "other"), weeks)
+    distributeForecastLine(screenLine(line, "other"), weeks, weekDates)
       .map((v) => v * expAdj)
       .forEach((v, i) => {
         outflow[i] += v;

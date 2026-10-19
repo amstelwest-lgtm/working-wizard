@@ -136,6 +136,26 @@ assert(
   "one row carries health and pack sign-off",
 );
 assert(yankeesRow?.tab === "advisory", "the urgent pack opens Advisory");
+const duplicated = mergeNeedsAttention(
+  [
+    {
+      ...health,
+      clientId: "dup",
+      name: "Dup",
+      detail: "2 actions overdue",
+      reason: "Cash under pressure",
+    },
+  ],
+  [
+    {
+      clientId: "dup",
+      name: "Dup",
+      exceptions: [{ severity: 2, label: "2 overdue actions", tab: "plan" }],
+    },
+  ],
+);
+assert(duplicated[0]?.reason.includes("2 overdue actions"), "the overdue count stays in the reason");
+assert(!/overdue/i.test(duplicated[0]?.detail ?? ""), duplicated[0]?.detail ?? "detail still repeats overdue");
 assert(merged[0]?.tab === "advisory", "sign-off ranks with the urgent rows");
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");

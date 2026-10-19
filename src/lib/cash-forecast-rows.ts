@@ -4,10 +4,10 @@
  * Amounts are the stored line amounts — grouping only sums them.
  *
  * Single-month assumption (display only; the stored frequency is not rewritten).
- * A month is ~4.33 weeks. The grid's monthly step is every 4th week, so a
- * monthly amount lands in weeks 1, 5, 9 and 13 — the same step a stored
- * recurring-monthly line already uses. The full amount is not spread across
- * every week and it is not divided by 4.33.
+ * A month is ~4.33 weeks. A monthly amount lands once a month, on the same
+ * day of the month as its start week — about three times in 13 weeks, not
+ * every fourth week. The full amount is not spread across every week and it
+ * is not divided by 4.33.
  *
  * Inflows and outflows use this same rule when the bank history does not
  * show a second month (`bankHistoryIsSingleMonth`):

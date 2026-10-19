@@ -238,6 +238,31 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
     matters.bullets!.some((x) => /Cash runs out in week 6/.test(x)),
     "cash break in what matters",
   );
+  const early = buildAdvisoryPack(
+    inputs({
+      openingBalance: 41794,
+      closings: [-100, -50, -400],
+    }),
+  );
+  assert(
+    /cash goes negative in week 1/.test(early.sections[0].body),
+    early.sections[0].body,
+  );
+  assert(
+    early.sections.find((s) => s.key === "what_matters")!.bullets!.some((x) => /Cash runs out in week 1/.test(x)),
+    "runs out uses the first negative close",
+  );
+  eq(early.forecast?.lowestWeek, 3, "the trough stays the lowest week");
+  const thin = buildAdvisoryPack(
+    inputs({
+      openingBalance: 80000,
+      closings: [60000, 40000, 30000],
+    }),
+  );
+  assert(
+    thin.sections.find((s) => s.key === "what_matters")!.bullets!.some((x) => /Cash is thin in week 2/.test(x)),
+    "thin uses the first close under the floor",
+  );
   assert(
     matters.bullets!.some((x) => /blocking data gap/.test(x)) === false,
     "important gap is not called blocking",

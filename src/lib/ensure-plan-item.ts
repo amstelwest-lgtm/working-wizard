@@ -3,17 +3,7 @@
  * The caller assigns the row. This does not choose an owner.
  */
 import { supabase } from "@/integrations/supabase/client";
-
-function defaultPeriodLabel() {
-  const now = new Date();
-  return `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}`;
-}
-
-function defaultTargetDate() {
-  const now = new Date();
-  const q = Math.floor(now.getMonth() / 3);
-  return new Date(now.getFullYear(), q * 3 + 3, 0).toISOString().slice(0, 10);
-}
+import { currentQuarterLabel, defaultTargetDate } from "@/lib/action-plan-counts";
 
 export async function ensureStrategicMoveItem(input: {
   clientId: string;
@@ -35,7 +25,7 @@ export async function ensureStrategicMoveItem(input: {
       .from("action_plans")
       .insert({
         client_id: input.clientId,
-        period_label: defaultPeriodLabel(),
+        period_label: currentQuarterLabel(),
         outcome_goal: "Set your outcome goal for this quarter",
         target_date: defaultTargetDate(),
       })

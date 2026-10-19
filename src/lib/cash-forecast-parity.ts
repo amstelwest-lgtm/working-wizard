@@ -69,6 +69,15 @@ export function forecastChatFacts(input: {
   };
 }
 
+/** 1-based index of the first closing strictly below `threshold`. */
+export function firstClosingBelow(closings: readonly number[], threshold: number): number | null {
+  for (let i = 0; i < closings.length; i++) {
+    const raw = closings[i];
+    if (typeof raw === "number" && Number.isFinite(raw) && raw < threshold) return i + 1;
+  }
+  return null;
+}
+
 export function forecastLowestPoint(
   opening: number,
   closings: readonly number[],

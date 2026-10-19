@@ -19,6 +19,8 @@ import {
 import { formatVariancePct, varianceLine } from "../src/lib/budget.variance";
 import { formatMoney } from "../src/lib/market/format";
 import { ZA_MARKET } from "../src/lib/market/resolve";
+import { applyForecastRent, budgetRentHint, forecastRentPayment } from "../src/lib/budget-forecast-rent";
+import { budgetSignoffIsStale, inputsChangedSinceSignoff } from "../src/lib/signoff-status";
 
 const money = (n: number) => formatMoney(n, ZA_MARKET);
 const formattedOpening = money(128450);
@@ -32,8 +34,8 @@ assert(budgetLensFromSearch("chart") === "chart", "chart stays chart");
 assert(budgetLensFromSearch("nope") === "chart", "an unknown view falls back to the chart");
 
 assert(
-  budgetYtdSentence({ budget: 1000, actual: null, money }) === `YTD: budget ${money(1000)} · no actuals yet.`,
-  "a year with no actuals names the budget only",
+  budgetYtdSentence({ budget: 1000, actual: null, money }) === "No monthly actuals yet",
+  "a year with no monthly actuals does not say in line",
 );
 assert(
   budgetYtdSentence({ budget: 1000, actual: 1300, money }) ===
@@ -161,5 +163,42 @@ assert(chart.includes('data-budget-axis="chart"'), "the chart keeps one month ax
 assert(chart.includes('data-budget-axis="readout"'), "the desktop readout is marked");
 assert(chart.includes('narrow ? " hidden"'), "the second month row hides on a phone");
 assert(simple.includes("readOnly={readOnly}"), "only the owner view hides a draft chart");
+
+const rentCash = {
+  seededFromBanksAt: "2026-08-24T00:00:00.000Z",
+  expenses: [{ name: "Greeff Properties", amount: "28000", frequency: "once-off", startWeek: 1 }],
+};
+const rent = forecastRentPayment(rentCash);
+assert(rent?.name === "Greeff Properties" && rent.monthly === 28000, "forecast rent is the properties payment");
+const filled = applyForecastRent(doc, rentCash);
+const premises = filled.overheads.find((line) => line.bucket === "premises");
+assert(Object.values(premises?.months ?? {}).every((amount) => amount === 28000), "blank premises follows forecast rent");
+assert(
+  budgetRentHint(filled, rent, money, true) === "Rent follows Greeff Properties in the 13-week forecast.",
+  "a matched rent line does not say rent is missing",
+);
+const mismatch = applyForecastRent(
+  {
+    ...doc,
+    overheads: doc.overheads.map((line) =>
+      line.bucket === "premises"
+        ? { ...line, months: Object.fromEntries(Object.keys(line.months).map((month) => [month, 1000])) }
+        : line,
+    ),
+  },
+  rentCash,
+);
+assert(
+  budgetRentHint(mismatch, rent, money, false)?.includes(money(28000)) === true,
+  "a different premises amount names the forecast rent",
+);
+assert(
+  inputsChangedSinceSignoff("2026-09-02T07:54:51.000Z", "2026-09-04T00:00:00.000Z") === true,
+  "financials saved after sign-off count as changed inputs",
+);
+assert(
+  budgetSignoffIsStale({ signed_off_at: "2026-09-02T07:54:51.000Z" }, "2026-10-12T00:00:00.000Z", false) === false,
+  "the budget autosave clock alone is not stale",
+);
 
 console.log("budget chart table ok");

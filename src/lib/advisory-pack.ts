@@ -35,6 +35,7 @@ import {
 } from "./health-score.ts";
 import { periodMonthsOf } from "./ratios.ts";
 import {
+  firstClosingBelow,
   forecastLowestPoint,
   forecastRunwayHeadlineShared,
   forecastStatusSentence,
@@ -134,6 +135,10 @@ export type PackForecastBlock = {
   openingBalance: number | null;
   lowestClosing: number | null;
   lowestWeek: number | null;
+  /** First closing strictly below zero. The trough stays on `lowestWeek`. */
+  firstNegativeWeek: number | null;
+  /** First closing strictly below the comfort floor. */
+  firstThinWeek: number | null;
   breachesZero: boolean;
   breachesThreshold: boolean;
   runwayWeeks: number | null;
@@ -855,6 +860,8 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
         openingBalance: input.openingBalance,
         lowestClosing: low.amount,
         lowestWeek: low.week,
+        firstNegativeWeek: firstClosingBelow(input.closings, 0),
+        firstThinWeek: firstClosingBelow(input.closings, comfort),
         breachesZero: low.amount < 0,
         breachesThreshold: low.amount < comfort,
         runwayWeeks: input.cashRunwayWeeks,
@@ -979,15 +986,15 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
   }
   if (forecast?.breachesZero) {
     mattersBullets.push(
-      forecast.lowestWeek == null
+      forecast.firstNegativeWeek == null
         ? "The opening balance is already below zero. Every recommendation below is judged first on whether it repairs that."
-        : `Cash runs out in week ${forecast.lowestWeek} on current assumptions. Every recommendation below is judged first on whether it moves that week.`,
+        : `Cash runs out in week ${forecast.firstNegativeWeek} on current assumptions. Every recommendation below is judged first on whether it moves that week.`,
     );
   } else if (forecast?.breachesThreshold) {
     mattersBullets.push(
-      forecast.lowestWeek == null
+      forecast.firstThinWeek == null
         ? "The opening balance is already under the floor; a late debtor or an early supplier bill turns thin into negative."
-        : `Cash is thin in week ${forecast.lowestWeek}; a late debtor or an early supplier bill turns thin into negative.`,
+        : `Cash is thin in week ${forecast.firstThinWeek}; a late debtor or an early supplier bill turns thin into negative.`,
     );
   }
   if (gaps.some((g) => g.severity === "critical")) {
@@ -1159,9 +1166,9 @@ function buildHeadline(
   }
   if (forecast?.breachesZero) {
     parts.push(
-      forecast.lowestWeek == null
+      forecast.firstNegativeWeek == null
         ? "the opening balance is already negative"
-        : `cash goes negative in week ${forecast.lowestWeek}`,
+        : `cash goes negative in week ${forecast.firstNegativeWeek}`,
     );
   } else if (weak[0]) {
     parts.push(`${weak[0].name} at ${weak[0].formatted} is the number to move`);

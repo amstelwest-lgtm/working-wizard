@@ -19,6 +19,7 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
+import { actionIsOverdue } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
   buildFollowUpQueue,
@@ -175,7 +176,7 @@ type ClientRow = Client & {
   openQueries: number;
   /** Open (not done) action-plan items. */
   openActions: number;
-  /** Open actions past due_date. */
+  /** Open actions past due_date, or past the plan target when they have no due date. */
   overdueActions: number;
   /** Revenue for scatter bubble sizing. */
   revenue: number | null;
@@ -1506,18 +1507,34 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (rawClients.length > 0) {
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const { data: actions, error: actErr } = await supabase
-          .from("action_items")
-          .select("client_id, status, due_date, title")
-          .in(
-            "client_id",
-            rawClients.map((c) => c.id),
-          )
-          .neq("status", "done");
+        const clientIds = rawClients.map((c) => c.id);
+        const [{ data: actions, error: actErr }, { data: plans }] = await Promise.all([
+          supabase
+            .from("action_items")
+            .select("client_id, status, due_date, title")
+            .in("client_id", clientIds)
+            .neq("status", "done"),
+          supabase
+            .from("action_plans")
+            .select("client_id, target_date")
+            .in("client_id", clientIds)
+            .eq("is_active", true),
+        ]);
+        const targetByClient = new Map<string, string>();
+        for (const plan of plans ?? []) {
+          if (!targetByClient.has(plan.client_id)) targetByClient.set(plan.client_id, plan.target_date);
+        }
         if (!actErr && actions) {
           for (const a of actions) {
             openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
-            const overdue = Boolean(a.due_date && a.due_date < today);
+            const overdue = actionIsOverdue(
+              {
+                status: a.status,
+                dueDate: a.due_date,
+                planTarget: targetByClient.get(a.client_id) ?? null,
+              },
+              today,
+            );
             if (overdue) {
               overdueActionsMap[a.client_id] = (overdueActionsMap[a.client_id] ?? 0) + 1;
             }
