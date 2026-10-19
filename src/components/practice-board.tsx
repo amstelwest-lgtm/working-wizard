@@ -1803,7 +1803,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const countsLoading = !countsReady;
   const clientIdKey = clientRows.map((c) => c.id).join("\n");
   useEffect(() => {
-    if (view !== "queries" || !countsReady) return;
+    // Slim client ids are in clientRows once `loading` drops. This promise
+    // clears "Loading open queries…" without waiting for the rest of the book.
+    if (view !== "queries" || loading) return;
     let cancelled = false;
     setQueryRowsReady(false);
     const ids = clientIdKey ? clientIdKey.split("\n") : [];
@@ -1830,7 +1832,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [view, countsReady, clientIdKey]);
+  }, [view, loading, clientIdKey]);
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();
 
