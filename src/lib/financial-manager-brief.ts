@@ -9,7 +9,7 @@
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
-import { cashFloorCopy, ownerCashStatusChip } from "./owner-answers.ts";
+import { cashFloorCopy } from "./owner-answers.ts";
 import { rewriteDraftMonthStamp } from "./statement-period.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
@@ -69,7 +69,7 @@ export type FinancialManagerBrief = {
   chase: ChaseDraftInput | null;
   /** Opening and floor, in the same words as the owner home. Null when either amount is missing. */
   cashFloorLine: string | null;
-  /** Same chip as the owner Financial Manager card, including Watch. */
+  /** Floor alert chip. Null when the opening is missing or the pillar is Watch or Healthy. */
   cashFloorChip: string | null;
   /** Short Health cash line. Same reading as the chip, so the pillar matches this brief. */
   healthCue: string | null;
@@ -251,9 +251,7 @@ export function buildFinancialManagerBrief(input: {
     : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
       ? `Cash is ${input.formatMoney(cashOpening)}.`
       : (cashCopy?.sentence ?? null);
-  const cashFloorChip =
-    ownerCashStatusChip(input.cashPillarStatus, input.openingMissing ? null : (cashCopy?.chip ?? null))
-      ?.word ?? null;
+  const cashFloorChip = input.openingMissing || pillarAgrees ? null : (cashCopy?.chip ?? null);
   if (
     input.actionsReady !== false &&
     !input.openingMissing &&
