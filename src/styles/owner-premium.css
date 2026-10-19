@@ -1172,3 +1172,45 @@ html:not(.dark) .owner-door[data-screen="home"] {
 .owner-door[data-screen="home"] .client-workspace {
   flex: 1 1 auto;
 }
+
+/* Phone: the charcoal frame is desktop only. Dashboard, client Home, Settings,
+   and the owner door sit on the same canvas, edge to edge. */
+@media (max-width: 860px) {
+  html:not(.dark):has(.accountant-portal),
+  html:not(.dark) body:has(.accountant-portal) {
+    background: #f4f6fa !important;
+  }
+  html:not(.dark) .accountant-portal,
+  html:not(.dark) .accountant-portal.premium-shell,
+  html:not(.dark) .settings-portal.accountant-portal,
+  html:not(.dark) .owner-door.accountant-portal:not([data-screen="chat"]) {
+    background: #f4f6fa;
+  }
+  .accountant-portal .shell {
+    padding-left: 0;
+    padding-right: 0;
+    max-width: none;
+  }
+  .accountant-portal .topbar {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
+  html:not(.dark) .owner-door.accountant-portal:not([data-screen="chat"]) .deliverable-main {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* The share button and the archive + edit stack are position:fixed. This is
+   their height from the bottom of the screen, so the last line can scroll clear. */
+@media (max-width: 767px) {
+  html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
+  html:not(.dark) .owner-door.accountant-portal:not([data-screen="chat"]) .deliverable-main,
+  .accountant-portal .deliverable-main {
+    padding-bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 40px + 8px + 40px);
+  }
+}
