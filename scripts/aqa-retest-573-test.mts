@@ -88,7 +88,9 @@ const cashflow = {
     },
   ],
 };
-const metrics = assessClientMetrics({ financials, cashflow, financialsUpdatedAt: null });
+// Same Monday as the fixture start. The wall clock would age the series
+// into the "week 1 is in the past" path and keep it.
+const metrics = assessClientMetrics({ financials, cashflow, financialsUpdatedAt: null, now });
 assert(metrics.runway.kind === "cash_generative", `ledger opening made runway ${metrics.runway.kind}`);
 assert(metrics.outlook.source === "derived", "the P&L runway still replaces the stored series");
 const screen = resolveCashScreenForecast({ financials, cashflow, now });
