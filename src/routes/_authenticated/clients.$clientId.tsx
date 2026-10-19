@@ -291,9 +291,13 @@ import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/own
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
+  handoffPaintBlocked,
+  HANDOFF_FAILED_COPY,
   loadActionHandoffRuns,
   loadActionNotes,
   loadLatestAssignments,
+  optimisticNoteHidden,
+  readHandoffError,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
 import {
@@ -1729,7 +1733,7 @@ function ClientView() {
   const [openActionAgent, setOpenActionAgent] = useState<AgentKey | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
-  const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
+  const pendingHandoffs = useRef(new Map<string, ActionPlanRefreshDetail>());
   const assignmentRowsRef = useRef(assignmentRows);
   assignmentRowsRef.current = assignmentRows;
   const handoffsRef = useRef(openPlanHandoffs);
@@ -1741,21 +1745,24 @@ function ClientView() {
     rows: readonly { id: string; title: string; assigneeName: string | null }[],
     assigned: readonly RowAssignment[],
     notes: ReadonlyMap<string, { note: string | null; at: string; actorLabel?: string | null; actorType?: string | null }[]>,
-    runs: ReadonlyMap<string, { agent: AgentKey; status: string; at: string }>,
+    runs: ReadonlyMap<string, { id?: string; agent: AgentKey; status: string; at: string }>,
   ) => {
     const first = assigned.find((row) => row.open);
     setAssignmentRows([...assigned]);
     setOpenPlanHandoffs(
       rows.map((row) => {
         const item = assigned.find((entry) => entry.id === row.id);
+        const run = runs.get(row.id) ?? null;
         return {
           id: row.id,
           title: row.title,
           assignee: item?.assigneeName ?? row.assigneeName,
           agent: item?.agent ?? null,
-          notes: notes.get(row.id) ?? [],
+          notes: (notes.get(row.id) ?? []).filter((note) => !optimisticNoteHidden(row.id, note.at)),
           openedAt: item?.openedAt,
-          run: runs.get(row.id) ?? null,
+          runId: item?.runId ?? run?.id,
+          error: readHandoffError(row.id),
+          run,
         };
       }),
     );
@@ -1766,20 +1773,55 @@ function ClientView() {
     const bump = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (detail?.failed && detail.actionItemId) {
-        const prior = priorHandoff.current.get(detail.actionItemId);
-        if (pendingHandoff.current?.actionItemId === detail.actionItemId) pendingHandoff.current = null;
+        const id = detail.actionItemId;
+        const prior = priorHandoff.current.get(id);
+        pendingHandoffs.current.delete(id);
         if (prior) {
           setAssignmentRows((current) =>
             prior.row
-              ? current.map((row) => (row.id === detail.actionItemId ? prior.row! : row))
-              : current.filter((row) => row.id !== detail.actionItemId),
+              ? current.map((row) => (row.id === id ? { ...prior.row!, open: false, runId: undefined } : row))
+              : current.filter((row) => row.id !== id),
           );
-          setOpenPlanHandoffs((rows) =>
-            prior.handoff
-              ? rows.map((row) => (row.id === detail.actionItemId ? prior.handoff! : row))
-              : rows.filter((row) => row.id !== detail.actionItemId),
-          );
+          setOpenPlanHandoffs((rows) => {
+            const restored = prior.handoff
+              ? {
+                  ...prior.handoff,
+                  notes: (prior.handoff.notes ?? []).filter((note) => note.at !== detail.since),
+                  error: detail.error ?? HANDOFF_FAILED_COPY,
+                  runId: undefined,
+                }
+              : null;
+            if (restored) return rows.map((row) => (row.id === id ? restored : row));
+            return rows.filter((row) => row.id !== id);
+          });
         }
+        setOpenPlanTick((n) => n + 1);
+        return;
+      }
+      if (detail?.actionItemId && detail.reused) {
+        const id = detail.actionItemId;
+        const current = pendingHandoffs.current.get(id);
+        pendingHandoffs.current.set(id, { ...(current ?? detail), ...detail, note: undefined, reused: true });
+        setOpenPlanHandoffs((rows) =>
+          rows.map((row) =>
+            row.id === id
+              ? {
+                  ...row,
+                  notes: (row.notes ?? []).filter((note) => note.at !== detail.since),
+                  runId: detail.runId ?? row.runId,
+                  error: null,
+                  openedAt: detail.since ?? row.openedAt,
+                }
+              : row,
+          ),
+        );
+        setAssignmentRows((currentRows) =>
+          currentRows.map((row) =>
+            row.id === id
+              ? { ...row, open: row.agent != null, openedAt: detail.since ?? row.openedAt, runId: detail.runId ?? row.runId }
+              : row,
+          ),
+        );
         setOpenPlanTick((n) => n + 1);
         return;
       }
@@ -1794,13 +1836,14 @@ function ClientView() {
               handoff: handoffsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
             });
           }
-          pendingHandoff.current = { ...detail, agent, assigneeName: name };
+          pendingHandoffs.current.set(detail.actionItemId, { ...detail, agent, assigneeName: name });
           const nextRow: RowAssignment = {
             id: detail.actionItemId,
             assigneeName: name,
             agent,
             open: agent != null,
             openedAt: agent ? detail.since : undefined,
+            runId: detail.runId,
           };
           setAssignmentRows((current) =>
             current.some((row) => row.id === nextRow.id)
@@ -1813,9 +1856,21 @@ function ClientView() {
             const patched = {
               assignee: name,
               agent,
-              notes: detail.note ? withPendingNote(current?.notes ?? [], detail.note) : current?.notes ?? [],
+              notes:
+                detail.note && !optimisticNoteHidden(detail.actionItemId, detail.note.at)
+                  ? withPendingNote(current?.notes ?? [], detail.note)
+                  : (current?.notes ?? []).filter((note) => !optimisticNoteHidden(detail.actionItemId, note.at)),
               openedAt: agent ? detail.since : undefined,
-              run: agent ? { agent, status: "queued" as const, at: detail.since ?? new Date().toISOString() } : null,
+              runId: detail.runId ?? current?.runId,
+              error: null,
+              run: agent
+                ? {
+                    id: detail.runId,
+                    agent,
+                    status: "queued" as const,
+                    at: detail.since ?? new Date().toISOString(),
+                  }
+                : null,
             };
             const next = rows.map((row) => (row.id === detail.actionItemId ? { ...row, ...patched } : row));
             return found
@@ -1844,7 +1899,7 @@ function ClientView() {
     let cancelled = false;
     if (seenPlanClient.current !== clientId) {
       seenPlanClient.current = clientId;
-      pendingHandoff.current = null;
+      pendingHandoffs.current.clear();
       setOpenPlanTitles(null);
       setOpenPlanHandoffs([]);
       setHandedTitle(null);
@@ -1903,15 +1958,9 @@ function ClientView() {
         ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids), loadActionNotes(ids)])
         : [new Map(), new Map(), new Map()];
       if (cancelled) return;
-      const pending = pendingHandoff.current;
-      const pendingView = pending?.assigneeName
-        ? {
-            id: pending.actionItemId,
-            agent: pending.agent ?? null,
-            assigneeName: pending.assigneeName,
-            since: pending.since,
-          }
-        : null;
+      const pendings = [...pendingHandoffs.current.values()].filter(
+        (pending) => pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
+      );
       const openRows = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return row.id && title
@@ -1937,44 +1986,63 @@ function ClientView() {
           run: runs.get(row.id) ?? null,
         });
       });
-      const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
-      const merged = withPendingAssignment(assigned, pendingView, pendingStored);
-      const pendingLanded = pendingAssignmentLanded(pendingStored, pendingView);
-      if (pendingLanded && pending) {
-        pendingHandoff.current = null;
-        clearOptimisticHandoff(pending.actionItemId);
-      }
+      let merged = assigned;
       const paintedNotes = new Map(noteLog);
       const paintedRuns = new Map(runs);
-      if (pending && !pendingLanded) {
-        if (pending.note) {
-          paintedNotes.set(pending.actionItemId, withPendingNote(noteLog.get(pending.actionItemId) ?? [], pending.note));
+      for (const pending of pendings) {
+        const pendingStored = assignments.get(pending.actionItemId) ?? null;
+        const pendingView = {
+          id: pending.actionItemId,
+          agent: pending.agent ?? null,
+          assigneeName: pending.assigneeName ?? "",
+          since: pending.since,
+          runId: pending.runId,
+        };
+        const serverRun = runs.get(pending.actionItemId) ?? null;
+        const reusedLanded = Boolean(pending.reused && pending.runId && serverRun?.id === pending.runId);
+        const pendingLanded = reusedLanded || (!pending.reused && pendingAssignmentLanded(pendingStored, pendingView));
+        if (pendingLanded) {
+          pendingHandoffs.current.delete(pending.actionItemId);
+          clearOptimisticHandoff(pending.actionItemId);
+          continue;
+        }
+        merged = withPendingAssignment(merged, pendingView, pendingStored);
+        if (pending.note && !optimisticNoteHidden(pending.actionItemId, pending.note.at)) {
+          paintedNotes.set(
+            pending.actionItemId,
+            withPendingNote(paintedNotes.get(pending.actionItemId) ?? [], pending.note),
+          );
         }
         const shownRun = displayedHandoffRun(
-          runs.get(pending.actionItemId) ?? null,
+          serverRun,
           { agent: pending.agent ?? null, since: pending.since },
           false,
         );
         if (shownRun) {
           paintedRuns.set(pending.actionItemId, {
+            id: pending.runId ?? serverRun?.id,
             agent: shownRun.agent,
             status: shownRun.status,
             at: shownRun.at ?? pending.since ?? "",
           });
         }
+        if (pending.title && !titles.includes(pending.title)) titles.push(pending.title);
       }
-      if (pending?.title && !titles.includes(pending.title)) titles.push(pending.title);
       const labelled = openRows.map((row) => ({
         id: row.id,
         title: row.title,
         assigneeName: row.ownerName,
       }));
-      if (pending?.title && pending.assigneeName && !labelled.some((row) => row.id === pending.actionItemId)) {
-        labelled.push({
-          id: pending.actionItemId,
-          title: pending.title,
-          assigneeName: pending.assigneeName,
-        });
+      for (const pending of pendings) {
+        if (pendingHandoffs.current.has(pending.actionItemId) && pending.title && pending.assigneeName) {
+          if (!labelled.some((row) => row.id === pending.actionItemId)) {
+            labelled.push({
+              id: pending.actionItemId,
+              title: pending.title,
+              assigneeName: pending.assigneeName,
+            });
+          }
+        }
       }
       setOpenPlanTitles(titles);
       setOpenPlanOverdue(
@@ -3279,6 +3347,7 @@ function ClientView() {
       applyLiveRuns(
         assignmentRows,
         homeActivity.runs.map((run) => ({
+          id: run.id,
           actionItemId: run.action_item_id,
           agent: run.agent,
           status: run.status,
@@ -3307,21 +3376,22 @@ function ClientView() {
   const shownHandoffs = useMemo(
     () =>
       openPlanHandoffs.map((row) => {
-        let live: { agent: AgentKey; status: string; at: string } | null = null;
+        let live: { id: string; agent: AgentKey; status: string; at: string } | null = null;
         for (const run of homeActivity.runs) {
           if (run.action_item_id !== row.id) continue;
+          if (row.runId && run.id !== row.runId) continue;
           const at = run.finished_at || run.queued_at;
-          if (!live || at > live.at) live = { agent: run.agent, status: run.status, at };
+          if (!live || at > live.at) live = { id: run.id, agent: run.agent, status: run.status, at };
         }
         const settled = settledRows.find((item) => item.id === row.id);
-        const missed = Boolean(settled?.open && !handoffRowStillWorking(settled, homeActivity.runs));
+        const missed = Boolean(!row.error && settled?.open && !handoffRowStillWorking(settled, homeActivity.runs));
         if (!live || !row.agent || live.agent !== row.agent) return { ...row, missed };
         const current = row.run;
         const currentOpen = current?.status === "queued" || current?.status === "running";
         if (currentOpen && live.at < (current.at ?? "") && live.status !== "queued" && live.status !== "running") {
           return { ...row, missed };
         }
-        return { ...row, run: live, missed: false };
+        return { ...row, run: live, runId: row.runId ?? live.id, missed: false };
       }),
     [openPlanHandoffs, homeActivity.runs, settledRows],
   );
@@ -3334,6 +3404,7 @@ function ClientView() {
         (item) =>
           item.action_item_id === row.id &&
           item.agent === row.agent &&
+          (!row.runId || item.id === row.runId) &&
           (item.status === "succeeded" || item.status === "partial"),
       );
       if (!run) continue;

@@ -10,9 +10,11 @@ import {
   handoffDecision,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
+  handoffCollisionResult,
   handoffFinding,
   handoffInputs,
   handoffNeedsFreshRun,
+  planHandoffRun,
   handoffRequestNote,
   handoffResultNote,
   personAssignmentName,
@@ -122,11 +124,13 @@ assert(fn.includes("owner_user_id") && fn.includes("client_memberships"), "the f
 assert(fn.includes("callerMayHandOff"), "the access decision is the shared check");
 assert(fn.includes("action.client_id !== clientId"), "the action must belong to that client");
 assert(fn.includes('rpc("agent_invoke"'), "the runner is triggered with the service role");
-assert(fn.includes("let invokeInputs = inputs"), "the invoke starts from the action key");
-assert(
-  (fn.match(/invokeInputs = againInputs/g) ?? []).length >= 2,
-  "a new second run and a reused queued row both switch to the again key",
-);
+assert(fn.includes("const invokeInputs = inputs"), "the invoke sends the key chosen for this run");
+assert(fn.includes("planHandoffRun"), "the newest run decides reuse or one new key");
+assert(fn.includes("handoffCollisionResult"), "a duplicate insert returns the run that won");
+assert(!fn.includes("guard < 5"), "a long again-chain is not walked");
+assert(!fn.includes("run_not_queued"), "already having runs is not a 500");
+assert(fn.includes("run_lookup_failed") && fn.includes("run_insert_failed"), "a real read or insert failure has its own code");
+assert(fn.includes("reused: true"), "a queued run is returned without a new note");
 const invoke = fn.slice(fn.indexOf('rpc("agent_invoke"'), fn.indexOf('rpc("agent_invoke"') + 400);
 assert(invoke.includes("inputs: invokeInputs"), "the invoke sends the second-run key");
 assert(fn.includes("decision.runner"), "the invoke target is the resolved runner");
@@ -137,13 +141,12 @@ assert(
     "action_item:f6446efd-568b-477a-9f6b-f055a7d4a5e4:again:run-advisor",
   "handing the same action back uses a new idempotency material",
 );
-assert(fn.includes("handoffNeedsFreshRun"), "a finished run starts another hand-off");
-assert(fn.includes("handoffAgainInputs"), "the repeat run does not reuse the finished key");
+assert(readFileSync("src/lib/owner-handoff.ts", "utf8").includes("handoffAgainInputs"), "a repeat run does not reuse the finished key");
 assert(fn.includes("const handoffActor = user.email"), "the hand-off note is written by the signed-in person");
 assert(!fn.includes("actorLabel: decision.displayName"), "a hand-off note is not authored by the bot");
 assert(
-  (fn.match(/actorLabel: handoffActor/g) ?? []).length >= 4,
-  "person and bot hand-offs name the signed-in person",
+  (fn.match(/actorLabel: handoffActor/g) ?? []).length >= 3,
+  "a new hand-off note is written by the signed-in person",
 );
 assert(fn.includes("writeAssignment"), "every hand-off stores the assignee and a note");
 assert(fn.includes("noted: true"), "the client can tell the note was stored");
@@ -151,8 +154,8 @@ assert(fn.includes("personId"), "a person hand-off uses the same function");
 assert(fn.includes("personAssignmentNote"), "the person note names the assignee");
 assert(fn.includes("cancelQueuedRuns"), "a person assignment clears a queued bot run");
 assert(fn.includes("assigned_to_person"), "the cleared run records why it stopped");
-const openRun = fn.slice(fn.indexOf("!handoffNeedsFreshRun(status)"), fn.indexOf("!handoffNeedsFreshRun(status)") + 700);
-assert(openRun.includes("writeAssignment"), "an open run still writes the hand-off note");
+const reuse = fn.slice(fn.indexOf('plan.action === "reuse"'), fn.indexOf('plan.action === "reuse"') + 500);
+assert(reuse.includes("reused: true") && !reuse.includes("writeAssignment"), "a queued run does not write another note");
 assert(fn.includes("decision.settingKey"), "each bot checks its own flag");
 assert(!fn.includes("no_runner"), "a known bot is not rejected for a missing runner");
 assert(!fn.includes("GRANT INSERT"), "the function does not grant client writes");
@@ -209,5 +212,180 @@ assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert a 
 const config = readFileSync("supabase/config.toml", "utf8");
 assert(config.includes("[functions.owner-handoff]"), "the function is registered");
 assert(/\[functions\.owner-handoff\]\nverify_jwt = true/.test(config), "the caller JWT is required");
+
+const actionId = "d596c54b-c700-46d4-a56c-dcf430388e48";
+const priorRuns = ["run-1", "run-2", "run-3", "run-4", "run-5", "run-6"].map((id) => ({
+  id,
+  status: "succeeded",
+}));
+const sixth = planHandoffRun(priorRuns[5]!, actionId);
+assert(sixth.action === "insert" && sixth.inputs === `action_item:${actionId}:again:run-6`, "the seventh hand-off keys off the newest finished run");
+assert(planHandoffRun(null, actionId).action === "insert" && planHandoffRun(null, actionId).inputs === `action_item:${actionId}`, "the first run keeps the original key");
+const queued = planHandoffRun({ id: "run-open", status: "queued" }, actionId);
+assert(queued.action === "reuse" && queued.runId === "run-open", "a queued run is reused");
+const running = planHandoffRun({ id: "run-open", status: "running" }, actionId);
+assert(running.action === "reuse", "a running run is reused");
+
+const firstClick = planHandoffRun(priorRuns[5]!, actionId);
+const secondClick = planHandoffRun(priorRuns[5]!, actionId);
+assert(
+  firstClick.action === "insert" && secondClick.action === "insert" && firstClick.inputs === secondClick.inputs,
+  "two concurrent clicks plan the same key",
+);
+const winner = handoffCollisionResult({ id: "run-7", status: "queued" });
+assert(winner.reused && winner.noted === false && winner.runId === "run-7", "the losing click returns the one inserted run");
+
+const keyStore = new Map<string, { id: string; status: string }>();
+let insertedCount = 0;
+function insertOrCollide(inputs: string): { created: true; id: string } | { created: false; code: "23505" } {
+  if (keyStore.has(inputs)) return { created: false, code: "23505" };
+  const id = `run-new-${++insertedCount}`;
+  keyStore.set(inputs, { id, status: "queued" });
+  return { created: true, id };
+}
+async function postAgain() {
+  const plan = planHandoffRun(priorRuns[5]!, actionId);
+  await Promise.resolve();
+  if (plan.action !== "insert") {
+    return { created: false, reused: true, noted: false, runId: plan.runId };
+  }
+  const inserted = insertOrCollide(plan.inputs);
+  if (!inserted.created) {
+    const held = keyStore.get(plan.inputs)!;
+    return { created: false, ...handoffCollisionResult(held) };
+  }
+  return { created: true, reused: false, noted: true, runId: inserted.id };
+}
+const [firstPost, secondPost] = await Promise.all([postAgain(), postAgain()]);
+assert(keyStore.size === 1, "two concurrent posts give one run");
+assert(firstPost.runId === secondPost.runId, "both posts return the same run id");
+assert(Number(firstPost.created) + Number(secondPost.created) === 1, "only one post inserts");
+const losingPost = firstPost.created ? secondPost : firstPost;
+assert(losingPost.reused === true && losingPost.noted === false, "the losing click does not write a note");
+
+const { applyLiveRuns } = await import("../src/lib/open-plan-home.ts");
+const { handoffRowStillWorking, handoffRunForAction } = await import("../src/lib/agent-activity-poll.ts");
+const card1 = {
+  id: "card-1",
+  assigneeName: "Analyst",
+  agent: "analyst" as const,
+  open: true,
+  openedAt: "2026-10-19T21:21:06.000Z",
+  runId: "run-a",
+};
+const card2 = {
+  id: "card-2",
+  assigneeName: "Analyst",
+  agent: "analyst" as const,
+  open: true,
+  openedAt: "2026-10-19T21:21:13.000Z",
+  runId: "run-b",
+};
+const overlapped = applyLiveRuns([card1, card2], [
+  { id: "run-b", actionItemId: "card-2", agent: "analyst", status: "succeeded", at: "2026-10-19T21:21:27.000Z" },
+  { id: "run-old", actionItemId: "card-1", agent: "analyst", status: "succeeded", at: "2026-10-19T21:20:36.000Z" },
+]);
+assert(overlapped.find((row) => row.id === "card-1")?.open === true, "card 2 finishing does not clear card 1");
+assert(
+  handoffRunForAction(
+    [
+      { id: "run-b", actionItemId: "card-2", agent: "analyst", status: "succeeded" },
+      { id: "run-a", actionItemId: "card-1", agent: "analyst", status: "queued" },
+    ],
+    "card-1",
+    "run-a",
+  )?.id === "run-a",
+  "card 2's run is not returned for card 1",
+);
+assert(
+  handoffRowStillWorking(card1, [
+    { id: "run-b", action_item_id: "card-2", agent: "analyst", status: "succeeded" },
+    { id: "run-a", action_item_id: "card-1", agent: "analyst", status: "queued" },
+  ]),
+  "card 1 stays Working on its own run id",
+);
+const settledCard = applyLiveRuns([card1], [
+  { id: "run-a", actionItemId: "card-1", agent: "analyst", status: "succeeded", at: "2026-10-19T21:22:00.000Z" },
+]);
+assert(settledCard[0]?.open === false, "card 1 stops Working when its own run finishes");
+
+const {
+  rememberOptimistic,
+  readOptimisticHandoffs,
+  rejectOptimisticHandoff,
+  suppressOptimisticNote,
+  stripSuppressedNotes,
+  resetHandoffOptimistic,
+  HANDOFF_FAILED_COPY,
+} = await import("../src/lib/owner-handoff-client.ts");
+resetHandoffOptimistic();
+const since = "2026-10-19T21:21:06.000Z";
+rememberOptimistic({
+  actionItemId: "card-1",
+  title: "Target a D/E",
+  since,
+  agent: "analyst",
+  assigneeName: "Milōn Analyst",
+  note: { note: "Handed to Milōn Analyst.", at: since, actorLabel: "amstel.west", actorType: "owner_app" },
+});
+rememberOptimistic({
+  actionItemId: "card-2",
+  title: "Get customers to pay faster",
+  since: "2026-10-19T21:21:13.000Z",
+  agent: "analyst",
+  assigneeName: "Milōn Analyst",
+  note: {
+    note: "Handed to Milōn Analyst.",
+    at: "2026-10-19T21:21:13.000Z",
+    actorLabel: "amstel.west",
+    actorType: "owner_app",
+  },
+});
+assert(readOptimisticHandoffs().length === 2, "two cards keep their own optimistic hand-offs");
+const painted = stripSuppressedNotes({
+  "card-1": [
+    { note: "Handed to Milōn Analyst.", at: "2026-10-19T21:20:22.000Z" },
+    { note: "Handed to Milōn Analyst.", at: since },
+  ],
+  "card-2": [{ note: "Handed to Milōn Analyst.", at: "2026-10-19T21:21:13.000Z" }],
+});
+rejectOptimisticHandoff("card-1", since, HANDOFF_FAILED_COPY);
+const afterError = stripSuppressedNotes(painted);
+assert(
+  afterError["card-1"]?.every((row) => row.at !== since) && afterError["card-2"]?.length === 1,
+  "an error drops that action's note and a later paint cannot put it back",
+);
+assert(readOptimisticHandoffs().every((row) => row.actionItemId !== "card-1"), "the failed click leaves the other card");
+resetHandoffOptimistic();
+rememberOptimistic({
+  actionItemId: "card-1",
+  title: "Target a D/E",
+  since,
+  agent: "analyst",
+  assigneeName: "Milōn Analyst",
+  note: { note: "Handed to Milōn Analyst.", at: since, actorLabel: "amstel.west", actorType: "owner_app" },
+});
+suppressOptimisticNote("card-1", since);
+const reusedNotes = stripSuppressedNotes({
+  "card-1": [
+    { note: "Handed to Milōn Analyst.", at: "2026-10-19T21:20:22.000Z" },
+    { note: "Handed to Milōn Analyst.", at: since },
+  ],
+});
+assert(reusedNotes["card-1"]?.every((row) => row.at !== since), "a reused run adds no new Handed-to line");
+assert(readOptimisticHandoffs()[0]?.runId == null && readOptimisticHandoffs()[0]?.note == null, "reuse keeps the click without the phantom note");
+const reusedRow = applyLiveRuns(
+  [{ ...card1, runId: "run-open", openedAt: since }],
+  [{ id: "run-open", actionItemId: "card-1", agent: "analyst", status: "queued", at: "2026-10-19T21:20:22.000Z" }],
+);
+assert(reusedRow[0]?.open === true, "the existing queued run stays Working");
+resetHandoffOptimistic();
+
+const clientPage = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");
+const door = readFileSync("src/components/owner-door/owner-door.tsx", "utf8");
+assert(clientPage.includes("pendingHandoffs") && door.includes("pendingHandoffs"), "both Homes keep a hand-off per action");
+assert(clientPage.includes("runId") && door.includes("runId"), "both Homes track the run id");
+assert(door.includes("data-handoff-error") || readFileSync("src/components/owner-door/owner-home.tsx", "utf8").includes("data-handoff-error"), "owner Home shows the hand-off error");
+assert(readFileSync("src/components/financial-manager-brief.tsx", "utf8").includes("error={item.error}"), "accountant Home shows the hand-off error");
 
 console.log("owner-handoff ok");

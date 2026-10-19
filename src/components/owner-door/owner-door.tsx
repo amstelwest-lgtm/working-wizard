@@ -38,6 +38,9 @@ import { cardRunsByAgent, ownerPresence, steerOpenHandoffs, withCardHandoffRuns,
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
+  commitActionHandoff,
+  handoffPaintBlocked,
+  HANDOFF_FAILED_COPY,
   loadActionHandoffRuns,
   loadLatestAssignments,
   type ActionPlanRefreshDetail,
@@ -241,7 +244,10 @@ export function OwnerDoor({
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
   const awaitingRun = assignmentRows.filter((row) => row.open).map((row) => ({ openedAt: row.openedAt }));
   const activity = useAgentActivity(clientId ?? "", awaitingRun);
-  const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
+  const pendingHandoffs = useRef(new Map<string, ActionPlanRefreshDetail>());
+  const [handoffErrors, setHandoffErrors] = useState<
+    { actionItemId: string; title: string; agent: AgentKey; message: string }[]
+  >([]);
   const assignmentRowsRef = useRef(assignmentRows);
   assignmentRowsRef.current = assignmentRows;
   const priorRows = useRef(new Map<string, { since: string; row: RowAssignment | null }>());
@@ -274,7 +280,8 @@ export function OwnerDoor({
     recRef.current?.stop();
     recRef.current = null;
     setListening(false);
-    pendingHandoff.current = null;
+    pendingHandoffs.current.clear();
+    setHandoffErrors([]);
     setHandedTitle(null);
     setAssignedAgent(null);
     setAssignmentRows([]);
@@ -369,15 +376,34 @@ export function OwnerDoor({
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (!detail?.actionItemId) return;
       if (detail.failed) {
-        const prior = priorRows.current.get(detail.actionItemId);
-        if (pendingHandoff.current?.actionItemId === detail.actionItemId) pendingHandoff.current = null;
+        const id = detail.actionItemId;
+        const prior = priorRows.current.get(id);
+        pendingHandoffs.current.delete(id);
         if (prior) {
           setAssignmentRows((current) =>
             prior.row
-              ? current.map((row) => (row.id === detail.actionItemId ? prior.row! : row))
-              : current.filter((row) => row.id !== detail.actionItemId),
+              ? current.map((row) => (row.id === id ? { ...prior.row!, open: false, runId: undefined } : row))
+              : current.filter((row) => row.id !== id),
           );
         }
+        if (detail.error && detail.agent && detail.title) {
+          setHandoffErrors((current) => [
+            ...current.filter((row) => row.actionItemId !== id),
+            { actionItemId: id, title: detail.title, agent: detail.agent as AgentKey, message: detail.error ?? HANDOFF_FAILED_COPY },
+          ]);
+        }
+        return;
+      }
+      if (detail.reused) {
+        pendingHandoffs.current.set(detail.actionItemId, { ...detail, note: undefined, reused: true });
+        setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
+        setAssignmentRows((current) =>
+          current.map((row) =>
+            row.id === detail.actionItemId
+              ? { ...row, open: row.agent != null, openedAt: detail.since ?? row.openedAt, runId: detail.runId ?? row.runId }
+              : row,
+          ),
+        );
         return;
       }
       if (!detail.title) return;
@@ -390,13 +416,15 @@ export function OwnerDoor({
           row: assignmentRowsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
         });
       }
-      pendingHandoff.current = { ...detail, agent, assigneeName: name };
+      pendingHandoffs.current.set(detail.actionItemId, { ...detail, agent, assigneeName: name });
+      setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
       const next: RowAssignment = {
         id: detail.actionItemId,
         assigneeName: name,
         agent,
         open: agent != null,
         openedAt: agent ? detail.since : undefined,
+        runId: detail.runId,
       };
       setAssignmentRows((current) =>
         current.some((row) => row.id === next.id)
@@ -509,7 +537,9 @@ export function OwnerDoor({
         ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
       if (cancelled) return;
-      const pending = pendingHandoff.current;
+      const pendings = [...pendingHandoffs.current.values()].filter(
+        (pending) => pending.assigneeName && !handoffPaintBlocked(pending.actionItemId, pending.since),
+      );
       const assigned = openRows.map((row) => {
         const stored = assignments.get(row.id) ?? null;
         return rowAssignment({
@@ -529,24 +559,29 @@ export function OwnerDoor({
           run: runs.get(row.id) ?? null,
         });
       });
-      const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
-      const pendingView = pending?.assigneeName
-        ? {
-            id: pending.actionItemId,
-            agent: pending.agent ?? null,
-            assigneeName: pending.assigneeName,
-            since: pending.since,
-          }
-        : null;
-      const merged = withPendingAssignment(assigned, pendingView, pendingStored);
-      const pendingLanded = pendingAssignmentLanded(pendingStored, pendingView);
-      if (pendingLanded && pending) {
-        pendingHandoff.current = null;
-        clearOptimisticHandoff(pending.actionItemId);
+      let merged = assigned;
+      const titles = openPlanTitles(openRows);
+      for (const pending of pendings) {
+        const pendingStored = assignments.get(pending.actionItemId) ?? null;
+        const pendingView = {
+          id: pending.actionItemId,
+          agent: pending.agent ?? null,
+          assigneeName: pending.assigneeName ?? "",
+          since: pending.since,
+          runId: pending.runId,
+        };
+        const serverRun = runs.get(pending.actionItemId) ?? null;
+        const reusedLanded = Boolean(pending.reused && pending.runId && serverRun?.id === pending.runId);
+        const pendingLanded = reusedLanded || (!pending.reused && pendingAssignmentLanded(pendingStored, pendingView));
+        if (pendingLanded) {
+          pendingHandoffs.current.delete(pending.actionItemId);
+          clearOptimisticHandoff(pending.actionItemId);
+          continue;
+        }
+        merged = withPendingAssignment(merged, pendingView, pendingStored);
+        if (pending.title && !titles.includes(pending.title)) titles.push(pending.title);
       }
       const firstOpen = merged.find((row) => row.open);
-      const titles = openPlanTitles(openRows);
-      if (pending && !titles.includes(pending.title)) titles.push(pending.title);
       setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
       setHandedTitle(firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null);
@@ -661,6 +696,7 @@ export function OwnerDoor({
   const settledRows = applyLiveRuns(
     assignmentRows,
     activity.runs.map((run) => ({
+      id: run.id,
       actionItemId: run.action_item_id,
       agent: run.agent,
       status: run.status,
@@ -903,6 +939,17 @@ export function OwnerDoor({
           onAsk={openChat}
           runState={runState}
           needs={needs}
+          handoffErrors={handoffErrors}
+          onRetryHandoff={(actionItemId) => {
+            const failed = handoffErrors.find((row) => row.actionItemId === actionItemId);
+            if (!failed || !clientId) return;
+            void commitActionHandoff({
+              clientId,
+              actionItemId: failed.actionItemId,
+              title: failed.title,
+              agent: failed.agent,
+            });
+          }}
           onMoves={() => go("moves")}
           onDeliverables={() => go("deliverables")}
           inviteClientId={clientId}

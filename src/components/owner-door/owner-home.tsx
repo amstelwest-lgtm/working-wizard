@@ -137,6 +137,8 @@ export function OwnerHome({
   onAsk,
   runState,
   needs,
+  handoffErrors,
+  onRetryHandoff,
   onMoves,
   onDeliverables,
   onActions,
@@ -168,6 +170,8 @@ export function OwnerHome({
   onOpen: (agent: AgentKey) => void;
   onAsk: (agent: AgentKey) => void;
   needs?: OwnerNeedsView;
+  handoffErrors?: readonly { actionItemId: string; title: string; message: string }[];
+  onRetryHandoff?: (actionItemId: string) => void;
   onMoves?: () => void;
   onDeliverables?: () => void;
   onActions?: () => void;
@@ -311,6 +315,18 @@ export function OwnerHome({
           />
         ) : null}
       </div>
+      {handoffErrors && handoffErrors.length > 0 ? (
+        <div data-handoff-errors>
+          {handoffErrors.map((row) => (
+            <p key={row.actionItemId} className="owner-lede" data-handoff-error>
+              {row.title}: {row.message} ·{" "}
+              <button type="button" data-handoff-retry onClick={() => onRetryHandoff?.(row.actionItemId)}>
+                Retry
+              </button>
+            </p>
+          ))}
+        </div>
+      ) : null}
       {needs && onMoves && onDeliverables ? (
         <OwnerNeedsStrip
           needs={needs}

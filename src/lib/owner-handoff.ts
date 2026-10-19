@@ -81,6 +81,35 @@ export function handoffAgainInputs(actionItemId: string, previousRunId: string):
   return `${handoffInputs(actionItemId)}:again:${previousRunId}`;
 }
 
+export type HandoffNewestRun = { id: string; status: string };
+
+export type HandoffRunPlan =
+  | { action: "reuse"; runId: string; status: string }
+  | { action: "insert"; inputs: string };
+
+/**
+ * The newest run for this action and bot decides the insert.
+ * A queued or running run is reused. A finished run gets one new key.
+ * The first run keeps action_item:<id>. There is no walk through older keys.
+ */
+export function planHandoffRun(newest: HandoffNewestRun | null, actionItemId: string): HandoffRunPlan {
+  if (newest && !handoffNeedsFreshRun(newest.status)) {
+    return { action: "reuse", runId: newest.id, status: newest.status };
+  }
+  if (!newest?.id) return { action: "insert", inputs: handoffInputs(actionItemId) };
+  return { action: "insert", inputs: handoffAgainInputs(actionItemId, newest.id) };
+}
+
+/** The row that won a unique-key insert. The loser does not start another run or note. */
+export function handoffCollisionResult(winner: HandoffNewestRun): {
+  reused: true;
+  noted: false;
+  runId: string;
+  status: string;
+} {
+  return { reused: true, noted: false, runId: winner.id, status: winner.status };
+}
+
 /** Newest hand-off note. A later sentence after the name stays out of the assignee label. */
 export function handoffAssigneeName(note: string | null | undefined): string | null {
   if (!note?.startsWith("Handed to ")) return null;

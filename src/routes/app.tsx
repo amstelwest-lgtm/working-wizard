@@ -2134,6 +2134,7 @@ function Index() {
   // it. The stored run settles it once it is newer than the click, the same read as client Home.
   // Both Homes share one poll. A tick reads a fresh snapshot and keeps going while a run
   // is queued or running, or for about two minutes after a hand-off note if its run has not appeared.
+  // Each action keeps its own click. Working follows that action's run id.
   // A queued or running run on a card beats Found something. Same runs as the row.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);
