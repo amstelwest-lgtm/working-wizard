@@ -3725,6 +3725,7 @@ function ClientView() {
                       agent={homeAgent}
                       marketCountry={clientMarket.country}
                       audience="accountant"
+                      sampleClient={Boolean(client.is_demo)}
                       homeFinding={
                         homeAgent
                           ? homeLines[homeAgent].filter((line) => line.trim()).join(" ")

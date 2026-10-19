@@ -182,7 +182,7 @@ export function OwnerDoor({
   onSignOut: () => void;
   /** Top ranked next move. Empty stays an honest line under the advisor. */
   topMove?: string | null;
-  /** clients.is_demo. The sample tax card stays off a real business. */
+  /** clients.is_demo. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
   boards?: (
     go: (screen: OwnerScreen) => void,

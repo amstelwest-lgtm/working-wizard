@@ -107,26 +107,26 @@ function Worksheet({
 }) {
   return (
     <div className="tax-sample-table">
-    <table>
-      <caption className="tax-sample-kicker">{caption}</caption>
-      <thead>
-        <tr>
-          <th scope="col">Line</th>
-          <th scope="col">SAMPLE amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.label} className={row.total ? "is-total" : undefined}>
-            <td>
-              {row.label}
-              {row.note ? <div className="tax-sample-note">{row.note}</div> : null}
-            </td>
-            <td>{row.amount}</td>
+      <table>
+        <caption className="tax-sample-kicker">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Line</th>
+            <th scope="col">SAMPLE amount</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label} className={row.total ? "is-total" : undefined}>
+              <td>
+                {row.label}
+                {row.note ? <div className="tax-sample-note">{row.note}</div> : null}
+              </td>
+              <td>{row.amount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -204,6 +204,97 @@ function irp6Rows(result: CompanyTaxResult) {
     },
     { label: "Optional top-up to the sample tax", amount: money(result.topUpCents), total: true },
   ];
+}
+
+function SampleHomeCard({ onOpen }: { onOpen: () => void }) {
+  const result = sampleCompanyTax();
+  return (
+    <div
+      className="owner-agent"
+      data-agent="tax_specialist"
+      data-agent-card="tax_specialist"
+      data-tax-card="sample"
+    >
+      <button
+        type="button"
+        className="owner-agent-open"
+        data-tax-sample-open="card"
+        onClick={onOpen}
+      >
+        <span className="owner-portrait">
+          <span className="owner-portrait-chip" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M4.2 2.2h5.2L12.2 5v8.6H4.2z" />
+              <path d="M9.2 2.3V5h2.8" />
+            </svg>
+          </span>
+          <TaxFace size="lg" place="card" />
+        </span>
+        <span className="owner-name">Milōn Tax Specialist</span>
+        <span className="owner-status is-idle">SAMPLE</span>
+        <span className="owner-lines">
+          <span className="owner-voice">
+            SAMPLE demo · Harbour & Co — see how company tax at 27% will work
+          </span>
+          <span className="owner-voice">Tax {money(result.taxCents)}.</span>
+        </span>
+      </button>
+      <button type="button" className="owner-ask" data-tax-sample-open="ask" onClick={onOpen}>
+        Open sample
+      </button>
+    </div>
+  );
+}
+
+function PreviewHomeCard({ onHandOff, onSample }: { onHandOff: () => void; onSample: () => void }) {
+  return (
+    <div
+      className="owner-agent"
+      data-agent="tax_specialist"
+      data-agent-card="tax_specialist"
+      data-tax-card="preview"
+    >
+      <button
+        type="button"
+        className="owner-agent-open"
+        data-tax-preview-action="handoff"
+        onClick={onHandOff}
+      >
+        <span className="owner-portrait">
+          <span className="owner-portrait-chip" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M4.2 2.2h5.2L12.2 5v8.6H4.2z" />
+              <path d="M9.2 2.3V5h2.8" />
+            </svg>
+          </span>
+          <TaxFace size="lg" place="card" />
+        </span>
+        <span className="owner-name">Milōn Tax Specialist</span>
+        <span className="owner-status is-idle">Preview</span>
+        <span className="owner-lines">
+          <span className="owner-voice">Prepares ITR14 and IRP6 workings for your sign-off.</span>
+        </span>
+      </button>
+      <div className="tax-preview-actions">
+        <button
+          type="button"
+          className="tax-sample-see"
+          data-tax-preview-action="sample"
+          onClick={onSample}
+        >
+          See a sample
+        </button>
+        <button
+          type="button"
+          className="owner-ask"
+          data-tax-preview-action="handoff"
+          onClick={onHandOff}
+        >
+          Hand to Tax Specialist
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function standingLabel(due: string): string {
@@ -318,39 +409,39 @@ function Workspace({
           {formatSampleDate(SAMPLE_COMPANY.asOf)}.
         </p>
         <div className="tax-sample-table">
-        <table data-tax-deadlines="true">
-          <caption className="tax-sample-kicker">SAMPLE deadlines</caption>
-          <thead>
-            <tr>
-              <th scope="col">Form</th>
-              <th scope="col">What</th>
-              <th scope="col">Statutory due</th>
-              <th scope="col">Standing</th>
-              <th scope="col">Sample</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deadlines.map((row) => (
-              <tr key={row.id} data-tax-deadline={row.id}>
-                <td>{row.form}</td>
-                <td>{row.label}</td>
-                <td>
-                  {formatSampleDate(row.due)} ({row.weekday})
-                </td>
-                <td
-                  className={
-                    deadlineStanding(row.due, SAMPLE_COMPANY.asOf) === "upcoming"
-                      ? "is-clear"
-                      : "is-wait"
-                  }
-                >
-                  {standingLabel(row.due)}
-                </td>
-                <td>{paymentLabel(row)}</td>
+          <table data-tax-deadlines="true">
+            <caption className="tax-sample-kicker">SAMPLE deadlines</caption>
+            <thead>
+              <tr>
+                <th scope="col">Form</th>
+                <th scope="col">What</th>
+                <th scope="col">Statutory due</th>
+                <th scope="col">Standing</th>
+                <th scope="col">Sample</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {deadlines.map((row) => (
+                <tr key={row.id} data-tax-deadline={row.id}>
+                  <td>{row.form}</td>
+                  <td>{row.label}</td>
+                  <td>
+                    {formatSampleDate(row.due)} ({row.weekday})
+                  </td>
+                  <td
+                    className={
+                      deadlineStanding(row.due, SAMPLE_COMPANY.asOf) === "upcoming"
+                        ? "is-clear"
+                        : "is-wait"
+                    }
+                  >
+                    {standingLabel(row.due)}
+                  </td>
+                  <td>{paymentLabel(row)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <div className="tax-sample-actions">
           <button type="button" className="tax-sample-primary" onClick={() => openTaxSample(true)}>
@@ -366,14 +457,16 @@ export function ZaTaxSpecialistSample({
   variant,
   audience,
   onOpen,
+  sampleClient = false,
 }: {
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
+  /** Demo clients keep the sample card. A real client gets the preview card. */
+  sampleClient?: boolean;
 }) {
   const isHost = useIsHost();
   const state = useOpenState();
-  const result = sampleCompanyTax();
 
   const openFromCard = () => {
     onOpen?.();
@@ -433,7 +526,12 @@ export function ZaTaxSpecialistSample({
   if (variant === "stage") {
     return (
       <>
-        <button type="button" className="tax-sample-stage" data-tax-sample-open="stage" onClick={openFromCard}>
+        <button
+          type="button"
+          className="tax-sample-stage"
+          data-tax-sample-open="stage"
+          onClick={openFromCard}
+        >
           <TaxFace size="sm" place="stage" />
           Tax Specialist
         </button>
@@ -449,17 +547,18 @@ export function ZaTaxSpecialistSample({
           type="button"
           className="milon-desk-agent"
           data-agent-card="tax_specialist"
+          data-tax-card={sampleClient ? "sample" : "preview"}
           data-tax-sample-open="desk"
-          onClick={openFromCard}
+          onClick={sampleClient ? openFromCard : openFromManager}
         >
           <TaxFace size="sm" place="desk" />
           <span className="milon-desk-agent-copy">
             <strong className="milon-desk-agent-name">Milōn Tax Specialist</strong>
             <span className="milon-desk-agent-short">Tax Specialist</span>
-            <span className="milon-desk-ran">SAMPLE</span>
+            <span className="milon-desk-ran">{sampleClient ? "SAMPLE" : "Preview"}</span>
             <span className="milon-desk-status is-idle">
               <i />
-              <span>Company tax at 27%</span>
+              <span>{sampleClient ? "Company tax at 27%" : "ITR14 and IRP6 workings"}</span>
             </span>
           </span>
         </button>
@@ -468,42 +567,18 @@ export function ZaTaxSpecialistSample({
     );
   }
 
+  if (!sampleClient) {
+    return (
+      <>
+        <PreviewHomeCard onHandOff={openFromManager} onSample={openFromCard} />
+        {workspace}
+      </>
+    );
+  }
+
   return (
     <>
-      <div className="owner-agent" data-agent="tax_specialist" data-agent-card="tax_specialist">
-        <button
-          type="button"
-          className="owner-agent-open"
-          data-tax-sample-open="card"
-          onClick={openFromCard}
-        >
-          <span className="owner-portrait">
-            <span className="owner-portrait-chip" aria-hidden="true">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M4.2 2.2h5.2L12.2 5v8.6H4.2z" />
-                <path d="M9.2 2.3V5h2.8" />
-              </svg>
-            </span>
-            <TaxFace size="lg" place="card" />
-          </span>
-          <span className="owner-name">Milōn Tax Specialist</span>
-          <span className="owner-status is-idle">SAMPLE</span>
-          <span className="owner-lines">
-            <span className="owner-voice">
-              SAMPLE demo · Harbour & Co — see how company tax at 27% will work
-            </span>
-            <span className="owner-voice">Tax {money(result.taxCents)}.</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className="owner-ask"
-          data-tax-sample-open="ask"
-          onClick={openFromCard}
-        >
-          Open sample
-        </button>
-      </div>
+      <SampleHomeCard onOpen={openFromCard} />
       {workspace}
     </>
   );
