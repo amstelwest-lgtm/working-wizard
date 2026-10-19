@@ -89,7 +89,7 @@ function ForOwnersPage() {
           <div>
             <h3>Give it your figures</h3>
             <p>
-              Your accountant can connect QuickBooks Online, Xero or Sage, or you can upload financials or
+              Your accountant can connect QuickBooks Online or Xero. Sage is coming soon. Or you can upload financials or
               a bank statement. You do not need a clean, finalised set — the point is to start from
               what you actually have.
             </p>
@@ -133,7 +133,7 @@ function ForOwnersPage() {
         <div className="mk-card">
           <h3>Not accounting software</h3>
           <p>
-            It does not replace QuickBooks Online, Xero, Sage, or any other ledger, and it does not file
+            It does not replace QuickBooks Online or Xero. Sage is coming soon. It does not replace any other ledger, and it does not file
             anything with <MarketCopy za="SARS" us="the IRS" />. It reads what your books already
             say and tells you what it means.
           </p>

@@ -207,3 +207,30 @@ html:not(.dark) .settings-portal.accountant-portal .topbar .firm-switcher select
     linear-gradient(45deg, transparent 50%, #5c7190 50%),
     linear-gradient(135deg, #5c7190 50%, transparent 50%);
 }
+
+/* One wordmark. The sidebar keeps MILŌN on desktop; the header keeps it on a phone. */
+@media (min-width: 861px) {
+  .settings-portal.accountant-portal .topbar > .brand {
+    display: none;
+  }
+  /* The practice rail stretches with the settings column, so its links scroll
+     away and the sidebar looks blank. Pin this rail to the viewport. */
+  .settings-portal.accountant-portal:not(.owner-door) .deliverable-rail {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: calc(100dvh - 72px);
+    min-height: 0;
+    max-height: calc(100dvh - 72px);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  html:not(.dark) .settings-portal.accountant-portal:not(.owner-door) .deliverable-rail {
+    background: var(--pp-frame, #1a1d23);
+  }
+}
+@media (max-width: 860px) {
+  .settings-portal .deliverable-rail .rail-brand {
+    display: none;
+  }
+}

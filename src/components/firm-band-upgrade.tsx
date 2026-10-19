@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
+  currentPlanLabel,
   downgradeDropsBelowUsage,
   firmBandPriceLabel,
   nextBandUp,
@@ -340,6 +341,11 @@ export function FirmBandUpgrade({
             </p>
           ) : null}
         </details>
+      ) : null}
+      {currentBand && currentPlanLabel(currentBand) ? (
+        <p data-current-plan="" className="text-foreground" style={{ margin: "16px 0 0", fontSize: 13 }}>
+          {currentPlanLabel(currentBand)}
+        </p>
       ) : null}
       {canUpgrade && selected && onUpgrade ? (
         <button

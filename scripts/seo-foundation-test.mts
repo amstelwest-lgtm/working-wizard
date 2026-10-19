@@ -255,7 +255,7 @@ assert(
   `${HERO_H1_LEAD} ${HERO_H1_GOLD}` === "Your AI finance team. You sign off.",
   "home H1 is the finance-team sign-off line",
 );
-assert(HERO_LEDE.startsWith("Plug in QuickBooks, Xero or Sage."), "hero lede keeps the ledger plug-in");
+assert(HERO_LEDE.startsWith("Plug in QuickBooks or Xero. Sage is coming soon."), "hero lede names QuickBooks and Xero, with Sage coming soon");
 assert(landing.includes("{HERO_LEDE}"), "hero lede comes from landing copy");
 assert(HERO_LEDE.includes("diagnose the business"), "hero lede lists diagnosis as a deliverable");
 assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
@@ -279,12 +279,12 @@ assert(!landing.includes("borrowed SA bands"), "US median disclaimer is not land
 assert(!landing.includes("the playbook"), "playbook is not the landing recommendation engine");
 assert(landing.includes('id="integrations"'), "landing has an integrations callout");
 assert(
-  landing.includes("QuickBooks Online, Xero and Sage."),
-  "landing footer names QuickBooks Online, Xero and Sage",
+  landing.includes("QuickBooks Online and Xero. Sage coming soon."),
+  "landing footer names QuickBooks Online and Xero, with Sage coming soon",
 );
 assert(
-  landing.includes("Connect QuickBooks, Xero or Sage"),
-  "landing tells visitors they can connect QuickBooks, Xero or Sage",
+  landing.includes("Connect QuickBooks or Xero. Sage is coming soon"),
+  "landing tells visitors they can connect QuickBooks or Xero, with Sage coming soon",
 );
 assert(!landing.includes("certified"), "landing does not claim certification");
 assert(!landing.includes("Intuit"), "landing does not claim an Intuit relationship");
@@ -330,8 +330,8 @@ assert(
   "homepage FAQ still says neither ledger is required",
 );
 assert(
-  ledgerFaq!.answer.includes("connect QuickBooks, Xero or Sage"),
-  "homepage FAQ connects QuickBooks, Xero or Sage",
+  ledgerFaq!.answer.includes("connect QuickBooks or Xero. Sage is coming soon"),
+  "homepage FAQ connects QuickBooks or Xero and marks Sage coming soon",
 );
 assert(
   faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does Milōn replace the accountant?"),
@@ -370,12 +370,12 @@ assert(
 assert(firms.includes("readSaPricingCopy"), "firm page loads rand copy from the server");
 assert(!firms.includes("separate rand catalog"), "firm page drops the unpublished-catalog line");
 assert(
-  SEO_PAGES.forAccountants.title === "AI Finance Team for Firms on QuickBooks, Xero & Sage | MILŌN",
-  "firm page title names QuickBooks, Xero and Sage",
+  SEO_PAGES.forAccountants.title === "AI Finance Team for QuickBooks, Xero · Sage soon | MILŌN",
+  "firm page title names QuickBooks and Xero, with Sage soon",
 );
 assert(
-  SEO_PAGES.home.title === "AI Finance Team & AI CFO for QuickBooks, Xero & Sage | MILŌN",
-  "home title names the AI finance team and AI CFO",
+  SEO_PAGES.home.title === "AI Finance Team & CFO · QuickBooks, Xero, Sage soon | MILŌN",
+  "home title names the AI finance team and QuickBooks, Xero, Sage soon",
 );
 assert(SEO_PAGES.home.title.length <= 60, "home title stays within 60 characters");
 assert(SEO_PAGES.forAccountants.title.length <= 60, "firm title stays within 60 characters");
@@ -433,8 +433,8 @@ for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwner
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
 const preferredAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");
 const preferredHref = "https://www.google.com/preferences/source?q=milonfinance.com";
-assert(shell.includes("QuickBooks Online, Xero and Sage."), "collateral footer names QuickBooks Online, Xero and Sage");
-assert(shell.includes("and Sage."), "collateral footer names Sage");
+assert(shell.includes("QuickBooks Online and Xero. Sage coming soon."), "collateral footer names QuickBooks Online and Xero, with Sage coming soon");
+assert(shell.includes("Sage coming soon."), "collateral footer marks Sage coming soon");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
 assert(preferredAssets.includes(preferredHref), "preferred source is a plain Google preferences deeplink");
 assert(
@@ -491,7 +491,7 @@ assert(
 );
 assert(
   SEO_PAGES.about.description ===
-    "Why Milōn exists: three AI agents give small businesses a finance function, and a qualified accountant signs off. Works with QuickBooks, Xero and Sage.",
+    "Why Milōn exists: three AI agents give small businesses a finance function, and a qualified accountant signs off. QuickBooks and Xero. Sage is coming soon.",
   "about description is product-forward",
 );
 assert(

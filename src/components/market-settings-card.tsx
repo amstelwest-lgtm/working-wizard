@@ -6,11 +6,8 @@ import { MarketPicker } from "@/components/market-picker";
 import { SectionCard } from "@/components/primitives";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  coerceMarketSelection,
   draftToSelection,
-  isDraftComplete,
   marketToJson,
-  parseMarketSelection,
   resolveMarket,
   SALES_TAX_HONESTY,
   formatPercentRate,
@@ -24,37 +21,49 @@ import {
   type ZaMarketExtras,
 } from "@/lib/market/za-provinces";
 import { saPlanRegionControls } from "@/lib/firm-band-upgrade";
+import { RegionSettingsLoading } from "@/components/region-settings-loading";
+import { regionFormFromSaved, regionSaveAllowed } from "@/lib/region-settings";
 
 export function MarketSettingsCard({
   kind,
   recordId,
   initial,
+  loaded = false,
   zarPlan = false,
 }: {
   kind: "client" | "firm";
   recordId: string | null;
   initial: unknown;
+  /** False until the saved region for this settings view has come back. */
+  loaded?: boolean;
   /** SA practice plan. Hides the US state list and VAT wording. Does not write the market. */
   zarPlan?: boolean;
 }) {
   const [draft, setDraft] = useState<DraftMarket>(() => {
-    const sel = parseMarketSelection(initial) ?? coerceMarketSelection(initial);
-    return { country: sel.country, regionCode: sel.regionCode };
+    const next = regionFormFromSaved({ loaded, saved: initial });
+    return next.status === "ready" ? next.draft : { country: null, regionCode: null };
   });
-  const [zaExtras, setZaExtras] = useState<ZaMarketExtras>(() => readZaMarketExtras(initial));
+  const [zaExtras, setZaExtras] = useState<ZaMarketExtras>(() =>
+    loaded ? readZaMarketExtras(initial) : { provinceCode: null, vatRegistered: false, vatMode: "exclusive" },
+  );
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const sel = parseMarketSelection(initial) ?? coerceMarketSelection(initial);
-    setDraft({ country: sel.country, regionCode: sel.regionCode });
+    const next = regionFormFromSaved({ loaded, saved: initial });
+    if (next.status !== "ready") {
+      setDraft({ country: null, regionCode: null });
+      return;
+    }
+    setDraft(next.draft);
     setZaExtras(readZaMarketExtras(initial));
-  }, [initial]);
+  }, [initial, loaded]);
 
   const sel = draftToSelection(draft);
   const resolved = sel ? resolveMarket(sel) : null;
   const regionControls = saPlanRegionControls(zarPlan);
 
   const save = async () => {
+    if (!regionSaveAllowed({ loaded, recordId, draft })) return;
     const next = draftToSelection(draft);
     if (!next || !recordId) {
       toast.error("Pick a country — and a US state if you chose the United States.");
@@ -94,11 +103,16 @@ export function MarketSettingsCard({
         </span>
       }
       description={
-        regionControls.vatCopy
-          ? "South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax for budgets. Changing region does not convert historical figures."
-          : "South Africa uses rand."
+        !loaded
+          ? "Loading the saved region."
+          : regionControls.vatCopy
+            ? "South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax for budgets. Changing region does not convert historical figures."
+            : "South Africa uses rand."
       }
     >
+      {!loaded ? <RegionSettingsLoading /> : null}
+      {loaded ? (
+      <>
       {regionControls.stateDropdown ? (
       <MarketPicker
         value={draft}
@@ -199,11 +213,13 @@ export function MarketSettingsCard({
       <Button
         type="button"
         className="settings-gold mt-4"
-        disabled={!isDraftComplete(draft) || saving || !recordId}
+        disabled={!regionSaveAllowed({ loaded, recordId, draft }) || saving}
         onClick={() => void save()}
       >
         {saving ? "Saving…" : "Save region"}
       </Button>
+      ) : null}
+      </>
       ) : null}
     </SectionCard>
   );
