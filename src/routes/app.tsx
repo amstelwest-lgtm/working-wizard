@@ -107,7 +107,7 @@ import {
   scoreTier,
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
-import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
+import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { cashPillarFollowsForecast, computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
@@ -3754,7 +3754,7 @@ function Index() {
     healthByKey: healthMap,
     profile: operatingProfile,
     suppressKeys: profitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
-    debtorDays,
+    debtorDays: ratiosStatementFigures(v as unknown as Record<string, unknown>).debtorDays,
     financingHealth: pillarHealths.financing,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 

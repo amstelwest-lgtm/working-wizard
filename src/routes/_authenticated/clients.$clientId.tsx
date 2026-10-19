@@ -1583,12 +1583,12 @@ function ClientView() {
     periodLabel: figuresPeriodLabel,
   };
   const clientProfitBridge = periodProfitBridge(financials);
-  const debtorDaysForMoves = ratios["Debtor Days"];
+  const debtorDaysForMoves = ratiosStatementFigures(financials).debtorDays;
   const strategicMoves = rankStrategicMoves({
     healthByKey: healthMap,
     profile: briefingProfile,
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
-    debtorDays: Number.isFinite(debtorDaysForMoves) ? debtorDaysForMoves : null,
+    debtorDays: debtorDaysForMoves,
     financingHealth: pillarHealths.financing,
   });
   const cashRunwayHeadline = hasFigures
