@@ -2470,7 +2470,6 @@ export function CashForecastPanel({
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
   const openingTilesMissing = loaded && storedOpeningIsMissing(loadedCashflowRef.current);
   const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
-  const openingTileSub = openingTilesMissing ? "missing" : openingLabel;
   const lowestTileValue =
     openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
   const lowestTileSub = openingTilesMissing
@@ -2546,7 +2545,11 @@ export function CashForecastPanel({
           </>
         ) : (
           <>
-            <Stat label="Opening bank" value={openingTileValue} sub={openingTileSub} />
+            {openingTilesMissing ? (
+              <Stat label="Opening bank" value={openingTileValue} sub="missing" />
+            ) : (
+              <Stat label="Opening bank" value={openingTileValue} sub={openingLabel} />
+            )}
             <Stat
               label="Lowest point"
               value={lowestTileValue}
