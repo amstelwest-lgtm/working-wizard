@@ -135,24 +135,82 @@ export function finderBusinessName(
   return null;
 }
 
+function cleanDetail(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ");
+}
+
+/** One field of a same-name label. Null means this row has nothing to add. */
+function finderDetailPart(client: FinderClient, step: "business" | "email" | "added" | "code"): string | null {
+  if (step === "business") {
+    const business = cleanDetail(client.businessName);
+    const person = client.name.trim();
+    if (!business || (person && sameName(business, person))) return null;
+    return business;
+  }
+  if (step === "email") return cleanDetail(client.ownerEmail) || null;
+  if (step === "added") return finderAddedLabel(client.createdAt);
+  return cleanDetail(client.clientCode) || shortClientId(client.id);
+}
+
+function labelsCollide(labels: ReadonlyMap<string, string>): boolean {
+  const seen = new Set<string>();
+  for (const label of labels.values()) {
+    if (!label || seen.has(label)) return true;
+    seen.add(label);
+  }
+  return false;
+}
+
+/** Rows still blank, or still sharing a label with another row in the group. */
+function unresolvedIds(group: readonly FinderClient[], labels: ReadonlyMap<string, string>): string[] {
+  const counts = new Map<string, number>();
+  for (const client of group) {
+    const label = labels.get(client.id) ?? "";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return group
+    .filter((client) => {
+      const label = labels.get(client.id) ?? "";
+      return !label || (counts.get(label) ?? 0) > 1;
+    })
+    .map((client) => client.id);
+}
+
 /**
- * Human detail for one row in a duplicate-name group.
- * Business name, then owner email, then the day the row was added.
- * Null means nothing readable is stored, so the caller may use a short id.
+ * Labels for one same-name group. Each step fills only the rows that are
+ * still blank or still identical, and stops once every label is unique.
+ * A last short id breaks whatever is still shared.
  */
-export function finderClientDetail(client: FinderClient): string | null {
-  const person = client.name.trim();
-  const business = client.businessName?.trim().replace(/\s+/g, " ") || "";
-  if (business && (!person || !sameName(business, person))) return business;
-  const email = client.ownerEmail?.trim() || "";
-  if (email) return email;
-  return finderAddedLabel(client.createdAt);
+function labelsForSameName(group: readonly FinderClient[]): Map<string, string> {
+  const labels = new Map<string, string>();
+  for (const client of group) labels.set(client.id, "");
+  const steps = ["business", "email", "added", "code"] as const;
+  for (const step of steps) {
+    if (!labelsCollide(labels)) break;
+    for (const id of unresolvedIds(group, labels)) {
+      const client = group.find((row) => row.id === id);
+      const part = client ? finderDetailPart(client, step) : null;
+      if (!part) continue;
+      const prev = labels.get(id) ?? "";
+      if (prev === part || prev.endsWith(` · ${part}`)) continue;
+      labels.set(id, prev ? `${prev} · ${part}` : part);
+    }
+  }
+  if (labelsCollide(labels)) {
+    for (const id of unresolvedIds(group, labels)) {
+      const part = shortClientId(id);
+      const prev = labels.get(id) ?? "";
+      const next = !prev ? part : prev.endsWith(part) ? `${prev} · ${id}` : `${prev} · ${part}`;
+      labels.set(id, next);
+    }
+  }
+  return labels;
 }
 
 /**
  * Extra label for a display name that belongs to more than one client.
- * Readable detail wins. The short id is only used when the row has no
- * business name, owner email, or created date.
+ * Fields are added only while labels still collide: business name, owner
+ * email, added date, then client code or a short id.
  */
 export function finderNameDisambiguators(
   clients: readonly FinderClient[],
@@ -168,8 +226,8 @@ export function finderNameDisambiguators(
   const out = new Map<string, string>();
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    for (const client of group) {
-      out.set(client.id, finderClientDetail(client) ?? shortClientId(client.id));
+    for (const [id, label] of labelsForSameName(group)) {
+      if (label) out.set(id, label);
     }
   }
   return out;

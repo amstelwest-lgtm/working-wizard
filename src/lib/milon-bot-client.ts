@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { authRetryPlanFromResponse } from "@/lib/edge-auth-retry";
 
 export type MilonBotAudience = "accountant" | "owner";
 export type MilonBotToolStatus = "ok" | "empty" | "error";
@@ -43,33 +44,44 @@ export async function invokeMilonBot(input: {
   agent?: "financial_manager" | "analyst" | "advisor";
 }): Promise<MilonBotResult> {
   const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
+  let token = sess.session?.access_token;
   if (!token) throw new Error("Not signed in");
   const base = import.meta.env.VITE_SUPABASE_URL;
   if (!base) throw new Error("Supabase URL is not configured");
-  const res = await fetch(`${base}/functions/v1/milon-bot`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(
-      input.mode === "agent"
-        ? {
-            clientId: input.clientId,
-            mode: "agent",
-            objective: input.objective,
-            audience: input.audience,
-          }
-        : {
-            clientId: input.clientId,
-            message: input.message,
-            history: input.history,
-            audience: input.audience,
-            ...(input.agent ? { agent: input.agent } : {}),
-          },
-    ),
-  });
+  const payload = JSON.stringify(
+    input.mode === "agent"
+      ? {
+          clientId: input.clientId,
+          mode: "agent",
+          objective: input.objective,
+          audience: input.audience,
+        }
+      : {
+          clientId: input.clientId,
+          message: input.message,
+          history: input.history,
+          audience: input.audience,
+          ...(input.agent ? { agent: input.agent } : {}),
+        },
+  );
+  const send = (bearer: string) =>
+    fetch(`${base}/functions/v1/milon-bot`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${bearer}`,
+      },
+      body: payload,
+    });
+  let res = await send(token);
+  const plan = await authRetryPlanFromResponse(res);
+  if (plan) {
+    if (plan === "refresh") {
+      const { data } = await supabase.auth.refreshSession();
+      token = data.session?.access_token || token;
+    }
+    res = await send(token);
+  }
   const body = (await res.json().catch(() => ({}))) as MilonBotResult & { error?: string };
   if (!res.ok) {
     throw new Error(body.error || `Milōn bot failed (${res.status})`);
