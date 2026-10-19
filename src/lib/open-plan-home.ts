@@ -138,6 +138,8 @@ export type RowAssignment = {
   open: boolean;
   /** Click time. A live run from before this click does not clear Working. */
   openedAt?: string;
+  /** The run this click is waiting on. Another action's run does not settle it. */
+  runId?: string;
 };
 
 /**
@@ -149,7 +151,7 @@ export function rowAssignment(input: {
   id: string;
   ownerName?: string | null;
   notes: readonly AssignmentNote[];
-  run?: { agent: AgentKey; status: string; at?: string } | null;
+  run?: { id?: string; agent: AgentKey; status: string; at?: string } | null;
 }): RowAssignment {
   const stored = latestStoredAssignment(input.notes);
   if (!stored) {
@@ -167,10 +169,12 @@ export function rowAssignment(input: {
     agent: stored.agent,
     open,
     openedAt: open ? stored.at : undefined,
+    runId: open && matched?.id ? matched.id : undefined,
   };
 }
 
 export type LiveHandoffRun = {
+  id?: string;
   actionItemId?: string | null;
   agent: AgentKey;
   status: string;
@@ -186,20 +190,23 @@ export function applyLiveRuns(
   rows: readonly RowAssignment[],
   runs: readonly LiveHandoffRun[],
 ): RowAssignment[] {
-  const latest = new Map<string, { agent: AgentKey; status: string; at: string }>();
+  const latest = new Map<string, LiveHandoffRun>();
   const ordered = [...runs].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
   for (const run of ordered) {
     const id = run.actionItemId ?? "";
     if (!id || latest.has(id)) continue;
-    latest.set(id, { agent: run.agent, status: run.status, at: run.at ?? "" });
+    latest.set(id, run);
   }
   return rows.map((row) => {
     if (!row.open || !row.agent) return row;
-    const run = latest.get(row.id);
+    const run = row.runId
+      ? runs.find((item) => item.id === row.runId && (item.actionItemId ?? "") === row.id) ?? null
+      : latest.get(row.id) ?? null;
     if (!run || run.agent !== row.agent) return row;
-    if (row.openedAt && (!run.at || run.at < row.openedAt)) return row;
-    if (ACTIVE.has(run.status)) return row;
-    return { ...row, open: false };
+    if (row.runId && run.id !== row.runId) return row;
+    if (!row.runId && row.openedAt && (!run.at || run.at < row.openedAt)) return row;
+    if (ACTIVE.has(run.status)) return { ...row, runId: run.id ?? row.runId };
+    return { ...row, open: false, runId: run.id ?? row.runId };
   });
 }
 
@@ -258,7 +265,7 @@ export function pendingAssignmentLanded(
  */
 export function withPendingAssignment(
   rows: readonly RowAssignment[],
-  pending: { id: string; agent: AgentKey | null; assigneeName: string; since?: string } | null,
+  pending: { id: string; agent: AgentKey | null; assigneeName: string; since?: string; runId?: string } | null,
   stored: StoredAssignment | null,
 ): RowAssignment[] {
   if (!pending) return [...rows];
@@ -269,6 +276,7 @@ export function withPendingAssignment(
     agent: pending.agent,
     open: pending.agent != null,
     openedAt: pending.since,
+    runId: pending.runId,
   };
   if (!rows.some((row) => row.id === pending.id)) return [...rows, next];
   return rows.map((row) => (row.id === pending.id ? next : row));

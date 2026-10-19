@@ -29,25 +29,46 @@ type HandoffClockRow = {
   open: boolean;
   agent?: string | null;
   openedAt?: string | null;
+  runId?: string | null;
 };
 
 type HandoffClockRun = {
+  id?: string;
   action_item_id?: string | null;
   actionItemId?: string | null;
   agent: string;
   status: string;
 };
 
-/** Working only while a real run is queued or running, or the hand-off is still inside the wait. */
+function runActionId(run: { action_item_id?: string | null; actionItemId?: string | null }): string {
+  return run.action_item_id ?? run.actionItemId ?? "";
+}
+
+/** The run this row is waiting on. A run id only matches that row's action. */
+export function handoffRunForAction<T extends HandoffClockRun>(
+  runs: readonly T[],
+  actionItemId: string,
+  runId?: string | null,
+): T | null {
+  const mine = runs.filter((run) => runActionId(run) === actionItemId);
+  if (runId) return mine.find((run) => run.id === runId) ?? null;
+  return mine[0] ?? null;
+}
+
+/** Working only while this action's run is queued or running, or the hand-off is still inside the wait. */
 export function handoffRowStillWorking(
   row: HandoffClockRow,
   runs: readonly HandoffClockRun[],
   now = Date.now(),
 ): boolean {
   if (!row.open || !row.agent) return false;
+  if (row.runId) {
+    const match = handoffRunForAction(runs, row.id, row.runId);
+    if (!match || match.agent !== row.agent) return handoffStillAwaitingRun(row.openedAt, now);
+    return match.status === "queued" || match.status === "running";
+  }
   const live = runs.some((run) => {
-    const id = run.action_item_id ?? run.actionItemId ?? "";
-    return id === row.id && run.agent === row.agent && (run.status === "queued" || run.status === "running");
+    return runActionId(run) === row.id && run.agent === row.agent && (run.status === "queued" || run.status === "running");
   });
   if (live) return true;
   return handoffStillAwaitingRun(row.openedAt, now);

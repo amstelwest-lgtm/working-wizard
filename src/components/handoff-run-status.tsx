@@ -9,15 +9,18 @@ export function HandoffRunStatus({
   run,
   caption,
   missed = false,
+  error = null,
   onRetry,
 }: {
   run?: { status: string; at?: string | null } | null;
   caption?: string | null;
   /** No run appeared for this hand-off. Offer Retry instead of Working. */
   missed?: boolean;
+  /** The hand-off did not start. Working and the optimistic note stay off. */
+  error?: string | null;
   onRetry?: () => void;
 }) {
-  const active = !missed && (run?.status === "queued" || run?.status === "running");
+  const active = !error && !missed && (run?.status === "queued" || run?.status === "running");
   const stopped = Boolean(caption?.includes("couldn't finish this one"));
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -26,10 +29,26 @@ export function HandoffRunStatus({
     return () => window.clearInterval(timer);
   }, [active, run?.at]);
   const slow = active && handoffIsSlow(run?.status, run?.at, now);
-  if (!slow && !caption && !active && !stopped && !missed) return null;
+  if (!slow && !caption && !active && !stopped && !missed && !error) return null;
   return (
     <>
-      {missed ? (
+      {error ? (
+        <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-error>
+          {error} ·{" "}
+          <button
+            type="button"
+            className="font-semibold text-[#0B5FFF] underline"
+            data-handoff-retry
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetry?.();
+            }}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
+      {missed && !error ? (
         <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-slow>
           Taking longer than usual ·{" "}
           <button

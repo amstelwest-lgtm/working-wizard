@@ -27,7 +27,13 @@ export type ActionPlanRefreshDetail = {
   };
   /** The click's optimistic row should drop. The refetch paints the stored row. */
   failed?: boolean;
+  /** The open run was already queued. Do not add another Handed-to line. */
+  reused?: boolean;
+  runId?: string;
+  error?: string;
 };
+
+export const HANDOFF_FAILED_COPY = "Couldn't hand this over";
 
 export type OptimisticHandoff = {
   actionItemId: string;
@@ -35,27 +41,89 @@ export type OptimisticHandoff = {
   since: string;
   agent: AgentKey | null;
   assigneeName: string;
+  runId?: string | null;
   note: {
     note: string;
     at: string;
     actorLabel: string | null;
     actorType: string | null;
-  };
+  } | null;
 };
 
-let optimisticHandoff: OptimisticHandoff | null = null;
+const optimisticHandoffs = new Map<string, OptimisticHandoff>();
+const blockedSince = new Map<string, string>();
+const hiddenNotes = new Map<string, string>();
+const handoffErrors = new Map<string, string>();
 
-/** The click that has not been confirmed by a stored note yet. */
-export function readOptimisticHandoff(): OptimisticHandoff | null {
-  return optimisticHandoff;
+export function resetHandoffOptimistic(): void {
+  optimisticHandoffs.clear();
+  blockedSince.clear();
+  hiddenNotes.clear();
+  handoffErrors.clear();
+}
+
+/** Clicks still on screen. One slot per action, so two cards do not share a pending hand-off. */
+export function readOptimisticHandoffs(): OptimisticHandoff[] {
+  return [...optimisticHandoffs.values()].filter((row) => blockedSince.get(row.actionItemId) !== row.since);
+}
+
+export function handoffPaintBlocked(actionItemId: string, since: string | undefined): boolean {
+  return Boolean(since && blockedSince.get(actionItemId) === since);
+}
+
+export function optimisticNoteHidden(actionItemId: string, at: string | undefined): boolean {
+  if (!at) return false;
+  return hiddenNotes.get(actionItemId) === at || blockedSince.get(actionItemId) === at;
+}
+
+export function readHandoffError(actionItemId: string): string | null {
+  return handoffErrors.get(actionItemId) ?? null;
 }
 
 export function clearOptimisticHandoff(actionItemId?: string): void {
-  if (!actionItemId || optimisticHandoff?.actionItemId === actionItemId) optimisticHandoff = null;
+  if (!actionItemId) {
+    optimisticHandoffs.clear();
+    return;
+  }
+  optimisticHandoffs.delete(actionItemId);
 }
 
-function rememberOptimistic(next: OptimisticHandoff): void {
-  optimisticHandoff = next;
+export function rememberOptimistic(next: OptimisticHandoff): void {
+  blockedSince.delete(next.actionItemId);
+  hiddenNotes.delete(next.actionItemId);
+  handoffErrors.delete(next.actionItemId);
+  optimisticHandoffs.set(next.actionItemId, next);
+}
+
+/** Drop this click and keep a later refresh from painting its note again. */
+export function rejectOptimisticHandoff(actionItemId: string, since: string, message: string | null): void {
+  const current = optimisticHandoffs.get(actionItemId);
+  if (!current || current.since === since) optimisticHandoffs.delete(actionItemId);
+  blockedSince.set(actionItemId, since);
+  hiddenNotes.set(actionItemId, since);
+  if (message) handoffErrors.set(actionItemId, message);
+  else handoffErrors.delete(actionItemId);
+}
+
+/** A reused run keeps Working and does not grow a second Handed-to line. */
+export function suppressOptimisticNote(actionItemId: string, since: string): void {
+  const current = optimisticHandoffs.get(actionItemId);
+  if (current?.since === since) optimisticHandoffs.set(actionItemId, { ...current, note: null });
+  hiddenNotes.set(actionItemId, since);
+}
+
+export function attachOptimisticRun(actionItemId: string, since: string, runId: string): void {
+  const current = optimisticHandoffs.get(actionItemId);
+  if (!current || current.since !== since || blockedSince.get(actionItemId) === since) return;
+  optimisticHandoffs.set(actionItemId, { ...current, runId });
+}
+
+export function stripSuppressedNotes<T extends { at: string }>(notes: Record<string, T[]>): Record<string, T[]> {
+  const out: Record<string, T[]> = {};
+  for (const [id, rows] of Object.entries(notes)) {
+    out[id] = rows.filter((row) => !optimisticNoteHidden(id, row.at));
+  }
+  return out;
 }
 
 export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): void {
@@ -64,7 +132,7 @@ export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): voi
 }
 
 export type OwnerHandoffResult =
-  | { ok: true; runId: string | null; status: string; dispatched: boolean; noted: boolean }
+  | { ok: true; runId: string | null; status: string; dispatched: boolean; noted: boolean; reused: boolean }
   | { ok: false; error: string };
 
 export async function requestOwnerHandoff(input: {
@@ -96,12 +164,14 @@ export async function requestOwnerHandoff(input: {
     error?: string;
     missing?: string;
     noted?: boolean;
+    reused?: boolean;
   } | null;
   if (body?.missing) return { ok: false, error: body.missing };
   if (!res.ok || !body?.ok) {
     return { ok: false, error: body?.missing || body?.error || "The hand-off did not start." };
   }
   const noted = body.noted === true;
+  const reused = body.reused === true;
   if (!body.runId) {
     return {
       ok: true,
@@ -109,9 +179,17 @@ export async function requestOwnerHandoff(input: {
       status: body.status ?? "assigned",
       dispatched: false,
       noted,
+      reused,
     };
   }
-  return { ok: true, runId: body.runId, status: body.status ?? "queued", dispatched: true, noted };
+  return {
+    ok: true,
+    runId: body.runId,
+    status: body.status ?? "queued",
+    dispatched: true,
+    noted,
+    reused,
+  };
 }
 
 async function signedInActorLabel(): Promise<string> {
@@ -187,8 +265,12 @@ export async function commitActionHandoff(input: {
   // The card flips to Working before the function returns. A finished run settles it.
   dispatchActionPlanRefresh(detail);
   const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
-    clearOptimisticHandoff(input.actionItemId);
-    dispatchActionPlanRefresh({ ...detail, failed: true });
+    rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : HANDOFF_FAILED_COPY);
+    dispatchActionPlanRefresh({
+      ...detail,
+      failed: true,
+      error: comingSoon ? undefined : HANDOFF_FAILED_COPY,
+    });
     return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error };
   };
   const result = await requestOwnerHandoff({
@@ -202,14 +284,26 @@ export async function commitActionHandoff(input: {
     await clearActionOwner(input.actionItemId);
   } else if (!result.ok) {
     return fail(result.error);
+  } else if (result.reused) {
+    suppressOptimisticNote(input.actionItemId, since);
+    if (result.runId) attachOptimisticRun(input.actionItemId, since, result.runId);
+    dispatchActionPlanRefresh({
+      ...detail,
+      note: undefined,
+      reused: true,
+      runId: result.runId ?? undefined,
+    });
+    return { ok: true };
   } else if (!result.noted) {
     // The deployed function has not confirmed the note yet. Write it here so
     // reload still sees the assignee. A function that returns noted does this itself.
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return fail(saved.error);
     await clearActionOwner(input.actionItemId);
+  } else if (result.runId) {
+    attachOptimisticRun(input.actionItemId, since, result.runId);
   }
-  dispatchActionPlanRefresh(detail);
+  dispatchActionPlanRefresh({ ...detail, runId: result.ok ? result.runId ?? undefined : undefined });
   return { ok: true };
 }
 
@@ -269,7 +363,7 @@ export async function assignActionToPerson(input: {
   });
   dispatchActionPlanRefresh(detail);
   const fail = (error: string): { ok: false; error: string } => {
-    clearOptimisticHandoff(input.actionItemId);
+    rejectOptimisticHandoff(input.actionItemId, since, null);
     dispatchActionPlanRefresh({ ...detail, failed: true });
     return { ok: false, error };
   };
@@ -335,7 +429,7 @@ async function requestPersonAssignment(input: {
   return { ok: true, noted: body.noted === true };
 }
 
-export type ActionHandoffRun = { agent: AgentKey; status: string; at: string };
+export type ActionHandoffRun = { id: string; agent: AgentKey; status: string; at: string };
 
 export type HandoffAgentNote = { agent: AgentKey; at: string };
 
@@ -367,25 +461,27 @@ export async function loadActionHandoffRuns(
     }
   )
     .from("agent_runs")
-    .select("action_item_id, agent, status, queued_at")
+    .select("id, action_item_id, agent, status, queued_at")
     .in("action_item_id", ids)
     .order("queued_at", { ascending: false });
   if (error || !Array.isArray(data)) return out;
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
     const record = row as {
+      id?: unknown;
       action_item_id?: unknown;
       agent?: unknown;
       status?: unknown;
       queued_at?: unknown;
     };
     const id = typeof record.action_item_id === "string" ? record.action_item_id : "";
+    const runId = typeof record.id === "string" ? record.id : "";
     const agent = record.agent;
     const status = typeof record.status === "string" ? record.status : "";
     const at = typeof record.queued_at === "string" ? record.queued_at : "";
-    if (!id || out.has(id)) continue;
+    if (!id || !runId || out.has(id)) continue;
     if (agent !== "financial_manager" && agent !== "analyst" && agent !== "advisor") continue;
-    out.set(id, { agent, status, at });
+    out.set(id, { id: runId, agent, status, at });
   }
   return out;
 }
