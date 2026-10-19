@@ -138,7 +138,11 @@ assert(run.includes("recordHandoffFinish"), "a finished analyst run writes the h
 assert(run.includes("handoffFinding"), "a finding is built only from stored figures");
 
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
-assert(plan.includes("requestOwnerHandoff"), "the owner button calls the function");
+const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
+assert(plan.includes("commitActionHandoff"), "the owner button commits the hand-off");
+assert(handoffClient.includes("requestOwnerHandoff"), "the commit calls the function");
+assert(handoffClient.includes("recordHandoffAssignment"), "a finished or offline run still writes the note");
+assert(handoffClient.includes("dispatchActionPlanRefresh"), "home hears the assignment");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert a run");
 
 const config = readFileSync("supabase/config.toml", "utf8");

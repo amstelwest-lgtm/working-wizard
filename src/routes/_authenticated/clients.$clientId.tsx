@@ -278,7 +278,7 @@ import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { cashSignoffIsStale, reviewFiguresChanged, signedHealthFromHistory, signoffStatusKind, signoffStatusLine } from "@/lib/signoff-status";
 import { MilonTeamPane } from "@/components/milon-team/milon-team-pane";
 import { OwnerHome } from "@/components/owner-door/owner-home";
-import { FinancialManagerBrief } from "@/components/financial-manager-brief";
+import { FinancialManagerBrief, type HomeBriefHandoff } from "@/components/financial-manager-brief";
 import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
@@ -1667,6 +1667,7 @@ function ClientView() {
     books: booksLines.figure,
   }, booksLines.detail ? { books: booksLines.detail } : undefined);
   const [openPlanTitles, setOpenPlanTitles] = useState<string[] | null>(null);
+  const [openPlanHandoffs, setOpenPlanHandoffs] = useState<HomeBriefHandoff[]>([]);
   const [openPlanOverdue, setOpenPlanOverdue] = useState(0);
   const [openPlanUnavailable, setOpenPlanUnavailable] = useState(false);
   const [openPlanTick, setOpenPlanTick] = useState(0);
@@ -1677,6 +1678,16 @@ function ClientView() {
   useEffect(() => {
     const bump = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
+      if (detail?.actionItemId && detail.title) {
+        const name = agentDisplayName(detail.agent);
+        setOpenPlanHandoffs((rows) => {
+          const found = rows.some((row) => row.id === detail.actionItemId);
+          const next = rows.map((row) =>
+            row.id === detail.actionItemId ? { ...row, assignee: name } : row,
+          );
+          return found ? next : [...next, { id: detail.actionItemId, title: detail.title, assignee: name }];
+        });
+      }
       if (detail?.actionItemId && detail.title && detail.agent !== "financial_manager") {
         pendingHandoff.current = detail;
         setHandedTitle(detail.title);
@@ -1699,6 +1710,7 @@ function ClientView() {
       seenPlanClient.current = clientId;
       pendingHandoff.current = null;
       setOpenPlanTitles(null);
+      setOpenPlanHandoffs([]);
       setHandedTitle(null);
       setOpenActionAgent(null);
       setOpenActionRun(null);
@@ -1716,6 +1728,7 @@ function ClientView() {
       if (error) {
         setOpenPlanUnavailable(true);
         setOpenPlanTitles([]);
+        setOpenPlanHandoffs([]);
         setOpenPlanOverdue(0);
         setOpenActionAgent(null);
         setOpenActionRun(null);
@@ -1733,12 +1746,13 @@ function ClientView() {
         : [new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
+      const openRows = rows.flatMap((row) => {
+        const title = row.title?.trim() ?? "";
+        return row.id && title ? [{ id: row.id, title }] : [];
+      });
       const handed = preferPendingHandoff(
         handedHomeAction(
-          rows.flatMap((row) => {
-            const title = row.title?.trim() ?? "";
-            return row.id && title ? [{ id: row.id, title }] : [];
-          }),
+          openRows,
           notes,
           runs,
         ),
@@ -1751,8 +1765,27 @@ function ClientView() {
         pendingHandoff.current = null;
       }
       if (pending && !titles.includes(pending.title)) titles.push(pending.title);
+      const handoffs = openRows.map((row) => {
+        const noteAgent = notes.get(row.id)?.agent ?? null;
+        const pendingAgent =
+          pending && pending.actionItemId === row.id && noteAgent !== pending.agent ? pending.agent : null;
+        const agent = pendingAgent ?? noteAgent;
+        return {
+          id: row.id,
+          title: row.title,
+          assignee: agent ? agentDisplayName(agent) : null,
+        };
+      });
+      if (pending && !handoffs.some((row) => row.id === pending.actionItemId)) {
+        handoffs.push({
+          id: pending.actionItemId,
+          title: pending.title,
+          assignee: agentDisplayName(pending.agent),
+        });
+      }
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
+      setOpenPlanHandoffs(handoffs);
       setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
       setHandedTitle(handed?.title ?? null);
       setOpenActionAgent(handed?.agent ?? null);
@@ -3431,7 +3464,9 @@ function ClientView() {
                   ) : null}
                   <FinancialManagerBrief
                     brief={homeBrief}
-                    onHandToBot={() => openHomeAgent("financial_manager")}
+                    clientId={clientId}
+                    handoffs={openPlanHandoffs}
+                    audience="accountant"
                     onOpen={(tab) => openHomeSection(tab)}
                   />
                   <OwnerHome

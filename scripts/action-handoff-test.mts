@@ -47,8 +47,10 @@ assert(
 );
 
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
+const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
 assert(plan.includes("assignToAgent"), "the button assigns the action");
-assert(plan.includes("recordHandoffAssignment"), "a switched-off runner still writes the assignee");
+assert(plan.includes("commitActionHandoff"), "the button commits the assignment");
+assert(handoffClient.includes("recordHandoffAssignment"), "a switched-off runner still writes the assignee");
 assert(plan.includes("toast.success(`Assigned to ${agentShortName(agent)}`)"), "assignment toasts");
 assert(plan.includes("HandToMenu"), "the row renders Hand to");
 const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");

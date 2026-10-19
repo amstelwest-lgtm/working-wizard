@@ -1102,11 +1102,13 @@ assert(!door.includes('setScreen("tasks")'), "the separate action plan screen is
 const plan = readFileSync("src/components/action-plan.tsx", "utf8");
 assert(plan.includes("ownerView"), "the owner rail uses a compact action plan");
 assert(plan.includes("HandToMenu"), "each action has a Hand to control");
-assert(plan.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
+assert(plan.includes("commitActionHandoff"), "handing off commits the assignment");
+const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
+assert(handoffClient.includes("handoffComingOnline"), "the missing-runner check is the hand-off path");
 const handoffButtons = readFileSync("src/components/action-handoff-buttons.tsx", "utf8");
 assert(handoffButtons.includes("Coming online soon"), "a missing runner says it is coming online");
 assert(handoffButtons.includes("data-bot-handoff"), "the hand-off controls are in the action row");
-assert(plan.includes("requestOwnerHandoff"), "handing off calls the owner-handoff function");
+assert(handoffClient.includes("requestOwnerHandoff"), "handing off calls the owner-handoff function");
 assert(
   handoffComingOnline("No runner exists for financial_manager. supabase/functions has agent-analyst only."),
   "the financial manager refusal is not an error",

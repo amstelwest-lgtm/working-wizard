@@ -24,18 +24,13 @@ import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
-import { handoffAssigneeName, handoffNeedsFreshRun } from "@/lib/owner-handoff";
+import { handoffAssigneeName } from "@/lib/owner-handoff";
 import { agentKeyFromAssignee, handoffProgressCaption } from "@/lib/action-handoff";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
-import { DRAFT_NEEDS_OWNER, draftFindingLabel, handoffComingOnline } from "@/hooks/owner-agent-ui";
+import { DRAFT_NEEDS_OWNER, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import {
-  dispatchActionPlanRefresh,
-  loadActionHandoffRuns,
-  recordHandoffAssignment,
-  requestOwnerHandoff,
-} from "@/lib/owner-handoff-client";
+import { commitActionHandoff, loadActionHandoffRuns } from "@/lib/owner-handoff-client";
 import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -708,51 +703,26 @@ export default function ActionPlanPanel({
           row.id === item.id ? { ...row, owner_id: null, owner_name: name, owner_email: null } : row,
         ),
       );
-      const result = await requestOwnerHandoff({
+      const result = await commitActionHandoff({
         clientId,
         actionItemId: item.id,
+        title: item.title,
         agent,
       });
-      if (!result.ok && handoffComingOnline(result.error)) {
-        const saved = await recordHandoffAssignment({
-          clientId,
-          actionItemId: item.id,
-          agent,
-        });
-        if (!saved.ok) {
-          setItems((current) =>
-            current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
-          );
+      if (!result.ok) {
+        setItems((current) =>
+          current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
+        );
+        if (result.comingSoon) {
           setComingSoon((current) => ({
             ...current,
             [item.id]: { ...current[item.id], [agent]: true },
           }));
-          toast.error(saved.error);
-          return;
         }
-      } else if (!result.ok) {
-        setItems((current) =>
-          current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
-        );
         toast.error(result.error);
         return;
-      } else if (result.runId && handoffNeedsFreshRun(result.status)) {
-        // The runner reused a finished run and did not write a new note.
-        const saved = await recordHandoffAssignment({
-          clientId,
-          actionItemId: item.id,
-          agent,
-        });
-        if (!saved.ok) {
-          setItems((current) =>
-            current.map((row) => (row.id === item.id ? { ...row, ...previous } : row)),
-          );
-          toast.error(saved.error);
-          return;
-        }
       }
       toast.success(`Assigned to ${agentShortName(agent)}`);
-      dispatchActionPlanRefresh({ actionItemId: item.id, title: item.title, agent });
       void refresh();
     },
     [clientId, refresh],

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { agentKeyFromAssignee } from "@/lib/action-handoff";
-import { handoffAssigneeName, handoffRequestNote } from "@/lib/owner-handoff";
+import { handoffComingOnline } from "@/hooks/owner-agent-ui";
+import { handoffAssigneeName, handoffNeedsFreshRun, handoffRequestNote } from "@/lib/owner-handoff";
 import { agentDisplayName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 
@@ -81,6 +82,65 @@ export async function recordHandoffAssignment(input: {
     note: handoffRequestNote(name),
   });
   if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export type ActionHandoffCommit =
+  | { ok: true }
+  | { ok: false; error: string; comingSoon?: boolean };
+
+/**
+ * The action-plan Hand to. Writes the hand-off, then tells Home so the
+ * assignee shows Working and the previous assignee drops back.
+ */
+export async function commitActionHandoff(input: {
+  clientId: string;
+  actionItemId: string;
+  title: string;
+  agent: AgentKey;
+}): Promise<ActionHandoffCommit> {
+  const result = await requestOwnerHandoff({
+    clientId: input.clientId,
+    actionItemId: input.actionItemId,
+    agent: input.agent,
+  });
+  if (!result.ok && handoffComingOnline(result.error)) {
+    const saved = await recordHandoffAssignment(input);
+    if (!saved.ok) return { ok: false, error: saved.error, comingSoon: true };
+  } else if (!result.ok) {
+    return { ok: false, error: result.error };
+  } else if (result.runId && handoffNeedsFreshRun(result.status)) {
+    const saved = await recordHandoffAssignment(input);
+    if (!saved.ok) return saved;
+  }
+  dispatchActionPlanRefresh({
+    actionItemId: input.actionItemId,
+    title: input.title,
+    agent: input.agent,
+  });
+  return { ok: true };
+}
+
+/** A person on the Hand to menu. Does not start a bot run. */
+export async function assignActionToPerson(input: {
+  clientId: string;
+  actionItemId: string;
+  personId: string;
+  personName: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await supabase
+    .from("action_items")
+    .update({ owner_id: input.personId, sent_at: null })
+    .eq("id", input.actionItemId);
+  if (error) return { ok: false, error: error.message };
+  const { error: noteError } = await supabase.from("action_updates").insert({
+    action_item_id: input.actionItemId,
+    client_id: input.clientId,
+    actor_type: "owner_app",
+    actor_label: input.personName,
+    note: `Assigned to ${input.personName}`,
+  });
+  if (noteError) return { ok: false, error: noteError.message };
   return { ok: true };
 }
 
