@@ -55,7 +55,7 @@ export function loadSaPricingCopy(): SaPricingCopy {
     accountantsIntro:
       "Pricing in rand. One monthly price, set by how many clients you actively advise.",
     accountantsLead:
-      "Management accounts, 13-week cash and advisory drafts from QuickBooks, Xero or Sage.",
+      "Management accounts, 13-week cash and advisory drafts from QuickBooks or Xero. Sage is coming soon.",
     ownerHomepageCost:
       `Business owners pay ${rand(299)}/mo, or nothing when their accountant is on Milōn.`,
     ownerBar: `${rand(299)}/mo · free when your accountant is on Milōn`,

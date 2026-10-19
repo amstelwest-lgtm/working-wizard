@@ -732,6 +732,14 @@ export function upgradeSuccessMessage(band: FirmCheckoutBand): string {
   return `Upgraded to ${FIRM_BAND_CATALOG[band].name}. ${firmClientLimitLabel(band)}.`;
 }
 
+/** Names the band the firm is on, so an upgrade is not a bare "Upgrade to Solo". */
+export function currentPlanLabel(band: FirmBandId | null | undefined): string | null {
+  if (!band) return null;
+  return `Current plan: ${FIRM_BAND_CATALOG[band].name}`;
+}
+
 export function upgradeButtonLabel(band: FirmCheckoutBand): string {
-  return `Upgrade to ${FIRM_BAND_CATALOG[band].name}`;
+  const entry = FIRM_BAND_CATALOG[band];
+  const cap = entry.clientLimit == null ? "unlimited clients" : `up to ${entry.clientLimit} clients`;
+  return `Upgrade to ${entry.name} (${cap})`;
 }
