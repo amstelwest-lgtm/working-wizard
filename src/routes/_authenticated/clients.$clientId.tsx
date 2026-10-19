@@ -193,6 +193,7 @@ import {
   runwayDisplayLabel,
   storedOpeningIsMissing,
 } from "@/lib/client-metrics";
+import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import {
   clientListStatusWord,
   forecastLowestPoint,
@@ -1761,6 +1762,7 @@ function ClientView() {
     whatMatters: briefingMatters,
     openQueries: openQueriesCount,
     debtorDays: actualDebtorDays,
+    forecastKey: forecastPlFingerprint(client?.cashflow, financials),
   };
   const workflowHash = workflowInputsHash(workflowCtx);
   const [workflow, setWorkflow] = useState<BriefingWorkflow | null>(null);
@@ -1823,6 +1825,7 @@ function ClientView() {
     // Always refresh the client context — submit() reads dataset.clientId at
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
+    el.dataset.forecastKey = forecastPlFingerprint(client.cashflow, client.financials);
     const askAgent =
       search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
         ? search.agent

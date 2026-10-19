@@ -9,11 +9,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ActionPlanAutomation } from "../src/components/action-plan-automation";
 import { adviceChatProductName, adviceChatVolumeUnit } from "../src/lib/advice-industry";
-import {
-  ASSUMED_MONTHLY_LABEL,
-  displayForecastFrequency,
-  forecastRowLabel,
-} from "../src/lib/cash-forecast-rows";
+import { displayForecastFrequency, forecastRowLabel } from "../src/lib/cash-forecast-rows";
 import { suggestOnceOffRows } from "../src/lib/cash-once-off-suggest";
 import { distributeForecastLine, forecastMinimumCash } from "../src/lib/client-metrics";
 import { practiceDisplaysZarPlan, saFirmDisplayPrice, saPlanRegionControls } from "../src/lib/firm-band-upgrade";
@@ -52,23 +48,28 @@ const hotel = {
   other: [line("T Mokoena", 25000, "once-off", 1)],
 };
 
-const assumedMonthly: Array<[string, number, "expenses" | "other"]> = [
-  ["Greeff Properties", 28000, "expenses"],
-  ["Fuji SA", 9200, "expenses"],
-  ["R Dlamini", 6000, "expenses"],
-  ["B Petersen", 4500, "expenses"],
-  ["T Mokoena", 25000, "other"],
+const assumedMonthly: Array<[string, number, "expenses" | "other", string]> = [
+  ["Greeff Properties", 28000, "expenses", "rent (assumed monthly)"],
+  ["R Dlamini", 6000, "expenses", "payroll (assumed monthly)"],
+  ["B Petersen", 4500, "expenses", "payroll (assumed monthly)"],
+  ["T Mokoena", 25000, "other", "payroll (assumed monthly)"],
 ];
 
-for (const [name, amount, side] of assumedMonthly) {
+for (const [name, amount, side, rule] of assumedMonthly) {
   const frequency = displayForecastFrequency(name, "once-off", { side });
   assert(frequency === "recurring-monthly", `${name} is assumed monthly from one month`);
   const weeks = distributeForecastLine({ amount: String(amount), frequency, startWeek: 1 }, 13);
   assert(weeks[0] === amount && weeks[4] === amount && weeks[8] === amount && weeks[12] === amount, `${name} lands in weeks 1, 5, 9 and 13`);
   assert(weeks[1] === 0 && weeks[2] === 0, `${name} is not copied onto every week`);
   const label = forecastRowLabel(name, "once-off", { side });
-  assert(label.includes(ASSUMED_MONTHLY_LABEL), `${name} is labelled ${label}`);
+  assert(label.includes(rule), `${name} is labelled ${label}`);
 }
+const fujiWeeks = distributeForecastLine(
+  { amount: "9200", frequency: displayForecastFrequency("Fuji SA", "once-off", { side: "expenses" }), startWeek: 1 },
+  13,
+);
+assert(fujiWeeks[0] === 9200 && fujiWeeks.slice(1).every((n) => n === 0), "Fuji stays a one-off purchase");
+assert(forecastRowLabel("Fuji SA", "once-off", { side: "expenses" }).includes("purchase (one-off)"), "Fuji is tagged as a purchase");
 
 const guest = distributeForecastLine(
   {
@@ -135,7 +136,7 @@ const staged = suggestOnceOffRows({
   existing: [],
   bankSourced: true,
   forecastLines: [
-    ...assumedMonthly.map(([name, amount, side], index) => ({
+    ...assumedMonthly.map(([name, amount, side]) => [name, amount, side] as const).map(([name, amount, side], index) => ({
       id: `a${index}`,
       name,
       amount: String(amount),
@@ -143,6 +144,7 @@ const staged = suggestOnceOffRows({
       startWeek: 1,
       side,
     })),
+    { id: "fuji", name: "Fuji SA", amount: "9200", frequency: "once-off", startWeek: 1, side: "expenses" as const },
     { id: "chem", name: "Dis-Chem", amount: "392", frequency: "once-off", startWeek: 1, side: "expenses" as const },
     { id: "guest", name: "D Pillay", amount: "900", frequency: "once-off", startWeek: 1, side: "revenue" as const },
   ],
@@ -151,7 +153,10 @@ const stagedNames = staged.lines.map((row) => row.name);
 for (const [name] of assumedMonthly) {
   assert(!stagedNames.includes(name), `${name} is not offered as a once-off`);
 }
-assert(stagedNames.includes("Dis-Chem") && stagedNames.includes("D Pillay"), "real one-offs are still offered");
+assert(
+  stagedNames.includes("Dis-Chem") && stagedNames.includes("D Pillay") && stagedNames.includes("Fuji SA"),
+  "a purchase and a guest stay available as once-offs until a second month is on file",
+);
 
 const usFirm = { country: "US", regionCode: "NY" };
 const zaBook = [
