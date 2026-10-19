@@ -1,5 +1,5 @@
 /**
- * Silent character clips for the Financial Manager, Analyst, and Advisor.
+ * Silent character clips. Every face uses this player.
  * Two stacked videos crossfade at a neutral frame. The incoming clip stays
  * hidden until it is playing and a frame has been decoded, and the outgoing
  * clip stays up until then. The swap waits for the last frame of whatever

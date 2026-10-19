@@ -1,15 +1,27 @@
-.tax-sample-mark {
-  width: 96px;
-  height: 96px;
+.tax-sample-face {
   display: grid;
+  flex: none;
   place-items: center;
-  border-radius: 999px;
-  border: 2px solid #0b5fff;
-  background: #ffffff;
-  color: #102a43;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+}
+
+.tax-sample-face[data-face="desk"] .owner-presence {
+  width: 42px;
+  height: 42px;
+}
+
+.tax-sample-face[data-face="menu"] .owner-presence,
+.tax-sample-face[data-face="stage"] .owner-presence {
+  width: 28px;
+  height: 28px;
+}
+
+.tax-sample-face[data-face="desk"] .owner-fm-face,
+.tax-sample-face[data-face="menu"] .owner-fm-face,
+.tax-sample-face[data-face="stage"] .owner-fm-face {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .tax-sample-kicker {
@@ -63,9 +75,18 @@
   background: rgba(11, 95, 255, 0.08);
 }
 
+.tax-sample-menu-btn,
+.tax-sample-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .tax-sample-menu-btn {
   width: 100%;
   margin-top: 6px;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .tax-sample-backdrop {
@@ -111,7 +132,14 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
+}
+
+.tax-sample-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
 }
 
 .tax-sample-sheet h2 {

@@ -231,5 +231,16 @@ assert(
 assert(sampleSrc.includes("SAMPLE demo · Harbour & Co"), "the demo card names Harbour & Co");
 assert(sampleSrc.includes("Open sample"), "the demo card opens the sample");
 assert(sampleSrc.includes("money(result.taxCents)"), "the demo card can show the sample tax");
+assert(sampleSrc.includes('agent="tax_specialist"'), "the sample uses the shared tax face");
+assert(sampleSrc.includes("fmAvatarClip"), "the sample uses the shared clip mapping");
+assert(sampleSrc.includes('variant="character"'), "the sample uses the character avatar");
+assert(sampleSrc.includes('place="card"'), "the home card shows the face");
+assert(sampleSrc.includes('place="desk"'), "the team card shows the face");
+assert(sampleSrc.includes('place="menu"'), "Hand to shows the face");
+assert(sampleSrc.includes('place="stage"'), "the team stage shows the face");
+assert(
+  !readFileSync("src/lib/fm-avatar-state.ts", "utf8").includes("Tax Specialist"),
+  "the shared avatar map does not name Tax Specialist",
+);
 
 console.log("tax-specialist-sample ok");

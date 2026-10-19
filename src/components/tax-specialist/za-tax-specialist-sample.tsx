@@ -4,6 +4,8 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { OwnerAvatar, type AvatarSize } from "@/components/owner-door/owner-avatar";
+import { fmAvatarClip } from "@/lib/fm-avatar-state";
 import {
   SAMPLE_COMPANY,
   companyTaxDeadlines,
@@ -69,21 +71,25 @@ function useIsHost(): boolean {
   return isHost;
 }
 
-function Mark() {
+function TaxFace({
+  size,
+  place,
+  handed = false,
+}: {
+  size: AvatarSize;
+  place: "card" | "desk" | "menu" | "stage" | "sheet";
+  handed?: boolean;
+}) {
+  const fmClip = fmAvatarClip(handed ? { handoff: { at: "2026-01-01T00:00:00.000Z" } } : {});
   return (
-    <span className="milon-desk-mark" aria-hidden="true">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M7 3.5h7.2L19 8.2V20.5H7z" />
-        <path d="M14 3.6V8h4.2" />
-        <path d="M9.2 12.2h6.2M9.2 16h4" />
-      </svg>
+    <span className="tax-sample-face" data-face={place} data-tax-avatar="tax_specialist">
+      <OwnerAvatar
+        agent="tax_specialist"
+        variant="character"
+        size={size}
+        motion="idle"
+        fmClip={fmClip}
+      />
     </span>
   );
 }
@@ -259,9 +265,12 @@ function Workspace({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="tax-sample-head">
-          <div>
-            <p className="tax-sample-kicker">SAMPLE · ZA · SARS</p>
-            <h2 id={titleId}>Tax Specialist</h2>
+          <div className="tax-sample-who">
+            <TaxFace size="md" place="sheet" handed={fromFinancialManager} />
+            <div>
+              <p className="tax-sample-kicker">SAMPLE · ZA · SARS</p>
+              <h2 id={titleId}>Tax Specialist</h2>
+            </div>
           </div>
           <button ref={closeRef} type="button" className="tax-sample-close" onClick={onClose}>
             Close
@@ -398,6 +407,7 @@ export function ZaTaxSpecialistSample({
           data-tax-handoff="true"
           onClick={openFromManager}
         >
+          <TaxFace size="sm" place="menu" />
           Hand to Tax Specialist
         </button>
         {workspace}
@@ -409,6 +419,7 @@ export function ZaTaxSpecialistSample({
     return (
       <>
         <div className="tax-sample-handoff" data-tax-fm-handoff="true">
+          <TaxFace size="sm" place="menu" />
           <p>Financial Manager</p>
           <button type="button" onClick={openFromManager}>
             Hand to Tax Specialist
@@ -422,7 +433,8 @@ export function ZaTaxSpecialistSample({
   if (variant === "stage") {
     return (
       <>
-        <button type="button" data-tax-sample-open="stage" onClick={openFromCard}>
+        <button type="button" className="tax-sample-stage" data-tax-sample-open="stage" onClick={openFromCard}>
+          <TaxFace size="sm" place="stage" />
           Tax Specialist
         </button>
         {workspace}
@@ -440,7 +452,7 @@ export function ZaTaxSpecialistSample({
           data-tax-sample-open="desk"
           onClick={openFromCard}
         >
-          <Mark />
+          <TaxFace size="sm" place="desk" />
           <span className="milon-desk-agent-copy">
             <strong className="milon-desk-agent-name">Milōn Tax Specialist</strong>
             <span className="milon-desk-agent-short">Tax Specialist</span>
@@ -472,7 +484,7 @@ export function ZaTaxSpecialistSample({
                 <path d="M9.2 2.3V5h2.8" />
               </svg>
             </span>
-            <span className="tax-sample-mark">T</span>
+            <TaxFace size="lg" place="card" />
           </span>
           <span className="owner-name">Milōn Tax Specialist</span>
           <span className="owner-status is-idle">SAMPLE</span>
