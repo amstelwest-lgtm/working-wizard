@@ -202,7 +202,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   // Headline names the drag and the cash break.
   const head = a.sections[0].body;
   assert(
-    /New Co is (at risk|watch|healthy) at \d+\/100/i.test(head),
+    /New Co is (at risk|watch|healthy) at \d+/i.test(head) && !/\d+\s*\/\s*100/.test(head),
     `headline has score: ${head}`,
   );
   assert(/cash goes negative in week 6/.test(head), `headline names the break week: ${head}`);
@@ -1643,7 +1643,8 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
       `pack pillar ${label}`,
     );
   }
-  assert(!state.includes("Profitability") && !state.includes("Financing"), state);
+  assert(!state.includes("Profit Drivers") && !state.includes("Leverage & Finance"), state);
+  assert(!state.includes("Profitability") && !state.includes("Financing & Solvency"), state);
   eq(pack.health?.overall, scorecard.overall, "stored pack health");
   eq(pack.health?.weakest, weakest?.label ?? null, "weakest pillar matches the scorecard");
   const inventory = pack.ratios.find((row) => row.name === "Inventory Days");

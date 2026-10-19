@@ -27,6 +27,19 @@ const titles = ["Collect the deposit", "File the VAT return"];
 const needs = homeActionNeeds({ known: true, titles, overdue: 1 });
 assert(needs.heading === "2 open, 1 overdue", needs.heading);
 assert(needs.lines.join(" | ") === titles.join(" | "), needs.lines.join(" | "));
+const five = homeActionNeeds({
+  known: true,
+  titles: ["One", "Two", "Three", "Four", "Five"],
+  overdue: 0,
+});
+assert(five.heading === "Showing 3 of 5", five.heading);
+assert(five.lines.length === 3 && five.lines[0] === "One" && five.lines[2] === "Three", five.lines.join(" | "));
+const fiveOverdue = homeActionNeeds({
+  known: true,
+  titles: ["One", "Two", "Three", "Four", "Five"],
+  overdue: 2,
+});
+assert(fiveOverdue.heading === "Showing 3 of 5, 2 overdue", fiveOverdue.heading);
 assert(!needs.lines.includes("No open work."), "open rows are not no open work");
 assert(openActionSentence(titles) === "2 open actions.", openActionSentence(titles) ?? "");
 assert(openActionSentence([]) === null, "no open rows stay empty");
@@ -222,6 +235,13 @@ assert(!moves.some((move) => /pay faster/i.test(move.title)), "short debtor days
 assert(
   moves.every((move) => move.actions.every((action) => !/pay faster/i.test(action))),
   "pay-faster steps are dropped",
+);
+assert(
+  moves.every(
+    (move) =>
+      !/tighten receivables|reduce debtor days|shorten debtor days|invoice the same day/i.test(move.title),
+  ),
+  "debtor days of 6 drop the other collection moves too",
 );
 const slow = rankStrategicMoves({ debtorDays: 40, healthByKey: { workingCapitalDays: 20 } });
 assert(slow.some((move) => /pay faster/i.test(move.title)), "slow debtors still get the suggestion");

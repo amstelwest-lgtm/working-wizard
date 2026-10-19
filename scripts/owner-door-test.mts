@@ -52,7 +52,13 @@ import {
   nextFmClip,
   nextFmIdleLoops,
 } from "../src/lib/fm-avatar-state.ts";
-import { ownerPresence, steerAssignedWork, steerOpenHandoffs } from "../src/lib/owner-presence.ts";
+import {
+  cardRunForAgent,
+  ownerPresence,
+  steerAssignedWork,
+  steerOpenHandoffs,
+  withCardHandoffRuns,
+} from "../src/lib/owner-presence.ts";
 import {
   applyLiveRuns,
   handedHomeAction,
@@ -398,6 +404,104 @@ assert(
   "an advisor finding plays the found-issue clip",
 );
 
+const activeBeatsFound = ownerPresence(
+  activity({
+    runs: [
+      {
+        id: "run-old",
+        agent: "analyst",
+        client_id: "c",
+        status: "running",
+        queued_at: "2026-10-01T00:00:00.000Z",
+        started_at: "2026-10-01T00:00:01.000Z",
+        finished_at: null,
+        action_item_id: "debt",
+      },
+      {
+        id: "run-new",
+        agent: "analyst",
+        client_id: "c",
+        status: "succeeded",
+        queued_at: "2026-10-02T00:00:00.000Z",
+        started_at: "2026-10-02T00:00:01.000Z",
+        finished_at: "2026-10-02T00:05:00.000Z",
+        action_item_id: "scan",
+      },
+    ],
+    findings: [
+      {
+        id: "find-new",
+        agent: "analyst",
+        client_id: "c",
+        title: "Debt to equity moved.",
+        detail: null,
+        evidence: {},
+        as_of: null,
+        created_at: "2026-10-02T00:04:00.000Z",
+      },
+    ],
+  }),
+);
+assert(
+  cardRunForAgent(
+    [
+      {
+        id: "run-old",
+        agent: "analyst",
+        client_id: "c",
+        status: "running",
+        queued_at: "2026-10-01T00:00:00.000Z",
+        started_at: null,
+        finished_at: null,
+      },
+      {
+        id: "run-new",
+        agent: "analyst",
+        client_id: "c",
+        status: "succeeded",
+        queued_at: "2026-10-02T00:00:00.000Z",
+        started_at: null,
+        finished_at: "2026-10-02T00:05:00.000Z",
+      },
+    ],
+    "analyst",
+  )?.id === "run-old",
+  "the card run is the open one, not the newer finish",
+);
+assert(
+  activeBeatsFound.agents.find((agent) => agent.agent === "analyst")?.motion === "working",
+  "a queued or running run beats a newer finding",
+);
+assert(
+  activeBeatsFound.agents.find((agent) => agent.agent === "analyst")?.sentence === "Working…",
+  "the card says Working while that run is open",
+);
+const injected = withCardHandoffRuns(
+  [],
+  [{ id: "pay", agent: "advisor", open: true, openedAt: "2026-10-19T10:00:00.000Z" }],
+);
+const injectedPresence = ownerPresence(activity({ runs: injected }));
+assert(
+  injectedPresence.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
+  "an open hand-off flips the card before the run is stored",
+);
+const finishedCardRuns = withCardHandoffRuns(
+  [
+    {
+      id: "done",
+      agent: "advisor",
+      client_id: "c",
+      status: "succeeded",
+      queued_at: "2026-10-19T10:02:00.000Z",
+      started_at: "2026-10-19T10:02:01.000Z",
+      finished_at: "2026-10-19T10:03:00.000Z",
+      action_item_id: "pay",
+    },
+  ],
+  [{ id: "pay", agent: "advisor", open: true, openedAt: "2026-10-19T10:00:00.000Z" }],
+);
+assert(finishedCardRuns.length === 1, "a finish after the click is not painted as a new queued run");
+
 const handoff = ownerPresence(
   activity({
     messages: [
@@ -450,7 +554,7 @@ const hiddenByLaterNote = ownerPresence(
   }),
 );
 assert(
-  hiddenByLaterNote.handoff?.sentence.includes("Profit Drivers is the weakest pillar"),
+  hiddenByLaterNote.handoff?.sentence.includes("Profit is the weakest pillar"),
   "a later non-assignment message does not drop the hand-off note",
 );
 assert(
@@ -680,6 +784,22 @@ const settled = applyLiveRuns(optimistic, [
   { actionItemId: "move", agent: "financial_manager", status: "succeeded", at: "2026-10-19T18:31:22.000Z" },
 ]);
 assert(settled[0]?.open === false, "a finished run settles Working");
+const clicked = withPendingAssignment(
+  [
+    rowAssignment({
+      id: "move",
+      notes: [{ note: "Handed to Milōn Analyst.", at: "2026-10-19T15:00:00.000Z" }],
+      run: { agent: "analyst", status: "succeeded", at: "2026-10-19T15:10:00.000Z" },
+    }),
+  ],
+  { id: "move", agent: "analyst", assigneeName: "Milōn Analyst", since: "2026-10-19T19:00:00.000Z" },
+  { kind: "bot", agent: "analyst", name: "Milōn Analyst", at: "2026-10-19T15:00:00.000Z" },
+);
+assert(clicked[0]?.open === true, "an older hand-off note does not settle the new click");
+const stillWorking = applyLiveRuns(clicked, [
+  { actionItemId: "move", agent: "analyst", status: "succeeded", at: "2026-10-19T15:10:00.000Z" },
+]);
+assert(stillWorking[0]?.open === true, "a finished run from before the click does not clear Working");
 const personRows = [reassignedRow];
 const masked = withoutPersonQueuedRuns(
   [
@@ -1520,7 +1640,7 @@ const quietBook = {
 const quietLines = practiceHomeLines(quietBook);
 assert(quietLines.financial_manager[0] === "4 clients on the book.", "practice Home counts the book");
 assert(quietLines.financial_manager[1] === "No open queries.", "a clear book has no open queries");
-assert(quietLines.analyst[0] === "Average health is 72 out of 100.", "practice Home states average health");
+assert(quietLines.analyst[0] === "Average health is 72.", "practice Home states average health");
 assert(quietLines.analyst[1] === "No client needs attention.", "a clear book needs no attention");
 assert(quietLines.advisor[0] === "No follow-up waiting.", "a clear book has no follow-up");
 const quietStatus = practiceCardStatuses(quietBook);

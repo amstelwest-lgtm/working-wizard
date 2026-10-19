@@ -150,8 +150,7 @@ const busyRows = [
 ];
 const busyDest = firmOpenQueriesDestination(busyRows);
 assert(firmOpenQueriesClient(busyRows) != null, "the book has a client with open queries");
-assert(busyDest?.to === "/clients", "open queries stays on the client list");
-assert(busyDest?.hash === "clients-table", "open queries opens the client list");
+assert(busyDest?.to === "/clients/queries", "open queries opens the queries page");
 assert(
   firmOpenQueriesDestination([
     { id: "a", name: "Yankees", openQueries: 0 },
@@ -323,14 +322,10 @@ const router = createRouter({
 });
 const built = router.buildLocation({
   to: routed.to,
-  hash: routed.hash,
 });
-assert(built.pathname === "/clients", "the helper stays on the client list");
-assert(built.hash === "clients-table", "the helper opens the client list");
-assert(built.href === "/clients#clients-table", "the address is the client list");
-assert(!built.pathname.startsWith("/clients/"), "the helper does not open a client file");
+assert(built.pathname === "/clients/queries", "the helper opens the queries page");
+assert(built.href === "/clients/queries", "the address is the queries page");
 const routeIds = router.matchRoutes(built.pathname).map((match) => match.routeId);
-assert(routeIds.includes("/_authenticated/clients/"), "that pathname is the client list");
 assert(!routeIds.includes("/_authenticated/clients/$clientId"), "that pathname is not a client file");
 
 console.log("accountant-qa-medium-test: ok");

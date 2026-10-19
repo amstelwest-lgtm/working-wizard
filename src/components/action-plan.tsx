@@ -25,14 +25,22 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
-import { botPickupCaption } from "@/lib/action-handoff";
+import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
+import { HandoffRunStatus } from "@/components/handoff-run-status";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import { assignActionToPerson, commitActionHandoff, loadActionHandoffRuns } from "@/lib/owner-handoff-client";
-import { latestStoredAssignment } from "@/lib/open-plan-home";
+import {
+  assignActionToPerson,
+  clearOptimisticHandoff,
+  commitActionHandoff,
+  loadActionHandoffRuns,
+  readOptimisticHandoff,
+  type ActionPlanRefreshDetail,
+} from "@/lib/owner-handoff-client";
+import { latestStoredAssignment, withPendingNote } from "@/lib/open-plan-home";
 import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -50,7 +58,13 @@ import {
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
 import { planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
-import { actionDisplayTitle, planGoalIsOverdue } from "@/lib/strategic-moves";
+import {
+  actionDisplayTitle,
+  actionPlanPillarTiles,
+  moveFactorLabel,
+  planGoalIsOverdue,
+  type ActionPlanPillarTile,
+} from "@/lib/strategic-moves";
 import { CASH_FLOOR_REASON, interventionPlanSteps } from "@/lib/intervention-grounding";
 import { actionPace, deriveActionHealth } from "@/lib/action-item-health";
 import { ActionPlanAutomation } from "@/components/action-plan-automation";
@@ -147,6 +161,51 @@ type Item = {
 };
 
 type Employee = ActionPlanEmployee;
+
+type PlanPickup = { agent: AgentKey; status: string; at: string };
+
+/** Keep a click's assignee, note, and queued run until the stored copy arrives. */
+function applyOptimisticPlan(input: {
+  items: Item[];
+  notes: Record<string, AssignmentNoteRow[]>;
+  pickups: Record<string, PlanPickup>;
+}): { items: Item[]; notes: Record<string, AssignmentNoteRow[]>; pickups: Record<string, PlanPickup> } {
+  const pending = readOptimisticHandoff();
+  if (!pending) return input;
+  const mergedNotes = withPendingNote(input.notes[pending.actionItemId] ?? [], pending.note);
+  const landed = mergedNotes.some((row) => row.note === pending.note.note && row.at !== pending.note.at);
+  if (landed) {
+    clearOptimisticHandoff(pending.actionItemId);
+    return { ...input, notes: { ...input.notes, [pending.actionItemId]: mergedNotes } };
+  }
+  const pickup = input.pickups[pending.actionItemId];
+  const keepServerRun =
+    pending.agent != null &&
+    pickup != null &&
+    pickup.agent === pending.agent &&
+    (pickup.status === "queued" || pickup.status === "running") &&
+    pickup.at >= pending.since;
+  return {
+    items: input.items.map((item) =>
+      item.id !== pending.actionItemId
+        ? item
+        : {
+            ...item,
+            owner_name: pending.assigneeName,
+            owner_id: pending.agent ? null : item.owner_id,
+            owner_email: pending.agent ? null : item.owner_email,
+          },
+    ),
+    notes: { ...input.notes, [pending.actionItemId]: mergedNotes },
+    pickups:
+      pending.agent && !keepServerRun
+        ? {
+            ...input.pickups,
+            [pending.actionItemId]: { agent: pending.agent, status: "queued", at: pending.since },
+          }
+        : input.pickups,
+  };
+}
 type Milestone = {
   id: string;
   action_item_id: string;
@@ -180,6 +239,9 @@ export type StrategicMoveLite = {
   ratioName: string;
   impactLine?: string;
   health: number;
+  /** Canonical pillar. The tile number is this score, not `health`. */
+  pillarLabel?: string | null;
+  pillarScore?: number | null;
 };
 
 interface Props {
@@ -189,6 +251,8 @@ interface Props {
   /** When false the UI is read-only: members cannot edit goals, add/delete actions, or send emails. */
   isOwner?: boolean;
   moves?: StrategicMoveLite[];
+  /** Health pillars. Tile numbers come from here, including an unscored Cash pillar. */
+  pillars?: readonly { id: ActionPlanPillarTile["id"]; score: number | null; note?: string | null }[];
   onViewAnalysis?: (driverKey?: string) => void;
   /** Move key whose Action Plan item should be highlighted/scrolled to on load. */
   focusMoveKey?: string | null;
@@ -434,7 +498,7 @@ export function buildStrategicMoveImportRows(opts: {
     source: "strategic_move",
     source_move_key: mv.key,
     driver_key: mv.key,
-    outcome_why: mv.impactLine ?? `Improves ${mv.ratioName}.`,
+    outcome_why: mv.impactLine ?? `Improves ${moveFactorLabel(mv)}.`,
   }));
 }
 const STATUS_LABEL: Record<Status, string> = {
@@ -478,6 +542,7 @@ export default function ActionPlanPanel({
   simplified,
   isOwner = true,
   moves = [],
+  pillars,
   onViewAnalysis,
   focusMoveKey,
   onFocusHandled,
@@ -609,25 +674,33 @@ export default function ActionPlanPanel({
       }
       const list = (its ?? []) as Item[];
       let shown = list;
+      let loadedNotes: Record<string, AssignmentNoteRow[]> = {};
       if (list.length) {
         const { data: notes } = await supabase
           .from("action_updates")
-          .select("action_item_id,note,created_at")
+          .select("action_item_id,note,created_at,actor_label,actor_type")
           .in(
             "action_item_id",
             list.map((item) => item.id),
           )
           .order("created_at", { ascending: false });
-        const grouped = new Map<string, { note: string | null; at: string }[]>();
+        const grouped = new Map<string, AssignmentNoteRow[]>();
         for (const row of (notes ?? []) as {
           action_item_id?: string;
           note?: string | null;
           created_at?: string;
+          actor_label?: string | null;
+          actor_type?: string | null;
         }[]) {
           const id = row.action_item_id;
           if (!id) continue;
           const bucket = grouped.get(id) ?? [];
-          bucket.push({ note: row.note ?? null, at: row.created_at ?? "" });
+          bucket.push({
+            note: row.note ?? null,
+            at: row.created_at ?? "",
+            actorLabel: row.actor_label ?? null,
+            actorType: row.actor_type ?? null,
+          });
           grouped.set(id, bucket);
         }
         shown = list.map((item) => {
@@ -640,19 +713,19 @@ export default function ActionPlanPanel({
         });
         const noteState: Record<string, AssignmentNoteRow[]> = {};
         for (const [id, notes] of grouped) noteState[id] = notes;
-        setItemNotes(noteState);
-      } else {
-        setItemNotes({});
+        loadedNotes = noteState;
       }
-      setItems(shown);
+      let loadedPickups: Record<string, PlanPickup> = {};
       if (list.length) {
         const runs = await loadActionHandoffRuns(list.map((item) => item.id));
-        const next: Record<string, { agent: AgentKey; status: string; at: string }> = {};
+        const next: Record<string, PlanPickup> = {};
         for (const [id, run] of runs) next[id] = run;
-        setPickups(next);
-      } else {
-        setPickups({});
+        loadedPickups = next;
       }
+      const painted = applyOptimisticPlan({ items: shown, notes: loadedNotes, pickups: loadedPickups });
+      setItemNotes(painted.notes);
+      setItems(painted.items);
+      setPickups(painted.pickups);
       setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
       if (list.length) {
         const ids = list.map((i) => i.id);
@@ -756,8 +829,57 @@ export default function ActionPlanPanel({
     };
   }, [refresh]);
 
+  const planSnap = useRef({ items, notes: itemNotes, pickups });
+  planSnap.current = { items, notes: itemNotes, pickups };
+  const priorPlan = useRef<{
+    since: string;
+    items: Item[];
+    notes: Record<string, AssignmentNoteRow[]>;
+    pickups: Record<string, PlanPickup>;
+  } | null>(null);
   useEffect(() => {
-    const onRefresh = () => void refresh();
+    const onRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
+      if (detail?.failed && detail.actionItemId) {
+        const prior = priorPlan.current;
+        if (prior && detail.since && prior.since === detail.since) {
+          setItems(prior.items);
+          setItemNotes(prior.notes);
+          setPickups(prior.pickups);
+        }
+        void refresh();
+        return;
+      }
+      if (detail?.since && detail.note && detail.assigneeName && detail.actionItemId) {
+        if (priorPlan.current?.since !== detail.since) {
+          priorPlan.current = { since: detail.since, ...planSnap.current };
+        }
+        const id = detail.actionItemId;
+        setItemNotes((current) => ({
+          ...current,
+          [id]: withPendingNote(current[id] ?? [], detail.note!),
+        }));
+        setItems((current) =>
+          current.map((row) =>
+            row.id === id
+              ? {
+                  ...row,
+                  owner_name: detail.assigneeName,
+                  owner_id: detail.agent ? null : row.owner_id,
+                  owner_email: detail.agent ? null : row.owner_email,
+                }
+              : row,
+          ),
+        );
+        if (detail.agent) {
+          setPickups((current) => ({
+            ...current,
+            [id]: { agent: detail.agent as AgentKey, status: "queued", at: detail.since ?? "" },
+          }));
+        }
+      }
+      void refresh();
+    };
     window.addEventListener("milon-action-plan-refresh", onRefresh);
     return () => window.removeEventListener("milon-action-plan-refresh", onRefresh);
   }, [refresh]);
@@ -1343,7 +1465,9 @@ export default function ActionPlanPanel({
       />
       )}
 
-      {!ownerView && moves.length > 0 && <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />}
+      {!ownerView && pillars && pillars.length > 0 && (
+        <DriversStrip tiles={actionPlanPillarTiles(pillars, moves)} onView={onViewAnalysis} />
+      )}
 
       {interventionSteps.length > 0 ? (
         <section
@@ -1632,12 +1756,38 @@ export default function ActionPlanPanel({
                       ? { text: live.summary.trim(), at: live.at }
                       : null;
                   const result = storedResult ?? liveResult;
+                  if (handoffCostStopped(result?.text) && run?.agent) return handoffCouldNotFinish(run.agent);
                   return botPickupCaption({
                     assignee: it.owner_name,
                     run,
                     result: result?.text,
                     resultAt: result?.at,
                   });
+                })()}
+                pickupRun={(() => {
+                  const stored = pickups[it.id] ?? null;
+                  let live: { agent: AgentKey; status: string; at: string } | null = null;
+                  for (const run of draftActivity.runs) {
+                    if (run.action_item_id !== it.id) continue;
+                    const at = run.finished_at || run.queued_at;
+                    if (!live || at > live.at) live = { agent: run.agent, status: run.status, at };
+                  }
+                  if (live && stored && live.agent === stored.agent && live.at >= (stored.at || "")) {
+                    return { status: live.status, at: live.at };
+                  }
+                  return stored ? { status: stored.status, at: stored.at } : null;
+                })()}
+                onRetry={(() => {
+                  const agent = pickups[it.id]?.agent;
+                  if (!agent) return undefined;
+                  return () => {
+                    void commitActionHandoff({
+                      clientId,
+                      actionItemId: it.id,
+                      title: it.title,
+                      agent,
+                    });
+                  };
                 })()}
                 suggestion={automationById.get(it.id) ?? null}
                 onHandOff={isOwner ? (agent) => void assignToAgent(it, agent) : undefined}
@@ -1894,8 +2044,8 @@ function GoalHeader({
     <Card id="wizard-action-goal" className={CARD_SHELL}>
       <div className={GOLD_RULE} />
       <CardContent className="pt-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+        <div className="action-goal-head flex flex-wrap items-start justify-between gap-4">
+          <div className="action-goal-copy min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
                 {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal
@@ -2110,16 +2260,17 @@ function GoalHeader({
 
 // ═══ Drivers strip ═══════════════════════════════════════════════════════════
 function DriversStrip({
-  moves,
+  tiles,
   onView,
 }: {
-  moves: StrategicMoveLite[];
+  tiles: readonly ActionPlanPillarTile[];
   onView?: (k?: string) => void;
 }) {
   return (
-    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
-      {moves.map((m) => {
-        const score = driverHealthLabel(m.health);
+    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      {tiles.map((tile) => {
+        const score = tile.score;
+        const sub = score == null ? tile.note : tile.factor;
         const tone =
           score == null
             ? "#94a3b8"
@@ -2130,24 +2281,22 @@ function DriversStrip({
                 : "#ef4444";
         return (
           <button
-            key={m.key}
-            onClick={() => onView?.(m.key)}
+            key={tile.id}
+            onClick={() => onView?.(tile.moveKey ?? tile.id)}
             className="group rounded-xl border border-[#DBEAFE] bg-white px-3.5 py-3 text-left transition-colors hover:border-[#0B5FFF]/40 dark:border-slate-800 dark:bg-slate-900/50"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className={LABEL_CLS}>{m.ratioName}</span>
+              <span className="text-[10px] font-bold tracking-[0.12em] text-[#3D5270] dark:text-slate-400">
+                {tile.label}
+              </span>
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
             </div>
             <div className="mt-1 text-lg font-extrabold tabular-nums tracking-tight text-slate-950 dark:text-white">
-              {score != null ? (
-                <>
-                  {score}
-                  <span className="text-xs font-semibold text-slate-400">/100</span>
-                </>
-              ) : (
-                <span className="text-slate-400">—</span>
-              )}
+              {score != null ? score : <span className="text-slate-400">—</span>}
             </div>
+            {sub ? (
+              <div className="mt-0.5 text-[10px] font-medium text-slate-500">{sub}</div>
+            ) : null}
             <div className="mt-0.5 flex items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-[#102A43] dark:group-hover:text-[#0B5FFF]">
               View full analysis <ChevronRight className="h-3 w-3" />
             </div>
@@ -2178,6 +2327,8 @@ function ItemRow({
   onAssignPerson,
   comingSoon,
   pickupLabel,
+  pickupRun = null,
+  onRetry,
   notes = [],
   focused,
   suggestion,
@@ -2206,6 +2357,8 @@ function ItemRow({
   comingSoon?: Partial<Record<AgentKey, true>>;
   /** Set when a queued run for this action has started or finished. */
   pickupLabel?: string | null;
+  pickupRun?: { status: string; at?: string | null } | null;
+  onRetry?: () => void;
   notes?: readonly AssignmentNoteRow[];
 }) {
   const { date, market } = useMarketFormat();
@@ -2473,7 +2626,7 @@ function ItemRow({
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
       </div>
-      {onHandOff || pickupLabel || notes.length > 0 ? (
+      {onHandOff || pickupLabel || pickupRun || notes.length > 0 ? (
         <div className="px-3 pb-3 sm:px-4" onClick={(event) => event.stopPropagation()}>
           {onHandOff ? (
             <HandToMenu
@@ -2499,11 +2652,7 @@ function ItemRow({
               }}
             />
           ) : null}
-          {pickupLabel ? (
-            <p className="mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
-              {pickupLabel}
-            </p>
-          ) : null}
+          <HandoffRunStatus run={pickupRun} caption={pickupLabel} onRetry={onRetry} />
           <AssignmentNotes notes={notes} />
         </div>
       ) : null}
@@ -2757,7 +2906,7 @@ function ImportPanel({
                     {m.title}
                   </span>
                   <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                    {m.ratioName}
+                    {moveFactorLabel(m)}
                     {m.impactLine ? ` · ${m.impactLine}` : ""}
                   </span>
                 </span>

@@ -217,16 +217,11 @@ export function FirmBandUpgrade({
               key={band.id}
               aria-current={isCurrent ? "true" : undefined}
               data-funnel={band.id === "solo" && soloLeads ? FUNNEL_SOLO_FIRST : undefined}
-              className="text-foreground"
-              style={{
-                display: "grid",
-                gridTemplateColumns: selectable ? "20px 1fr auto" : "1fr auto",
-                gap: 8,
-                alignItems: "center",
-                padding: "8px 0",
-                borderTop: "1px solid var(--border, var(--line, rgba(0,0,0,.08)))",
-                fontSize: 13,
-              }}
+              className={
+                selectable
+                  ? "firm-band-row firm-band-row--pick text-foreground"
+                  : "firm-band-row text-foreground"
+              }
             >
               {selectable ? (
                 <input
@@ -240,7 +235,7 @@ export function FirmBandUpgrade({
                   disabled={upgrading}
                 />
               ) : null}
-              <span>
+              <span className="firm-band-row__copy">
                 <strong>{band.name}</strong>
                 {isCurrent ? (
                   <span
@@ -272,7 +267,7 @@ export function FirmBandUpgrade({
                     : firmClientLimitLabel(band.id)}
                 </span>
               </span>
-              <span>{price}</span>
+              <span className="firm-band-row__price">{price}</span>
             </label>
           );
         })}

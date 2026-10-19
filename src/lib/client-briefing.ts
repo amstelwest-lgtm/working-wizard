@@ -204,7 +204,7 @@ export function buildFinancialSnapshot(input: {
 
 export function healthHeadline(score: number | null | undefined, label: string): string {
   if (score == null || !Number.isFinite(score)) return "Not scored yet";
-  return `${Math.round(score)} / 100 · ${label}`;
+  return `${Math.round(score)} · ${label}`;
 }
 
 // ── About this business ───────────────────────────────────────────────────────

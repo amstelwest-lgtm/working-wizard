@@ -88,7 +88,7 @@ assert.deepEqual(
   "overview cards stay in the CoS order",
 );
 const cards = overviewSectionCards({
-  health: "72 / 100 · Stable",
+  health: "72 · Stable",
   cash: "11 weeks",
   collections: "R 92 000",
   moves: "Invoice the same day work is done",
@@ -101,7 +101,7 @@ assert.deepEqual(
 assert.deepEqual(
   cards.filter((card) => card.figure).map((card) => [card.id, card.figure]),
   [
-    ["health", "72 / 100 · Stable"],
+    ["health", "72 · Stable"],
     ["cash", "11 weeks"],
     ["collections", "R 92 000"],
     ["moves", "Invoice the same day work is done"],

@@ -6,11 +6,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
+import { HandoffRunStatus } from "@/components/handoff-run-status";
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import { HandToMenu } from "@/components/hand-to-menu";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useMarketFormat } from "@/contexts/market";
-import { botPickupCaption } from "@/lib/action-handoff";
+import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { latestHandoffResult } from "@/lib/owner-handoff";
@@ -32,21 +33,21 @@ export type HomeBriefHandoff = {
   run?: { agent: AgentKey; status: string; at?: string | null } | null;
 };
 
-function HandoffProgress({ item }: { item: HomeBriefHandoff }) {
+function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: () => void }) {
   const result = latestHandoffResult(item.notes ?? []);
-  const caption = botPickupCaption({
-    assignee: item.assignee,
-    run: item.run,
-    result: result?.text,
-    resultAt: result?.at,
-  });
+  const agent = item.run?.agent ?? item.agent ?? null;
+  const caption =
+    handoffCostStopped(result?.text) && agent
+      ? handoffCouldNotFinish(agent)
+      : botPickupCaption({
+          assignee: item.assignee,
+          run: item.run,
+          result: result?.text,
+          resultAt: result?.at,
+        });
   return (
     <>
-      {caption ? (
-        <p className="fm-brief-progress" data-agent-pickup>
-          {caption}
-        </p>
-      ) : null}
+      <HandoffRunStatus run={item.run} caption={caption} onRetry={onRetry} />
       <AssignmentNotes notes={item.notes ?? []} />
     </>
   );
@@ -168,7 +169,23 @@ export function FinancialManagerBrief({
                 <div>
                   <b>{action.title}</b>
                   <span>{action.reason}</span>
-                  {handoff ? <HandoffProgress item={handoff} /> : null}
+                  {handoff ? (
+                    <HandoffProgress
+                      item={handoff}
+                      onRetry={
+                        clientId && handoff.agent
+                          ? () => {
+                              void commitActionHandoff({
+                                clientId,
+                                actionItemId: handoff.id,
+                                title: handoff.title,
+                                agent: handoff.agent as AgentKey,
+                              });
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
                 </div>
                 {action.button === "hand" && clientId && handoff ? (
                   <BriefHandControl clientId={clientId} item={handoff} audience={audience} />

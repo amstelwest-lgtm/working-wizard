@@ -34,7 +34,8 @@ function flatten(text: string) {
 const blob = formatOwnerReply(OWNER_REPLY_BLOB);
 const blobText = ownerReplyPlainText(blob);
 assert(runsText(blob.headline).startsWith("Overall, healthy:"), `blob headline (${runsText(blob.headline)})`);
-assert(blob.headline.some((run) => run.bold && run.text === "80/100"), "80/100 is bold");
+assert(blob.headline.some((run) => run.bold && run.text === "80"), "80 is bold");
+assert(blobText.includes("Profit is your weakest pillar at 72"), "a stored Profit Drivers note uses the pillar name");
 assert(blobText.includes("operating margin at 2.9%"), "the weak spot stays in the reply");
 assert(blob.body.length >= 2, "the blob splits into short paragraphs");
 assert(blob.actions.length === 2, `blob next actions are a list (${blob.actions.length})`);
@@ -46,8 +47,8 @@ assert(!blobText.includes("**"), "bold markers are not shown raw");
 assert(!blobText.includes(" - "), "inline bullets are not left in the paragraph");
 
 const bold = formatOwnerReply(OWNER_REPLY_STRUCTURED_BOLD);
-assert(runsText(bold.headline) === "Overall, healthy: 80/100 for Sep 2026.", `bold headline (${runsText(bold.headline)})`);
-assert(bold.headline.some((run) => run.bold && run.text === "80/100"), "structured score is bold");
+assert(runsText(bold.headline) === "Overall, healthy: 80 for Sep 2026.", `bold headline (${runsText(bold.headline)})`);
+assert(bold.headline.some((run) => run.bold && run.text === "80"), "structured score is bold");
 assert(bold.stats.length === 5, `five key figures (${bold.stats.length})`);
 assert(bold.stats.map((stat) => stat.label).join("|") === "Score|Revenue|Net profit|Gross margin|Operating margin", "stat labels stay in order");
 assert(bold.stats[1].value.some((run) => run.text.includes("R4,200,000")), "revenue stays on the stat");

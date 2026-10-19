@@ -4,7 +4,12 @@
  * Rank once here so Moves and Plan cannot drift.
  */
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { PILLAR_LABELS, type HealthPillarId } from "@/lib/health-score";
+import { moveFactorLabel, strategicMovePillar } from "@/lib/move-pillars";
 import { profilePriorityWeight } from "@/lib/profile-signals";
+import { factorDisplayName } from "@/lib/score-prose";
+
+export { moveFactorLabel, strategicMovePillar };
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
 export type StrategicEisenhower = "Do" | "Decide" | "Delegate" | "Delete";
@@ -340,7 +345,63 @@ export const STRATEGIC_MOVE_CATALOG: readonly StrategicMoveEntry[] = [
   },
 ];
 
-const PAY_FASTER_MAX_DAYS = 30;
+/** Debtor days at or under this are already healthy. Receivables moves stay off. */
+export const HEALTHY_DEBTOR_DAYS_MAX = 30;
+
+/** Computed debtor days. Unknown (missing or not a number) does not count as healthy. */
+export function debtorDaysAreHealthy(days: number | null | undefined): boolean {
+  return typeof days === "number" && Number.isFinite(days) && days <= HEALTHY_DEBTOR_DAYS_MAX;
+}
+
+/** Pillar name and the shared pillar score, so a ratio nickname is not the pillar. */
+export function attachPillarScore<T extends { key: string }>(
+  move: T,
+  pillars: readonly { id: HealthPillarId; score: number | null }[] | null | undefined,
+): T & { pillarLabel: string | null; pillarScore: number | null } {
+  const id = strategicMovePillar(move.key);
+  const pillar = id ? pillars?.find((row) => row.id === id) : undefined;
+  return {
+    ...move,
+    pillarLabel: id ? PILLAR_LABELS[id] : null,
+    pillarScore: pillar?.score ?? null,
+  };
+}
+
+export type ActionPlanPillarTile = {
+  id: HealthPillarId;
+  label: string;
+  /** Same rounded pillar score Health shows. Null when the pillar is unscored. */
+  score: number | null;
+  note: string | null;
+  /** Top move in this pillar, without its own score. */
+  factor: string | null;
+  moveKey: string | null;
+};
+
+const PILLAR_TILE_ORDER: readonly HealthPillarId[] = ["profit", "assets", "financing", "cash"];
+
+/**
+ * Action-plan tiles. The number is the Health pillar score, never the
+ * ratio score sitting under a nickname such as Profit power.
+ */
+export function actionPlanPillarTiles(
+  pillars: readonly { id: HealthPillarId; score: number | null; note?: string | null }[] | null | undefined,
+  moves: readonly { key: string; ratioName: string }[] = [],
+): ActionPlanPillarTile[] {
+  return PILLAR_TILE_ORDER.map((id) => {
+    const pillar = pillars?.find((row) => row.id === id);
+    const move = moves.find((row) => strategicMovePillar(row.key) === id);
+    const raw = pillar?.score;
+    return {
+      id,
+      label: PILLAR_LABELS[id],
+      score: raw != null && Number.isFinite(raw) ? Math.round(raw) : null,
+      note: pillar?.note?.trim() || null,
+      factor: move ? factorDisplayName(move.ratioName) : null,
+      moveKey: move?.key ?? null,
+    };
+  });
+}
 
 const NO_STOCK_TEMPLATES = new Set([
   "hospitality_rooms",
@@ -389,12 +450,48 @@ export function planGoalIsOverdue(
 
 const PRICE_CLUSTER = /\braise prices\b|\bincrease prices\b/i;
 const FIXED_VARIABLE_CLUSTER = /\bfixed (?:contracts|costs)\b[\s\S]{0,80}\bvariable\b/i;
+const RECEIVABLES_STEP =
+  /pay faster|receivable|debtor day|invoice the same day|invoice same-day|invoice faster|collect more aggressively|speed up receivables/i;
 
-/** Near-duplicate catalog titles collapse after ranking. Catalog text stays. */
-function moveCluster(title: string): string | null {
-  if (PRICE_CLUSTER.test(title)) return "price";
+/**
+ * Same lever, regardless of the catalog title. The first ranked move in a
+ * lever is the one that stays.
+ */
+const MOVE_LEVER_BY_KEY: Readonly<Record<string, string>> = {
+  operatingMargin: "pricing",
+  netMargin: "pricing",
+  grossMargin: "pricing",
+  roe: "pricing",
+  debtorDays: "receivables",
+  workingCapitalDays: "receivables",
+  ocfToEbitda: "receivables",
+  workingCapitalUtilization: "receivables",
+  workingCapitalFunding: "receivables",
+  creditorDays: "payables",
+  inventoryDays: "inventory",
+  fixedCostRatio: "fixed-variable",
+  dol: "fixed-variable",
+  assetTurnover: "assets",
+  roa: "assets",
+  gpToLabor: "labor",
+  salesPerEmployee: "labor",
+  debtToEquity: "leverage",
+  debtToAssets: "leverage",
+  equityMultiplier: "equity",
+  fundingStructure: "equity",
+  capexIntensity: "capex",
+  assetReinvestmentRatio: "capex",
+};
+
+function titleCluster(title: string): string | null {
+  if (PRICE_CLUSTER.test(title)) return "pricing";
   if (FIXED_VARIABLE_CLUSTER.test(title)) return "fixed-variable";
+  if (RECEIVABLES_STEP.test(title)) return "receivables";
   return null;
+}
+
+function moveLever(entry: { key: string; title: string }): string | null {
+  return MOVE_LEVER_BY_KEY[entry.key] ?? titleCluster(entry.title);
 }
 
 /** The current-ratio catalog title is a target, not a move. Use its doable step. */
@@ -422,21 +519,25 @@ export function rankStrategicMoves(input: {
   entries?: readonly StrategicMoveEntry[];
   /** Drop moves that would be ranked on a figure the bridge does not trust. */
   suppressKeys?: readonly string[];
-  /** Stored debtor days. At or under 30, "pay faster" is not suggested. */
+  /**
+   * Computed debtor days (`computedDaysAr`). At or under
+   * `HEALTHY_DEBTOR_DAYS_MAX`, receivables moves are left off. Null when
+   * the days are unknown, which does not suppress.
+   */
   debtorDays?: number | null;
   /** Financing pillar score. Leverage Level uses this one figure. */
   financingHealth?: number | null;
+  /** Shared weakest pillar. Moves in that pillar rank first. */
+  weakestPillar?: HealthPillarId | null;
   limit?: number;
 }): RankedStrategicMove[] {
   const suppressed = new Set(input.suppressKeys ?? []);
-  const debtorsAlreadyQuick =
-    input.debtorDays != null && Number.isFinite(input.debtorDays) && input.debtorDays <= PAY_FASTER_MAX_DAYS;
-  const payFaster = /pay faster/i;
+  const debtorsAlreadyHealthy = debtorDaysAreHealthy(input.debtorDays);
   const keepStock = stockSittingApplies(input.profile);
   const entries = (input.entries ?? STRATEGIC_MOVE_CATALOG).filter((entry) => {
     if (suppressed.has(entry.key)) return false;
     if (!keepStock && entry.key === "inventoryDays") return false;
-    if (debtorsAlreadyQuick && payFaster.test(entry.title)) return false;
+    if (debtorsAlreadyHealthy && moveLever(entry) === "receivables") return false;
     return true;
   });
   const healthByKey = input.healthByKey ?? {};
@@ -450,9 +551,12 @@ export function rankStrategicMoves(input: {
       const raw = entry.key === "equityMultiplier" && financing != null ? financing : healthByKey[entry.key];
       const health = typeof raw === "number" && Number.isFinite(raw) ? raw : Number.NaN;
       const urgency = Number.isFinite(health) ? 100 - health : 50;
-      const score = urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName);
-      const actions = debtorsAlreadyQuick
-        ? entry.actions.filter((action) => !payFaster.test(action))
+      const inWeakest =
+        input.weakestPillar != null && strategicMovePillar(entry.key) === input.weakestPillar ? 4 : 1;
+      const score =
+        urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName) * inWeakest;
+      const actions = debtorsAlreadyHealthy
+        ? entry.actions.filter((action) => !RECEIVABLES_STEP.test(action))
         : [...entry.actions];
       return {
         ...entry,
@@ -467,7 +571,7 @@ export function rankStrategicMoves(input: {
   const seen = new Set<string>();
   const deduped: RankedStrategicMove[] = [];
   for (const move of ranked) {
-    const cluster = moveCluster(move.title);
+    const cluster = moveLever(move);
     if (cluster) {
       if (seen.has(cluster)) continue;
       seen.add(cluster);

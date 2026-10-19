@@ -75,12 +75,17 @@ function CustomTooltip({
  * Bubble size scales with revenue when available.
  */
 export function PortfolioHealthScatter({ clients, onSelect }: Props) {
-  const data = clients.map((c) => ({
-    ...c,
-    x: clampTrend(c.trendDelta),
-    y: Math.max(0, Math.min(100, c.score)),
-    z: c.revenue != null ? Math.max(c.revenue, 1) : 40_000,
-  }));
+  const data = clients.flatMap((c) => {
+    if (!Number.isFinite(c.score) || !Number.isFinite(c.trendDelta)) return [];
+    return [
+      {
+        ...c,
+        x: clampTrend(c.trendDelta),
+        y: Math.max(0, Math.min(100, c.score)),
+        z: c.revenue != null ? Math.max(c.revenue, 1) : 40_000,
+      },
+    ];
+  });
 
   return (
     <div className="ph-scatter">
@@ -93,9 +98,12 @@ export function PortfolioHealthScatter({ clients, onSelect }: Props) {
 
       <div className="ph-scatter-chart">
         {data.length === 0 ? (
-          <div className="ph-empty">Score a client to plot portfolio health.</div>
+          <div className="ph-empty">
+            No trend to plot yet. A point appears when a client has a score and a second stored
+            score.
+          </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={280}>
             <ScatterChart margin={{ top: 12, right: 16, bottom: 28, left: 8 }}>
               <CartesianGrid stroke="var(--line-soft)" strokeDasharray="3 3" />
               <XAxis

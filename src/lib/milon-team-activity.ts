@@ -8,6 +8,7 @@ import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
+import { canonicalScoreProse } from "./score-prose";
 import { rewriteDraftMonthStamp } from "./statement-period";
 
 export const TODAY_RATIO_CAP = 3;
@@ -371,10 +372,12 @@ export function formatFindingProse(
   market: MoneyMarket = ZA_MARKET,
 ): string {
   const corrected = correctQuotedFigures(figureEntries(figures));
-  return rewriteDraftMonthStamp(
-    stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
-      .replace(/\s+/g, " ")
-      .trim(),
+  return canonicalScoreProse(
+    rewriteDraftMonthStamp(
+      stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
+        .replace(/\s+/g, " ")
+        .trim(),
+    ),
   );
 }
 
@@ -640,7 +643,7 @@ export function handoffLine(
 ): string | null {
   const parts = handoffParts(row);
   if (!parts) return null;
-  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${parts.text}`;
+  return `${shortName(parts.from)} → ${shortName(parts.to)}: ${canonicalScoreProse(parts.text)}`;
 }
 
 /** Owner review is never a sign-off. Only an accountant approval uses the check. */

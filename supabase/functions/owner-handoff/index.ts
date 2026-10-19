@@ -147,6 +147,8 @@ Deno.serve(async (req) => {
   if (!action) return json({ error: "action_not_found" }, 404);
   if (action.client_id !== clientId) return json({ error: "action_client_mismatch" }, 403);
 
+  const handoffActor = user.email?.split("@")[0]?.trim() || "Accountant";
+
   if (personId) {
     const { data: employee, error: employeeError } = await admin
       .from("client_employees")
@@ -157,14 +159,13 @@ Deno.serve(async (req) => {
     if (!employee || employee.client_id !== clientId) return json({ error: "person_not_on_file" }, 400);
     const cleared = await cancelQueuedRuns(admin, actionItemId);
     if (cleared) return json({ error: cleared }, 500);
-    const actor = user.email?.split("@")[0]?.trim() || "Accountant";
     const name = typeof employee.name === "string" && employee.name.trim() ? employee.name.trim() : "Team member";
     const failed = await writeAssignment(admin, {
       clientId,
       actionItemId,
       ownerId: personId,
       actorType: "owner_app",
-      actorLabel: actor,
+      actorLabel: handoffActor,
       note: personAssignmentNote(name),
     });
     if (failed) return json({ error: failed }, 500);
@@ -186,8 +187,8 @@ Deno.serve(async (req) => {
       clientId,
       actionItemId,
       ownerId: null,
-      actorType: "system",
-      actorLabel: decision.displayName,
+      actorType: "owner_app",
+      actorLabel: handoffActor,
       note: handoffRequestNote(decision.displayName),
     });
     if (failed) return json({ error: failed }, 500);
@@ -202,6 +203,7 @@ Deno.serve(async (req) => {
   }
 
   const inputs = handoffInputs(actionItemId);
+  let invokeInputs = inputs;
   const idempotencyKey = await agentIdempotencyKey({
     agent: decision.agent,
     clientId,
@@ -257,8 +259,8 @@ Deno.serve(async (req) => {
         clientId,
         actionItemId,
         ownerId: null,
-        actorType: "system",
-        actorLabel: decision.displayName,
+        actorType: "owner_app",
+        actorLabel: handoffActor,
         note: handoffRequestNote(decision.displayName),
       });
       if (failed) return json({ error: failed }, 500);
@@ -298,6 +300,7 @@ Deno.serve(async (req) => {
         status = "queued";
         created = true;
         invokeCorrelation = againCorrelation;
+        invokeInputs = againInputs;
         break;
       }
       if (againError?.code !== "23505") return json({ error: "run_not_queued" }, 500);
@@ -310,17 +313,12 @@ Deno.serve(async (req) => {
       if (againLookupError || !existingAgain?.id) return json({ error: "run_not_queued" }, 500);
       runId = existingAgain.id as string;
       status = existingAgain.status as string;
+      invokeInputs = againInputs;
       if (!handoffNeedsFreshRun(status)) {
-        const failed = await writeAssignment(admin, {
-          clientId,
-          actionItemId,
-          ownerId: null,
-          actorType: "system",
-          actorLabel: decision.displayName,
-          note: handoffRequestNote(decision.displayName),
-        });
-        if (failed) return json({ error: failed }, 500);
-        return json({ ok: true, noted: true, runId, status, already: true, runner: decision.runner });
+        // Reuse this queued or running row and start it with the again key.
+        // Another insert would be a third run, and the original key matches the finished one.
+        created = true;
+        break;
       }
     }
     if (!created) return json({ error: "run_not_queued" }, 500);
@@ -331,7 +329,7 @@ Deno.serve(async (req) => {
     p_body: {
       client_id: clientId,
       trigger: HANDOFF_TRIGGER,
-      inputs,
+      inputs: invokeInputs,
       correlation_id: invokeCorrelation,
     },
   });
@@ -351,8 +349,8 @@ Deno.serve(async (req) => {
     clientId,
     actionItemId,
     ownerId: null,
-    actorType: "system",
-    actorLabel: decision.displayName,
+    actorType: "owner_app",
+    actorLabel: handoffActor,
     note: handoffRequestNote(decision.displayName),
   });
   if (failed) return json({ error: failed, runId }, 500);

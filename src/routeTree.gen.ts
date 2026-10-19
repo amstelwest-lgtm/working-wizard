@@ -50,7 +50,13 @@ import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
+import { Route as AuthenticatedClientsQueriesRouteImport } from './routes/_authenticated/clients_.queries'
 import { Route as AuthenticatedFounderMetricsRouteImport } from './routes/_authenticated/founder.metrics'
+import { Route as AuthenticatedPracticeFollowUpRouteImport } from './routes/_authenticated/practice_.follow-up'
+import { Route as AuthenticatedPracticeInsightsRouteImport } from './routes/_authenticated/practice_.insights'
+import { Route as AuthenticatedPracticeMarketplaceRouteImport } from './routes/_authenticated/practice_.marketplace'
+import { Route as AuthenticatedPracticeNeedsAttentionRouteImport } from './routes/_authenticated/practice_.needs-attention'
+import { Route as AuthenticatedPracticePlaybooksRouteImport } from './routes/_authenticated/practice_.playbooks'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
@@ -272,10 +278,46 @@ const AuthenticatedClientsClientIdRoute =
     path: '/clients/$clientId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedClientsQueriesRoute =
+  AuthenticatedClientsQueriesRouteImport.update({
+    id: '/clients_/queries',
+    path: '/clients/queries',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedFounderMetricsRoute =
   AuthenticatedFounderMetricsRouteImport.update({
     id: '/founder/metrics',
     path: '/founder/metrics',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPracticeFollowUpRoute =
+  AuthenticatedPracticeFollowUpRouteImport.update({
+    id: '/practice_/follow-up',
+    path: '/practice/follow-up',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPracticeInsightsRoute =
+  AuthenticatedPracticeInsightsRouteImport.update({
+    id: '/practice_/insights',
+    path: '/practice/insights',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPracticeMarketplaceRoute =
+  AuthenticatedPracticeMarketplaceRouteImport.update({
+    id: '/practice_/marketplace',
+    path: '/practice/marketplace',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPracticeNeedsAttentionRoute =
+  AuthenticatedPracticeNeedsAttentionRouteImport.update({
+    id: '/practice_/needs-attention',
+    path: '/practice/needs-attention',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPracticePlaybooksRoute =
+  AuthenticatedPracticePlaybooksRouteImport.update({
+    id: '/practice_/playbooks',
+    path: '/practice/playbooks',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedReportsIndexRoute =
@@ -397,7 +439,13 @@ export interface FileRoutesByFullPath {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
+  '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
+  '/practice/follow-up': typeof AuthenticatedPracticeFollowUpRoute
+  '/practice/insights': typeof AuthenticatedPracticeInsightsRoute
+  '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
+  '/practice/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
+  '/practice/playbooks': typeof AuthenticatedPracticePlaybooksRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -454,7 +502,13 @@ export interface FileRoutesByTo {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
+  '/clients/queries': typeof AuthenticatedClientsQueriesRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
+  '/practice/follow-up': typeof AuthenticatedPracticeFollowUpRoute
+  '/practice/insights': typeof AuthenticatedPracticeInsightsRoute
+  '/practice/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
+  '/practice/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
+  '/practice/playbooks': typeof AuthenticatedPracticePlaybooksRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -513,7 +567,13 @@ export interface FileRoutesById {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
+  '/_authenticated/clients_/queries': typeof AuthenticatedClientsQueriesRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
+  '/_authenticated/practice_/follow-up': typeof AuthenticatedPracticeFollowUpRoute
+  '/_authenticated/practice_/insights': typeof AuthenticatedPracticeInsightsRoute
+  '/_authenticated/practice_/marketplace': typeof AuthenticatedPracticeMarketplaceRoute
+  '/_authenticated/practice_/needs-attention': typeof AuthenticatedPracticeNeedsAttentionRoute
+  '/_authenticated/practice_/playbooks': typeof AuthenticatedPracticePlaybooksRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -572,7 +632,13 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
+    | '/clients/queries'
     | '/founder/metrics'
+    | '/practice/follow-up'
+    | '/practice/insights'
+    | '/practice/marketplace'
+    | '/practice/needs-attention'
+    | '/practice/playbooks'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
@@ -629,7 +695,13 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
+    | '/clients/queries'
     | '/founder/metrics'
+    | '/practice/follow-up'
+    | '/practice/insights'
+    | '/practice/marketplace'
+    | '/practice/needs-attention'
+    | '/practice/playbooks'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
@@ -687,7 +759,13 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/_authenticated/clients/$clientId'
+    | '/_authenticated/clients_/queries'
     | '/_authenticated/founder/metrics'
+    | '/_authenticated/practice_/follow-up'
+    | '/_authenticated/practice_/insights'
+    | '/_authenticated/practice_/marketplace'
+    | '/_authenticated/practice_/needs-attention'
+    | '/_authenticated/practice_/playbooks'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/team'
@@ -1041,11 +1119,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsClientIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/clients_/queries': {
+      id: '/_authenticated/clients_/queries'
+      path: '/clients/queries'
+      fullPath: '/clients/queries'
+      preLoaderRoute: typeof AuthenticatedClientsQueriesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/founder/metrics': {
       id: '/_authenticated/founder/metrics'
       path: '/founder/metrics'
       fullPath: '/founder/metrics'
       preLoaderRoute: typeof AuthenticatedFounderMetricsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/practice_/follow-up': {
+      id: '/_authenticated/practice_/follow-up'
+      path: '/practice/follow-up'
+      fullPath: '/practice/follow-up'
+      preLoaderRoute: typeof AuthenticatedPracticeFollowUpRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/practice_/insights': {
+      id: '/_authenticated/practice_/insights'
+      path: '/practice/insights'
+      fullPath: '/practice/insights'
+      preLoaderRoute: typeof AuthenticatedPracticeInsightsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/practice_/marketplace': {
+      id: '/_authenticated/practice_/marketplace'
+      path: '/practice/marketplace'
+      fullPath: '/practice/marketplace'
+      preLoaderRoute: typeof AuthenticatedPracticeMarketplaceRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/practice_/needs-attention': {
+      id: '/_authenticated/practice_/needs-attention'
+      path: '/practice/needs-attention'
+      fullPath: '/practice/needs-attention'
+      preLoaderRoute: typeof AuthenticatedPracticeNeedsAttentionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/practice_/playbooks': {
+      id: '/_authenticated/practice_/playbooks'
+      path: '/practice/playbooks'
+      fullPath: '/practice/playbooks'
+      preLoaderRoute: typeof AuthenticatedPracticePlaybooksRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/reports/': {
@@ -1155,7 +1275,13 @@ interface AuthenticatedRouteChildren {
   AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
   AuthenticatedPracticeRoute: typeof AuthenticatedPracticeRoute
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
+  AuthenticatedClientsQueriesRoute: typeof AuthenticatedClientsQueriesRoute
   AuthenticatedFounderMetricsRoute: typeof AuthenticatedFounderMetricsRoute
+  AuthenticatedPracticeFollowUpRoute: typeof AuthenticatedPracticeFollowUpRoute
+  AuthenticatedPracticeInsightsRoute: typeof AuthenticatedPracticeInsightsRoute
+  AuthenticatedPracticeMarketplaceRoute: typeof AuthenticatedPracticeMarketplaceRoute
+  AuthenticatedPracticeNeedsAttentionRoute: typeof AuthenticatedPracticeNeedsAttentionRoute
+  AuthenticatedPracticePlaybooksRoute: typeof AuthenticatedPracticePlaybooksRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
   AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
@@ -1170,7 +1296,14 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOpsRoute: AuthenticatedOpsRoute,
   AuthenticatedPracticeRoute: AuthenticatedPracticeRoute,
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
+  AuthenticatedClientsQueriesRoute: AuthenticatedClientsQueriesRoute,
   AuthenticatedFounderMetricsRoute: AuthenticatedFounderMetricsRoute,
+  AuthenticatedPracticeFollowUpRoute: AuthenticatedPracticeFollowUpRoute,
+  AuthenticatedPracticeInsightsRoute: AuthenticatedPracticeInsightsRoute,
+  AuthenticatedPracticeMarketplaceRoute: AuthenticatedPracticeMarketplaceRoute,
+  AuthenticatedPracticeNeedsAttentionRoute:
+    AuthenticatedPracticeNeedsAttentionRoute,
+  AuthenticatedPracticePlaybooksRoute: AuthenticatedPracticePlaybooksRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
   AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,

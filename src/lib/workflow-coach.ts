@@ -99,17 +99,16 @@ const INTENTS: Record<string, Intent> = {
     because: "margin is where this business hurts, and the waterfall shows the leak",
   },
   assets: {
-    page: "profit",
-    because:
-      "asset efficiency is the weak pillar, and the waterfall shows whether those assets earn their keep",
+    page: "health",
+    because: "asset efficiency is the weak pillar, and its ratios show whether those assets earn their keep",
   },
   liquidity: {
     page: "cash",
     because: "liquidity is the weak spot, and the 13-week forecast shows whether cash holds",
   },
   financing: {
-    page: "budget",
-    because: "financing is the weak pillar, and the budget shows what that structure can carry",
+    page: "health",
+    because: "financing is the weak pillar, and its ratios show the funding pressure",
   },
   budget: { page: "budget", because: DEFAULT_BECAUSE.budget },
   collections: { page: "collections", because: DEFAULT_BECAUSE.collections },
@@ -202,18 +201,30 @@ export type PillarEvidenceId = "profit" | "assets" | "financing" | "cash";
 
 const PILLAR_EVIDENCE: Record<
   PillarEvidenceId,
-  { coach: string; label: string; tab: string; section?: string }
+  { coach: string; label: string; tab: string; section?: string; focus?: "health" | "pillars" }
 > = {
-  profit: { coach: "margin", label: "See it on Profitability", tab: "profit" },
-  assets: { coach: "assets", label: "See it on Profitability", tab: "profit" },
-  cash: { coach: "liquidity", label: "See it on Cash", tab: "cash" },
-  financing: { coach: "financing", label: "See it on Budget", tab: "budget" },
+  profit: { coach: "margin", label: "See it on Profit", tab: "profit", section: "waterfall" },
+  assets: {
+    coach: "assets",
+    label: "See the Assets ratios",
+    tab: "health",
+    section: "score",
+    focus: "health",
+  },
+  cash: { coach: "liquidity", label: "See it on Cash", tab: "cash", section: "forecast" },
+  financing: {
+    coach: "financing",
+    label: "See the Financing ratios",
+    tab: "health",
+    section: "score",
+    focus: "health",
+  },
 };
 
 export function evidenceForPillar(id: string): (CoachDestination & { label: string }) | null {
   const row = PILLAR_EVIDENCE[id as PillarEvidenceId];
   if (!row) return null;
-  return { tab: row.tab, section: row.section, coach: row.coach, label: row.label };
+  return { tab: row.tab, section: row.section, focus: row.focus, coach: row.coach, label: row.label };
 }
 
 /** Owner briefing tabs → accountant deliverable + coach intent. */

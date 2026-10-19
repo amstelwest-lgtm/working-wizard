@@ -39,6 +39,65 @@ export function handoffClock(at: string | null | undefined): string | null {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+/** A queued or running hand-off that has not moved for this long offers Retry. */
+export const HANDOFF_SLOW_AFTER_MS = 3 * 60 * 1000;
+
+/** Stored when a run stops so it does not spend another model call. Not shown raw. */
+export const HANDOFF_COST_STOP = "Stopped before another model call so the run stays within its cost ceiling.";
+
+export function handoffCostStopped(text: string | null | undefined): boolean {
+  return (text ?? "").includes(HANDOFF_COST_STOP);
+}
+
+/** Friendly line for a cost-ceiling stop. Retry sits beside it on the row. */
+export function handoffCouldNotFinish(agent: AgentKey): string {
+  return `${agentShortName(agent)} couldn't finish this one`;
+}
+
+function costStopLine(note: string): string | null {
+  if (!handoffCostStopped(note)) return null;
+  for (const agent of AGENT_KEYS) {
+    const short = agentShortName(agent);
+    if (note.includes(`${short} finished`) || note.startsWith(short)) return handoffCouldNotFinish(agent);
+  }
+  return "Couldn't finish this one";
+}
+
+/** True once a queued or running hand-off has been sitting longer than the usual wait. */
+export function handoffIsSlow(
+  status: string | null | undefined,
+  at: string | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (status !== "queued" && status !== "running") return false;
+  if (!at) return false;
+  const stamp = Date.parse(at);
+  if (Number.isNaN(stamp)) return false;
+  return now - stamp > HANDOFF_SLOW_AFTER_MS;
+}
+
+/**
+ * One note, with who wrote it and when.
+ * "Assigned to theo · by amstel.west · 8:31 PM"
+ */
+export function formatAssignmentNote(row: {
+  note: string;
+  at?: string | null;
+  actorLabel?: string | null;
+  actorType?: string | null;
+}): string {
+  const stripped = row.note.trim().replace(/\.+$/u, "");
+  const friendly = costStopLine(row.note);
+  const body = friendly ?? stripped;
+  const handed = stripped.startsWith("Handed to ");
+  const actorNamesBot = agentKeyFromAssignee(row.actorLabel) != null;
+  const hideAuthor = handed && (actorNamesBot || row.actorType === "system");
+  const actor = hideAuthor ? "" : (row.actorLabel?.trim() ?? "");
+  const time = handoffClock(row.at);
+  const tail = [actor ? `by ${actor}` : "", time ?? ""].filter(Boolean).join(" · ");
+  return tail ? `${body} · ${tail}` : body;
+}
+
 /**
  * Progress line once a queued run exists for this action.
  * A hand-off that has not started a run stays on the assignee label only.
@@ -53,9 +112,10 @@ export function handoffProgressCaption(
   if (status === "queued") return `${short} is queued`;
   if (status === "running") return `${short} picked this up`;
   if (status === "succeeded" || status === "partial") {
+    const result = detail?.result?.replace(/\s+/g, " ").trim();
+    if (handoffCostStopped(result)) return handoffCouldNotFinish(agent);
     const time = handoffClock(detail?.at);
     const head = time ? `${short} finished · ${time}` : `${short} finished`;
-    const result = detail?.result?.replace(/\s+/g, " ").trim();
     return result ? `${head} — ${result}` : head;
   }
   return null;

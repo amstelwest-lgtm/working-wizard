@@ -346,6 +346,14 @@ const DELIVERY_STATUS_LABEL: Record<string, string> = {
   whatsapp: "Shared · not confirmed received",
 };
 
+/**
+ * An unsigned advisory draft downloaded as a PDF is not a send.
+ * Signed report downloads stay on the history as Downloaded.
+ */
+export function countsAsSent(delivery: { kind?: string | null; channel?: string | null }): boolean {
+  return !(delivery.kind === "advisory_draft" && delivery.channel === "pdf_download");
+}
+
 export function channelHonestyLabel(channel: DeliveryChannel, acknowledged: boolean): string {
   if (acknowledged) return DELIVERY_STATUS_LABEL.acknowledged;
   return DELIVERY_STATUS_LABEL[channel] ?? "Logged";

@@ -61,8 +61,9 @@ assert(exceptionsSrc.includes('id="needs-attention"'), "urgent items use one nee
 assert(exceptionsSrc.includes("mergeNeedsAttention"), "health and sign-off share that strip");
 assert(!dashSrc.includes('className="attn-strip"'), "dashboard does not render a second attention strip");
 assert(
-  dashSrc.includes('<details className="home-fold" id="playbooks">'),
-  "playbook library is collapsed by default",
+  dashSrc.includes('id="playbooks"') &&
+    dashSrc.includes('view === "playbooks" ? { open: true }'),
+  "playbook library stays collapsed on the overview and opens on its page",
 );
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");

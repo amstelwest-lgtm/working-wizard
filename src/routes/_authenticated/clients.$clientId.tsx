@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { PeriodPill } from "@/components/chrome-icons";
 import { openPracticeSettings } from "@/lib/user-roles";
@@ -89,6 +89,7 @@ import {
   ratioScoreBand,
   overviewRatioInputs,
   overviewRatios,
+  CASH_OPENING_UNSCORED,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   cashPillarFollowsForecast,
@@ -168,6 +169,7 @@ import { clientBackTarget } from "@/lib/client-back";
 import { useOverlayHistory } from "@/lib/overlay-history";
 import type { ReportsStudioProps } from "@/routes/_authenticated/reports-studio";
 import { hashIsCashDetailAnchor } from "@/lib/cash-forecast-view";
+import { shouldNavigateForHashChange } from "@/lib/content-scroll-navigation";
 import { agentDisplayName } from "@/lib/milon-team";
 import { AccountantMenuButton, DrawerBackdrop, useAccountantDrawer } from "@/components/accountant-nav";
 import { firmClientCrumbLabel, isActingAsThisClient } from "@/lib/acting-as-client";
@@ -187,6 +189,7 @@ import {
   rewriteDraftMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
+import { canonicalScoreProse } from "@/lib/score-prose";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -260,7 +263,7 @@ import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/li
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
-import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
+import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import {
@@ -283,9 +286,10 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { ownerPresence, steerOpenHandoffs } from "@/lib/owner-presence";
+import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
+  clearOptimisticHandoff,
   loadActionHandoffRuns,
   loadActionNotes,
   loadLatestAssignments,
@@ -293,14 +297,18 @@ import {
 } from "@/lib/owner-handoff-client";
 import {
   applyLiveRuns,
+  displayedHandoffRun,
   openHandoffAgents,
+  pendingAssignmentLanded,
   personOwnedActionIds,
   rowAssignment,
   withPendingAssignment,
+  withPendingNote,
   withoutPersonQueuedRuns,
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
@@ -910,7 +918,17 @@ function ClientView() {
   const askHashClear = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
-    const apply = () => {
+    let scrolling = false;
+    let scrollTimer = 0;
+    const markScroll = () => {
+      scrolling = true;
+      window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        scrolling = false;
+      }, 400);
+    };
+    const apply = (phase: "load" | "hashchange") => {
+      if (!shouldNavigateForHashChange({ phase, scrolling })) return;
       const hash = window.location.hash;
       const asked = askAgentFromHash(hash);
       if (asked) {
@@ -939,9 +957,17 @@ function ClientView() {
         replace: true,
       });
     };
-    apply();
-    window.addEventListener("hashchange", apply);
-    return () => window.removeEventListener("hashchange", apply);
+    apply("load");
+    const onHash = () => apply("hashchange");
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("scroll", markScroll, { passive: true });
+    window.addEventListener("wheel", markScroll, { passive: true });
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("scroll", markScroll);
+      window.removeEventListener("wheel", markScroll);
+      window.clearTimeout(scrollTimer);
+    };
   }, [search.tab, search.section, search.agent, clientId, navigate]);
   // Landing tab: Home (Bot and the team desk). Decided once per client, after
   // load, and never over a ?tab= deep link.
@@ -1196,6 +1222,10 @@ function ClientView() {
   const [drawerActual, setDrawerActual] = useState<string | null>(null);
   const [drawerFallbackSteps, setDrawerFallbackSteps] = useState<string[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const routeHref = useRouterState({ select: (s) => s.location.href });
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [routeHref]);
   useEffect(() => {
     const next = resolveAccountantTab(search);
     if (next) setActiveTab(next);
@@ -1317,6 +1347,10 @@ function ClientView() {
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
+  const healthIndustry = clientIndustryDisplay(
+    client?.name,
+    parseOperatingProfile(client?.operating_profile),
+  );
   const overallHealth: OverallHealth = cashPillarFollowsForecast(
     scorecardHealthFromFinancials({
       financials,
@@ -1326,6 +1360,7 @@ function ClientView() {
       cashBalance: cashKnown ? cashBalance : null,
       market: clientMarket,
       shortfallWeek: cashOutlook.shortfallWeek,
+      industry: healthIndustry,
     }),
     {
       openingMissing,
@@ -1435,21 +1470,25 @@ function ClientView() {
     [clientMarket],
   );
 
+  const pillarNotes = Object.fromEntries(
+    overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", string | null>;
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
     pillarStatus,
+    pillarNotes,
     healthMap,
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
   });
-
   const simplifiedSections = [
     {
       id: "profit",
       label: PILLAR_LABELS.profit,
       health: pillarHealths.profit,
       status: pillarStatus.profit,
+      unscoredLabel: pillarNotes.profit,
       series: [] as number[],
     },
     {
@@ -1457,6 +1496,7 @@ function ClientView() {
       label: PILLAR_LABELS.assets,
       health: pillarHealths.assets,
       status: pillarStatus.assets,
+      unscoredLabel: pillarNotes.assets,
       series: [] as number[],
     },
     {
@@ -1464,6 +1504,7 @@ function ClientView() {
       label: PILLAR_LABELS.financing,
       health: pillarHealths.financing,
       status: pillarStatus.financing,
+      unscoredLabel: pillarNotes.financing,
       series: [] as number[],
     },
     {
@@ -1471,6 +1512,7 @@ function ClientView() {
       label: PILLAR_LABELS.cash,
       health: pillarHealths.cash,
       status: pillarStatus.cash,
+      unscoredLabel: pillarNotes.cash ?? (openingMissing ? CASH_OPENING_UNSCORED : null),
       series: [] as number[],
     },
   ];
@@ -1583,13 +1625,14 @@ function ClientView() {
     periodLabel: figuresPeriodLabel,
   };
   const clientProfitBridge = periodProfitBridge(financials);
-  const debtorDaysForMoves = ratios["Debtor Days"];
+  const debtorDaysForMoves = ratiosStatementFigures(financials).debtorDays;
   const strategicMoves = rankStrategicMoves({
     healthByKey: healthMap,
     profile: briefingProfile,
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
-    debtorDays: Number.isFinite(debtorDaysForMoves) ? debtorDaysForMoves : null,
+    debtorDays: debtorDaysForMoves,
     financingHealth: pillarHealths.financing,
+    weakestPillar: overallHealth.weakestPillar?.id ?? null,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -1684,10 +1727,17 @@ function ClientView() {
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
+  const assignmentRowsRef = useRef(assignmentRows);
+  assignmentRowsRef.current = assignmentRows;
+  const handoffsRef = useRef(openPlanHandoffs);
+  handoffsRef.current = openPlanHandoffs;
+  const priorHandoff = useRef(
+    new Map<string, { since: string; row: RowAssignment | null; handoff: HomeBriefHandoff | null }>(),
+  );
   const paintAssignments = (
     rows: readonly { id: string; title: string; assigneeName: string | null }[],
     assigned: readonly RowAssignment[],
-    notes: ReadonlyMap<string, { note: string | null; at: string }[]>,
+    notes: ReadonlyMap<string, { note: string | null; at: string; actorLabel?: string | null; actorType?: string | null }[]>,
     runs: ReadonlyMap<string, { agent: AgentKey; status: string; at: string }>,
   ) => {
     const first = assigned.find((row) => row.open);
@@ -1712,7 +1762,20 @@ function ClientView() {
     const bump = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (detail?.failed && detail.actionItemId) {
+        const prior = priorHandoff.current.get(detail.actionItemId);
         if (pendingHandoff.current?.actionItemId === detail.actionItemId) pendingHandoff.current = null;
+        if (prior) {
+          setAssignmentRows((current) =>
+            prior.row
+              ? current.map((row) => (row.id === detail.actionItemId ? prior.row! : row))
+              : current.filter((row) => row.id !== detail.actionItemId),
+          );
+          setOpenPlanHandoffs((rows) =>
+            prior.handoff
+              ? rows.map((row) => (row.id === detail.actionItemId ? prior.handoff! : row))
+              : rows.filter((row) => row.id !== detail.actionItemId),
+          );
+        }
         setOpenPlanTick((n) => n + 1);
         return;
       }
@@ -1720,12 +1783,20 @@ function ClientView() {
         const agent = detail.agent ?? null;
         const name = detail.assigneeName ?? (agent ? agentDisplayName(agent) : null);
         if (name) {
+          if (detail.since && priorHandoff.current.get(detail.actionItemId)?.since !== detail.since) {
+            priorHandoff.current.set(detail.actionItemId, {
+              since: detail.since,
+              row: assignmentRowsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
+              handoff: handoffsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
+            });
+          }
           pendingHandoff.current = { ...detail, agent, assigneeName: name };
           const nextRow: RowAssignment = {
             id: detail.actionItemId,
             assigneeName: name,
             agent,
             open: agent != null,
+            openedAt: agent ? detail.since : undefined,
           };
           setAssignmentRows((current) =>
             current.some((row) => row.id === nextRow.id)
@@ -1733,11 +1804,13 @@ function ClientView() {
               : [...current, nextRow],
           );
           setOpenPlanHandoffs((rows) => {
-            const found = rows.some((row) => row.id === detail.actionItemId);
+            const current = rows.find((row) => row.id === detail.actionItemId);
+            const found = Boolean(current);
             const patched = {
               assignee: name,
               agent,
-              run: agent ? { agent, status: "queued" as const, at: new Date().toISOString() } : null,
+              notes: detail.note ? withPendingNote(current?.notes ?? [], detail.note) : current?.notes ?? [],
+              run: agent ? { agent, status: "queued" as const, at: detail.since ?? new Date().toISOString() } : null,
             };
             const next = rows.map((row) => (row.id === detail.actionItemId ? { ...row, ...patched } : row));
             return found
@@ -1775,13 +1848,22 @@ function ClientView() {
     }
     setOpenPlanUnavailable(false);
     void (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("action_items_v")
-        .select("id, title, due_date, status, owner_name")
-        .eq("client_id", clientId)
-        .neq("status", "done")
-        .order("seq");
+      const [itemsRes, planRes] = await Promise.all([
+        supabase
+          .from("action_items_v")
+          .select("id, title, due_date, status, owner_name")
+          .eq("client_id", clientId)
+          .neq("status", "done")
+          .order("seq"),
+        supabase
+          .from("action_plans")
+          .select("target_date")
+          .eq("client_id", clientId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      ]);
+      const { data, error } = itemsRes;
       if (cancelled) return;
       if (error) {
         setOpenPlanUnavailable(true);
@@ -1797,8 +1879,11 @@ function ClientView() {
         id?: string | null;
         title?: string | null;
         due_date?: string | null;
+        status?: string | null;
         owner_name?: string | null;
       }[];
+      const planTarget =
+        (planRes.data?.[0] as { target_date?: string | null } | undefined)?.target_date ?? null;
       const titles = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
@@ -1809,6 +1894,14 @@ function ClientView() {
         : [new Map(), new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
+      const pendingView = pending?.assigneeName
+        ? {
+            id: pending.actionItemId,
+            agent: pending.agent ?? null,
+            assigneeName: pending.assigneeName,
+            since: pending.since,
+          }
+        : null;
       const openRows = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return row.id && title
@@ -1835,25 +1928,31 @@ function ClientView() {
         });
       });
       const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
-      const merged = withPendingAssignment(
-        assigned,
-        pending?.assigneeName
-          ? {
-              id: pending.actionItemId,
-              agent: pending.agent ?? null,
-              assigneeName: pending.assigneeName,
-            }
-          : null,
-        pendingStored,
-      );
-      const pendingLanded =
-        pending?.assigneeName != null &&
-        (pendingStored?.kind === "bot"
-          ? pendingStored.agent === pending.agent
-          : pendingStored?.kind === "person" &&
-            pending.agent == null &&
-            pendingStored.name === pending.assigneeName);
-      if (pendingLanded) pendingHandoff.current = null;
+      const merged = withPendingAssignment(assigned, pendingView, pendingStored);
+      const pendingLanded = pendingAssignmentLanded(pendingStored, pendingView);
+      if (pendingLanded && pending) {
+        pendingHandoff.current = null;
+        clearOptimisticHandoff(pending.actionItemId);
+      }
+      const paintedNotes = new Map(noteLog);
+      const paintedRuns = new Map(runs);
+      if (pending && !pendingLanded) {
+        if (pending.note) {
+          paintedNotes.set(pending.actionItemId, withPendingNote(noteLog.get(pending.actionItemId) ?? [], pending.note));
+        }
+        const shownRun = displayedHandoffRun(
+          runs.get(pending.actionItemId) ?? null,
+          { agent: pending.agent ?? null, since: pending.since },
+          false,
+        );
+        if (shownRun) {
+          paintedRuns.set(pending.actionItemId, {
+            agent: shownRun.agent,
+            status: shownRun.status,
+            at: shownRun.at ?? pending.since ?? "",
+          });
+        }
+      }
       if (pending?.title && !titles.includes(pending.title)) titles.push(pending.title);
       const labelled = openRows.map((row) => ({
         id: row.id,
@@ -1869,8 +1968,22 @@ function ClientView() {
       }
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
-      setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
-      paintAssignments(labelled, merged, noteLog, runs);
+      setOpenPlanOverdue(
+        countActionPlan(
+          rows.flatMap((row) => {
+            const title = row.title?.trim() ?? "";
+            if (!title) return [];
+            return [
+              {
+                status: row.status,
+                dueDate: row.due_date,
+                planTarget,
+              },
+            ];
+          }),
+        ).overdue,
+      );
+      paintAssignments(labelled, merged, paintedNotes, paintedRuns);
     })();
     return () => {
       cancelled = true;
@@ -2832,6 +2945,7 @@ function ClientView() {
         periodMonths: periodMonthsOf(financials),
         partMonth,
         cashFlowKnown: cashFlowKnown(financials),
+        industry: healthIndustry,
       },
     );
     const clientFirmName =
@@ -2848,6 +2962,7 @@ function ClientView() {
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
+        operatingProfile: parseOperatingProfile(client.operating_profile),
         reviewSignoff: financialsStamp,
         sample: Boolean(client.is_demo),
         market: clientMarket,
@@ -2868,6 +2983,7 @@ function ClientView() {
     firmId,
     effectiveRunway,
     overallHealth,
+    healthIndustry,
     overviewScorecardPeriodLabel,
   ]);
 
@@ -2933,7 +3049,7 @@ function ClientView() {
     const subjectText = `${client.name} — Financial Health Update`;
     const bodyText =
       `Hi,\n\nHere is a brief financial health summary for ${client.name}.\n\n` +
-      `Overall Health Score: ${score}/100 (${tierLabel})\n` +
+      `Overall Health Score: ${score} (${tierLabel})\n` +
       `Cash Runway: ${runway}` +
       weak +
       `Open Queries: ${openQueriesCount}\n\n` +
@@ -2983,7 +3099,7 @@ function ClientView() {
     const tierLabel = bookStatusWord;
     const text =
       `${client.name} Financial Health Update\n` +
-      `Health Score: ${score}/100 (${tierLabel})\n` +
+      `Health Score: ${score} (${tierLabel})\n` +
       `Cash Runway: ${cashRunwayHeadline ?? runwayDisplayLabel(metricRunway) ?? "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
@@ -3157,16 +3273,17 @@ function ClientView() {
     [assignmentRows, homeActivity.runs],
   );
   const openAgents = useMemo(() => openHandoffAgents(settledRows), [settledRows]);
-  const homePresence = useMemo(
+  const homeCardRuns = useMemo(
     () =>
-      steerOpenHandoffs(
-        ownerPresence({
-          ...homeActivity,
-          runs: withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
-        }),
-        openAgents,
+      withCardHandoffRuns(
+        withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
+        settledRows,
       ),
-    [homeActivity, settledRows, openAgents],
+    [homeActivity.runs, settledRows],
+  );
+  const homePresence = useMemo(
+    () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
+    [homeActivity, homeCardRuns, openAgents],
   );
   const shownHandoffs = useMemo(
     () =>
@@ -3350,7 +3467,7 @@ function ClientView() {
       : homeActivity.error
         ? ["Drafts aren't available yet."]
         : waiting.length
-          ? [rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
+          ? [canonicalScoreProse(rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting."))]
           : ["No draft waiting."];
     const booksLine = booksAnswerSentence({ freshness: dataFreshness });
     return {
@@ -4202,7 +4319,7 @@ function ClientView() {
                             const labels: Record<string, string> = PILLAR_LABELS;
                             return {
                               title: `Improve ${labels[worst[0]] ?? worst[0]}`,
-                              description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
+                              description: `This pillar scores ${Math.round(worst[1])} — your highest-impact area right now.`,
                             };
                           })()}
                         />
@@ -4233,6 +4350,9 @@ function ClientView() {
                           onOpenEvidence={(id) => {
                             const evidence = evidenceForPillar(id);
                             if (!evidence) return;
+                            if (id === "assets" || id === "financing") {
+                              setHealthDrill({ token: Date.now(), pillarId: id });
+                            }
                             openCoach(evidence);
                           }}
                         />
@@ -4960,13 +5080,19 @@ function ClientView() {
                                 ? search.filter
                                 : undefined
                           }
-                          moves={strategicMoves.map((move) => ({
-                            key: move.key,
-                            title: move.title,
-                            ratioName: move.ratioName,
-                            impactLine: move.impactLine,
-                            health: Number.isFinite(move.health) ? move.health : Number.NaN,
-                          }))}
+                          pillars={overallHealth.pillars}
+                          moves={strategicMoves.map((move) =>
+                            attachPillarScore(
+                              {
+                                key: move.key,
+                                title: move.title,
+                                ratioName: move.ratioName,
+                                impactLine: move.impactLine,
+                                health: Number.isFinite(move.health) ? move.health : Number.NaN,
+                              },
+                              overallHealth.pillars,
+                            ),
+                          )}
                           focusMoveKey={planFocusMove}
                           onFocusHandled={() => setPlanFocusMove(null)}
                           onAnswer={onPlanAnswer}
@@ -5351,14 +5477,23 @@ function ClientView() {
               const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                scorecardHealthFromFinancials({
-                  financials: draftedFinancials,
-                  fyStartMonth,
-                  periodMonths: periodMonthsOf(draftedFinancials),
-                  cashRunwayWeeks: effectiveRunway,
-                  market: clientMarket,
-                  shortfallWeek: cashOutlook.shortfallWeek,
-                }).overall,
+                cashPillarFollowsForecast(
+                  scorecardHealthFromFinancials({
+                    financials: draftedFinancials,
+                    fyStartMonth,
+                    periodMonths: periodMonthsOf(draftedFinancials),
+                    cashRunwayWeeks: effectiveRunway,
+                    market: clientMarket,
+                    shortfallWeek: cashOutlook.shortfallWeek,
+                    industry: healthIndustry,
+                  }),
+                  {
+                    openingMissing,
+                    opening: cashOutlook.opening,
+                    closings: cashOutlook.closing,
+                    floor: cashOutlook.floor,
+                  },
+                ).overall,
               );
               toast.success(
                 annualised

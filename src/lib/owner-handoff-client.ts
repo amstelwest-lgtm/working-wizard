@@ -17,9 +17,46 @@ export type ActionPlanRefreshDetail = {
   title: string;
   agent?: AgentKey | null;
   assigneeName?: string;
+  /** Click time. An older note or run is not this hand-off. */
+  since?: string;
+  note?: {
+    note: string;
+    at: string;
+    actorLabel?: string | null;
+    actorType?: string | null;
+  };
   /** The click's optimistic row should drop. The refetch paints the stored row. */
   failed?: boolean;
 };
+
+export type OptimisticHandoff = {
+  actionItemId: string;
+  title: string;
+  since: string;
+  agent: AgentKey | null;
+  assigneeName: string;
+  note: {
+    note: string;
+    at: string;
+    actorLabel: string | null;
+    actorType: string | null;
+  };
+};
+
+let optimisticHandoff: OptimisticHandoff | null = null;
+
+/** The click that has not been confirmed by a stored note yet. */
+export function readOptimisticHandoff(): OptimisticHandoff | null {
+  return optimisticHandoff;
+}
+
+export function clearOptimisticHandoff(actionItemId?: string): void {
+  if (!actionItemId || optimisticHandoff?.actionItemId === actionItemId) optimisticHandoff = null;
+}
+
+function rememberOptimistic(next: OptimisticHandoff): void {
+  optimisticHandoff = next;
+}
 
 export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): void {
   if (typeof window === "undefined") return;
@@ -78,8 +115,11 @@ export async function requestOwnerHandoff(input: {
 }
 
 async function signedInActorLabel(): Promise<string> {
-  const { data } = await supabase.auth.getUser();
-  const local = data.user?.email?.split("@")[0]?.trim() ?? "";
+  const { data } = await supabase.auth.getSession();
+  const fromSession = data.session?.user?.email?.split("@")[0]?.trim() ?? "";
+  if (fromSession) return fromSession;
+  const { data: userData } = await supabase.auth.getUser();
+  const local = userData.user?.email?.split("@")[0]?.trim() ?? "";
   return local || "Accountant";
 }
 
@@ -98,7 +138,7 @@ export async function recordHandoffAssignment(input: {
     action_item_id: input.actionItemId,
     client_id: input.clientId,
     actor_type: "owner_app",
-    actor_label: name,
+    actor_label: await signedInActorLabel(),
     note: handoffRequestNote(name),
   });
   if (error) return { ok: false, error: error.message };
@@ -119,14 +159,38 @@ export async function commitActionHandoff(input: {
   title: string;
   agent: AgentKey;
 }): Promise<ActionHandoffCommit> {
+  const since = new Date().toISOString();
+  const assigneeName = agentDisplayName(input.agent);
+  const actorLabel = await signedInActorLabel();
+  const note = {
+    note: handoffRequestNote(assigneeName),
+    at: since,
+    actorLabel,
+    actorType: "owner_app",
+  };
   const detail: ActionPlanRefreshDetail = {
     actionItemId: input.actionItemId,
     title: input.title,
     agent: input.agent,
-    assigneeName: agentDisplayName(input.agent),
+    assigneeName,
+    since,
+    note,
   };
+  rememberOptimistic({
+    actionItemId: input.actionItemId,
+    title: input.title,
+    since,
+    agent: input.agent,
+    assigneeName,
+    note,
+  });
   // The card flips to Working before the function returns. A finished run settles it.
   dispatchActionPlanRefresh(detail);
+  const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
+    clearOptimisticHandoff(input.actionItemId);
+    dispatchActionPlanRefresh({ ...detail, failed: true });
+    return comingSoon ? { ok: false, error, comingSoon: true } : { ok: false, error };
+  };
   const result = await requestOwnerHandoff({
     clientId: input.clientId,
     actionItemId: input.actionItemId,
@@ -134,22 +198,15 @@ export async function commitActionHandoff(input: {
   });
   if (!result.ok && handoffComingOnline(result.error)) {
     const saved = await recordHandoffAssignment(input);
-    if (!saved.ok) {
-      dispatchActionPlanRefresh({ ...detail, failed: true });
-      return { ok: false, error: saved.error, comingSoon: true };
-    }
+    if (!saved.ok) return fail(saved.error, true);
     await clearActionOwner(input.actionItemId);
   } else if (!result.ok) {
-    dispatchActionPlanRefresh({ ...detail, failed: true });
-    return { ok: false, error: result.error };
+    return fail(result.error);
   } else if (!result.noted) {
     // The deployed function has not confirmed the note yet. Write it here so
     // reload still sees the assignee. A function that returns noted does this itself.
     const saved = await recordHandoffAssignment(input);
-    if (!saved.ok) {
-      dispatchActionPlanRefresh({ ...detail, failed: true });
-      return saved;
-    }
+    if (!saved.ok) return fail(saved.error);
     await clearActionOwner(input.actionItemId);
   }
   dispatchActionPlanRefresh(detail);
@@ -186,13 +243,36 @@ export async function assignActionToPerson(input: {
   personName: string;
   title?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const since = new Date().toISOString();
+  const actorLabel = await signedInActorLabel();
+  const note = {
+    note: personAssignmentNote(input.personName),
+    at: since,
+    actorLabel,
+    actorType: "owner_app",
+  };
   const detail: ActionPlanRefreshDetail = {
     actionItemId: input.actionItemId,
     title: input.title ?? "",
     agent: null,
     assigneeName: input.personName,
+    since,
+    note,
   };
+  rememberOptimistic({
+    actionItemId: input.actionItemId,
+    title: input.title ?? "",
+    since,
+    agent: null,
+    assigneeName: input.personName,
+    note,
+  });
   dispatchActionPlanRefresh(detail);
+  const fail = (error: string): { ok: false; error: string } => {
+    clearOptimisticHandoff(input.actionItemId);
+    dispatchActionPlanRefresh({ ...detail, failed: true });
+    return { ok: false, error };
+  };
   const server = await requestPersonAssignment(input);
   if (server.ok && server.noted) {
     dispatchActionPlanRefresh(detail);
@@ -200,19 +280,12 @@ export async function assignActionToPerson(input: {
   }
   if (server.ok && !server.noted) {
     const saved = await writePersonAssignment(input);
-    if (!saved.ok) {
-      dispatchActionPlanRefresh({ ...detail, failed: true });
-      return saved;
-    }
+    if (!saved.ok) return fail(saved.error);
   } else if (!personAssignNeedsClient(server.ok ? "" : server.error)) {
-    dispatchActionPlanRefresh({ ...detail, failed: true });
-    return server;
+    return fail(server.ok ? "" : server.error);
   } else {
     const saved = await writePersonAssignment(input);
-    if (!saved.ok) {
-      dispatchActionPlanRefresh({ ...detail, failed: true });
-      return saved;
-    }
+    if (!saved.ok) return fail(saved.error);
   }
   dispatchActionPlanRefresh(detail);
   return { ok: true };
@@ -323,19 +396,27 @@ async function loadAssignmentNotes(actionIds: string[]): Promise<Map<string, Ass
   if (!ids.length) return grouped;
   const { data, error } = await supabase
     .from("action_updates")
-    .select("action_item_id,note,created_at")
+    .select("action_item_id,note,created_at,actor_label,actor_type")
     .in("action_item_id", ids)
     .order("created_at", { ascending: false });
   if (error || !Array.isArray(data)) return grouped;
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
-    const record = row as { action_item_id?: unknown; note?: unknown; created_at?: unknown };
+    const record = row as {
+      action_item_id?: unknown;
+      note?: unknown;
+      created_at?: unknown;
+      actor_label?: unknown;
+      actor_type?: unknown;
+    };
     const id = typeof record.action_item_id === "string" ? record.action_item_id : "";
     if (!id) continue;
     const notes = grouped.get(id) ?? [];
     notes.push({
       note: typeof record.note === "string" ? record.note : null,
       at: typeof record.created_at === "string" ? record.created_at : "",
+      actorLabel: typeof record.actor_label === "string" ? record.actor_label : null,
+      actorType: typeof record.actor_type === "string" ? record.actor_type : null,
     });
     grouped.set(id, notes);
   }

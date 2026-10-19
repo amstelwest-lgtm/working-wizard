@@ -617,7 +617,7 @@ export function practiceHomeLines(book: PracticeBook): OwnerHomeLines {
           ? "1 open query."
           : `${book.openQueries} open queries.`;
   const health =
-    book.avgHealth == null ? "No scored clients yet." : `Average health is ${book.avgHealth} out of 100.`;
+    book.avgHealth == null ? "No scored clients yet." : `Average health is ${book.avgHealth}.`;
   const attention =
     book.needAttention === 0
       ? "No client needs attention."
