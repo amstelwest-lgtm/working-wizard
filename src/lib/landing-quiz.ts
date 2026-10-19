@@ -2,6 +2,7 @@
  * Landing diagnostic. Loaded when the quiz nears the viewport or a persona
  * card is chosen — not on first paint.
  */
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import type { DraftMarket } from "@/lib/market";
 
 type QuizStep = { q: string; hint: string; opts: string[][]; key: string; reward: string };
@@ -140,7 +141,7 @@ function installLandingQuiz(): QuizApi {
       ],
       "❓": [
         "profit clarity",
-        "You have the numbers, but not a finance function to interpret them. <b>MILŌN turns those figures into one health score, 19 ratios with the workings shown, and a clear view of what is driving profitability.</b>",
+        `You have the numbers, but not a finance function to interpret them. <b>MILŌN turns those figures into one health score, ${HEALTH_RATIO_COUNT} ratios with the workings shown, and a clear view of what is driving profitability.</b>`,
       ],
       "⛓": [
         "debt pressure",

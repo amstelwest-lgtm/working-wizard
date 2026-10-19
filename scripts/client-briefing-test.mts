@@ -228,7 +228,7 @@ assert(!noPrior.some((m) => m.key === "runway"), "no runway → no runway row");
 assert(!noPrior.some((m) => m.key === "om"), "no ebit → no operating margin row");
 
 // ── health headline ──────────────────────────────────────────────────────────
-assert(healthHeadline(72, "Healthy") === "72 / 100 · Healthy", "health headline");
+assert(healthHeadline(72, "Healthy") === "72 · Healthy", "health headline");
 assert(healthHeadline(null, "Healthy") === "Not scored yet", "unscored");
 
 // ── about ────────────────────────────────────────────────────────────────────

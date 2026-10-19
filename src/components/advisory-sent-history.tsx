@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useMarketFormat } from "@/contexts/market";
 import {
   listDeliveries,
+  countsAsSent,
   channelHonestyLabel,
   ackUrlForToken,
   signedDeliveryPdfUrl,
@@ -53,7 +54,7 @@ export function AdvisorySentHistory({
     setLoading(true);
     listDeliveries(clientId)
       .then((data) => {
-        if (!cancelled) setRows(data);
+        if (!cancelled) setRows(data.filter(countsAsSent));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

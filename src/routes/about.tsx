@@ -4,6 +4,7 @@ import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { OWNER_PLAN_EARLY_US } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -60,7 +61,7 @@ function AboutPage() {
         <strong>profit, assets, financing, and cash</strong>.
       </p>
       <p>
-        The assessment uses 19 financial ratios that provide a broad and technically meaningful view
+        The assessment uses {HEALTH_RATIO_COUNT} financial ratios that provide a broad and technically meaningful view
         of financial health. Each ratio includes its underlying workings so that the result can be
         understood and reviewed, rather than treated as a black box.
       </p>

@@ -414,6 +414,7 @@ function BudgetComplexWorkspace({
             clientName={clientName}
             signoff={signoff}
             isStale={isStale}
+            displayTemplateId={displayTemplateId}
           />
         }
       />
@@ -424,6 +425,7 @@ function BudgetComplexWorkspace({
         onLensChange={onLensChange}
         actualMonths={actualMonths}
         statementActuals={actuals}
+        displayTemplateId={displayTemplateId}
       />
       {nestInDrawer(
         drawer,

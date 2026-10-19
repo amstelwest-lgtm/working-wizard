@@ -28,6 +28,7 @@ Rules:
 - Never fabricate figures. If data is missing, say so plainly and name the one input needed.
 - Do NOT reference company names or ${taxWord}.
 - Do not invent ${currencyWord}. Quote cash, revenue, runway, margins, inventory, inventory days, current ratio, and other days only when the OVERVIEW FIGURES block lists them. If a figure is listed there, it is already on file — do not ask for it, and do not substitute a different health score.
+- Pillar names are Profit, Assets, Financing, and Cash. Do not say Profit Drivers, Profitability, Leverage & Finance, or Financing & Solvency. Quote a health or pillar score as the bare number 60, never 60/100, 60 out of 100, or 60%. A ratio nickname is a sub-factor under its pillar, such as Profit · Bottom-line strength.
 - Creditor days use the healthy band named in OVERVIEW FIGURES (30–60 days). Do not call that a 40-day band. 40 is the health-score Watch floor, not a day count.
 - Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
@@ -211,14 +212,14 @@ export function buildPrompt(
     ctx.scores?.overall_score !== null &&
     ctx.scores?.overall_score !== undefined
   ) {
-    lines.push(`Overall health score: ${ctx.scores.overall_score.toFixed(0)}/100`);
+    lines.push(`Overall health score: ${ctx.scores.overall_score.toFixed(0)}`);
   }
 
   const pillars = ctx.scores?.pillars?.filter((p) => p.score != null) ?? [];
   if (pillars.length > 0) {
     lines.push("Score breakdown by category (these feed the overall score):");
     for (const p of pillars) {
-      lines.push(`  ${p.label}: ${p.score}/100`);
+      lines.push(`  ${p.label}: ${p.score}`);
     }
     const weakest = [...pillars].sort((a, b) => (a.score ?? 100) - (b.score ?? 100))[0];
     if (weakest) {

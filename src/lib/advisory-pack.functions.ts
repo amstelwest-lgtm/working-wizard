@@ -43,6 +43,8 @@ import {
   type PackSection,
 } from "@/lib/advisory-pack";
 import { parseOperatingProfile } from "@/lib/client-profile";
+import { storedOpeningIsMissing } from "@/lib/client-metrics";
+import { clientIndustryDisplay } from "@/lib/profile-signals";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { ZA_MARKET, resolveMarket } from "@/lib/market/resolve";
 import type { ResolvedMarket } from "@/lib/market";
@@ -405,6 +407,7 @@ async function loadOverviewContext(
     fyStartMonth,
     timeZone: market.timezone,
     now,
+    industry: clientIndustryDisplay(row?.name, profile, profile?.businessTypeId),
   });
   return { row, snaps, prior, metrics, fyStartMonth, market };
 }
@@ -415,7 +418,7 @@ export async function gatherPackInputs(
   now: string,
 ): Promise<Parameters<typeof buildAdvisoryPack>[0] | null> {
   const nowDate = new Date(now);
-  const [overview, recsRes, reqsRes, openRes, overdueRes, outcomesRes] = await Promise.all([
+  const [overview, recsRes, reqsRes, openRes, overdueRes, outcomesRes, artifactsRes] = await Promise.all([
     loadOverviewContext(sb, clientId, Number.isFinite(nowDate.getTime()) ? nowDate : new Date()),
     sb
       .from("proposed_next_steps")
@@ -446,6 +449,7 @@ export async function gatherPackInputs(
       .eq("client_id", clientId)
       .order("measured_at", { ascending: false })
       .limit(300),
+    sb.from("client_artifacts").select("kind").eq("client_id", clientId).limit(50),
   ]);
   const client = overview.row;
   if (!client) throw new Error("Client not found");
@@ -463,6 +467,15 @@ export async function gatherPackInputs(
     firmName = (firm as { name?: string } | null)?.name ?? null;
   }
 
+  const artifactKinds = new Set(
+    (artifactsRes.error ? [] : (artifactsRes.data ?? [])).map((row: { kind?: string }) => row.kind ?? ""),
+  );
+  const amount = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value !== "string" || !value.trim()) return null;
+    const parsed = Number(value.replace(/,/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
   const recommendations: Recommendation[] = (recsRes.error ? [] : (recsRes.data ?? [])).map(
     (r: Record<string, unknown>) => parseRecommendationRow(r),
   );
@@ -504,6 +517,13 @@ export async function gatherPackInputs(
     ),
     now,
     currency: overview.market.currency,
+    statementGaps: {
+      receivables: amount(financials?.receivables),
+      payables: amount(financials?.payables),
+      hasAgedDebtors: artifactKinds.has("aged_debtors"),
+      hasAgedCreditors: artifactKinds.has("aged_creditors"),
+      openingMissing: storedOpeningIsMissing(client.cashflow),
+    },
   };
 }
 

@@ -10,7 +10,7 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
-import { overviewRatios } from "../../../src/lib/health-score.ts";
+import { overviewRatios, PILLAR_LABELS as CANONICAL_PILLAR_LABELS } from "../../../src/lib/health-score.ts";
 import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 
 export const DISPLAY_TO_CAMEL: Record<string, string> = {
@@ -52,10 +52,10 @@ const PILLAR_NAMES: Record<string, readonly string[]> = {
 };
 
 export const PILLAR_LABELS: Record<string, string> = {
-  profit: "Profitability",
-  assets: "Asset efficiency",
-  financing: "Financing / debt",
-  cash: "Cash & working capital",
+  profit: CANONICAL_PILLAR_LABELS.profit,
+  assets: CANONICAL_PILLAR_LABELS.assets,
+  financing: CANONICAL_PILLAR_LABELS.financing,
+  cash: CANONICAL_PILLAR_LABELS.cash,
 };
 
 function num(raw: unknown): number {

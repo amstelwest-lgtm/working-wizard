@@ -58,7 +58,13 @@ import {
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
 import { planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
-import { actionDisplayTitle, planGoalIsOverdue } from "@/lib/strategic-moves";
+import {
+  actionDisplayTitle,
+  actionPlanPillarTiles,
+  moveFactorLabel,
+  planGoalIsOverdue,
+  type ActionPlanPillarTile,
+} from "@/lib/strategic-moves";
 import { CASH_FLOOR_REASON, interventionPlanSteps } from "@/lib/intervention-grounding";
 import { actionPace, deriveActionHealth } from "@/lib/action-item-health";
 import { ActionPlanAutomation } from "@/components/action-plan-automation";
@@ -233,6 +239,9 @@ export type StrategicMoveLite = {
   ratioName: string;
   impactLine?: string;
   health: number;
+  /** Canonical pillar. The tile number is this score, not `health`. */
+  pillarLabel?: string | null;
+  pillarScore?: number | null;
 };
 
 interface Props {
@@ -242,6 +251,8 @@ interface Props {
   /** When false the UI is read-only: members cannot edit goals, add/delete actions, or send emails. */
   isOwner?: boolean;
   moves?: StrategicMoveLite[];
+  /** Health pillars. Tile numbers come from here, including an unscored Cash pillar. */
+  pillars?: readonly { id: ActionPlanPillarTile["id"]; score: number | null; note?: string | null }[];
   onViewAnalysis?: (driverKey?: string) => void;
   /** Move key whose Action Plan item should be highlighted/scrolled to on load. */
   focusMoveKey?: string | null;
@@ -487,7 +498,7 @@ export function buildStrategicMoveImportRows(opts: {
     source: "strategic_move",
     source_move_key: mv.key,
     driver_key: mv.key,
-    outcome_why: mv.impactLine ?? `Improves ${mv.ratioName}.`,
+    outcome_why: mv.impactLine ?? `Improves ${moveFactorLabel(mv)}.`,
   }));
 }
 const STATUS_LABEL: Record<Status, string> = {
@@ -531,6 +542,7 @@ export default function ActionPlanPanel({
   simplified,
   isOwner = true,
   moves = [],
+  pillars,
   onViewAnalysis,
   focusMoveKey,
   onFocusHandled,
@@ -1453,7 +1465,9 @@ export default function ActionPlanPanel({
       />
       )}
 
-      {!ownerView && moves.length > 0 && <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />}
+      {!ownerView && pillars && pillars.length > 0 && (
+        <DriversStrip tiles={actionPlanPillarTiles(pillars, moves)} onView={onViewAnalysis} />
+      )}
 
       {interventionSteps.length > 0 ? (
         <section
@@ -2245,16 +2259,17 @@ function GoalHeader({
 
 // ═══ Drivers strip ═══════════════════════════════════════════════════════════
 function DriversStrip({
-  moves,
+  tiles,
   onView,
 }: {
-  moves: StrategicMoveLite[];
+  tiles: readonly ActionPlanPillarTile[];
   onView?: (k?: string) => void;
 }) {
   return (
-    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
-      {moves.map((m) => {
-        const score = driverHealthLabel(m.health);
+    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      {tiles.map((tile) => {
+        const score = tile.score;
+        const sub = score == null ? tile.note : tile.factor;
         const tone =
           score == null
             ? "#94a3b8"
@@ -2265,24 +2280,22 @@ function DriversStrip({
                 : "#ef4444";
         return (
           <button
-            key={m.key}
-            onClick={() => onView?.(m.key)}
+            key={tile.id}
+            onClick={() => onView?.(tile.moveKey ?? tile.id)}
             className="group rounded-xl border border-[#DBEAFE] bg-white px-3.5 py-3 text-left transition-colors hover:border-[#0B5FFF]/40 dark:border-slate-800 dark:bg-slate-900/50"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className={LABEL_CLS}>{m.ratioName}</span>
+              <span className="text-[10px] font-bold tracking-[0.12em] text-[#3D5270] dark:text-slate-400">
+                {tile.label}
+              </span>
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
             </div>
             <div className="mt-1 text-lg font-extrabold tabular-nums tracking-tight text-slate-950 dark:text-white">
-              {score != null ? (
-                <>
-                  {score}
-                  <span className="text-xs font-semibold text-slate-400">/100</span>
-                </>
-              ) : (
-                <span className="text-slate-400">—</span>
-              )}
+              {score != null ? score : <span className="text-slate-400">—</span>}
             </div>
+            {sub ? (
+              <div className="mt-0.5 text-[10px] font-medium text-slate-500">{sub}</div>
+            ) : null}
             <div className="mt-0.5 flex items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-[#102A43] dark:group-hover:text-[#0B5FFF]">
               View full analysis <ChevronRight className="h-3 w-3" />
             </div>
@@ -2892,7 +2905,7 @@ function ImportPanel({
                     {m.title}
                   </span>
                   <span className="block text-[11px] text-slate-500 dark:text-slate-400">
-                    {m.ratioName}
+                    {moveFactorLabel(m)}
                     {m.impactLine ? ` · ${m.impactLine}` : ""}
                   </span>
                 </span>
