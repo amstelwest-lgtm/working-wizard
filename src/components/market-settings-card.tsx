@@ -23,15 +23,19 @@ import {
   zaMarketExtrasJson,
   type ZaMarketExtras,
 } from "@/lib/market/za-provinces";
+import { saPlanRegionControls } from "@/lib/firm-band-upgrade";
 
 export function MarketSettingsCard({
   kind,
   recordId,
   initial,
+  zarPlan = false,
 }: {
   kind: "client" | "firm";
   recordId: string | null;
   initial: unknown;
+  /** SA practice plan. Hides the US state list and VAT wording. Does not write the market. */
+  zarPlan?: boolean;
 }) {
   const [draft, setDraft] = useState<DraftMarket>(() => {
     const sel = parseMarketSelection(initial) ?? coerceMarketSelection(initial);
@@ -48,6 +52,7 @@ export function MarketSettingsCard({
 
   const sel = draftToSelection(draft);
   const resolved = sel ? resolveMarket(sel) : null;
+  const regionControls = saPlanRegionControls(zarPlan);
 
   const save = async () => {
     const next = draftToSelection(draft);
@@ -88,10 +93,25 @@ export function MarketSettingsCard({
           Region & tax
         </span>
       }
-      description="South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax for budgets. Changing region does not convert historical figures."
+      description={
+        regionControls.vatCopy
+          ? "South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax for budgets. Changing region does not convert historical figures."
+          : "South Africa uses rand."
+      }
     >
-      <MarketPicker value={draft} onChange={setDraft} />
-      {draft.country === "ZA" ? (
+      {regionControls.stateDropdown ? (
+      <MarketPicker
+        value={draft}
+        onChange={setDraft}
+        vatCopy={regionControls.vatCopy}
+        stateDropdown={regionControls.stateDropdown}
+      />
+      ) : (
+        <p className="text-sm font-semibold" data-sa-plan-region="">
+          South Africa
+        </p>
+      )}
+      {draft.country === "ZA" && regionControls.vatCopy ? (
         <div className="mt-3 space-y-3">
           <div>
             <label className="text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]" htmlFor="milon-za-province">
@@ -162,19 +182,20 @@ export function MarketSettingsCard({
           </fieldset>
         </div>
       ) : null}
-      {resolved?.tax.regime === "sales_tax" && (
+      {regionControls.stateDropdown && resolved?.tax.regime === "sales_tax" && (
         <p className="mt-3 text-xs leading-relaxed text-[var(--ink-dim)]">
           Default combined rate {formatPercentRate(resolved.tax.combinedRate)} (
           {formatPercentRate(resolved.tax.stateRate)} state +{" "}
           {formatPercentRate(resolved.tax.localRate)} avg local). {SALES_TAX_HONESTY}
         </p>
       )}
-      {resolved?.tax.regime === "none" && resolved.country === "US" && (
+      {regionControls.stateDropdown && resolved?.tax.regime === "none" && resolved.country === "US" && (
         <p className="mt-3 text-xs text-[var(--ink-dim)]">
           This state has no statewide sales tax (or none collected). Budgets will not add a
           sales-tax line unless you change that on the budget itself.
         </p>
       )}
+      {regionControls.stateDropdown ? (
       <Button
         type="button"
         className="settings-gold mt-4"
@@ -183,6 +204,7 @@ export function MarketSettingsCard({
       >
         {saving ? "Saving…" : "Save region"}
       </Button>
+      ) : null}
     </SectionCard>
   );
 }

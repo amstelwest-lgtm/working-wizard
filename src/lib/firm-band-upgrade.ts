@@ -4,7 +4,8 @@
  * Do not invent ZAR list prices. Adaptive Pricing presents ZAR at Checkout.
  */
 
-import type { FirmCouponDiscount } from "./firm-sa-market";
+import { isSaMarketFirm, type FirmCouponDiscount } from "./firm-sa-market";
+import { parseMarketSelection } from "./market/parse";
 import { isOwnerCatalogPrice } from "./owner-price";
 import { annualZarCents, isZaCheckoutBand, parseZaLookupKey, perClientRands, ZA_MONTHLY_RANDS } from "./pricing/za-ladder";
 import {
@@ -479,6 +480,33 @@ export function saFirmDisplayPrice(
   const per = entry.clientLimit ? perClientRands(monthly, entry.clientLimit) : 0;
   const head = `R${monthly.toLocaleString("en-ZA")}/mo`;
   return per > 0 ? `${head} · about R${per} per client` : head;
+}
+
+/**
+ * Settings → Plan display. A firm saved as South Africa qualifies.
+ * So does a practice whose clients are mostly in South Africa, which is
+ * the case when the firm row still says United States. This does not
+ * change the currency Checkout charges.
+ */
+export function practiceDisplaysZarPlan(input: {
+  firmMarket: unknown;
+  clientMarkets?: readonly unknown[] | null;
+}): boolean {
+  if (isSaMarketFirm({ market: input.firmMarket })) return true;
+  let za = 0;
+  let us = 0;
+  for (const raw of input.clientMarkets ?? []) {
+    const country = parseMarketSelection(raw)?.country;
+    if (country === "ZA") za += 1;
+    else if (country === "US") us += 1;
+  }
+  return za > 0 && za > us;
+}
+
+/** An SA plan hides the US state list and any VAT sentence. */
+export function saPlanRegionControls(zarPlan: boolean): { stateDropdown: boolean; vatCopy: boolean } {
+  if (zarPlan) return { stateDropdown: false, vatCopy: false };
+  return { stateDropdown: true, vatCopy: true };
 }
 
 export function firmBandPriceLabel(

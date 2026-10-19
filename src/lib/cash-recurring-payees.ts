@@ -6,7 +6,7 @@
  */
 import { buildDraftLinesFromExtract, payeeGroupKey } from "./cash-from-banks.pattern.ts";
 import type { CashBankExtract } from "./cash-from-banks.types.ts";
-import { displayForecastFrequency } from "./cash-forecast-rows.ts";
+import { displayForecastFrequency, type AssumedMonthlyContext } from "./cash-forecast-rows.ts";
 
 export type RecurringFrequency = "recurring-monthly" | "recurring-weekly";
 
@@ -70,26 +70,29 @@ export function isRecurringPayee(
 }
 
 /**
- * Display cadence. A stored once-off repeats only when history already says
- * that payee is monthly or weekly. Otherwise the name rule (rent, payroll) stands.
+ * Display cadence. History wins when the same payee already repeats.
+ * A single month of rent, payroll, insurance, a debit order or a subscription
+ * is still projected monthly. The stored frequency is left unchanged.
  */
 export function projectForecastFrequency(
   name: string,
   frequency: string | null | undefined,
   recurring?: ReadonlyMap<string, RecurringFrequency> | null,
+  context?: AssumedMonthlyContext | null,
 ): string {
   const stored = frequency ?? "recurring-monthly";
   if ((stored === "once-off" || stored === "once") && isRecurringPayee(name, recurring)) {
     return recurring!.get(payeeGroupKey(name)) ?? stored;
   }
-  return displayForecastFrequency(name, frequency);
+  return displayForecastFrequency(name, frequency, context);
 }
 
 export function isProjectedOnceOff(
   name: string,
   frequency: string | null | undefined,
   recurring?: ReadonlyMap<string, RecurringFrequency> | null,
+  context?: AssumedMonthlyContext | null,
 ): boolean {
-  const freq = projectForecastFrequency(name, frequency, recurring);
+  const freq = projectForecastFrequency(name, frequency, recurring, context);
   return freq === "once-off" || freq === "once";
 }

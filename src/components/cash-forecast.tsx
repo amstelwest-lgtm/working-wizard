@@ -111,7 +111,7 @@ import {
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
-import { groupSmallForecastRows } from "@/lib/cash-forecast-rows";
+import { forecastRowLabel, groupSmallForecastRows, isAssumedMonthlyLine } from "@/lib/cash-forecast-rows";
 import {
   isProjectedOnceOff,
   projectForecastFrequency,
@@ -216,11 +216,15 @@ const EXPENSE_PRESETS = [
 const DEFAULT_EXPENSES: LineItem[] = EXPENSE_PRESETS.map((n) => makeLine(n));
 const DEFAULT_OTHER: LineItem[] = [makeLine("Other expenses")];
 
-function distribute(line: LineItem, recurring?: ReadonlyMap<string, RecurringFrequency> | null): number[] {
+function distribute(
+  line: LineItem,
+  side: "revenue" | "expenses" | "other",
+  recurring?: ReadonlyMap<string, RecurringFrequency> | null,
+): number[] {
   return distributeForecastLine(
     {
       ...line,
-      frequency: projectForecastFrequency(line.name, line.frequency, recurring) as LineItem["frequency"],
+      frequency: projectForecastFrequency(line.name, line.frequency, recurring, { side }) as LineItem["frequency"],
     },
     WEEKS,
   );
@@ -417,17 +421,21 @@ function LineEditor({
   onChange,
   onRemove,
   tone,
+  side,
 }: {
   line: LineItem;
   onChange: (l: LineItem) => void;
   onRemove?: () => void;
   tone: "revenue" | "expense";
+  side?: "revenue" | "expenses" | "other";
 }) {
   const { market } = useMarketFormat();
   const cur = currencySymbol(market);
   const accent =
     tone === "revenue" ? "border-l-[3px] border-l-[#4caf82]" : "border-l-[3px] border-l-[#e05c5c]";
   const showSplit = line.frequency === "split-weeks" || line.frequency === "split-months";
+  const sideForLabel = side ?? (tone === "revenue" ? "revenue" : "expenses");
+  const assumed = isAssumedMonthlyLine(line.name, line.frequency, { side: sideForLabel });
   return (
     <div
       className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
@@ -466,6 +474,11 @@ function LineEditor({
             ))}
           </SelectContent>
         </Select>
+        {assumed ? (
+          <p className="mt-1 text-[11px] text-slate-500" data-assumed-monthly="">
+            recurring (assumed monthly)
+          </p>
+        ) : null}
       </div>
       <div className="md:col-span-2">
         <Label className={LABEL_CLS}>Start week</Label>
@@ -1348,10 +1361,10 @@ export function CashForecastPanel({
       revenue.map((l) => ({
         id: l.id,
         bucket: "revenue" as const,
-        name: l.name,
-        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees),
+        name: forecastRowLabel(l.name, l.frequency, { side: "revenue" }),
+        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, { side: "revenue" }),
         vals: applyWeekOverrides(
-          shiftVals(distribute(l, recurringPayees).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          shiftVals(distribute(l, "revenue", recurringPayees).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
           l.weekOverrides,
         ),
       })),
@@ -1359,10 +1372,10 @@ export function CashForecastPanel({
     const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
       id: l.id,
       bucket,
-      name: l.name,
-      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees),
+      name: forecastRowLabel(l.name, l.frequency, { side: bucket }),
+      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, { side: bucket }),
       vals: applyWeekOverrides(
-        distribute(l, recurringPayees).map((v) => v * opts.eMul),
+        distribute(l, bucket, recurringPayees).map((v) => v * opts.eMul),
         l.weekOverrides,
       ),
     });
@@ -2886,6 +2899,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
+                side="other"
                 onChange={(n) => updateAt(other, setOther, i, n)}
                 onRemove={
                   other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined

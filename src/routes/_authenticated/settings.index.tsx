@@ -22,7 +22,7 @@ import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
-import { formatFirmOverLimitNote, UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import { formatFirmOverLimitNote, practiceDisplaysZarPlan, UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
 import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import {
   createBillingPortalSession,
@@ -94,8 +94,11 @@ function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [ownerClientId, setOwnerClientId] = useState<string | null>(null);
   const [marketBlob, setMarketBlob] = useState<unknown>(null);
+  const [clientMarkets, setClientMarkets] = useState<unknown[] | null>(null);
 
   const isPractice = view === "practice";
+  const zarPlan = practiceDisplaysZarPlan({ firmMarket: marketBlob, clientMarkets });
+  const planPricesReady = !isPractice || clientMarkets != null || zarPlan;
 
   useEffect(() => {
     if (!user) return;
@@ -126,14 +129,28 @@ function SettingsPage() {
   useEffect(() => {
     if (!user) return;
     if (isPractice && firmId) {
+      setClientMarkets(null);
       void supabase
         .from("firms")
         .select("market")
         .eq("id", firmId)
         .maybeSingle()
         .then(({ data }) => setMarketBlob((data as { market?: unknown } | null)?.market ?? null));
+      void supabase
+        .from("clients")
+        .select("market")
+        .eq("firm_id", firmId)
+        .then(({ data, error }) => {
+          if (error) {
+            setClientMarkets([]);
+            return;
+          }
+          const rows = (data ?? []) as Array<{ market?: unknown }>;
+          setClientMarkets(rows.map((row) => row.market));
+        });
       return;
     }
+    setClientMarkets(null);
     if (!isPractice) {
       void supabase
         .from("clients")
@@ -352,6 +369,7 @@ function SettingsPage() {
         kind={isPractice ? "firm" : "client"}
         recordId={isPractice ? firmId : ownerClientId}
         initial={marketBlob}
+        zarPlan={isPractice && zarPlan}
       />
 
       {!isPractice && hasPractice && (
@@ -433,14 +451,14 @@ function SettingsPage() {
                     canUpgrade: plan.canUpgrade,
                     clientCount: plan.clientCount,
                     usageLabel: plan.usageLabel,
-                    saDiscount: plan.saDiscount,
+                    saDiscount: Boolean(plan.saDiscount) || zarPlan,
                     zaLabels: plan.zaLabels,
                     phase: plan.phase,
                   }}
                   onUpgrade={handlePlanUpgrade}
                 />
               </div>
-            ) : plan && plan.configured !== false ? (
+            ) : plan && plan.configured !== false && planPricesReady ? (
               <div className="mb-3">
                 {overLimitNote ? (
                   <p className="mb-2 text-sm font-semibold">Upgrade</p>
@@ -452,7 +470,7 @@ function SettingsPage() {
                   zarByBand={plan.zarByBand ?? {}}
                   canUpgrade={plan.canUpgrade}
                   clientCount={plan.clientCount}
-                  saDiscount={plan.saDiscount}
+                  saDiscount={Boolean(plan.saDiscount) || zarPlan}
                   zaLabels={plan.zaLabels}
                   upgrading={upgrading}
                   onValidateVoucher={onValidateVoucher}
