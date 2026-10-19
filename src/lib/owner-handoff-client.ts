@@ -244,15 +244,14 @@ export async function commitActionHandoff(input: {
     note: handoffRequestNote(assigneeName),
     at: since,
     actorLabel,
-    actorType: "owner_app",
+    actorType: "owner_app" as const,
   };
-  const detail: ActionPlanRefreshDetail = {
+  const working: ActionPlanRefreshDetail = {
     actionItemId: input.actionItemId,
     title: input.title,
     agent: input.agent,
     assigneeName,
     since,
-    note,
   };
   rememberOptimistic({
     actionItemId: input.actionItemId,
@@ -260,14 +259,14 @@ export async function commitActionHandoff(input: {
     since,
     agent: input.agent,
     assigneeName,
-    note,
+    note: null,
   });
-  // The card flips to Working before the function returns. A finished run settles it.
-  dispatchActionPlanRefresh(detail);
+  // Working paints before the function returns. The Handed-to line waits for noted.
+  dispatchActionPlanRefresh(working);
   const fail = (error: string, comingSoon?: boolean): ActionHandoffCommit => {
     rejectOptimisticHandoff(input.actionItemId, since, comingSoon ? null : HANDOFF_FAILED_COPY);
     dispatchActionPlanRefresh({
-      ...detail,
+      ...working,
       failed: true,
       error: comingSoon ? undefined : HANDOFF_FAILED_COPY,
     });
@@ -288,8 +287,7 @@ export async function commitActionHandoff(input: {
     suppressOptimisticNote(input.actionItemId, since);
     if (result.runId) attachOptimisticRun(input.actionItemId, since, result.runId);
     dispatchActionPlanRefresh({
-      ...detail,
-      note: undefined,
+      ...working,
       reused: true,
       runId: result.runId ?? undefined,
     });
@@ -300,10 +298,24 @@ export async function commitActionHandoff(input: {
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return fail(saved.error);
     await clearActionOwner(input.actionItemId);
-  } else if (result.runId) {
-    attachOptimisticRun(input.actionItemId, since, result.runId);
+  } else if (result.noted) {
+    rememberOptimistic({
+      actionItemId: input.actionItemId,
+      title: input.title,
+      since,
+      agent: input.agent,
+      assigneeName,
+      runId: result.runId,
+      note,
+    });
+    dispatchActionPlanRefresh({
+      ...working,
+      note,
+      runId: result.runId ?? undefined,
+    });
+    return { ok: true };
   }
-  dispatchActionPlanRefresh({ ...detail, runId: result.ok ? result.runId ?? undefined : undefined });
+  dispatchActionPlanRefresh({ ...working, runId: result.ok ? result.runId ?? undefined : undefined });
   return { ok: true };
 }
 

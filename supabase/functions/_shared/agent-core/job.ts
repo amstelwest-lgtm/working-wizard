@@ -21,7 +21,7 @@ import {
 import {
   analystFailurePlan,
   analystRunCostUsd,
-  analystRunSummary,
+  handoffFinishSummary,
   collectStoredReads,
   evidenceKeyList,
   evidenceKeysNote,
@@ -35,6 +35,7 @@ import {
   withDraftFlags,
 } from "../../../../src/lib/agent-draft.ts";
 import {
+  HANDOFF_COST_STOP,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffFinding,
@@ -347,8 +348,8 @@ export async function runQueueJob(
         if (runnerNextCallExceedsCeiling({ spentUsd: spent, lastCallUsd: lastCall, ceilingUsd: config.costCeilingUsd })) {
           return {
             kind: "stop",
-            reason: "insufficient_information",
-            summary: "Stopped before another model call so the run stays within its cost ceiling.",
+            reason: "cost_ceiling",
+            summary: HANDOFF_COST_STOP,
           };
         }
         await db.rpc("heartbeat_agent_lease", {
@@ -409,7 +410,12 @@ export async function runQueueJob(
       maxIterations: config.maxIterations,
     });
     const partial = outcome.status === "partial";
-    const summary = analystRunSummary({ stopReason: outcome.stopReason, summary: result.summary }).slice(0, 2000);
+    const summary = handoffFinishSummary({
+      stopReason: outcome.stopReason,
+      summary: result.summary,
+      steps: result.trace.map((step) => ({ tool: step.tool, status: step.status, args: step.args })),
+      noun: config.writeTools.includes("record_draft") ? "draft" : "finding",
+    }).slice(0, 2000);
     await db
       .from("agent_runs")
       .update({
@@ -441,7 +447,7 @@ export async function runQueueJob(
     await recordHandoffFinish(db, config, {
       runId: existing.run_id,
       clientId: job.clientId,
-      summary: result.summary,
+      summary,
       pool,
       market: client?.market,
     });

@@ -3989,6 +3989,7 @@ function Index() {
           <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
             {showOwnerDoor ? (
               // Demo clients keep the sample card. Real clients get the preview card.
+              // A reused hand-off stays Working on the run already open. The Handed-to line waits until noted.
               <OwnerDoor
                 bot={oauthReturn.bot ?? null}
                 planTick={planTick}

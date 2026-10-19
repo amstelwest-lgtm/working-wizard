@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatAssignmentNote } from "@/lib/action-handoff";
+import { assignmentNoteFace, formatAssignmentNote } from "@/lib/action-handoff";
 
 export type AssignmentNoteRow = {
   note: string | null;
@@ -22,12 +22,10 @@ function noteLine(row: AssignmentNoteRow): string {
 /** Latest note on the row, with earlier notes behind one control. */
 export function AssignmentNotes({ notes }: { notes: readonly AssignmentNoteRow[] }) {
   const [open, setOpen] = useState(false);
-  const rows = [...notes]
-    .filter((row) => row.note?.trim())
-    .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
-  if (rows.length === 0) return null;
-  const latest = rows[0]!;
-  const older = rows.slice(1);
+  const { face, earlier } = assignmentNoteFace(notes);
+  if (!face) return null;
+  const latest = face;
+  const older = earlier;
   return (
     <div className="mt-1" data-assignment-notes>
       <p className="text-[12px] font-medium leading-snug text-[#102A43] dark:text-slate-100" data-assignment-note>

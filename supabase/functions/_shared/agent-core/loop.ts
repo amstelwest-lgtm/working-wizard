@@ -25,6 +25,7 @@ export const AGENT_STOP_REASONS = [
   "tool_blocked",
   "needs_human",
   "safety_limit",
+  "cost_ceiling",
 ] as const;
 
 export type AgentStopReason = (typeof AGENT_STOP_REASONS)[number];
@@ -36,6 +37,7 @@ export const AGENT_OUTCOME_LABELS: Record<AgentStopReason, string> = {
   tool_blocked: "Blocked — the action did not happen",
   needs_human: "Needs a person",
   safety_limit: "Stopped at the safety limit",
+  cost_ceiling: "Stopped at the cost ceiling",
 };
 
 /** Reads, existing draft writers, and two bounded action-plan writes. */
