@@ -142,7 +142,7 @@ const cashPanel = clientRoute.indexOf("<CashForecastPanel", cashAt);
 assert(cashGate !== -1 && cashGate < cashPanel, "CashForecastPanel is inside the cash-tab gate");
 
 const board = readFileSync("src/components/practice-board.tsx", "utf8");
-const publish = board.indexOf("toClientRow(c, [], 0, 0, 0)");
+const publish = board.indexOf("setClientRows(rawClients.map((c) => lightClientRow(c)))");
 const history = board.indexOf("client_score_history");
 assert(publish !== -1 && history !== -1 && publish < history, "clients are shown before score history is loaded");
 

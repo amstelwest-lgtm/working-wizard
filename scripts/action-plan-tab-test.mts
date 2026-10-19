@@ -84,8 +84,8 @@ assert(
       plan_target: "2026-09-29",
     },
     new Date("2026-10-19T12:00:00"),
-  ) === "overdue",
-  "no due date and no suggestion uses a past plan target",
+  ) === "not_started",
+  "a missing created date suggests today plus 14 days and is not overdue",
 );
 assert(
   deriveActionHealth(

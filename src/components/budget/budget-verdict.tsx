@@ -136,6 +136,7 @@ export function BudgetVerdictStrip({
           higherIsBetter
           market={market}
           money={money}
+          unbuilt={unbuilt}
           monthlyActuals={monthlyActuals}
         />
         <div className="col-span-2 flex min-w-0 items-start justify-between gap-2 sm:col-span-1">

@@ -80,7 +80,8 @@ export function addDays(iso: string, days: number): string | null {
 
 /**
  * The due date the row is judged on. A stored date wins. With none, the
- * suggestion is created + 14 days, or today + 14 when that day has passed.
+ * suggestion is created + 14 days when that day is still ahead, otherwise
+ * today + 14, including when the created date is missing.
  * The plan target is not a due date.
  */
 export function effectiveActionDue(
@@ -90,9 +91,10 @@ export function effectiveActionDue(
   const stored = item.dueDate?.slice(0, 10) ?? "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
   const created = item.createdAt?.slice(0, 10) ?? "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(created)) return null;
-  const fromCreated = addDays(created, 14);
-  if (fromCreated && fromCreated >= today.slice(0, 10)) return fromCreated;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(created)) {
+    const fromCreated = addDays(created, 14);
+    if (fromCreated && fromCreated >= today.slice(0, 10)) return fromCreated;
+  }
   return addDays(today.slice(0, 10), 14);
 }
 
