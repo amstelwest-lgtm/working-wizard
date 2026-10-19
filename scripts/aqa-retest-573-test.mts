@@ -88,7 +88,7 @@ const cashflow = {
     },
   ],
 };
-const metrics = assessClientMetrics({ financials, cashflow, financialsUpdatedAt: null });
+const metrics = assessClientMetrics({ financials, cashflow, financialsUpdatedAt: null, now });
 assert(metrics.runway.kind === "cash_generative", `ledger opening made runway ${metrics.runway.kind}`);
 assert(metrics.outlook.source === "derived", "the P&L runway still replaces the stored series");
 const screen = resolveCashScreenForecast({ financials, cashflow, now });
