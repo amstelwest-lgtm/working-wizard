@@ -1596,3 +1596,22 @@ export function cashScreenFloor(
     weeklyOutflows,
   });
 }
+
+/**
+ * The series the cash grid draws: base knobs, the same monthly display step,
+ * then `cashScreenFloor`. Home and the brief read this so a passed floor
+ * cannot disagree with Cash.
+ */
+export function storedSeriesReading(cashflow: unknown): {
+  opening: number;
+  inflow: number[];
+  outflow: number[];
+  closing: number[];
+  floor: number;
+} | null {
+  const cf = asRecord(cashflow);
+  if (!cf) return null;
+  const rolled = rollForwardForecast(baseCashflow(cf));
+  if (!rolled) return null;
+  return { ...rolled, floor: cashScreenFloor(cf, rolled.outflow) };
+}

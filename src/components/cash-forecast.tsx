@@ -83,6 +83,7 @@ import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
+import { interestOfRevenueSentence } from "@/lib/cash-interest-note";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
 import { formatCalendarDay, formatMoneyChartTick, formatMoneyCompact } from "@/lib/market/format";
@@ -1549,6 +1550,7 @@ export function CashForecastPanel({
     () => forecastMinimumCash({ configured: configuredFloor, weeklyOutflows: baseCalc.outflow }),
     [baseCalc.outflow, configuredFloor],
   );
+  const interestNote = interestOfRevenueSentence(inputFinancials, (amount) => fmtR(amount));
   const cashSuggestions = useMemo(
     () =>
       suggestCashForecast({
@@ -2668,6 +2670,11 @@ export function CashForecastPanel({
               Runway floor {fmtCompact(minimumCash)}
             </span>
           </div>
+          {interestNote ? (
+            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400" data-cash-interest>
+              {interestNote}
+            </p>
+          ) : null}
           {heroChart(
             simplified ? 200 : 240,
             inlineChart.chartWidth,
@@ -2934,7 +2941,11 @@ export function CashForecastPanel({
       <CollapsibleGoldCard
         icon={Wallet}
         title="Money In & Out"
-        subtitle="Revenue and expense line items — pick how each lands across the 13 weeks"
+        subtitle={
+          interestNote
+            ? interestNote
+            : "Revenue and expense line items — pick how each lands across the 13 weeks"
+        }
       >
         <div className="space-y-6">
           <div className="space-y-3">

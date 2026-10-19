@@ -3226,9 +3226,11 @@ function ClientView() {
         })),
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
+        cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
         cashOpening: hasFigures ? cashOutlook.opening : null,
-        // The forecast floor (forecastMinimumCash). The brief does not compute another.
+        // Passed through for a forecast with no lines. A stored series replaces this
+        // with forecastMinimumCash, the same floor as Cash.
         cashFloor: hasFigures ? cashOutlook.floor : null,
         cashClosing: hasFigures ? cashOutlook.closing : null,
         market: clientMarket,
@@ -3253,6 +3255,7 @@ function ClientView() {
       openPlanTitles,
       openPlanOverdue,
       openPlanUnavailable,
+      client?.cashflow,
       cashOutlook.dipsBelowFloorWeek,
       hasFigures,
       cashOutlook.opening,

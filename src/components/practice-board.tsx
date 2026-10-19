@@ -1765,8 +1765,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     ],
   );
   const practiceLines = useMemo(
-    () => practiceHomeLines({ ...practiceBrief, loading: bookLoading }),
-    [practiceBrief, bookLoading],
+    () => practiceHomeLines({ ...practiceBrief, loading: bookLoading, countsReady }),
+    [practiceBrief, bookLoading, countsReady],
   );
   const practiceStatus = useMemo(() => practiceCardStatuses(practiceBrief), [practiceBrief]);
   const dashAgent = view === "home" ? practiceAgent : null;
