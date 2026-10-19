@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { stripMilonProjection } from "@/lib/milon-projection";
+import { formatCalendarDay, formatDate } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
 
 /**
  * Public tokenised task page — /t/:token
@@ -43,9 +45,8 @@ const GOLD = "#0B5FFF";
 
 function fmtDate(d: string | null) {
   if (!d) return null;
-  return new Date(d + "T00:00:00").toLocaleDateString("en-ZA", {
-    day: "numeric", month: "short", year: "numeric",
-  });
+  const day = formatCalendarDay(d, ZA_MARKET);
+  return day === "—" ? null : day;
 }
 
 function TaskPage() {
@@ -409,7 +410,7 @@ function TaskPage() {
       </button>
 
       <p className="mt-4 text-center text-[11px] text-[#8a938c]">
-        Last updated {new Date(item.updated_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })} ·
+        Last updated {formatDate(item.updated_at, ZA_MARKET)} ·
         This page shows only your task.
       </p>
     </>,

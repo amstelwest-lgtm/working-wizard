@@ -19,7 +19,7 @@ import {
   summariseAutoPopulate,
 } from "../src/lib/auto-populate";
 import { ZA_MARKET } from "../src/lib/market";
-import { formatCalendarDay } from "../src/lib/market/format";
+import { formatWeekHeader } from "../src/lib/market/format";
 import { rankStrategicMoves } from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
@@ -278,14 +278,13 @@ const plAfterDated = mergeStatementFinancials(
 );
 assert(plAfterDated.cashAsOf === "2026-09-30", "a later P&L does not move the cash date");
 assert(plAfterDated.periodEnd === "2026-10-31", "a later P&L still updates its own period end");
-const weekLabel = formatCalendarDay("2026-10-05", { locale: "en-US" }, { day: "2-digit", month: "short" });
-const sheetLabel = formatCalendarDay(
+const weekLabel = formatWeekHeader("2026-10-05", { locale: "en-US" });
+const sheetLabel = formatWeekHeader(
   balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30" }, 46300) ?? "",
   { locale: "en-US" },
-  { day: "2-digit", month: "short" },
 );
-assert(weekLabel.includes("Oct") && weekLabel.includes("05"), `week label ${weekLabel}`);
-assert(sheetLabel.includes("Sep") && sheetLabel.includes("30"), `opening label ${sheetLabel}`);
+assert(weekLabel === "Oct 5", `week label ${weekLabel}`);
+assert(sheetLabel === "Sep 30", `opening label ${sheetLabel}`);
 assert(
   balanceSheetCashAsOf({ cash: "46300", cashAsOf: "2026-09-30" }, 12000) === null,
   "a different opening keeps the week label",

@@ -1489,15 +1489,8 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   const inApp = formatSignedOffDateTime("2026-10-08T01:15:46.000Z", {
     locale: "en-US",
     timezone: "America/New_York",
-  }, {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
   });
-  assert(/9:15:46/.test(inApp), `in-app sign-off keeps the clock, got ${inApp}`);
+  assert(inApp === "Oct 7, 2026, 9:15 PM EDT", `in-app sign-off uses the clock preset, got ${inApp}`);
   assert(/EDT|UTC-4/.test(inApp), `in-app sign-off names the zone, got ${inApp}`);
   const packPanel = readFileSync(resolve("src/components/advisory-pack-panel.tsx"), "utf8");
   assert(packPanel.includes("formatReviewDateTime"), "the pack sign-off line uses the shared formatter");

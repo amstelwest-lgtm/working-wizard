@@ -86,7 +86,7 @@ import type {
 import { interestOfRevenueSentence } from "@/lib/cash-interest-note";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
-import { formatCalendarDay, formatMoneyChartTick, formatMoneyCompact } from "@/lib/market/format";
+import { formatCalendarDay, formatMoneyChartTick, formatMoneyCompact, formatWeekHeader } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
@@ -193,7 +193,6 @@ type LineItem = {
 };
 
 const WEEKS = 13;
-const WEEK_DAY_LABEL = { day: "2-digit", month: "short" } as const;
 
 const FREQ_LABEL: Record<Frequency, string> = {
   "recurring-weekly": "Recurring (weekly)",
@@ -1363,22 +1362,20 @@ export function CashForecastPanel({
   const weekIsos = useMemo(() => weekDatesFrom(startDate, WEEKS), [startDate]);
 
   const weeks = useMemo(
-    () => weekIsos.map((iso) => formatCalendarDay(iso, market, WEEK_DAY_LABEL)),
+    () => weekIsos.map((iso) => formatWeekHeader(iso, market)),
     [weekIsos, market],
   );
   // Same formatter as the week axis, so the start cannot read as an ISO date
   // beside a timezone-shifted week label. The forecast week stays on that
   // axis. Opening cash that came from a balance sheet is labelled with the
   // statement date (cashAsOf), not the Monday the 13 weeks begin.
-  const startLabel = weeks[0] ?? formatCalendarDay(startDate, market, WEEK_DAY_LABEL);
+  const startLabel = weeks[0] ?? formatWeekHeader(startDate, market);
   const openingAsOf = balanceSheetCashAsOf(inputFinancials, parseFloat(openingBalance) || 0);
-  const openingLabel = openingAsOf
-    ? formatCalendarDay(openingAsOf, market, WEEK_DAY_LABEL)
-    : startLabel;
+  const openingLabel = openingAsOf ? formatWeekHeader(openingAsOf, market) : startLabel;
 
   const horizonLabel =
     weekIsos.length >= WEEKS
-      ? `${formatCalendarDay(weekIsos[0]!, market, { day: "numeric", month: "short", year: "numeric" })} – ${formatCalendarDay(weekIsos[WEEKS - 1]!, market, { day: "numeric", month: "short", year: "numeric" })}`
+      ? `${formatCalendarDay(weekIsos[0]!, market)} – ${formatCalendarDay(weekIsos[WEEKS - 1]!, market)}`
       : "";
 
   const computeScenario = (opts: {
@@ -2200,7 +2197,7 @@ export function CashForecastPanel({
   );
 
   const forecastUpdatedLabel = lastForecastAt
-    ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone)}`
+    ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone, market)}`
     : null;
 
   const openingMissingNow =

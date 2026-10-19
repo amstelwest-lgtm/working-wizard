@@ -36,7 +36,7 @@ import {
   BOT_MAX_HISTORY,
   BOT_MAX_TOOL_ROUNDS,
   BOT_RATE_LIMIT,
-  BOT_SYSTEM,
+  botSystem,
   buildBlockers,
   buildBrainAnswer,
   buildInviteStatus,
@@ -438,12 +438,14 @@ async function handleMilonBot(req: Request): Promise<Response> {
 
   let overviewBlock = "";
   let clientName: string | null = null;
+  let replyPack: "za" | "us" = "za";
   if (!createIntent) {
     try {
       const brief = await loadOverviewBrief(userClient, clientId);
       if (brief) {
         overviewBlock = formatOverviewForPrompt(brief, audience);
         clientName = brief.clientName;
+        replyPack = brief.copyPack === "us" ? "us" : "za";
       }
     } catch (e) {
       console.warn("overview brief:", (e as Error).message);
@@ -565,7 +567,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
     }));
 
   const sealedChat = buildMilonBotChatPayload({
-    system: BOT_SYSTEM,
+    system: botSystem(replyPack),
     overviewBlock,
     history,
     message,
@@ -687,7 +689,7 @@ async function handleMilonBot(req: Request): Promise<Response> {
       : "I could not complete that. Try again, or use Propose / Draft on the Summary tab.";
   }
 
-  const shown = normalizeChatReply(rehydrateForUi(answer, sealedChat.session, message));
+  const shown = normalizeChatReply(rehydrateForUi(answer, sealedChat.session, message), replyPack);
   // Charge a real model answer, or the grounded "nothing on file" reply.
   // The failure fallback is not an answer. A retry of the same turn id
   // does not consume a second allowance.

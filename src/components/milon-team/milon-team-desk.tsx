@@ -164,7 +164,7 @@ export function MilonTeamDesk({
 
   function checkedLine(item: TeamBriefingItem): string | null {
     const stamp = checkedStamp(latest[item.agent], feed.agents[item.agent]?.lastRunAt ?? null);
-    return figuresCheckedLine(item.source.asOf, stamp ?? item.source.asOf, clock);
+    return figuresCheckedLine(item.source.asOf, stamp ?? item.source.asOf, clock, live?.market);
   }
   const waiting = feed.loading && !feed.error && emptyFeed && presentation !== "agent";
   const quietError = Boolean(feed.error) && emptyFeed;
@@ -297,8 +297,8 @@ export function MilonTeamDesk({
                       market: live?.market,
                     });
                     const draft = draftFindingLabel(row);
-                    const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock);
-                    const when = formatAsOf(row.created_at, clock);
+                    const checked = figuresCheckedLine(findingPeriod(row), row.created_at, clock, live?.market);
+                    const when = formatAsOf(row.created_at, clock, live?.market);
                     const meta = (
                       <div className="milon-desk-meta">
                         {checked ? (

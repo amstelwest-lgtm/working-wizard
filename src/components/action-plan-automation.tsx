@@ -3,6 +3,8 @@
  * Confirm is the only write. The panel does not email anyone.
  */
 import type { ActionAutomationRow, Contradiction, DuplicateGroup } from "@/lib/action-plan-automation";
+import { useMarketFormat } from "@/contexts/market";
+import { formatCalendarDay } from "@/lib/market/format";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 const FOLLOW_UP: Record<ActionAutomationRow["followUp"], string> = {
@@ -28,6 +30,7 @@ export function ActionPlanAutomation({
   onConfirm: (row: ActionAutomationRow) => void;
   onDrop: (id: string, note: string) => void;
 }) {
+  const { market } = useMarketFormat();
   const open = rows.filter((row) => row.followUp !== "done");
   const needsConfirm = open.filter((row) => row.ownerSuggested || row.dueSuggested);
   if (!needsConfirm.length && !duplicates.length && !contradictions.length && !open.some((row) => row.overdue)) {
@@ -43,7 +46,7 @@ export function ActionPlanAutomation({
               <span>
                 <b>{actionDisplayTitle(row.title)}</b>
                 {row.ownerSuggested && row.owner ? ` · ${row.owner.name}` : ""}
-                {row.dueSuggested && row.dueDate ? ` · due ${row.dueDate}` : ""}
+                {row.dueSuggested && row.dueDate ? ` · due ${formatCalendarDay(row.dueDate, market)}` : ""}
                 {` · ${FOLLOW_UP[row.followUp]}`}
                 {row.overdue ? " · Overdue" : ""}
               </span>

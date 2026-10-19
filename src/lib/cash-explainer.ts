@@ -1,23 +1,11 @@
-const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
-const DAY_YEAR: Intl.DateTimeFormatOptions = {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-};
+import { calendarDayFromIso, weekHeaderFromIso } from "@/lib/market/date-presets";
 
 /**
- * "12 Oct 2026" or "12 Oct". Noon UTC so a timezone cannot move the calendar
- * day. en-GB keeps the day unpadded; en-ZA prints "05 Oct".
+ * "12 Oct 2026" or "12 Oct". The calendar day is the written ISO date.
  */
 export function humanCalendarDay(iso: string, withYear = true): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!match) return "—";
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
-  return date
-    .toLocaleDateString("en-GB", { timeZone: "UTC", ...(withYear ? DAY_YEAR : DAY) })
-    .replace(/\u202f/g, " ")
-    .replace(/\u00a0/g, " ")
-    .replace(/\bSept\b/g, "Sep");
+  const label = withYear ? calendarDayFromIso(iso, "za") : weekHeaderFromIso(iso, "za");
+  return label ?? "—";
 }
 
 export function humanizeIsoDates(text: string): string {

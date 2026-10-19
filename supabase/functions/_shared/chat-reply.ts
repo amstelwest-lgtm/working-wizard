@@ -13,6 +13,8 @@
  * Pure functions only, so the edge functions and the Node tests share them.
  */
 
+import { calendarDayFromIso, dateOrder } from "../../../src/lib/market/date-presets.ts";
+
 export type ChatAgent = "financial_manager" | "analyst" | "advisor";
 
 export function parseChatAgent(raw: unknown): ChatAgent | null {
@@ -27,6 +29,7 @@ export function chatReplyFormatRules(copyPack: "za" | "us" | null = null): strin
       : copyPack === "za"
         ? "Amounts use the South African rand format, for example R4,200,000."
         : "Amounts use the currency format already shown in the figures you were given, for example R4,200,000 or $4,200,000.";
+  const dateExample = copyPack === "us" ? "Sep 8, 2026" : "8 Sep 2026";
   return `Reply format (always, unless the user asks for more detail). These rules override any other length or style rule above:
 - The reply has only three parts, in this order, and nothing else.
 - Part 1, line 1: one plain sentence that answers the question. No heading marks, no bold.
@@ -34,37 +37,27 @@ export function chatReplyFormatRules(copyPack: "za" | "us" | null = null): strin
 - Part 3: a blank line, then the line **Next actions** on its own, then at most 3 numbered items ("1. ", "2. ", "3. "), each one short plain sentence of at most 20 words.
 - No paragraphs between the figures and Next actions, and nothing after the last action. If a figure or date is missing, say so as one figure line, for example "- Due dates: none on file", not as a paragraph.
 - Skip the figures part when there are no figures (for example small talk or a definition). Skip Next actions when there is nothing to do.
-- Dates look like 8 Sep 2026. Never write ISO dates such as 2026-09-08.
+- Dates look like ${dateExample}. Never write ISO dates such as 2026-09-08.
 - Plain words. No jargon dumps. Hard limit of 120 words in total. Cut detail rather than go over.
 - Use bold sparingly and never for whole sentences. No tables, no code blocks, no headings.
 - Never put list items inline in a sentence. Each bullet or numbered item is on its own line.`;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** 2026-09-08 → 8 Sep 2026. Returns null for anything that is not a real calendar date. */
-export function humanDate(iso: string): string | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
-  if (!m) return null;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  if (month < 1 || month > 12 || day < 1) return null;
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  if (day > daysInMonth) return null;
-  return `${day} ${MONTHS[month - 1]} ${year}`;
+/** 2026-09-08 → 8 Sep 2026, or Sep 8, 2026 for a US pack. Null when it is not a real calendar date. */
+export function humanDate(iso: string, copyPack: "za" | "us" = "za"): string | null {
+  return calendarDayFromIso(iso, dateOrder(copyPack));
 }
 
 const ISO_DATE = /(?<![\d\-/.])(\d{4})-(\d{2})-(\d{2})(?![\d\-/:T])/g;
 
-function humanizeDates(text: string): string {
+function humanizeDates(text: string, copyPack: "za" | "us" = "za"): string {
   // Leave inline code spans alone.
   return text
     .split(/(`[^`\n]*`)/)
     .map((part) =>
       part.startsWith("`") && part.endsWith("`") && part.length > 1
         ? part
-        : part.replace(ISO_DATE, (whole, y, mo, d) => humanDate(`${y}-${mo}-${d}`) ?? whole),
+        : part.replace(ISO_DATE, (whole, y, mo, d) => humanDate(`${y}-${mo}-${d}`, copyPack) ?? whole),
     )
     .join("");
 }
@@ -123,7 +116,7 @@ function splitInlineBullets(line: string): string[] {
  * breaks, rewrites ISO dates, list markers and the Next actions heading.
  * Numbers, words and fenced code are left alone.
  */
-export function normalizeChatReply(raw: string): string {
+export function normalizeChatReply(raw: string, copyPack: "za" | "us" = "za"): string {
   if (typeof raw !== "string" || !raw.trim()) return raw;
   const text = raw.replace(/\r\n?/g, "\n");
 
@@ -138,7 +131,7 @@ export function normalizeChatReply(raw: string): string {
       lines.push(`${FENCE}${fences.length - 1}`);
       continue;
     }
-    for (const rawLine of humanizeDates(chunk).split("\n")) {
+    for (const rawLine of humanizeDates(chunk, copyPack).split("\n")) {
       lines.push(...splitInlineBullets(rawLine));
     }
   }

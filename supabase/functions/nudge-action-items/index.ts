@@ -10,6 +10,7 @@
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { transactionalFrom, transactionalSiteUrl } from "../_shared/transactional-mail.ts";
+import { calendarDayFromIso } from "../../../src/lib/market/date-presets.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 // How long to wait before re-nudging the same item (7 days).
@@ -289,13 +290,7 @@ Deno.serve(async (req) => {
       const emailType: "nudge" | "overdue" =
         item.health === "overdue" ? "overdue" : "nudge";
 
-      const dueDateFormatted = item.due_date
-        ? new Date(item.due_date + "T00:00:00").toLocaleDateString("en-ZA", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
-        : null;
+      const dueDateFormatted = item.due_date ? calendarDayFromIso(item.due_date, "za") : null;
 
       const { html, text, subject } = buildEmailHtml({
         employeeName: item.owner_name.split(" ")[0],

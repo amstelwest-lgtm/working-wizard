@@ -15,6 +15,7 @@ import {
   computedDaysAr,
   daysNeedReview,
 } from "@/lib/deliverable-input-config";
+import { formatMonthRange } from "@/lib/market/date-presets";
 import { readStatementMeta } from "@/lib/statement-period";
 import {
   annualiseFinancials,
@@ -885,25 +886,12 @@ export function budgetSignedFiguresChanged(
   );
 }
 
-const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "Jan–Sep 2026" for the months a statement comparison actually covers. */
+/** "Jan 2026 – Sep 2026" for the months a statement comparison actually covers. */
 export function budgetCoverWindowLabel(months: string[]): string {
-  const stamp = (ym: string) => {
-    const match = /^(\d{4})-(\d{2})$/.exec(ym);
-    if (!match) return null;
-    const idx = Number(match[2]) - 1;
-    if (idx < 0 || idx > 11) return null;
-    return { mon: MONTH_SHORT[idx], year: match[1] };
-  };
-  const first = stamp(months[0] ?? "");
-  const last = stamp(months[months.length - 1] ?? "");
+  const first = months[0];
+  const last = months[months.length - 1];
   if (!first || !last) return "Statement";
-  if (months.length === 1 || (first.mon === last.mon && first.year === last.year)) {
-    return `${first.mon} ${first.year}`;
-  }
-  if (first.year === last.year) return `${first.mon}–${last.mon} ${last.year}`;
-  return `${first.mon} ${first.year}–${last.mon} ${last.year}`;
+  return formatMonthRange(first, last) ?? "Statement";
 }
 
 /** A statement comparison that is the seed itself is not a performance verdict. */

@@ -3,6 +3,7 @@
  * Slow drip stamps last_asked_at on one owner|both item per call.
  */
 
+import { MONTHS_LONG as MONTHS } from "@/lib/market/date-presets";
 import type { ClientOperatingProfile } from "./client-profile.ts";
 import {
   canAdvanceFromCosts,
@@ -77,21 +78,6 @@ const GOAL_LABEL: Record<string, string> = {
   reduce_founder_dependence: "Get the business to run without me",
   build_to_exit: "Build value for a sale or handover",
 };
-
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 
 /** Core four asked on first run. Deferred six are unanswered when depth === "core". */
 export const CORE_PROFILE_KEYS = new Set([

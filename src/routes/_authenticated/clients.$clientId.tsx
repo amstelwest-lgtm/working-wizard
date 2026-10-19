@@ -908,6 +908,7 @@ function ClientView() {
         headline: facts.length ? facts.join(" · ") : null,
         items: completeDeliverablePdfItems(planItems, created),
         profile,
+        market: clientMarket,
       });
     })()
       .then(() => toast.success("Action Plan PDF downloaded"))

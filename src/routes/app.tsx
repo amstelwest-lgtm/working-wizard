@@ -4998,11 +4998,7 @@ function Index() {
                                   className="!text-[9px] !tracking-[0.16em]"
                                 >
                                   Live ·{" "}
-                                  {formatDate(new Date(), boardMarket, {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  }).toUpperCase()}
+                                  {formatDate(new Date(), boardMarket).toUpperCase()}
                                 </StatusPill>
                               ) : sampleMode ? (
                                 <StatusPill

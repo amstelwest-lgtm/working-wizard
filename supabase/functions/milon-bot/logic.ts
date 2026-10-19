@@ -223,3 +223,9 @@ Rules:
 - "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
 
 ${chatReplyFormatRules()}`;
+
+/** Same system prompt, with the calendar-day example for the client's market. */
+export function botSystem(copyPack: "za" | "us" = "za"): string {
+  if (copyPack !== "us") return BOT_SYSTEM;
+  return BOT_SYSTEM.replaceAll("Dates look like 8 Sep 2026.", "Dates look like Sep 8, 2026.");
+}

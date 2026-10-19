@@ -1,6 +1,8 @@
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { stripMilonProjection } from "@/lib/milon-projection";
+import type { ResolvedMarket } from "@/lib/market/types";
+import { ZA_MARKET } from "@/lib/market/resolve";
 import type { ActionPlanPdfItem } from "@/reports/action-plan";
 
 export type DeliverablePdfSource = {
@@ -48,6 +50,7 @@ export async function downloadActionPlanPdf(input: {
   items: ActionPlanPdfItem[];
   profile: AccountantProfile;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: Pick<ResolvedMarket, "locale">;
 }): Promise<void> {
   const [{ pdf }, { ActionPlanPDF }] = await Promise.all([
     import("@react-pdf/renderer"),
@@ -63,6 +66,7 @@ export async function downloadActionPlanPdf(input: {
       outcomeGoal: input.outcomeGoal,
       items: input.items,
       reviewSignoff: input.reviewSignoff ?? null,
+      market: input.market ?? ZA_MARKET,
     }) as Parameters<typeof pdf>[0],
   ).toBlob();
   const url = URL.createObjectURL(blob);

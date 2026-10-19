@@ -535,12 +535,6 @@ const STATUS_LABEL: Record<Status, string> = {
   blocked: "Blocked",
 };
 
-const PLAN_DAY: Intl.DateTimeFormatOptions = {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-};
-
 export { defaultTargetDate };
 
 function PlanDateField({
@@ -559,7 +553,7 @@ function PlanDateField({
       <span
         className={`block px-1 py-1 text-xs font-medium tabular-nums ${overdue ? "font-bold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}`}
       >
-        {value ? formatCalendarDay(value, market, PLAN_DAY) : "—"}
+        {value ? formatCalendarDay(value, market) : "—"}
       </span>
       <input
         type="date"
@@ -1043,6 +1037,7 @@ export default function ActionPlanPanel({
         })),
         profile,
         reviewSignoff,
+        market,
       });
       toast.success("Action Plan PDF downloaded");
     } catch (e) {
@@ -1280,7 +1275,7 @@ export default function ActionPlanPanel({
           employeeName: owner.name.split(" ")[0],
           taskTitle: it.title,
           outcomeWhy: stripMilonProjection(it.outcome_why) || undefined,
-          dueDate: it.due_date ? formatCalendarDay(it.due_date, market, PLAN_DAY) : undefined,
+          dueDate: it.due_date ? formatCalendarDay(it.due_date, market) : undefined,
           periodLabel: plan?.period_label,
           milestones: ms.map((m) => ({ week_no: m.week_no, label: m.label })),
           taskUrl: url,
@@ -2213,7 +2208,7 @@ function GoalHeader({
                 ) : null}
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   <CalendarDays className="mr-1 inline h-3.5 w-3.5" />
-                  Target {formatCalendarDay(shownTarget, market, PLAN_DAY)}
+                  Target {formatCalendarDay(shownTarget, market)}
                   {goalOverdue ? (
                     <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Target date has passed</span>
                   ) : null}
@@ -2671,13 +2666,13 @@ function ItemRow({
       <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-28">
         {!item.due_date && suggestion?.dueSuggested && suggestion.dueDate ? (
           <span data-due-suggested="" className="block px-1 text-[10px] font-medium text-slate-500">
-            Due {formatCalendarDay(suggestion.dueDate, market, PLAN_DAY)} · suggested
+            Due {formatCalendarDay(suggestion.dueDate, market)} · suggested
           </span>
         ) : !isOwner ? (
           <span
             className={`block px-1 py-1 text-xs font-medium tabular-nums ${overdue ? "font-bold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}`}
           >
-            {item.due_date ? formatCalendarDay(item.due_date, market, PLAN_DAY) : "—"}
+            {item.due_date ? formatCalendarDay(item.due_date, market) : "—"}
           </span>
         ) : (
           <PlanDateField
@@ -2727,7 +2722,7 @@ function ItemRow({
           {lastNudge ? (
             <span
               className={`inline-flex items-center gap-1 text-[10px] font-semibold dark:text-[#F4F7FB] ${lastNudge.email_type === "nudge" ? "text-[#102A43]" : "text-[#C43D4B]"}`}
-              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY) : ""}`}
+              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? formatCalendarDay(lastNudge.sent_at, market) : ""}`}
             >
               <Mail className="h-3 w-3" />
               {lastNudge.email_type === "nudge" ? "Nudged" : "Overdue"}
@@ -2743,7 +2738,7 @@ function ItemRow({
           ) : null}
           {lastNudge?.sent_at && (
             <span className="text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-              Sent {formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY)}
+              Sent {formatCalendarDay(lastNudge.sent_at, market)}
             </span>
           )}
         </div>

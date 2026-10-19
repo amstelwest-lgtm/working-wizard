@@ -8,6 +8,9 @@ import { PDFDocument, type ReportSignoffStamp, type SmeData } from "@/components
 import { ReportTitle } from "@/components/pdf/report-title";
 import { C } from "@/components/pdf/theme";
 import { stripMilonProjection } from "@/lib/milon-projection";
+import { formatCalendarDay } from "@/lib/market/format";
+import { ZA_MARKET } from "@/lib/market/resolve";
+import type { ResolvedMarket } from "@/lib/market/types";
 
 export type ActionPlanPdfItem = {
   title: string;
@@ -25,6 +28,7 @@ export type ActionPlanPDFProps = {
   items: ActionPlanPdfItem[];
   sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: Pick<ResolvedMarket, "locale">;
 };
 
 const S = StyleSheet.create({
@@ -64,6 +68,7 @@ export function ActionPlanPDF({
   items,
   sample,
   reviewSignoff,
+  market = ZA_MARKET,
 }: ActionPlanPDFProps) {
   return (
     <PDFDocument
@@ -90,7 +95,7 @@ export function ActionPlanPDF({
             <Text style={S.title}>{stripMilonProjection(item.title)}</Text>
             <Text style={S.meta}>
               {statusLabel(item.status)}
-              {item.dueDate ? ` · due ${item.dueDate}` : ""}
+              {item.dueDate ? ` · due ${formatCalendarDay(item.dueDate, market)}` : ""}
               {item.ownerName ? ` · ${item.ownerName}` : ""}
             </Text>
             {stripMilonProjection(item.outcomeWhy) ? (

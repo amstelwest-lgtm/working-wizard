@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { UserPlus, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { sendTransactionalEmail } from "@/lib/email/send";
+import { useMarketFormat } from "@/contexts/market";
+import { formatCalendarDay } from "@/lib/market/format";
 
 type Employee = { id: string; name: string; email: string | null };
 
@@ -35,6 +37,7 @@ export function AssignButton({
   trigger,
   size = "xs",
 }: Props) {
+  const { market } = useMarketFormat();
   const [open, setOpen] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
@@ -126,7 +129,7 @@ export function AssignButton({
               employeeName: emp.name,
               taskTitle: title.trim(),
               taskDescription: description.trim() || undefined,
-              dueDate: due || undefined,
+              dueDate: due ? formatCalendarDay(due, market) : undefined,
               assignedBy: u.user?.email ?? undefined,
               clientName,
             },

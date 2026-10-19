@@ -6,20 +6,8 @@
  * a gold miner.
  */
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-] as const;
+import { calendarDayLabel } from "../market/date-presets.ts";
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 export const COMPANY_TAX_NUMERATOR = 27;
@@ -115,7 +103,7 @@ function endOfShiftedMonth(parts: Parts, monthsAhead: number): string {
 
 export function formatSampleDate(value: string): string {
   const { y, m, d } = parseIso(value);
-  return `${d} ${MONTHS[m - 1]} ${y}`;
+  return calendarDayLabel(y, m, d, "za") ?? value;
 }
 
 export function formatSampleCents(cents: number): string {

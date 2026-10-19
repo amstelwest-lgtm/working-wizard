@@ -1,3 +1,4 @@
+import { MONTHS_LONG as MONTHS } from "@/lib/market/date-presets";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -167,20 +168,6 @@ const REPORT_KEYS = [
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(String);
 

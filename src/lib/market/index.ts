@@ -47,6 +47,7 @@ export {
   formatCalendarDay,
   formatDate,
   formatDateTime,
+  formatWeekHeader,
   formatReviewDateTime,
   formatSignedOffDateTime,
   signedOffTimeZone,
@@ -55,6 +56,7 @@ export {
   formatMoneyCompact,
   formatMoneyUnit,
   formatMonthLabel,
+  formatMonthRange,
   formatNumber,
   formatPercentRate,
 } from "./format";

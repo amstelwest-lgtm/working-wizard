@@ -224,7 +224,7 @@ await shot("desk-live-1280", 1280, 1440, "/milon-team-desk?fixture=live", async 
   await handoff.getByText("Analyst").waitFor();
   await handoff.getByText("Advisor").waitFor();
   await handoff.locator("time").waitFor();
-  await page.getByText("Sep figures · checked 9 Oct").first().waitFor();
+  await page.getByText("Sep figures · checked 9 Oct 2026").first().waitFor();
   await page.getByText("Debt-to-Equity is 0.78×.").waitFor();
   await page.getByText("Debt", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Show all" }).waitFor();
