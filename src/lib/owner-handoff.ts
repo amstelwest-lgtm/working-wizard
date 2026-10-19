@@ -126,7 +126,7 @@ export function handoffDraftIsDuplicate(actionTitle: string, existingTitles: rea
   });
 }
 
-/** Short role from "Milōn Financial Manager". The hand-off note already named the bot. */
+/** Drop the team prefix so the finish note uses the short role. */
 function finishedRole(displayName: string): string {
   const short = displayName.replace(/^Milōn\s+/u, "").trim();
   return short || displayName.trim() || "Milōn";
