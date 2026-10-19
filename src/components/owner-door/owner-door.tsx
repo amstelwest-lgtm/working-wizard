@@ -16,7 +16,6 @@ import { visitorCopyPack } from "@/lib/market/marketing";
 import { readVisitorDraft } from "@/lib/market/storage";
 import type { ResolvedMarket } from "@/lib/market/types";
 import { AGENT_KEYS, type AgentKey } from "@/lib/milon-team-feed";
-import { latestRunByAgent } from "@/lib/milon-team-activity";
 import { askOwnerAgent } from "@/lib/owner-ask";
 import {
   browserThreadStore,
@@ -34,7 +33,7 @@ import {
   type OwnerBooks,
 } from "@/lib/owner-answers";
 import { agentDisplayName } from "@/lib/milon-team";
-import { ownerPresence, steerOpenHandoffs, type OwnerTalk } from "@/lib/owner-presence";
+import { cardRunsByAgent, ownerPresence, steerOpenHandoffs, withCardHandoffRuns, type OwnerTalk } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
@@ -663,13 +662,16 @@ export function OwnerDoor({
     })),
   );
   const openAgents = openHandoffAgents(settledRows);
-  const cardRuns = withoutPersonQueuedRuns(activity.runs, personOwnedActionIds(settledRows));
+  const cardRuns = withCardHandoffRuns(
+    withoutPersonQueuedRuns(activity.runs, personOwnedActionIds(settledRows)),
+    settledRows,
+  );
   const presence = steerOpenHandoffs(
     ownerPresence({ ...activity, runs: cardRuns }, talk),
     openAgents,
   );
   const runState = useMemo(() => {
-    const latest = latestRunByAgent(cardRuns);
+    const latest = cardRunsByAgent(cardRuns);
     const out: Partial<Record<AgentKey, OwnerRunPhase>> = {};
     for (const key of AGENT_KEYS) {
       const phase = ownerRunPhase(latest[key], activity.findings);

@@ -283,7 +283,7 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { ownerPresence, steerOpenHandoffs } from "@/lib/owner-presence";
+import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
@@ -3205,16 +3205,17 @@ function ClientView() {
     [assignmentRows, homeActivity.runs],
   );
   const openAgents = useMemo(() => openHandoffAgents(settledRows), [settledRows]);
-  const homePresence = useMemo(
+  const homeCardRuns = useMemo(
     () =>
-      steerOpenHandoffs(
-        ownerPresence({
-          ...homeActivity,
-          runs: withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
-        }),
-        openAgents,
+      withCardHandoffRuns(
+        withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
+        settledRows,
       ),
-    [homeActivity, settledRows, openAgents],
+    [homeActivity.runs, settledRows],
+  );
+  const homePresence = useMemo(
+    () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
+    [homeActivity, homeCardRuns, openAgents],
   );
   const shownHandoffs = useMemo(
     () =>

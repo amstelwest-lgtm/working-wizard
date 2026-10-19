@@ -6,8 +6,9 @@
  * the desk falls back to the existing feed. agent_settings is not readable
  * here; enabled=false simply leaves these tables empty.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { dispatchActionPlanRefresh } from "@/lib/owner-handoff-client";
 import { coerceMarketSelection } from "@/lib/market/parse";
 import { resolveMarket, ZA_MARKET } from "@/lib/market/resolve";
 import {
@@ -22,7 +23,13 @@ import {
 import type { AgentKey } from "@/lib/milon-team-feed";
 
 const ROW_LIMIT = 20;
+/** While a run is queued or running, Home reloads runs and notes, then stops. */
+const ACTIVE_POLL_MS = 5000;
 const CLIENT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function runIsOpen(status: string): boolean {
+  return status === "queued" || status === "running";
+}
 
 type QueryError = { message?: string; code?: string } | null;
 
@@ -221,6 +228,22 @@ export function useAgentActivity(clientId: string): AgentActivity {
       void supabase.removeChannel(channel);
     };
   }, [clientId, reload]);
+
+  const active = state.runs.some((run) => runIsOpen(run.status));
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (wasActive.current && !active && !state.loading) dispatchActionPlanRefresh();
+    wasActive.current = active;
+  }, [active, state.loading]);
+
+  useEffect(() => {
+    if (!clientId.trim() || state.loading || !active) return;
+    const timer = window.setInterval(() => {
+      refresh();
+      dispatchActionPlanRefresh();
+    }, ACTIVE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [active, clientId, refresh, state.loading]);
 
   return { ...state, refresh };
 }

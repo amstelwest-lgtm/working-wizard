@@ -25,7 +25,7 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
-import { botPickupCaption } from "@/lib/action-handoff";
+import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
@@ -1742,6 +1742,7 @@ export default function ActionPlanPanel({
                       ? { text: live.summary.trim(), at: live.at }
                       : null;
                   const result = storedResult ?? liveResult;
+                  if (handoffCostStopped(result?.text) && run?.agent) return handoffCouldNotFinish(run.agent);
                   return botPickupCaption({
                     assignee: it.owner_name,
                     run,

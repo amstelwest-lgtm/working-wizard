@@ -2123,6 +2123,8 @@ function Index() {
   // Owner Home reloads each action row from this event. Hand to flips the card
   // to Working on the click. A run that started before that click does not clear
   // it. The stored run settles it once it is newer than the click, the same read as client Home.
+  // While any run for this client is queued or running, Home polls and reloads the notes, then stops.
+  // A queued or running run on a card beats Found something. Same runs as the row.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);
     window.addEventListener("milon-action-plan-refresh", bump);

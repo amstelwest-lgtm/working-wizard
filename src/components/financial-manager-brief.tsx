@@ -11,7 +11,7 @@ import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
 import { HandToMenu } from "@/components/hand-to-menu";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useMarketFormat } from "@/contexts/market";
-import { botPickupCaption } from "@/lib/action-handoff";
+import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { latestHandoffResult } from "@/lib/owner-handoff";
@@ -35,12 +35,16 @@ export type HomeBriefHandoff = {
 
 function HandoffProgress({ item, onRetry }: { item: HomeBriefHandoff; onRetry?: () => void }) {
   const result = latestHandoffResult(item.notes ?? []);
-  const caption = botPickupCaption({
-    assignee: item.assignee,
-    run: item.run,
-    result: result?.text,
-    resultAt: result?.at,
-  });
+  const agent = item.run?.agent ?? item.agent ?? null;
+  const caption =
+    handoffCostStopped(result?.text) && agent
+      ? handoffCouldNotFinish(agent)
+      : botPickupCaption({
+          assignee: item.assignee,
+          run: item.run,
+          result: result?.text,
+          resultAt: result?.at,
+        });
   return (
     <>
       <HandoffRunStatus run={item.run} caption={caption} onRetry={onRetry} />
