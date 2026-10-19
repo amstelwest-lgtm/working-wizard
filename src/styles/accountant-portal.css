@@ -2008,6 +2008,19 @@ html.dark .health-plate{
   color:inherit;
   text-decoration:none;
 }
+/* Same phone canvas as the premium shell: keep the crumb navy, not frame-grey. */
+@media (max-width: 860px) {
+  html:not(.dark) .accountant-portal .crumb,
+  html:not(.dark) .accountant-portal .crumb a,
+  html:not(.dark) .accountant-portal .crumb span,
+  html:not(.dark) .accountant-portal .crumb b {
+    color: rgba(16, 42, 67, 0.92);
+  }
+  html:not(.dark) .accountant-portal .crumb .aud {
+    color: #102a43;
+    border-color: rgba(16, 42, 67, 0.35);
+  }
+}
 .accountant-portal .crumb a.crumb-link:hover{
   text-decoration:underline;
 }
@@ -2043,7 +2056,11 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 @media (max-width:390px){
   .accountant-portal:not(.owner-door) .deliverable-main{
     padding-left:12px;
-    padding-right:12px;
+    /* The pencil sits at the right. 12px let the next card's text run under it. */
+    padding-right:28px;
+  }
+  .accountant-portal .health-pillar-cards{
+    margin-top:12px;
   }
   .accountant-portal .topbar .firm-chip{
     min-width:0;

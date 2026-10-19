@@ -31,6 +31,8 @@ export type FinderClient = {
   id: string;
   name: string;
   clientCode?: string | null;
+  /** Firm the client belongs to. Used only when several clients share a name. */
+  firmName?: string | null;
 };
 
 export type ClientSearchResult = {
@@ -77,24 +79,83 @@ function compactCode(value: string): string {
   return value.replace(/ /g, "");
 }
 
+/** First 8 hex characters of a client id, enough to tell same-name rows apart. */
+export function shortClientId(id: string): string {
+  return id.replace(/-/g, "").slice(0, 8);
+}
+
+/** One row per client id. The loaded book is newest-first, so the first copy wins. */
+export function dedupeFinderClients(clients: readonly FinderClient[]): FinderClient[] {
+  const seen = new Set<string>();
+  const out: FinderClient[] = [];
+  for (const client of clients) {
+    const id = client.id.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(client);
+  }
+  return out;
+}
+
+/**
+ * Extra label for a display name that belongs to more than one client.
+ * A firm name is used when that firm appears once in the group. Same firm,
+ * a missing firm, or two clients at one firm fall back to a short id.
+ */
+export function finderNameDisambiguators(
+  clients: readonly FinderClient[],
+): ReadonlyMap<string, string> {
+  const groups = new Map<string, FinderClient[]>();
+  for (const client of clients) {
+    const key = client.name.trim().toLowerCase();
+    if (!key || !client.id.trim()) continue;
+    const list = groups.get(key);
+    if (list) list.push(client);
+    else groups.set(key, [client]);
+  }
+  const out = new Map<string, string>();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const firmCounts = new Map<string, number>();
+    for (const client of group) {
+      const firm = client.firmName?.trim() || "";
+      firmCounts.set(firm, (firmCounts.get(firm) ?? 0) + 1);
+    }
+    for (const client of group) {
+      const firm = client.firmName?.trim() || "";
+      out.set(client.id, firm && firmCounts.get(firm) === 1 ? firm : shortClientId(client.id));
+    }
+  }
+  return out;
+}
+
+function clientHint(client: FinderClient, disambiguator: string | undefined, fallback: string): string {
+  const code = client.clientCode?.trim() || "";
+  if (disambiguator && code) return `${code} · ${disambiguator}`;
+  if (disambiguator) return disambiguator;
+  return code || fallback;
+}
+
 /**
  * The first clients in the loaded book, which the firm list orders by most
- * recently created. An empty search still returns nothing.
+ * recently created. Duplicate ids collapse. Shared display names pick up a
+ * firm or a short id so the rows are not identical.
  */
 export function recentFinderClients(
   clients: readonly FinderClient[],
   limit = RECENT_CLIENT_LIMIT,
 ): ClientSearchResult[] {
+  const book = dedupeFinderClients(clients);
+  const extras = finderNameDisambiguators(book);
   const out: ClientSearchResult[] = [];
-  for (const client of clients) {
+  for (const client of book) {
     if (out.length >= limit) break;
     const name = client.name.trim();
     if (!name) continue;
-    const code = client.clientCode?.trim() || "";
     out.push({
       id: client.id,
       label: name,
-      hint: code || "Recent client",
+      hint: clientHint(client, extras.get(client.id), "Recent client"),
       group: CLIENTS_GROUP,
       clientId: client.id,
       href: clientFileHref(client.id),
@@ -138,7 +199,9 @@ export function searchClients(
   clients: readonly FinderClient[],
 ): ClientSearchResult[] {
   if (!normalizeFeatureQuery(query)) return [];
-  return clients
+  const book = dedupeFinderClients(clients);
+  const extras = finderNameDisambiguators(book);
+  return book
     .map((client) => ({ client, score: clientMatchScore(query, client) }))
     .filter((row) => row.score > 0)
     .sort(
@@ -148,11 +211,10 @@ export function searchClients(
     )
     .slice(0, MAX_CLIENT_RESULTS)
     .map(({ client }) => {
-      const code = client.clientCode?.trim() || "";
       return {
         id: `client:${client.id}`,
         label: client.name.trim(),
-        hint: code || "Client",
+        hint: clientHint(client, extras.get(client.id), "Client"),
         group: CLIENTS_GROUP,
         clientId: client.id,
         href: clientFileHref(client.id),
@@ -190,19 +252,21 @@ export function searchClientSectionJumps(
   }
   if (!pool.length) return [];
 
+  const book = dedupeFinderClients(pool);
+  const extras = finderNameDisambiguators(dedupeFinderClients(clients));
   const perFeature = Math.max(8, Math.floor(MAX_SECTION_JUMPS / targets.length));
   const jumps: FeatureResult[] = [];
   const seen = new Set<string>();
   for (const target of targets) {
     let shown = 0;
-    for (const client of pool) {
+    for (const client of book) {
       if (shown >= perFeature || jumps.length >= MAX_SECTION_JUMPS) break;
       const name = client.name.trim();
       if (!name) continue;
-      const label = `${target.label} for ${name}`;
-      const key = label.trim().toLowerCase();
+      const key = `${target.id}:${client.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      const extra = extras.get(client.id);
       const destination = {
         kind: "client" as const,
         clientId: client.id,
@@ -210,8 +274,8 @@ export function searchClientSectionJumps(
       };
       const code = client.clientCode?.trim() || "";
       jumps.push({
-        id: `${target.id}:${client.id}`,
-        label,
+        id: key,
+        label: extra ? `${target.label} for ${name} · ${extra}` : `${target.label} for ${name}`,
         hint: code || target.hint,
         group: target.label,
         destination,

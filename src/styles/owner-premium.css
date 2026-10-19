@@ -682,6 +682,16 @@ html.dark .owner-door .health-ring-track {
 @media (max-width: 430px) {
   .owner-door .health-pillar-cards {
     grid-template-columns: minmax(0, 1fr);
+    margin-top: 12px;
+  }
+}
+@media (max-width: 390px) {
+  html:not(.dark) .accountant-portal:not(.owner-door) .deliverable-main,
+  .owner-door.accountant-portal:not([data-screen="chat"]) .deliverable-main {
+    padding-right: 28px;
+  }
+  .notes-fab {
+    bottom: max(20px, env(safe-area-inset-bottom)) !important;
   }
 }
 .owner-door .health-pillar-cardx {
@@ -1110,6 +1120,20 @@ html:not(.dark) .premium-shell .crumb b {
 html:not(.dark) .premium-shell .crumb .aud {
   border-color: rgba(255, 255, 255, 0.2);
   color: #d5e2f2;
+}
+/* Phone canvas is light (#f4f6fa). Frame-colored crumb text disappears on it.
+   Navy at 92% still clears WCAG AA for 13px text on that canvas. */
+@media (max-width: 860px) {
+  html:not(.dark) .accountant-portal.premium-shell .crumb,
+  html:not(.dark) .accountant-portal.premium-shell .crumb a,
+  html:not(.dark) .accountant-portal.premium-shell .crumb span,
+  html:not(.dark) .accountant-portal.premium-shell .crumb b {
+    color: rgba(16, 42, 67, 0.92) !important;
+  }
+  html:not(.dark) .accountant-portal.premium-shell .crumb .aud {
+    color: #102a43 !important;
+    border-color: rgba(16, 42, 67, 0.35);
+  }
 }
 .premium-shell .deliverable-rail .rail-brand {
   display: flex;
