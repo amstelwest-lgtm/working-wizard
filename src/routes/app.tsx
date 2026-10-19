@@ -4017,6 +4017,7 @@ function Index() {
                     : [],
                 )}
                 firmId={clientMeta?.firm_id ?? null}
+                {/* A demo client keeps the sample card. A real client gets the preview card. */}
                 sampleClient={Boolean(clientMeta?.is_demo)}
                 workspaces={ownerWorkspaces}
                 onSwitch={switchOwnerWorkspace}
