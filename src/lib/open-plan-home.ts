@@ -106,7 +106,12 @@ export type StoredAssignment =
   | { kind: "bot"; agent: AgentKey; name: string; at: string }
   | { kind: "person"; name: string; at: string };
 
-export type AssignmentNote = { note: string | null; at: string };
+export type AssignmentNote = {
+  note: string | null;
+  at: string;
+  actorLabel?: string | null;
+  actorType?: string | null;
+};
 
 /**
  * The newest assignment note on one action.
@@ -131,6 +136,8 @@ export type RowAssignment = {
   agent: AgentKey | null;
   /** This row's bot hand-off is stored and has not finished. */
   open: boolean;
+  /** Click time. A live run from before this click does not clear Working. */
+  openedAt?: string;
 };
 
 /**
@@ -167,22 +174,24 @@ export type LiveHandoffRun = {
 /**
  * A live run settles the optimistic Working flag.
  * No live run yet keeps the row as it was. A finished run for that bot drops Working.
+ * A run that started before the click does not drop Working.
  */
 export function applyLiveRuns(
   rows: readonly RowAssignment[],
   runs: readonly LiveHandoffRun[],
 ): RowAssignment[] {
-  const latest = new Map<string, { agent: AgentKey; status: string }>();
+  const latest = new Map<string, { agent: AgentKey; status: string; at: string }>();
   const ordered = [...runs].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
   for (const run of ordered) {
     const id = run.actionItemId ?? "";
     if (!id || latest.has(id)) continue;
-    latest.set(id, { agent: run.agent, status: run.status });
+    latest.set(id, { agent: run.agent, status: run.status, at: run.at ?? "" });
   }
   return rows.map((row) => {
     if (!row.open || !row.agent) return row;
     const run = latest.get(row.id);
     if (!run || run.agent !== row.agent) return row;
+    if (row.openedAt && (!run.at || run.at < row.openedAt)) return row;
     if (ACTIVE.has(run.status)) return row;
     return { ...row, open: false };
   });
@@ -226,31 +235,70 @@ export function openHandoffAgents(rows: readonly Pick<RowAssignment, "agent" | "
   return out;
 }
 
+/** The stored note is this click, not an older hand-off to the same name. */
+export function pendingAssignmentLanded(
+  stored: StoredAssignment | null,
+  pending: { agent: AgentKey | null; assigneeName: string; since?: string } | null,
+): boolean {
+  if (!pending?.assigneeName || !stored) return false;
+  if (pending.since && stamp(stored.at) + 1500 < stamp(pending.since)) return false;
+  if (stored.kind === "bot") return stored.agent === pending.agent;
+  return pending.agent == null && stored.name === pending.assigneeName;
+}
+
 /**
  * A hand-off that just landed stays on that row until its note is stored.
- * Other rows keep the assignees already on file.
+ * An older note for the same bot is not this click. Other rows stay as they are.
  */
 export function withPendingAssignment(
   rows: readonly RowAssignment[],
-  pending: { id: string; agent: AgentKey | null; assigneeName: string } | null,
+  pending: { id: string; agent: AgentKey | null; assigneeName: string; since?: string } | null,
   stored: StoredAssignment | null,
 ): RowAssignment[] {
   if (!pending) return [...rows];
-  const landed =
-    stored?.kind === "bot"
-      ? stored.agent === pending.agent
-      : stored?.kind === "person"
-        ? pending.agent == null && stored.name === pending.assigneeName
-        : false;
-  if (landed) return [...rows];
-  const next = {
+  if (pendingAssignmentLanded(stored, pending)) return [...rows];
+  const next: RowAssignment = {
     id: pending.id,
     assigneeName: pending.assigneeName,
     agent: pending.agent,
     open: pending.agent != null,
+    openedAt: pending.since,
   };
   if (!rows.some((row) => row.id === pending.id)) return [...rows, next];
   return rows.map((row) => (row.id === pending.id ? next : row));
+}
+
+/** The click's note stays on the row until the stored copy arrives, then the stored copy wins. */
+export function withPendingNote<T extends { note: string | null; at: string }>(
+  notes: readonly T[],
+  pending: T | null,
+): T[] {
+  if (!pending?.note) return [...notes];
+  const serverCopy = notes.some(
+    (row) => row.note === pending.note && row.at !== pending.at && stamp(row.at) + 1500 >= stamp(pending.at),
+  );
+  if (serverCopy) return notes.filter((row) => row.at !== pending.at);
+  if (notes.some((row) => row.note === pending.note && row.at === pending.at)) return [...notes];
+  return [pending, ...notes];
+}
+
+/**
+ * The row's run while a click is still in flight.
+ * A finished run from before the click does not replace the Working line.
+ */
+export function displayedHandoffRun<T extends { agent: AgentKey; status: string; at?: string }>(
+  server: T | null,
+  pending: { agent: AgentKey | null; since?: string } | null,
+  landed: boolean,
+): T | { agent: AgentKey; status: "queued"; at: string } | null {
+  if (!pending?.agent || landed) return server;
+  const at = pending.since ?? "";
+  const optimistic = { agent: pending.agent, status: "queued" as const, at };
+  if (!server) return optimistic;
+  const serverAt = server.at ?? "";
+  if (server.agent === pending.agent && ACTIVE.has(server.status) && (!at || serverAt >= at)) return server;
+  if (at && serverAt < at) return optimistic;
+  return server;
 }
 
 /**

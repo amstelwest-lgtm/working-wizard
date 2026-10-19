@@ -286,6 +286,7 @@ import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
 import { ownerPresence, steerOpenHandoffs } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
+  clearOptimisticHandoff,
   loadActionHandoffRuns,
   loadActionNotes,
   loadLatestAssignments,
@@ -293,10 +294,13 @@ import {
 } from "@/lib/owner-handoff-client";
 import {
   applyLiveRuns,
+  displayedHandoffRun,
   openHandoffAgents,
+  pendingAssignmentLanded,
   personOwnedActionIds,
   rowAssignment,
   withPendingAssignment,
+  withPendingNote,
   withoutPersonQueuedRuns,
   type RowAssignment,
 } from "@/lib/open-plan-home";
@@ -1684,10 +1688,17 @@ function ClientView() {
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
+  const assignmentRowsRef = useRef(assignmentRows);
+  assignmentRowsRef.current = assignmentRows;
+  const handoffsRef = useRef(openPlanHandoffs);
+  handoffsRef.current = openPlanHandoffs;
+  const priorHandoff = useRef(
+    new Map<string, { since: string; row: RowAssignment | null; handoff: HomeBriefHandoff | null }>(),
+  );
   const paintAssignments = (
     rows: readonly { id: string; title: string; assigneeName: string | null }[],
     assigned: readonly RowAssignment[],
-    notes: ReadonlyMap<string, { note: string | null; at: string }[]>,
+    notes: ReadonlyMap<string, { note: string | null; at: string; actorLabel?: string | null; actorType?: string | null }[]>,
     runs: ReadonlyMap<string, { agent: AgentKey; status: string; at: string }>,
   ) => {
     const first = assigned.find((row) => row.open);
@@ -1712,7 +1723,20 @@ function ClientView() {
     const bump = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (detail?.failed && detail.actionItemId) {
+        const prior = priorHandoff.current.get(detail.actionItemId);
         if (pendingHandoff.current?.actionItemId === detail.actionItemId) pendingHandoff.current = null;
+        if (prior) {
+          setAssignmentRows((current) =>
+            prior.row
+              ? current.map((row) => (row.id === detail.actionItemId ? prior.row! : row))
+              : current.filter((row) => row.id !== detail.actionItemId),
+          );
+          setOpenPlanHandoffs((rows) =>
+            prior.handoff
+              ? rows.map((row) => (row.id === detail.actionItemId ? prior.handoff! : row))
+              : rows.filter((row) => row.id !== detail.actionItemId),
+          );
+        }
         setOpenPlanTick((n) => n + 1);
         return;
       }
@@ -1720,12 +1744,20 @@ function ClientView() {
         const agent = detail.agent ?? null;
         const name = detail.assigneeName ?? (agent ? agentDisplayName(agent) : null);
         if (name) {
+          if (detail.since && priorHandoff.current.get(detail.actionItemId)?.since !== detail.since) {
+            priorHandoff.current.set(detail.actionItemId, {
+              since: detail.since,
+              row: assignmentRowsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
+              handoff: handoffsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
+            });
+          }
           pendingHandoff.current = { ...detail, agent, assigneeName: name };
           const nextRow: RowAssignment = {
             id: detail.actionItemId,
             assigneeName: name,
             agent,
             open: agent != null,
+            openedAt: agent ? detail.since : undefined,
           };
           setAssignmentRows((current) =>
             current.some((row) => row.id === nextRow.id)
@@ -1733,11 +1765,13 @@ function ClientView() {
               : [...current, nextRow],
           );
           setOpenPlanHandoffs((rows) => {
-            const found = rows.some((row) => row.id === detail.actionItemId);
+            const current = rows.find((row) => row.id === detail.actionItemId);
+            const found = Boolean(current);
             const patched = {
               assignee: name,
               agent,
-              run: agent ? { agent, status: "queued" as const, at: new Date().toISOString() } : null,
+              notes: detail.note ? withPendingNote(current?.notes ?? [], detail.note) : current?.notes ?? [],
+              run: agent ? { agent, status: "queued" as const, at: detail.since ?? new Date().toISOString() } : null,
             };
             const next = rows.map((row) => (row.id === detail.actionItemId ? { ...row, ...patched } : row));
             return found
@@ -1809,6 +1843,14 @@ function ClientView() {
         : [new Map(), new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
+      const pendingView = pending?.assigneeName
+        ? {
+            id: pending.actionItemId,
+            agent: pending.agent ?? null,
+            assigneeName: pending.assigneeName,
+            since: pending.since,
+          }
+        : null;
       const openRows = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return row.id && title
@@ -1835,25 +1877,31 @@ function ClientView() {
         });
       });
       const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
-      const merged = withPendingAssignment(
-        assigned,
-        pending?.assigneeName
-          ? {
-              id: pending.actionItemId,
-              agent: pending.agent ?? null,
-              assigneeName: pending.assigneeName,
-            }
-          : null,
-        pendingStored,
-      );
-      const pendingLanded =
-        pending?.assigneeName != null &&
-        (pendingStored?.kind === "bot"
-          ? pendingStored.agent === pending.agent
-          : pendingStored?.kind === "person" &&
-            pending.agent == null &&
-            pendingStored.name === pending.assigneeName);
-      if (pendingLanded) pendingHandoff.current = null;
+      const merged = withPendingAssignment(assigned, pendingView, pendingStored);
+      const pendingLanded = pendingAssignmentLanded(pendingStored, pendingView);
+      if (pendingLanded && pending) {
+        pendingHandoff.current = null;
+        clearOptimisticHandoff(pending.actionItemId);
+      }
+      const paintedNotes = new Map(noteLog);
+      const paintedRuns = new Map(runs);
+      if (pending && !pendingLanded) {
+        if (pending.note) {
+          paintedNotes.set(pending.actionItemId, withPendingNote(noteLog.get(pending.actionItemId) ?? [], pending.note));
+        }
+        const shownRun = displayedHandoffRun(
+          runs.get(pending.actionItemId) ?? null,
+          { agent: pending.agent ?? null, since: pending.since },
+          false,
+        );
+        if (shownRun) {
+          paintedRuns.set(pending.actionItemId, {
+            agent: shownRun.agent,
+            status: shownRun.status,
+            at: shownRun.at ?? pending.since ?? "",
+          });
+        }
+      }
       if (pending?.title && !titles.includes(pending.title)) titles.push(pending.title);
       const labelled = openRows.map((row) => ({
         id: row.id,
@@ -1870,7 +1918,7 @@ function ClientView() {
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
       setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
-      paintAssignments(labelled, merged, noteLog, runs);
+      paintAssignments(labelled, merged, paintedNotes, paintedRuns);
     })();
     return () => {
       cancelled = true;

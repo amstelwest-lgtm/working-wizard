@@ -39,6 +39,38 @@ export function handoffClock(at: string | null | undefined): string | null {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+/** A queued or running hand-off that has not moved for this long offers Retry. */
+export const HANDOFF_SLOW_AFTER_MS = 3 * 60 * 1000;
+
+/** True once a queued or running hand-off has been sitting longer than the usual wait. */
+export function handoffIsSlow(
+  status: string | null | undefined,
+  at: string | null | undefined,
+  now = Date.now(),
+): boolean {
+  if (status !== "queued" && status !== "running") return false;
+  if (!at) return false;
+  const stamp = Date.parse(at);
+  if (Number.isNaN(stamp)) return false;
+  return now - stamp > HANDOFF_SLOW_AFTER_MS;
+}
+
+/**
+ * One note, with who wrote it and when.
+ * "Assigned to theo · by amstel.west · 8:31 PM"
+ */
+export function formatAssignmentNote(row: {
+  note: string;
+  at?: string | null;
+  actorLabel?: string | null;
+}): string {
+  const body = row.note.trim().replace(/\.+$/u, "");
+  const actor = row.actorLabel?.trim() ?? "";
+  const time = handoffClock(row.at);
+  const tail = [actor ? `by ${actor}` : "", time ?? ""].filter(Boolean).join(" · ");
+  return tail ? `${body} · ${tail}` : body;
+}
+
 /**
  * Progress line once a queued run exists for this action.
  * A hand-off that has not started a run stays on the assignee label only.
