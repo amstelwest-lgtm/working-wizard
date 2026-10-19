@@ -30,6 +30,7 @@ import {
   recentFinderClients,
   searchClientSectionJumps,
   searchClients,
+  shortClientId,
   type FinderClient,
 } from "../src/lib/feature-finder-clients.ts";
 import { firmClientOrFilter } from "../src/lib/firm-client-list.ts";
@@ -288,6 +289,55 @@ assert(
 );
 assert(paletteClients("yankees", BOOK).length === 1, "a typed query still searches");
 assert(searchClients("   ", BOOK).length === 0, "blank query matches no clients");
+
+const THEO = "Theo van der Westhuizen";
+const THEO_A = "2d31b10a-a2b4-4451-a65a-6c61b32c1fa3";
+const THEO_B = "334bb8ee-8246-443d-967d-cf72d94d8a89";
+const THEO_C = "ef4ee372-a453-4ada-943c-d7c0642c81f8";
+const theoBook: FinderClient[] = [
+  { id: THEO_A, name: THEO, clientCode: null, firmName: "My practice" },
+  { id: THEO_A, name: THEO, clientCode: null, firmName: "My practice" },
+  { id: THEO_B, name: THEO, clientCode: null, firmName: "My practice" },
+  { id: THEO_C, name: THEO, clientCode: null, firmName: "Maritz & Fleming INC" },
+  { id: YANKEES, name: "New York Yankees", clientCode: "MLN-004821" },
+];
+const theoRecent = recentFinderClients(theoBook);
+assert(theoRecent.length === 4, "duplicate client ids collapse to one recent row");
+assert(
+  theoRecent.filter((row) => row.clientId === THEO_A).length === 1,
+  "the same Theo id is listed once",
+);
+assert(
+  theoRecent.find((row) => row.clientId === THEO_A)?.hint === shortClientId(THEO_A),
+  "same-firm Theos are told apart by a short id",
+);
+assert(
+  theoRecent.find((row) => row.clientId === THEO_B)?.hint === shortClientId(THEO_B),
+  "a second same-firm Theo gets its own short id",
+);
+assert(
+  theoRecent.find((row) => row.clientId === THEO_C)?.hint === "Maritz & Fleming INC",
+  "a Theo at a different firm is told apart by the firm",
+);
+assert(
+  theoRecent.find((row) => row.clientId === YANKEES)?.hint === "MLN-004821",
+  "a unique name keeps its client code",
+);
+const theoSearch = searchClients("theo", theoBook);
+assert(theoSearch.length === 3, "a typed query lists each same-name client once");
+assert(
+  new Set(theoSearch.map((row) => row.hint)).size === 3,
+  "search hints for shared names are not identical",
+);
+const theoCash = searchClientSectionJumps("cash", theoBook);
+assert(
+  theoCash.filter((row) => row.label.startsWith("Cash for Theo")).length === 3,
+  "a section jump keeps every same-name client",
+);
+assert(
+  theoCash.some((row) => row.label === `Cash for ${THEO} · ${shortClientId(THEO_A)}`),
+  "a section jump names the short id when the firm is shared",
+);
 
 const bothNamedNew = searchClients("new", BOOK).map((hit) => hit.clientId);
 assert(bothNamedNew.includes(YANKEES) && !bothNamedNew.includes(SOX), "new matches Yankees only");
