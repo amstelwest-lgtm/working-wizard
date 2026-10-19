@@ -13,6 +13,7 @@ import { rehydrateForUi } from "../_shared/redact-identifiers.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
+import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
 import {
   finishPrecardAttempt,
@@ -330,11 +331,9 @@ async function handleMilonBot(req: Request): Promise<Response> {
   });
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const {
-    data: { user },
-    error: authErr,
-  } = await userClient.auth.getUser();
-  if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
+  const authResult = await authenticateEdgeUser({ token, auth: userClient.auth });
+  if (!authResult.ok) return respond(authResult.body, authResult.status);
+  const user = authResult.user;
 
   let body: {
     clientId?: string;

@@ -18,6 +18,7 @@ import {
 } from "../_shared/precard-cap-gate.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
 import { forecastPlFingerprint } from "../../../src/lib/cash-forecast-rows.ts";
+import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -103,8 +104,9 @@ async function handleAskAi(req: Request): Promise<Response> {
   // ONLY used after the user has been authenticated and authorised below.
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
+  const authResult = await authenticateEdgeUser({ token, auth: userClient.auth });
+  if (!authResult.ok) return respond(authResult.body, authResult.status);
+  const user = authResult.user;
 
   // ── Parse body ────────────────────────────────────────────────────────────
   let body: { clientId?: string; question?: string; audience?: string; turnId?: string; agent?: string };

@@ -68,6 +68,10 @@ export function PracticeAgentThread({
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token ?? null;
           },
+          refreshSession: async () => {
+            const { data } = await supabase.auth.refreshSession();
+            return data.session?.access_token ?? null;
+          },
         });
       })
       .catch(() => {

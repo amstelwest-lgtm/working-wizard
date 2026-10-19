@@ -13,6 +13,7 @@ import {
 } from "../_shared/redact-identifiers.ts";
 import { scopeHistoryToAgent, type ChatAgent } from "../_shared/chat-reply.ts";
 import { askAiAgentPersona } from "../ask-ai/prompt.ts";
+import { productFactsBlock } from "../_shared/product-facts.ts";
 
 export type BotChatTurn = {
   role: "user" | "assistant";
@@ -24,9 +25,11 @@ export type BotHistoryTurn = BotChatTurn & { agent?: string | null };
 
 /** Bot system prompt for one agent's chat. No agent keeps the plain Milōn Bot prompt. */
 export function milonBotChatSystem(base: string, agent: ChatAgent | null, audience: string): string {
-  if (!agent) return base;
-  const persona = askAiAgentPersona(agent, audience === "accountant" ? "accountant" : "owner");
-  return `${base}\n\nThis chat: ${persona} Only this agent's own earlier turns are in this conversation. Do not refer to chats with the other agents.`;
+  const side = audience === "accountant" ? "accountant" : "owner";
+  const withFacts = `${base}\n\n${productFactsBlock(side)}`;
+  if (!agent) return withFacts;
+  const persona = askAiAgentPersona(agent, side);
+  return `${withFacts}\n\nThis chat: ${persona} Only this agent's own earlier turns are in this conversation. Do not refer to chats with the other agents.`;
 }
 
 export function buildMilonBotChatPayload(input: {
