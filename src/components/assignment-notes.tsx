@@ -1,6 +1,18 @@
 import { useState } from "react";
+import { formatAssignmentNote } from "@/lib/action-handoff";
 
-export type AssignmentNoteRow = { note: string | null; at: string };
+export type AssignmentNoteRow = {
+  note: string | null;
+  at: string;
+  actorLabel?: string | null;
+  actorType?: string | null;
+};
+
+function noteLine(row: AssignmentNoteRow): string {
+  const text = row.note?.trim() ?? "";
+  if (!text) return "";
+  return formatAssignmentNote({ note: text, at: row.at, actorLabel: row.actorLabel });
+}
 
 /** Latest note on the row, with earlier notes behind one control. */
 export function AssignmentNotes({ notes }: { notes: readonly AssignmentNoteRow[] }) {
@@ -14,7 +26,7 @@ export function AssignmentNotes({ notes }: { notes: readonly AssignmentNoteRow[]
   return (
     <div className="mt-1" data-assignment-notes>
       <p className="text-[12px] font-medium leading-snug text-[#102A43] dark:text-slate-100" data-assignment-note>
-        {latest.note}
+        {noteLine(latest)}
       </p>
       {older.length > 0 ? (
         <button
@@ -38,7 +50,7 @@ export function AssignmentNotes({ notes }: { notes: readonly AssignmentNoteRow[]
               className="text-[12px] leading-snug text-[#3d5270] dark:text-slate-300"
               data-assignment-earlier
             >
-              {row.note}
+              {noteLine(row)}
             </li>
           ))}
         </ul>

@@ -37,6 +37,7 @@ import { agentDisplayName } from "@/lib/milon-team";
 import { ownerPresence, steerOpenHandoffs, type OwnerTalk } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
+  clearOptimisticHandoff,
   loadActionHandoffRuns,
   loadLatestAssignments,
   type ActionPlanRefreshDetail,
@@ -45,6 +46,7 @@ import {
   applyLiveRuns,
   openHandoffAgents,
   openPlanTitles,
+  pendingAssignmentLanded,
   personOwnedActionIds,
   rowAssignment,
   withPendingAssignment,
@@ -239,6 +241,9 @@ export function OwnerDoor({
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
+  const assignmentRowsRef = useRef(assignmentRows);
+  assignmentRowsRef.current = assignmentRows;
+  const priorRows = useRef(new Map<string, { since: string; row: RowAssignment | null }>());
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
@@ -363,19 +368,34 @@ export function OwnerDoor({
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
       if (!detail?.actionItemId) return;
       if (detail.failed) {
+        const prior = priorRows.current.get(detail.actionItemId);
         if (pendingHandoff.current?.actionItemId === detail.actionItemId) pendingHandoff.current = null;
+        if (prior) {
+          setAssignmentRows((current) =>
+            prior.row
+              ? current.map((row) => (row.id === detail.actionItemId ? prior.row! : row))
+              : current.filter((row) => row.id !== detail.actionItemId),
+          );
+        }
         return;
       }
       if (!detail.title) return;
       const agent = detail.agent ?? null;
       const name = detail.assigneeName ?? (agent ? agentDisplayName(agent) : null);
       if (!name) return;
+      if (detail.since && priorRows.current.get(detail.actionItemId)?.since !== detail.since) {
+        priorRows.current.set(detail.actionItemId, {
+          since: detail.since,
+          row: assignmentRowsRef.current.find((row) => row.id === detail.actionItemId) ?? null,
+        });
+      }
       pendingHandoff.current = { ...detail, agent, assigneeName: name };
       const next: RowAssignment = {
         id: detail.actionItemId,
         assigneeName: name,
         agent,
         open: agent != null,
+        openedAt: agent ? detail.since : undefined,
       };
       setAssignmentRows((current) =>
         current.some((row) => row.id === next.id)
@@ -505,19 +525,20 @@ export function OwnerDoor({
         });
       });
       const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
-      const merged = withPendingAssignment(
-        assigned,
-        pending?.assigneeName
-          ? { id: pending.actionItemId, agent: pending.agent ?? null, assigneeName: pending.assigneeName }
-          : null,
-        pendingStored,
-      );
-      const pendingLanded =
-        pending?.assigneeName != null &&
-        (pendingStored?.kind === "bot"
-          ? pendingStored.agent === pending.agent
-          : pendingStored?.kind === "person" && pending.agent == null && pendingStored.name === pending.assigneeName);
-      if (pendingLanded) pendingHandoff.current = null;
+      const pendingView = pending?.assigneeName
+        ? {
+            id: pending.actionItemId,
+            agent: pending.agent ?? null,
+            assigneeName: pending.assigneeName,
+            since: pending.since,
+          }
+        : null;
+      const merged = withPendingAssignment(assigned, pendingView, pendingStored);
+      const pendingLanded = pendingAssignmentLanded(pendingStored, pendingView);
+      if (pendingLanded && pending) {
+        pendingHandoff.current = null;
+        clearOptimisticHandoff(pending.actionItemId);
+      }
       const firstOpen = merged.find((row) => row.open);
       const titles = openPlanTitles(openRows);
       if (pending && !titles.includes(pending.title)) titles.push(pending.title);
