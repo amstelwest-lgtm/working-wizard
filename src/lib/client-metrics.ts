@@ -348,16 +348,14 @@ export function assessClientMetrics(input: {
       totalOutflow: outlook.totalOutflow,
     });
   }
-  const openingMissing = storedOpeningIsMissing(cf);
+  // A stored series that actually closes under the floor is not "cash generative".
+  // A derived P&L sketch under the fallback floor keeps the P&L runway.
   const weeksBelow = outlook.closing.filter((balance) => balance < outlook.floor).length;
-  const opensBelow =
-    !openingMissing && Number.isFinite(outlook.opening) && outlook.opening < outlook.floor;
-  if ((weeksBelow > 0 || opensBelow) && runway.kind === "cash_generative") {
+  if (outlook.source === "stored" && weeksBelow > 0 && runway.kind === "cash_generative") {
     runway = {
       weeks: null,
       kind: "unknown",
-      label:
-        weeksBelow === 1 ? "1 week below" : weeksBelow > 1 ? `${weeksBelow} weeks below` : "Below floor",
+      label: weeksBelow === 1 ? "1 week below" : `${weeksBelow} weeks below`,
     };
   }
   return { cash, runway, forecastNet, outlook };

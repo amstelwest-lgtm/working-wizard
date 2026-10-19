@@ -279,7 +279,11 @@ assert(
   "fallback uses the cash runway",
 );
 assert(!/health score/i.test(findingText), "fallback does not restate the health score");
-assert(!findingText.includes(String(us.health.score)), "fallback does not quote the score");
+const withoutMoney = findingText.replace(/(?:\$|R)\s?[\d,]+(?:\.\d+)?/g, "");
+assert(
+  !new RegExp(`\\b${us.health.score}\\b`).test(withoutMoney),
+  "fallback does not quote the score",
+);
 const reading = trialReading(us, new Date("2026-10-14T00:00:00Z"));
 assert(
   reading.grossMargin === "60.0%" && reading.netMargin === "7.8%",
