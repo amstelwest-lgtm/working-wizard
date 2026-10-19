@@ -17,7 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { AI_MODEL_DISCLOSURE } from "@/lib/marketing-faq";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
-import { showStarterTrialEndedCopy, type FirmPlanDisplay } from "@/lib/firm-client-cap";
+import { firmTrialStatusLine, showStarterTrialEndedCopy, type FirmPlanDisplay } from "@/lib/firm-client-cap";
 import { firmStarterTrialCountdownCopy } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
@@ -87,18 +87,39 @@ function SettingsPage() {
   const [upgrading, setUpgrading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
-  const [view, setView] = useState<SettingsView>("owner");
+  const [view, setView] = useState<SettingsView | null>(null);
   const [hasPractice, setHasPractice] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [ownerClientId, setOwnerClientId] = useState<string | null>(null);
-  const [marketBlob, setMarketBlob] = useState<unknown>(null);
-  const [clientMarkets, setClientMarkets] = useState<unknown[] | null>(null);
+  const [regionSnapshot, setRegionSnapshot] = useState<{
+    view: SettingsView;
+    firmId: string | null;
+    market: unknown;
+    clientMarkets: unknown[] | null;
+  } | null>(null);
 
+  const viewReady = view != null;
   const isPractice = view === "practice";
-  const zarPlan = practiceDisplaysZarPlan({ firmMarket: marketBlob, clientMarkets });
-  const planPricesReady = !isPractice || clientMarkets != null || zarPlan;
+  const regionReady =
+    viewReady &&
+    regionSnapshot != null &&
+    regionSnapshot.view === view &&
+    (view !== "practice" || regionSnapshot.firmId === (firmId ?? null)) &&
+    (view !== "practice" || regionSnapshot.clientMarkets != null);
+  const marketBlob = regionReady && regionSnapshot ? regionSnapshot.market : null;
+  const zarPlan =
+    isPractice &&
+    regionSnapshot != null &&
+    regionSnapshot.view === "practice" &&
+    regionSnapshot.firmId === (firmId ?? null) &&
+    regionSnapshot.clientMarkets != null &&
+    practiceDisplaysZarPlan({
+      firmMarket: regionSnapshot.market,
+      clientMarkets: regionSnapshot.clientMarkets,
+    });
+  const planPricesReady = !isPractice || regionReady;
 
   useEffect(() => {
     if (!user) return;
@@ -127,49 +148,60 @@ function SettingsPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    if (isPractice && firmId) {
-      setClientMarkets(null);
-      void supabase
-        .from("firms")
-        .select("market")
-        .eq("id", firmId)
-        .maybeSingle()
-        .then(({ data }) => setMarketBlob((data as { market?: unknown } | null)?.market ?? null));
-      void supabase
-        .from("clients")
-        .select("market")
-        .eq("firm_id", firmId)
-        .then(({ data, error }) => {
-          if (error) {
-            setClientMarkets([]);
-            return;
-          }
-          const rows = (data ?? []) as Array<{ market?: unknown }>;
-          setClientMarkets(rows.map((row) => row.market));
+    if (!user || view == null) return;
+    let cancelled = false;
+    const requested = view;
+    if (requested === "practice") {
+      if (!firmId) return;
+      void (async () => {
+        const firmRes = await supabase
+          .from("firms")
+          .select("market")
+          .eq("id", firmId)
+          .maybeSingle();
+        const clientRes = await supabase.from("clients").select("market").eq("firm_id", firmId);
+        if (cancelled) return;
+        const market = firmRes.error
+          ? null
+          : ((firmRes.data as { market?: unknown } | null)?.market ?? null);
+        const rows = clientRes.error ? [] : ((clientRes.data ?? []) as Array<{ market?: unknown }>);
+        setRegionSnapshot({
+          view: "practice",
+          firmId,
+          market,
+          clientMarkets: rows.map((row) => row.market),
         });
-      return;
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
-    setClientMarkets(null);
-    if (!isPractice) {
-      void supabase
-        .from("clients")
-        .select("id, market, firm_id")
-        .eq("owner_user_id", user.id)
-        .order("created_at", { ascending: true })
-        .limit(10)
-        .then(({ data }) => {
-          const rows = (data ?? []) as Array<{
-            id?: string;
-            market?: unknown;
-            firm_id?: string | null;
-          }>;
-          const preferred = pickOwnedSettingsClient(rows, readStoredOwnerClientId(user.id));
-          setOwnerClientId(preferred?.id ?? null);
-          setMarketBlob(preferred?.market ?? null);
+    void supabase
+      .from("clients")
+      .select("id, market, firm_id")
+      .eq("owner_user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(10)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = (data ?? []) as Array<{
+          id?: string;
+          market?: unknown;
+          firm_id?: string | null;
+        }>;
+        const preferred = pickOwnedSettingsClient(rows, readStoredOwnerClientId(user.id));
+        setOwnerClientId(preferred?.id ?? null);
+        setRegionSnapshot({
+          view: "owner",
+          firmId: null,
+          market: preferred?.market ?? null,
+          clientMarkets: null,
         });
-    }
-  }, [user, isPractice, firmId]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, view, firmId]);
 
   useEffect(() => {
     if (!isPractice) {
@@ -193,7 +225,11 @@ function SettingsPage() {
     };
   }, [isPractice, firmId, loadPlan]);
 
-  const backTo = settingsBackPath(view);
+  const backTo = view == null ? null : settingsBackPath(view);
+  const trialLine = firmTrialStatusLine({
+    phase: plan?.phase,
+    trialEndsOn: plan?.trialEndsOn,
+  });
 
   const handleDelete = async () => {
     if (confirmText.trim().toUpperCase() !== "DELETE") return;
@@ -274,25 +310,29 @@ function SettingsPage() {
         void navigate({ to: "/app", search: { screen: "plan" } });
       }}
     >
-      <BackLink
-        onClick={() => {
-          if (backTo === "/app") setPortalIntent("owner");
-          else setPortalIntent("accountant");
-          navigate({ to: backTo });
-        }}
-        className="mb-3"
-      >
-        {backTo === "/app" ? "Back to board" : "Back to practice"}
-      </BackLink>
+      {backTo ? (
+        <BackLink
+          onClick={() => {
+            if (backTo === "/app") setPortalIntent("owner");
+            else setPortalIntent("accountant");
+            navigate({ to: backTo });
+          }}
+          className="mb-3"
+        >
+          {backTo === "/app" ? "Back to board" : "Back to practice"}
+        </BackLink>
+      ) : null}
       <PageHeader
         compact
         className="mb-8"
         eyebrow="Account"
         title="Settings"
         subtitle={
-          isPractice
+          view === "practice"
             ? "Profile, practice preferences, and account controls"
-            : "Profile, workspace, and account controls"
+            : view === "owner"
+              ? "Profile, workspace, and account controls"
+              : "Profile and account controls"
         }
         meta={<ThemeToggle />}
       />
@@ -314,7 +354,7 @@ function SettingsPage() {
 
           <ChangePasswordCard />
 
-          {!isPractice && (
+          {view === "owner" && (
             <button
               type="button"
               className="settings-row"
@@ -328,7 +368,7 @@ function SettingsPage() {
             </button>
           )}
 
-          {isPractice && (
+          {view === "practice" && (
             <p className="text-xs text-[var(--ink-dim)]">
               Client business profiles are edited inside each client workspace.
             </p>
@@ -336,22 +376,23 @@ function SettingsPage() {
         </div>
       </SectionCard>
 
-      {!isPractice && ownerClientId ? (
+      {view === "owner" && ownerClientId ? (
         <div className="mb-6">
           <InviteAccountantCard clientId={ownerClientId} tone="settings" />
         </div>
       ) : null}
 
-      {!isPractice ? <OwnerPracticeAccessCard /> : null}
+      {view === "owner" ? <OwnerPracticeAccessCard /> : null}
 
       <MarketSettingsCard
         kind={isPractice ? "firm" : "client"}
         recordId={isPractice ? firmId : ownerClientId}
         initial={marketBlob}
-        zarPlan={isPractice && zarPlan}
+        loaded={regionReady}
+        zarPlan={Boolean(zarPlan)}
       />
 
-      {!isPractice && hasPractice && (
+      {view === "owner" && hasPractice && (
         <SectionCard
           className="mb-6"
           description="This login also has a practice portal. Opening it leaves the business board."
@@ -391,11 +432,15 @@ function SettingsPage() {
                 <p className="settings-value">Plan status unavailable</p>
               ) : (
                 <>
-                  <p className="settings-value">
-                    {plan?.phase === "trialing"
-                      ? `${plan.headline ?? "Trial"}${plan.trialEndsOn ? ` · ends ${plan.trialEndsOn}` : ""}`
-                      : (plan?.headline ?? "No active plan")}
-                  </p>
+                  {plan?.phase === "trialing" ? (
+                    trialLine ? (
+                      <p className="settings-value" data-trial-status="">
+                        {trialLine}
+                      </p>
+                    ) : null
+                  ) : (
+                    <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
+                  )}
                   {plan?.starterTrial && !trialEnded ? (
                     firmStarterTrialCountdownCopy(plan.starterTrial) ? (
                       <p role="status" className="text-sm">
@@ -563,9 +608,11 @@ function SettingsPage() {
       <section id="danger-zone" className="settings-danger mb-6" aria-label="Danger zone">
         <p className="settings-danger-title">Danger zone</p>
         <p>
-          {isPractice
+          {view === "practice"
             ? "Permanently deletes your practice login, firms you own, and practice clients you created. This cannot be undone."
-            : "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."}
+            : view === "owner"
+              ? "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."
+              : "Permanently deletes this login. This cannot be undone."}
         </p>
         <Button
           type="button"

@@ -590,11 +590,21 @@ function builder(table: string) {
       return api;
     },
     then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
-      try {
-        resolve(materialize(table, mode));
-      } catch (error) {
-        reject?.(error);
-      }
+      const delay =
+        typeof location !== "undefined" &&
+        /(?:^|[?&])regionDelay=1(?:&|$)/.test(location.search) &&
+        (table === "firms" || table === "clients")
+          ? 900
+          : 0;
+      const finish = () => {
+        try {
+          resolve(materialize(table, mode));
+        } catch (error) {
+          reject?.(error);
+        }
+      };
+      if (delay) setTimeout(finish, delay);
+      else finish();
     },
   };
   return api;

@@ -170,7 +170,7 @@ export function MarketingShell({
           <span>
             © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
           </span>
-          <span>QuickBooks Online, Xero and Sage.</span>
+          <span>QuickBooks Online and Xero. Sage coming soon.</span>
           <a href="/">milonfinance.com</a>
           <a href="/about">About</a>
           <a href="/faq">Questions</a>
