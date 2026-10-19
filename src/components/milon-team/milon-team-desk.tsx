@@ -35,6 +35,7 @@ import type { MilonTeamFeedApi } from "@/hooks/use-milon-team-feed";
 import { draftFindingLabel, ownerRunPhase, ownerRunPhaseLabel, ownerRunPhaseMuted } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard, type ApprovedDraftTarget } from "@/components/owner-draft-card";
 import type { AgentKey, TeamBriefingItem, TeamJob } from "@/lib/milon-team-feed";
+import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
 import "./milon-team-desk.css";
 
 type FilterKey = "all" | AgentKey;
@@ -65,6 +66,8 @@ export function MilonTeamDesk({
   onRefreshDrafts,
   onOpenAgent,
   presentation = "team",
+  marketCountry = null,
+  audience = "accountant",
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
@@ -78,6 +81,8 @@ export function MilonTeamDesk({
   onOpenAgent?: (agent: AgentKey) => void;
   /** Agent view hides the last-run chip strip. The stage switcher owns that click. */
   presentation?: "team" | "agent";
+  marketCountry?: string | null;
+  audience?: "owner" | "accountant";
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
@@ -260,6 +265,7 @@ export function MilonTeamDesk({
                     </button>
                   );
                 })}
+                <TaxSpecialistSlot country={marketCountry} variant="desk" audience={audience} />
               </div>
             </div>
             )}

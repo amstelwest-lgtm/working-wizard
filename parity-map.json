@@ -22,6 +22,19 @@
       "id": "cash-floor",
       "owner": ["src/lib/owner-answers.ts"],
       "accountant": ["src/lib/financial-manager-brief.ts"]
+    },
+    {
+      "id": "tax-specialist",
+      "owner": [
+        "src/components/owner-door/owner-door.tsx",
+        "src/components/owner-door/owner-home.tsx"
+      ],
+      "accountant": [
+        "src/components/practice-board.tsx",
+        "src/routes/_authenticated/clients.$clientId.tsx",
+        "src/components/milon-team/milon-team-pane.tsx",
+        "src/components/practice-agent-thread.tsx"
+      ]
     }
   ]
 }

@@ -21,6 +21,8 @@ export function MilonTeamPane({
   onOpenApproved,
   onInvite,
   onSelectAgent,
+  marketCountry = null,
+  audience = "accountant",
 }: {
   clientId: string;
   /** Home Ask opens this agent's thread. The feed stays off the card stage. */
@@ -33,6 +35,8 @@ export function MilonTeamPane({
   onInvite?: () => void;
   /** Landing cards and the stage switcher both land here. */
   onSelectAgent?: (agent: AgentKey) => void;
+  marketCountry?: string | null;
+  audience?: "owner" | "accountant";
 }) {
   const feed = useMilonTeamFeed(clientId);
   const live = useAgentActivity(clientId);
@@ -61,11 +65,19 @@ export function MilonTeamPane({
       onInvite={onInvite}
       onOpenAgent={onSelectAgent}
       onRefreshDrafts={live.refresh}
+      marketCountry={marketCountry}
+      audience={audience}
     />
   );
   if (!agent) return desk;
   return (
-    <AgentStage agent={agent} finding={finding || null} onSelect={(next) => onSelectAgent?.(next)}>
+    <AgentStage
+      agent={agent}
+      finding={finding || null}
+      marketCountry={marketCountry}
+      audience={audience}
+      onSelect={(next) => onSelectAgent?.(next)}
+    >
       <AgentWork label="On this client" items={clientAgentWork(agent, clientId)} />
       {desk}
     </AgentStage>

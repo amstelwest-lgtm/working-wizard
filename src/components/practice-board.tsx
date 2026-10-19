@@ -1222,7 +1222,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     };
   }, [user, navigate]);
 
-  const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource } = useAccountantProfile();
+  const { firmId, firms, brandLoading, profile, refreshFirms, greetingSource, firmMarket } =
+    useAccountantProfile();
+  const practiceCountry = parseMarketSelection(firmMarket)?.country ?? null;
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -1907,6 +1909,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 agent={dashAgent}
                 finding={(practiceLines[dashAgent] ?? []).filter((line) => line.trim()).join(" ")}
                 clients={clientRows.map((row) => ({ id: row.id, name: row.name }))}
+                marketCountry={practiceCountry}
                 onBack={() => {
                   void navigate({ to: "/dashboard", hash: "" });
                 }}
@@ -1929,6 +1932,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
               title="Your whole finance team"
               showInvite={false}
               variant="character"
+              audience="accountant"
+              marketCountry={practiceCountry}
               presence={ownerPresence(emptyAgentActivity())}
               lines={practiceLines}
               status={practiceStatus}

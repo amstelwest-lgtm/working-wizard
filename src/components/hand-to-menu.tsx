@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { toast } from "sonner";
 import { ActionHandoffButtons } from "@/components/action-handoff-buttons";
+import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
+import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
@@ -39,6 +41,8 @@ export function HandToMenu({
   employees,
   assignee,
   comingSoon,
+  marketCountry,
+  audience = "owner",
   onAssignAgent,
   onAssignPerson,
 }: {
@@ -46,9 +50,13 @@ export function HandToMenu({
   employees?: readonly HandToPerson[];
   assignee?: string | null;
   comingSoon?: Partial<Record<AgentKey, true>>;
+  marketCountry?: string | null;
+  audience?: "owner" | "accountant";
   onAssignAgent: (agent: AgentKey) => void | Promise<void>;
   onAssignPerson: (person: HandToPerson) => void | Promise<void>;
 }) {
+  const boundCountry = useBoundMarketCountry();
+  const country = marketCountry ?? boundCountry;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [team, setTeam] = useState<readonly HandToPerson[]>(employees ?? []);
@@ -106,6 +114,7 @@ export function HandToMenu({
       onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
     >
+      <TaxSpecialistSlot country={country} variant="host" audience={audience} />
       <button
         type="button"
         className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#0B5FFF] hover:bg-[#0B5FFF]/10 disabled:opacity-70 dark:bg-transparent"
@@ -130,6 +139,12 @@ export function HandToMenu({
             ownerName={assignee}
             comingSoon={comingSoon}
             onHandOff={(agent) => void run(() => onAssignAgent(agent))}
+          />
+          <TaxSpecialistSlot
+            country={country}
+            variant="handoff"
+            audience={audience}
+            onOpen={() => setOpen(false)}
           />
           <p className="px-1 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
             Team
@@ -184,6 +199,7 @@ export function MoveHandTo({
   return (
     <HandToMenu
       clientId={clientId}
+      audience="accountant"
       onAssignAgent={async (agent) => {
         const actionItemId = await ensure();
         if (!actionItemId) return;

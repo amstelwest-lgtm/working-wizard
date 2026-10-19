@@ -2403,6 +2403,7 @@ function ItemRow({
             employees={employees}
             assignee={item.owner_name}
             comingSoon={comingSoon}
+            audience={isOwner ? "owner" : "accountant"}
             onAssignAgent={onHandOff}
             onAssignPerson={(person) =>
               onPatch(

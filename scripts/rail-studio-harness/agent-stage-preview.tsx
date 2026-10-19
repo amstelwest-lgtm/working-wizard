@@ -62,7 +62,13 @@ export function AgentStagePreview() {
             Back to the team
           </button>
           <div className="milon-desk-host">
-            <AgentStage agent={agent} finding={FINDING} onSelect={setAgent}>
+            <AgentStage
+              agent={agent}
+              finding={FINDING}
+              onSelect={setAgent}
+              marketCountry="ZA"
+              audience="accountant"
+            >
               <section className="milon-desk-card" aria-label="Today">
                 <p className="milon-desk-kicker">Today</p>
                 <p className="milon-desk-figure">{FINDING}</p>

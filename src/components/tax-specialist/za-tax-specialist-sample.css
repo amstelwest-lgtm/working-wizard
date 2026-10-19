@@ -1,0 +1,227 @@
+.tax-sample-mark {
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 2px solid #0b5fff;
+  background: #ffffff;
+  color: #102a43;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.tax-sample-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #0b5fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tax-sample-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #102a43;
+}
+
+.tax-sample-handoff p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tax-sample-handoff button,
+.tax-sample-menu-btn,
+.tax-sample-sheet button.tax-sample-primary {
+  border: 1px solid #0b5fff;
+  background: #ffffff;
+  color: #0b5fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tax-sample-handoff button:hover,
+.tax-sample-menu-btn:hover,
+.tax-sample-sheet button.tax-sample-primary:hover {
+  background: rgba(11, 95, 255, 0.08);
+}
+
+.tax-sample-menu-btn {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.tax-sample-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100002;
+  display: flex;
+  justify-content: center;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.tax-sample-sheet {
+  box-sizing: border-box;
+  width: min(920px, 100%);
+  height: 100%;
+  max-height: 100dvh;
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    max(22px, env(safe-area-inset-top))
+    max(22px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom))
+    max(22px, env(safe-area-inset-left));
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #102a43;
+  box-shadow: none;
+}
+
+.tax-sample-sheet h2,
+.tax-sample-sheet h3,
+.tax-sample-sheet p {
+  margin: 0;
+}
+
+.tax-sample-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.tax-sample-sheet h2 {
+  margin-top: 6px;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.tax-sample-sheet h3 {
+  margin: 22px 0 8px;
+  font-size: 18px;
+}
+
+.tax-sample-close {
+  border: 1px solid #102a43;
+  background: #ffffff;
+  color: #102a43;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tax-sample-banner,
+.tax-sample-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f4f7fb;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.tax-sample-banner strong {
+  color: #0b5fff;
+}
+
+.tax-sample-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.tax-sample-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.tax-sample-sheet th,
+.tax-sample-sheet td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #dbeafe;
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.tax-sample-sheet td:last-child,
+.tax-sample-sheet th:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tax-sample-sheet tr.is-total td {
+  font-weight: 700;
+  color: #102a43;
+}
+
+.tax-sample-sheet .is-clear {
+  color: #0b5fff;
+  font-weight: 700;
+}
+
+.tax-sample-sheet .is-wait {
+  font-weight: 700;
+}
+
+.tax-sample-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .tax-sample-sheet {
+    padding:
+      max(16px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-right))
+      max(28px, env(safe-area-inset-bottom))
+      max(14px, env(safe-area-inset-left));
+  }
+
+  .tax-sample-head {
+    flex-wrap: wrap;
+  }
+
+  .tax-sample-sheet h2 {
+    font-size: 24px;
+  }
+}
+
+.tax-sample-table {
+  max-width: 100%;
+  overflow-x: auto;
+}

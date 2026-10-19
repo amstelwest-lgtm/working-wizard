@@ -631,6 +631,8 @@ export function OwnerDoorPreview({
           presence={shown}
           lines={ownerHomeLines(TILES, "Collect the two largest invoices")}
           status={ownerCardStatuses(BOOKS)}
+          marketCountry="ZA"
+          audience="owner"
           onOpen={openLive}
           onAsk={openLive}
           needs={HOME_NEEDS}

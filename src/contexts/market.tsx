@@ -71,6 +71,12 @@ export function useMarket(): MarketContextValue {
   return ctx ?? FALLBACK_VALUE;
 }
 
+/** Country from a mounted provider. Outside a provider this is null, never the ZA fallback. */
+export function useBoundMarketCountry(): "ZA" | "US" | null {
+  const ctx = useContext(MarketContext);
+  return ctx?.market.country ?? null;
+}
+
 /** Workspace copy pack when inside MarketProvider. Outside it, US — never a stored market. */
 export function useResolvedCopyPack(): "za" | "us" {
   const ctx = useContext(MarketContext);
