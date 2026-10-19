@@ -182,7 +182,9 @@ function waitToShow(video: HTMLVideoElement): { done: Promise<void>; cancel: () 
       void presentedFrame(video).then(finish);
     };
     const onError = () => fail(new Error("fm-clip"));
+    const reveal = window.setTimeout(finish, 400);
     const cleanup = () => {
+      window.clearTimeout(reveal);
       video.removeEventListener("playing", onSignal);
       video.removeEventListener("canplaythrough", onSignal);
       video.removeEventListener("error", onError);
@@ -240,7 +242,7 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
     let playing: FmAvatarClip = clipRef.current;
     let desired: FmAvatarClip = clipRef.current;
     let idleLoops = 0;
-    let budget = fmIdleBudget(Math.random());
+    let budget = agent === "tax_specialist" ? 1 : fmIdleBudget(Math.random());
     let flourish: FmIdleFlourish = fmIdleFlourish(Math.random());
     let queued: FmAvatarClip = desired;
     let fade = 0;
@@ -308,12 +310,19 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
         if (cancelled || token !== generation) return;
       }
       silence(incoming);
+      incoming.autoplay = true;
+      incoming.loop = true;
       const waiter = waitToShow(incoming);
       try {
         await incoming.play();
       } catch {
-        waiter.cancel();
-        return;
+        try {
+          await whenReady(incoming, agent);
+          await incoming.play();
+        } catch {
+          waiter.cancel();
+          return;
+        }
       }
       try {
         await waiter.done;
@@ -465,6 +474,8 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
           <video
             ref={firstRef}
             className={clipClass(0)}
+            autoPlay
+            loop
             muted
             playsInline
             preload="none"
@@ -474,6 +485,8 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
           <video
             ref={secondRef}
             className={clipClass(1)}
+            autoPlay
+            loop
             muted
             playsInline
             preload="none"

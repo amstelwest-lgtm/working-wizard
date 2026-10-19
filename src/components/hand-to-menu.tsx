@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { overlayMayHandleKey } from "@/lib/dialog-focus";
 import { toast } from "sonner";
 import { ActionHandoffButtons } from "@/components/action-handoff-buttons";
@@ -64,7 +65,9 @@ export function HandToMenu({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [team, setTeam] = useState<readonly HandToPerson[]>(employees ?? []);
+  const [menuBox, setMenuBox] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (employees) setTeam(employees);
@@ -83,8 +86,32 @@ export function HandToMenu({
 
   useEffect(() => {
     if (!open) return;
+    const place = () => {
+      const trigger = rootRef.current?.querySelector("[data-hand-to-trigger]");
+      if (!(trigger instanceof HTMLElement)) return;
+      const rect = trigger.getBoundingClientRect();
+      const width = 256;
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const height = menuRef.current?.offsetHeight ?? 280;
+      const below = rect.bottom + 4;
+      const top = below + height > window.innerHeight ? Math.max(8, rect.top - height - 4) : below;
+      setMenuBox({ top, left });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, team.length]);
+
+  useEffect(() => {
+    if (!open) return;
     const onDown = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (!open) return;
@@ -130,9 +157,12 @@ export function HandToMenu({
         Hand to
         {assignee ? <span className="font-medium text-white">{assignee}</span> : null}
       </button>
-      {open ? (
+      {open && menuBox
+        ? createPortal(
         <div
-          className="absolute z-40 mt-1 w-64 rounded-lg border border-[#DBEAFE] bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+          ref={menuRef}
+          className="w-64 rounded-lg border border-[#DBEAFE] bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+          style={{ position: "fixed", top: menuBox.top, left: menuBox.left, zIndex: 80 }}
           data-hand-to-menu
           role="menu"
         >
@@ -173,8 +203,10 @@ export function HandToMenu({
               ))}
             </div>
           )}
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+        )
+        : null}
     </div>
   );
 }

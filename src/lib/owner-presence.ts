@@ -126,7 +126,8 @@ export function ownerPresence(
 
 /**
  * A handed action belongs on the agent it was given to.
- * A queued run, or a hand-off beam aimed at someone else, must not leave
+ * An open assignment shows Working on that card, ahead of an older
+ * found-something. A queued run aimed at someone else must not leave
  * Working… on the Financial Manager while the Advisor holds the action.
  */
 export function steerAssignedWork(
@@ -136,12 +137,11 @@ export function steerAssignedWork(
 ): OwnerPresence {
   if (!assignee || assignee === "financial_manager") return presence;
   const active = run != null && WORKING.has(run.status);
-  if (!active && presence.handoff?.to !== "financial_manager") return presence;
   return {
     ...presence,
     agents: presence.agents.map((card) => {
       if (card.agent === assignee) {
-        if (!active || card.motion === "working") return card;
+        if (card.motion === "working" && card.sentence === "Working…") return card;
         return { ...card, motion: "working", sentence: "Working…" };
       }
       const paintedByHandoff = presence.handoff?.to === card.agent;

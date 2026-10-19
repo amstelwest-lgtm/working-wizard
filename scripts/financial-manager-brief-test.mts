@@ -92,14 +92,20 @@ const dip = buildFinancialManagerBrief({
   cashDipWeek: 4,
   cashOpening: 44480,
   cashFloor: 32688,
+  cashClosing: [30000],
+  market: ZA_MARKET,
   formatMoney: money,
 });
 assert(
   dip.cashFloorLine ===
-    `Cash ${money(44480)}. The forecast dips under your ${money(32688)} minimum.`,
+    `Cash ${money(30000)}, ${money(2688)} below your ${money(32688)} minimum.`,
   dip.cashFloorLine ?? "missing dip line",
 );
 assert(dip.cashFloorChip === "Below your minimum", "a projected dip keeps the same chip");
+assert(
+  dip.healthCue?.includes("minimum · see FM") === true,
+  dip.healthCue ?? "the brief and the health pillar share the floor line",
+);
 assert(
   brief.actions.find((row) => row.id === "cash-floor")?.reason === brief.cashFloorLine,
   "the cash-floor action quotes the same amounts",
