@@ -184,6 +184,7 @@ import {
   preferStatementPeriod,
   readStatementMeta,
   reportDataPeriodLabel,
+  rewriteDraftMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
 import {
@@ -3174,7 +3175,7 @@ function ClientView() {
       : homeActivity.error
         ? ["Drafts aren't available yet."]
         : waiting.length
-          ? [waiting[0]?.title ?? "A draft is waiting."]
+          ? [rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
           : ["No draft waiting."];
     const linkOf = (link: { lastSyncedAt?: string | null } | null, checked: boolean): BooksLink => {
       if (!checked) return { state: "unknown" };
@@ -3224,9 +3225,11 @@ function ClientView() {
         })),
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
+        cashflow: (client?.cashflow as SavedCashflowLike | null) ?? null,
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
         cashOpening: hasFigures ? cashOutlook.opening : null,
-        // The forecast floor (forecastMinimumCash). The brief does not compute another.
+        // Passed through for a forecast with no lines. A stored series replaces this
+        // with forecastMinimumCash, the same floor as Cash.
         cashFloor: hasFigures ? cashOutlook.floor : null,
         cashClosing: hasFigures ? cashOutlook.closing : null,
         market: clientMarket,
@@ -3251,6 +3254,7 @@ function ClientView() {
       openPlanTitles,
       openPlanOverdue,
       openPlanUnavailable,
+      client?.cashflow,
       cashOutlook.dipsBelowFloorWeek,
       hasFigures,
       cashOutlook.opening,
@@ -3437,6 +3441,7 @@ function ClientView() {
                     audience="accountant"
                     marketCountry={clientMarket.country}
                     sampleClient={Boolean(client.is_demo)}
+                    firmId={client.firm_id ?? null}
                     presence={homePresence}
                     lines={homeLines}
                     status={homeStatus}

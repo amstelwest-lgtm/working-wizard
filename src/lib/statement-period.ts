@@ -410,6 +410,15 @@ export function rewriteSavedMonthStamp(text: string): string {
     );
 }
 
+/**
+ * Stored draft prose. A month with no day ("Sep 2026 accounts") is the file
+ * stamp. A dated day ("8 Sep 2026") stays. Display only.
+ */
+export function rewriteDraftMonthStamp(text: string): string {
+  const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
+  return rewriteSavedMonthStamp(text).replace(new RegExp(monthYear, "gi"), FULL_YEAR_ON_FILE);
+}
+
 function snapshotIsMonthStamp(label: string): boolean {
   return /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}$/i.test(label.trim());
 }

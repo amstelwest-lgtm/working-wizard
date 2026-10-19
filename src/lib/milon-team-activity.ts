@@ -8,7 +8,7 @@ import { ZA_MARKET } from "./market/resolve";
 import { formatAsOf, formatLastRun, type AgentHeaderStatus } from "./milon-team";
 import type { AgentKey, TeamBriefingItem } from "./milon-team-feed";
 import { correctedGrossMarginFraction, metricDirection, workingCapitalFromDayParts } from "./ratios";
-import { rewriteSavedMonthStamp } from "./statement-period";
+import { rewriteDraftMonthStamp } from "./statement-period";
 
 export const TODAY_RATIO_CAP = 3;
 
@@ -369,7 +369,7 @@ export function formatFindingProse(
   market: MoneyMarket = ZA_MARKET,
 ): string {
   const corrected = correctQuotedFigures(figureEntries(figures));
-  return rewriteSavedMonthStamp(
+  return rewriteDraftMonthStamp(
     stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
       .replace(/\s+/g, " ")
       .trim(),

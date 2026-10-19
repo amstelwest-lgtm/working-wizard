@@ -10,6 +10,7 @@ import {
 import { formatMoney, formatMoneyCompact, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { OPENING_BALANCE_MISSING, forecastLowestPoint } from "@/lib/cash-forecast-parity";
+import { storedSeriesReading } from "@/lib/client-metrics";
 import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
@@ -60,7 +61,7 @@ export type OwnerBooks = {
   } | null;
   /**
    * Cash pillar band from the same health score as the ring.
-   * Watch or Healthy wins over the floor chip. Omit it and the outlook rule stays.
+   * The card chip follows Watch and Critical. Omit it and the floor chip stays.
    */
   cashPillarStatus?: "healthy" | "at_risk" | "critical" | null;
   openAction: string | null;
@@ -240,12 +241,27 @@ export type OwnerCardStatus = {
 export const CASH_FLOOR_ALERT = "Below your minimum";
 
 /**
+ * The Financial Manager chip follows the cash pillar.
+ * Watch and Critical use the pillar word. Healthy stays quiet.
+ * When the pillar is omitted, a floor alert keeps its own chip.
+ */
+export function ownerCashStatusChip(
+  pillar: "healthy" | "at_risk" | "critical" | null | undefined,
+  floorChip: string | null,
+): OwnerCardStatus | null {
+  if (pillar === "at_risk") return { tone: "attention", word: "Watch" };
+  if (pillar === "critical") return { tone: "critical", word: "Critical" };
+  if (pillar === "healthy") return null;
+  if (floorChip) return { tone: "attention", word: floorChip };
+  return null;
+}
+
+/**
  * A chip only when the card's figures are a problem.
- * Cash under the floor is a floor alert, not the health band word.
+ * Cash uses the pillar band, including Watch. An omitted pillar keeps the floor alert.
  * A profit decline, or overdue debtors above zero, is Attention.
  */
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
-  const pillar = books.cashPillarStatus;
   const floor = cashFloorForHome({
     openingMissing: books.openingMissing,
     cashOutlook: books.cashOutlook,
@@ -253,12 +269,7 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
     market: books.market,
     money: (amount) => ownerAmount(amount, books.market),
   });
-  const cash: OwnerCardStatus | null =
-    pillar === "healthy" || pillar === "at_risk"
-      ? null
-      : pillar === "critical" || floor?.chip
-        ? { tone: "attention", word: floor?.chip ?? CASH_FLOOR_ALERT }
-        : null;
+  const cash = ownerCashStatusChip(books.cashPillarStatus, floor?.chip ?? null);
 
   const gross =
     finite(books.revenue) && finite(books.cogs)
@@ -395,6 +406,18 @@ export function cashFloorForHome(input: {
 }): CashFloorCopy | null {
   if (input.openingMissing) return null;
   const outlook = input.cashOutlook;
+  const series = outlook && finite(outlook.opening) && finite(outlook.floor) ? storedSeriesReading(input.cashflow) : null;
+  if (series) {
+    const dipAt = series.closing.findIndex((balance) => balance < series.floor);
+    return cashFloorCopy({
+      opening: series.opening,
+      floor: series.floor,
+      dipsBelowFloorWeek: dipAt >= 0 ? dipAt + 1 : null,
+      closing: series.closing,
+      money: input.money,
+      market: input.market,
+    });
+  }
   if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
     return cashFloorCopy({
       opening: outlook.opening,
@@ -446,12 +469,14 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     };
   }
   const outlook = books.cashOutlook;
+  const series = storedSeriesReading(books.cashflow);
+  const quotedOpening = series?.opening ?? outlook?.opening;
   const pillarAgrees =
     books.cashPillarStatus === "healthy" || books.cashPillarStatus === "at_risk";
-  if (pillarAgrees && outlook && finite(outlook.opening)) {
+  if (pillarAgrees && quotedOpening != null && finite(quotedOpening)) {
     return {
       ...base,
-      sentence: `Cash is ${money(outlook.opening)}.`,
+      sentence: `Cash is ${money(quotedOpening)}.`,
       source: `${booksSource}, 13-week forecast`,
       step: "Ask",
       signed: false,
@@ -568,6 +593,11 @@ export type PracticeBook = {
    * wait is not an empty book.
    */
   loading?: boolean;
+  /**
+   * False while open queries are still being counted. Zero during that wait
+   * is not "no open queries". Omit it and a zero stays a finished zero.
+   */
+  countsReady?: boolean;
 };
 
 /** Book-level lines for practice Home. Same shape as the owner cards. */
@@ -579,11 +609,13 @@ export function practiceHomeLines(book: PracticeBook): OwnerHomeLines {
         ? "1 client on the book."
         : `${book.clientCount} clients on the book.`;
   const queries =
-    book.openQueries === 0
-      ? "No open queries."
-      : book.openQueries === 1
-        ? "1 open query."
-        : `${book.openQueries} open queries.`;
+    book.countsReady === false
+      ? "Checking open queries."
+      : book.openQueries === 0
+        ? "No open queries."
+        : book.openQueries === 1
+          ? "1 open query."
+          : `${book.openQueries} open queries.`;
   const health =
     book.avgHealth == null ? "No scored clients yet." : `Average health is ${book.avgHealth} out of 100.`;
   const attention =

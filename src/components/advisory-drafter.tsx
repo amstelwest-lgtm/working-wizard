@@ -34,6 +34,7 @@ import {
   drafterAnswerSentence,
   plainSentDate,
 } from "@/lib/reports-drafter-copy";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 
 type Kind = "client_email" | "meeting_agenda" | "exec_summary";
 
@@ -166,7 +167,9 @@ export function AdvisoryDrafter({
     if (!result) return;
     try {
       const logged = await logShare("copy", result);
-      const text = result.subject ? `Subject: ${result.subject}\n\n${logged.body}` : logged.body;
+      const text = result.subject
+        ? `Subject: ${rewriteDraftMonthStamp(result.subject)}\n\n${rewriteDraftMonthStamp(logged.body)}`
+        : rewriteDraftMonthStamp(logged.body);
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
@@ -179,15 +182,19 @@ export function AdvisoryDrafter({
   const openMailto = async () => {
     if (!result) return;
     const logged = await logShare("mailto", result);
-    const subject = encodeURIComponent(result.subject ?? `${clientName ?? "Client"} — advisory`);
-    const body = encodeURIComponent(logged.body);
+    const subject = encodeURIComponent(
+      rewriteDraftMonthStamp(result.subject ?? `${clientName ?? "Client"} — advisory`),
+    );
+    const body = encodeURIComponent(rewriteDraftMonthStamp(logged.body));
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
   const openWhatsApp = async () => {
     if (!result) return;
     const logged = await logShare("whatsapp", result);
-    const text = result.subject ? `*${result.subject}*\n\n${logged.body}` : logged.body;
+    const text = result.subject
+      ? `*${rewriteDraftMonthStamp(result.subject)}*\n\n${rewriteDraftMonthStamp(logged.body)}`
+      : rewriteDraftMonthStamp(logged.body);
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -329,10 +336,12 @@ export function AdvisoryDrafter({
             </div>
           </div>
           {result.subject && (
-            <p className="mb-2 text-sm font-semibold text-amber-100">{result.subject}</p>
+            <p className="mb-2 text-sm font-semibold text-amber-100">
+              {rewriteDraftMonthStamp(result.subject)}
+            </p>
           )}
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-            {result.body}
+            {rewriteDraftMonthStamp(result.body)}
           </p>
           <p className="mt-3 border-t border-slate-800 pt-2 text-[11px] text-slate-500">
             Grounded in {result.grounding.currentPeriod}

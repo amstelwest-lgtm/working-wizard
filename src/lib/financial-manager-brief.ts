@@ -9,7 +9,10 @@
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
+import { storedSeriesReading } from "./client-metrics.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
+import { rewriteDraftMonthStamp } from "./statement-period.ts";
+import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
 export type BriefMoneyField = {
@@ -68,7 +71,7 @@ export type FinancialManagerBrief = {
   chase: ChaseDraftInput | null;
   /** Opening and floor, in the same words as the owner home. Null when either amount is missing. */
   cashFloorLine: string | null;
-  /** Same chip as the owner Financial Manager card. Null when cash is not a floor alert. */
+  /** Floor alert chip. Null when the opening is missing or the pillar is Watch or Healthy. */
   cashFloorChip: string | null;
   /** Short Health cash line. Same reading as the chip, so the pillar matches this brief. */
   healthCue: string | null;
@@ -151,6 +154,11 @@ export function buildFinancialManagerBrief(input: {
   openActionTitles?: readonly string[] | null;
   overdueActions?: number;
   cashDipWeek?: number | null;
+  /**
+   * Stored forecast. When it has movement, the floor is `storedSeriesReading`
+   * (the cash grid's `forecastMinimumCash`), not the passed `cashFloor`.
+   */
+  cashflow?: SavedCashflowLike | null;
   /** Opening cash and the 13-week floor. Both are required before the brief quotes them. */
   cashOpening?: number | null;
   cashFloor?: number | null;
@@ -223,10 +231,21 @@ export function buildFinancialManagerBrief(input: {
       tab: null,
     });
   }
-  const cashOpening = input.cashOpening;
-  const cashFloor = input.cashFloor;
+  const passedOpening = input.cashOpening;
+  const passedFloor = input.cashFloor;
   const pillarAgrees =
     input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
+  const series = !input.openingMissing && input.cashflow ? storedSeriesReading(input.cashflow) : null;
+  const seriesDip =
+    series == null
+      ? null
+      : (() => {
+          const at = series.closing.findIndex((balance) => balance < series.floor);
+          return at >= 0 ? at + 1 : null;
+        })();
+  const cashOpening = series?.opening ?? passedOpening;
+  const cashFloor = series?.floor ?? passedFloor;
+  const dipWeek = series ? seriesDip : (input.cashDipWeek ?? null);
   const floorCopy =
     !input.openingMissing &&
     cashOpening != null &&
@@ -236,8 +255,8 @@ export function buildFinancialManagerBrief(input: {
       ? cashFloorCopy({
           opening: cashOpening,
           floor: cashFloor,
-          dipsBelowFloorWeek: input.cashDipWeek ?? null,
-          closing: input.cashClosing,
+          dipsBelowFloorWeek: dipWeek,
+          closing: series?.closing ?? input.cashClosing,
           money: input.formatMoney,
           market: input.market,
         })
@@ -255,12 +274,12 @@ export function buildFinancialManagerBrief(input: {
     input.actionsReady !== false &&
     !input.openingMissing &&
     !pillarAgrees &&
-    input.cashDipWeek != null &&
-    input.cashDipWeek > 0
+    dipWeek != null &&
+    dipWeek > 0
   ) {
     actions.push({
       id: "cash-floor",
-      title: `Cash goes under the floor in week ${input.cashDipWeek}`,
+      title: `Cash goes under the floor in week ${dipWeek}`,
       reason: cashFloorLine ?? "From the 13-week forecast already on file.",
       button: "open",
       tab: "cash",
@@ -270,7 +289,7 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    return [{ id: row.id, title }];
+    return [{ id: row.id, title: rewriteDraftMonthStamp(title) }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =
