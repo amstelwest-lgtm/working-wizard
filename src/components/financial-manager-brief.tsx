@@ -33,6 +33,11 @@ export function FinancialManagerBrief({
       <h2 className="fm-brief-title">What changed {since}</h2>
       {brief.cashFloorLine ? (
         <p className="fm-brief-cash" data-cash-floor-line>
+          {brief.cashFloorChip ? (
+            <span className="fm-brief-chip" data-cash-floor-chip>
+              {brief.cashFloorChip}
+            </span>
+          ) : null}
           {brief.cashFloorLine}
         </p>
       ) : null}

@@ -111,7 +111,14 @@ import {
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
-import { forecastRowLabel, groupSmallForecastRows, isAssumedMonthlyLine } from "@/lib/cash-forecast-rows";
+import {
+  bankHistoryIsSingleMonth,
+  forecastLineRule,
+  forecastRowLabel,
+  forecastRuleLabel,
+  groupSmallForecastRows,
+  isAssumedMonthlyLine,
+} from "@/lib/cash-forecast-rows";
 import {
   isProjectedOnceOff,
   projectForecastFrequency,
@@ -220,11 +227,15 @@ function distribute(
   line: LineItem,
   side: "revenue" | "expenses" | "other",
   recurring?: ReadonlyMap<string, RecurringFrequency> | null,
+  singleMonth = false,
 ): number[] {
   return distributeForecastLine(
     {
       ...line,
-      frequency: projectForecastFrequency(line.name, line.frequency, recurring, { side }) as LineItem["frequency"],
+      frequency: projectForecastFrequency(line.name, line.frequency, recurring, {
+        side,
+        singleMonth,
+      }) as LineItem["frequency"],
     },
     WEEKS,
   );
@@ -422,12 +433,14 @@ function LineEditor({
   onRemove,
   tone,
   side,
+  singleMonth = false,
 }: {
   line: LineItem;
   onChange: (l: LineItem) => void;
   onRemove?: () => void;
   tone: "revenue" | "expense";
   side?: "revenue" | "expenses" | "other";
+  singleMonth?: boolean;
 }) {
   const { market } = useMarketFormat();
   const cur = currencySymbol(market);
@@ -435,7 +448,9 @@ function LineEditor({
     tone === "revenue" ? "border-l-[3px] border-l-[#4caf82]" : "border-l-[3px] border-l-[#e05c5c]";
   const showSplit = line.frequency === "split-weeks" || line.frequency === "split-months";
   const sideForLabel = side ?? (tone === "revenue" ? "revenue" : "expenses");
-  const assumed = isAssumedMonthlyLine(line.name, line.frequency, { side: sideForLabel });
+  const rule = forecastLineRule(line.name, line.frequency, { side: sideForLabel, singleMonth });
+  const ruleLabel = forecastRuleLabel(rule);
+  const assumed = isAssumedMonthlyLine(line.name, line.frequency, { side: sideForLabel, singleMonth });
   return (
     <div
       className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
@@ -474,9 +489,9 @@ function LineEditor({
             ))}
           </SelectContent>
         </Select>
-        {assumed ? (
-          <p className="mt-1 text-[11px] text-slate-500" data-assumed-monthly="">
-            recurring (assumed monthly)
+        {ruleLabel ? (
+          <p className="mt-1 text-[11px] text-slate-500" data-assumed-monthly={assumed ? "" : undefined} data-forecast-rule={rule}>
+            {ruleLabel}
           </p>
         ) : null}
       </div>
@@ -648,6 +663,8 @@ export function CashForecastPanel({
     note: string | null;
     cycleNote: string | null;
     financials: Record<string, string | number | null | undefined> | null;
+    /** Local preview of a one-month bank file. Real clients use the stored seed. */
+    singleMonth?: boolean;
   } | null;
 } = {}) {
   const accountant = useOptionalAccountantProfile();
@@ -728,6 +745,14 @@ export function CashForecastPanel({
   const [onceOffSaving, setOnceOffSaving] = useState(false);
   const [bankHistory, setBankHistory] = useState<unknown>(initialBankDraft);
   const recurringPayees = useMemo(() => recurringPayeeFrequency(bankHistory), [bankHistory]);
+  const singleMonthHistory = useMemo(
+    () =>
+      bankHistoryIsSingleMonth({
+        seededFromBanksAt: preview?.singleMonth || bankSeeded ? "published" : null,
+        bankDraft: bankHistory,
+      }),
+    [preview?.singleMonth, bankSeeded, bankHistory],
+  );
   const [stagedOnceOffs, setStagedOnceOffs] = useState<SuggestedOnceOffLine[]>([]);
   const [linesSourceChip, setLinesSourceChip] = useState<string | null>(null);
   const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(preview?.cycleNote ?? null);
@@ -1368,10 +1393,13 @@ export function CashForecastPanel({
       revenue.map((l) => ({
         id: l.id,
         bucket: "revenue" as const,
-        name: forecastRowLabel(l.name, l.frequency, { side: "revenue" }),
-        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, { side: "revenue" }),
+        name: forecastRowLabel(l.name, l.frequency, { side: "revenue", singleMonth: singleMonthHistory }),
+        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
+          side: "revenue",
+          singleMonth: singleMonthHistory,
+        }),
         vals: applyWeekOverrides(
-          shiftVals(distribute(l, "revenue", recurringPayees).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          shiftVals(distribute(l, "revenue", recurringPayees, singleMonthHistory).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
           l.weekOverrides,
         ),
       })),
@@ -1379,10 +1407,13 @@ export function CashForecastPanel({
     const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
       id: l.id,
       bucket,
-      name: forecastRowLabel(l.name, l.frequency, { side: bucket }),
-      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, { side: bucket }),
+      name: forecastRowLabel(l.name, l.frequency, { side: bucket, singleMonth: singleMonthHistory }),
+      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, {
+        side: bucket,
+        singleMonth: singleMonthHistory,
+      }),
       vals: applyWeekOverrides(
-        distribute(l, bucket, recurringPayees).map((v) => v * opts.eMul),
+        distribute(l, bucket, recurringPayees, singleMonthHistory).map((v) => v * opts.eMul),
         l.weekOverrides,
       ),
     });
@@ -1456,6 +1487,8 @@ export function CashForecastPanel({
       revGrowthPct,
       capexAmount,
       capexWeek,
+      singleMonthHistory,
+      recurringPayees,
     ],
   );
 
@@ -1489,7 +1522,7 @@ export function CashForecastPanel({
         capexAmount: 0,
         capexWeek: 1,
       }),
-    [revenue, expenses, other, openingBalance],
+    [revenue, expenses, other, openingBalance, singleMonthHistory, recurringPayees],
   );
 
   const updateAt = (
@@ -1643,6 +1676,7 @@ export function CashForecastPanel({
       existing: forecastLines,
       forecastLines,
       bankSourced: linesAreBank,
+      singleMonth: singleMonthHistory,
     });
     if (!result.lines.length) {
       setStagedOnceOffs([]);
@@ -2898,6 +2932,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="revenue"
+                singleMonth={singleMonthHistory}
                 onChange={(n) => updateAt(revenue, setRevenue, i, n)}
                 onRemove={
                   revenue.length > 1
@@ -2924,6 +2959,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
+                singleMonth={singleMonthHistory}
                 onChange={(n) => updateAt(expenses, setExpenses, i, n)}
               />
             ))}
@@ -2936,6 +2972,7 @@ export function CashForecastPanel({
                 line={l}
                 tone="expense"
                 side="other"
+                singleMonth={singleMonthHistory}
                 onChange={(n) => updateAt(other, setOther, i, n)}
                 onRemove={
                   other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined

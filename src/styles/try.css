@@ -32,6 +32,11 @@ html:not(.dark) body:has(.try-page):has(.owner-door) {
   overflow-x: auto;
 }
 
+/* Simplified cash omits the table hint, leaving a lone Enlarge and a blank row. */
+.try-readout #detailed-forecast > div:has(> [aria-label="Enlarge cash flow table"]) {
+  display: none;
+}
+
 .try-cash-note {
   margin: 0 0 10px;
   color: #3d5270;

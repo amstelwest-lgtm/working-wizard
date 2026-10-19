@@ -5,6 +5,7 @@
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
+import { openPlanTitles } from "@/lib/open-plan-home";
 
 export type OwnerActionRow = { title: string; email: string | null };
 
@@ -53,17 +54,6 @@ export function openActionSentence(titles: readonly string[]): string | null {
 
 function countPhrase(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
-}
-
-export function ownerAssignedTitles(actions: readonly OwnerActionRow[], ownerEmail: string | null): string[] {
-  const email = ownerEmail?.trim().toLowerCase() ?? "";
-  if (!email) return [];
-  return actions.flatMap((row) => {
-    const title = row.title.trim();
-    if (!title) return [];
-    if ((row.email ?? "").trim().toLowerCase() !== email) return [];
-    return [title];
-  });
 }
 
 export function ownerDraftTitles(findings: readonly AgentFindingRow[]): string[] {
@@ -134,7 +124,7 @@ export function ownerNeedsView(input: {
   xero: BooksLink;
   when: (iso: string) => string;
 }): OwnerNeedsView {
-  const assigned = ownerAssignedTitles(input.actions, input.ownerEmail);
+  const assigned = openPlanTitles(input.actions);
   const actionsHeading = !input.actionsReady
     ? "Open actions"
     : input.actionsUnavailable
@@ -148,7 +138,7 @@ export function ownerNeedsView(input: {
       ? ["Open actions aren't available yet."]
       : assigned.length
         ? assigned.slice(0, 2)
-        : ["No open actions assigned to you."];
+        : ["No open actions."];
 
   const draftsHeading = !input.draftsReady
     ? "Drafts"

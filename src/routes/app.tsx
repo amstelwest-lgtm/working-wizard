@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate, ClientOnly } from "@tanstack/react-router";
 import { founderPortalLinks } from "@/styles/app-route-styles";
 import { OwnerDoor } from "@/components/owner-door/owner-door";
+import { cashFloorCopy } from "@/lib/owner-answers";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
@@ -33,6 +34,7 @@ import {
   canShowIndustryMedian,
   coerceMarketSelection,
   formatDate,
+  formatMoney,
   formatMoneyCompact,
   formatNumber,
   industryBenchmarkCaption,
@@ -111,6 +113,7 @@ import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
+import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
 import { cashOutlookIsCritical, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
@@ -3035,7 +3038,13 @@ function Index() {
     return () => clearTimeout(t);
   }, [v, weeklyInputs, productMix, effectiveClientId, hydratedClientId, hasRealFinancials]);
 
-  useAskAiMount({ effectiveClientId, activeTab, viewMode, hasRealFinancials });
+  useAskAiMount({
+    effectiveClientId,
+    activeTab,
+    viewMode,
+    hasRealFinancials,
+    forecastKey: forecastPlFingerprint(clientMeta?.cashflow, v),
+  });
 
   const exitImpersonation = async () => {
     if (actingClientId) {
@@ -3614,6 +3623,24 @@ function Index() {
       ? ownerMetrics.runway.weeks
       : null;
   const ownerOutlook = ownerMetrics.outlook;
+  const ownerCashFloorCue =
+    ownerMetrics.cash.amount != null &&
+    Number.isFinite(ownerOutlook.opening) &&
+    Number.isFinite(ownerOutlook.floor)
+      ? cashFloorCopy({
+          opening: ownerOutlook.opening,
+          floor: ownerOutlook.floor,
+          dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
+          money: (amount) => formatMoney(amount, boardMarket),
+          market: boardMarket,
+        }).healthCue
+      : null;
+  const openOwnerFm = () => {
+    void navigate({
+      to: "/app",
+      search: (prev) => ({ ...prev, bot: "financial_manager" as const }),
+    });
+  };
   const cashBalance = ownerMetrics.cash.amount;
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
   const overallHealth = cashPillarFollowsForecast(
@@ -4057,6 +4084,8 @@ function Index() {
                             statusLabel={ownerStatusCritical ? ownerStatusWord : null}
                             pillars={spherePillars}
                             caption={HEALTH_RING_CAPTION}
+                            cashFloorCue={ownerCashFloorCue}
+                            onCashFloor={openOwnerFm}
                             onTopPriority={() => go("moves")}
                             onDriverClick={(key) => {
                               if (key in RATIO_META) setOpenRatio(key as RatioKey);
@@ -5199,6 +5228,8 @@ function Index() {
                                     displayStatus={ownerStatusCritical ? "critical" : overallHealth.displayStatus}
                                     statusLabel={ownerStatusCritical ? ownerStatusWord : null}
                                     pillars={spherePillars}
+                                    cashFloorCue={ownerCashFloorCue}
+                                    onCashFloor={openOwnerFm}
                                     caption={overviewCaption}
                                     topPriority={
                                       nextSteps[0]

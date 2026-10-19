@@ -788,6 +788,17 @@ button.dig-cue--control {
   font-family: inherit;
   appearance: none;
 }
+.health-cash-floor {
+  display: block;
+  margin-top: 6px;
+  color: #0b5fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 button.dig-cue--control:hover,
 .health-pillar-tile:hover .dig-cue,
 .health-pillar-card:hover .dig-cue,

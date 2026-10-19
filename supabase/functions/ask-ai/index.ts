@@ -17,6 +17,7 @@ import {
   recordPrecardUse,
 } from "../_shared/precard-cap-gate.ts";
 import { PRECARD_CAP_CODE, PRECARD_CAP_MESSAGE, normalizePrecardTurnId } from "../../../src/lib/precard-cap.ts";
+import { forecastPlFingerprint } from "../../../src/lib/cash-forecast-rows.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -157,10 +158,19 @@ async function handleAskAi(req: Request): Promise<Response> {
   // ── Cache lookup — definitional questions only ────────────────────────────
   // question_hash is SHA-256(canonical question) — raw question text is never stored.
   // Cache reads/writes use adminClient (service role only; no authenticated SELECT policy).
+  const { data: figureRow } = await userClient
+    .from("clients")
+    .select("cashflow, financials")
+    .eq("id", clientId)
+    .maybeSingle();
+  // A forecast or P&L change misses the previous answer. The client id keeps
+  // one practice's cached reply off another client's thread.
+  const figureKey = forecastPlFingerprint(figureRow?.cashflow, figureRow?.financials);
+
   if (tier === "none") {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
     // One cached answer per audience + agent, so one agent's reply never shows up in another's chat.
-    const hash = await sha256(`${chatCacheScope(audience, agent)}|${canonical}`);
+    const hash = await sha256(`${chatCacheScope(audience, agent)}|${clientId}|${figureKey}|${canonical}`);
 
     const { data: cached } = await adminClient
       .from("ask_ai_cache")
@@ -254,7 +264,7 @@ async function handleAskAi(req: Request): Promise<Response> {
   if (tier === "none" && claudeResult.text) {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
     // One cached answer per audience + agent, so one agent's reply never shows up in another's chat.
-    const hash = await sha256(`${chatCacheScope(audience, agent)}|${canonical}`);
+    const hash = await sha256(`${chatCacheScope(audience, agent)}|${clientId}|${figureKey}|${canonical}`);
     await adminClient.from("ask_ai_cache").upsert({
       question_hash: hash,
       answer: sealedCacheAnswer(claudeResult.text, sealed.session),

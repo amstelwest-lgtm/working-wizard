@@ -80,6 +80,27 @@ export function handoffRequestNote(displayName: string): string {
   return `Handed to ${displayName}.`;
 }
 
+/** The draft a finished hand-off may leave for a person. The action title is the label. */
+export function handoffDraftTitle(actionTitle: string): string {
+  const title = actionTitle.replace(/\s+/g, " ").trim();
+  if (!title) return "Hand-off draft";
+  return `Hand-off: ${title}`.slice(0, 200);
+}
+
+/**
+ * A second hand-off of the same action must not add another draft.
+ * An existing draft already titled with the action is the same work.
+ */
+export function handoffDraftIsDuplicate(actionTitle: string, existingTitles: readonly string[]): boolean {
+  const action = actionTitle.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!action) return true;
+  const labelled = handoffDraftTitle(actionTitle).toLowerCase();
+  return existingTitles.some((row) => {
+    const key = row.replace(/\s+/g, " ").trim().toLowerCase();
+    return key === action || key === labelled;
+  });
+}
+
 export function handoffResultNote(
   displayName: string,
   summary: string,

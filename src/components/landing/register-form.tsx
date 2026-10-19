@@ -357,7 +357,7 @@ export function LandingRegisterForm({
                 <button
                   type="submit"
                   id="create-firm"
-                  className="btn btn-gold"
+                  className="btn btn-cobalt"
                   disabled={regBusy || !isDraftComplete(draftMarket)}
                   style={{ width: "100%", justifyContent: "center", marginTop: 20 }}
                 >

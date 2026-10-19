@@ -279,7 +279,7 @@ function applyReplacements(text: string, replacements: { raw: string; formatted:
   const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
   if (!list.length) return text;
   const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  return text.replace(new RegExp(`(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match, offset: number) => {
+  return text.replace(new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match, offset: number) => {
     const after = text.slice(offset + match.length, offset + match.length + 20);
     if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
     return chosen.get(match) ?? match;
@@ -291,6 +291,11 @@ function stripScoreCurrency(text: string): string {
   return text
     .replace(/(?:\$|R[\u00a0 ])(\d[\d,]*(?:\.\d+)?)(?=\s+out of\s+100\b)/gi, "$1")
     .replace(/(?:\$|R[\u00a0 ])(\d[\d,]*(?:\.\d+)?)(?=\s*\/\s*100\b)/gi, "$1");
+}
+
+/** A template that already wrote $0 must not gain a second symbol. */
+function stripDoubleCurrency(text: string): string {
+  return text.replace(/\$\s*\$/g, "$").replace(/R(?:[\u00a0 ]+)R(?:[\u00a0 ])/g, "R ");
 }
 
 function figureEntries(
@@ -365,7 +370,9 @@ export function formatFindingProse(
 ): string {
   const corrected = correctQuotedFigures(figureEntries(figures));
   return rewriteSavedMonthStamp(
-    stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))).replace(/\s+/g, " ").trim(),
+    stripDoubleCurrency(stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))))
+      .replace(/\s+/g, " ")
+      .trim(),
   );
 }
 

@@ -479,6 +479,8 @@ export type WorkflowContext = {
   openQueries?: number | null;
   /** Ratios debtor days. The workflow must not quote the template default instead. */
   debtorDays?: number | null;
+  /** Forecast and P&L fingerprint. A change drops the cached briefing. */
+  forecastKey?: string | null;
 };
 
 /** Stable key for caching: regenerate only when the inputs change. */
@@ -499,6 +501,7 @@ export function workflowInputsHash(ctx: WorkflowContext): string {
     r: ctx.cashRunwayWeeks ?? null,
     w: ctx.whatMatters,
     d: ctx.debtorDays ?? null,
+    f: ctx.forecastKey ?? null,
   });
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;

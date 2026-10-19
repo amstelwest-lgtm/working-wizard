@@ -117,6 +117,13 @@ export type SphereHeroProps = {
    * owner has backed out.
    */
   drillTo?: { token: number; pillarId: SpherePillar["id"] } | null;
+  /**
+   * Short line under the Cash pillar when cash is below the minimum.
+   * The score and the band word stay as they are.
+   */
+  cashFloorCue?: string | null;
+  /** Opens the Financial Manager. The cue is the only control that uses it. */
+  onCashFloor?: () => void;
 };
 
 // ── Tier helpers (HEALTH_BAND_TABLE via scoreTier) ──────────────────────────
@@ -510,6 +517,8 @@ export function SphereHero({
   onDriverClick,
   queryCounts,
   drillTo,
+  cashFloorCue = null,
+  onCashFloor,
 }: SphereHeroProps) {
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
@@ -670,6 +679,27 @@ export function SphereHero({
                     ) : null}
                   </span>
                   <DigCue id={`pillar-ring-${p.id}`} compact />
+                  {p.id === "cash" && cashFloorCue ? (
+                    <span
+                      className="health-cash-floor"
+                      data-cash-floor-cue="true"
+                      role="link"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onCashFloor?.();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onCashFloor?.();
+                      }}
+                    >
+                      {cashFloorCue}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -791,6 +821,27 @@ export function SphereHero({
                   </span>
                 )}
                 <DigCue id={`pillar-tile-${p.id}`} compact />
+                {p.id === "cash" && cashFloorCue ? (
+                  <span
+                    className="health-cash-floor"
+                    data-cash-floor-cue="true"
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCashFloor?.();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCashFloor?.();
+                    }}
+                  >
+                    {cashFloorCue}
+                  </span>
+                ) : null}
               </button>
             );
           })}

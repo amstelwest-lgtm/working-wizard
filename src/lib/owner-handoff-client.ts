@@ -6,9 +6,16 @@ import type { AgentKey } from "@/lib/milon-team-feed";
 
 export const ACTION_PLAN_REFRESH_EVENT = "milon-action-plan-refresh";
 
-export function dispatchActionPlanRefresh(): void {
+/** The hand-off that just landed, so Home can paint it before the refetch returns. */
+export type ActionPlanRefreshDetail = {
+  actionItemId: string;
+  title: string;
+  agent: AgentKey;
+};
+
+export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(ACTION_PLAN_REFRESH_EVENT));
+  window.dispatchEvent(new CustomEvent(ACTION_PLAN_REFRESH_EVENT, { detail }));
 }
 
 export type OwnerHandoffResult =
@@ -77,7 +84,9 @@ export async function recordHandoffAssignment(input: {
   return { ok: true };
 }
 
-export type ActionHandoffRun = { agent: AgentKey; status: string };
+export type ActionHandoffRun = { agent: AgentKey; status: string; at: string };
+
+export type HandoffAgentNote = { agent: AgentKey; at: string };
 
 /** Newest run per action. A missing column or an empty table stays quiet. */
 export async function loadActionHandoffRuns(
@@ -113,20 +122,26 @@ export async function loadActionHandoffRuns(
   if (error || !Array.isArray(data)) return out;
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
-    const record = row as { action_item_id?: unknown; agent?: unknown; status?: unknown };
+    const record = row as {
+      action_item_id?: unknown;
+      agent?: unknown;
+      status?: unknown;
+      queued_at?: unknown;
+    };
     const id = typeof record.action_item_id === "string" ? record.action_item_id : "";
     const agent = record.agent;
     const status = typeof record.status === "string" ? record.status : "";
+    const at = typeof record.queued_at === "string" ? record.queued_at : "";
     if (!id || out.has(id)) continue;
     if (agent !== "financial_manager" && agent !== "analyst" && agent !== "advisor") continue;
-    out.set(id, { agent, status });
+    out.set(id, { agent, status, at });
   }
   return out;
 }
 
 /** Newest "Handed to …" note per action, when it names one of the three bots. */
-export async function loadLatestHandoffAgents(actionIds: string[]): Promise<Map<string, AgentKey>> {
-  const out = new Map<string, AgentKey>();
+export async function loadLatestHandoffAgents(actionIds: string[]): Promise<Map<string, HandoffAgentNote>> {
+  const out = new Map<string, HandoffAgentNote>();
   const ids = actionIds.filter(Boolean);
   if (!ids.length) return out;
   const { data, error } = await supabase
@@ -138,13 +153,14 @@ export async function loadLatestHandoffAgents(actionIds: string[]): Promise<Map<
   const seen = new Set<string>();
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
-    const record = row as { action_item_id?: unknown; note?: unknown };
+    const record = row as { action_item_id?: unknown; note?: unknown; created_at?: unknown };
     const id = typeof record.action_item_id === "string" ? record.action_item_id : "";
     if (!id || seen.has(id)) continue;
     seen.add(id);
     const note = typeof record.note === "string" ? record.note : null;
     const agent = agentKeyFromAssignee(handoffAssigneeName(note));
-    if (agent) out.set(id, agent);
+    const at = typeof record.created_at === "string" ? record.created_at : "";
+    if (agent) out.set(id, { agent, at });
   }
   return out;
 }

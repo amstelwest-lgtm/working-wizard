@@ -219,7 +219,7 @@ export function MoveHandTo({
           return;
         }
         toast.success(`Assigned to ${agentShortName(agent)}`);
-        dispatchActionPlanRefresh();
+        dispatchActionPlanRefresh({ actionItemId, title, agent });
       }}
       onAssignPerson={async (person) => {
         const actionItemId = await ensure();

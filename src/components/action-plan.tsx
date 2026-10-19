@@ -30,7 +30,12 @@ import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel, handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import { loadActionHandoffRuns, recordHandoffAssignment, requestOwnerHandoff } from "@/lib/owner-handoff-client";
+import {
+  dispatchActionPlanRefresh,
+  loadActionHandoffRuns,
+  recordHandoffAssignment,
+  requestOwnerHandoff,
+} from "@/lib/owner-handoff-client";
 import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -733,6 +738,7 @@ export default function ActionPlanPanel({
         return;
       }
       toast.success(`Assigned to ${agentShortName(agent)}`);
+      dispatchActionPlanRefresh({ actionItemId: item.id, title: item.title, agent });
       void refresh();
     },
     [clientId, refresh],

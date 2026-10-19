@@ -9,7 +9,7 @@
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
-import { cashFloorSentence } from "./owner-answers.ts";
+import { cashFloorCopy } from "./owner-answers.ts";
 
 export type BriefMoneyField = {
   key: string;
@@ -67,6 +67,8 @@ export type FinancialManagerBrief = {
   chase: ChaseDraftInput | null;
   /** Opening and floor, in the same words as the owner home. Null when either amount is missing. */
   cashFloorLine: string | null;
+  /** Same chip as the owner Financial Manager card. Null when cash is not a floor alert. */
+  cashFloorChip: string | null;
 };
 
 function numField(fin: Record<string, unknown> | null | undefined, key: string): number | null {
@@ -218,21 +220,26 @@ export function buildFinancialManagerBrief(input: {
   const cashFloor = input.cashFloor;
   const pillarAgrees =
     input.cashPillarStatus === "healthy" || input.cashPillarStatus === "at_risk";
+  const cashCopy =
+    !input.openingMissing &&
+    !pillarAgrees &&
+    cashOpening != null &&
+    cashFloor != null &&
+    Number.isFinite(cashOpening) &&
+    Number.isFinite(cashFloor)
+      ? cashFloorCopy({
+          opening: cashOpening,
+          floor: cashFloor,
+          dipsBelowFloorWeek: input.cashDipWeek ?? null,
+          money: input.formatMoney,
+        })
+      : null;
   const cashFloorLine = input.openingMissing
     ? `${OPENING_BALANCE_MISSING}.`
     : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
       ? `Cash is ${input.formatMoney(cashOpening)}.`
-      : cashOpening != null &&
-          cashFloor != null &&
-          Number.isFinite(cashOpening) &&
-          Number.isFinite(cashFloor)
-        ? cashFloorSentence({
-            opening: cashOpening,
-            floor: cashFloor,
-            dipsBelowFloorWeek: input.cashDipWeek ?? null,
-            money: input.formatMoney,
-          })
-        : null;
+      : (cashCopy?.sentence ?? null);
+  const cashFloorChip = input.openingMissing || pillarAgrees ? null : (cashCopy?.chip ?? null);
   if (
     input.actionsReady !== false &&
     !input.openingMissing &&
@@ -283,5 +290,6 @@ export function buildFinancialManagerBrief(input: {
           : "No draft is waiting for review.",
     chase,
     cashFloorLine,
+    cashFloorChip,
   };
 }

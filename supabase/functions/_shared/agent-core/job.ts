@@ -34,7 +34,12 @@ import {
   RUNNER_MAX_OUTPUT_TOKENS,
   withDraftFlags,
 } from "../../../../src/lib/agent-draft.ts";
-import { handoffFinding, handoffResultNote } from "../../../../src/lib/owner-handoff.ts";
+import {
+  handoffDraftIsDuplicate,
+  handoffDraftTitle,
+  handoffFinding,
+  handoffResultNote,
+} from "../../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../../src/lib/milon-team-names.ts";
 
 export type RunnerJob = {
@@ -191,6 +196,24 @@ async function recordHandoffFinish(
     return;
   }
   if ((count ?? 0) > 0) return;
+  const { data: actionRow } = await db
+    .from("action_items")
+    .select("title")
+    .eq("id", actionItemId)
+    .maybeSingle();
+  const actionTitle = typeof actionRow?.title === "string" ? actionRow.title : "";
+  const labelled = actionTitle ? handoffDraftTitle(actionTitle) : finding.title;
+  const { data: priorDrafts } = await db
+    .from("agent_findings")
+    .select("title")
+    .eq("client_id", input.clientId)
+    .limit(80);
+  const existingTitles = (priorDrafts ?? []).flatMap((row) => {
+    const title = (row as { title?: unknown }).title;
+    return typeof title === "string" && title.trim() ? [title] : [];
+  });
+  if (actionTitle && handoffDraftIsDuplicate(actionTitle, existingTitles)) return;
+  if (!actionTitle && existingTitles.some((title) => title.trim() === labelled.trim())) return;
   const metrics = evidenceMetrics(cited.evidence.figures, cited.evidence.period_label, market);
   const severity = severityWithFloor("info", metrics);
   const { error: findingError } = await db.from("agent_findings").insert({
@@ -199,7 +222,7 @@ async function recordHandoffFinish(
     run_id: input.runId,
     kind: config.fallbackDraftKind,
     severity,
-    title: finding.title,
+    title: labelled,
     detail: finding.detail,
     evidence: withDraftFlags({
       ...cited.evidence,

@@ -5,6 +5,7 @@
  */
 
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
+import { periodProfitBridge } from "../../../src/lib/period-profit.ts";
 import {
   baseCashflow,
   cashScreenFloor,
@@ -274,21 +275,17 @@ export function extractWaterfallFigures(financials: Record<string, unknown> | nu
     };
   }
 
-  const revenue = num(financials?.revenue);
-  const cogs = num(financials?.cogs);
-  const gross = revenue - cogs;
-  const hasFixed = financials?.fixedCosts != null && String(financials.fixedCosts) !== "";
-  const hasEbit = financials?.ebit != null && String(financials.ebit) !== "";
-  const hasEbt = financials?.ebt != null && String(financials.ebt) !== "";
-  const hasNi = financials?.netIncome != null && String(financials.netIncome) !== "";
-  const fixedCosts = hasFixed
-    ? num(financials?.fixedCosts)
-    : hasEbit
-      ? gross - num(financials?.ebit)
-      : 0;
-  const interest = hasEbit && hasEbt ? num(financials?.ebit) - num(financials?.ebt) : 0;
-  const tax = hasEbt && hasNi ? num(financials?.ebt) - num(financials?.netIncome) : 0;
-  return { revenue, costOfSales: cogs, fixedCosts, interest, tax, source: "period" };
+  // Same bridge the profitability waterfall uses. Interest is that charge
+  // divided by revenue, not the DuPont interest-burden multiple.
+  const bridge = periodProfitBridge(financials ?? {});
+  return {
+    revenue: bridge.revenue,
+    costOfSales: bridge.cogs,
+    fixedCosts: bridge.operatingExpenses + bridge.depreciation,
+    interest: bridge.interest,
+    tax: bridge.tax,
+    source: "period",
+  };
 }
 
 export function summarizeWaterfall(figures: WaterfallFigures): WaterfallSummary | null {
