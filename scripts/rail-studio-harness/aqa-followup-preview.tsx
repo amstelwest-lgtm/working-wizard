@@ -100,7 +100,7 @@ export function AqaFollowupPreview() {
             onBooks={() => undefined}
           />
         </section>
-        <FinancialManagerBrief brief={brief} onHandToBot={() => undefined} onOpen={() => undefined} />
+        <FinancialManagerBrief brief={brief} onOpen={() => undefined} />
       </div>
       <table className="mt-6 w-full max-w-3xl text-sm" data-action-health>
         <thead>

@@ -251,7 +251,7 @@ const moves = read("src/components/strategic-moves-panel.tsx");
 const handTo = read("src/components/hand-to-menu.tsx");
 assert(moves.includes("<MoveHandTo"), "next moves open the shared Hand to menu");
 assert(handTo.includes("<ActionHandoffButtons"), "Hand to reuses the cobalt buttons");
-assert(handTo.includes("requestOwnerHandoff"), "Hand to uses the same hand-off call");
+assert(handTo.includes("commitActionHandoff"), "Hand to uses the same hand-off call");
 const plan = read("src/components/action-plan.tsx");
 assert(plan.includes("onHandOff={isOwner ? (agent) => void assignToAgent"), "the action plan still hands off");
 

@@ -1,26 +1,102 @@
 /**
  * Client Home brief. The accountant confirms or opens work.
  * Draft chase uses the shared chase draft and is never sent.
+ * Hand to assigns the open action the same way the action plan does.
  */
 import { useState } from "react";
+import { toast } from "sonner";
 import { ChaseDraftDialog } from "@/components/chase-draft-dialog";
+import { HandToMenu } from "@/components/hand-to-menu";
 import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useMarketFormat } from "@/contexts/market";
+import { agentShortName } from "@/lib/milon-team";
+import type { AgentKey } from "@/lib/milon-team-feed";
+import {
+  assignActionToPerson,
+  commitActionHandoff,
+  dispatchActionPlanRefresh,
+} from "@/lib/owner-handoff-client";
+import { actionDisplayTitle } from "@/lib/strategic-moves";
 import "./financial-manager-brief.css";
 
 const BUTTON_LABEL = {
-  hand: "Hand to bot",
   chase: "Draft chase",
   open: "Open",
 } as const;
 
+export type HomeBriefHandoff = {
+  id: string;
+  title: string;
+  assignee?: string | null;
+};
+
+function handoffFor(actionTitle: string, handoffs: readonly HomeBriefHandoff[]): HomeBriefHandoff | null {
+  return (
+    handoffs.find((row) => actionDisplayTitle(row.title) === actionTitle) ??
+    handoffs.find((row) => row.title.trim() === actionTitle) ??
+    null
+  );
+}
+
+function BriefHandControl({
+  clientId,
+  item,
+  audience,
+}: {
+  clientId: string;
+  item: HomeBriefHandoff;
+  audience: "owner" | "accountant";
+}) {
+  const [comingSoon, setComingSoon] = useState<Partial<Record<AgentKey, true>>>({});
+  return (
+    <HandToMenu
+      clientId={clientId}
+      assignee={item.assignee}
+      comingSoon={comingSoon}
+      audience={audience}
+      onAssignAgent={async (agent) => {
+        const result = await commitActionHandoff({
+          clientId,
+          actionItemId: item.id,
+          title: item.title,
+          agent,
+        });
+        if (!result.ok) {
+          if (result.comingSoon) setComingSoon((current) => ({ ...current, [agent]: true }));
+          toast.error(result.error);
+          return;
+        }
+        toast.success(`Assigned to ${agentShortName(agent)}`);
+      }}
+      onAssignPerson={async (person) => {
+        const result = await assignActionToPerson({
+          clientId,
+          actionItemId: item.id,
+          personId: person.id,
+          personName: person.name,
+        });
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success(`Assigned to ${person.name}`);
+        dispatchActionPlanRefresh();
+      }}
+    />
+  );
+}
+
 export function FinancialManagerBrief({
   brief,
-  onHandToBot,
+  clientId,
+  handoffs = [],
+  audience = "accountant",
   onOpen,
 }: {
   brief: FinancialManagerBrief;
-  onHandToBot: () => void;
+  clientId?: string | null;
+  handoffs?: readonly HomeBriefHandoff[];
+  audience?: "owner" | "accountant";
   onOpen: (tab: "plan" | "cash" | "health" | "profit" | "budget" | "reports") => void;
 }) {
   const { money } = useMarketFormat();
@@ -63,25 +139,31 @@ export function FinancialManagerBrief({
       <h3>Act on these</h3>
       {brief.actions.length > 0 ? (
         <ul className="fm-brief-actions">
-          {brief.actions.map((action) => (
-            <li key={action.id}>
-              <div>
-                <b>{action.title}</b>
-                <span>{action.reason}</span>
-              </div>
-              <button
-                type="button"
-                className="btn ghost mini"
-                onClick={() => {
-                  if (action.button === "hand") onHandToBot();
-                  else if (action.button === "chase") setChaseOpen(true);
-                  else if (action.tab) onOpen(action.tab);
-                }}
-              >
-                {BUTTON_LABEL[action.button]}
-              </button>
-            </li>
-          ))}
+          {brief.actions.map((action) => {
+            const handoff = action.button === "hand" ? handoffFor(action.title, handoffs) : null;
+            return (
+              <li key={action.id}>
+                <div>
+                  <b>{action.title}</b>
+                  <span>{action.reason}</span>
+                </div>
+                {action.button === "hand" && clientId && handoff ? (
+                  <BriefHandControl clientId={clientId} item={handoff} audience={audience} />
+                ) : action.button === "hand" ? null : (
+                  <button
+                    type="button"
+                    className="btn ghost mini"
+                    onClick={() => {
+                      if (action.button === "chase") setChaseOpen(true);
+                      else if (action.tab) onOpen(action.tab);
+                    }}
+                  >
+                    {BUTTON_LABEL[action.button]}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="fm-brief-empty">{brief.actionEmpty}</p>

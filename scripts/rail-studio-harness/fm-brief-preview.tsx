@@ -50,11 +50,7 @@ export function FmBriefPreview() {
       <p className="text-xs font-semibold uppercase tracking-widest text-[#3D5270]">
         Fixture proof — not a client file
       </p>
-      <FinancialManagerBrief
-        brief={brief}
-        onHandToBot={() => undefined}
-        onOpen={() => undefined}
-      />
+      <FinancialManagerBrief brief={brief} onOpen={() => undefined} />
     </div>
   );
 }

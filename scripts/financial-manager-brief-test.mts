@@ -164,7 +164,9 @@ assert(empty.chase == null, "no balance and no overdue means no chase draft");
 assert(empty.draftEmpty === "No draft is waiting for review.", empty.draftEmpty ?? "");
 
 const src = readFileSync(resolve("src/components/financial-manager-brief.tsx"), "utf8");
-assert(src.includes("Hand to bot"), "hand button");
+assert(src.includes("<HandToMenu"), "Act on these hands off through the shared menu");
+assert(src.includes("commitActionHandoff"), "Hand to writes the assignment");
+assert(!src.includes("onHandToBot"), "Hand to does not navigate to the Financial Manager");
 assert(src.includes("Draft chase"), "chase button");
 assert(src.includes("Open"), "open button");
 assert(src.includes("ChaseDraftDialog"), "Draft chase opens the shared chase draft");
@@ -173,5 +175,10 @@ assert(!/supabase|sendEmail|mailto/i.test(src), "the brief does not send");
 
 const page = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(page.includes("<FinancialManagerBrief"), "client Home renders the brief");
+assert(page.includes("handoffs={openPlanHandoffs}"), "Act on these uses the open action rows");
+assert(
+  !page.includes('onHandToBot={() => openHomeAgent("financial_manager")}'),
+  "the home hand control does not open the Financial Manager page",
+);
 
 console.log("financial-manager-brief ok");

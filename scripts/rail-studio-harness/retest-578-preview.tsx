@@ -69,7 +69,7 @@ export function Retest578Preview() {
         Local build — Chill Pepper lines on file. The card is handed the old floor and ignores it.
       </p>
       <div className="owner-door" data-client-home="true">
-        <FinancialManagerBrief brief={brief} onHandToBot={() => undefined} onOpen={() => undefined} />
+        <FinancialManagerBrief brief={brief} onOpen={() => undefined} />
         <OwnerHome
           title="Your whole finance team"
           variant="character"

@@ -7,14 +7,12 @@ import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-sl
 import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
-import { handoffComingOnline } from "@/hooks/owner-agent-ui";
-import { handoffNeedsFreshRun } from "@/lib/owner-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import {
+  assignActionToPerson,
+  commitActionHandoff,
   dispatchActionPlanRefresh,
-  recordHandoffAssignment,
-  requestOwnerHandoff,
 } from "@/lib/owner-handoff-client";
 
 export type HandToPerson = { id: string; name: string; email: string | null };
@@ -240,45 +238,26 @@ export function MoveHandTo({
       onAssignAgent={async (agent) => {
         const actionItemId = await ensure();
         if (!actionItemId) return;
-        const result = await requestOwnerHandoff({ clientId, actionItemId, agent });
-        if (!result.ok && handoffComingOnline(result.error)) {
-          const saved = await recordHandoffAssignment({ clientId, actionItemId, agent });
-          if (!saved.ok) {
-            toast.error(saved.error);
-            return;
-          }
-        } else if (!result.ok) {
+        const result = await commitActionHandoff({ clientId, actionItemId, title, agent });
+        if (!result.ok) {
           toast.error(result.error);
           return;
-        } else if (result.runId && handoffNeedsFreshRun(result.status)) {
-          const saved = await recordHandoffAssignment({ clientId, actionItemId, agent });
-          if (!saved.ok) {
-            toast.error(saved.error);
-            return;
-          }
         }
         toast.success(`Assigned to ${agentShortName(agent)}`);
-        dispatchActionPlanRefresh({ actionItemId, title, agent });
       }}
       onAssignPerson={async (person) => {
         const actionItemId = await ensure();
         if (!actionItemId) return;
-        const { error } = await supabase
-          .from("action_items")
-          .update({ owner_id: person.id, sent_at: null })
-          .eq("id", actionItemId);
-        if (error) {
-          toast.error(error.message);
+        const result = await assignActionToPerson({
+          clientId,
+          actionItemId,
+          personId: person.id,
+          personName: person.name,
+        });
+        if (!result.ok) {
+          toast.error(result.error);
           return;
         }
-        const { data: userData } = await supabase.auth.getUser();
-        await supabase.from("action_updates").insert({
-          action_item_id: actionItemId,
-          client_id: clientId,
-          actor_type: "owner_app",
-          actor_label: userData.user?.email?.split("@")[0] ?? "Accountant",
-          note: `Assigned to ${person.name}`,
-        });
         toast.success(`Assigned to ${person.name}`);
         dispatchActionPlanRefresh();
       }}
