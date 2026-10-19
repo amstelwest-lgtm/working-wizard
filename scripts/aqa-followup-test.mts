@@ -236,6 +236,13 @@ assert(
   moves.every((move) => move.actions.every((action) => !/pay faster/i.test(action))),
   "pay-faster steps are dropped",
 );
+assert(
+  moves.every(
+    (move) =>
+      !/tighten receivables|reduce debtor days|shorten debtor days|invoice the same day/i.test(move.title),
+  ),
+  "debtor days of 6 drop the other collection moves too",
+);
 const slow = rankStrategicMoves({ debtorDays: 40, healthByKey: { workingCapitalDays: 20 } });
 assert(slow.some((move) => /pay faster/i.test(move.title)), "slow debtors still get the suggestion");
 

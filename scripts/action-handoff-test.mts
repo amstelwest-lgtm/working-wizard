@@ -6,8 +6,10 @@ import { readFileSync } from "node:fs";
 import {
   agentKeyFromAssignee,
   botPickupCaption,
+  formatAssignmentNote,
   handoffButtonLabel,
   handoffClock,
+  handoffIsSlow,
   handoffProgressCaption,
 } from "../src/lib/action-handoff.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
@@ -57,6 +59,30 @@ assert(
 assert(
   handoffProgressCaption("advisor", "failed") === null,
   "a failed run does not claim progress",
+);
+const notedAt = "2026-10-19T18:31:00.000Z";
+assert(
+  formatAssignmentNote({ note: "Assigned to theo.", at: notedAt, actorLabel: "amstel.west" }) ===
+    `Assigned to theo · by amstel.west · ${handoffClock(notedAt)}`,
+  "a person note names the author and the time",
+);
+assert(
+  formatAssignmentNote({ note: "Handed to Analyst.", at: notedAt, actorLabel: "amstel.west" }) ===
+    `Handed to Analyst · by amstel.west · ${handoffClock(notedAt)}`,
+  "a hand-off note names the author and the time",
+);
+const slowStart = Date.parse("2026-10-19T18:00:00.000Z");
+assert(
+  handoffIsSlow("queued", "2026-10-19T18:00:00.000Z", slowStart + 3 * 60 * 1000) === false,
+  "three minutes is not yet the slow line",
+);
+assert(
+  handoffIsSlow("running", "2026-10-19T18:00:00.000Z", slowStart + 3 * 60 * 1000 + 1),
+  "a run past three minutes is slow",
+);
+assert(
+  handoffIsSlow("succeeded", "2026-10-19T18:00:00.000Z", slowStart + 60 * 60 * 1000) === false,
+  "a finished run is not the slow line",
 );
 assert(
   deskSignoffText("Draft", false) === "Advisory pack · still a draft",
@@ -136,6 +162,12 @@ assert(
   "landing cards open the agent",
 );
 assert(clientPage.includes("withPendingAssignment"), "the accountant home keeps the hand-off on its own row");
+assert(clientPage.includes("openedAt"), "a click keeps Working until a newer run arrives");
+const status = readFileSync("src/components/handoff-run-status.tsx", "utf8");
+assert(status.includes("Working"), "an open hand-off shows Working on the row");
+assert(status.includes("Taking longer than usual ·"), "a slow run names the wait");
+assert(status.includes("data-handoff-retry"), "a slow run can be retried");
+assert(status.includes("handoffIsSlow"), "the retry line waits three minutes");
 assert(clientPage.includes("steerOpenHandoffs"), "each open hand-off shows Working on its bot");
 
 const pane = readFileSync("src/components/milon-team/milon-team-pane.tsx", "utf8");

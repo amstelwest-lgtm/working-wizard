@@ -171,7 +171,10 @@ assert(src.includes("<HandToMenu"), "Act on these hands off through the shared m
 assert(src.includes("commitActionHandoff"), "Hand to writes the assignment");
 assert(src.includes("toast.success"), "an accountant assign toasts");
 assert(src.includes("data-assignment-note") || src.includes("<AssignmentNotes"), "Act on these shows the latest note");
-assert(src.includes("data-agent-pickup"), "a finished run names itself on the row");
+assert(src.includes("HandoffRunStatus"), "Act on these shows Working and the slow retry");
+const runStatus = readFileSync(resolve("src/components/handoff-run-status.tsx"), "utf8");
+assert(runStatus.includes("data-agent-pickup"), "a finished run names itself on the row");
+assert(runStatus.includes("Taking longer than usual ·"), "a slow run offers retry");
 assert(!src.includes("onHandToBot"), "Hand to does not navigate to the Financial Manager");
 assert(src.includes("Draft chase"), "chase button");
 assert(src.includes("Open"), "open button");

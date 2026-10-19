@@ -122,6 +122,13 @@ assert(fn.includes("owner_user_id") && fn.includes("client_memberships"), "the f
 assert(fn.includes("callerMayHandOff"), "the access decision is the shared check");
 assert(fn.includes("action.client_id !== clientId"), "the action must belong to that client");
 assert(fn.includes('rpc("agent_invoke"'), "the runner is triggered with the service role");
+assert(fn.includes("let invokeInputs = inputs"), "the invoke starts from the action key");
+assert(
+  (fn.match(/invokeInputs = againInputs/g) ?? []).length >= 2,
+  "a new second run and a reused queued row both switch to the again key",
+);
+const invoke = fn.slice(fn.indexOf('rpc("agent_invoke"'), fn.indexOf('rpc("agent_invoke"') + 400);
+assert(invoke.includes("inputs: invokeInputs"), "the invoke sends the second-run key");
 assert(fn.includes("decision.runner"), "the invoke target is the resolved runner");
 assert(handoffNeedsFreshRun("succeeded") && handoffNeedsFreshRun("partial") && handoffNeedsFreshRun("failed"), "a finished run is not the current hand-off");
 assert(!handoffNeedsFreshRun("queued") && !handoffNeedsFreshRun("running"), "an open run stays the current hand-off");
@@ -168,6 +175,14 @@ assert(
   commit.indexOf("dispatchActionPlanRefresh") < commit.indexOf("requestOwnerHandoff"),
   "Working is painted before the hand-off function returns",
 );
+assert(commit.includes("since"), "the click time travels with the optimistic row");
+const person = handoffClient.slice(handoffClient.indexOf("export async function assignActionToPerson"));
+assert(
+  person.indexOf("dispatchActionPlanRefresh") < person.indexOf("requestPersonAssignment"),
+  "the person note is painted before the assignment returns",
+);
+assert(person.includes("personAssignmentNote"), "the optimistic person note names the assignee");
+assert(handoffClient.includes("actor_label"), "notes keep the author");
 assert(handoffClient.includes("failed: true"), "a failed hand-off drops the optimistic row");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert a run");
 

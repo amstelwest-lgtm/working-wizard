@@ -680,6 +680,22 @@ const settled = applyLiveRuns(optimistic, [
   { actionItemId: "move", agent: "financial_manager", status: "succeeded", at: "2026-10-19T18:31:22.000Z" },
 ]);
 assert(settled[0]?.open === false, "a finished run settles Working");
+const clicked = withPendingAssignment(
+  [
+    rowAssignment({
+      id: "move",
+      notes: [{ note: "Handed to Milōn Analyst.", at: "2026-10-19T15:00:00.000Z" }],
+      run: { agent: "analyst", status: "succeeded", at: "2026-10-19T15:10:00.000Z" },
+    }),
+  ],
+  { id: "move", agent: "analyst", assigneeName: "Milōn Analyst", since: "2026-10-19T19:00:00.000Z" },
+  { kind: "bot", agent: "analyst", name: "Milōn Analyst", at: "2026-10-19T15:00:00.000Z" },
+);
+assert(clicked[0]?.open === true, "an older hand-off note does not settle the new click");
+const stillWorking = applyLiveRuns(clicked, [
+  { actionItemId: "move", agent: "analyst", status: "succeeded", at: "2026-10-19T15:10:00.000Z" },
+]);
+assert(stillWorking[0]?.open === true, "a finished run from before the click does not clear Working");
 const personRows = [reassignedRow];
 const masked = withoutPersonQueuedRuns(
   [

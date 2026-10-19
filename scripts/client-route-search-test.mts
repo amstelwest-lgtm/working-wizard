@@ -18,7 +18,12 @@ import {
   type CanonicalClientSearch,
 } from "../src/lib/client-route-search";
 import { askAgentFromHash, askHashForAgent, searchWithAskAgent } from "../src/lib/ask-agent";
-import { STRATEGIC_MOVE_CATALOG, rankStrategicMoves } from "../src/lib/strategic-moves";
+import {
+  HEALTHY_DEBTOR_DAYS_MAX,
+  STRATEGIC_MOVE_CATALOG,
+  debtorDaysAreHealthy,
+  rankStrategicMoves,
+} from "../src/lib/strategic-moves";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -359,6 +364,44 @@ assert(
 assert(
   STRATEGIC_MOVE_CATALOG.find((entry) => entry.key === "currentRatio")?.title.includes("Target a current ratio"),
   "the catalog title stays the playbook step",
+);
+assert(HEALTHY_DEBTOR_DAYS_MAX === 30, "healthy debtor days stop at 30");
+assert(debtorDaysAreHealthy(0) && debtorDaysAreHealthy(6) && debtorDaysAreHealthy(30), "0, 6 and 30 days are already healthy");
+assert(
+  !debtorDaysAreHealthy(31) && !debtorDaysAreHealthy(null) && !debtorDaysAreHealthy(undefined) && !debtorDaysAreHealthy(Number.NaN),
+  "unknown or slow days are not healthy",
+);
+const RECEIVABLES_KEYS = [
+  "debtorDays",
+  "workingCapitalDays",
+  "ocfToEbitda",
+  "workingCapitalUtilization",
+  "workingCapitalFunding",
+];
+const collection = rankStrategicMoves({
+  debtorDays: 45,
+  limit: 40,
+  healthByKey: { ocfToEbitda: 80, workingCapitalFunding: 20 },
+});
+const collectionKeys = collection.filter((move) => RECEIVABLES_KEYS.includes(move.key)).map((move) => move.key);
+assert(collectionKeys.length === 1, `receivables collapse to one move, got ${collectionKeys.join(", ")}`);
+assert(collectionKeys[0] === "workingCapitalFunding", "the weaker receivables health ranks first");
+assert(
+  !(
+    collection.some((move) => move.title.startsWith("Tighten receivables")) &&
+    collection.some((move) => move.title.startsWith("Reduce debtor days"))
+  ),
+  "the two collection titles do not both stay",
+);
+const healthyCollections = rankStrategicMoves({ debtorDays: 6, limit: 40 });
+assert(
+  healthyCollections.every((move) => !RECEIVABLES_KEYS.includes(move.key)),
+  "debtor days of 6 drop every receivables move",
+);
+const unknownCollections = rankStrategicMoves({ debtorDays: null, limit: 40 });
+assert(
+  unknownCollections.some((move) => RECEIVABLES_KEYS.includes(move.key)),
+  "unknown debtor days still leave a receivables move",
 );
 
 const linesViaView = accountantClientRouteSearch({ tab: "profit", view: "lines" });
