@@ -13,14 +13,36 @@ export const TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
 export const TRIAL_DISCLAIMER = "AI-generated from sample figures, not reviewed by an accountant.";
 
 /**
- * Accountant signup (Create Firm, Solo monthly preselected). Must stay equal
- * to firmSignupHref() in firm-signup-copy.ts — asserted by test:trial-demo.
+ * Accountant signup (Create Firm, Starter monthly preselected). Must stay
+ * equal to firmSignupHref("starter") — asserted by test:trial-demo.
  * Duplicated here so the /try client chunk does not pull the Stripe catalog.
  */
-export const TRIAL_SIGNUP_HREF = "/auth?signup=true&plan=solo&interval=month";
+export const TRIAL_SIGNUP_HREF = "/auth?signup=true&plan=starter&interval=month";
 
-/** Must stay equal to FIRM_TRIAL_SENTENCE in stripe-plans.ts — asserted by test:trial-demo. */
-export const TRIAL_SIGNUP_SENTENCE = "14-day free trial · up to 3 clients";
+/**
+ * Starter's catalog client limit (5), not the older 3-client trial sentence.
+ * The test checks this against FIRM_BAND_CATALOG.starter.clientLimit.
+ */
+export const TRIAL_SIGNUP_SENTENCE = "14-day free trial · up to 5 clients";
+
+const TRIAL_UTM_KEYS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+] as const;
+
+/** Starter signup, plus any utm params already on the page. Other query keys are dropped. */
+export function trialSignupHref(search = ""): string {
+  const incoming = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const q = new URLSearchParams(TRIAL_SIGNUP_HREF.slice(TRIAL_SIGNUP_HREF.indexOf("?") + 1));
+  for (const key of TRIAL_UTM_KEYS) {
+    const value = incoming.get(key);
+    if (value) q.set(key, value);
+  }
+  return `/auth?${q.toString()}`;
+}
 
 export const TRIAL_CTA_LABEL = "Start free trial";
 

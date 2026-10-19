@@ -85,7 +85,7 @@ import type {
 } from "@/lib/cash-from-banks.types";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
-import { formatCalendarDay, formatMoneyChartTick } from "@/lib/market/format";
+import { formatCalendarDay, formatMoneyChartTick, formatMoneyCompact } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
@@ -577,6 +577,7 @@ export function CashForecastPanel({
   onInvite,
   preview = null,
   includeFloorInDomain = false,
+  spacedChartTicks = false,
 }: {
   clientId?: string;
   clientName?: string;
@@ -619,6 +620,12 @@ export function CashForecastPanel({
    * charts, where the auto domain is unchanged.
    */
   includeFloorInDomain?: boolean;
+  /**
+   * Keep the R gap in abbreviated axis ticks (R 656k). Off on owner and
+   * accountant charts, which stay on the unspaced tick so the label cannot wrap.
+   * US abbreviations stay $656k either way.
+   */
+  spacedChartTicks?: boolean;
   preview?: {
     startDate: string;
     openingBalance: string;
@@ -1885,8 +1892,14 @@ export function CashForecastPanel({
             fontSize={tickSize}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
-            width={enlarged ? 76 : 68}
+            tickFormatter={(v) =>
+              sign(
+                spacedChartTicks
+                  ? formatMoneyCompact(v, market)
+                  : formatMoneyChartTick(v, market),
+              )
+            }
+            width={spacedChartTicks ? 84 : enlarged ? 76 : 68}
             tick={{ fill: "#94a3b8", fontSize: tickSize }}
             domain={
               includeFloorInDomain

@@ -7,6 +7,7 @@
 import { findingKindAllowed } from "@/lib/agent-analyst";
 import { claudeRequestFields } from "@/lib/claude-request";
 import { trialReading, type TrialBoard, type TrialFinding } from "@/lib/trial-demo";
+import { TRIAL_CASH_OPENING_LINE } from "@/lib/trial-sample-view";
 import {
   ANALYST_SYSTEM,
   analystToolSchemas,
@@ -78,7 +79,7 @@ export function trialAnalystUserMessage(board: TrialBoard): string {
     cash_opening: reading.cashOpening,
     cash_low: reading.cashLow,
     cash_week_13: reading.cashClose,
-    cash_note: "Opening cash stays the balance on file. Weekly movements follow the monthly run-rate and are estimated from the profit and loss.",
+    cash_note: `${TRIAL_CASH_OPENING_LINE} Weekly movements follow the monthly run-rate and are estimated from the profit and loss.`,
   };
   return [
     "Sample figures for this trial. There is no ledger. Quote only these numbers. Do not invent a summary score.",

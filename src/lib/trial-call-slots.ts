@@ -113,6 +113,61 @@ export function formatSlotClock(start: Date, timeZone: string): string {
   }).format(start);
 }
 
+/**
+ * Zone shown on /try. A US sample must not label the SAST window when the
+ * laptop clock is still that window. Any other local zone is kept, so a
+ * visitor in California sees Pacific time.
+ */
+export function displaySlotZone(
+  browserZone: string,
+  market?: "US" | "ZA" | null,
+): string {
+  const local = safeTimeZone(browserZone);
+  if (market === "US" && local === CALL_ZONE) return "America/New_York";
+  return local;
+}
+
+/** Short label on each slot. Johannesburg is SAST; US zones stay EDT, PDT, and so on. */
+export function formatSlotZoneShort(start: Date, timeZone: string): string {
+  const zone = safeTimeZone(timeZone);
+  if (zone === CALL_ZONE) return "SAST";
+  return intlZoneName(start, zone, "short");
+}
+
+/** Lead label, such as Eastern Time. Johannesburg stays SAST. */
+export function formatSlotZoneLong(start: Date, timeZone: string): string {
+  const zone = safeTimeZone(timeZone);
+  if (zone === CALL_ZONE) return "SAST";
+  const long = intlZoneName(start, zone, "longGeneric");
+  return long || formatSlotZoneShort(start, zone);
+}
+
+export function formatSlotButton(start: Date, timeZone: string): string {
+  const zone = safeTimeZone(timeZone);
+  const clock = formatSlotClock(start, zone);
+  const label = formatSlotZoneShort(start, zone);
+  return label ? `${clock} ${label}` : clock;
+}
+
+function intlZoneName(
+  start: Date,
+  timeZone: string,
+  timeZoneName: "short" | "longGeneric",
+): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName }).formatToParts(
+      start,
+    );
+    const name = parts.find((part) => part.type === "timeZoneName")?.value?.trim() ?? "";
+    if (timeZoneName === "short" && !/^[A-Z]{2,5}$/.test(name)) {
+      return name.replace(/^GMT/i, "UTC");
+    }
+    return name;
+  } catch {
+    return "";
+  }
+}
+
 /** Stable 24-hour clock for tests and founder mail. */
 export function formatSlotClock24(start: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", {
