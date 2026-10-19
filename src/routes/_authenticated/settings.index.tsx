@@ -333,27 +333,6 @@ function SettingsPage() {
               Client business profiles are edited inside each client workspace.
             </p>
           )}
-
-          <div className="settings-danger">
-            <p className="settings-danger-title">Delete account</p>
-            <p>
-              {isPractice
-                ? "Permanently deletes your practice login, firms you own, and practice clients you created. This cannot be undone."
-                : "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."}
-            </p>
-            <Button
-              type="button"
-              variant="destructive"
-              className="mt-3"
-              onClick={() => {
-                setConfirmText("");
-                setConfirmOpen(true);
-              }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete my account
-            </Button>
-          </div>
         </div>
       </SectionCard>
 
@@ -412,7 +391,11 @@ function SettingsPage() {
                 <p className="settings-value">Plan status unavailable</p>
               ) : (
                 <>
-                  <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
+                  <p className="settings-value">
+                    {plan?.phase === "trialing"
+                      ? `${plan.headline ?? "Trial"}${plan.trialEndsOn ? ` · ends ${plan.trialEndsOn}` : ""}`
+                      : (plan?.headline ?? "No active plan")}
+                  </p>
                   {plan?.starterTrial && !trialEnded ? (
                     firmStarterTrialCountdownCopy(plan.starterTrial) ? (
                       <p role="status" className="text-sm">
@@ -576,6 +559,27 @@ function SettingsPage() {
           Sign out
         </button>
       </SectionCard>
+
+      <section id="danger-zone" className="settings-danger mb-6" aria-label="Danger zone">
+        <p className="settings-danger-title">Danger zone</p>
+        <p>
+          {isPractice
+            ? "Permanently deletes your practice login, firms you own, and practice clients you created. This cannot be undone."
+            : "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."}
+        </p>
+        <Button
+          type="button"
+          variant="destructive"
+          className="mt-3"
+          onClick={() => {
+            setConfirmText("");
+            setConfirmOpen(true);
+          }}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete my account
+        </Button>
+      </section>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent className="border-[var(--line)] bg-[var(--bg-2)] text-[var(--ink)]">

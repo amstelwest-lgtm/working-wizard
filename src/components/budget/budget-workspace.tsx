@@ -14,6 +14,7 @@ import type {
   BudgetTemplateId,
   UnmappedDriver,
 } from "@/lib/budget.types";
+import { budgetRentHint, type ForecastRent } from "@/lib/budget-forecast-rent";
 import { budgetPriceLabel, budgetVolumeLabel, hotelDriversOnFile, hotelLineDisplayName, hotelTemplateRows } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { currentBudgetMonth, fyMonths, formatMonthLabel, plainBudgetWindowHeading } from "@/lib/budget.months";
@@ -83,6 +84,7 @@ export function BudgetWorkspace({
   priorYearMonths = null,
   displayTemplateId = null,
   statementAligned = false,
+  forecastRent = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -111,6 +113,8 @@ export function BudgetWorkspace({
   displayTemplateId?: BudgetTemplateId | null;
   /** Untouched template shown from the statement. Rent stays unstated. */
   statementAligned?: boolean;
+  /** Rent already in the 13-week forecast. Blank premises follows it. */
+  forecastRent?: ForecastRent | null;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -146,6 +150,7 @@ export function BudgetWorkspace({
           priorYearMonths={priorYearMonths}
           displayTemplateId={displayTemplateId}
           statementAligned={statementAligned}
+          forecastRent={forecastRent}
         />
       </div>
     );
@@ -174,6 +179,7 @@ export function BudgetWorkspace({
       actualMonths={actualMonths}
       displayTemplateId={displayTemplateId}
       statementAligned={statementAligned}
+      forecastRent={forecastRent}
     />
   );
 }
@@ -290,6 +296,7 @@ function BudgetComplexWorkspace({
   actualMonths,
   displayTemplateId = null,
   statementAligned = false,
+  forecastRent = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -312,10 +319,12 @@ function BudgetComplexWorkspace({
   actualMonths?: readonly BudgetActualMonth[];
   displayTemplateId?: BudgetTemplateId | null;
   statementAligned?: boolean;
+  forecastRent?: ForecastRent | null;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
+  const rentHint = budgetRentHint(doc, forecastRent, money, statementAligned);
   const monthLabel = (ym: string) => formatMonthLabel(ym, market);
   const tax = doc.tax;
   const usTax = tax?.regime === "sales_tax" || tax?.regime === "none";
@@ -876,6 +885,7 @@ function BudgetComplexWorkspace({
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             Fixed overheads
           </h3>
+          {rentHint ? <p className="mt-1 text-[11px] text-slate-500">{rentHint}</p> : null}
         </div>
         <ScrollableTable className="rounded-lg border border-[#DBEAFE] dark:border-slate-800">
           <table className="milon-data-table w-full min-w-[640px] text-xs text-[#0f172a] dark:text-slate-100">
@@ -896,9 +906,11 @@ function BudgetComplexWorkspace({
                     {oh.name}
                   </td>
                   {focusMonths.map((m) => {
+                    const amount = oh.months[m] ?? 0;
                     const unstated =
                       statementAligned &&
-                      (oh.bucket === "premises" || oh.bucket === "sales" || oh.bucket === "other");
+                      (oh.bucket === "premises" || oh.bucket === "sales" || oh.bucket === "other") &&
+                      Math.abs(amount) < 0.5;
                     return (
                     <td key={m} className="px-1 py-1">
                       {unstated ? (

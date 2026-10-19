@@ -7,6 +7,7 @@ import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { AgentChipIcon } from "@/components/chrome-icons";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
+import { taxSampleCardVisible } from "@/lib/tax-specialist/enabled";
 import { FirmStartHereLoader } from "@/components/firm-band-upgrade";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
@@ -31,6 +32,9 @@ function voiceNodes(line: string): ReactNode[] {
   if (last < line.length) nodes.push(line.slice(last));
   return nodes.length > 0 ? nodes : [line];
 }
+
+const HOME_LEDE = "Three agents watching the books — ask them anything, any time.";
+const ZA_HOME_LEDE = "Your agents are watching the books — ask them anything, any time.";
 
 export type OwnerBotLayout = "row" | "stack";
 
@@ -145,7 +149,7 @@ export function OwnerHome({
   audience,
   sampleClient = false,
   title = "Your finance team",
-  lede = "Three agents watching the books — ask them anything, any time.",
+  lede = HOME_LEDE,
   showInvite = true,
   firmId = null,
 }: {
@@ -174,16 +178,18 @@ export function OwnerHome({
   /** Sample figures that are too small to be this business's rands. */
   notice?: string | null;
   inviteClientId?: string | null;
-  /** Resolved market. The sample card loads only when this is ZA. */
+  /** Resolved market. The home card loads only when this is ZA. */
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
-  /** clients.is_demo. Real clients do not get the sample tax card. */
+  /** clients.is_demo. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
   /** Firm whose current plan carries the Start here badge. */
   firmId?: string | null;
 }) {
   const handoff = presence.handoff;
   const sampleAudience = audience ?? (showInvite ? "owner" : "accountant");
+  const taxCardOn = taxSampleCardVisible(marketCountry, sampleClient);
+  const shownLede = taxCardOn && lede === HOME_LEDE ? ZA_HOME_LEDE : lede;
   const [bots, setBots] = useState<OwnerBotLayout>(() =>
     ownerBotLayout(typeof window === "undefined" ? "" : window.location.search),
   );
@@ -197,7 +203,7 @@ export function OwnerHome({
       <div className="owner-head">
         <p className="owner-eyebrow">Home</p>
         <h1 className="owner-title">{title}</h1>
-        <p className="owner-lede">{lede}</p>
+        <p className="owner-lede">{shownLede}</p>
         <FirmStartHereLoader firmId={firmId} />
         {notice ? (
           <p className="owner-lede" role="status" data-sample-notice="">
@@ -290,7 +296,13 @@ export function OwnerHome({
             sampleClient={sampleClient}
           />
         </div>
-        <TaxSpecialistSlot country={marketCountry} variant="fm-handoff" audience={sampleAudience} />
+        {taxCardOn ? null : (
+          <TaxSpecialistSlot
+            country={marketCountry}
+            variant="fm-handoff"
+            audience={sampleAudience}
+          />
+        )}
         {handoff ? (
           <HandoffBeam
             sentence={handoff.sentence}

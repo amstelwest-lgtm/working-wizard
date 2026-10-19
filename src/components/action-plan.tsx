@@ -24,8 +24,9 @@ import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
-import { handoffAssigneeName } from "@/lib/owner-handoff";
-import { agentKeyFromAssignee, handoffProgressCaption } from "@/lib/action-handoff";
+import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
+import { botPickupCaption } from "@/lib/action-handoff";
+import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
@@ -38,6 +39,14 @@ import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
+import { formatCalendarDay } from "@/lib/market/format";
+import {
+  countActionPlan,
+  currentQuarterLabel,
+  defaultTargetDate,
+  displayedPlanPeriod,
+  formatActionPlanCounts,
+} from "@/lib/action-plan-counts";
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
 import { practiceRoleLabel } from "@/lib/practice-access";
 import { planAutomation, type ActionAutomationRow } from "@/lib/action-plan-automation";
@@ -438,25 +447,18 @@ const STATUS_LABEL: Record<Status, string> = {
   blocked: "Blocked",
 };
 
-function defaultPeriodLabel() {
-  const now = new Date();
-  return `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}`;
-}
+const PLAN_DAY: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+};
+
+export { defaultTargetDate };
+
 function isoDay(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
-}
-
-/** Quarter end, moved forward when that day is today or already past. */
-export function defaultTargetDate(now = new Date()) {
-  const q = Math.floor(now.getMonth() / 3);
-  let end = new Date(now.getFullYear(), q * 3 + 3, 0);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (end.getTime() <= today.getTime()) {
-    end = new Date(now.getFullYear(), q * 3 + 6, 0);
-  }
-  return isoDay(end);
 }
 
 export function planTargetIsOverdue(targetDate: string, now = new Date()): boolean {
@@ -493,7 +495,7 @@ export default function ActionPlanPanel({
   ownerSignoffStale = false,
   cashBelowFloor = false,
 }: Props) {
-  const { date } = useMarketFormat();
+  const { market } = useMarketFormat();
   const { profile, firms, firmId } = useAccountantProfile();
   const firmOwnerUserId = firms.find((firm) => firm.id === firmId)?.owner_user_id ?? null;
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -523,8 +525,9 @@ export default function ActionPlanPanel({
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const [comingSoon, setComingSoon] = useState<Record<string, Partial<Record<AgentKey, true>>>>({});
-  const [pickups, setPickups] = useState<Record<string, { agent: AgentKey; status: string }>>({});
-  const draftActivity = useAgentActivity(ownerView ? clientId : "");
+  const [pickups, setPickups] = useState<Record<string, { agent: AgentKey; status: string; at: string }>>({});
+  const [itemNotes, setItemNotes] = useState<Record<string, AssignmentNoteRow[]>>({});
+  const draftActivity = useAgentActivity(clientId);
   const draftFindings = useMemo(
     () => draftActivity.findings.filter((row) => row.status === "approved" || draftFindingLabel(row) != null),
     [draftActivity.findings],
@@ -560,7 +563,7 @@ export default function ActionPlanPanel({
           .from("action_plans")
           .insert({
             client_id: clientId,
-            period_label: defaultPeriodLabel(),
+            period_label: currentQuarterLabel(),
             outcome_goal: "Set your outcome goal for this quarter",
             target_date: defaultTargetDate(),
           })
@@ -638,11 +641,16 @@ export default function ActionPlanPanel({
           if (stored?.kind === "person") return { ...item, owner_name: stored.name };
           return item;
         });
+        const noteState: Record<string, AssignmentNoteRow[]> = {};
+        for (const [id, notes] of grouped) noteState[id] = notes;
+        setItemNotes(noteState);
+      } else {
+        setItemNotes({});
       }
       setItems(shown);
       if (list.length) {
         const runs = await loadActionHandoffRuns(list.map((item) => item.id));
-        const next: Record<string, { agent: AgentKey; status: string }> = {};
+        const next: Record<string, { agent: AgentKey; status: string; at: string }> = {};
         for (const [id, run] of runs) next[id] = run;
         setPickups(next);
       } else {
@@ -756,6 +764,25 @@ export default function ActionPlanPanel({
     window.addEventListener("milon-action-plan-refresh", onRefresh);
     return () => window.removeEventListener("milon-action-plan-refresh", onRefresh);
   }, [refresh]);
+
+  const refreshedFinish = useRef(new Set<string>());
+  useEffect(() => {
+    let due = false;
+    for (const run of draftActivity.runs) {
+      const id = run.action_item_id;
+      if (!id || (run.status !== "succeeded" && run.status !== "partial")) continue;
+      const pickup = pickups[id];
+      if (!pickup || pickup.agent !== run.agent) continue;
+      if (pickup.status !== "queued" && pickup.status !== "running") continue;
+      const key = `${id}:${run.id}`;
+      if (refreshedFinish.current.has(key)) continue;
+      refreshedFinish.current.add(key);
+      due = true;
+    }
+    if (!due) return;
+    const timer = window.setTimeout(() => void refresh(), 400);
+    return () => window.clearTimeout(timer);
+  }, [draftActivity.runs, pickups, refresh]);
 
   const exportPdf = async () => {
     setExportingPdf(true);
@@ -1010,9 +1037,7 @@ export default function ActionPlanPanel({
           employeeName: owner.name.split(" ")[0],
           taskTitle: it.title,
           outcomeWhy: stripMilonProjection(it.outcome_why) || undefined,
-          dueDate: it.due_date
-            ? date(it.due_date + "T00:00:00", { day: "numeric", month: "long", year: "numeric" })
-            : undefined,
+          dueDate: it.due_date ? formatCalendarDay(it.due_date, market, PLAN_DAY) : undefined,
           periodLabel: plan?.period_label,
           milestones: ms.map((m) => ({ week_no: m.week_no, label: m.label })),
           taskUrl: url,
@@ -1128,7 +1153,25 @@ export default function ActionPlanPanel({
   };
 
   // ── Derived views ─────────────────────────────────────────────────────────────
-  const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
+  const enriched = useMemo(
+    () =>
+      items.map((i) => ({
+        ...i,
+        health: deriveActionHealth({ ...i, plan_target: plan?.target_date ?? null }),
+      })),
+    [items, plan?.target_date],
+  );
+  const planCounts = useMemo(
+    () =>
+      countActionPlan(
+        items.map((item) => ({
+          status: item.status,
+          dueDate: item.due_date,
+          planTarget: plan?.target_date ?? null,
+        })),
+      ),
+    [items, plan?.target_date],
+  );
   const automation = useMemo(() => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -1336,8 +1379,7 @@ export default function ActionPlanPanel({
                 Actions
               </CardTitle>
               <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
-                {enriched.filter((i) => i.status !== "done").length} open · assigned work, visible
-                progress
+                {formatActionPlanCounts(planCounts)}
               </span>
             </div>
             {ownerView ? (
@@ -1571,12 +1613,34 @@ export default function ActionPlanPanel({
                   setTeamOpen(true);
                 }}
                 comingSoon={comingSoon[it.id]}
+                notes={itemNotes[it.id] ?? []}
                 pickupLabel={(() => {
-                  const run = pickups[it.id];
-                  if (!run) return null;
-                  const assigned = agentKeyFromAssignee(it.owner_name);
-                  if (assigned && assigned !== run.agent) return null;
-                  return handoffProgressCaption(run.agent, run.status);
+                  const notes = itemNotes[it.id] ?? [];
+                  const stored = pickups[it.id] ?? null;
+                  let live: { agent: AgentKey; status: string; at: string; summary: string } | null = null;
+                  for (const run of draftActivity.runs) {
+                    if (run.action_item_id !== it.id) continue;
+                    const at = run.finished_at || run.queued_at;
+                    if (!live || at > live.at) {
+                      live = { agent: run.agent, status: run.status, at, summary: run.summary ?? "" };
+                    }
+                  }
+                  const run =
+                    live && stored && live.agent === stored.agent && live.at >= (stored.at || "")
+                      ? { agent: live.agent, status: live.status, at: live.at }
+                      : stored;
+                  const storedResult = latestHandoffResult(notes);
+                  const liveResult =
+                    live && (live.status === "succeeded" || live.status === "partial") && live.summary.trim()
+                      ? { text: live.summary.trim(), at: live.at }
+                      : null;
+                  const result = storedResult ?? liveResult;
+                  return botPickupCaption({
+                    assignee: it.owner_name,
+                    run,
+                    result: result?.text,
+                    resultAt: result?.at,
+                  });
                 })()}
                 suggestion={automationById.get(it.id) ?? null}
                 onHandOff={isOwner ? (agent) => void assignToAgent(it, agent) : undefined}
@@ -1801,7 +1865,7 @@ function GoalHeader({
   isOwner?: boolean;
   onChange: (patch: Partial<Plan>) => void;
 }) {
-  const { date, number } = useMarketFormat();
+  const { number, market } = useMarketFormat();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(plan);
   useEffect(
@@ -1837,7 +1901,7 @@ function GoalHeader({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#102A43] dark:text-[#0B5FFF]/80">
-                {plan.period_label} · Outcome goal
+                {displayedPlanPeriod(plan.period_label, stripMilonProjection(plan.outcome_goal))} · Outcome goal
               </span>
               {isOwner && (
                 <button
@@ -1868,12 +1932,7 @@ function GoalHeader({
                 ) : null}
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   <CalendarDays className="mr-1 inline h-3.5 w-3.5" />
-                  Target{" "}
-                  {date(plan.target_date + "T00:00:00", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
+                  Target {formatCalendarDay(plan.target_date, market, PLAN_DAY)}
                   {goalOverdue ? (
                     <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Target date has passed</span>
                   ) : null}
@@ -2141,6 +2200,7 @@ function ItemRow({
   onAssignPerson,
   comingSoon,
   pickupLabel,
+  notes = [],
   focused,
   suggestion,
 }: {
@@ -2168,8 +2228,9 @@ function ItemRow({
   comingSoon?: Partial<Record<AgentKey, true>>;
   /** Set when a queued run for this action has started or finished. */
   pickupLabel?: string | null;
+  notes?: readonly AssignmentNoteRow[];
 }) {
-  const { date } = useMarketFormat();
+  const { date, market } = useMarketFormat();
   const h = healthMeta(item.health);
   const overdue = item.health === "overdue";
   const [editTitle, setEditTitle] = useState(false);
@@ -2344,18 +2405,21 @@ function ItemRow({
       <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-28">
         {!item.due_date && suggestion?.dueSuggested && suggestion.dueDate ? (
           <span data-due-suggested="" className="block px-1 text-[10px] font-medium text-slate-500">
-            Due {suggestion.dueDate} · suggested
+            Due {formatCalendarDay(suggestion.dueDate, market, PLAN_DAY)} · suggested
+          </span>
+        ) : !isOwner ? (
+          <span
+            className={`block px-1 py-1 text-xs font-medium tabular-nums ${overdue ? "font-bold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}`}
+          >
+            {item.due_date ? formatCalendarDay(item.due_date, market, PLAN_DAY) : "—"}
           </span>
         ) : (
           <input
             type="date"
             value={item.due_date ?? ""}
-            onChange={
-              isOwner ? (e) => onPatch({ due_date: e.target.value || null } as any) : undefined
-            }
+            onChange={(e) => onPatch({ due_date: e.target.value || null } as any)}
             onClick={(e) => e.stopPropagation()}
-            readOnly={!isOwner}
-            className={`w-full rounded-md border-0 bg-transparent px-1 py-1 text-xs font-medium tabular-nums ${isOwner ? "cursor-pointer" : "cursor-default"} ${overdue ? "text-[#ef4444] font-bold" : "text-slate-700 dark:text-slate-300"}`}
+            className={`w-full cursor-pointer rounded-md border-0 bg-transparent px-1 py-1 text-xs font-medium tabular-nums ${overdue ? "font-bold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}`}
           />
         )}
       </div>
@@ -2398,7 +2462,7 @@ function ItemRow({
           {lastNudge ? (
             <span
               className={`inline-flex items-center gap-1 text-[10px] font-semibold dark:text-[#F4F7FB] ${lastNudge.email_type === "nudge" ? "text-[#102A43]" : "text-[#C43D4B]"}`}
-              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? date(lastNudge.sent_at, { day: "numeric", month: "short", year: "numeric" }) : ""}`}
+              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? date(lastNudge.sent_at, PLAN_DAY) : ""}`}
             >
               <Mail className="h-3 w-3" />
               {lastNudge.email_type === "nudge" ? "Nudged" : "Overdue"}
@@ -2414,7 +2478,7 @@ function ItemRow({
           ) : null}
           {lastNudge?.sent_at && (
             <span className="text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-              {date(lastNudge.sent_at, { day: "numeric", month: "short" })}
+              {date(lastNudge.sent_at, PLAN_DAY)}
             </span>
           )}
         </div>
@@ -2431,35 +2495,38 @@ function ItemRow({
         <ChevronRight className="h-3.5 w-3.5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600" />
       </div>
       </div>
-      {onHandOff ? (
-        <div className="px-3 pb-3 sm:px-4">
-          <HandToMenu
-            employees={employees}
-            assignee={item.owner_name}
-            comingSoon={comingSoon}
-            audience={isOwner ? "owner" : "accountant"}
-            onAssignAgent={onHandOff}
-            onAssignPerson={(person) => {
-              if (onAssignPerson) {
-                onAssignPerson(person);
-                return;
-              }
-              onPatch(
-                {
-                  owner_id: person.id,
-                  owner_name: person.name,
-                  owner_email: person.email,
-                  sent_at: null,
-                },
-                { note: `Assigned to ${person.name}` },
-              );
-            }}
-          />
+      {onHandOff || pickupLabel || notes.length > 0 ? (
+        <div className="px-3 pb-3 sm:px-4" onClick={(event) => event.stopPropagation()}>
+          {onHandOff ? (
+            <HandToMenu
+              employees={employees}
+              assignee={item.owner_name}
+              comingSoon={comingSoon}
+              audience={isOwner ? "owner" : "accountant"}
+              onAssignAgent={onHandOff}
+              onAssignPerson={(person) => {
+                if (onAssignPerson) {
+                  onAssignPerson(person);
+                  return;
+                }
+                onPatch(
+                  {
+                    owner_id: person.id,
+                    owner_name: person.name,
+                    owner_email: person.email,
+                    sent_at: null,
+                  },
+                  { note: `Assigned to ${person.name}` },
+                );
+              }}
+            />
+          ) : null}
           {pickupLabel ? (
             <p className="mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
               {pickupLabel}
             </p>
           ) : null}
+          <AssignmentNotes notes={notes} />
         </div>
       ) : null}
     </div>
@@ -3520,14 +3587,13 @@ function VizCard({ title, children }: { title: string; children: React.ReactNode
 export function formatActionHealthSummary(counts: Record<Health, number>): string {
   const open =
     counts.on_track + counts.at_risk + counts.off_track + counts.overdue + (counts.not_started ?? 0);
-  const parts = [`${open} open`];
-  if (counts.not_started) parts.push(`${counts.not_started} not started`);
-  if (counts.on_track) parts.push(`${counts.on_track} on track`);
-  if (counts.at_risk) parts.push(`${counts.at_risk} at risk`);
-  if (counts.off_track) parts.push(`${counts.off_track} off track`);
-  if (counts.overdue) parts.push(`${counts.overdue} overdue`);
-  if (counts.complete) parts.push(`${counts.complete} done`);
-  return parts.join(" · ");
+  const done = counts.complete ?? 0;
+  return formatActionPlanCounts({
+    total: open + done,
+    open,
+    done,
+    overdue: counts.overdue ?? 0,
+  });
 }
 
 function HealthDonut({

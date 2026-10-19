@@ -23,7 +23,7 @@ import {
 import { BackLink } from "@/components/back-link";
 import { ARAP_GOLD_BTN, ArapAnswerStrip } from "@/components/arap-answer-strip";
 import { ReviewInputsDrawer } from "@/components/review-inputs-drawer";
-import { reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
+import { reportStripNames, reportsAnswerSentence, reportsPrimaryLabel } from "@/lib/reports-drafter-copy";
 import { reportLinkOpensPreview } from "@/lib/report-preview";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -3601,6 +3601,8 @@ export type ReportsStudioProps = {
   inputs?: ReactNode;
   /** When set, the embedded catalogue shows only these report keys. */
   onlyKeys?: readonly string[];
+  /** Parent already has figures, so a remount does not say "No reports yet". */
+  figuresOnFile?: boolean;
 };
 
 /** Opening a report page keeps the catalogue. Preview and download are explicit. */
@@ -3621,6 +3623,7 @@ export function ReportsStudio({
   sourceChip = null,
   inputs = null,
   onlyKeys,
+  figuresOnFile = false,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId, brandLoading } = useAccountantProfile();
@@ -4073,8 +4076,16 @@ export function ReportsStudio({
   const readyReports = clientData?.hasData
     ? REPORTS.filter((report) => !unavailableFor(report.key))
     : [];
+  const catalogueNames = REPORTS.map((report) => reportCopy(report, reportMarket).name);
+  const stripNames = reportStripNames({
+    loadedNames: clientData
+      ? readyReports.map((report) => reportCopy(report, reportMarket).name)
+      : null,
+    figuresOnFile,
+    catalogueNames,
+  });
   const reportsSentence = reportsAnswerSentence({
-    readyNames: readyReports.map((report) => reportCopy(report, reportMarket).name),
+    readyNames: stripNames,
     periodLabel: clientData?.dataPeriodLabel || null,
   });
   const openPrimaryReport = () => {
@@ -4229,7 +4240,7 @@ export function ReportsStudio({
                     disabled={studioBusy}
                     onClick={openPrimaryReport}
                   >
-                    {studioBusy ? "Loading…" : reportsPrimaryLabel(readyReports.length)}
+                    {studioBusy ? "Loading…" : reportsPrimaryLabel(stripNames.length)}
                   </button>
                   {onlyKeys?.length === 1 ? null : (
                   <button

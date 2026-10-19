@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
+import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 import { useAppChromeReady } from "@/contexts/app-chrome-ready";
 import { authenticatedLayoutLinks } from "@/styles/app-route-styles";
 
 function FirmShellLoading() {
-  return (
-    <div className="min-h-screen grid place-items-center bg-background text-foreground">Loading…</div>
-  );
+  return <BootSkeleton />;
 }
 
 export const Route = createFileRoute("/_authenticated")({

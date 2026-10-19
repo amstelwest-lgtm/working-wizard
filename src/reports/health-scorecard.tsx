@@ -396,7 +396,7 @@ export function HealthScorecardPDF({
       {/* Overall score band */}
       <View style={styles.scoreBand}>
         <View style={styles.scoreLeft}>
-          <Text style={[styles.overallNumber, { color: overallColor }]}>
+          <Text style={[styles.overallNumber, { color: "#0B5FFF" }]}>
             {overallScore != null ? overallScore : "—"}
           </Text>
           <Text style={styles.outOf}>OVERALL SCORE / 100</Text>

@@ -41,7 +41,7 @@ export const C = {
   amberSoft: "#fbf6ee",
   amberDeep: "#8A5A12",
 
-  // Hairlines follow cobalt. Gold stays off the report canvas.
+  // Hairlines and the score accent follow cobalt. Gold stays off the report canvas.
   gold: "#0B5FFF",
 } as const;
 

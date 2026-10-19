@@ -66,6 +66,11 @@ export function signoffStatusLine(input: {
   variant?: "full" | "short";
   /** Optional prefix, e.g. "Financials: signed off · figures changed". */
   scopeLabel?: string | null;
+  /**
+   * Replaces the default stale clause and keeps the sign-off date.
+   * Budget uses "figures changed since sign-off".
+   */
+  staleClause?: string | null;
 }): string {
   const line = signoffStatusBody(input);
   const scope = input.scopeLabel?.trim() || "";
@@ -78,6 +83,7 @@ function signoffStatusBody(input: {
   name?: string | null;
   date?: string | null;
   variant?: "full" | "short";
+  staleClause?: string | null;
 }): string {
   if (input.kind === "ready") return SIGNOFF_STATUS_READY;
   const name = input.name?.trim() || "";
@@ -87,11 +93,29 @@ function signoffStatusBody(input: {
     if (name) return `Signed off by ${name}`;
   }
   if (input.kind === "stale") {
+    const clause = input.staleClause?.trim() || "";
+    if (clause) {
+      const date = input.date?.trim() || "";
+      const who = name ? `Signed off by ${name}` : "Signed off";
+      if (date) return `${who} · ${date} · ${clause}`;
+      return name ? `Signed off by ${name} · ${clause}` : clause;
+    }
     if (input.variant === "short") return SIGNOFF_STATUS_STALE_SHORT;
     if (name) return `Signed off by ${name} · ${PAGE_FIGURES_CHANGED_CLAUSE}`;
     return PAGE_FIGURES_CHANGED_CLAUSE;
   }
   return SIGNOFF_STATUS_DRAFT;
+}
+
+/** True when an input clock is later than the signature, past the same-sitting grace. */
+export function inputsChangedSinceSignoff(
+  signedOffAt: string | null | undefined,
+  inputsUpdatedAt: string | null | undefined,
+): boolean {
+  const signed = Date.parse(signedOffAt ?? "");
+  const updated = Date.parse(inputsUpdatedAt ?? "");
+  if (!Number.isFinite(signed) || !Number.isFinite(updated)) return false;
+  return updated > signed + SIGNED_PERIOD_GRACE_MS;
 }
 
 /** Uploads that land in the same sitting as the signature are the signed period. */

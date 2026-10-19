@@ -530,6 +530,7 @@ export async function loadFirmPlanDisplay(input: {
       band: null,
       headline: null,
       detail: null,
+      trialEndsOn: null,
       clientCount: null,
       clientLimit: null,
       usageLabel: null,

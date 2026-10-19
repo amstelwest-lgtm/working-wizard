@@ -152,17 +152,9 @@ export function SageConnectCard({
 
   if (configured === false) {
     return (
-      <div className="ledger-connect ledger-connect--dashed">
+      <div className="ledger-connect ledger-connect--dashed" data-sage-connect="soon">
         <p className="ledger-connect__kicker">Sage Accounting</p>
-        <p className="ledger-connect__body">
-          Sage sync isn&apos;t switched on for this workspace yet. You are not stuck: export a
-          P&amp;L and balance sheet from Sage (Excel, CSV or PDF) and upload them — the board
-          fills in the same way.
-        </p>
-        <p className="ledger-connect__meta">
-          Admins: set <code className="ledger-connect__code">SAGE_SA_API_KEY</code> and{" "}
-          <code className="ledger-connect__code">SAGE_SA_PASSWORD_KEY</code> to enable live connect.
-        </p>
+        <p className="ledger-connect__body">Coming soon</p>
       </div>
     );
   }

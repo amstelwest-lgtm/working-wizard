@@ -382,7 +382,7 @@ export function cashFloorCopy(input: {
     chip: alert ? CASH_FLOOR_ALERT : null,
     healthCue:
       alert && input.market
-        ? `Below your ${shortFloorAmount(floor, input.market)} minimum · see FM`
+        ? `Below your ${shortFloorAmount(floor, input.market)} minimum · Financial Manager`
         : null,
   };
 }

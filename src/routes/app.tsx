@@ -2128,8 +2128,8 @@ function Index() {
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
   const [planTick, setPlanTick] = useState(0);
-  // Owner Home reloads each action row from this event. The assignee and the
-  // Working card come from that stored hand-off, the same read as client Home.
+  // Owner Home reloads each action row from this event. Hand to flips the card
+  // to Working immediately, then the stored run settles it, the same read as client Home.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);
     window.addEventListener("milon-action-plan-refresh", bump);
@@ -3981,6 +3981,7 @@ function Index() {
           )}
           <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
             {showOwnerDoor ? (
+              // Demo clients keep the sample card. Real clients get the preview card.
               <OwnerDoor
                 bot={oauthReturn.bot ?? null}
                 planTick={planTick}

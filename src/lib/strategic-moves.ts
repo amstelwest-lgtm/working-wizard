@@ -443,6 +443,22 @@ export function planGoalIsOverdue(
   return day < today;
 }
 
+const PRICE_CLUSTER = /\braise prices\b|\bincrease prices\b/i;
+const FIXED_VARIABLE_CLUSTER = /\bfixed (?:contracts|costs)\b[\s\S]{0,80}\bvariable\b/i;
+
+/** Near-duplicate catalog titles collapse after ranking. Catalog text stays. */
+function moveCluster(title: string): string | null {
+  if (PRICE_CLUSTER.test(title)) return "price";
+  if (FIXED_VARIABLE_CLUSTER.test(title)) return "fixed-variable";
+  return null;
+}
+
+/** The current-ratio catalog title is a target, not a move. Use its doable step. */
+function rankedMoveTitle(entry: StrategicMoveEntry): string {
+  if (entry.key !== "currentRatio") return entry.title;
+  return entry.actions.find((line) => /refinanc/i.test(line)) ?? entry.title;
+}
+
 function eisenhowerOf(health: number, impact: number): StrategicEisenhower {
   const urgent = Number.isFinite(health) && health < 60;
   const important = impact >= 7;
@@ -488,7 +504,7 @@ export function rankStrategicMoves(input: {
     typeof input.financingHealth === "number" && Number.isFinite(input.financingHealth)
       ? input.financingHealth
       : null;
-  return entries
+  const ranked = entries
     .map((entry) => {
       const raw = entry.key === "equityMultiplier" && financing != null ? financing : healthByKey[entry.key];
       const health = typeof raw === "number" && Number.isFinite(raw) ? raw : Number.NaN;
@@ -502,12 +518,23 @@ export function rankStrategicMoves(input: {
         : [...entry.actions];
       return {
         ...entry,
+        title: rankedMoveTitle(entry),
         actions,
         health,
         score,
         eisenhower: eisenhowerOf(health, entry.impact),
       };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+    .sort((a, b) => b.score - a.score);
+  const seen = new Set<string>();
+  const deduped: RankedStrategicMove[] = [];
+  for (const move of ranked) {
+    const cluster = moveCluster(move.title);
+    if (cluster) {
+      if (seen.has(cluster)) continue;
+      seen.add(cluster);
+    }
+    deduped.push(move);
+  }
+  return deduped.slice(0, limit);
 }

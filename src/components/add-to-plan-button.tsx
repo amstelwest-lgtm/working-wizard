@@ -3,18 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, ListPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SIGNOFF_GOLD_BTN } from "@/components/review-signoff";
+import { currentQuarterLabel, defaultTargetDate } from "@/lib/action-plan-counts";
 
 const STRIP_GOLD_BTN = `${SIGNOFF_GOLD_BTN} answer-strip__primary`;
-
-function defaultPeriodLabel() {
-  const now = new Date();
-  return `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}`;
-}
-function defaultTargetDate() {
-  const now = new Date();
-  const q = Math.floor(now.getMonth() / 3);
-  return new Date(now.getFullYear(), q * 3 + 3, 0).toISOString().slice(0, 10);
-}
 
 interface Props {
   clientId: string | null | undefined;
@@ -51,7 +42,7 @@ export async function ensureMoveActionItem(input: {
       .from("action_plans")
       .insert({
         client_id: input.clientId,
-        period_label: defaultPeriodLabel(),
+        period_label: currentQuarterLabel(),
         outcome_goal: "Set your outcome goal for this quarter",
         target_date: defaultTargetDate(),
       })

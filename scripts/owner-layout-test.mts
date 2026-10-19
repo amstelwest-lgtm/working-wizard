@@ -327,7 +327,7 @@ const pillarCard = [...document.querySelectorAll(".health-summary-card")].find((
 assert(pillarCard instanceof HTMLElement, "the accountant cash pillar is the summary card");
 const pillarCash = pillarCard.querySelector("button");
 assert(pillarCash instanceof HTMLButtonElement, "the cash summary drills from a button");
-assert(pillarCard.textContent?.includes("Tap to see more") === true, "the drill cue stays");
+assert(pillarCard.textContent?.includes("See more") === true, "the drill cue stays");
 assert(pillarCard.textContent?.includes("Add a past period") === true, "the past-period link stays on the card");
 assert(pillarCard.textContent?.includes("See it on Cash") === true, "the cash evidence link stays");
 assert(pillarCard.textContent?.includes(accountantFloor.healthCue!) === true, "the floor line is on the cash card");

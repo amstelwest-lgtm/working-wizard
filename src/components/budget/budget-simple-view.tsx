@@ -25,6 +25,7 @@ import { ownerYearFromStatement, type BudgetYearMoney } from "@/lib/budget-year-
 import type { BudgetActualMonth, BudgetLens } from "@/lib/budget-chart-table";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
+import { budgetRentHint, type ForecastRent } from "@/lib/budget-forecast-rent";
 import { ownerMinus } from "@/lib/owner-money";
 import {
   budgetDaysNeedReview,
@@ -116,6 +117,7 @@ export function BudgetSimpleView({
   priorYearMonths = null,
   displayTemplateId = null,
   statementAligned = false,
+  forecastRent = null,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -142,6 +144,7 @@ export function BudgetSimpleView({
   displayTemplateId?: BudgetTemplateId | null;
   /** Statement has operating expenses and no rent line. */
   statementAligned?: boolean;
+  forecastRent?: ForecastRent | null;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -489,9 +492,8 @@ export function BudgetSimpleView({
             kicker="Then pay"
             label="Fixed overheads"
             hint={
-              statementAligned
-                ? "Operating expenses from the statement. Rent is not on the statement."
-                : "Rent, salaries, keep-the-lights-on this month"
+              budgetRentHint(doc, forecastRent, money, statementAligned) ??
+              "Rent, salaries, keep-the-lights-on this month"
             }
           >
             {readOnly ? (

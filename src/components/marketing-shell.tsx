@@ -170,7 +170,7 @@ export function MarketingShell({
           <span>
             © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
           </span>
-          <span>Works with QuickBooks Online and Xero. Sage connects the same way.</span>
+          <span>QuickBooks Online, Xero and Sage.</span>
           <a href="/">milonfinance.com</a>
           <a href="/about">About</a>
           <a href="/faq">Questions</a>

@@ -1,3 +1,5 @@
+import { monthlyOccurrenceWeeks } from "./cash-cadence.ts";
+
 /**
  * Cash runway — weeks until the 13-week forecast dips below the danger floor.
  * Same rule as CashForecastPDF (default R50,000). Maths mirrors CashForecastPanel.
@@ -81,7 +83,7 @@ function distributeLine(l: CashflowLineLike, weeks: number): number[] {
       break;
     case "recurring-monthly":
     case "monthly":
-      for (let i = start; i < weeks; i += 4) out[i] = amt;
+      for (const week of monthlyOccurrenceWeeks(start, weeks)) out[week] = amt;
       break;
     case "once-off":
     case "once":
@@ -97,14 +99,11 @@ function distributeLine(l: CashflowLineLike, weeks: number): number[] {
     case "split-months": {
       const n = Math.max(1, l.splitCount ?? 3);
       const per = amt / n;
-      for (let i = 0; i < n; i++) {
-        const w = start + i * 4;
-        if (w < weeks) out[w] = per;
-      }
+      for (const week of monthlyOccurrenceWeeks(start, weeks).slice(0, n)) out[week] = per;
       break;
     }
     default:
-      for (let i = start; i < weeks; i += 4) out[i] = amt;
+      for (const week of monthlyOccurrenceWeeks(start, weeks)) out[week] = amt;
   }
   return out;
 }

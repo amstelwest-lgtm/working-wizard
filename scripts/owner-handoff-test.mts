@@ -72,9 +72,13 @@ assert(handoffRequestNote("Milōn Analyst") === "Handed to Milōn Analyst.", "th
 assert(personAssignmentNote("theo") === "Assigned to theo.", "a person note names the assignee");
 assert(personAssignmentName("Assigned to theo.") === "theo", "reload reads the person from the note");
 assert(personAssignmentName("Assigned to theo. Sent the pack.") === "theo", "a later sentence stays out of the name");
+const finished = handoffResultNote("Milōn Financial Manager", "Drafts are recorded.");
+assert(finished.startsWith("Financial Manager finished:"), "a finished note does not repeat the hand-off");
+assert(finished.includes("Drafts are recorded."), "a finished note keeps the result");
+assert(handoffAssigneeName(finished) === null, "a finished note is not a new assignment");
 assert(
-  handoffResultNote("Milōn Analyst", "Cash is the lever.").startsWith("Handed to Milōn Analyst."),
-  "the finished note starts with the bot",
+  handoffResultNote("Milōn Analyst", "Cash is the lever.").startsWith("Analyst finished:"),
+  "the finished note names the short role",
 );
 
 assert(
@@ -132,6 +136,8 @@ assert(fn.includes("writeAssignment"), "every hand-off stores the assignee and a
 assert(fn.includes("noted: true"), "the client can tell the note was stored");
 assert(fn.includes("personId"), "a person hand-off uses the same function");
 assert(fn.includes("personAssignmentNote"), "the person note names the assignee");
+assert(fn.includes("cancelQueuedRuns"), "a person assignment clears a queued bot run");
+assert(fn.includes("assigned_to_person"), "the cleared run records why it stopped");
 const openRun = fn.slice(fn.indexOf("!handoffNeedsFreshRun(status)"), fn.indexOf("!handoffNeedsFreshRun(status)") + 700);
 assert(openRun.includes("writeAssignment"), "an open run still writes the hand-off note");
 assert(fn.includes("decision.settingKey"), "each bot checks its own flag");
@@ -157,6 +163,12 @@ assert(handoffClient.includes("!result.noted"), "the client writes the note when
 assert(handoffClient.includes("signedInActorLabel"), "a person note is written by the signed-in actor");
 assert(plan.includes("assignActionToPerson"), "the owner action plan uses the same person assignment");
 assert(handoffClient.includes("dispatchActionPlanRefresh"), "home hears the assignment");
+const commit = handoffClient.slice(handoffClient.indexOf("export async function commitActionHandoff"));
+assert(
+  commit.indexOf("dispatchActionPlanRefresh") < commit.indexOf("requestOwnerHandoff"),
+  "Working is painted before the hand-off function returns",
+);
+assert(handoffClient.includes("failed: true"), "a failed hand-off drops the optimistic row");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert a run");
 
 const config = readFileSync("supabase/config.toml", "utf8");

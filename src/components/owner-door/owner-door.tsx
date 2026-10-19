@@ -41,7 +41,16 @@ import {
   loadLatestAssignments,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { openHandoffAgents, openPlanTitles, rowAssignment, withPendingAssignment } from "@/lib/open-plan-home";
+import {
+  applyLiveRuns,
+  openHandoffAgents,
+  openPlanTitles,
+  personOwnedActionIds,
+  rowAssignment,
+  withPendingAssignment,
+  withoutPersonQueuedRuns,
+  type RowAssignment,
+} from "@/lib/open-plan-home";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
@@ -182,7 +191,7 @@ export function OwnerDoor({
   onSignOut: () => void;
   /** Top ranked next move. Empty stays an honest line under the advisor. */
   topMove?: string | null;
-  /** clients.is_demo. The sample tax card stays off a real business. */
+  /** clients.is_demo. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
   boards?: (
     go: (screen: OwnerScreen) => void,
@@ -228,7 +237,7 @@ export function OwnerDoor({
   const [openAction, setOpenAction] = useState<string | null>(null);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
-  const [openAgents, setOpenAgents] = useState<AgentKey[]>([]);
+  const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
@@ -262,7 +271,7 @@ export function OwnerDoor({
     pendingHandoff.current = null;
     setHandedTitle(null);
     setAssignedAgent(null);
-    setOpenAgents([]);
+    setAssignmentRows([]);
     setThreads(clientId ? readOwnerThreads(browserThreadStore(), clientId) : emptyOwnerThreads());
     setErrors({});
   }, [clientId]);
@@ -352,15 +361,30 @@ export function OwnerDoor({
   useEffect(() => {
     const onRefresh = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
-      if (!detail?.actionItemId || !detail.title) return;
+      if (!detail?.actionItemId) return;
+      if (detail.failed) {
+        if (pendingHandoff.current?.actionItemId === detail.actionItemId) pendingHandoff.current = null;
+        return;
+      }
+      if (!detail.title) return;
       const agent = detail.agent ?? null;
       const name = detail.assigneeName ?? (agent ? agentDisplayName(agent) : null);
       if (!name) return;
       pendingHandoff.current = { ...detail, agent, assigneeName: name };
+      const next: RowAssignment = {
+        id: detail.actionItemId,
+        assigneeName: name,
+        agent,
+        open: agent != null,
+      };
+      setAssignmentRows((current) =>
+        current.some((row) => row.id === next.id)
+          ? current.map((row) => (row.id === next.id ? next : row))
+          : [...current, next],
+      );
       if (agent) {
         setHandedTitle(detail.title);
         setAssignedAgent(agent);
-        setOpenAgents((current) => (current.includes(agent) ? current : [...current, agent]));
       }
       setActionRows((rows) =>
         rows.some((row) => row.title === detail.title)
@@ -444,7 +468,7 @@ export function OwnerDoor({
       if (actions.error) {
         setOpenAction(null);
         setAssignedAgent(null);
-        setOpenAgents([]);
+        setAssignmentRows([]);
         setActionRows([]);
         setActionsUnavailable(true);
         setActionsReady(true);
@@ -501,7 +525,7 @@ export function OwnerDoor({
       setOpenAction(openRows[0]?.title ?? null);
       setHandedTitle(firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null);
       setAssignedAgent(firstOpen?.agent ?? null);
-      setOpenAgents(openHandoffAgents(merged));
+      setAssignmentRows(merged);
       setActionsReady(true);
     });
     return () => {
@@ -608,16 +632,30 @@ export function OwnerDoor({
       market,
     ],
   );
-  const presence = steerOpenHandoffs(ownerPresence(activity, talk), openAgents);
+  const settledRows = applyLiveRuns(
+    assignmentRows,
+    activity.runs.map((run) => ({
+      actionItemId: run.action_item_id,
+      agent: run.agent,
+      status: run.status,
+      at: run.finished_at || run.queued_at,
+    })),
+  );
+  const openAgents = openHandoffAgents(settledRows);
+  const cardRuns = withoutPersonQueuedRuns(activity.runs, personOwnedActionIds(settledRows));
+  const presence = steerOpenHandoffs(
+    ownerPresence({ ...activity, runs: cardRuns }, talk),
+    openAgents,
+  );
   const runState = useMemo(() => {
-    const latest = latestRunByAgent(activity.runs);
+    const latest = latestRunByAgent(cardRuns);
     const out: Partial<Record<AgentKey, OwnerRunPhase>> = {};
     for (const key of AGENT_KEYS) {
       const phase = ownerRunPhase(latest[key], activity.findings);
       if (phase) out[key] = phase;
     }
     return out;
-  }, [activity]);
+  }, [activity.findings, cardRuns]);
   const active = presence.agents.find((item) => item.agent === agent) ?? presence.agents[0];
 
   useEffect(() => {

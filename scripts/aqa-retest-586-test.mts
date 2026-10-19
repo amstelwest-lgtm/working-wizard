@@ -29,6 +29,7 @@ import {
   assessClientMetrics,
   distributeForecastLine,
   forecastMinimumCash,
+  weekDatesFrom,
 } from "../src/lib/client-metrics.ts";
 import {
   NEEDS_DATA_OPENING,
@@ -197,9 +198,10 @@ const project = (
   side: "revenue" | "expenses" | "other",
   target: number[],
 ) => {
+  const dates = weekDatesFrom(chillCash.startDate, weeks);
   for (const row of rows) {
     const frequency = displayForecastFrequency(row.name, row.frequency, { side, ...single });
-    distributeForecastLine({ amount: row.amount, frequency, startWeek: row.startWeek }, weeks).forEach((n, i) => {
+    distributeForecastLine({ amount: row.amount, frequency, startWeek: row.startWeek }, weeks, dates).forEach((n, i) => {
       target[i] += n;
     });
   }
@@ -219,6 +221,7 @@ assert(
   grouped.some((row) => row.name.includes("Fuji SA") && row.name.includes("purchase (one-off)")),
   "Fuji stays on its own row with the purchase rule",
 );
+const pillayDates = weekDatesFrom(chillCash.startDate, 13);
 const pillay = distributeForecastLine(
   {
     amount: "900",
@@ -226,10 +229,23 @@ const pillay = distributeForecastLine(
     startWeek: 1,
   },
   13,
+  pillayDates,
 );
 assert(
-  pillay[0] === 900 && pillay[4] === 900 && pillay[8] === 900 && pillay[12] === 900,
-  "a single-month receipt repeats on weeks 1, 5, 9 and 13",
+  pillay[0] === 900 && pillay[4] === 900 && pillay[8] === 900 && pillay[12] === 0,
+  "a single-month receipt lands once a month and not a fourth time in week 13",
+);
+const pillayFallback = distributeForecastLine(
+  {
+    amount: "900",
+    frequency: "recurring-monthly",
+    startWeek: 1,
+  },
+  13,
+);
+assert(
+  pillayFallback.filter((n) => n === 900).length === 3 && pillayFallback[12] === 0,
+  "without week dates a monthly line still lands three times",
 );
 const closing: number[] = [];
 let bal = Number(chillCash.openingBalance);
@@ -525,6 +541,10 @@ assert(
   "a snapshot phrase is the full-year stamp",
 );
 assert(rewriteDraftMonthStamp("due 8 Sep 2026") === "due 8 Sep 2026", "a dated day stays");
+assert(
+  rewriteSavedMonthStamp("Sep 2026 books look healthy") === "Full year on file looks healthy",
+  "a full-year stamp agrees the verb",
+);
 assert(rewriteSavedMonthStamp("Sep 2026") === "Sep 2026", "a cited period stays on the narrow stamp");
 assert(
   src("src/components/recommendations-panel.tsx").includes("rewriteDraftMonthStamp"),

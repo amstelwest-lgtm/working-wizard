@@ -69,6 +69,15 @@ export function forecastChatFacts(input: {
   };
 }
 
+/** 1-based index of the first closing strictly below `threshold`. */
+export function firstClosingBelow(closings: readonly number[], threshold: number): number | null {
+  for (let i = 0; i < closings.length; i++) {
+    const raw = closings[i];
+    if (typeof raw === "number" && Number.isFinite(raw) && raw < threshold) return i + 1;
+  }
+  return null;
+}
+
 export function forecastLowestPoint(
   opening: number,
   closings: readonly number[],
@@ -183,6 +192,31 @@ export function clientListRunwayHeadline(input: {
     cashGenerative: input.cashGenerative,
     openingMissing: input.openingMissing,
   }).headline;
+}
+
+/**
+ * Clients-table cell. A counted runway is weeks. Anything else is an em dash,
+ * with the existing headline kept for the tooltip only.
+ */
+export function clientListRunwayCell(input: {
+  weeks: number | null;
+  reason: string | null;
+}): { value: string; title?: string } {
+  const reason = input.reason?.trim() ?? "";
+  if (reason === OPENING_BALANCE_MISSING) {
+    return { value: "—", title: OPENING_BALANCE_MISSING };
+  }
+  const below = reason.match(/^(\d+) weeks? below$/i);
+  if (below) {
+    const weeks = Number(below[1]);
+    return { value: weeks === 1 ? "1 week" : `${weeks} weeks` };
+  }
+  if (input.weeks != null && Number.isFinite(input.weeks)) {
+    const weeks = Number.isInteger(input.weeks) ? input.weeks : Math.round(input.weeks);
+    return { value: weeks === 1 ? "1 week" : `${weeks} weeks` };
+  }
+  if (reason && reason !== "—") return { value: "—", title: reason };
+  return { value: "—" };
 }
 
 /**

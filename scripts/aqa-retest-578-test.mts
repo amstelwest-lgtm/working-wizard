@@ -11,7 +11,7 @@ import { ActionPlanAutomation } from "../src/components/action-plan-automation";
 import { adviceChatProductName, adviceChatVolumeUnit } from "../src/lib/advice-industry";
 import { displayForecastFrequency, forecastRowLabel } from "../src/lib/cash-forecast-rows";
 import { suggestOnceOffRows } from "../src/lib/cash-once-off-suggest";
-import { distributeForecastLine, forecastMinimumCash } from "../src/lib/client-metrics";
+import { distributeForecastLine, forecastMinimumCash, weekDatesFrom } from "../src/lib/client-metrics";
 import { practiceDisplaysZarPlan, saFirmDisplayPrice, saPlanRegionControls } from "../src/lib/firm-band-upgrade";
 import { buildFinancialManagerBrief } from "../src/lib/financial-manager-brief";
 import { ownerAnswerTiles, type OwnerBooks } from "../src/lib/owner-answers";
@@ -31,6 +31,7 @@ const line = (
 
 const hotel = {
   openingBalance: "44480",
+  startDate: "2026-10-19",
   seededFromBanksAt: "2026-08-24T20:07:05.368Z",
   revenue: [
     line("Netcash", 36360, "recurring-monthly", 3),
@@ -58,8 +59,12 @@ const assumedMonthly: Array<[string, number, "expenses" | "other", string]> = [
 for (const [name, amount, side, rule] of assumedMonthly) {
   const frequency = displayForecastFrequency(name, "once-off", { side });
   assert(frequency === "recurring-monthly", `${name} is assumed monthly from one month`);
-  const weeks = distributeForecastLine({ amount: String(amount), frequency, startWeek: 1 }, 13);
-  assert(weeks[0] === amount && weeks[4] === amount && weeks[8] === amount && weeks[12] === amount, `${name} lands in weeks 1, 5, 9 and 13`);
+  const weeks = distributeForecastLine(
+    { amount: String(amount), frequency, startWeek: 1 },
+    13,
+    weekDatesFrom(hotel.startDate, 13),
+  );
+  assert(weeks[0] === amount && weeks[4] === amount && weeks[8] === amount && weeks[12] === 0, `${name} lands once a month in weeks 1, 5 and 9`);
   assert(weeks[1] === 0 && weeks[2] === 0, `${name} is not copied onto every week`);
   const label = forecastRowLabel(name, "once-off", { side });
   assert(label.includes(rule), `${name} is labelled ${label}`);
@@ -96,7 +101,11 @@ function screenSeries(book: typeof hotel) {
   const add = (rows: typeof hotel.revenue, side: "revenue" | "expenses" | "other", target: number[]) => {
     for (const row of rows) {
       const frequency = displayForecastFrequency(row.name, row.frequency, { side });
-      distributeForecastLine({ amount: row.amount, frequency, startWeek: row.startWeek }, weeks).forEach((n, i) => {
+      distributeForecastLine(
+        { amount: row.amount, frequency, startWeek: row.startWeek },
+        weeks,
+        weekDatesFrom(book.startDate, weeks),
+      ).forEach((n, i) => {
         target[i] += n;
       });
     }
@@ -120,7 +129,7 @@ const withoutRent = screenSeries({
   other: hotel.other.map((row) => ({ ...row, name: "Bonus" })),
 });
 assert(projected.closing[12]! < withoutRent.closing[12]!, "week 13 does not climb by leaving rent and staff out");
-assert(withoutRent.closing[12]! - projected.closing[12]! >= 28000, "week 13 still carries the rent");
+assert(withoutRent.closing[12]! - projected.closing[12]! >= 28000, "week 13 closing still includes the earlier rent payments");
 const floor = forecastMinimumCash({ configured: null, weeklyOutflows: projected.outflow });
 const thinFloor = forecastMinimumCash({ configured: null, weeklyOutflows: withoutRent.outflow });
 assert(floor > thinFloor, `the floor uses the repeated costs (${floor} vs ${thinFloor})`);
@@ -183,8 +192,8 @@ assert(
 );
 const starter = saFirmDisplayPrice("starter", "month");
 const solo = saFirmDisplayPrice("solo", "month");
-assert(starter.includes("R299") && !starter.includes("$") && !/vat/i.test(starter), starter);
-assert(solo.includes("R799") && !solo.includes("$") && !/vat/i.test(solo), solo);
+assert(starter.includes("R 299") && !starter.includes("$") && !/vat/i.test(starter), starter);
+assert(solo.includes("R 799") && !solo.includes("$") && !/vat/i.test(solo), solo);
 const hidden = saPlanRegionControls(true);
 assert(hidden.stateDropdown === false && hidden.vatCopy === false, "an SA plan has no state list and no VAT wording");
 assert(saPlanRegionControls(false).stateDropdown === true, "a US plan still asks for a state");

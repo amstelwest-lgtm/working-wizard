@@ -280,8 +280,8 @@ assert(!landing.includes("borrowed SA bands"), "US median disclaimer is not land
 assert(!landing.includes("the playbook"), "playbook is not the landing recommendation engine");
 assert(landing.includes('id="integrations"'), "landing has an integrations callout");
 assert(
-  landing.includes("Works with QuickBooks Online and Xero"),
-  "landing states both ledgers in crawlable text",
+  landing.includes("QuickBooks Online, Xero and Sage."),
+  "landing footer names QuickBooks Online, Xero and Sage",
 );
 assert(
   landing.includes("Connect QuickBooks, Xero or Sage"),
@@ -434,8 +434,8 @@ for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwner
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
 const preferredAssets = readFileSync(resolve("src/lib/landing-assets.ts"), "utf8");
 const preferredHref = "https://www.google.com/preferences/source?q=milonfinance.com";
-assert(shell.includes("Works with QuickBooks Online and Xero."), "collateral footer names both ledgers");
-assert(shell.includes("Sage connects the same way."), "collateral footer names Sage");
+assert(shell.includes("QuickBooks Online, Xero and Sage."), "collateral footer names QuickBooks Online, Xero and Sage");
+assert(shell.includes("and Sage."), "collateral footer names Sage");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
 assert(preferredAssets.includes(preferredHref), "preferred source is a plain Google preferences deeplink");
 assert(

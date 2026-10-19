@@ -19,6 +19,7 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
+import { actionIsOverdue } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
   buildFollowUpQueue,
@@ -59,12 +60,12 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { clientListRunwayHeadline, clientListStatusWord, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
+import { clientListRunwayCell, clientListRunwayHeadline, clientListStatusWord, statusColumnNeedsAttention } from "@/lib/cash-forecast-parity";
+import { revealPracticeHash } from "@/lib/practice-section-hash";
 import {
   assessClientMetrics,
   forecastIsCashGenerative,
   runwayDisplayLabel,
-  runwayTileValue,
   storedOpeningIsMissing,
 } from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
@@ -175,7 +176,7 @@ type ClientRow = Client & {
   openQueries: number;
   /** Open (not done) action-plan items. */
   openActions: number;
-  /** Open actions past due_date. */
+  /** Open actions past due_date, or past the plan target when they have no due date. */
   overdueActions: number;
   /** Revenue for scatter bubble sizing. */
   revenue: number | null;
@@ -1081,6 +1082,14 @@ function InviteOwnerDialog({
   );
 }
 
+function latestStoredScore(history: ScoreHistoryPoint[]): number | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const score = history[i]?.score;
+    if (typeof score === "number" && Number.isFinite(score)) return score;
+  }
+  return null;
+}
+
 const UNSCORED_HEALTH: OverallHealth = {
   overall: null,
   status: "at_risk",
@@ -1166,7 +1175,7 @@ function toClientRow(
     });
     return {
       ...c,
-      score: health.overall,
+      score: health.overall ?? latestStoredScore(history),
       health,
       trendDelta: trendDelta30d(history, health.overall),
       scoreSeries: history.map((point) => point.score).filter((score) => Number.isFinite(score)),
@@ -1498,18 +1507,34 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     if (rawClients.length > 0) {
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const { data: actions, error: actErr } = await supabase
-          .from("action_items")
-          .select("client_id, status, due_date, title")
-          .in(
-            "client_id",
-            rawClients.map((c) => c.id),
-          )
-          .neq("status", "done");
+        const clientIds = rawClients.map((c) => c.id);
+        const [{ data: actions, error: actErr }, { data: plans }] = await Promise.all([
+          supabase
+            .from("action_items")
+            .select("client_id, status, due_date, title")
+            .in("client_id", clientIds)
+            .neq("status", "done"),
+          supabase
+            .from("action_plans")
+            .select("client_id, target_date")
+            .in("client_id", clientIds)
+            .eq("is_active", true),
+        ]);
+        const targetByClient = new Map<string, string>();
+        for (const plan of plans ?? []) {
+          if (!targetByClient.has(plan.client_id)) targetByClient.set(plan.client_id, plan.target_date);
+        }
         if (!actErr && actions) {
           for (const a of actions) {
             openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
-            const overdue = Boolean(a.due_date && a.due_date < today);
+            const overdue = actionIsOverdue(
+              {
+                status: a.status,
+                dueDate: a.due_date,
+                planTarget: targetByClient.get(a.client_id) ?? null,
+              },
+              today,
+            );
             if (overdue) {
               overdueActionsMap[a.client_id] = (overdueActionsMap[a.client_id] ?? 0) + 1;
             }
@@ -1676,6 +1701,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const greetName = firstNameOf(greetingSource);
   const greeting = practiceGreeting(greetingSource);
   const bookLoading = loading || brandLoading;
+  useEffect(() => {
+    if (!portalReady) return;
+    revealPracticeHash(practiceHash);
+  }, [portalReady, practiceHash, view, bookLoading, clientRows.length]);
   const countsLoading = !countsReady;
   const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
   const asOf = dataAsOfLabel();
@@ -1829,10 +1858,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     });
   }
 
-  function runwayStr(c: ClientRow): string {
-    if (c.runwayLabel) return c.runwayLabel;
-    if (c.runwayWeeks == null) return "—";
-    return `${c.runwayWeeks} wk`;
+  function runwayCell(c: ClientRow) {
+    return clientListRunwayCell({ weeks: c.runwayWeeks, reason: c.runwayLabel });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1941,6 +1968,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                   })}
                 />
               </PracticeAgentThread>
+            ) : bookLoading ? (
+              <DashboardSkeleton className="py-8" />
             ) : (
             <OwnerHome
               title="Your whole finance team"
@@ -2151,7 +2180,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           </div>
         </details>
 
-        <AccountantInbox firmId={firmId} quiet onChanged={() => void load(firmId, user?.id, greetingSource)} />
+        <div id="marketplace">
+          <AccountantInbox firmId={firmId} quiet onChanged={() => void load(firmId, user?.id, greetingSource)} />
+        </div>
 
         {/* ===== PLAYBOOK LIBRARY ===== */}
         <details className="home-fold" id="playbooks">
@@ -2263,6 +2294,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                 {filteredRows.map((c) => {
                   const chip = chipFromHealth(c.health);
                   const score = c.score != null ? Math.round(c.score) : null;
+                  const runway = runwayCell(c);
                   return (
                     <tr
                       key={c.id}
@@ -2338,8 +2370,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
                           )}
                         </td>
                       ) : null}
-                      <td className="num" data-label="Runway" title={runwayStr(c)}>
-                        <span className="runway-val">{runwayTileValue(runwayStr(c))}</span>
+                      <td className="num" data-label="Runway" title={runway.title}>
+                        <span className="runway-val">{runway.value}</span>
                       </td>
                       <td className="num" data-label="Queries">
                         {countsLoading ? "…" : c.openQueries > 0 ? c.openQueries : "—"}

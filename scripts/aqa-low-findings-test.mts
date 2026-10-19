@@ -56,7 +56,10 @@ const rent = distributeForecastLine(
   { name: "Rent", amount: "8000", frequency: displayForecastFrequency("Rent", "once-off"), startWeek: 1 },
   13,
 );
-assert(rent[0] === 8000 && rent[4] === 8000 && rent[8] === 8000 && rent[12] === 8000, "rent repeats monthly");
+assert(
+  rent[0] === 8000 && rent[4] === 8000 && rent[9] === 8000 && rent[8] === 0 && rent[12] === 0,
+  "rent repeats once a month, three times in 13 weeks",
+);
 assert(rent[1] === 0, "rent is not weekly");
 assert(displayForecastFrequency("Payroll", "recurring-weekly") === "recurring-weekly", "a weekly payroll stays weekly");
 assert(isDisplayOnceOff("Coffee", "once-off"), "a small purchase stays a one-off");

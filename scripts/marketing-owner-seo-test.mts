@@ -72,7 +72,7 @@ assert(!usFaq.includes("R299") && !usFaq.includes("R799") && !usFaq.includes("ZA
 const zaFaq = homepageFaqItems(true, loadSaPricingCopy().ownerHomepageCost)
   .map((item) => item.answer)
   .join("\n");
-assert(zaFaq.includes("Business owners pay R299/mo"), "ZA homepage FAQ uses the server rand sentence");
+assert(zaFaq.includes("Business owners pay R 299/mo"), "ZA homepage FAQ uses the server rand sentence");
 
 const index = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(index.includes("imageAlt={ACCOUNTANT_TEASER.imageAlt}"), "accountant thumbnail has alt text");

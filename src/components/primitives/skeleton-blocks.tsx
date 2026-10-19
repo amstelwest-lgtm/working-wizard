@@ -11,6 +11,16 @@ export function SkeletonTile({ className }: BlockProps) {
   return <div className={cn("milon-skeleton milon-skeleton--tile", className)} aria-hidden />;
 }
 
+/** First paint of the accountant shell, before the portal chunk arrives. */
+export function BootSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#f4f6fa] px-4 py-8" role="status" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <DashboardSkeleton />
+    </div>
+  );
+}
+
 /** Accountant dashboard — stats strip + client table placeholder. */
 export function DashboardSkeleton({ className }: BlockProps) {
   return (

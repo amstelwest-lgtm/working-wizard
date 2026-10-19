@@ -71,11 +71,11 @@ assert(!us.includes("South African"), "US render omits the rand heading");
 
 const za = surface(true);
 assert(
-  za.includes("R799/mo") && za.includes("about R53 per client"),
+  za.includes("R 799/mo") && za.includes("about R 53 per client"),
   "ZA render shows the solo rand price",
 );
 assert(
-  za.includes("R299/mo") && za.includes("about R60 per client"),
+  za.includes("R 299/mo") && za.includes("about R 60 per client"),
   "ZA render shows the Starter rand line",
 );
 assert(!za.toLowerCase().includes("vat"), "ZA render has no tax wording");

@@ -42,7 +42,7 @@ const lowestAt = live!.closing.reduce(
   (best, balance, index) => (balance < best.balance ? { balance, index } : best),
   { balance: live!.closing[0] ?? 0, index: 0 },
 );
-assert(lowestAt.index === 12, `low is week ${lowestAt.index + 1}, not week 13`);
+assert(lowestAt.index === 9, `low is week ${lowestAt.index + 1}`);
 assert(isDisplayOnceOff("Fuji SA", "once-off", { side: "expenses", singleMonth: true }), "Fuji stays a purchase");
 assert(
   !outflows.slice(1).some((week) => Math.abs(week - (outflows[0]! - 9200)) < 0.5 && week > outflows[4]! + 1),
@@ -79,7 +79,7 @@ const books: OwnerBooks = {
 };
 const card = ownerHomeLines(ownerAnswerTiles(books), null).financial_manager[0] ?? "";
 assert(!card.includes("34 903") && !card.includes("34903") && !card.includes("201"), card);
-assert(card.includes("93") && card.includes("334"), card);
+assert(card.includes("44") && card.includes("480") && card.includes("73") && card.includes("119"), card);
 assert(card.includes("below"), card);
 
 const brief = buildFinancialManagerBrief({
@@ -95,7 +95,7 @@ const brief = buildFinancialManagerBrief({
 });
 const plain = (line: string) => line.replace(/\u00a0/g, " ");
 assert(plain(brief.cashFloorLine ?? "") === plain(card), `brief ${brief.cashFloorLine} / card ${card}`);
-assert(brief.healthCue?.includes("93"), brief.healthCue ?? "no health cue");
+assert(brief.healthCue?.includes("73.1k"), brief.healthCue ?? "no health cue");
 
 const watch = buildFinancialManagerBrief({
   clientName: "Chill Pepper Boutique Hotel",
@@ -111,7 +111,7 @@ const watch = buildFinancialManagerBrief({
 });
 assert(plain(watch.cashFloorLine ?? "") === `Cash is ${money(live!.opening)}.`, watch.cashFloorLine ?? "");
 assert(watch.cashFloorChip == null, "Watch keeps the floor chip off the card");
-assert(watch.healthCue?.includes("93") === true, watch.healthCue ?? "Watch cleared the Health cash line");
+assert(watch.healthCue?.includes("73.1k") === true, watch.healthCue ?? "Watch cleared the Health cash line");
 assert(!watch.healthCue?.includes("34 903"), watch.healthCue ?? "");
 
 const interest = interestOfRevenue(chillFinancials);

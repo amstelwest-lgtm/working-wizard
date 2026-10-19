@@ -191,7 +191,22 @@ export type FirmPlanStatusCopy = {
   headline: string | null;
   /** Secondary line. Trial uses the trial client cap, not the paid band's limit. */
   detail: string | null;
+  /** Calendar date from Stripe trial_end. Null when there is no trial end to show. */
+  trialEndsOn: string | null;
 };
+
+/** Date label for a Stripe trial end. Null when the timestamp is missing. */
+export function trialEndDateLabel(trialEndIso: string | null | undefined): string | null {
+  if (!trialEndIso) return null;
+  const end = Date.parse(trialEndIso);
+  if (!Number.isFinite(end)) return null;
+  return new Intl.DateTimeFormat("en-ZA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Africa/Johannesburg",
+  }).format(new Date(end));
+}
 
 export type FirmPlanDisplay = FirmPlanStatusCopy & {
   configured: boolean;
@@ -253,7 +268,13 @@ export function formatFirmPlanStatus(input: {
           ? `${bandName} after the trial`
           : null;
     const detail = after ? `${cap} · ${after}` : cap;
-    return { phase: "trialing", band, headline, detail };
+    return {
+      phase: "trialing",
+      band,
+      headline,
+      detail,
+      trialEndsOn: trialEndDateLabel(input.trialEndIso),
+    };
   }
 
   if (input.phase === "active") {
@@ -262,8 +283,9 @@ export function formatFirmPlanStatus(input: {
       band,
       headline: bandName ?? "Paid plan",
       detail: band ? firmClientLimitLabel(band) : null,
+      trialEndsOn: null,
     };
   }
 
-  return { phase: "none", band: null, headline: "No active plan", detail: null };
+  return { phase: "none", band: null, headline: "No active plan", detail: null, trialEndsOn: null };
 }

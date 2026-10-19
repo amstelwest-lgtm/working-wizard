@@ -17,6 +17,8 @@ export type ActionPlanRefreshDetail = {
   title: string;
   agent?: AgentKey | null;
   assigneeName?: string;
+  /** The click's optimistic row should drop. The refetch paints the stored row. */
+  failed?: boolean;
 };
 
 export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): void {
@@ -117,6 +119,14 @@ export async function commitActionHandoff(input: {
   title: string;
   agent: AgentKey;
 }): Promise<ActionHandoffCommit> {
+  const detail: ActionPlanRefreshDetail = {
+    actionItemId: input.actionItemId,
+    title: input.title,
+    agent: input.agent,
+    assigneeName: agentDisplayName(input.agent),
+  };
+  // The card flips to Working before the function returns. A finished run settles it.
+  dispatchActionPlanRefresh(detail);
   const result = await requestOwnerHandoff({
     clientId: input.clientId,
     actionItemId: input.actionItemId,
@@ -124,23 +134,25 @@ export async function commitActionHandoff(input: {
   });
   if (!result.ok && handoffComingOnline(result.error)) {
     const saved = await recordHandoffAssignment(input);
-    if (!saved.ok) return { ok: false, error: saved.error, comingSoon: true };
+    if (!saved.ok) {
+      dispatchActionPlanRefresh({ ...detail, failed: true });
+      return { ok: false, error: saved.error, comingSoon: true };
+    }
     await clearActionOwner(input.actionItemId);
   } else if (!result.ok) {
+    dispatchActionPlanRefresh({ ...detail, failed: true });
     return { ok: false, error: result.error };
   } else if (!result.noted) {
     // The deployed function has not confirmed the note yet. Write it here so
     // reload still sees the assignee. A function that returns noted does this itself.
     const saved = await recordHandoffAssignment(input);
-    if (!saved.ok) return saved;
+    if (!saved.ok) {
+      dispatchActionPlanRefresh({ ...detail, failed: true });
+      return saved;
+    }
     await clearActionOwner(input.actionItemId);
   }
-  dispatchActionPlanRefresh({
-    actionItemId: input.actionItemId,
-    title: input.title,
-    agent: input.agent,
-    assigneeName: agentDisplayName(input.agent),
-  });
+  dispatchActionPlanRefresh(detail);
   return { ok: true };
 }
 
@@ -174,29 +186,35 @@ export async function assignActionToPerson(input: {
   personName: string;
   title?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const detail: ActionPlanRefreshDetail = {
+    actionItemId: input.actionItemId,
+    title: input.title ?? "",
+    agent: null,
+    assigneeName: input.personName,
+  };
+  dispatchActionPlanRefresh(detail);
   const server = await requestPersonAssignment(input);
   if (server.ok && server.noted) {
-    dispatchActionPlanRefresh({
-      actionItemId: input.actionItemId,
-      title: input.title ?? "",
-      assigneeName: input.personName,
-    });
+    dispatchActionPlanRefresh(detail);
     return { ok: true };
   }
   if (server.ok && !server.noted) {
     const saved = await writePersonAssignment(input);
-    if (!saved.ok) return saved;
+    if (!saved.ok) {
+      dispatchActionPlanRefresh({ ...detail, failed: true });
+      return saved;
+    }
   } else if (!personAssignNeedsClient(server.ok ? "" : server.error)) {
+    dispatchActionPlanRefresh({ ...detail, failed: true });
     return server;
   } else {
     const saved = await writePersonAssignment(input);
-    if (!saved.ok) return saved;
+    if (!saved.ok) {
+      dispatchActionPlanRefresh({ ...detail, failed: true });
+      return saved;
+    }
   }
-  dispatchActionPlanRefresh({
-    actionItemId: input.actionItemId,
-    title: input.title ?? "",
-    assigneeName: input.personName,
-  });
+  dispatchActionPlanRefresh(detail);
   return { ok: true };
 }
 
@@ -322,6 +340,11 @@ async function loadAssignmentNotes(actionIds: string[]): Promise<Map<string, Ass
     grouped.set(id, notes);
   }
   return grouped;
+}
+
+/** Every note on these actions, newest first. The row shows them; assignment is a separate read. */
+export async function loadActionNotes(actionIds: string[]): Promise<Map<string, AssignmentNote[]>> {
+  return loadAssignmentNotes(actionIds);
 }
 
 /** Newest bot or person assignment per action. Other notes stay in the log and do not hide it. */

@@ -107,19 +107,12 @@ export function overviewBudgetTileFigure(input: {
 }
 
 /** Revenue year-to-date. Months without actuals stay out of the comparison. */
-/** Month rows win. A stored statement figure fills YTD when those rows are empty. */
+/** Month rows are the only actual. A full-year statement figure is not YTD. */
 export function budgetYtdWithStatement(
   ytd: { budget: number; actual: number | null },
-  statement?: { chip?: string | null; revenue?: number | null; budgetRevenue?: number | null } | null,
+  _statement?: { chip?: string | null; revenue?: number | null; budgetRevenue?: number | null } | null,
 ): { budget: number; actual: number | null } {
-  if (ytd.actual != null) return ytd;
-  if (!statement || !statement.chip || statement.chip === "None") return ytd;
-  if (typeof statement.revenue !== "number" || !Number.isFinite(statement.revenue)) return ytd;
-  const budget =
-    typeof statement.budgetRevenue === "number" && Number.isFinite(statement.budgetRevenue)
-      ? statement.budgetRevenue
-      : ytd.budget;
-  return { budget, actual: statement.revenue };
+  return ytd;
 }
 
 export function budgetYtdSentence(input: {
@@ -127,8 +120,8 @@ export function budgetYtdSentence(input: {
   actual: number | null;
   money: (n: number) => string;
 }): string {
+  if (input.actual == null) return "No monthly actuals yet";
   const budget = input.money(input.budget);
-  if (input.actual == null) return `YTD: budget ${budget} · no actuals yet.`;
   const actual = input.money(input.actual);
   const delta = input.actual - input.budget;
   if (Math.abs(delta) < 1) {

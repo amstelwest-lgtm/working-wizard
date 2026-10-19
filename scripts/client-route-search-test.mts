@@ -340,7 +340,26 @@ const ranked = rankStrategicMoves({
   ),
 });
 assert(ranked[0]?.key === "grossMargin", "weaker health ranks above a healthy lever");
-assert(ranked.length === 2, "ranker keeps one row per move");
+assert(ranked.length === 1, "near-duplicate price moves collapse to one row");
+const fixedPair = rankStrategicMoves({
+  limit: 5,
+  entries: STRATEGIC_MOVE_CATALOG.filter(
+    (entry) => entry.key === "fixedCostRatio" || entry.key === "dol" || entry.key === "currentRatio",
+  ),
+});
+assert(
+  fixedPair.filter((move) => move.key === "fixedCostRatio" || move.key === "dol").length === 1,
+  "fixed-to-variable near-duplicates collapse",
+);
+const liquidity = fixedPair.find((move) => move.key === "currentRatio");
+assert(
+  liquidity?.title === "Reduce short-term debt by refinancing into longer-term facilities",
+  "the current-ratio row is a doable move",
+);
+assert(
+  STRATEGIC_MOVE_CATALOG.find((entry) => entry.key === "currentRatio")?.title.includes("Target a current ratio"),
+  "the catalog title stays the playbook step",
+);
 
 const linesViaView = accountantClientRouteSearch({ tab: "profit", view: "lines" });
 assert(

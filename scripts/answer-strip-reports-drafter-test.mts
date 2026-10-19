@@ -13,6 +13,7 @@ import {
   SENT_HISTORY_INTRO,
   drafterAnswerSentence,
   plainSentDate,
+  reportStripNames,
   reportsAnswerSentence,
   reportsPrimaryLabel,
 } from "../src/lib/reports-drafter-copy";
@@ -20,6 +21,22 @@ import {
 assert.equal(
   reportsAnswerSentence({ readyNames: [], periodLabel: "September" }),
   "No reports yet. Pick one to build from this client's figures.",
+);
+const catalogue = ["Financial Health Scorecard", "Priority Intervention Plan"];
+assert.deepEqual(
+  reportStripNames({ loadedNames: null, figuresOnFile: true, catalogueNames: catalogue }),
+  catalogue,
+  "figures already on file use the catalogue while a report page is still loading",
+);
+assert.deepEqual(
+  reportStripNames({ loadedNames: [], figuresOnFile: true, catalogueNames: catalogue }),
+  [],
+  "a loaded empty catalogue stays empty",
+);
+assert.deepEqual(
+  reportStripNames({ loadedNames: null, figuresOnFile: false, catalogueNames: catalogue }),
+  [],
+  "no figures and no load stays empty",
 );
 assert.equal(
   reportsAnswerSentence({

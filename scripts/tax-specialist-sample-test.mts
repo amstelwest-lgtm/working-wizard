@@ -4,7 +4,11 @@
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { taxSampleCardVisible, taxSampleEnabled } from "../src/lib/tax-specialist/enabled.ts";
+import {
+  taxSampleCardVisible,
+  taxSampleEnabled,
+  taxSampleFiguresVisible,
+} from "../src/lib/tax-specialist/enabled.ts";
 import {
   COMPANY_TAX_NUMERATOR,
   companyTaxDeadlines,
@@ -25,9 +29,15 @@ assert(taxSampleEnabled("ZA") === true, "ZA shows the sample");
 assert(taxSampleEnabled("US") === false, "US hides the sample");
 assert(taxSampleEnabled(null) === false, "a missing market hides the sample");
 assert(taxSampleEnabled("za") === false, "only the resolved ZA code turns it on");
-assert(taxSampleCardVisible("ZA", true) === true, "a demo client can show the home card");
-assert(taxSampleCardVisible("ZA", false) === false, "a real ZA client hides the home card");
+assert(taxSampleCardVisible("ZA", true) === true, "a demo client shows the home card");
+assert(taxSampleCardVisible("ZA", false) === true, "a real ZA client shows the home card");
 assert(taxSampleCardVisible("US", true) === false, "a US demo still hides the home card");
+assert(taxSampleCardVisible("US", false) === false, "a US client hides the home card");
+assert(taxSampleCardVisible(null, true) === false, "a missing market hides the home card");
+assert(taxSampleFiguresVisible("ZA", true) === true, "a demo client can show sample figures");
+assert(taxSampleFiguresVisible("ZA", false) === false, "a real ZA client hides sample figures");
+assert(taxSampleFiguresVisible("US", true) === false, "a US demo hides sample figures");
+assert(taxSampleFiguresVisible(null, false) === false, "a missing market hides sample figures");
 
 const sample = sampleCompanyTax();
 assert(sample.taxableIncomeCents === 182_850_000, "sample taxable income is R 1 828 500.00");
@@ -196,20 +206,39 @@ for (const path of [
 }
 const menu = readFileSync("src/components/hand-to-menu.tsx", "utf8");
 assert(menu.includes('variant="handoff"'), "Hand to can reach Tax Specialist");
-assert(menu.includes('variant="host"'), "Hand to keeps a sample host mounted after the menu closes");
-assert(menu.includes('audience="accountant"'), "accountant next moves use the accountant copy");
 assert(
-  readFileSync("src/components/owner-door/owner-home.tsx", "utf8").includes('variant="fm-handoff"'),
-  "the home shows Hand to from the Financial Manager",
+  menu.includes('variant="host"'),
+  "Hand to keeps a sample host mounted after the menu closes",
 );
+assert(menu.includes('audience="accountant"'), "accountant next moves use the accountant copy");
 const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
+assert(
+  homeSrc.includes('variant="fm-handoff"'),
+  "the home still names the Financial Manager hand-off",
+);
+assert(
+  homeSrc.includes("taxCardOn ? null"),
+  "the home hides the hand-off strip when the tax card is on",
+);
+assert(
+  homeSrc.includes("Your agents are watching the books — ask them anything, any time."),
+  "ZA home does not count three agents",
+);
+assert(
+  homeSrc.includes("Three agents watching the books — ask them anything, any time."),
+  "US home keeps the three-agent subtitle",
+);
 assert(homeSrc.includes("sampleClient={sampleClient}"), "the home card follows the demo flag");
 assert(
-  readFileSync("src/components/owner-door/owner-door.tsx", "utf8").includes("sampleClient={sampleClient}"),
+  readFileSync("src/components/owner-door/owner-door.tsx", "utf8").includes(
+    "sampleClient={sampleClient}",
+  ),
   "the owner door passes the demo flag",
 );
 assert(
-  readFileSync("src/routes/app.tsx", "utf8").includes("sampleClient={Boolean(clientMeta?.is_demo)}"),
+  readFileSync("src/routes/app.tsx", "utf8").includes(
+    "sampleClient={Boolean(clientMeta?.is_demo)}",
+  ),
   "the owner home uses clients.is_demo",
 );
 assert(
@@ -224,13 +253,42 @@ assert(
 );
 const slotSrc = readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8");
 assert(slotSrc.includes("taxSampleCardVisible"), "the home card has its own gate");
+assert(slotSrc.includes('variant === "card"'), "the home card uses that gate");
 assert(
-  slotSrc.includes('variant === "card"'),
-  "only the home card checks the demo flag",
+  /if \(!enabled\) return;[\s\S]*import\("\.\/za-tax-specialist-sample"\)/.test(slotSrc),
+  "a closed market returns before the sample import",
 );
+assert(slotSrc.includes("sampleClient={sampleClient}"), "the loaded card receives the demo flag");
 assert(sampleSrc.includes("SAMPLE demo · Harbour & Co"), "the demo card names Harbour & Co");
 assert(sampleSrc.includes("Open sample"), "the demo card opens the sample");
 assert(sampleSrc.includes("money(result.taxCents)"), "the demo card can show the sample tax");
+assert(sampleSrc.includes('data-tax-card="sample"'), "the demo card is marked as the sample");
+assert(sampleSrc.includes('data-tax-card="preview"'), "a real client gets the preview card");
+const previewStart = sampleSrc.indexOf("function PreviewHomeCard");
+const previewEnd = sampleSrc.indexOf("function standingLabel");
+assert(previewStart >= 0 && previewEnd > previewStart, "the preview card is its own function");
+const preview = sampleSrc.slice(previewStart, previewEnd);
+assert(
+  preview.includes("Prepares ITR14 and IRP6 workings for your sign-off."),
+  "the preview card says what she prepares",
+);
+assert(preview.includes(">Preview<"), "the preview card carries a Preview tag");
+assert(preview.includes("Hand to Tax Specialist"), "the primary action is the hand-off");
+assert(preview.includes("See a sample"), "a secondary link opens the sample");
+assert(preview.includes('data-tax-preview-action="handoff"'), "the hand-off is the primary action");
+assert(
+  preview.includes('data-tax-preview-action="sample"'),
+  "See a sample is the secondary action",
+);
+assert(!preview.includes("Harbour"), "the preview card has no sample company");
+assert(!preview.includes("SAMPLE"), "the preview card has no SAMPLE badge");
+assert(!preview.includes("money("), "the preview card has no sample figures");
+assert(
+  !preview.includes("Xero") && !preview.includes("QuickBooks") && !preview.includes("Sage"),
+  "the preview card does not name a ledger",
+);
+assert(!/\bSARS\b/.test(preview), "the preview card does not name SARS");
+assert(!/submit|filed|files/i.test(preview), "the preview card does not imply a filing");
 assert(sampleSrc.includes('agent="tax_specialist"'), "the sample uses the shared tax face");
 assert(sampleSrc.includes("fmAvatarClip"), "the sample uses the shared clip mapping");
 assert(sampleSrc.includes('variant="character"'), "the sample uses the character avatar");
