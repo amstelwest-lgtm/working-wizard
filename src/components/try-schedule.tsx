@@ -1,0 +1,187 @@
+/**
+ * Schedule a call on the public sample. Slots are 16:30–22:00 SAST and the
+ * labels use the visitor's time zone. Booking goes through a server function
+ * the page passes in.
+ */
+import { useEffect, useMemo, useState } from "react";
+import { callSlots, formatSlotClock, formatSlotDay, type CallSlot } from "@/lib/trial-call-slots";
+
+export type TryCallResult =
+  | { ok: true; status: "saved" | "booked"; meetUrl?: string | null }
+  | { ok: false; error?: string; silent?: boolean };
+
+export type TryCallInput = {
+  name: string;
+  email: string;
+  consent: boolean;
+  honeypot: string;
+  start: string;
+  timeZone: string;
+};
+
+function groupByDay(slots: CallSlot[], timeZone: string): { day: string; slots: CallSlot[] }[] {
+  const groups: { day: string; slots: CallSlot[] }[] = [];
+  for (const slot of slots) {
+    const day = formatSlotDay(slot.start, timeZone);
+    const last = groups[groups.length - 1];
+    if (!last || last.day !== day) groups.push({ day, slots: [slot] });
+    else last.slots.push(slot);
+  }
+  return groups;
+}
+
+export function TrySchedule({
+  now,
+  timeZone,
+  onBook,
+}: {
+  now?: Date;
+  timeZone?: string;
+  onBook?: (input: TryCallInput) => Promise<TryCallResult>;
+}) {
+  // Slot labels depend on the visitor's zone. The server render stays blank
+  // so it matches the first client render, then the effect fills the times.
+  const [frozenNow, setFrozenNow] = useState<Date | null>(now ?? null);
+  const [zone, setZone] = useState(timeZone ?? "");
+  useEffect(() => {
+    setFrozenNow(now ?? new Date());
+    setZone(timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC");
+  }, [now, timeZone]);
+  const groups = useMemo(
+    () => (frozenNow ? groupByDay(callSlots(frozenNow), zone || "UTC") : []),
+    [frozenNow, zone],
+  );
+  const [more, setMore] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<"saved" | "booked" | null>(null);
+  const [meetUrl, setMeetUrl] = useState<string | null>(null);
+  const shown = more ? groups : groups.slice(0, 2);
+
+  return (
+    <section className="try-card try-schedule" aria-label="Schedule a call" data-try-schedule>
+      <h2 className="try-kicker">Schedule a call</h2>
+      <p className="try-schedule-lead">
+        Pick a time. It is shown in your time zone{zone ? ` (${zone})` : ""}.
+      </p>
+      {!frozenNow ? <p className="try-status">Loading times.</p> : null}
+      {done ? (
+        <p className="try-schedule-done" role="status">
+          {done === "booked"
+            ? "Booked. The Meet link is on the calendar invite."
+            : "Saved. We'll confirm this time."}
+          {meetUrl ? (
+            <>
+              {" "}
+              <a href={meetUrl}>Open the Meet link</a>
+            </>
+          ) : null}
+        </p>
+      ) : (
+        <form
+          className="try-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!selected || !onBook) {
+              setError(
+                onBook ? "Pick a time from the list." : "The sample isn't available right now.",
+              );
+              return;
+            }
+            setBusy(true);
+            setError(null);
+            void onBook({ name, email, consent, honeypot, start: selected, timeZone: zone })
+              .then((result) => {
+                if (!result.ok) {
+                  if (result.silent) return;
+                  setError(result.error ?? "We couldn't save that time. Try again.");
+                  return;
+                }
+                setDone(result.status);
+                setMeetUrl(result.meetUrl ?? null);
+              })
+              .catch(() => setError("We couldn't save that time. Try again."))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {shown.map((group) => (
+            <fieldset key={group.day} className="try-slot-day">
+              <legend>{group.day}</legend>
+              <div className="try-slots">
+                {group.slots.map((slot) => {
+                  const iso = slot.start.toISOString();
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      className={selected === iso ? "try-slot is-selected" : "try-slot"}
+                      aria-pressed={selected === iso}
+                      onClick={() => setSelected(iso)}
+                    >
+                      {formatSlotClock(slot.start, zone)}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
+          {groups.length > 2 && !more ? (
+            <button type="button" className="try-slot-more" onClick={() => setMore(true)}>
+              More days
+            </button>
+          ) : null}
+          <label className="try-field">
+            Name
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              autoComplete="name"
+              required
+            />
+          </label>
+          <label className="try-field">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              required
+            />
+          </label>
+          <label className="try-consent">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+            />
+            <span>I agree Milōn may email me about this call.</span>
+          </label>
+          <div className="try-hp" aria-hidden="true">
+            <label>
+              Leave this blank
+              <input
+                type="text"
+                name="milon_leave_blank"
+                tabIndex={-1}
+                autoComplete="off"
+                value={honeypot}
+                onChange={(event) => setHoneypot(event.target.value)}
+              />
+            </label>
+          </div>
+          <button type="submit" className="try-step" disabled={busy}>
+            Book this time
+          </button>
+          {error ? <p className="try-error">{error}</p> : null}
+        </form>
+      )}
+    </section>
+  );
+}

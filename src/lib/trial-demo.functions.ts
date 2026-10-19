@@ -16,6 +16,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
+import { alertTrialStart } from "@/lib/trial-followup.functions";
 import {
   analystUsageTokens,
   findingsFromAnalystContent,
@@ -411,6 +412,11 @@ export const submitTrialLead = createServerFn({ method: "POST" })
       utm,
     });
     if (!saved) return { ok: false as const, error: "The sample isn't available right now." };
+    try {
+      await alertTrialStart({ name: gate.name, email: gate.email, country: session.country });
+    } catch {
+      /* The sample still opens when the alert cannot be sent. */
+    }
     const board = buildTrialBoard(session.country);
     return { ok: true as const, board };
   });

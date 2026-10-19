@@ -506,13 +506,21 @@ const advisoryTalk = renderToStaticMarkup(
   createElement(TryScreen, { phase: "findings", board: us, findings, picks: ["advisory"] }),
 );
 assert(
-  advisoryTalk.includes("Preparing your advisory pack") && advisoryTalk.includes("coming next"),
-  "the advisory pack is an honest preparing state",
+  advisoryTalk.includes("SAMPLE") && advisoryTalk.includes(esc(SAMPLE_BUSINESS_NAME)),
+  "the advisory pack names the sample company",
+);
+assert(advisoryTalk.includes("Advisory pack"), "the advisory pack has its title");
+assert(advisoryTalk.includes("Sign off"), "the advisory pack has a Sign off button");
+assert(advisoryTalk.includes("try-signoff-arrow"), "a hand-drawn arrow points at Sign off");
+assert(
+  !advisoryTalk.includes("Preparing your advisory pack"),
+  "the sample pack replaces the preparing state",
 );
 assert(
   !advisoryTalk.includes("Profitability waterfall") && !advisoryTalk.includes("13-week cash model"),
-  "the preparing state fakes nothing",
+  "the sample pack does not fake the other reports",
 );
+assert(!advisoryTalk.includes("ZAR") && !/rand /.test(advisoryTalk), "the US pack has no rand");
 assert(
   advisoryTalk.includes("Want the profit report or the cash forecast next?"),
   "advisory still re-offers the real reports",
