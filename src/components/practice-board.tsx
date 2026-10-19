@@ -35,6 +35,7 @@ import {
   firmOpenQueriesDestination,
   firstNameOf,
   practiceGreeting,
+  needsAttentionView,
   practiceNeedsAttention,
   portfolioSummaryLine,
   revenueOf,
@@ -1339,6 +1340,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   const [loading, setLoading] = useState(() => warmBook == null);
   /** Open queries and follow-ups stay on a loading state until enrichment lands. */
   const [countsReady, setCountsReady] = useState(() => warmBook != null);
+  /** Set only after the enriched rows land. A warm paint and the shell timer must not set this. */
+  const [bookEnriched, setBookEnriched] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
@@ -1467,6 +1470,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
+    setBookEnriched(false);
     const warm = readPaintedBook<ClientRow>(userId, activeFirmId);
     if (warm) {
       setClientRows(warm);
@@ -1481,6 +1485,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       setClientRows([]);
       setIsItMember(false);
       setCountsReady(true);
+      setBookEnriched(true);
       setLoading(false);
       return;
     }
@@ -1674,8 +1679,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         chaseActionsMap[c.id] ?? [],
       ),
     );
-    setClientRows(fullRows);
-    rememberPaintedBook(userId, activeFirmId, fullRows);
+    if (gen === loadGen.current) {
+      setClientRows(fullRows);
+      rememberPaintedBook(userId, activeFirmId, fullRows);
+      setBookEnriched(true);
+    }
     } catch (err) {
       console.error("practice book:", err);
     } finally {
@@ -1703,8 +1711,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
+    // greetingSource is read for the name chain inside load, and the greeting
+    // itself renders from practiceGreeting. A name update must not restart the book.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading, user?.id, portalReady, greetingSource]);
+  }, [firmId, brandLoading, user?.id, portalReady]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -1857,7 +1867,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       window.clearTimeout(timer);
     };
   }, [view, loading, clientIdKey]);
-  const portfolioRows = useFirmPortfolioRows(firmId, clientRows.length);
+  const portfolioBook = useFirmPortfolioRows(firmId, clientRows.length);
+  const portfolioRows = portfolioBook.rows;
+  const portfolioLoaded = portfolioBook.loaded;
   const asOf = dataAsOfLabel();
 
   const attentionItems = useMemo(
@@ -1883,6 +1895,12 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     () => practiceNeedsAttention(attentionItems, portfolioRows),
     [attentionItems, portfolioRows],
   );
+  const attentionView = needsAttentionView({
+    bookLoading,
+    enriched: bookEnriched,
+    portfolioLoaded,
+    items: attentionBook.items,
+  });
   const attention = attentionBook.summary;
   const statusAttention = clientRows.filter((row) =>
     statusColumnNeedsAttention(row.health.displayLabel),
@@ -2207,8 +2225,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           />
         )}
 
-        {/* One queue: health alerts and pack sign-off, not two strips. */}
-        {(view === "practice" || view === "needs-attention") && !bookLoading && !countsLoading ? (
+        {/* Practice home still waits for the enriched book. */}
+        {view === "practice" && !bookLoading && !countsLoading ? (
           <PortfolioExceptions
             firmId={firmId}
             hideWhenClear
@@ -2217,8 +2235,23 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             onChase={(clientId, name) => openChase(clientId, name)}
           />
         ) : null}
-        {view === "needs-attention" && !bookLoading && !countsLoading && attentionBook.items.length === 0 ? (
-          <p className="sub">Nothing needs attention.</p>
+        {view === "needs-attention" ? (
+          <section className="attn-strip mb-3" id="needs-attention" aria-label="Needs attention today">
+            <h2>Needs attention today</h2>
+            {attentionView === "list" ? (
+              <PortfolioExceptions
+                firmId={firmId}
+                hideWhenClear
+                queue={attentionBook.items}
+                showHeading={false}
+                onChase={(clientId, name) => openChase(clientId, name)}
+              />
+            ) : (
+              <p className="sub">
+                {attentionView === "clear" ? "Nothing needs attention." : "Checking the book…"}
+              </p>
+            )}
+          </section>
         ) : null}
 
         {view === "practice" ? (

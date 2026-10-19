@@ -67,6 +67,7 @@ import {
   loadSignInRoleSnapshot,
   resolveSignedInDestination,
 } from "@/lib/landing-sign-in-destination";
+import { shouldCallEnsureOwnClient } from "@/lib/ensure-own-client-choice";
 import {
   AuthEntryCard,
   AuthEntryEyebrow,
@@ -246,15 +247,29 @@ function AuthCallbackPage() {
         } catch {
           /* metadata stamp is best-effort */
         }
-        const { error: rpcErr } = await withMarketRpcFallback(
-          () =>
-            supabase.rpc("ensure_own_client", {
-              p_name: displayName,
-              p_market: readVisitorMarket() ?? { country: "ZA", regionCode: null },
-            }),
-          () => supabase.rpc("ensure_own_client", { p_name: displayName }),
-        );
-        if (rpcErr) console.error("[google] ensure_own_client failed:", rpcErr.message);
+        // adminSignUp skips a client the user already owns. A firm-linked
+        // business, or any membership, is the same kind of existing seat.
+        const [{ data: ownedRows, error: ownedErr }, { data: memberRows, error: memberErr }] =
+          await Promise.all([
+            supabase.from("clients").select("id").eq("owner_user_id", user.id).limit(1),
+            supabase.from("client_memberships").select("client_id").eq("user_id", user.id).limit(1),
+          ]);
+        if (
+          shouldCallEnsureOwnClient({
+            ownedIds: ownedErr ? null : (ownedRows ?? []),
+            membershipClientIds: memberErr ? null : (memberRows ?? []),
+          })
+        ) {
+          const { error: rpcErr } = await withMarketRpcFallback(
+            () =>
+              supabase.rpc("ensure_own_client", {
+                p_name: displayName,
+                p_market: readVisitorMarket() ?? { country: "ZA", regionCode: null },
+              }),
+            () => supabase.rpc("ensure_own_client", { p_name: displayName }),
+          );
+          if (rpcErr) console.error("[google] ensure_own_client failed:", rpcErr.message);
+        }
         if (isFreshAuthUser(user.created_at)) {
           notifySignup("Business owner (Google)", user.email ?? "", displayName);
         }

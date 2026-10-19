@@ -42,6 +42,11 @@ type Props = {
   queue?: readonly MergedAttention[];
   /** Chase → opens a draft for this client. It does not send. */
   onChase?: (clientId: string, name: string) => void;
+  /**
+   * The needs-attention page draws the heading itself so it stays up while
+   * the queue is still loading. The list then renders without a second title.
+   */
+  showHeading?: boolean;
 };
 
 const SEV_CLASS: Record<1 | 2 | 3, string> = {
@@ -62,6 +67,7 @@ export function PortfolioExceptions({
   healthItems,
   queue,
   onChase,
+  showHeading = true,
 }: Props) {
   const fetch = useServerFn(getFirmPortfolio);
   const [data, setData] = useState<PortfolioResult | null>(null);
@@ -94,15 +100,7 @@ export function PortfolioExceptions({
     if ((!data && loading && merged.length === 0) || merged.length === 0) return null;
     const shown = merged.slice(0, 6);
     const more = merged.length - shown.length;
-    return (
-      <section
-        className={["attn-strip", className].filter(Boolean).join(" ")}
-        id="needs-attention"
-        aria-label="Needs attention today"
-        data-attention={merged.length}
-        data-today="true"
-      >
-        <h2>Needs attention today</h2>
+    const list = (
         <ul>
           {shown.map((row, index) => (
             <li key={row.clientId} className="attn-strip-row" data-client={row.clientId} data-reason={row.reason}>
@@ -140,6 +138,18 @@ export function PortfolioExceptions({
             <li className="attn-strip-more">and {more} more in the client list</li>
           ) : null}
         </ul>
+    );
+    if (!showHeading) return list;
+    return (
+      <section
+        className={["attn-strip", className].filter(Boolean).join(" ")}
+        id="needs-attention"
+        aria-label="Needs attention today"
+        data-attention={merged.length}
+        data-today="true"
+      >
+        <h2>Needs attention today</h2>
+        {list}
       </section>
     );
   }
