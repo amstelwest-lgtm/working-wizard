@@ -3,6 +3,7 @@
  * Confirm is the only write. The panel does not email anyone.
  */
 import type { ActionAutomationRow, Contradiction, DuplicateGroup } from "@/lib/action-plan-automation";
+import { actionDisplayTitle } from "@/lib/strategic-moves";
 
 const FOLLOW_UP: Record<ActionAutomationRow["followUp"], string> = {
   overdue: "Overdue",
@@ -40,7 +41,7 @@ export function ActionPlanAutomation({
           {needsConfirm.map((row) => (
             <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <span>
-                <b>{row.title}</b>
+                <b>{actionDisplayTitle(row.title)}</b>
                 {row.ownerSuggested && row.owner ? ` · ${row.owner.name}` : ""}
                 {row.dueSuggested && row.dueDate ? ` · due ${row.dueDate}` : ""}
                 {` · ${FOLLOW_UP[row.followUp]}`}
@@ -61,14 +62,14 @@ export function ActionPlanAutomation({
             .filter((row) => row.overdue && !row.ownerSuggested && !row.dueSuggested)
             .map((row) => (
               <li key={`overdue-${row.id}`}>
-                <b>Overdue</b> · {row.title} · {FOLLOW_UP[row.followUp]}
+                <b>Overdue</b> · {actionDisplayTitle(row.title)} · {FOLLOW_UP[row.followUp]}
               </li>
             ))}
         </ul>
       ) : null}
       {duplicates.map((group) => (
         <div key={group.keepId} className="mt-3 text-sm">
-          <p>Same action more than once: {group.title}</p>
+          <p>Same action more than once: {actionDisplayTitle(group.title)}</p>
           {canEdit
             ? group.dropIds.map((id) => (
                 <button
@@ -87,7 +88,7 @@ export function ActionPlanAutomation({
         <div key={`${pair.leftId}-${pair.rightId}`} className="mt-3 text-sm">
           <p>{pair.reason}</p>
           <p>
-            {pair.leftTitle} · {pair.rightTitle}
+            {actionDisplayTitle(pair.leftTitle)} · {actionDisplayTitle(pair.rightTitle)}
           </p>
           {canEdit ? (
             <button
