@@ -949,3 +949,145 @@ html:not(.dark) .owner-door .enlarge-btn:hover {
     align-self: stretch;
   }
 }
+
+/* ===== accountant shell: same navy frame and white topbar as the owner =====
+   The portal root carries .premium-shell. Inner pages stay on their own cards.
+   .owner-door inside a health plate still paints the score ring. */
+html:not(.dark) .accountant-portal.premium-shell {
+  --pp-frame: #0e2238;
+  --pp-frame-2: #112a44;
+  --pp-frame-line: rgba(255, 255, 255, 0.08);
+  --pp-frame-ink: #f2f6fc;
+  --pp-frame-dim: #c0cedf;
+  --pp-frame-faint: #7f93ab;
+  --pp-canvas: #f4f6fa;
+  --op-line: #e3e9f2;
+  --op-ink: #102a43;
+  --op-ink-dim: #3d5270;
+  --op-ink-faint: #5c7190;
+  --op-active: linear-gradient(180deg, rgba(37, 99, 235, 0.5), rgba(29, 78, 216, 0.42));
+  --op-active-ring: rgba(96, 165, 250, 0.32);
+  background: var(--pp-frame);
+}
+html:not(.dark) body:has(.premium-shell) {
+  background: #0e2238 !important;
+}
+.premium-shell #atmos {
+  display: none;
+}
+html:not(.dark) .premium-shell .topbar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--op-line, #e3e9f2);
+  box-shadow: none;
+  color: var(--op-ink, #102a43);
+  backdrop-filter: none;
+}
+html:not(.dark) .premium-shell .topbar .brand::after {
+  content: none;
+}
+html:not(.dark) .premium-shell .topbar .gold-text {
+  filter: none;
+}
+@media (min-width: 861px) {
+  .premium-shell .topbar > .brand {
+    display: none;
+  }
+}
+html:not(.dark) .premium-shell .topbar .period-pill,
+html:not(.dark) .premium-shell .topbar .firm-chip,
+html:not(.dark) .premium-shell .topbar .tb-btn:not(.gold),
+html:not(.dark) .premium-shell .topbar .settings-gear,
+html:not(.dark) .premium-shell .topbar .feature-finder-trigger,
+html:not(.dark) .premium-shell .topbar .profile-chip,
+html:not(.dark) .premium-shell .topbar-menu-btn {
+  border-color: var(--op-line, #e3e9f2);
+  background: #ffffff;
+  color: var(--op-ink, #102a43);
+}
+html:not(.dark) .premium-shell .topbar .firm-chip b,
+html:not(.dark) .premium-shell .topbar .firm-switcher select,
+html:not(.dark) .premium-shell .topbar .profile-name {
+  color: var(--op-ink, #102a43);
+}
+html:not(.dark) .premium-shell .topbar .firm-switcher select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #5c7190 50%),
+    linear-gradient(135deg, #5c7190 50%, transparent 50%);
+}
+html:not(.dark) .premium-shell .topbar .milon-theme-toggle,
+html:not(.dark) .premium-shell .topbar [data-theme-toggle] {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #0e2238;
+  background: #102a43;
+  color: #f2f6fc;
+}
+html:not(.dark) .premium-shell .topbar .profile-chip .av {
+  background: #dbeafe;
+  color: #2563eb;
+}
+html:not(.dark) .premium-shell .crumb,
+html:not(.dark) .premium-shell .crumb a,
+html:not(.dark) .premium-shell .crumb span {
+  color: var(--pp-frame-dim);
+}
+html:not(.dark) .premium-shell .crumb b {
+  color: #f2f6fc !important;
+}
+html:not(.dark) .premium-shell .crumb .aud {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #d5e2f2;
+}
+.premium-shell .deliverable-rail .rail-brand {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px 16px;
+}
+.premium-shell .deliverable-rail .rail-brand .brand {
+  display: flex;
+  align-items: center;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  font-size: 15px;
+}
+@media (max-width: 860px) {
+  .premium-shell .deliverable-rail .rail-brand {
+    display: none;
+  }
+  .premium-shell .topbar > .brand {
+    display: flex;
+  }
+}
+html:not(.dark) .premium-shell .deliverable-main {
+  background: var(--pp-canvas, #f4f6fa);
+}
+html:not(.dark) .premium-shell .accountant-nav .nav-heading.is-page > .nav-row,
+html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[aria-current="page"],
+html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"] {
+  background: var(--op-active);
+  background-image: var(--op-active);
+  box-shadow: inset 0 0 0 1px var(--op-active-ring);
+  border-radius: 10px;
+}
+html:not(.dark) .premium-shell .accountant-nav .nav-heading.is-page > .nav-row .nav-label,
+html:not(.dark) .premium-shell .accountant-nav .nav-heading.is-page > .nav-row .nav-chev,
+html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[aria-current="page"],
+html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"] {
+  color: #ffffff;
+  background: transparent;
+  box-shadow: none;
+}
+html:not(.dark) .premium-shell .btn.gold {
+  background-color: #2563eb;
+  background-image:
+    linear-gradient(180deg, #2e6bf0, #2056d6),
+    var(--op-gold-gleam, linear-gradient(115deg, #7a5400, #f6e7a2, #7a5400));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  border: 2px solid transparent;
+}

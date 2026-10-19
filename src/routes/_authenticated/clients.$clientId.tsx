@@ -102,7 +102,7 @@ import { FirmSwitcher } from "@/components/firm-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsMenu } from "@/components/settings-menu";
 import { FeatureFinder } from "@/components/feature-finder";
-import { SphereHero, type SpherePillar } from "@/components/sphere-hero";
+import { HEALTH_RING_CAPTION, SphereHero, type SpherePillar } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
 import {
@@ -248,7 +248,7 @@ import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/li
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
-import { rankStrategicMoves } from "@/lib/strategic-moves";
+import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import {
   hashFigures,
@@ -1384,6 +1384,7 @@ function ClientView() {
     pillarStatus,
     healthMap,
     ratioMeta: sphereRatioMeta,
+    inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
   });
 
   const simplifiedSections = [
@@ -1528,6 +1529,7 @@ function ClientView() {
     profile: briefingProfile,
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
     debtorDays: Number.isFinite(debtorDaysForMoves) ? debtorDaysForMoves : null,
+    financingHealth: pillarHealths.financing,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -3067,6 +3069,8 @@ function ClientView() {
         openActionTitles: openPlanTitles ?? [],
         overdueActions: openPlanOverdue,
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
+        cashOpening: hasFigures ? cashOutlook.opening : null,
+        cashFloor: hasFigures ? cashOutlook.floor : null,
         receivables: statementPosition.receivables ?? null,
         drafts: homeActivity.findings.flatMap((row) => {
           if (row.status === "approved" || !isVisibleAgentFinding(row)) return [];
@@ -3087,6 +3091,9 @@ function ClientView() {
       openPlanOverdue,
       openPlanUnavailable,
       cashOutlook.dipsBelowFloorWeek,
+      hasFigures,
+      cashOutlook.opening,
+      cashOutlook.floor,
       statementPosition.receivables,
       homeActivity,
       clientMarket,
@@ -3111,7 +3118,7 @@ function ClientView() {
 
   if (!client) {
     return (
-      <div className="accountant-portal">
+      <div className="accountant-portal premium-shell">
         <EmptyState
           className="min-h-screen"
           title="Client not found or you don't have access."
@@ -3132,7 +3139,7 @@ function ClientView() {
       selection={parseMarketSelection(client.market) ?? coerceMarketSelection(client.market)}
     >
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-        <div className={`accountant-portal milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
+        <div className={`accountant-portal premium-shell milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
           {/* Two honest steps while the client has no figures; the full studio
               tour runs once a real score exists, so "Start with Milōn Bot" and
               the seeded budget are never promised over an empty book. */}
@@ -3819,8 +3826,10 @@ function ClientView() {
                   ) : null}
                   {search.section === "score" ? (
                   <div style={{ marginBottom: 32 }}>
-                      <div className="health-plate">
+                      <div className="health-plate owner-door">
                         <SphereHero
+                          variant="ring"
+                          caption={HEALTH_RING_CAPTION}
                           hideCaption
                           overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
                           displayStatus={overallHealth.displayStatus}

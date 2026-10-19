@@ -59,17 +59,32 @@ export type BuildSphereArgs = {
   healthMap: Record<string, number>;
   /** RATIO_META from app.tsx (for friendly labels/descriptions) */
   ratioMeta: Record<string, { friendly?: string; techName?: string }>;
+  /** False for hotels and services. Stock Sitting Time then reads N/A. */
+  inventoryApplies?: boolean;
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
   const { pillarHealths, pillarDeltas, healthMap, ratioMeta, pillarStatus } = args;
   return (Object.keys(PILLAR_DRIVER_KEYS) as SpherePillar["id"][]).map((id) => {
-    const drivers = PILLAR_DRIVER_KEYS[id].map((k) => ({
-      key: k,
-      label: ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k,
-      description: ratioMeta[k]?.techName,
-      health: k in healthMap && Number.isFinite(healthMap[k]) ? healthMap[k] : Number.NaN,
-    }));
+    const financing =
+      id === "financing" && Number.isFinite(pillarHealths.financing) ? pillarHealths.financing : null;
+    const drivers = PILLAR_DRIVER_KEYS[id].map((k) => {
+      const noStock = k === "inventoryDays" && args.inventoryApplies === false;
+      const health = noStock
+        ? Number.NaN
+        : k === "equityMultiplier" && financing != null
+          ? financing
+          : k in healthMap && Number.isFinite(healthMap[k])
+            ? healthMap[k]
+            : Number.NaN;
+      return {
+        key: k,
+        label: ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k,
+        description: ratioMeta[k]?.techName,
+        health,
+        na: noStock ? true : undefined,
+      };
+    });
     // Drivers with no score still render as "—" so the owner sees what's missing.
     // Pillar health itself comes from computeOverallHealth (finite scores only).
     const health = pillarHealths[id];

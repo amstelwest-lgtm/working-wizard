@@ -34,6 +34,23 @@ jobs:
       - name: Production /clients/:id chunk has no initialization crash
         run: node scripts/client-route-build-render.mjs
 
+  side-parity:
+    name: owner/accountant parity
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Both sides of a mapped pair move together
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/side-parity.mjs
+
   # Blocking: ask-ai, milon-bot, brain-propose, and brain-deliverable-draft
   # prod are one-liners that import these entries from raw.githubusercontent.com
   # at a pinned commit. That runtime resolves the graph with Deno defaults —
