@@ -4,10 +4,19 @@ export function taxSampleEnabled(country: string | null | undefined): boolean {
 }
 
 /**
- * Home sample card only. A real client stays blank.
- * Hand-off and the practice team use taxSampleEnabled and ignore this flag.
+ * Home card for every ZA client.
+ * A demo client renders the sample card. A real client renders the preview card.
+ * US and a missing country stay off. The sample module still loads only through the dynamic import.
  */
 export function taxSampleCardVisible(
+  country: string | null | undefined,
+  _sampleClient?: boolean,
+): boolean {
+  return taxSampleEnabled(country);
+}
+
+/** Sample figures on the home card. A real client stays on the preview card. */
+export function taxSampleFiguresVisible(
   country: string | null | undefined,
   sampleClient: boolean,
 ): boolean {

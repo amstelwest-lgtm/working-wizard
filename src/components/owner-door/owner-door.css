@@ -351,10 +351,35 @@ html:not(.dark) .owner-door .owner-menu .milon-settings-btn:hover {
   gap: 14px;
 }
 
-@media (min-width: 1100px) {
-  .owner-door .owner-agents:has([data-agent-card="tax_specialist"]) {
+/* Four home cards: two by two until the row is wide enough for four equal cards. */
+@media (min-width: 761px) and (max-width: 1279px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .owner-door
+    .owner-pane[data-owner-home="true"]:not([data-bots="stack"])
+    .owner-agents:has([data-agent-card="tax_specialist"]) {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+.owner-door .tax-preview-actions {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.owner-door .owner-pane[data-owner-home="true"] .tax-preview-actions .owner-ask {
+  margin-top: 0;
 }
 
 .owner-door .owner-pane[data-owner-home="true"] .owner-agents {

@@ -12,6 +12,7 @@ type Loaded = ComponentType<{
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
+  sampleClient?: boolean;
 }>;
 
 export function TaxSpecialistSlot({
@@ -25,7 +26,7 @@ export function TaxSpecialistSlot({
   variant: TaxSampleVariant;
   audience: TaxSampleAudience;
   onOpen?: () => void;
-  /** Home card only. Real clients pass false and the card stays off. */
+  /** Home card only. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
 }) {
   const [Slot, setSlot] = useState<Loaded | null>(null);
@@ -44,5 +45,5 @@ export function TaxSpecialistSlot({
   }, [enabled]);
 
   if (!enabled || !Slot) return null;
-  return <Slot variant={variant} audience={audience} onOpen={onOpen} />;
+  return <Slot variant={variant} audience={audience} onOpen={onOpen} sampleClient={sampleClient} />;
 }

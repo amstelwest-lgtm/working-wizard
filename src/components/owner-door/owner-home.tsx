@@ -174,10 +174,10 @@ export function OwnerHome({
   /** Sample figures that are too small to be this business's rands. */
   notice?: string | null;
   inviteClientId?: string | null;
-  /** Resolved market. The sample card loads only when this is ZA. */
+  /** Resolved market. The home card loads only when this is ZA. */
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
-  /** clients.is_demo. Real clients do not get the sample tax card. */
+  /** clients.is_demo. A demo client gets the sample card. A real client gets the preview card. */
   sampleClient?: boolean;
   /** Firm whose current plan carries the Start here badge. */
   firmId?: string | null;
