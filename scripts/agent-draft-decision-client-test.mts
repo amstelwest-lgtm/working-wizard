@@ -281,5 +281,18 @@ assert(
   formatFindingProse("Revenue of 700,000.", [{ key: "revenue", value: 700000 }], ZA_MARKET) === "Revenue of R 700 000.",
   "rand amounts use the client market",
 );
+assert(
+  formatFindingProse(
+    "Profit is the weakest pillar at 70 out of 100.",
+    [{ key: "pillar:profit", value: 70 }],
+    US,
+  ) === "Profit is the weakest pillar at 70 out of 100.",
+  "a pillar score is not currency",
+);
+assert(
+  formatFindingProse("The weakest pillar is at $70 out of 100.", [], US) ===
+    "The weakest pillar is at 70 out of 100.",
+  "a stored score dollar sign is removed",
+);
 
 console.log("agent-draft-decision-client: ok");

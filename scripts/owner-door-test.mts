@@ -49,7 +49,7 @@ import {
   nextFmClip,
   nextFmIdleLoops,
 } from "../src/lib/fm-avatar-state.ts";
-import { ownerPresence } from "../src/lib/owner-presence.ts";
+import { ownerPresence, steerAssignedWork } from "../src/lib/owner-presence.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -152,6 +152,19 @@ assert(
 );
 assert(homeLines.analyst[1]?.startsWith("Customers owe"), "debtors stay under the analyst");
 assert(homeLines.advisor[0] === "Collect the two largest invoices.", "the advisor carries the top next move");
+const handed = ownerHomeLines(filled, "Move fixed contracts to variable / usage-based pricing", "advisor");
+assert(
+  !handed.financial_manager.some((line) => line === "Approve the payroll run."),
+  "a handed action leaves the financial manager",
+);
+assert(
+  handed.advisor.includes("Approve the payroll run."),
+  "a handed action sits on the assigned agent",
+);
+assert(
+  handed.advisor.includes("Move fixed contracts to variable / usage-based pricing."),
+  "the advisor still carries the next move",
+);
 for (const line of [...homeLines.financial_manager, ...homeLines.analyst, ...homeLines.advisor]) {
   assert(/^[A-Z]/.test(line) && /[.!?]$/.test(line), `a home line is a full sentence (${line})`);
 }
@@ -167,8 +180,8 @@ const underBooks = ownerAnswerTiles(
 );
 const underHome = ownerHomeLines(underBooks, null);
 assert(
-  /^Cash is \$[\d,]+ below your \$[\d,]+ minimum\.$/.test(underHome.financial_manager[0] ?? ""),
-  `a dip under the floor is a sentence (${underHome.financial_manager[0]})`,
+  /^Cash \$[\d,]+, \$[\d,]+ below your \$[\d,]+ minimum\.$/.test(underHome.financial_manager[0] ?? ""),
+  `a dip under the floor names the balance and the gap (${underHome.financial_manager[0]})`,
 );
 const outlookBooks = books({
   hasBooks: true,
@@ -199,8 +212,8 @@ assert(
         expenses: [{ amount: "4000", frequency: "recurring-weekly", startWeek: 1 }],
       },
     }),
-  ).financial_manager?.tone === "critical",
-  "cash under the floor is Critical",
+  ).financial_manager?.word === "Below your minimum",
+  "cash under the floor is a floor alert, not the Watch band",
 );
 assert(
   ownerCardStatuses(
@@ -384,6 +397,31 @@ assert(
   handoff.agents.find((agent) => agent.agent === "analyst")?.fmClip === "handoff" &&
     handoff.agents.find((agent) => agent.agent === "advisor")?.fmClip === "handoff",
   "both ends of a hand-off play the handoff clip",
+);
+
+const fmWorking = ownerPresence(
+  activity({
+    runs: [
+      {
+        id: "run-fm",
+        agent: "financial_manager",
+        client_id: "c",
+        status: "running",
+        queued_at: "2026-10-03T00:00:00.000Z",
+        started_at: "2026-10-03T00:00:01.000Z",
+        finished_at: null,
+      },
+    ],
+  }),
+);
+const steered = steerAssignedWork(fmWorking, "advisor", { agent: "financial_manager", status: "running" });
+assert(
+  steered.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
+  "a handed run shows Working on the assigned agent",
+);
+assert(
+  steered.agents.find((agent) => agent.agent === "financial_manager")?.motion === "idle",
+  "Working leaves the financial manager when the action was handed on",
 );
 
 const speaking = ownerPresence(emptyAgentActivity(), {

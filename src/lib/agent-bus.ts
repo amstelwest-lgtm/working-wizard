@@ -1285,7 +1285,11 @@ function applyCopyReplacements(text: string, replacements: { raw: string; format
   const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
   return text.replace(
     new RegExp(`(?<![R$£€][ \\u00a0\\u202f]?)(?<![\\d.])(?:${pattern})(?![\\d×%])`, "g"),
-    (match) => chosen.get(match) ?? match,
+    (match, offset: number) => {
+      const after = text.slice(offset + match.length, offset + match.length + 20);
+      if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
+      return chosen.get(match) ?? match;
+    },
   );
 }
 

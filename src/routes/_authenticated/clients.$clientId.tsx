@@ -277,7 +277,8 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { ownerPresence } from "@/lib/owner-presence";
+import { ownerPresence, steerAssignedWork } from "@/lib/owner-presence";
+import { loadActionHandoffRuns, loadLatestHandoffAgents } from "@/lib/owner-handoff-client";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -1639,6 +1640,8 @@ function ClientView() {
   const [openPlanOverdue, setOpenPlanOverdue] = useState(0);
   const [openPlanUnavailable, setOpenPlanUnavailable] = useState(false);
   const [openPlanTick, setOpenPlanTick] = useState(0);
+  const [openActionAgent, setOpenActionAgent] = useState<AgentKey | null>(null);
+  const [openActionRun, setOpenActionRun] = useState<{ agent: AgentKey; status: string } | null>(null);
   useEffect(() => {
     const bump = () => setOpenPlanTick((n) => n + 1);
     window.addEventListener("milon-action-plan-refresh", bump);
@@ -1649,11 +1652,13 @@ function ClientView() {
     let cancelled = false;
     setOpenPlanTitles(null);
     setOpenPlanUnavailable(false);
+    setOpenActionAgent(null);
+    setOpenActionRun(null);
     void (async () => {
       const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from("action_items")
-        .select("title, due_date, status")
+        .select("id, title, due_date, status")
         .eq("client_id", clientId)
         .neq("status", "done")
         .order("seq");
@@ -1662,16 +1667,32 @@ function ClientView() {
         setOpenPlanUnavailable(true);
         setOpenPlanTitles([]);
         setOpenPlanOverdue(0);
+        setOpenActionAgent(null);
+        setOpenActionRun(null);
         return;
       }
-      const rows = (data ?? []) as { title?: string | null; due_date?: string | null }[];
+      const rows = (data ?? []) as { id?: string | null; title?: string | null; due_date?: string | null }[];
       const titles = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
       });
+      const firstId = rows.find((row) => row.title?.trim() && row.id)?.id ?? null;
+      let agent: AgentKey | null = null;
+      let run: { agent: AgentKey; status: string } | null = null;
+      if (firstId) {
+        const [notes, runs] = await Promise.all([
+          loadLatestHandoffAgents([firstId]),
+          loadActionHandoffRuns([firstId]),
+        ]);
+        if (cancelled) return;
+        run = runs.get(firstId) ?? null;
+        agent = notes.get(firstId) ?? run?.agent ?? null;
+      }
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
       setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
+      setOpenActionAgent(agent);
+      setOpenActionRun(run);
     })();
     return () => {
       cancelled = true;
@@ -2906,7 +2927,10 @@ function ClientView() {
   );
 
   const homeActivity = useAgentActivity(clientId);
-  const homePresence = useMemo(() => ownerPresence(homeActivity), [homeActivity]);
+  const homePresence = useMemo(
+    () => steerAssignedWork(ownerPresence(homeActivity), openActionAgent, openActionRun),
+    [homeActivity, openActionAgent, openActionRun],
+  );
   const homeAgent: AgentKey | null =
     search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"
       ? search.agent
@@ -3018,8 +3042,8 @@ function ClientView() {
     clientProfitBridge.ebit,
   ]);
   const homeLines = useMemo(
-    () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null),
-    [homeBooks, strategicMoves],
+    () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent),
+    [homeBooks, strategicMoves, openActionAgent],
   );
   const homeStatus = useMemo(() => ownerCardStatuses(homeBooks), [homeBooks]);
   // Declared before the memo. A const after the loading return is still in

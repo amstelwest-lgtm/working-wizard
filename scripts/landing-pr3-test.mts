@@ -124,7 +124,10 @@ assert(
   css.includes("border-left:2px solid var(--cobalt);\n  border-bottom:2px solid var(--cobalt);"),
   "hero list checks are cobalt",
 );
-assert(css.includes(".pill-row.warn .bar i{\n  background:var(--warn);") || css.includes(".pill-row.warn .bar i{\n  background:var(--warn);\n}"), "cash status bar uses Attention");
+assert(
+  css.includes(".pill-row.warn .bar i{\n  background:linear-gradient(90deg,#2563eb,var(--cobalt));"),
+  "cash status bar in the hero is cobalt, not gold",
+);
 
 assert(lh.budgets.mobilePerformanceMin === 0.8, "LH mobile performance budget is 80");
 assert(lh.budgets.accessibilityMin === 1, "LH accessibility budget is 100");

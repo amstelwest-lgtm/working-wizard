@@ -868,16 +868,20 @@ html.dark .health-summary-card:hover .dig-cue {
   background: #163654;
   border-color: #2563eb;
 }
-/* Hand to stays cobalt on both portals, including owner moves buttons. */
+/* Hand to is solid brand cobalt on both portals, including owner moves buttons. */
 [data-hand-to-trigger] {
-  color: #0b5fff !important;
+  color: #ffffff !important;
   border-color: #0b5fff !important;
-  background: #ffffff;
+  background: #0b5fff !important;
+}
+[data-hand-to-trigger]:hover {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
 }
 html.dark [data-hand-to-trigger] {
-  color: #9ec1ff !important;
-  border-color: #3b82f6 !important;
-  background: transparent;
+  color: #ffffff !important;
+  border-color: #0b5fff !important;
+  background: #0b5fff !important;
 }
 .dig-leaf {
   display: flex;

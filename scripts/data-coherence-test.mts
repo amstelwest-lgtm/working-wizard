@@ -253,8 +253,8 @@ assert(
     ...karooBooks,
     openingMissing: false,
     cashOutlook: { opening: 30_000, closing: [30_000], floor: 34_903, dipsBelowFloorWeek: null },
-  }).financial_manager?.word === CASH_BELOW_FLOOR_STATUS,
-  "the Financial Manager card uses the same word",
+  }).financial_manager?.word === "Below your minimum",
+  "the Financial Manager card is a floor alert and does not say Critical",
 );
 const score = renderToStaticMarkup(
   createElement(SphereHero, {

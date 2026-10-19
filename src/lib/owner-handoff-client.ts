@@ -1,7 +1,15 @@
 import { supabase } from "@/integrations/supabase/client";
-import { handoffRequestNote } from "@/lib/owner-handoff";
+import { agentKeyFromAssignee } from "@/lib/action-handoff";
+import { handoffAssigneeName, handoffRequestNote } from "@/lib/owner-handoff";
 import { agentDisplayName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
+
+export const ACTION_PLAN_REFRESH_EVENT = "milon-action-plan-refresh";
+
+export function dispatchActionPlanRefresh(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(ACTION_PLAN_REFRESH_EVENT));
+}
 
 export type OwnerHandoffResult =
   | { ok: true; runId: string | null; status: string; dispatched: boolean }
@@ -112,6 +120,31 @@ export async function loadActionHandoffRuns(
     if (!id || out.has(id)) continue;
     if (agent !== "financial_manager" && agent !== "analyst" && agent !== "advisor") continue;
     out.set(id, { agent, status });
+  }
+  return out;
+}
+
+/** Newest "Handed to …" note per action, when it names one of the three bots. */
+export async function loadLatestHandoffAgents(actionIds: string[]): Promise<Map<string, AgentKey>> {
+  const out = new Map<string, AgentKey>();
+  const ids = actionIds.filter(Boolean);
+  if (!ids.length) return out;
+  const { data, error } = await supabase
+    .from("action_updates")
+    .select("action_item_id,note,created_at")
+    .in("action_item_id", ids)
+    .order("created_at", { ascending: false });
+  if (error || !Array.isArray(data)) return out;
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as { action_item_id?: unknown; note?: unknown };
+    const id = typeof record.action_item_id === "string" ? record.action_item_id : "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const note = typeof record.note === "string" ? record.note : null;
+    const agent = agentKeyFromAssignee(handoffAssigneeName(note));
+    if (agent) out.set(id, agent);
   }
   return out;
 }

@@ -123,3 +123,33 @@ export function ownerPresence(
 
   return { agents, handoff };
 }
+
+/**
+ * A handed action belongs on the agent it was given to.
+ * A queued run, or a hand-off beam aimed at someone else, must not leave
+ * Working… on the Financial Manager while the Advisor holds the action.
+ */
+export function steerAssignedWork(
+  presence: OwnerPresence,
+  assignee: AgentKey | null,
+  run: { agent: AgentKey; status: string } | null,
+): OwnerPresence {
+  if (!assignee || assignee === "financial_manager") return presence;
+  const active = run != null && WORKING.has(run.status);
+  if (!active && presence.handoff?.to !== "financial_manager") return presence;
+  return {
+    ...presence,
+    agents: presence.agents.map((card) => {
+      if (card.agent === assignee) {
+        if (!active || card.motion === "working") return card;
+        return { ...card, motion: "working", sentence: "Working…" };
+      }
+      const paintedByHandoff = presence.handoff?.to === card.agent;
+      const paintedByThisRun = active && run?.agent === card.agent;
+      if (card.motion === "working" && (paintedByHandoff || paintedByThisRun)) {
+        return { ...card, motion: "idle", sentence: "Nothing new from the books.", lookAt: null };
+      }
+      return card;
+    }),
+  };
+}
