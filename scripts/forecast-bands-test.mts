@@ -213,7 +213,11 @@ const blankWithRevenue = resolveThirteenWeekForecast({
 });
 assert(blankWithRevenue.source === "derived", "zero lines with P&L revenue are seeded");
 assert(blankWithRevenue.estimateLabel === "Estimated from the P&L", blankWithRevenue.estimateLabel ?? "missing estimate label");
-assert(parseFloat(blankWithRevenue.lines.revenue[0]?.amount ?? "0") > 0, "seeded inflow is the weekly run-rate");
+assert(blankWithRevenue.lines.revenue[0]?.frequency === "recurring-monthly", "a derived collection is monthly");
+assert(
+  (blankWithRevenue.inflow.filter((n) => n > 0).length) === 3,
+  `monthly cadence lands three times, got ${blankWithRevenue.inflow.filter((n) => n > 0).length}`,
+);
 assert(blankWithRevenue.totalInflow > 0 && blankWithRevenue.totalOutflow > 0, "seeded series is not $0 in and $0 out");
 
 const pastBank = resolveThirteenWeekForecast({

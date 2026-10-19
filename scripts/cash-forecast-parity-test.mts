@@ -21,6 +21,7 @@ import {
   cashEmptyPresentation,
   forecastLowestPoint,
   forecastPositionPhrase,
+  forecastStatusSentence,
   clientListRunwayCell,
   forecastRunwayHeadlineShared,
   openingSourceLabel,
@@ -71,7 +72,20 @@ assert(
 );
 const oneWeek = clientListRunwayCell({ weeks: 1, reason: null });
 assert(oneWeek.value === "1 week", "one week stays singular");
+const belowZero = clientListRunwayCell({ weeks: 0, reason: "Below zero now" });
+assert(belowZero.value === "Below zero now", "below zero wins over a stored week count");
 assert(story.note.includes("week 2"), story.note);
+const belowZeroSentence = forecastStatusSentence({
+  opening: 44480,
+  closings: [-41794, -50000, -86243],
+  floor: 73119,
+  floorText: "R73.1k",
+  formatAmount: (n) => `R${Math.round(n)}`,
+});
+assert(
+  belowZeroSentence.startsWith("Cash is below zero from week 1") && belowZeroSentence.includes("R-86243"),
+  belowZeroSentence,
+);
 
 const clear = forecastRunwayHeadlineShared({
   opening: 20000,

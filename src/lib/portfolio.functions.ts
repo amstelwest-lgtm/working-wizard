@@ -18,7 +18,7 @@ import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
 import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
-import { actionIsOverdue } from "@/lib/action-plan-counts";
+import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import {
   rankPortfolio,
   summarisePortfolio,
@@ -185,7 +185,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
       groupCount(sb, "data_requests", ids, "client_id, severity, status", (q) =>
         (q as { in: (c: string, v: string[]) => unknown }).in("status", ["open", "sent"]),
       ),
-      groupCount(sb, "action_items", ids, "client_id, status, due_date", (q) =>
+      groupCount(sb, "action_items", ids, "client_id, status, due_date, created_at", (q) =>
         (q as { neq: (c: string, v: string) => unknown }).neq("status", "done"),
       ),
       groupCount(sb, "proposed_next_steps", ids, "client_id, status", (q) =>
@@ -234,11 +234,15 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const openAct = tally(actions);
     const overdueAct = tally(actions, (r) =>
       actionIsOverdue(
-        {
-          status: typeof r.status === "string" ? r.status : "",
-          dueDate: typeof r.due_date === "string" ? r.due_date : null,
-          planTarget: planTarget.get(String(r.client_id ?? "")) ?? null,
-        },
+        actionOverdueInput(
+          {
+            status: typeof r.status === "string" ? r.status : "",
+            dueDate: typeof r.due_date === "string" ? r.due_date : null,
+            createdAt: typeof r.created_at === "string" ? r.created_at : null,
+            planTarget: planTarget.get(String(r.client_id ?? "")) ?? null,
+          },
+          today,
+        ),
         today,
       ),
     );

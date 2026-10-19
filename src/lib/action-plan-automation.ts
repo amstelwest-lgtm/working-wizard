@@ -78,6 +78,24 @@ export function addDays(iso: string, days: number): string | null {
   return new Date(time + days * 86400000).toISOString().slice(0, 10);
 }
 
+/**
+ * The due date the row is judged on. A stored date wins. With none, the
+ * suggestion is created + 14 days, or today + 14 when that day has passed.
+ * The plan target is not a due date.
+ */
+export function effectiveActionDue(
+  item: { dueDate?: string | null; createdAt?: string | null },
+  today: string,
+): string | null {
+  const stored = item.dueDate?.slice(0, 10) ?? "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
+  const created = item.createdAt?.slice(0, 10) ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(created)) return null;
+  const fromCreated = addDays(created, 14);
+  if (fromCreated && fromCreated >= today.slice(0, 10)) return fromCreated;
+  return addDays(today.slice(0, 10), 14);
+}
+
 export function suggestOwner(title: string, team: readonly TeamOption[]): SuggestedOwner {
   const hay = title.toLowerCase();
   const people = team
@@ -113,9 +131,7 @@ export function planAutomation(
     const hasOwner = Boolean(item.ownerId || item.ownerName?.trim());
     const owner = hasOwner ? null : suggestOwner(item.title, team);
     const dueSuggested = !item.dueDate;
-    const fromCreated = dueSuggested ? addDays(item.createdAt, 14) : null;
-    const fromToday = dueSuggested ? addDays(today, 14) : null;
-    const dueDate = item.dueDate ?? (fromCreated && fromCreated >= today ? fromCreated : fromToday);
+    const dueDate = effectiveActionDue(item, today);
     let followUp: FollowUpState = "none";
     if (item.status === "done") followUp = "done";
     else if (item.dueDate && item.dueDate < today) followUp = "overdue";

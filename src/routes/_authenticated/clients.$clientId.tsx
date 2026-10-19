@@ -302,6 +302,7 @@ import {
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
+import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
@@ -1775,14 +1776,25 @@ function ClientView() {
     }
     setOpenPlanUnavailable(false);
     void (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("action_items_v")
-        .select("id, title, due_date, status, owner_name")
-        .eq("client_id", clientId)
-        .neq("status", "done")
-        .order("seq");
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const [itemsRes, planRes] = await Promise.all([
+        supabase
+          .from("action_items_v")
+          .select("id, title, due_date, status, owner_name, created_at")
+          .eq("client_id", clientId)
+          .neq("status", "done")
+          .order("seq"),
+        supabase
+          .from("action_plans")
+          .select("target_date")
+          .eq("client_id", clientId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle(),
+      ]);
       if (cancelled) return;
+      const { data, error } = itemsRes;
       if (error) {
         setOpenPlanUnavailable(true);
         setOpenPlanTitles([]);
@@ -1797,12 +1809,32 @@ function ClientView() {
         id?: string | null;
         title?: string | null;
         due_date?: string | null;
+        created_at?: string | null;
         owner_name?: string | null;
       }[];
+      const planTarget = planRes.data?.target_date ?? null;
       const titles = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
       });
+      setOpenPlanUnavailable(false);
+      setOpenPlanTitles(titles);
+      setOpenPlanOverdue(
+        rows.filter((row) =>
+          actionIsOverdue(
+            actionOverdueInput(
+              {
+                status: "open",
+                dueDate: row.due_date ?? null,
+                createdAt: row.created_at ?? null,
+                planTarget,
+              },
+              today,
+            ),
+            today,
+          ),
+        ).length,
+      );
       const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
       const [assignments, runs, noteLog] = ids.length
         ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids), loadActionNotes(ids)])
@@ -1867,9 +1899,7 @@ function ClientView() {
           assigneeName: pending.assigneeName,
         });
       }
-      setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
-      setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
       paintAssignments(labelled, merged, noteLog, runs);
     })();
     return () => {

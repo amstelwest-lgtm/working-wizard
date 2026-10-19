@@ -76,6 +76,7 @@ export function BudgetVerdictStrip({
   extraActions = null,
   signoffKnown = true,
   presentation = "strip",
+  onBuild,
 }: {
   periodLabel: string;
   revenueBudget: number;
@@ -95,9 +96,13 @@ export function BudgetVerdictStrip({
   extraActions?: ReactNode;
   /** Owner Budget is a slim stat row. The accountant strip stays. */
   presentation?: "owner" | "strip";
+  /** Builds an empty plan from the saved statement. */
+  onBuild?: () => void;
 }) {
   const money = (n: number) => stickyMoney(n, market);
-  const hasActuals = revenueActual != null && chip !== "None";
+  const unbuilt = budgetFigureMissing(revenueBudget) && budgetFigureMissing(profitBudget);
+  const monthlyActuals = chip === "From this month's actuals";
+  const hasActuals = monthlyActuals && revenueActual != null && !unbuilt;
   const seeded = budgetSeededFromStatement({
     chip,
     revenue: revenueActual ?? 0,
@@ -121,6 +126,8 @@ export function BudgetVerdictStrip({
           higherIsBetter
           market={market}
           money={money}
+          unbuilt={unbuilt}
+          onBuild={onBuild}
         />
         <OwnerBudgetCompare
           label="Profit vs budget"
@@ -129,6 +136,7 @@ export function BudgetVerdictStrip({
           higherIsBetter
           market={market}
           money={money}
+          monthlyActuals={monthlyActuals}
         />
         <div className="col-span-2 flex min-w-0 items-start justify-between gap-2 sm:col-span-1">
           <div className="min-w-0">
@@ -156,7 +164,19 @@ export function BudgetVerdictStrip({
         {periodLabel}
       </p>
       <p className="answer-strip__sentence mt-1 text-[#102A43] dark:text-slate-100">
-        {seeded ? (
+        {unbuilt ? (
+          <span data-budget-unbuilt="">
+            Budget not built yet
+            {onBuild ? (
+              <>
+                {" · "}
+                <button type="button" className="font-semibold text-[#0B5FFF] underline" onClick={onBuild}>
+                  Build
+                </button>
+              </>
+            ) : null}
+          </span>
+        ) : seeded ? (
           "Budget seeded from these figures — variance starts with the first uploaded month"
         ) : (
           <span className="flex flex-col gap-1 sm:block">
@@ -205,6 +225,12 @@ export function BudgetVerdictStrip({
                 <span className="whitespace-nowrap tabular-nums">{money(profitBudget)}</span>
               )}
             </span>
+            {monthlyActuals ? null : (
+              <span data-no-monthly-actuals="">
+                <span className="hidden text-slate-400 sm:inline"> · </span>
+                No monthly actuals yet
+              </span>
+            )}
           </span>
         )}
       </p>
@@ -258,6 +284,9 @@ function OwnerBudgetCompare({
   higherIsBetter,
   market,
   money,
+  unbuilt = false,
+  onBuild,
+  monthlyActuals = true,
 }: {
   label: string;
   budget: number;
@@ -265,12 +294,27 @@ function OwnerBudgetCompare({
   higherIsBetter: boolean;
   market: ResolvedMarket;
   money: (n: number) => string;
+  unbuilt?: boolean;
+  onBuild?: () => void;
+  monthlyActuals?: boolean;
 }) {
   const missing = budgetFigureMissing(budget);
   return (
     <div className="min-w-0" data-budget-missing={missing ? "true" : "false"}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#3D5270]">{label}</p>
-      {missing ? (
+      {unbuilt ? (
+        <p className="mt-1 text-[13px] font-medium text-[#102A43]" data-budget-unbuilt="">
+          Budget not built yet
+          {onBuild ? (
+            <>
+              {" · "}
+              <button type="button" className="font-semibold text-[#0B5FFF] underline" onClick={onBuild}>
+                Build
+              </button>
+            </>
+          ) : null}
+        </p>
+      ) : missing ? (
         <p className="mt-1 text-[13px] font-medium text-[#102A43]">No budget yet</p>
       ) : actual == null ? (
         <p className="mt-1 whitespace-nowrap text-[13px] font-semibold tabular-nums text-[#102A43]">
@@ -286,6 +330,11 @@ function OwnerBudgetCompare({
             <Delta budget={budget} actual={actual} higherIsBetter={higherIsBetter} market={market} />
             )
           </span>
+        </p>
+      )}
+      {unbuilt || monthlyActuals || missing ? null : (
+        <p className="mt-1 text-[12px] text-[#3D5270]" data-no-monthly-actuals="">
+          No monthly actuals yet
         </p>
       )}
     </div>

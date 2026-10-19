@@ -114,7 +114,7 @@ import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
-import { cashOutlookIsCritical, clientListStatusWord } from "@/lib/cash-forecast-parity";
+import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
@@ -5781,7 +5781,18 @@ function Index() {
                       refreshKey={`${activeTab}|${advisoryBump}`}
                       onChanged={() => setAdvisoryBump((n) => n + 1)}
                       currentFigures={{
-                        runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
+                        runwayLabel: clientListRunwayHeadline({
+                          source: ownerOutlook.source,
+                          opening: ownerOutlook.opening,
+                          closings: ownerOutlook.closing,
+                          floor: ownerOutlook.floor,
+                          totalInflow: ownerOutlook.totalInflow,
+                          totalOutflow: ownerOutlook.totalOutflow,
+                          runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
+                          cashGenerative: ownerMetrics.runway.kind === "cash_generative",
+                          healthOverall: overallHealth.overall,
+                          openingMissing: ownerOpeningMissing,
+                        }),
                         cash: ownerOutlook.opening,
                         healthScore: overallHealth.overall,
                       }}

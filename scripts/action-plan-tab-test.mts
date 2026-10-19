@@ -20,8 +20,10 @@ import ActionPlan, {
 import { lazyPanel, TabErrorBoundary } from "../src/components/lazy-panel";
 import {
   actionIsOverdue,
+  actionOverdueInput,
   countActionPlan,
   displayedPlanPeriod,
+  displayedPlanTarget,
   formatActionPlanCounts,
   overdueActionsLabel,
 } from "../src/lib/action-plan-counts";
@@ -78,12 +80,53 @@ assert(
       status: "not_started",
       due_date: null,
       progress_pct: 0,
-      created_at: "2026-09-01T00:00:00.000Z",
+      created_at: "",
       plan_target: "2026-09-29",
     },
     new Date("2026-10-19T12:00:00"),
   ) === "overdue",
-  "the overdue filter includes a past plan target",
+  "no due date and no suggestion uses a past plan target",
+);
+assert(
+  deriveActionHealth(
+    {
+      status: "not_started",
+      due_date: null,
+      progress_pct: 0,
+      created_at: "2026-09-01T00:00:00.000Z",
+      plan_target: "2026-09-29",
+    },
+    new Date("2026-10-19T12:00:00"),
+  ) === "not_started",
+  "a future suggested due is not overdue",
+);
+assert(
+  deriveActionHealth(
+    {
+      status: "not_started",
+      due_date: "2026-09-08",
+      progress_pct: 0,
+      created_at: "2026-08-31T00:00:00.000Z",
+      plan_target: "2026-09-29",
+    },
+    new Date("2026-10-19T12:00:00"),
+  ) === "overdue",
+  "a past stored due date is overdue",
+);
+const suggested = actionOverdueInput(
+  {
+    status: "not_started",
+    dueDate: null,
+    createdAt: "2026-10-13",
+    planTarget: "2026-09-29",
+  },
+  "2026-10-19",
+);
+assert(suggested.dueDate === "2026-10-27" && suggested.planTarget == null, `suggested due ${suggested.dueDate}`);
+assert(
+  displayedPlanTarget("2026-09-29", "Set your outcome goal for this quarter", new Date("2026-10-19T12:00:00")) ===
+    "2026-12-31",
+  "a placeholder goal targets the end of the quarter shown",
 );
 const counted = countActionPlan(
   [
