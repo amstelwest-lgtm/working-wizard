@@ -7,6 +7,7 @@ import { existsSync, statSync, writeFileSync } from "node:fs";
 import { createElement } from "react";
 import { render } from "@react-email/render";
 import { chromium } from "@playwright/test";
+import { firmSignupHref } from "../src/lib/firm-signup-copy";
 import { buildTrialBoard, trialReading } from "../src/lib/trial-demo";
 import TryOutreachEmail, {
   TRY_OUTREACH_ADDRESS,
@@ -14,6 +15,8 @@ import TryOutreachEmail, {
   TRY_OUTREACH_EXAMPLE_ALT,
   TRY_OUTREACH_EXAMPLE_SRC,
   TRY_OUTREACH_HEADERS,
+  TRY_OUTREACH_INCENTIVES,
+  TRY_OUTREACH_INCENTIVES_KICKER,
   TRY_OUTREACH_PREVIEW,
   TRY_OUTREACH_SIGN_OFF,
   TRY_OUTREACH_SIGNUP_LABEL,
@@ -179,6 +182,8 @@ const required = [
   "Holds the 13-week cash line and the profit bridge.",
   "Reads the ratios, the margins, and what is drifting.",
   "Turns that reading into the next move.",
+  TRY_OUTREACH_INCENTIVES_KICKER,
+  ...TRY_OUTREACH_INCENTIVES,
 ];
 for (const needle of required) {
   if (!html.includes(needle)) throw new Error(`html missing ${needle}`);
@@ -198,6 +203,13 @@ if (
   !html.includes(TRY_OUTREACH_SIGNUP_URL)
 ) {
   throw new Error("html missing the signup link");
+}
+const starterSignup = `https://www.milonfinance.com${firmSignupHref("starter")}&utm_source=email`;
+if (TRY_OUTREACH_SIGNUP_URL !== starterSignup) {
+  throw new Error(`signup link is not the accountant Starter plan: ${TRY_OUTREACH_SIGNUP_URL}`);
+}
+if (html.includes("plan=solo") || text.includes("plan=solo")) {
+  throw new Error("Start free trial still links to plan=solo");
 }
 if (!text.includes(TRY_OUTREACH_SUBJECT)) throw new Error("text missing the subject");
 if (!text.includes(TRY_OUTREACH_CTA_LABEL)) throw new Error("text missing the button label");

@@ -26,9 +26,19 @@ export const TRY_OUTREACH_PREVIEW =
   "The Milōn AI finance team: the Financial Manager, the Analyst and the Advisor. Sample statements are loaded. The agents analyze them and give a health score, key ratios and next steps.";
 export const TRY_OUTREACH_TRY_URL = "https://www.milonfinance.com/try?utm_source=email";
 export const TRY_OUTREACH_CTA_LABEL = "Talk to your AI finance team";
-/** Same accountant signup route as firmSignupHref() — Create Firm, Solo monthly. */
+/**
+ * Accountant Starter, monthly. Firms must not land on Solo.
+ * Matches firmSignupHref("starter") plus the email utm.
+ */
 export const TRY_OUTREACH_SIGNUP_URL =
-  "https://www.milonfinance.com/auth?signup=true&plan=solo&interval=month&utm_source=email";
+  "https://www.milonfinance.com/auth?signup=true&plan=starter&interval=month&utm_source=email";
+export const TRY_OUTREACH_INCENTIVES_KICKER = "In our tests";
+export const TRY_OUTREACH_INCENTIVES = [
+  "80% time saved",
+  "70% lower cost to serve a retainer advisory client",
+  "a better client experience",
+  "advisory becomes packageable",
+] as const;
 export const TRY_OUTREACH_SIGNUP_LABEL = "Start free trial";
 export const TRY_OUTREACH_UNSUBSCRIBE_URL = "https://www.milonfinance.com/unsubscribe";
 export const TRY_OUTREACH_ADDRESS =
@@ -89,6 +99,9 @@ export const TRY_OUTREACH_TEXT = [
   "Financial Manager. Holds the 13-week cash line and the profit bridge.",
   "Analyst. Reads the ratios, the margins, and what is drifting.",
   "Advisor. Turns that reading into the next move.",
+  "",
+  TRY_OUTREACH_INCENTIVES_KICKER,
+  ...TRY_OUTREACH_INCENTIVES,
   "",
   TRY_OUTREACH_EXAMPLE_ALT,
   "",
@@ -248,6 +261,36 @@ export default function TryOutreachEmail() {
               }}
             />
           </Section>
+
+          <Text
+            style={{
+              margin: "28px 0 0",
+              fontFamily: FONT,
+              fontSize: 12,
+              lineHeight: "16px",
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: BLUE,
+            }}
+          >
+            {TRY_OUTREACH_INCENTIVES_KICKER}
+          </Text>
+          {TRY_OUTREACH_INCENTIVES.map((line) => (
+            <Text
+              key={line}
+              style={{
+                margin: "8px 0 0",
+                fontFamily: FONT,
+                fontSize: 16,
+                lineHeight: "22px",
+                fontWeight: 700,
+                color: INK,
+              }}
+            >
+              {line}
+            </Text>
+          ))}
 
           <div
             style={{ marginTop: 28 }}

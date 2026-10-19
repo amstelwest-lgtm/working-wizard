@@ -1,15 +1,20 @@
 /**
- * Public sample. Gold is the Start free trial CTA only — every in-flow step
- * is cobalt. Avatars stay muted and silent.
+ * Public sample. Gold is the Start free trial CTA and the demo Sign off
+ * button. Every other step is cobalt. Avatars stay muted and silent.
+ * Sign off stays in the browser.
  */
 import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { TrySamplePack } from "@/components/try-sample-pack";
+import { TrySchedule, type TryCallInput, type TryCallResult } from "@/components/try-schedule";
+import { TrySignoff } from "@/components/try-signoff";
 import {
   readTrialPublicConfig,
   runTrialAnalyst,
   startTrialSample,
   submitTrialLead,
 } from "@/lib/trial-demo.functions";
+import { bookTrialCall, noteTrialDemoView } from "@/lib/trial-followup.functions";
 import type { TrialBoard, TrialFinding } from "@/lib/trial-demo";
 import type { MarketId } from "@/lib/market/types";
 
@@ -58,7 +63,7 @@ const TOPIC_USER_LINE: Record<TryTopic, string> = {
 const TOPIC_FM_REPLY: Record<TryTopic, string> = {
   profit: `Here it is — ${SAMPLE_BUSINESS_NAME}'s revenue walked down to net profit, step by step. I hold the profit bridge; the Analyst reads the margins.`,
   cash: `Here's the 13-week cash line. The sample has no bank balance, so it opens at zero and follows the monthly run-rate — an estimate, not a bank balance.`,
-  advisory: `The Advisor is still turning this diagnosis into the advisory pack — it isn't ready on the sample yet. I'll only show you real work, so here's where it stands.`,
+  advisory: `Here's the advisory pack for ${SAMPLE_BUSINESS_NAME}, labelled SAMPLE. The Advisor turned this diagnosis into moves. Sign it off here — nothing is written to a live client.`,
 };
 
 export const FM_INTRO = `We've diagnosed ${SAMPLE_BUSINESS_NAME}'s financials. The profitability report and the 13-week cash forecast are built and waiting for your sign-off. Where should we start — the profit report, the cash forecast, or the advisory pack based on this diagnosis?`;
@@ -93,6 +98,7 @@ export type TryScreenProps = {
   }) => void;
   onShowFindings?: () => void;
   onPickTopic?: (topic: TryTopic) => void;
+  onBookCall?: (input: TryCallInput) => Promise<TryCallResult>;
 };
 
 function TeamRow({ thinking }: { thinking?: boolean }) {
@@ -268,13 +274,14 @@ function FmBubble({ children, intro }: { children: React.ReactNode; intro?: bool
 
 function TryConversation({
   picks,
-  market,
+  board,
   onPick,
 }: {
   picks: TryTopic[];
-  market: MarketId;
+  board: TrialBoard | null;
   onPick?: (topic: TryTopic) => void;
 }) {
+  const market = (board?.market ?? "US") as MarketId;
   const remaining = TRY_TOPICS.filter((topic) => !picks.includes(topic));
   return (
     <section
@@ -306,18 +313,12 @@ function TryConversation({
               </div>
             </div>
             <FmBubble>{TOPIC_FM_REPLY[topic]}</FmBubble>
-            {topic === "advisory" ? (
-              <div className="try-pack-preparing" role="status">
-                <p className="try-chat-board-who">
-                  <span>Milōn</span> Advisor
-                </p>
-                <strong>Preparing your advisory pack — coming next.</strong>
-                <p>
-                  The Advisor turns this diagnosis into recommended moves. The pack isn't ready on
-                  the sample yet, and we don't show a mock-up in its place.
-                </p>
+            {topic === "advisory" && board ? (
+              <div className="try-chat-board">
+                <TrySamplePack board={board} />
+                <TrySignoff />
               </div>
-            ) : (
+            ) : topic === "advisory" ? null : (
               <div className="try-chat-board">
                 <p className="try-chat-board-caption">
                   <span className="try-stamp">SAMPLE</span>
@@ -333,6 +334,7 @@ function TryConversation({
                     cash={topic === "cash"}
                   />
                 </Suspense>
+                <TrySignoff />
               </div>
             )}
           </Fragment>
@@ -465,7 +467,15 @@ function TurnstileBox({ siteKey, onToken }: { siteKey: string; onToken: (token: 
   return <div ref={host} className="try-turnstile" />;
 }
 
-function Frame({ phase, children }: { phase: TryPhase; children: React.ReactNode }) {
+function Frame({
+  phase,
+  onBookCall,
+  children,
+}: {
+  phase: TryPhase;
+  onBookCall?: (input: TryCallInput) => Promise<TryCallResult>;
+  children: React.ReactNode;
+}) {
   return (
     <main className="try-page" data-try-phase={phase}>
       <div className="try-wrap">
@@ -476,6 +486,7 @@ function Frame({ phase, children }: { phase: TryPhase; children: React.ReactNode
           <span className="try-stamp">SAMPLE</span>
         </div>
         {children}
+        <TrySchedule onBook={onBookCall} />
         <p className="try-sign">The MILŌN Team</p>
       </div>
       <div className="try-ctabar" aria-label="Start a free trial">
@@ -500,7 +511,7 @@ export function TryScreen(props: TryScreenProps) {
 
   if (props.phase === "start") {
     return (
-      <Frame phase="start">
+      <Frame phase="start" onBookCall={props.onBookCall}>
         <p className="try-kicker">Sample</p>
         <h1 className="try-title try-title-hero">See a health score on sample figures.</h1>
         <p className="try-lead">{TRY_OPENING}</p>
@@ -523,7 +534,7 @@ export function TryScreen(props: TryScreenProps) {
 
   if (props.phase === "gate") {
     return (
-      <Frame phase="gate">
+      <Frame phase="gate" onBookCall={props.onBookCall}>
         <p className="try-kicker">Sample</p>
         <h1 className="try-title">Where should we send this?</h1>
         <p className="try-lead">
@@ -602,7 +613,7 @@ export function TryScreen(props: TryScreenProps) {
 
   const board = props.board;
   return (
-    <Frame phase={props.phase}>
+    <Frame phase={props.phase} onBookCall={props.onBookCall}>
       <p className="try-kicker">Sample</p>
       <h1 className="try-title">Sample health score</h1>
       <p className="try-lead">{TRY_OPENING}</p>
@@ -702,11 +713,7 @@ export function TryScreen(props: TryScreenProps) {
         </section>
       ) : null}
 
-      <TryConversation
-        picks={props.picks ?? []}
-        market={(board?.market ?? "US") as MarketId}
-        onPick={props.onPickTopic}
-      />
+      <TryConversation picks={props.picks ?? []} board={board ?? null} onPick={props.onPickTopic} />
 
       {props.runsLeft != null ? (
         <p className="try-runs">Sample runs left: {props.runsLeft}</p>
@@ -726,11 +733,15 @@ function readUtm(): Record<string, string> {
   return out;
 }
 
+let trialViewNoted = false;
+
 export function TryDemo() {
   const start = useServerFn(startTrialSample);
   const submit = useServerFn(submitTrialLead);
   const analyst = useServerFn(runTrialAnalyst);
   const loadConfig = useServerFn(readTrialPublicConfig);
+  const noteView = useServerFn(noteTrialDemoView);
+  const bookCall = useServerFn(bookTrialCall);
   const [phase, setPhase] = useState<TryPhase>("start");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -746,6 +757,14 @@ export function TryDemo() {
   const [findingsPending, setFindingsPending] = useState(false);
   const [picks, setPicks] = useState<TryTopic[]>([]);
   const [runsLeft, setRunsLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (trialViewNoted) return;
+    trialViewNoted = true;
+    void noteView().catch(() => {
+      trialViewNoted = false;
+    });
+  }, [noteView]);
 
   useEffect(() => {
     let cancelled = false;
@@ -827,6 +846,7 @@ export function TryDemo() {
         setPicks((current) => (current.includes(topic) ? current : [...current, topic]));
         setError(null);
       }}
+      onBookCall={(input) => bookCall({ data: input })}
     />
   );
 }
