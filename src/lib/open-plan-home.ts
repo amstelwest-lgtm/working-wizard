@@ -51,7 +51,7 @@ export function openPlanTitles(rows: readonly { title?: string | null }[]): stri
 
 /**
  * The open action that belongs on an agent card.
- * An in-progress run wins over an older note. Otherwise the newest hand-off wins.
+ * The newest hand-off wins, including over an older run that is still queued.
  * The Financial Manager keeps the unassigned cash line, so a hand-off to that bot
  * does not move the card.
  */
@@ -80,7 +80,7 @@ export function handedHomeAction(
       active,
     });
   }
-  candidates.sort((a, b) => Number(b.active) - Number(a.active) || b.at - a.at);
+  candidates.sort((a, b) => b.at - a.at || Number(b.active) - Number(a.active));
   const best = candidates[0];
   if (!best) return null;
   const inFlight = best.active || best.run == null;
@@ -91,5 +91,24 @@ export function handedHomeAction(
     run: inFlight
       ? { agent: best.agent, status: best.active && best.run ? best.run.status : "queued" }
       : null,
+  };
+}
+
+/**
+ * A hand-off that just landed stays on that agent until its note is stored.
+ * A refetch that still sees the previous assignee must not paint them again.
+ */
+export function preferPendingHandoff(
+  loaded: HandedHomeAction | null,
+  pending: { id: string; title: string; agent: AgentKey } | null,
+  notes: ReadonlyMap<string, { agent: AgentKey }>,
+): HandedHomeAction | null {
+  if (!pending || pending.agent === "financial_manager") return loaded;
+  if (notes.get(pending.id)?.agent === pending.agent) return loaded;
+  return {
+    id: pending.id,
+    title: pending.title,
+    agent: pending.agent,
+    run: { agent: pending.agent, status: "queued" },
   };
 }

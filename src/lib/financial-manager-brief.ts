@@ -10,7 +10,7 @@ import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { storedSeriesReading } from "./client-metrics.ts";
-import { cashFloorCopy, cashFloorForHome } from "./owner-answers.ts";
+import { cashFloorCopy } from "./owner-answers.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
@@ -242,35 +242,27 @@ export function buildFinancialManagerBrief(input: {
           const at = series.closing.findIndex((balance) => balance < series.floor);
           return at >= 0 ? at + 1 : null;
         })();
-  const fromSeries =
-    series == null
-      ? null
-      : cashFloorForHome({
-          openingMissing: false,
-          cashflow: input.cashflow,
-          market: input.market ?? { currency: "ZAR", locale: "en-ZA" },
-          money: input.formatMoney,
-        });
   const cashOpening = series?.opening ?? passedOpening;
   const cashFloor = series?.floor ?? passedFloor;
   const dipWeek = series ? seriesDip : (input.cashDipWeek ?? null);
-  const cashCopy =
-    !input.openingMissing && !pillarAgrees
-      ? (fromSeries ??
-        (cashOpening != null &&
-        cashFloor != null &&
-        Number.isFinite(cashOpening) &&
-        Number.isFinite(cashFloor)
-          ? cashFloorCopy({
-              opening: cashOpening,
-              floor: cashFloor,
-              dipsBelowFloorWeek: input.cashDipWeek ?? null,
-              closing: input.cashClosing,
-              money: input.formatMoney,
-              market: input.market,
-            })
-          : null))
+  const floorCopy =
+    !input.openingMissing &&
+    cashOpening != null &&
+    cashFloor != null &&
+    Number.isFinite(cashOpening) &&
+    Number.isFinite(cashFloor)
+      ? cashFloorCopy({
+          opening: cashOpening,
+          floor: cashFloor,
+          dipsBelowFloorWeek: dipWeek,
+          closing: series?.closing ?? input.cashClosing,
+          money: input.formatMoney,
+          market: input.market,
+        })
       : null;
+  // Watch and Healthy keep the card sentence off the floor. The Health pillar
+  // still uses this same floor reading, so its line is not cleared with the chip.
+  const cashCopy = pillarAgrees ? null : floorCopy;
   const cashFloorLine = input.openingMissing
     ? `${OPENING_BALANCE_MISSING}.`
     : pillarAgrees && cashOpening != null && Number.isFinite(cashOpening)
@@ -328,6 +320,6 @@ export function buildFinancialManagerBrief(input: {
     chase,
     cashFloorLine,
     cashFloorChip,
-    healthCue: input.openingMissing ? null : (cashCopy?.healthCue ?? null),
+    healthCue: input.openingMissing ? null : (floorCopy?.healthCue ?? null),
   };
 }

@@ -97,6 +97,23 @@ const plain = (line: string) => line.replace(/\u00a0/g, " ");
 assert(plain(brief.cashFloorLine ?? "") === plain(card), `brief ${brief.cashFloorLine} / card ${card}`);
 assert(brief.healthCue?.includes("93"), brief.healthCue ?? "no health cue");
 
+const watch = buildFinancialManagerBrief({
+  clientName: "Chill Pepper Boutique Hotel",
+  currentFinancials: chillFinancials,
+  snapshots: [],
+  cashflow: chillCashflow,
+  cashOpening: staleOpening,
+  cashFloor: staleFloor,
+  cashClosing: [staleOpening],
+  cashPillarStatus: "at_risk",
+  market: ZA_MARKET,
+  formatMoney: money,
+});
+assert(plain(watch.cashFloorLine ?? "") === `Cash is ${money(live!.opening)}.`, watch.cashFloorLine ?? "");
+assert(watch.cashFloorChip == null, "Watch keeps the floor chip off the card");
+assert(watch.healthCue?.includes("93") === true, watch.healthCue ?? "Watch cleared the Health cash line");
+assert(!watch.healthCue?.includes("34 903"), watch.healthCue ?? "");
+
 const interest = interestOfRevenue(chillFinancials);
 assert(interest != null, "interest is a P&L fact");
 assert(interest!.interest === 19_800, `interest ${interest!.interest}`);

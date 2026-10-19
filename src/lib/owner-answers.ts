@@ -379,8 +379,8 @@ export function cashFloorCopy(input: {
 
 /**
  * The cash reading the owner Financial Manager card shows.
- * Health uses this same result, so the pillar line appears whenever the card
- * says below the minimum.
+ * Health calls this with the same outlook and, when the card has no outlook,
+ * the same cashflow. The pillar band does not clear the health line.
  */
 export function cashFloorForHome(input: {
   openingMissing?: boolean;
@@ -395,7 +395,8 @@ export function cashFloorForHome(input: {
   money: (amount: number) => string;
 }): CashFloorCopy | null {
   if (input.openingMissing) return null;
-  const series = storedSeriesReading(input.cashflow);
+  const outlook = input.cashOutlook;
+  const series = outlook && finite(outlook.opening) && finite(outlook.floor) ? storedSeriesReading(input.cashflow) : null;
   if (series) {
     const dipAt = series.closing.findIndex((balance) => balance < series.floor);
     return cashFloorCopy({
@@ -407,7 +408,6 @@ export function cashFloorForHome(input: {
       market: input.market,
     });
   }
-  const outlook = input.cashOutlook;
   if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
     return cashFloorCopy({
       opening: outlook.opening,

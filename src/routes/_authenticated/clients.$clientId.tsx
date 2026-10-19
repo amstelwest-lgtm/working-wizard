@@ -4019,20 +4019,7 @@ function ClientView() {
                           statusLabel={bookStatusCritical ? bookStatusWord : null}
                           pillars={spherePillars}
                           cashFloorCue={homeBrief.healthCue}
-                          onCashFloor={() => {
-                            setActiveTab("overview");
-                            void navigate({
-                              to: "/clients/$clientId",
-                              params: { clientId },
-                              search: (prev) => accountantClientTabSearch(prev, "overview"),
-                            });
-                            window.setTimeout(() => {
-                              document.querySelector("[data-fm-brief]")?.scrollIntoView({
-                                behavior: "smooth",
-                                block: "start",
-                              });
-                            }, 80);
-                          }}
+                          onCashFloor={() => openHomeAgent("financial_manager")}
                           queryCounts={ratioQueryCounts}
                           drillTo={healthDrill}
                           onDriverClick={(key) => openDrawerFromUiKey(key)}
@@ -4069,6 +4056,8 @@ function ClientView() {
                       <div className="health-plate">
                         <SimplifiedRatios
                           sections={simplifiedSections}
+                          cashFloorCue={homeBrief.healthCue}
+                          onCashFloor={() => openHomeAgent("financial_manager")}
                           onAddPastPeriod={() => setPastPeriodOpen(true)}
                           onOpenPillar={(id) => {
                             if (id !== "profit" && id !== "assets" && id !== "financing" && id !== "cash") return;
