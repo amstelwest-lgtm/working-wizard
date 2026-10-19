@@ -36,6 +36,7 @@ import {
   type ScoreHistoryPoint,
 } from "@/lib/portfolio-dashboard";
 import { useServerFn } from "@tanstack/react-start";
+import { FIRM_TRIAL_SENTENCE } from "@/lib/stripe-plans";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import {
   idleStarterTrialBanner,
@@ -398,7 +399,10 @@ function FirmClientCapNotice({
     );
   }
   const limitMessage =
-    currentPlan && cap.upgrade?.band === "starter" && cap.code !== "band_client_cap"
+    currentPlan &&
+    cap.upgrade?.band === "starter" &&
+    cap.code !== "band_client_cap" &&
+    cap.code !== "trial_client_cap"
       ? "You can't add another client on Starter."
       : cap.message;
   const upgrade = cap.upgrade;
@@ -412,8 +416,8 @@ function FirmClientCapNotice({
       </p>
       {cap.canEndTrial && confirmUpgrade ? (
         <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink)", lineHeight: 1.55 }}>
-          This charges the card on file today and ends the 14-day free trial. The paid band’s client
-          limit applies after that.
+          This charges the card on file today and ends the {FIRM_TRIAL_SENTENCE} on Starter. The paid
+          band’s client limit applies after that.
         </p>
       ) : null}
       {cap.canEndTrial ? (

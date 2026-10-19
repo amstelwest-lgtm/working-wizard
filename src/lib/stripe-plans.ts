@@ -9,9 +9,8 @@
  *
  * Owner Spark stays free and does not create a Checkout Session.
  *
- * Signup Checkout stays Solo monthly with a 14-day trial and a card on file
- * unless the firm picks Starter. The trial cap is 3 clients. Paid Starter
- * allows 5.
+ * Signup Checkout is Starter monthly: a 14-day trial, a card on file, and
+ * Starter's client cap. Paid Solo and the bands above keep their own caps.
  */
 
 import { isOwnerLookupKey } from "@/lib/owner-price";
@@ -22,10 +21,14 @@ export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 export const FOUNDING_COUPON_ID = "FOUNDING50";
 export const FOUNDING_PROMO_CODE = "FOUNDING";
 
-/** Locked commercial sentence. Never rewrite as "3 free clients". */
+/**
+ * Locked commercial sentence. The trial is Starter for every band.
+ * Never rewrite this as a free-client offer, and do not put a smaller cap on the trial.
+ */
 export const FIRM_TRIAL_DAYS = 14;
-export const FIRM_TRIAL_CLIENT_LIMIT = 3;
-export const FIRM_TRIAL_SENTENCE = "14-day free trial · up to 3 clients";
+export const FIRM_TRIAL_CLIENT_LIMIT = 5;
+export const FIRM_TRIAL_SENTENCE = `${FIRM_TRIAL_DAYS}-day free trial · up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
+export const FIRM_TRIAL_CARD_LINE = `A card is required at signup. ${FIRM_TRIAL_SENTENCE} on Starter.`;
 
 export const FIRM_INTERVALS = ["month", "year"] as const;
 export type FirmInterval = (typeof FIRM_INTERVALS)[number];
@@ -286,16 +289,15 @@ export function firmClientLimitLabel(band: FirmBandId): string {
 }
 
 /**
- * Default firm Checkout after signup: paid Solo monthly, 14-day trial,
- * card collected. Starter is offered on the pricing page and in Checkout
- * when the firm selects it.
+ * Default firm Checkout after signup: Starter monthly, 14-day trial,
+ * card collected. Larger bands stay available when the firm selects them.
  */
 export function firmSignupCheckoutIntent(market: StripePlanMarket = "us"): {
-  plan: "solo";
+  plan: "starter";
   interval: "month";
   market: StripePlanMarket;
 } {
-  return { plan: "solo", interval: "month", market };
+  return { plan: "starter", interval: "month", market };
 }
 
 /* ── Owner Spark remains free. Legacy Orbit/Constellation names are not billed. ── */

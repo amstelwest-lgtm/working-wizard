@@ -958,7 +958,7 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
       ok: false,
       status: 403,
       json: async () => ({
-        error: "Add a card to start your 14-day free trial",
+        error: "A card is required at signup. 14-day free trial · up to 5 clients on Starter.",
         code: "precard_cap",
         limit: "bot",
       }),

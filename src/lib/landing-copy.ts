@@ -1,6 +1,7 @@
 import { FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { HOMEPAGE_FAQ_ITEMS, HOMEPAGE_OWNER_COST_US } from "@/lib/marketing-faq";
 import type { FaqItem } from "@/lib/seo";
+import { FIRM_TRIAL_SENTENCE, firmUsdListPrice } from "@/lib/stripe-plans";
 
 /** Empty unless VITE_WALKTHROUGH_URL is set. The hero slot stays unrendered. */
 export const WALKTHROUGH_URL = String(import.meta.env.VITE_WALKTHROUGH_URL ?? "").trim();
@@ -12,9 +13,10 @@ export const HERO_LEDE =
   "Plug in QuickBooks, Xero or Sage. Milōn Financial Manager, Milōn Analyst and Milōn Advisor read the numbers, diagnose the business and draft the advisory. You review and sign off.";
 export const HERO_CTA_LABEL = "Start my 14-day free trial";
 export const HERO_WALKTHROUGH_LABEL = "Book a 30-min walkthrough";
-/** Hero note and the pricing section. Nowhere else. */
-export const FIRM_TRIAL_EXPLORE =
-  "Free to explore your first client — no card. Trial covers up to 3 clients for 14 days.";
+/** Hero note. The pricing bar leads with FIRM_TRIAL_SENTENCE and uses the shorter line under it. */
+const FIRM_TRIAL_THEN_US = `Then ${firmUsdListPrice("starter", "month")}/mo.`;
+export const PRICING_TRIAL_AFTER = `On Starter. A card is required at signup. ${FIRM_TRIAL_THEN_US}`;
+export const FIRM_TRIAL_EXPLORE = `${FIRM_TRIAL_SENTENCE}. ${PRICING_TRIAL_AFTER}`;
 export const HERO_CTA_NOTE = FIRM_TRIAL_EXPLORE;
 export const HERO_CONTACT_EMAIL = "hello@milonfinance.com";
 export const HERO_CONTACT_HREF =
@@ -144,7 +146,6 @@ export const PRICING_INTRO =
  * (`firmCheckoutSessionParams`: `trial_period_days` 14, `payment_method_collection: "always"`).
  * The paid band bills that price when the trial ends and a card is on file.
  */
-export const PRICING_TRIAL_AFTER = FIRM_TRIAL_EXPLORE;
 export const PRICING_OWNER_BAR_US = "$39/mo · free when your accountant is on Milōn";
 export const OWNER_OFFER_LABEL = "For business owners";
 export const PRICING_OWNER_CTA = OWNER_SIGNUP_LINK;

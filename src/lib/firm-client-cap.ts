@@ -1,6 +1,6 @@
 /**
  * Pure client-cap decisions for firm billing.
- * Trial (status trialing): 3 clients, whatever paid band Checkout started.
+ * Trial (status trialing): Starter's cap on every band.
  * Paid (status active): that band's catalog limit.
  */
 
@@ -146,21 +146,14 @@ export function decideFirmClientCreate(input: {
   }
 
   if (input.phase === "trialing") {
-    const trialLimit =
-      input.band === "starter"
-        ? (FIRM_BAND_CATALOG.starter.clientLimit ?? FIRM_TRIAL_CLIENT_LIMIT)
-        : FIRM_TRIAL_CLIENT_LIMIT;
+    const trialLimit = FIRM_TRIAL_CLIENT_LIMIT;
     if (input.clientCount >= trialLimit) {
-      const bandName = input.band ? FIRM_BAND_CATALOG[input.band].name : null;
-      const message =
-        input.band === "starter"
-          ? `You can't add another client on Starter. Starter includes up to ${trialLimit} active clients.`
-          : `${FIRM_TRIAL_SENTENCE}. This practice already has ${trialLimit} clients. Upgrade to a paid plan to add another.`;
+      const bandName = input.band ? FIRM_BAND_CATALOG[input.band].name : "Starter";
       return {
         allowed: false,
         code: "trial_client_cap",
         bandName,
-        message,
+        message: `${FIRM_TRIAL_SENTENCE} on Starter. This practice already has ${trialLimit} clients.`,
       };
     }
     return { allowed: true };
@@ -238,8 +231,8 @@ export function trialDaysRemaining(
 }
 
 /**
- * Read-only plan line for Settings. Trial copy uses `FIRM_TRIAL_CLIENT_LIMIT`
- * (the cap the billing gate enforces), not the paid band's larger limit.
+ * Read-only plan line for Settings. A trial is Starter's cap on every band,
+ * not the paid band's larger limit.
  */
 export function formatFirmPlanStatus(input: {
   phase: FirmSubscriptionPhase;
@@ -258,16 +251,7 @@ export function formatFirmPlanStatus(input: {
         : days <= 0
           ? "Trial — ends today"
           : `Trial — ${days} day${days === 1 ? "" : "s"} left`;
-    const capLimit =
-      band === "starter" ? FIRM_BAND_CATALOG.starter.clientLimit : FIRM_TRIAL_CLIENT_LIMIT;
-    const cap = `Up to ${capLimit} clients`;
-    const after =
-      band === "starter"
-        ? null
-        : bandName
-          ? `${bandName} after the trial`
-          : null;
-    const detail = after ? `${cap} · ${after}` : cap;
+    const detail = `Starter · ${FIRM_TRIAL_SENTENCE}`;
     return {
       phase: "trialing",
       band,

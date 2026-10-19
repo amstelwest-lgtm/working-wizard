@@ -231,7 +231,7 @@ export function LandingRegisterForm({
                 const value = e.target.value;
                 setRegRole(value);
                 if (value === "Accountant / Advisory firm") {
-                  goToFirmSignup({ plan: "solo", scrollTo: "register" });
+                  goToFirmSignup({ plan: "starter", scrollTo: "register" });
                 } else {
                   clearPendingCheckout();
                   setRegPlan("Business owner");
@@ -246,7 +246,7 @@ export function LandingRegisterForm({
                 <FirmSignupTerms
                   variant="landing"
                   showRole={false}
-                  plan={paidPlanFromRegisterLabel(regPlan) ?? "solo"}
+                  plan={paidPlanFromRegisterLabel(regPlan) ?? "starter"}
                   interval={firmInterval}
                   onPlanChange={(nextPlan) => {
                     setRegPlan(registerLabelForPlan(nextPlan));
@@ -278,7 +278,7 @@ export function LandingRegisterForm({
                   label="Continue with Google"
                   disabled={regBusy || !isDraftComplete(draftMarket)}
                   next={billingStartPath({
-                    plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+                    plan: paidPlanFromRegisterLabel(regPlan) ?? "starter",
                     interval: firmInterval,
                     market: visitorCopyPack(draftMarket),
                   })}
@@ -299,7 +299,7 @@ export function LandingRegisterForm({
                       marketRegion: market.regionCode,
                     });
                     stashPendingCheckout({
-                      plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+                      plan: paidPlanFromRegisterLabel(regPlan) ?? "starter",
                       interval: firmInterval,
                       market: market.country === "ZA" ? "za" : "us",
                     });
