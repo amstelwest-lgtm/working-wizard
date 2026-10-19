@@ -2,6 +2,7 @@
  * Owner hand-off rules. No database. Run: pnpm test:owner-handoff
  */
 import { readFileSync } from "node:fs";
+import { displayedHandoffRun, withPendingNote } from "../src/lib/open-plan-home.ts";
 import { agentDisplayName } from "../src/lib/milon-team.ts";
 import {
   callerMayHandOff,
@@ -184,6 +185,13 @@ assert(
   commit.indexOf("dispatchActionPlanRefresh") < commit.indexOf("requestOwnerHandoff"),
   "Working is painted before the hand-off function returns",
 );
+const workingBlock = commit.slice(commit.indexOf("const working"), commit.indexOf("rememberOptimistic"));
+assert(!workingBlock.includes("note"), "Working paints before any Handed-to line");
+assert(commit.includes("else if (result.noted)"), "the Handed-to line waits for noted");
+const reuseBranch = commit.slice(commit.indexOf("result.reused"), commit.indexOf("else if (!result.noted)"));
+assert(!reuseBranch.includes("note,"), "a reuse does not add a Handed-to line");
+const notedBranch = commit.slice(commit.indexOf("else if (result.noted)"));
+assert(notedBranch.includes("note,"), "a noted response adds the Handed-to line");
 const commitBody = handoffClient.slice(
   handoffClient.indexOf("export async function commitActionHandoff"),
   handoffClient.indexOf("async function writePersonAssignment"),
@@ -262,6 +270,7 @@ assert(firstPost.runId === secondPost.runId, "both posts return the same run id"
 assert(Number(firstPost.created) + Number(secondPost.created) === 1, "only one post inserts");
 const losingPost = firstPost.created ? secondPost : firstPost;
 assert(losingPost.reused === true && losingPost.noted === false, "the losing click does not write a note");
+assert(insertedCount === 1, "a double-click inserts one run");
 
 const { applyLiveRuns } = await import("../src/lib/open-plan-home.ts");
 const { handoffRowStillWorking, handoffRunForAction } = await import("../src/lib/agent-activity-poll.ts");
@@ -379,6 +388,23 @@ const reusedRow = applyLiveRuns(
   [{ id: "run-open", actionItemId: "card-1", agent: "analyst", status: "queued", at: "2026-10-19T21:20:22.000Z" }],
 );
 assert(reusedRow[0]?.open === true, "the existing queued run stays Working");
+const whileRunning = [
+  { note: "Handed to Analyst.", at: "2026-10-19T22:00:52.450Z" },
+  { note: "Analyst finished: Recorded 1 finding: Cash is thin.", at: "2026-10-19T22:00:46.000Z" },
+];
+assert(
+  withPendingNote(whileRunning, null).length === whileRunning.length,
+  "a reuse while running doesn't change the note count",
+);
+const keptRun = displayedHandoffRun(
+  { id: "run-open", agent: "analyst", status: "running", at: "2026-10-19T22:00:25.000Z" },
+  { agent: "analyst", since: "2026-10-19T22:01:36.000Z" },
+  false,
+);
+assert(
+  keptRun != null && "id" in keptRun && keptRun.id === "run-open" && keptRun.status === "running",
+  "a reuse while running keeps Working on the existing run id",
+);
 resetHandoffOptimistic();
 
 const clientPage = readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8");

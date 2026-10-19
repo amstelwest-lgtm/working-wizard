@@ -703,10 +703,57 @@ export function analystRunSummary(input: { stopReason: string; summary: string }
   return input.summary;
 }
 
+type SavedStep = {
+  tool: string | null;
+  status: string;
+  args?: Record<string, unknown> | null;
+};
+
+function savedDeliverables(steps: readonly SavedStep[]): SavedStep[] {
+  return steps.filter(
+    (step) => (step.tool === "record_finding" || step.tool === "record_draft") && step.status === "ok",
+  );
+}
+
+/**
+ * The sentence a cost ceiling leaves when the run already saved work.
+ * Zero saved output returns null so the caller keeps the ceiling sentence.
+ */
+export function ceilingSavedSummary(
+  steps: readonly SavedStep[],
+  noun: "finding" | "draft" = "finding",
+): string | null {
+  const saved = savedDeliverables(steps);
+  if (saved.length === 0) return null;
+  const titles = saved.flatMap((step) => {
+    const title = step.args && typeof step.args.title === "string" ? step.args.title.replace(/\s+/g, " ").trim() : "";
+    return title ? [title] : [];
+  });
+  const label = saved.length === 1 ? noun : `${noun}s`;
+  const head = `Recorded ${saved.length} ${label}`;
+  const text = titles.length === 0 ? `${head}.` : `${head}: ${titles.join(", ")}`;
+  return text.length <= 1500 ? text : `${text.slice(0, 1499)}.`;
+}
+
+/** Finish text for the run row and the hand-off note. A ceiling with saved work names that work. */
+export function handoffFinishSummary(input: {
+  stopReason: string;
+  summary: string;
+  steps: readonly SavedStep[];
+  noun?: "finding" | "draft";
+}): string {
+  if (input.stopReason === "cost_ceiling") {
+    const saved = ceilingSavedSummary(input.steps, input.noun ?? "finding");
+    if (saved) return saved;
+  }
+  return analystRunSummary({ stopReason: input.stopReason, summary: input.summary });
+}
+
 /**
  * Hitting the iteration cap after a saved finding is a finished review.
  * A cap of only empty record_finding calls finishes too.
- * A cap with no finding, or any earlier safety stop, stays partial.
+ * A cost ceiling after a saved finding or draft is finished too.
+ * A ceiling with nothing saved, a cap with no finding, or any earlier safety stop, stays partial.
  */
 export function analystRunOutcome(input: {
   stopReason: string;
@@ -716,12 +763,15 @@ export function analystRunOutcome(input: {
   if (input.stopReason === "safety_limit" && analystEmptyFindingStop(input.steps)) {
     return { status: "succeeded", stopReason: "no_further_action" };
   }
-  const accepted = input.steps.filter((step) => step.tool === "record_finding" && step.status === "ok").length;
+  const accepted = savedDeliverables(input.steps).length;
   const hitCap =
     input.stopReason === "safety_limit" &&
     input.steps.length >= input.maxIterations &&
     accepted >= 1;
   if (hitCap) return { status: "succeeded", stopReason: "cap_after_findings" };
+  if (input.stopReason === "cost_ceiling") {
+    return { status: accepted >= 1 ? "succeeded" : "partial", stopReason: "cost_ceiling" };
+  }
   const partial =
     input.stopReason === "insufficient_information" || input.stopReason === "safety_limit";
   return { status: partial ? "partial" : "succeeded", stopReason: input.stopReason };

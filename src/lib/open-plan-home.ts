@@ -302,15 +302,15 @@ export function withPendingNote<T extends { note: string | null; at: string }>(
  */
 export function displayedHandoffRun<T extends { agent: AgentKey; status: string; at?: string }>(
   server: T | null,
-  pending: { agent: AgentKey | null; since?: string } | null,
+  pending: { agent: AgentKey | null; since?: string; runId?: string | null } | null,
   landed: boolean,
-): T | { agent: AgentKey; status: "queued"; at: string } | null {
+): T | { id?: string; agent: AgentKey; status: "queued"; at: string } | null {
   if (!pending?.agent || landed) return server;
   const at = pending.since ?? "";
-  const optimistic = { agent: pending.agent, status: "queued" as const, at };
+  if (server && server.agent === pending.agent && ACTIVE.has(server.status)) return server;
+  const optimistic = { id: pending.runId ?? undefined, agent: pending.agent, status: "queued" as const, at };
   if (!server) return optimistic;
   const serverAt = server.at ?? "";
-  if (server.agent === pending.agent && ACTIVE.has(server.status) && (!at || serverAt >= at)) return server;
   if (at && serverAt < at) return optimistic;
   return server;
 }

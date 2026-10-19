@@ -21,13 +21,13 @@ import {
   analystFailurePlan,
   analystRunCostUsd,
   analystRunOutcome,
-  analystRunSummary,
+  handoffFinishSummary,
   collectStoredReads,
   evidenceKeyList,
   evidenceKeysNote,
 } from "../../../src/lib/agent-analyst.ts";
 import { executeAnalystTool } from "./execute.ts";
-import { handoffFinding, handoffResultNote } from "../../../src/lib/owner-handoff.ts";
+import { HANDOFF_COST_STOP, handoffFinding, handoffResultNote } from "../../../src/lib/owner-handoff.ts";
 import { agentDisplayNameFromKey } from "../../../src/lib/milon-team-names.ts";
 
 export type AnalystJob = {
@@ -187,8 +187,8 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
         if (runnerNextCallExceedsCeiling({ spentUsd: spent, lastCallUsd: lastCall, ceilingUsd: RUNNER_COST_CEILING_USD })) {
           return {
             kind: "stop",
-            reason: "insufficient_information",
-            summary: "Stopped before another model call so the run stays within its cost ceiling.",
+            reason: "cost_ceiling",
+            summary: HANDOFF_COST_STOP,
           };
         }
         await db.rpc("heartbeat_agent_lease", {
@@ -245,12 +245,17 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
       maxIterations: ANALYST_MAX_ITERATIONS,
     });
     const partial = outcome.status === "partial";
+    const finishSummary = handoffFinishSummary({
+      stopReason: outcome.stopReason,
+      summary: result.summary,
+      steps: result.trace.map((step) => ({ tool: step.tool, status: step.status, args: step.args })),
+    }).slice(0, 2000);
     await db
       .from("agent_runs")
       .update({
         status: outcome.status,
         stop_reason: outcome.stopReason,
-        summary: analystRunSummary({ stopReason: outcome.stopReason, summary: result.summary }).slice(0, 2000),
+        summary: finishSummary,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cache_write_tokens: cacheWriteTokens,
@@ -270,7 +275,7 @@ export async function runAnalystJob(db: SupabaseClient, job: AnalystJob): Promis
     await recordHandoffFinish(db, {
       runId: existing.run_id,
       clientId: job.clientId,
-      summary: result.summary,
+      summary: finishSummary,
       pool,
       market: client?.market,
     });

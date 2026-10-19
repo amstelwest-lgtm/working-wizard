@@ -400,7 +400,7 @@ export function OwnerDoor({
         setAssignmentRows((current) =>
           current.map((row) =>
             row.id === detail.actionItemId
-              ? { ...row, open: row.agent != null, openedAt: detail.since ?? row.openedAt, runId: detail.runId ?? row.runId }
+              ? { ...row, open: row.agent != null, openedAt: row.openedAt ?? detail.since, runId: detail.runId ?? row.runId }
               : row,
           ),
         );
@@ -418,19 +418,21 @@ export function OwnerDoor({
       }
       pendingHandoffs.current.set(detail.actionItemId, { ...detail, agent, assigneeName: name });
       setHandoffErrors((current) => current.filter((row) => row.actionItemId !== detail.actionItemId));
-      const next: RowAssignment = {
-        id: detail.actionItemId,
-        assigneeName: name,
-        agent,
-        open: agent != null,
-        openedAt: agent ? detail.since : undefined,
-        runId: detail.runId,
-      };
-      setAssignmentRows((current) =>
-        current.some((row) => row.id === next.id)
+      setAssignmentRows((current) => {
+        const existing = current.find((row) => row.id === detail.actionItemId);
+        const sameWorking = !detail.runId && existing?.open === true && existing.agent === agent && Boolean(existing.runId);
+        const next: RowAssignment = {
+          id: detail.actionItemId,
+          assigneeName: name,
+          agent,
+          open: agent != null,
+          openedAt: sameWorking ? existing?.openedAt : agent ? detail.since : undefined,
+          runId: detail.runId ?? (sameWorking ? existing?.runId : undefined),
+        };
+        return current.some((row) => row.id === next.id)
           ? current.map((row) => (row.id === next.id ? next : row))
-          : [...current, next],
-      );
+          : [...current, next];
+      });
       if (agent) {
         setHandedTitle(detail.title);
         setAssignedAgent(agent);

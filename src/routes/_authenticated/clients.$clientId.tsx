@@ -1807,10 +1807,9 @@ function ClientView() {
             row.id === id
               ? {
                   ...row,
-                  notes: (row.notes ?? []).filter((note) => note.at !== detail.since),
                   runId: detail.runId ?? row.runId,
                   error: null,
-                  openedAt: detail.since ?? row.openedAt,
+                  openedAt: row.openedAt ?? detail.since,
                 }
               : row,
           ),
@@ -1818,7 +1817,7 @@ function ClientView() {
         setAssignmentRows((currentRows) =>
           currentRows.map((row) =>
             row.id === id
-              ? { ...row, open: row.agent != null, openedAt: detail.since ?? row.openedAt, runId: detail.runId ?? row.runId }
+              ? { ...row, open: row.agent != null, openedAt: row.openedAt ?? detail.since, runId: detail.runId ?? row.runId }
               : row,
           ),
         );
@@ -1853,6 +1852,11 @@ function ClientView() {
           setOpenPlanHandoffs((rows) => {
             const current = rows.find((row) => row.id === detail.actionItemId);
             const found = Boolean(current);
+            const sameWorking =
+              !detail.runId &&
+              current?.run != null &&
+              current.run.agent === agent &&
+              (current.run.status === "queued" || current.run.status === "running");
             const patched = {
               assignee: name,
               agent,
@@ -1860,16 +1864,18 @@ function ClientView() {
                 detail.note && !optimisticNoteHidden(detail.actionItemId, detail.note.at)
                   ? withPendingNote(current?.notes ?? [], detail.note)
                   : (current?.notes ?? []).filter((note) => !optimisticNoteHidden(detail.actionItemId, note.at)),
-              openedAt: agent ? detail.since : undefined,
-              runId: detail.runId ?? current?.runId,
+              openedAt: sameWorking ? current?.openedAt : agent ? detail.since : undefined,
+              runId: detail.runId ?? (sameWorking ? (current?.runId ?? current?.run?.id) : current?.runId),
               error: null,
               run: agent
-                ? {
-                    id: detail.runId,
-                    agent,
-                    status: "queued" as const,
-                    at: detail.since ?? new Date().toISOString(),
-                  }
+                ? sameWorking && current?.run
+                  ? current.run
+                  : {
+                      id: detail.runId,
+                      agent,
+                      status: "queued" as const,
+                      at: detail.since ?? new Date().toISOString(),
+                    }
                 : null,
             };
             const next = rows.map((row) => (row.id === detail.actionItemId ? { ...row, ...patched } : row));

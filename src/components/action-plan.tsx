@@ -43,7 +43,7 @@ import {
   stripSuppressedNotes,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { latestStoredAssignment, withPendingNote } from "@/lib/open-plan-home";
+import { displayedHandoffRun, latestStoredAssignment, withPendingNote } from "@/lib/open-plan-home";
 import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -213,23 +213,20 @@ function applyOptimisticPlan(input: {
             owner_email: pending.agent ? null : item.owner_email,
           },
     );
-    const pickup = pickups[pending.actionItemId];
-    const keepServerRun =
-      pending.runId != null
-        ? pickup?.id === pending.runId && (pickup.status === "queued" || pickup.status === "running")
-        : pending.agent != null &&
-          pickup != null &&
-          pickup.agent === pending.agent &&
-          (pickup.status === "queued" || pickup.status === "running") &&
-          pickup.at >= pending.since;
-    if (pending.agent && !keepServerRun) {
+    const pickup = pickups[pending.actionItemId] ?? null;
+    const shown = displayedHandoffRun(
+      pickup,
+      { agent: pending.agent, since: pending.since, runId: pending.runId },
+      false,
+    );
+    if (pending.agent && shown && shown !== pickup) {
       pickups = {
         ...pickups,
         [pending.actionItemId]: {
-          id: pending.runId ?? undefined,
-          agent: pending.agent,
-          status: "queued",
-          at: pending.since,
+          id: ("id" in shown ? shown.id : undefined) ?? pending.runId ?? undefined,
+          agent: shown.agent,
+          status: shown.status,
+          at: shown.at ?? pending.since,
         },
       };
     }
