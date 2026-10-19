@@ -5,7 +5,7 @@
  * Each bot has a runner. A runner whose agent_settings flag is false does not start.
  * The assignment is still recorded. This function never posts to a ledger.
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.ts";
 import {
   HANDOFF_TRIGGER,
@@ -36,7 +36,7 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-type AdminClient = ReturnType<typeof createClient>;
+type AdminClient = SupabaseClient<any, "public", any>;
 
 /** Stores this row's assignee and appends a note. Older notes are left in place. */
 async function writeAssignment(
