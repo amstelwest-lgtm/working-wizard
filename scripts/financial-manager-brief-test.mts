@@ -87,6 +87,25 @@ assert(
   brief.actions.find((row) => row.id === "cash-floor")?.reason === brief.cashFloorLine,
   "the cash-floor action quotes the same amounts",
 );
+const missingOpening = buildFinancialManagerBrief({
+  clientName: "Karoo",
+  currentFinancials: current,
+  currentPeriodEnd: "2026-03-31",
+  snapshots,
+  cashDipWeek: 1,
+  cashOpening: 0,
+  cashFloor: 55000,
+  openingMissing: true,
+  formatMoney: money,
+});
+assert(
+  missingOpening.cashFloorLine === "Opening balance missing.",
+  missingOpening.cashFloorLine ?? "missing opening line",
+);
+assert(
+  !missingOpening.actions.some((row) => row.id === "cash-floor"),
+  "a missing opening is not a floor breach",
+);
 
 const empty = buildFinancialManagerBrief({
   clientName: "Chill Pepper",

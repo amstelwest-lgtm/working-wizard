@@ -40,6 +40,7 @@ import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { writePrecardCapApplies } from "@/lib/precard-cap-mirror.server";
 import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
+import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 
 export type EntitlingFirmSubscription = {
   id: string;
@@ -116,7 +117,13 @@ type FirmSelect = {
     error: { message: string } | null;
   }>;
 } & Promise<{
-  data?: Array<{ id?: string | null; name?: string | null }> | null;
+  data?: Array<{
+    id?: string | null;
+    name?: string | null;
+    created_at?: string | null;
+    financials?: unknown;
+    cashflow?: unknown;
+  }> | null;
   count: number | null;
   error: { message: string } | null;
 }>;
@@ -348,21 +355,28 @@ async function loadMembershipRole(
 }
 
 async function countFirmClients(db: CapDb, firmId: string): Promise<number> {
-  // One row is one client. `clients` has no archived or deleted column, so a
-  // hidden archive cannot inflate this. Demo rows are left out. Two rows with
-  // the same name are two clients and both count.
+  // One book is one client. Demo rows are left out. Empty shells that share a
+  // name collapse to the oldest, the same set the Clients list shows.
   const { data, error } = await db
     .from("clients")
-    .select("id, name")
+    .select("id, name, created_at, financials, cashflow")
     .eq("firm_id", firmId)
     .eq("is_demo", false);
   if (error) throw new Error(error.message);
-  const ids = new Set<string>();
-  for (const row of data ?? []) {
+  const rows = (data ?? []).flatMap((row) => {
     const id = row?.id ? String(row.id) : "";
-    if (id) ids.add(id);
-  }
-  return ids.size;
+    if (!id) return [];
+    return [
+      {
+        id,
+        name: String(row?.name ?? ""),
+        created_at: row?.created_at ?? null,
+        financials: row?.financials,
+        cashflow: row?.cashflow,
+      },
+    ];
+  });
+  return collapseDuplicateClientShells(rows).length;
 }
 
 async function billingEmailForFirm(

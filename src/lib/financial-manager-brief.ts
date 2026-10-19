@@ -5,6 +5,7 @@
  * The chase button opens the shared chase draft. This file does not write one.
  */
 import type { ChaseDraftInput } from "./chase-draft.ts";
+import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { cashFloorSentence } from "./owner-answers.ts";
 
 export type BriefMoneyField = {
@@ -145,6 +146,8 @@ export function buildFinancialManagerBrief(input: {
   /** Opening cash and the 13-week floor. Both are required before the brief quotes them. */
   cashOpening?: number | null;
   cashFloor?: number | null;
+  /** A blank opening is not R0 under the floor. */
+  openingMissing?: boolean;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
   draftsReady?: boolean;
@@ -205,11 +208,12 @@ export function buildFinancialManagerBrief(input: {
   }
   const cashOpening = input.cashOpening;
   const cashFloor = input.cashFloor;
-  const cashFloorLine =
-    cashOpening != null &&
-    cashFloor != null &&
-    Number.isFinite(cashOpening) &&
-    Number.isFinite(cashFloor)
+  const cashFloorLine = input.openingMissing
+    ? `${OPENING_BALANCE_MISSING}.`
+    : cashOpening != null &&
+        cashFloor != null &&
+        Number.isFinite(cashOpening) &&
+        Number.isFinite(cashFloor)
       ? cashFloorSentence({
           opening: cashOpening,
           floor: cashFloor,
@@ -217,7 +221,12 @@ export function buildFinancialManagerBrief(input: {
           money: input.formatMoney,
         })
       : null;
-  if (input.actionsReady !== false && input.cashDipWeek != null && input.cashDipWeek > 0) {
+  if (
+    input.actionsReady !== false &&
+    !input.openingMissing &&
+    input.cashDipWeek != null &&
+    input.cashDipWeek > 0
+  ) {
     actions.push({
       id: "cash-floor",
       title: `Cash goes under the floor in week ${input.cashDipWeek}`,

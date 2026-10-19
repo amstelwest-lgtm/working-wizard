@@ -9,8 +9,12 @@ import {
 } from "@/lib/cash-runway";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
-import { periodProfitBridge } from "@/lib/period-profit";
+import {
+  CASH_BELOW_FLOOR_STATUS,
+  OPENING_BALANCE_MISSING,
+  cashOutlookIsCritical,
+} from "@/lib/cash-forecast-parity";
+import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
 
@@ -37,8 +41,12 @@ export type OwnerBooks = {
   /** Stated gross profit on the statement. The waterfall uses this when it is in range. */
   grossProfit?: number | null;
   priorGrossProfit?: number | null;
-  /** Stated net profit. Shown beside gross profit with that label. */
+  /** Stated net profit. Shown only when it does not exceed operating profit. */
   netIncome?: number | null;
+  /** Operating profit from the same bridge as the waterfall. */
+  operatingProfit?: number | null;
+  /** Blank or zero opening with no source. Not cash under the floor. */
+  openingMissing?: boolean;
   receivables: number | null;
   /** Aged overdue balance. Null when the collections snapshot is not loaded. */
   overdueReceivables?: number | null;
@@ -65,7 +73,7 @@ export function ownerAmount(n: number, market: MoneyMarket): string {
   return formatMoney(n, market).replace(/ /g, "\u00a0");
 }
 
-function finite(n: number | null): n is number {
+function finite(n: number | null | undefined): n is number {
   return n != null && Number.isFinite(n);
 }
 
@@ -220,7 +228,7 @@ export type OwnerStatusTone = "attention" | "critical";
 
 export type OwnerCardStatus = {
   tone: OwnerStatusTone;
-  word: "Attention" | "Critical";
+  word: string;
 };
 
 function forecastLow(books: OwnerBooks): number | null {
@@ -237,9 +245,10 @@ function forecastLow(books: OwnerBooks): number | null {
  * debtors above zero, is Attention. The stronger tone wins on the analyst card.
  */
 function outlookUnderFloor(books: OwnerBooks): boolean | null {
+  if (books.openingMissing) return false;
   const outlook = books.cashOutlook;
   if (!outlook || !finite(outlook.opening) || !finite(outlook.floor)) return null;
-  return cashOutlookIsCritical(outlook);
+  return cashOutlookIsCritical({ ...outlook, openingMissing: books.openingMissing });
 }
 
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
@@ -248,7 +257,7 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
   const floor = cashComfortThreshold(books.market.currency);
   const cash: OwnerCardStatus | null =
     (fromOutlook != null ? fromOutlook : low != null && low < floor)
-      ? { tone: "critical", word: "Critical" }
+      ? { tone: "critical", word: CASH_BELOW_FLOOR_STATUS }
       : null;
 
   const gross =
@@ -309,6 +318,16 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
     heading: "Cash over the next 13 weeks",
     ask: "financial_manager" as const,
   };
+  if (books.openingMissing) {
+    return {
+      ...base,
+      sentence: `${OPENING_BALANCE_MISSING}.`,
+      source: books.hasBooks ? "13-week forecast" : "No books connected",
+      step: "Ask",
+      signed: false,
+      empty: false,
+    };
+  }
   const outlook = books.cashOutlook;
   if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
     const sentence = cashFloorSentence({
@@ -378,8 +397,15 @@ function profitTile(
     };
   }
   const gross = waterfallGross(books.revenue, books.cogs, books.grossProfit);
-  let sentence = `Gross profit is ${money(gross)}.`;
-  if (finite(books.netIncome)) sentence += ` Net profit is ${money(books.netIncome)}.`;
+  const operating = finite(books.operatingProfit) ? books.operatingProfit : null;
+  const netIncome = finite(books.netIncome) ? books.netIncome : null;
+  const netOk = netIncome != null && (operating == null || statedNetIsUsable(operating, netIncome));
+  const profitBit = netOk && netIncome != null
+    ? ` Net profit is ${money(netIncome)}.`
+    : operating != null
+      ? ` Operating profit is ${money(operating)}.`
+      : "";
+  let sentence = `Gross profit is ${money(gross)}.${profitBit}`;
   if (finite(books.priorRevenue) && finite(books.priorCogs)) {
     const prior = waterfallGross(books.priorRevenue, books.priorCogs, books.priorGrossProfit);
     const compared =
@@ -388,7 +414,7 @@ function profitTile(
         : gross > prior
           ? `Gross profit is ${money(gross)}, more than the prior period.`
           : `Gross profit is ${money(gross)}, the same as the prior period.`;
-    sentence = finite(books.netIncome) ? `${compared} Net profit is ${money(books.netIncome)}.` : compared;
+    sentence = `${compared}${profitBit}`;
   }
   return {
     ...base,

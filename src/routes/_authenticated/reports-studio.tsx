@@ -1950,11 +1950,33 @@ async function buildInterventions(
   const rawPlaybook = await import("@/lib/playbook-data.json");
   const allSteps = (rawPlaybook.default ?? rawPlaybook) as Intervention[];
 
+  const NOT_MEANINGFUL_DAY_KEYS = new Set([
+    "creditor_days",
+    "inventory_days",
+    "working_capital_days",
+  ]);
+
   const atRiskRatios = ratioResults.filter(
     (r) => !r.unscored && (r.health_tier === "critical" || r.health_tier === "at_risk"),
   );
 
   const result: Intervention[] = [];
+  for (const rr of ratioResults) {
+    if (rr.formatted_value !== "not meaningful" || !NOT_MEANINGFUL_DAY_KEYS.has(rr.ratio_key)) continue;
+    result.push({
+      ratio_key: rr.ratio_key,
+      ratio_name: rr.ratio_name,
+      health_tier: "at_risk",
+      step_number: 1,
+      step_title: `${rr.ratio_name} are not meaningful`,
+      step_description:
+        "Cost of sales is too small to turn this into days, or the day count runs past a year. The figure is not a term to act on.",
+      timeframe: "immediate",
+      effort: "low",
+      impact: "medium",
+      category: "cash",
+    });
+  }
   for (const rr of atRiskRatios) {
     const playbookKey = KEY_MAP[rr.ratio_key] ?? rr.ratio_key;
     const steps = allSteps.filter(

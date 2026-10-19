@@ -380,7 +380,19 @@ export function figuresPeriodLabelFrom(
     if (stamp) return stamp;
   }
   const snap = snapshotPeriodLabel?.trim() ?? "";
+  // A snapshot named "Sep 2026" is the month the file was saved. Figures with
+  // no start or end are the full statement on file, not that month.
+  if (!meta.periodStart && !meta.periodEnd && snapshotIsMonthStamp(snap)) {
+    return FULL_YEAR_ON_FILE;
+  }
   return snap || null;
+}
+
+/** Label for a statement that has amounts and no from/to dates. */
+export const FULL_YEAR_ON_FILE = "Full year on file";
+
+function snapshotIsMonthStamp(label: string): boolean {
+  return /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}$/i.test(label.trim());
 }
 
 function opensStoredYear(from: Date, fyStartMonth: number): boolean {

@@ -12,6 +12,7 @@ import type { BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import {
   budgetIsImplausible,
+  statementBudgetRead,
   budgetScaleBreak,
   budgetVersusStatement,
   budgetWasRebuiltFromActuals,
@@ -506,8 +507,13 @@ export function BudgetPanel({
     );
   }
 
-  const implausible = budgetIsImplausible(doc, figureSource);
-  const scaleBroken = budgetScaleBreak(doc, figureSource) != null;
+  const statementView = statementBudgetRead(
+    doc,
+    (loadedFinancialsRef.current ?? null) as Record<string, unknown> | null,
+  );
+  const shownDoc = statementView.doc;
+  const implausible = budgetIsImplausible(shownDoc, figureSource);
+  const scaleBroken = budgetScaleBreak(shownDoc, figureSource) != null;
   const rebuilt = budgetWasRebuiltFromActuals(doc);
 
   const reviewDrawer = (
@@ -598,12 +604,13 @@ export function BudgetPanel({
         </div>
       )}
       <BudgetWorkspace
-        doc={doc}
+        doc={shownDoc}
         onChange={(next) => {
           budgetDirty.current = true;
           setDoc(next);
         }}
         simplified={simplified}
+        statementAligned={statementView.fromStatement}
         actuals={actuals}
         unmappedReview={unmapped}
         onClearUnmapped={() => setUnmapped(null)}

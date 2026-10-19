@@ -99,6 +99,7 @@ import {
   forecastScenarioLabel,
   runwayFromForecastNet,
   periodOperatingOutflows,
+  storedOpeningIsMissing,
   ledgerOpeningIsCashEvidence,
   persistedRunwayWeeks,
   plBankDisagreement,
@@ -2120,6 +2121,7 @@ export function CashForecastPanel({
           floorText: fmtCompact(minimumCash),
           runwayLabel: runwayDisplayLabel(publishedDirection),
           cashGenerative: publishedGenerative,
+          openingMissing: storedOpeningIsMissing(loadedCashflowRef.current),
         });
   const stripChip = !loaded ? null : shownLineSource === "Bank" ? "Bank" : statementChip?.trim() || null;
 

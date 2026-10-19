@@ -34,6 +34,7 @@ import {
   sendAccessEmail,
 } from "@/lib/practice-access-email";
 import { inviteSiteUrl } from "@/lib/client-invite-email";
+import { collapseDuplicateClientShells } from "@/lib/client-display-name";
 
 export type PracticeMember = {
   userId: string;
@@ -469,7 +470,7 @@ async function loadPracticeAccess(
 
   const clientQuery = admin
     .from("clients")
-    .select("id, name, client_code, owner_user_id, contact_email")
+    .select("id, name, client_code, owner_user_id, contact_email, created_at, financials, cashflow")
     .eq("firm_id", firm.id)
     .order("name");
   const assignQuery = admin
@@ -491,13 +492,22 @@ async function loadPracticeAccess(
   if (clientRes.error) throw clientRes.error;
   if (assignRes.error) throw assignRes.error;
 
-  const clientRows = (clientRes.data ?? []) as Array<{
-    id: string;
-    name?: string | null;
-    client_code?: string | null;
-    owner_user_id?: string | null;
-    contact_email?: string | null;
-  }>;
+  const clientRows = collapseDuplicateClientShells(
+    ((clientRes.data ?? []) as Array<{
+      id: string;
+      name?: string | null;
+      client_code?: string | null;
+      owner_user_id?: string | null;
+      contact_email?: string | null;
+      created_at?: string | null;
+      financials?: unknown;
+      cashflow?: unknown;
+    }>).map((c) => ({
+      ...c,
+      id: String(c.id),
+      name: String(c.name ?? "Client"),
+    })),
+  );
   const ownerIds = clientRows.map((c) => (c.owner_user_id ? String(c.owner_user_id) : "")).filter(Boolean);
   const profiles = await profilesByIds(admin, [...memberIds, ...ownerIds]);
 

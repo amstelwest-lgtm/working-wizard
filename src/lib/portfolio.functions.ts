@@ -17,7 +17,7 @@ import { advisoryPackFiguresChanged, livePackMetrics } from "@/lib/advisory-pack
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { coerceMarketSelection, parseMarketSelection } from "@/lib/market/parse";
 import { resolveMarket } from "@/lib/market/resolve";
-import { loadClientDisplayNames } from "@/lib/client-display-name";
+import { collapseDuplicateClientShells, loadClientDisplayNames } from "@/lib/client-display-name";
 import {
   rankPortfolio,
   summarisePortfolio,
@@ -118,15 +118,16 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     const { data: clientsRaw, error } = await sb
       .from("clients")
       .select(
-        "id, name, owner_user_id, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, financials, cashflow, market, operating_profile",
+        "id, name, owner_user_id, firm_id, advisory_state, advisory_cycle_id, next_review_at, financials_updated_at, last_login_at, created_at, financials, cashflow, market, operating_profile",
       )
       .eq("firm_id", data.firmId)
       .order("name")
       .limit(500);
     if (error) throw new Error(error.message);
-    const clients = (clientsRaw ?? []) as Array<{
+    let clients = (clientsRaw ?? []) as Array<{
       id: string;
       name: string;
+      created_at?: string | null;
       owner_user_id?: string | null;
       advisory_state: string | null;
       advisory_cycle_id: string | null;
@@ -161,6 +162,7 @@ export const getFirmPortfolio = createServerFn({ method: "GET" })
     } catch {
       /* keep the stored name */
     }
+    clients = collapseDuplicateClientShells(clients);
 
     const ids = clients.map((c) => c.id);
     const cycleIds = clients.map((c) => c.advisory_cycle_id).filter((x): x is string => Boolean(x));

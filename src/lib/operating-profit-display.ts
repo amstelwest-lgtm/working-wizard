@@ -38,3 +38,46 @@ export function operatingProfitLabel(input: {
   }
   return amount;
 }
+
+/**
+ * Annual revenue under this, with no recorded thousands/millions scale, is
+ * too small to present as this business's real rands. Woodwork's R1,000 is.
+ */
+export const IMPLAUSIBLE_SAMPLE_REVENUE = 10_000;
+
+export const IMPLAUSIBLE_SAMPLE_NOTE =
+  "Implausible sample — these figures are too small to be this business's real rands.";
+
+export function statementSampleImplausible(
+  financials: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!financials || statementMoneyScale(financials) !== 1) return false;
+  const raw = financials.revenue;
+  const revenue = typeof raw === "number" ? raw : parseFloat(String(raw ?? "").replace(/,/g, ""));
+  return Number.isFinite(revenue) && revenue > 0 && revenue < IMPLAUSIBLE_SAMPLE_REVENUE;
+}
+
+/**
+ * Clients-table heading. The amount is annual EBIT when the statement has no
+ * single-month range, so the column must not say MTD.
+ */
+export function operatingProfitColumnHeading(
+  rows: readonly { financials?: Record<string, unknown> | null }[],
+): string {
+  let monthly = false;
+  let annual = false;
+  for (const row of rows) {
+    const fin = row.financials;
+    if (!fin) continue;
+    const revenue = parseFloat(String(fin.revenue ?? "").replace(/,/g, ""));
+    if (!(revenue > 0)) continue;
+    const months = parseFloat(String(fin.periodMonths ?? ""));
+    const start = String(fin.periodStart ?? "").trim();
+    const end = String(fin.periodEnd ?? "").trim();
+    if (start && end && months === 1) monthly = true;
+    else annual = true;
+  }
+  if (monthly && !annual) return "Op. profit (MTD)";
+  if (annual) return "Op. profit (year)";
+  return "Op. profit";
+}

@@ -78,6 +78,15 @@ export function costMagnitude(amount: number): number {
   return amount < 0 ? Math.abs(amount) : amount;
 }
 
+/**
+ * A stated net income above operating profit is not a reconciled net.
+ * Karoo's R540,000 net against R120,000 operating profit fails this.
+ */
+export function statedNetIsUsable(operatingProfit: number, netIncome: number | null | undefined): boolean {
+  if (netIncome == null || !Number.isFinite(netIncome) || !Number.isFinite(operatingProfit)) return false;
+  return netIncome <= operatingProfit + PROFIT_RECONCILE_TOLERANCE;
+}
+
 /** Gross profit ÷ revenue from the same bridge the waterfall prints. Null when revenue is missing. */
 export function statementGrossMarginFraction(
   fields: Record<string, unknown> | null | undefined,

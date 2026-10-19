@@ -82,6 +82,7 @@ export function BudgetWorkspace({
   priorYearLabel = null,
   priorYearMonths = null,
   displayTemplateId = null,
+  statementAligned = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -108,6 +109,8 @@ export function BudgetWorkspace({
   priorYearLabel?: string | null;
   priorYearMonths?: number | null;
   displayTemplateId?: BudgetTemplateId | null;
+  /** Untouched template shown from the statement. Rent stays unstated. */
+  statementAligned?: boolean;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -142,6 +145,7 @@ export function BudgetWorkspace({
           priorYearLabel={priorYearLabel}
           priorYearMonths={priorYearMonths}
           displayTemplateId={displayTemplateId}
+          statementAligned={statementAligned}
         />
       </div>
     );
@@ -169,6 +173,7 @@ export function BudgetWorkspace({
       onLensChange={onLensChange}
       actualMonths={actualMonths}
       displayTemplateId={displayTemplateId}
+      statementAligned={statementAligned}
     />
   );
 }
@@ -284,6 +289,7 @@ function BudgetComplexWorkspace({
   onLensChange,
   actualMonths,
   displayTemplateId = null,
+  statementAligned = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -305,6 +311,7 @@ function BudgetComplexWorkspace({
   onLensChange?: (next: BudgetLens) => void;
   actualMonths?: readonly BudgetActualMonth[];
   displayTemplateId?: BudgetTemplateId | null;
+  statementAligned?: boolean;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -875,16 +882,25 @@ function BudgetComplexWorkspace({
                   <td className="px-3 py-1 font-medium text-slate-700 dark:text-slate-200">
                     {oh.name}
                   </td>
-                  {focusMonths.map((m) => (
+                  {focusMonths.map((m) => {
+                    const unstated =
+                      statementAligned &&
+                      (oh.bucket === "premises" || oh.bucket === "sales" || oh.bucket === "other");
+                    return (
                     <td key={m} className="px-1 py-1">
+                      {unstated ? (
+                        <span className="block px-1 text-right text-[11px] text-slate-500">not on the statement</span>
+                      ) : (
                       <Input
                         type="number"
                         className="h-7 text-right"
                         value={oh.months[m] ?? 0}
                         onChange={(e) => patchOverhead(oh.id, m, parseFloat(e.target.value) || 0)}
                       />
+                      )}
                     </td>
-                  ))}
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

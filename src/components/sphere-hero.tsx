@@ -77,6 +77,11 @@ export type SphereHeroProps = {
    * instead of raw score bands. Values match `OverallHealth.displayStatus`.
    */
   displayStatus?: "healthy" | "at_risk" | "critical" | null;
+  /**
+   * Replaces the overall band word ("Watch") when cash and health share one
+   * status, e.g. "Critical: cash below floor". Pillars keep their own band.
+   */
+  statusLabel?: string | null;
   overallDelta?: number;
   pillars: SpherePillar[];
   topPriority?: {
@@ -255,6 +260,7 @@ function Sphere({
   className,
   ariaLabel,
   tier: tierProp,
+  bandLabel,
   fit = false,
   decorative = false,
 }: {
@@ -272,6 +278,8 @@ function Sphere({
   ariaLabel?: string;
   /** Overall orb follows displayStatus. Pillars fall back to the score table. */
   tier?: Tier;
+  /** Overall status phrase. Pillars leave this unset and keep the band word. */
+  bandLabel?: string | null;
   /** Fill the card. A fixed pixel size overflows the pillar card at 390px. */
   fit?: boolean;
   /** Drawn inside another button. Not its own control. */
@@ -310,8 +318,11 @@ function Sphere({
       <span className={`${numberClass} ${scoreClass ?? ""} font-bold leading-none`} style={{ fontSize: scoreSize }}>
         {fmtScore(score)}
       </span>
-      <span className={`mt-1 flex items-center gap-1 font-semibold tracking-widest ${TIER_TEXT[tier]}`} style={{ fontSize: tierSize }}>
-        {TIER_LABEL[tier]}
+      <span
+        className={`mt-1 flex max-w-[88%] items-center justify-center gap-1 text-center font-semibold leading-tight ${bandLabel ? "tracking-normal" : "tracking-widest"} ${TIER_TEXT[tier]}`}
+        style={{ fontSize: bandLabel && bandLabel.length > 14 ? Math.max(8, size * 0.04) : tierSize }}
+      >
+        {bandLabel?.trim() || TIER_LABEL[tier]}
         {typeof delta === "number" && delta !== 0 && (
           <span className={delta > 0 ? "text-emerald-400" : "text-rose-400"}>
             {delta > 0 ? "↑" : "↓"} {Math.abs(Math.round(delta))}
@@ -361,12 +372,14 @@ function RingDial({
   delta,
   onClick,
   ariaLabel,
+  bandLabel,
 }: {
   score: number;
   tier: Tier;
   delta?: number;
   onClick?: () => void;
   ariaLabel: string;
+  bandLabel?: string | null;
 }) {
   const radius = 84;
   const circumference = 2 * Math.PI * radius;
@@ -406,7 +419,7 @@ function RingDial({
         <span className="health-ring-label">Business health score</span>
         <span className={`health-ring-score ${TIER_TEXT[tier]}`}>{fmtScore(score)}</span>
         <span className={`health-band is-${tier}`}>
-          {TIER_LABEL[tier]}
+          {bandLabel?.trim() || TIER_LABEL[tier]}
           {typeof delta === "number" && delta !== 0 ? (
             <span className="health-band-delta">
               {delta > 0 ? "↑" : "↓"} {Math.abs(Math.round(delta))}
@@ -484,6 +497,7 @@ export function SphereHero({
   variant = "orb",
   overallHealth,
   displayStatus,
+  statusLabel,
   overallDelta,
   pillars,
   topPriority,
@@ -567,9 +581,10 @@ export function SphereHero({
               <RingDial
                 score={overallHealth}
                 tier={overallTier}
+                bandLabel={statusLabel}
                 delta={overallDelta}
                 onClick={() => (onOrbOpen ? onOrbOpen() : go(2))}
-                ariaLabel={`Business Health Score ${fmtScore(overallHealth)}. ${caption ?? "Dig deeper."}`}
+                ariaLabel={`Business Health Score ${fmtScore(overallHealth)}. ${statusLabel?.trim() || caption || "Dig deeper."}`}
               />
               {tapCaption || !caption ? (
                 <button
@@ -678,6 +693,7 @@ export function SphereHero({
             <Sphere
               score={overallHealth}
               tier={overallTier}
+              bandLabel={statusLabel}
               label="Business Health Score"
               delta={overallDelta}
               size={orbSize}
@@ -686,9 +702,9 @@ export function SphereHero({
               onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}
               ariaLabel={
                 onOrbOpen
-                  ? `${caption ?? "Tap to see what's behind your score"}. Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
+                  ? `${statusLabel?.trim() || caption || "Tap to see what's behind your score"}. Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
                   : level === 1
-                    ? `Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
+                    ? `Business Health Score ${fmtScore(overallHealth)}${statusLabel?.trim() ? `, ${statusLabel.trim()}` : ""}. Dig deeper.`
                     : `Business Health Score ${fmtScore(overallHealth)}. Back to overview.`
               }
               className="health-orb"

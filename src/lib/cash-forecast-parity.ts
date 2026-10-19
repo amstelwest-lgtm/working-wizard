@@ -8,7 +8,13 @@ import {
   forecastMinimumCash,
   RUNWAY_INSUFFICIENT_LABEL,
   RUNWAY_PROFITABLE_LABEL,
+  storedOpeningIsMissing,
 } from "./client-metrics.ts";
+
+export const CASH_BELOW_FLOOR_STATUS = "Critical: cash below floor";
+export const OPENING_BALANCE_MISSING = "Opening balance missing";
+
+export { storedOpeningIsMissing };
 
 export function canonicalForecastFloor(input: {
   configured?: number | null;
@@ -132,8 +138,11 @@ export function cashOutlookIsCritical(input: {
   opening: number;
   floor: number;
   dipsBelowFloorWeek?: number | null;
+  /** Blank or zero opening with no source. Not a real balance under the floor. */
+  openingMissing?: boolean;
 } | null | undefined): boolean {
-  if (!input || !Number.isFinite(input.opening) || !Number.isFinite(input.floor)) return false;
+  if (!input || input.openingMissing) return false;
+  if (!Number.isFinite(input.opening) || !Number.isFinite(input.floor)) return false;
   return input.opening < input.floor || input.dipsBelowFloorWeek != null;
 }
 
@@ -184,9 +193,11 @@ export function clientListStatusWord(input: {
   dipsBelowFloorWeek?: number | null;
   totalInflow?: number | null;
   totalOutflow?: number | null;
+  openingMissing?: boolean;
 }): string {
   if (input.healthOverall == null) return "—";
-  if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input)) return "Critical";
+  if (input.openingMissing) return input.healthLabel;
+  if (forecastHasCashEvidence(input) && cashOutlookIsCritical(input)) return CASH_BELOW_FLOOR_STATUS;
   return input.healthLabel;
 }
 
@@ -246,7 +257,9 @@ export function forecastRunwayHeadlineShared(input: {
   floor: number;
   runwayLabel?: string | null;
   cashGenerative?: boolean;
+  openingMissing?: boolean;
 }): { headline: string; note: string } {
+  if (input.openingMissing) return { headline: OPENING_BALANCE_MISSING, note: "opening balance missing" };
   const pos = forecastFloorPosition(input);
   if (!pos.staysAbove) {
     if (pos.firstDipWeek != null) {
@@ -331,7 +344,9 @@ export function forecastStatusSentence(input: {
   floorText: string;
   runwayLabel?: string | null;
   cashGenerative?: boolean;
+  openingMissing?: boolean;
 }): string {
+  if (input.openingMissing) return OPENING_BALANCE_MISSING;
   const story = forecastRunwayHeadlineShared(input);
   const weeks = input.closings.length > 0 ? input.closings.length : 13;
   if (story.note === "above the floor") {
