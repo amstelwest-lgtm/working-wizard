@@ -31,6 +31,8 @@ import {
   searchClientSectionJumps,
   searchClients,
   shortClientId,
+  finderAddedLabel,
+  finderBusinessName,
   type FinderClient,
 } from "../src/lib/feature-finder-clients.ts";
 import { firmClientOrFilter } from "../src/lib/firm-client-list.ts";
@@ -294,49 +296,90 @@ const THEO = "Theo van der Westhuizen";
 const THEO_A = "2d31b10a-a2b4-4451-a65a-6c61b32c1fa3";
 const THEO_B = "334bb8ee-8246-443d-967d-cf72d94d8a89";
 const THEO_C = "ef4ee372-a453-4ada-943c-d7c0642c81f8";
+const THEO_D = "db1293bb-cf37-43aa-bafb-0580a9fd1ed5";
+const THEO_E = "442c2e76-8976-4a97-95da-9cad6c01fe74";
 const theoBook: FinderClient[] = [
-  { id: THEO_A, name: THEO, clientCode: null, firmName: "My practice" },
-  { id: THEO_A, name: THEO, clientCode: null, firmName: "My practice" },
-  { id: THEO_B, name: THEO, clientCode: null, firmName: "My practice" },
-  { id: THEO_C, name: THEO, clientCode: null, firmName: "Maritz & Fleming INC" },
+  {
+    id: THEO_A,
+    name: THEO,
+    clientCode: null,
+    businessName: "Chill Pepper",
+    ownerEmail: "amstel.west@gmail.com",
+    createdAt: "2026-03-03T00:00:00.000Z",
+  },
+  { id: THEO_A, name: THEO, clientCode: null, businessName: "Chill Pepper" },
+  {
+    id: THEO_B,
+    name: THEO,
+    clientCode: null,
+    businessName: THEO,
+    ownerEmail: "amstel.west@gmail.com",
+    createdAt: "2026-04-04T00:00:00.000Z",
+  },
+  {
+    id: THEO_C,
+    name: THEO,
+    clientCode: null,
+    ownerEmail: "jack@marflem.co.za",
+    createdAt: "2026-05-05T00:00:00.000Z",
+  },
+  { id: THEO_D, name: THEO, clientCode: null, createdAt: "2026-06-06T12:00:00.000Z" },
+  { id: THEO_E, name: THEO, clientCode: null },
   { id: YANKEES, name: "New York Yankees", clientCode: "MLN-004821" },
 ];
+assert(
+  finderBusinessName(THEO, [THEO, "Westhuizen Trading"]) === "Westhuizen Trading",
+  "a company name is kept only when it is not the person's name",
+);
+assert(finderAddedLabel("2026-03-03T00:00:00.000Z") === "added 3 Mar 2026", "the added label is d MMM yyyy");
 const theoRecent = recentFinderClients(theoBook);
-assert(theoRecent.length === 4, "duplicate client ids collapse to one recent row");
+assert(theoRecent.length === 6, "duplicate client ids collapse to one recent row");
 assert(
   theoRecent.filter((row) => row.clientId === THEO_A).length === 1,
   "the same Theo id is listed once",
 );
 assert(
-  theoRecent.find((row) => row.clientId === THEO_A)?.hint === shortClientId(THEO_A),
-  "same-firm Theos are told apart by a short id",
+  theoRecent.find((row) => row.clientId === THEO_A)?.hint === "Chill Pepper",
+  "a different business name is the hint",
 );
 assert(
-  theoRecent.find((row) => row.clientId === THEO_B)?.hint === shortClientId(THEO_B),
-  "a second same-firm Theo gets its own short id",
+  theoRecent.find((row) => row.clientId === THEO_B)?.hint === "amstel.west@gmail.com",
+  "a business name that matches the person falls through to the owner email",
 );
 assert(
-  theoRecent.find((row) => row.clientId === THEO_C)?.hint === "Maritz & Fleming INC",
-  "a Theo at a different firm is told apart by the firm",
+  theoRecent.find((row) => row.clientId === THEO_C)?.hint === "jack@marflem.co.za",
+  "an owner email is the hint when there is no business name",
+);
+assert(
+  theoRecent.find((row) => row.clientId === THEO_D)?.hint === "added 6 Jun 2026",
+  "the added date is the hint when there is no business name or email",
+);
+assert(
+  theoRecent.find((row) => row.clientId === THEO_E)?.hint === shortClientId(THEO_E),
+  "the short id is used only when nothing else is stored",
+);
+assert(
+  !theoRecent.some((row) => row.hint === shortClientId(THEO_A) || row.hint === shortClientId(THEO_B)),
+  "a readable Theo is not labelled with a hash",
 );
 assert(
   theoRecent.find((row) => row.clientId === YANKEES)?.hint === "MLN-004821",
   "a unique name keeps its client code",
 );
 const theoSearch = searchClients("theo", theoBook);
-assert(theoSearch.length === 3, "a typed query lists each same-name client once");
+assert(theoSearch.length === 5, "a typed query lists each same-name client once");
 assert(
-  new Set(theoSearch.map((row) => row.hint)).size === 3,
+  new Set(theoSearch.map((row) => row.hint)).size === 5,
   "search hints for shared names are not identical",
 );
 const theoCash = searchClientSectionJumps("cash", theoBook);
 assert(
-  theoCash.filter((row) => row.label.startsWith("Cash for Theo")).length === 3,
+  theoCash.filter((row) => row.label.startsWith("Cash for Theo")).length === 5,
   "a section jump keeps every same-name client",
 );
 assert(
-  theoCash.some((row) => row.label === `Cash for ${THEO} · ${shortClientId(THEO_A)}`),
-  "a section jump names the short id when the firm is shared",
+  theoCash.some((row) => row.label === `Cash for ${THEO} · Chill Pepper`),
+  "a section jump names the business, not the id",
 );
 
 const bothNamedNew = searchClients("new", BOOK).map((hit) => hit.clientId);
@@ -576,5 +619,14 @@ assert(
 );
 assert(!listSrc.includes("client.server"), "client list does not use the service role");
 assert(!listSrc.includes("supabaseAdmin"), "client list does not use the admin client");
+assert(
+  listSrc.includes("contact_email") && listSrc.includes("created_at") && listSrc.includes("financials"),
+  "the client list loads email, the added day, and statement names",
+);
+assert(
+  listSrc.includes("tenant_name") && listSrc.includes("company_name"),
+  "a shared name can use the ledger company name",
+);
+assert(!listSrc.includes("firms(name)"), "the practice name is not the disambiguator");
 
 console.log("feature-finder: ok");
