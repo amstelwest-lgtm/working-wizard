@@ -3177,6 +3177,7 @@ function ClientView() {
         overdueActions: openPlanOverdue,
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
         cashOpening: hasFigures ? cashOutlook.opening : null,
+        // The forecast floor (forecastMinimumCash). The brief does not compute another.
         cashFloor: hasFigures ? cashOutlook.floor : null,
         cashClosing: hasFigures ? cashOutlook.closing : null,
         market: clientMarket,
