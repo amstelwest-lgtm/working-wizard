@@ -795,6 +795,7 @@ button.dig-cue--control {
 button.dig-cue--control:hover,
 .health-pillar-tile:hover .dig-cue,
 .health-pillar-card:hover .dig-cue,
+.health-pillar-cardx:hover .dig-cue,
 .health-driver-row:hover .dig-cue,
 .health-summary-card:hover .dig-cue {
   border-color: #0b5fff;
@@ -861,10 +862,22 @@ html.dark .dig-cue__icon { color: #dbeafe; }
 html.dark button.dig-cue--control:hover,
 html.dark .health-pillar-tile:hover .dig-cue,
 html.dark .health-pillar-card:hover .dig-cue,
+html.dark .health-pillar-cardx:hover .dig-cue,
 html.dark .health-driver-row:hover .dig-cue,
 html.dark .health-summary-card:hover .dig-cue {
   background: #163654;
   border-color: #2563eb;
+}
+/* Hand to stays cobalt on both portals, including owner moves buttons. */
+[data-hand-to-trigger] {
+  color: #0b5fff !important;
+  border-color: #0b5fff !important;
+  background: #ffffff;
+}
+html.dark [data-hand-to-trigger] {
+  color: #9ec1ff !important;
+  border-color: #3b82f6 !important;
+  background: transparent;
 }
 .dig-leaf {
   display: flex;

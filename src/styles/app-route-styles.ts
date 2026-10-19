@@ -64,4 +64,5 @@ export const authenticatedLayoutLinks: StyleLink[] = [
   ...sheetWithPreload(featureFinderHref),
   ...sheetWithPreload(settingsPortalHref),
   ...sheetWithPreload(premiumShineHref),
+  ...sheetWithPreload(ownerPremiumHref),
 ];

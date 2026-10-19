@@ -28,14 +28,18 @@ assert(hero.includes("open money briefing"), "driver rows are labelled as the br
 assert(hero.includes("drillTo"), "an outside pillar card can open the same drivers");
 assert(hero.includes("level === 1 ? ("), "the overall cue is only on the overview ring");
 assert(
-  hero.includes("{clickable ? (") && hero.includes("<DigCue id={`driver-${d.key}`} compact />"),
-  "a ratio cue is shown only when the briefing exists",
+  hero.includes("pillar-ring-") && hero.includes("<DigCue id={`pillar-ring-${p.id}`} compact />"),
+  "ring pillar cards, below the top score, carry the see-more cue",
+);
+assert(
+  !hero.includes("<DigCue id={`driver-${d.key}`} compact />"),
+  "the bottom driver level has no see-more hint",
 );
 assert(hero.includes("<DigLeaf />"), "a ratio with no briefing is the bottom line");
 
 assert(cue.includes("Click"), "desktop copy says Click");
 assert(cue.includes("Tap"), "touch copy says Tap");
-assert(cue.includes("to dig deeper"), "the cue names the dig");
+assert(cue.includes("to see more"), "the cue says see more");
 assert(cue.includes("This is the bottom line"), "the leaf says this is the bottom line");
 assert(cue.includes("usePrefersReducedMotion"), "the one-time shimmer respects reduced motion");
 assert(cue.includes("pulsedCueIds"), "the shimmer runs once per cue");
@@ -60,6 +64,8 @@ assert(
   studio.includes("drillTo={healthDrill}"),
   "the accountant health score accepts a pillar drill",
 );
+assert(studio.includes('variant="ring"'), "the accountant score uses the same health ring");
+assert(studio.includes("premium-shell"), "the accountant client shell uses the premium frame");
 assert(studio.includes("onOpenPillar"), "accountant pillar cards drill into the score");
 assert(studio.includes("onDriverClick"), "accountant ratios still open the playbook");
 

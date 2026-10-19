@@ -279,7 +279,7 @@ import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { SageConnectCard } from "@/components/sage-connect";
 import { Button } from "@/components/ui/button";
-import { SphereHero } from "@/components/sphere-hero";
+import { HEALTH_RING_CAPTION, SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -4005,7 +4005,7 @@ function Index() {
                             overallHealth={avgHealth}
                             displayStatus={overallHealth.displayStatus}
                             pillars={spherePillars}
-                            caption="Tap to see what's behind your score"
+                            caption={HEALTH_RING_CAPTION}
                             onTopPriority={() => go("moves")}
                             onDriverClick={(key) => {
                               if (key in RATIO_META) setOpenRatio(key as RatioKey);

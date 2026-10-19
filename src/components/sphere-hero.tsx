@@ -59,6 +59,9 @@ export type SpherePillar = {
   drivers: SphereDriver[];
 };
 
+/** Caption under the health ring on both the owner and accountant score. */
+export const HEALTH_RING_CAPTION = "Tap to see what's behind your score";
+
 export type SphereHeroProps = {
   /**
    * "orb" keeps the glowing sphere (accountant studio). "ring" is the owner
@@ -518,7 +521,7 @@ export function SphereHero({
   const overallTier = tierFromDisplayStatus(displayStatus, overallHealth);
   const overallGlow = ORB_GLOW;
 
-  const tapCaption = caption === "Tap to see what's behind your score";
+  const tapCaption = caption === HEALTH_RING_CAPTION;
 
   return (
     <div
@@ -572,7 +575,7 @@ export function SphereHero({
                   className="sphere-caption"
                   onClick={() => (onOrbOpen ? onOrbOpen() : go(2))}
                 >
-                  {caption ?? "Tap to see what's behind your score"}
+                  {caption ?? HEALTH_RING_CAPTION}
                 </button>
               ) : (
                 <p className="sphere-caption" role="note">
@@ -649,6 +652,7 @@ export function SphereHero({
                       </span>
                     ) : null}
                   </span>
+                  <DigCue id={`pillar-ring-${p.id}`} compact />
                 </button>
               );
             })}
@@ -885,11 +889,7 @@ export function SphereHero({
                       }}
                     />
                   </div>
-                  {clickable ? (
-                    <DigCue id={`driver-${d.key}`} compact />
-                  ) : (
-                    <DigLeaf />
-                  )}
+                  {clickable ? null : <DigLeaf />}
                 </>
               );
               if (clickable) {
@@ -898,7 +898,7 @@ export function SphereHero({
                     key={d.key}
                     type="button"
                     onClick={() => onDriverClick?.(d.key)}
-                    aria-label={`${d.label} — open money briefing. Dig deeper.`}
+                    aria-label={`${d.label} — open money briefing`}
                     className={rowClass}
                     style={rowStyle}
                   >

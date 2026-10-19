@@ -26,7 +26,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName } from "@/lib/owner-handoff";
 import { agentKeyFromAssignee, handoffProgressCaption } from "@/lib/action-handoff";
-import { HandToMenu } from "@/components/hand-to-menu";
+import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel, handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
@@ -1598,13 +1598,21 @@ export default function ActionPlanPanel({
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50"
               >
                 <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{move.title}</span>
-                <AddToPlanButton
-                  clientId={clientId}
-                  moveKey={move.key}
-                  title={move.title}
-                  outcomeWhy={move.impactLine}
-                  onAssign={() => void refresh()}
-                />
+                <span className="flex flex-wrap items-center gap-2">
+                  <MoveHandTo
+                    clientId={clientId}
+                    moveKey={move.key}
+                    title={move.title}
+                    outcomeWhy={move.impactLine}
+                  />
+                  <AddToPlanButton
+                    clientId={clientId}
+                    moveKey={move.key}
+                    title={move.title}
+                    outcomeWhy={move.impactLine}
+                    onAssign={() => void refresh()}
+                  />
+                </span>
               </li>
             ))}
           </ul>

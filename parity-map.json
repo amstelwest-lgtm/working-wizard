@@ -1,0 +1,27 @@
+{
+  "pairs": [
+    {
+      "id": "shell-markup",
+      "owner": ["src/components/owner-door/owner-shell.tsx"],
+      "accountant": ["src/components/accountant-nav.tsx"]
+    },
+    {
+      "id": "shell-pages",
+      "owner": ["src/routes/app.tsx"],
+      "accountant": [
+        "src/routes/_authenticated/clients.$clientId.tsx",
+        "src/components/practice-board.tsx"
+      ]
+    },
+    {
+      "id": "shell-chrome",
+      "owner": ["src/styles/owner-premium.css"],
+      "accountant": ["src/styles/accountant-portal.css"]
+    },
+    {
+      "id": "cash-floor",
+      "owner": ["src/lib/owner-answers.ts"],
+      "accountant": ["src/lib/financial-manager-brief.ts"]
+    }
+  ]
+}
