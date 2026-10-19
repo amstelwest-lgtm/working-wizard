@@ -10,8 +10,10 @@ import { agentIdempotencyKey, agentInputHash } from "../../../src/lib/agent-bus.
 import {
   HANDOFF_TRIGGER,
   callerMayHandOff,
+  handoffAgainInputs,
   handoffDecision,
   handoffInputs,
+  handoffNeedsFreshRun,
   handoffRequestNote,
   runnerEnabled,
 } from "../../../src/lib/owner-handoff.ts";
@@ -138,7 +140,7 @@ Deno.serve(async (req) => {
     inputs,
   });
   const inputHash = await agentInputHash(inputs);
-  const correlationId = crypto.randomUUID();
+  let invokeCorrelation = crypto.randomUUID();
 
   const { data: inserted, error: insertError } = await admin
     .from("agent_runs")
@@ -150,7 +152,7 @@ Deno.serve(async (req) => {
       audience: "owner",
       idempotency_key: idempotencyKey,
       input_hash: inputHash,
-      correlation_id: correlationId,
+      correlation_id: invokeCorrelation,
       status: "queued",
       action_item_id: actionItemId,
       attempt: 1,
@@ -177,7 +179,60 @@ Deno.serve(async (req) => {
   if (!runId) return json({ error: "run_not_queued" }, 500);
 
   if (!created) {
-    return json({ ok: true, runId, status, already: true, runner: decision.runner });
+    // The first run for this action and bot already exists. Reuse it while it
+    // is still queued or running. A finished run is not the current assignment:
+    // handing the action over again starts a new queued run and a new note.
+    let guard = 0;
+    while (runId && handoffNeedsFreshRun(status) && guard < 5) {
+      guard += 1;
+      const againInputs = handoffAgainInputs(actionItemId, runId);
+      const againKey = await agentIdempotencyKey({
+        agent: decision.agent,
+        clientId,
+        trigger: HANDOFF_TRIGGER,
+        inputs: againInputs,
+      });
+      const againHash = await agentInputHash(againInputs);
+      const againCorrelation = crypto.randomUUID();
+      const { data: againInserted, error: againError } = await admin
+        .from("agent_runs")
+        .insert({
+          agent: decision.agent,
+          client_id: clientId,
+          firm_id: (client.firm_id as string | null) ?? null,
+          trigger: HANDOFF_TRIGGER,
+          audience: "owner",
+          idempotency_key: againKey,
+          input_hash: againHash,
+          correlation_id: againCorrelation,
+          status: "queued",
+          action_item_id: actionItemId,
+          attempt: 1,
+        })
+        .select("id, status")
+        .maybeSingle();
+      if (!againError && againInserted?.id) {
+        runId = againInserted.id as string;
+        status = "queued";
+        created = true;
+        invokeCorrelation = againCorrelation;
+        break;
+      }
+      if (againError?.code !== "23505") return json({ error: "run_not_queued" }, 500);
+      const { data: existingAgain, error: againLookupError } = await admin
+        .from("agent_runs")
+        .select("id, status")
+        .eq("agent", decision.agent)
+        .eq("idempotency_key", againKey)
+        .maybeSingle();
+      if (againLookupError || !existingAgain?.id) return json({ error: "run_not_queued" }, 500);
+      runId = existingAgain.id as string;
+      status = existingAgain.status as string;
+      if (!handoffNeedsFreshRun(status)) {
+        return json({ ok: true, runId, status, already: true, runner: decision.runner });
+      }
+    }
+    if (!created) return json({ error: "run_not_queued" }, 500);
   }
 
   const { error: invokeError } = await admin.rpc("agent_invoke", {
@@ -186,7 +241,7 @@ Deno.serve(async (req) => {
       client_id: clientId,
       trigger: HANDOFF_TRIGGER,
       inputs,
-      correlation_id: correlationId,
+      correlation_id: invokeCorrelation,
     },
   });
   if (invokeError) {

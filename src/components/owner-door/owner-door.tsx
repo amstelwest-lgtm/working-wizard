@@ -471,6 +471,7 @@ export function OwnerDoor({
       setOpenAction(openRows[0]?.title ?? null);
       setHandedTitle(handed?.title ?? null);
       setAssignedAgent(handed?.agent ?? null);
+      // The run status is the stored row. Finished work must not come back as Working.
       setAssignedRun(handed?.run ?? null);
       setActionsReady(true);
     });

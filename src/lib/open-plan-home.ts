@@ -26,7 +26,10 @@ export type HandedHomeAction = {
   id: string;
   title: string;
   agent: AgentKey;
-  /** Queued or running while the hand-off is in progress. Null once it has finished. */
+  /**
+   * Queued or running while this assignment is open.
+   * A finished run keeps its status so Home does not paint it as a new hand-off.
+   */
   run: { agent: AgentKey; status: string } | null;
 };
 
@@ -67,15 +70,20 @@ export function handedHomeAction(
     if (!row.id || !title) continue;
     const note = notes.get(row.id) ?? null;
     const run = runs.get(row.id) ?? null;
+    // A newer note for a different bot is the assignment. The previous bot's run is not.
+    const matched = run && (!note || run.agent === note.agent) ? run : null;
     const agent = note?.agent ?? run?.agent ?? null;
     if (!agent || agent === "financial_manager") continue;
-    const active = run != null && ACTIVE.has(run.status);
-    const at = Math.max(stamp(note?.at), stamp(run?.at));
+    const active = matched != null && ACTIVE.has(matched.status);
+    const at = Math.max(stamp(note?.at), stamp(matched?.at));
+    const open = matched == null || active;
     candidates.push({
       id: row.id,
       title,
       agent,
-      run: run ? { agent: run.agent, status: run.status } : null,
+      run: open
+        ? { agent, status: active && matched ? matched.status : "queued" }
+        : { agent, status: matched?.status ?? "succeeded" },
       at,
       active,
     });
@@ -83,14 +91,11 @@ export function handedHomeAction(
   candidates.sort((a, b) => b.at - a.at || Number(b.active) - Number(a.active));
   const best = candidates[0];
   if (!best) return null;
-  const inFlight = best.active || best.run == null;
   return {
     id: best.id,
     title: best.title,
     agent: best.agent,
-    run: inFlight
-      ? { agent: best.agent, status: best.active && best.run ? best.run.status : "queued" }
-      : null,
+    run: best.run,
   };
 }
 

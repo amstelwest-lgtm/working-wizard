@@ -8,6 +8,7 @@ import { useBoundMarketCountry } from "@/contexts/market";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
+import { handoffNeedsFreshRun } from "@/lib/owner-handoff";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import {
@@ -249,6 +250,12 @@ export function MoveHandTo({
         } else if (!result.ok) {
           toast.error(result.error);
           return;
+        } else if (result.runId && handoffNeedsFreshRun(result.status)) {
+          const saved = await recordHandoffAssignment({ clientId, actionItemId, agent });
+          if (!saved.ok) {
+            toast.error(saved.error);
+            return;
+          }
         }
         toast.success(`Assigned to ${agentShortName(agent)}`);
         dispatchActionPlanRefresh({ actionItemId, title, agent });

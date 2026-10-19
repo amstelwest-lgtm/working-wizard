@@ -290,7 +290,7 @@ import {
   loadLatestHandoffAgents,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { handedHomeAction } from "@/lib/open-plan-home";
+import { handedHomeAction, preferPendingHandoff } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -1733,7 +1733,7 @@ function ClientView() {
         : [new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
-      const handed =
+      const handed = preferPendingHandoff(
         handedHomeAction(
           rows.flatMap((row) => {
             const title = row.title?.trim() ?? "";
@@ -1741,16 +1741,15 @@ function ClientView() {
           }),
           notes,
           runs,
-        ) ??
-        (pending && pending.agent !== "financial_manager"
-          ? {
-              id: pending.actionItemId,
-              title: pending.title,
-              agent: pending.agent,
-              run: { agent: pending.agent, status: "queued" as const },
-            }
-          : null);
-      if (handed && notes.has(handed.id)) pendingHandoff.current = null;
+        ),
+        pending && pending.agent !== "financial_manager"
+          ? { id: pending.actionItemId, title: pending.title, agent: pending.agent }
+          : null,
+        notes,
+      );
+      if (pending && notes.get(pending.actionItemId)?.agent === pending.agent) {
+        pendingHandoff.current = null;
+      }
       if (pending && !titles.includes(pending.title)) titles.push(pending.title);
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);

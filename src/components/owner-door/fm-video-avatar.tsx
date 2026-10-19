@@ -218,8 +218,12 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
     const node = rootRef.current;
     if (!node) return;
     const mark = () => setNear(true);
-    const rect = node.getBoundingClientRect();
-    if (rect.width > 0 && rect.bottom > -120 && rect.top < window.innerHeight + 120) mark();
+    const look = () => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width > 0 && rect.bottom > -120 && rect.top < window.innerHeight + 120) mark();
+    };
+    look();
+    const frame = window.requestAnimationFrame(look);
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) mark();
@@ -227,7 +231,10 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
       { rootMargin: "120px" },
     );
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [reduced]);
 
   useEffect(() => {
@@ -245,9 +252,13 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
     let budget = agent === "tax_specialist" ? 1 : fmIdleBudget(Math.random());
     let flourish: FmIdleFlourish = fmIdleFlourish(Math.random());
     let queued: FmAvatarClip = desired;
-    // tax-idle is almost a still, especially at pill size. Open on a moving flourish.
-    let intro: FmAvatarClip | null =
-      agent === "tax_specialist" && desired === "idle" ? flourish : null;
+    // tax-idle is almost a still, and so are calm, pleased, and handoff at sheet size.
+    // curious is the tax clip that actually moves. Play it once, then hold the last frame.
+    const taxOpensStill =
+      agent === "tax_specialist" && desired === "idle" ||
+      (agent === "tax_specialist" && desired === "handoff");
+    let intro: FmAvatarClip | null = taxOpensStill ? "curious" : null;
+    const restOnIntro = intro != null;
     let fade = 0;
     let endTimer = 0;
     let ending = false;
@@ -309,6 +320,7 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
       if (cancelled || token !== generation) return;
       if (revealed && incoming === videos[visibleSlot]) return;
       const clipName = revealed ? queued : opening;
+      const holdIntro = restOnIntro && clipName === opening;
       if (!revealed) intro = null;
       if (incoming.dataset.clip !== clipName) {
         await prepare(nextSlot, clipName);
@@ -362,6 +374,7 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
           if (outgoing && outgoing !== incoming) outgoing.pause();
           setHold(null);
           setLive(true);
+          if (holdIntro) return;
           queued = plan(playing);
           await prepare((1 - nextSlot) as 0 | 1, queued);
         });
@@ -372,6 +385,11 @@ export function FmVideoAvatar({ clip, agent }: { clip: FmAvatarClip; agent: Avat
 
     function advance() {
       if (cancelled || ending || !revealed || advanced) return;
+      if (restOnIntro && playing === "curious") {
+        const active = videos[visibleSlot];
+        if (active) holdLastFrame(active);
+        return;
+      }
       advanced = true;
       ending = true;
       const active = videos[visibleSlot];
