@@ -40,7 +40,7 @@ import {
   forecastLowestPoint,
   statusColumnNeedsAttention,
 } from "../src/lib/cash-forecast-parity.ts";
-import { searchClientSectionJumps } from "../src/lib/feature-finder-clients.ts";
+import { searchClientSectionJumps, shortClientId } from "../src/lib/feature-finder-clients.ts";
 import {
   CASH_FLOOR_ACTION,
   CASH_FLOOR_REASON,
@@ -511,8 +511,16 @@ const jumps = searchClientSectionJumps(
   "debt",
   [theo, { ...theo }, { id: "theo-2", name: "Theo" }, { id: "theo-3", name: "Theo" }, { id: "theo-4", name: "Theo" }],
 );
-const collections = jumps.filter((row) => row.label === "Collections for Theo");
-assert(collections.length === 1, `collections ${collections.length}`);
+const collections = jumps.filter((row) => row.label.startsWith("Collections for Theo"));
+assert(collections.length === 4, `collections ${collections.length}`);
+assert(
+  collections.filter((row) => row.id === "collections:theo").length === 1,
+  "a repeated client id is one collections jump",
+);
+assert(
+  collections.some((row) => row.label === `Collections for Theo · ${shortClientId("theo-2")}`),
+  "a second Theo with the same name keeps its own jump",
+);
 assert(jumps.some((row) => row.label === "Collections") === false, "the bare label stays a different row");
 
 const picker = src("src/components/firm-band-upgrade.tsx");
