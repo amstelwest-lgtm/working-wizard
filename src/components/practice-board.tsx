@@ -3,6 +3,11 @@ import { PeriodPill } from "@/components/chrome-icons";
 import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { reportClientError } from "@/lib/monitoring";
 import { SHELL_GATE_TIMEOUT_MS } from "@/lib/shell-gate";
+import {
+  forgetPaintedBook,
+  readPaintedBook,
+  rememberPaintedBook,
+} from "@/lib/practice-book-cache";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -1255,28 +1260,6 @@ function practiceSectionSubtitle(view: PracticeSection): string {
 
 /** A stay that already succeeded. Remounting All clients must not wait on it again. */
 const accountantPortalStay = new Set<string>();
-const paintedBookByKey = new Map<string, ClientRow[]>();
-const paintedBookByUser = new Map<string, { firmId: string | null; rows: ClientRow[] }>();
-
-function practiceBookCacheKey(userId: string, firmId: string | null): string {
-  return `${userId}:${firmId ?? ""}`;
-}
-
-function readPaintedBook(userId: string | undefined, firmId: string | null): ClientRow[] | null {
-  if (!userId) return null;
-  const exact = paintedBookByKey.get(practiceBookCacheKey(userId, firmId));
-  if (exact && exact.length > 0) return exact;
-  const last = paintedBookByUser.get(userId);
-  if (!last || last.rows.length === 0) return null;
-  if (firmId && last.firmId && last.firmId !== firmId) return null;
-  return last.rows;
-}
-
-function rememberPaintedBook(userId: string | undefined, firmId: string | null, rows: ClientRow[]) {
-  if (!userId || rows.length === 0) return;
-  paintedBookByKey.set(practiceBookCacheKey(userId, firmId), rows);
-  paintedBookByUser.set(userId, { firmId, rows });
-}
 
 export function PracticeBoard({ view }: { view: PracticeView }) {
   const { user } = useAuth();
@@ -1347,7 +1330,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       : null);
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const warmBook = readPaintedBook(user?.id, firmId);
+  const warmBook = readPaintedBook<ClientRow>(user?.id, firmId);
   const [clientRows, setClientRows] = useState<ClientRow[]>(() => warmBook ?? []);
   const [loading, setLoading] = useState(() => warmBook == null);
   /** Open queries and follow-ups stay on a loading state until enrichment lands. */
@@ -1480,7 +1463,11 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
 
   const load = async (activeFirmId: string | null, userId: string | undefined, viewerName?: string | null) => {
     const gen = ++loadGen.current;
-    if (!readPaintedBook(userId, activeFirmId)) {
+    const warm = readPaintedBook<ClientRow>(userId, activeFirmId);
+    if (warm) {
+      setClientRows(warm);
+      setLoading(false);
+    } else {
       setLoading(true);
       setCountsReady(false);
     }
@@ -2654,6 +2641,8 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
             const wasFirst = firstClientOpen;
             setFirstClientOpen(false);
             setAddOpen(false);
+            forgetPaintedBook(user.id, firm?.id ?? firmId);
+            forgetPaintedBook(user.id, created.firm_id ?? null);
             void (async () => {
               await refreshFirms();
               void load(created.firm_id ?? firmId, user.id, greetingSource);
