@@ -290,7 +290,7 @@ import {
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
 import { handedHomeAction } from "@/lib/open-plan-home";
-import { cashFloorCopy, ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
@@ -3227,7 +3227,10 @@ function ClientView() {
         overdueActions: openPlanOverdue,
         cashDipWeek: cashOutlook.dipsBelowFloorWeek,
         cashOpening: hasFigures ? cashOutlook.opening : null,
+        // The forecast floor (forecastMinimumCash). The brief does not compute another.
         cashFloor: hasFigures ? cashOutlook.floor : null,
+        cashClosing: hasFigures ? cashOutlook.closing : null,
+        market: clientMarket,
         openingMissing,
         cashPillarStatus: pillarStatus.cash ?? null,
         receivables: statementPosition.receivables ?? null,
@@ -3252,6 +3255,7 @@ function ClientView() {
       cashOutlook.dipsBelowFloorWeek,
       hasFigures,
       cashOutlook.opening,
+      cashOutlook.closing,
       cashOutlook.floor,
       openingMissing,
       pillarStatus.cash,
@@ -4011,17 +4015,7 @@ function ClientView() {
                           displayStatus={bookStatusCritical ? "critical" : overallHealth.displayStatus}
                           statusLabel={bookStatusCritical ? bookStatusWord : null}
                           pillars={spherePillars}
-                          cashFloorCue={
-                            Number.isFinite(cashOutlook.opening) && Number.isFinite(cashOutlook.floor)
-                              ? cashFloorCopy({
-                                  opening: cashOutlook.opening,
-                                  floor: cashOutlook.floor,
-                                  dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
-                                  money: (amount) => formatMoney(amount, clientMarket),
-                                  market: clientMarket,
-                                }).healthCue
-                              : null
-                          }
+                          cashFloorCue={homeBrief.healthCue}
                           onCashFloor={() => {
                             setActiveTab("overview");
                             void navigate({

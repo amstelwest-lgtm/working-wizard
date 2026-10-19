@@ -9,7 +9,7 @@ import {
 } from "@/lib/cash-runway";
 import { formatMoney, formatMoneyCompact, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { OPENING_BALANCE_MISSING, cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
+import { OPENING_BALANCE_MISSING, forecastLowestPoint } from "@/lib/cash-forecast-parity";
 import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 
@@ -233,14 +233,6 @@ export type OwnerCardStatus = {
   word: string;
 };
 
-function forecastLow(books: OwnerBooks): number | null {
-  const balances = closingBalancesFromCashflow(books.cashflow);
-  if (!balances || balances.length === 0) return null;
-  let low = balances[0];
-  for (const value of balances) if (value < low) low = value;
-  return low;
-}
-
 /**
  * Floor alert on an agent card. The health pillar keeps its own band
  * (Watch, Healthy), so this chip does not say Critical.
@@ -252,23 +244,20 @@ export const CASH_FLOOR_ALERT = "Below your minimum";
  * Cash under the floor is a floor alert, not the health band word.
  * A profit decline, or overdue debtors above zero, is Attention.
  */
-function outlookUnderFloor(books: OwnerBooks): boolean | null {
-  if (books.openingMissing) return false;
-  const outlook = books.cashOutlook;
-  if (!outlook || !finite(outlook.opening) || !finite(outlook.floor)) return null;
-  return cashOutlookIsCritical({ ...outlook, openingMissing: books.openingMissing });
-}
-
 export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCardStatus | null> {
-  const fromOutlook = outlookUnderFloor(books);
-  const low = forecastLow(books);
-  const floor = cashComfortThreshold(books.market.currency);
   const pillar = books.cashPillarStatus;
+  const floor = cashFloorForHome({
+    openingMissing: books.openingMissing,
+    cashOutlook: books.cashOutlook,
+    cashflow: books.cashflow,
+    market: books.market,
+    money: (amount) => ownerAmount(amount, books.market),
+  });
   const cash: OwnerCardStatus | null =
     pillar === "healthy" || pillar === "at_risk"
       ? null
-      : pillar === "critical" || (fromOutlook != null ? fromOutlook : low != null && low < floor)
-        ? { tone: "attention", word: CASH_FLOOR_ALERT }
+      : pillar === "critical" || floor?.chip
+        ? { tone: "attention", word: floor?.chip ?? CASH_FLOOR_ALERT }
         : null;
 
   const gross =
@@ -343,8 +332,8 @@ export type CashFloorCopy = {
   /** The agent-card chip. Null when cash is not under the minimum and the forecast does not dip. */
   chip: string | null;
   /**
-   * One line under the Health cash pillar when cash is below the minimum now.
-   * A projected dip keeps the sentence and the chip, and leaves this null.
+   * One line under the Health cash pillar whenever the card chip is set.
+   * The pillar score and band stay on their own inputs.
    */
   healthCue: string | null;
 };
@@ -358,26 +347,76 @@ export function cashFloorCopy(input: {
   opening: number;
   floor: number;
   dipsBelowFloorWeek?: number | null;
+  /** Week closings. A dip quotes the low point, the same way the owner card does. */
+  closing?: readonly number[] | null;
   money: (amount: number) => string;
   market?: MoneyMarket;
 }): CashFloorCopy {
   const { opening, floor, money } = input;
-  const dip = input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0;
+  const low = input.closing?.length
+    ? forecastLowestPoint(opening, input.closing).amount
+    : null;
+  const lowUnder = low != null && Number.isFinite(low) && low < floor;
+  const dip = (input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0) || lowUnder;
   const belowNow = opening < floor;
-  const gap = Math.abs(floor - opening);
-  const sentence = belowNow
-    ? `Cash ${money(opening)}, ${money(gap)} below your ${money(floor)} minimum.`
-    : dip
-      ? `Cash ${money(opening)}. The forecast dips under your ${money(floor)} minimum.`
-      : `Cash is ${money(opening)}, above the ${money(floor)} floor.`;
+  const quoted = belowNow ? opening : lowUnder ? low! : opening;
+  const gap = Math.abs(floor - quoted);
+  const under = belowNow || lowUnder;
+  const sentence = under
+    ? `Cash ${money(quoted)}, ${money(gap)} below your ${money(floor)} minimum.`
+    : `Cash is ${money(opening)}, above the ${money(floor)} floor.`;
+  const alert = under || dip;
   return {
     sentence,
-    chip: belowNow || dip ? CASH_FLOOR_ALERT : null,
+    chip: alert ? CASH_FLOOR_ALERT : null,
     healthCue:
-      belowNow && input.market
+      alert && input.market
         ? `Below your ${shortFloorAmount(floor, input.market)} minimum · see FM`
         : null,
   };
+}
+
+/**
+ * The cash reading the owner Financial Manager card shows.
+ * Health uses this same result, so the pillar line appears whenever the card
+ * says below the minimum.
+ */
+export function cashFloorForHome(input: {
+  openingMissing?: boolean;
+  cashOutlook?: {
+    opening: number;
+    closing: readonly number[];
+    floor: number;
+    dipsBelowFloorWeek: number | null;
+  } | null;
+  cashflow?: SavedCashflowLike | null;
+  market: MoneyMarket;
+  money: (amount: number) => string;
+}): CashFloorCopy | null {
+  if (input.openingMissing) return null;
+  const outlook = input.cashOutlook;
+  if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
+    return cashFloorCopy({
+      opening: outlook.opening,
+      floor: outlook.floor,
+      dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
+      closing: outlook.closing,
+      money: input.money,
+      market: input.market,
+    });
+  }
+  const balances = closingBalancesFromCashflow(input.cashflow ?? null);
+  if (!balances || balances.length === 0) return null;
+  let low = balances[0];
+  for (const value of balances) if (value < low) low = value;
+  const floor = cashComfortThreshold(input.market.currency);
+  return cashFloorCopy({
+    opening: low,
+    floor,
+    dipsBelowFloorWeek: low < floor ? 1 : null,
+    money: input.money,
+    market: input.market,
+  });
 }
 
 /** Same cash-floor sentence on the owner home and the accountant client brief. */
@@ -419,16 +458,17 @@ function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: 
       empty: false,
     };
   }
-  if (outlook && finite(outlook.opening) && finite(outlook.floor)) {
-    const sentence = cashFloorSentence({
-      opening: outlook.opening,
-      floor: outlook.floor,
-      dipsBelowFloorWeek: outlook.dipsBelowFloorWeek,
-      money,
-    });
+  const shared = cashFloorForHome({
+    openingMissing: books.openingMissing,
+    cashOutlook: books.cashOutlook,
+    cashflow: books.cashflow,
+    market: books.market,
+    money,
+  });
+  if (shared && outlook && finite(outlook.opening) && finite(outlook.floor)) {
     return {
       ...base,
-      sentence,
+      sentence: shared.sentence,
       source: `${booksSource}, 13-week forecast`,
       step: "Ask",
       signed: false,
