@@ -442,6 +442,23 @@ export function practiceNeedsAttention(
 }
 
 /**
+ * What the Needs attention page shows. Rows appear as soon as the queue has
+ * any item. "Nothing needs attention." waits for a finished enrichment and a
+ * settled portfolio fetch. A timer that only clears the spinner stays on
+ * "Checking the book…".
+ */
+export function needsAttentionView(input: {
+  bookLoading: boolean;
+  enriched: boolean;
+  portfolioLoaded: boolean;
+  items: readonly unknown[];
+}): "loading" | "list" | "clear" {
+  if (input.items.length > 0) return "list";
+  if (!input.bookLoading && input.enriched && input.portfolioLoaded) return "clear";
+  return "loading";
+}
+
+/**
  * Practice home digest. Same rows and reasons as the Needs attention queue,
  * already ranked (review now, then watching, then name).
  */

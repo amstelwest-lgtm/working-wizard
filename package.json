@@ -53,6 +53,7 @@
     "test:accountant-followup": "vite-node --config scripts/vite-test.config.ts scripts/accountant-followup-test.mts",
     "test:aqa-practice-nav": "vite-node --config scripts/vite-test.config.ts scripts/aqa-practice-nav-test.mts",
     "test:open-queries-ready": "vite-node --config scripts/vite-test.config.ts scripts/open-queries-ready-test.mts",
+    "test:needs-attention-ready": "vite-node --config scripts/vite-test.config.ts scripts/needs-attention-ready-test.mts",
     "test:aqa-med-findings": "vite-node --config scripts/vite-test.config.ts scripts/aqa-med-findings-test.mts",
     "test:accountant-reports-studio": "vite-node --config scripts/vite-test.config.ts scripts/accountant-reports-studio-test.mts",
     "test:aqa-persona-crit": "vite-node --config scripts/vite-test.config.ts scripts/aqa-persona-crit-test.mts",
