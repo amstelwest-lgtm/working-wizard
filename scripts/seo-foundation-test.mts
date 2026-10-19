@@ -4,6 +4,7 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { HEALTH_RATIO_COUNT } from "../src/lib/health-score";
 import {
   INDEXABLE_PATHS,
   LLMS_TXT,
@@ -141,7 +142,7 @@ assert(
 );
 assert(!graph.includes("Canada"), "org schema does not claim Canada");
 assert(!graph.includes("photographed"), "schema does not claim photo ingest");
-assert(graph.includes("19 financial ratios"), "schema uses the real ratio count");
+assert(graph.includes(`${HEALTH_RATIO_COUNT} financial ratios`), "schema uses the real ratio count");
 assert(graph.includes("QuickBooks Online"), "schema names QuickBooks Online");
 assert(graph.includes("Xero"), "schema names Xero");
 assert(!graph.includes("certified"), "schema does not claim certification");
@@ -534,7 +535,7 @@ assert(
   "the bot line is gone from about and the shared copy",
 );
 assert(aboutText.includes("The accountant reviews and signs off."), "about keeps accountant sign-off");
-assert(about.includes("19 financial ratios"), "about keeps the ratio claim");
+assert(about.includes("{HEALTH_RATIO_COUNT} financial ratios"), "about keeps the ratio claim");
 assert(about.includes("DuPont analysis"), "about keeps DuPont");
 assert(about.includes("13-week cash forecast"), "about keeps the cash forecast");
 assert(!about.includes("Delaware"), "about does not invent a US legal entity");

@@ -6,6 +6,7 @@ import { readMarketingVisitor } from "@/lib/geo-country.functions";
 import { OWNER_PLAN_EARLY_US, OWNER_TEASER } from "@/lib/landing-copy";
 import { visitorMarketBootScript } from "@/lib/market";
 import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-score";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -60,7 +61,7 @@ function ForOwnersPage() {
           so the advice is something you can trust.
         </li>
         <li>
-          <strong>One health score.</strong> Nineteen ratios and four pillar scores collapsed into
+          <strong>One health score.</strong> {HEALTH_RATIO_COUNT} ratios and four pillar scores collapsed into
           a single number you can actually hold in your head, with the workings still there when you
           want them.
         </li>

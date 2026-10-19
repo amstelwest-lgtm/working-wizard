@@ -4,7 +4,12 @@
  */
 import { buildSpherePillars } from "../src/components/sphere-hero-adapter";
 import {
+  CASH_OPENING_UNSCORED,
+  HEALTH_RATIO_COUNT,
+  PILLAR_LABELS,
+  cashPillarFollowsForecast,
   computeOverallHealth,
+  grossMarginLooksImplausible,
   profitStepBand,
   ratioScoreBand,
   scoreRatio,
@@ -318,6 +323,37 @@ const drawerBand = ratioScoreBand(equityCard.health);
 assert(drawerBand.label === criticalMultiplier.label && drawerBand.tier === criticalMultiplier.tier, "the drawer uses the card score and the same band");
 assert(drawerBand.label === "Critical", "the drawer does not relabel a critical multiplier as Watch");
 assert(ratioScoreBand(60).label === "Watch", "a financing pillar of 60 stays Watch on its own card");
+
+assert(PILLAR_LABELS.profit === "Profit" && PILLAR_LABELS.financing === "Financing", "canonical pillar names");
+assert(PILLAR_LABELS.assets === "Assets" && PILLAR_LABELS.cash === "Cash", "canonical pillar names");
+assert(HEALTH_RATIO_COUNT === 20, `catalogue is 20 ratios, got ${HEALTH_RATIO_COUNT}`);
+assert(grossMarginLooksImplausible(0.954, "Hotels & accommodation"), "a hotel margin above 85% is implausible");
+assert(!grossMarginLooksImplausible(0.954, "SaaS & software"), "software can carry a high gross margin");
+assert(grossMarginLooksImplausible(0.9, null), "an unknown industry still flags a 90% gross margin");
+
+const floored = cashPillarFollowsForecast(stillHealthy, {
+  opening: 10,
+  closings: [10, 80],
+  floor: 50,
+});
+const flooredCash = floored.pillars.find((pillar) => pillar.id === "cash");
+assert(flooredCash?.status === "critical" && (flooredCash.score ?? 100) <= 25, "cash under the floor is capped");
+assert(floored.displayStatus === "critical" && floored.displayLabel === "Critical", "the overall band matches the cash breach");
+
+const missingOpen = cashPillarFollowsForecast(stillHealthy, { openingMissing: true, opening: 0, closings: [0], floor: 50 });
+const missingCash = missingOpen.pillars.find((pillar) => pillar.id === "cash");
+assert(missingCash?.score == null && missingCash.note === CASH_OPENING_UNSCORED, "a missing opening is unscored");
+assert(missingCash?.status !== "critical", "a missing opening is not a floor breach");
+assert(
+  missingOpen.overall ===
+    Math.round(
+      missingOpen.pillars
+        .filter((pillar) => pillar.id !== "cash" && pillar.score != null)
+        .reduce((sum, pillar) => sum + (pillar.score ?? 0), 0) / 3,
+    ),
+  "unscored cash leaves the average",
+);
+assert(missingOpen.displayStatus !== "healthy", "an unscored cash pillar flags a healthy overall");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

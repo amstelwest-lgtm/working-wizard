@@ -38,6 +38,7 @@ import {
   signupLooksAlreadyRegistered,
 } from "@/lib/invite-handoff";
 import { browserAppUrl } from "@/lib/app-origin";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-score";
 import {
   billingStartPath,
   billingStartSearch,
@@ -2340,7 +2341,7 @@ function LandingPage() {
               <span className="n">02</span>
               <h3>Milōn understands the business</h3>
               <p>
-                Milōn analyzes 19 carefully selected financial ratios across four pillars of
+                Milōn analyzes {HEALTH_RATIO_COUNT} carefully selected financial ratios across four pillars of
                 financial health. DuPont analysis helps break profitability down to identify where
                 the underlying problem sits.
               </p>
@@ -2434,7 +2435,7 @@ function LandingPage() {
           <div className="pillar-grid stagger" id="pillarGrid">
             <div className="pillar-card">
               <div className="node" />
-              <h3>Profitability</h3>
+              <h3>Profit</h3>
               <p className="ask">
                 Is the business actually making money, and what is driving its profitability?
               </p>
@@ -2449,7 +2450,7 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <h3>Cash Flow</h3>
+              <h3>Cash</h3>
               <p className="ask">
                 Is cash coming in and going out at a rate the business can sustain?
               </p>
@@ -2472,7 +2473,7 @@ function LandingPage() {
             </div>
             <div className="pillar-card warn">
               <div className="node" />
-              <h3>Asset Productivity</h3>
+              <h3>Assets</h3>
               <p className="ask">
                 How effectively is the business using the assets and working capital it already has?
               </p>
@@ -2487,7 +2488,7 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <h3>Financing &amp; Solvency</h3>
+              <h3>Financing</h3>
               <p className="ask">
                 How is the business funded, and how much financial pressure is that creating?
               </p>

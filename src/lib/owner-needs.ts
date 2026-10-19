@@ -29,6 +29,9 @@ export type OwnerNeedsView = {
  * What needs you → Action plan. Unknown is not "No open work".
  * Titles are the open rows already on the plan.
  */
+/** Home shows this many open titles. A longer plan says how many are hidden. */
+export const HOME_ACTION_PREVIEW = 3;
+
 export function homeActionNeeds(input: {
   known: boolean;
   unavailable?: boolean;
@@ -39,9 +42,14 @@ export function homeActionNeeds(input: {
   if (input.unavailable) return { heading: "Action plan", lines: ["Open actions aren't available yet."] };
   const titles = input.titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
   if (titles.length === 0) return { heading: "Action plan", lines: ["No open work."] };
+  const lines = titles.slice(0, HOME_ACTION_PREVIEW);
   const heading =
-    input.overdue > 0 ? `${titles.length} open, ${input.overdue} overdue` : `${titles.length} open`;
-  return { heading, lines: titles.slice(0, 2) };
+    lines.length < titles.length
+      ? `Showing ${lines.length} of ${titles.length}`
+      : input.overdue > 0
+        ? `${titles.length} open, ${input.overdue} overdue`
+        : `${titles.length} open`;
+  return { heading, lines };
 }
 
 /** Same open-action sentence the Financial Manager card and the hub count. */
@@ -125,19 +133,22 @@ export function ownerNeedsView(input: {
   when: (iso: string) => string;
 }): OwnerNeedsView {
   const assigned = openPlanTitles(input.actions);
+  const shownActions = assigned.slice(0, HOME_ACTION_PREVIEW);
   const actionsHeading = !input.actionsReady
     ? "Open actions"
     : input.actionsUnavailable
       ? "Open actions"
-      : assigned.length
-        ? countPhrase(assigned.length, "open action", "open actions")
-        : "Open actions";
+      : assigned.length > shownActions.length
+        ? `Showing ${shownActions.length} of ${assigned.length}`
+        : assigned.length
+          ? countPhrase(assigned.length, "open action", "open actions")
+          : "Open actions";
   const actionLines = !input.actionsReady
     ? ["Checking open actions."]
     : input.actionsUnavailable
       ? ["Open actions aren't available yet."]
-      : assigned.length
-        ? assigned
+      : shownActions.length
+        ? shownActions
         : ["No open actions."];
 
   const draftsHeading = !input.draftsReady

@@ -395,10 +395,14 @@ export function reportProfileCoda(
   profile: ClientOperatingProfile | null | undefined,
   kind: ReportNarrativeKind,
   market: Pick<ResolvedMarket, "copyPack" | "currency"> = ZA_MARKET,
+  businessName?: string | null,
 ): string | null {
   if (!profile) return null;
   const goal = GOAL_LABEL[profile.ownerGoal];
-  const industry = profileIndustryLabel(profile, "this business");
+  const named = (businessName ?? "").trim();
+  const industry = named
+    ? clientIndustryDisplay(named, profile, profile.businessTypeId)
+    : profileIndustryLabel(profile, "this business");
 
   const raw = ((): string | null => {
     switch (kind) {

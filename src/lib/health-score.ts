@@ -44,6 +44,8 @@ export type PillarScore = {
   label: string;
   score: number | null;
   status: HealthTier;
+  /** Set when the pillar has no confident score, such as a missing opening balance. */
+  note?: string | null;
 };
 
 export type OverallHealth = {
@@ -53,7 +55,7 @@ export type OverallHealth = {
   status: HealthTier;
   /**
    * Display tier. "healthy" is demoted to "at_risk" when any pillar is critical
-   * or week 1 is short. Zero weeks of runway forces "critical".
+   * or week 1 is short. Zero weeks of runway, or cash under the floor, forces "critical".
    */
   displayStatus: HealthTier;
   /** Short UI label for chips ("Healthy" / "Watch" / "Critical"). */
@@ -64,26 +66,42 @@ export type OverallHealth = {
 };
 
 /**
- * Names on the scorecard PDF, the Overview pillar chips, and the pack.
- * One map so those three cannot print different words for the same pillar.
+ * One name per pillar. Home, Health, the action plan, the pack, the scorecard
+ * PDF, and the landing page all use this map. Scores are out of 100.
  */
 export const PILLAR_LABELS: Record<HealthPillarId, string> = {
-  profit: "Profit Drivers",
-  assets: "Asset Productivity",
-  financing: "Leverage & Finance",
-  cash: "Cash Flow",
-};
-
-/**
- * Tight labels for the Overview orb. Each one abbreviates `PILLAR_LABELS`.
- * Pack prose, the scorecard, and the pillar cards use the canonical names.
- */
-export const PILLAR_SHORT_LABELS: Record<HealthPillarId, string> = {
   profit: "Profit",
   assets: "Assets",
   financing: "Financing",
   cash: "Cash",
 };
+
+/** Same words as `PILLAR_LABELS`. Kept so older call sites stay on the map. */
+export const PILLAR_SHORT_LABELS: Record<HealthPillarId, string> = PILLAR_LABELS;
+
+/** Cash has no confident score until an opening balance is on file. */
+export const CASH_OPENING_UNSCORED = "Needs opening balance";
+
+/** Gross margin above this, outside software, is a mapping problem, not a healthy score. */
+export const IMPLAUSIBLE_GROSS_MARGIN = 0.85;
+
+export const GROSS_MARGIN_MAPPING_NOTE = "Check cost of sales mapping";
+
+const SOFTWARE_INDUSTRY = /saas|software/i;
+
+/**
+ * A margin above 85% is implausible for hospitality and most other industries.
+ * Software is exempt. An unknown industry is flagged.
+ */
+export function grossMarginLooksImplausible(
+  margin: number,
+  industry?: string | null,
+): boolean {
+  if (!Number.isFinite(margin) || margin <= IMPLAUSIBLE_GROSS_MARGIN) return false;
+  const label = (industry ?? "").trim();
+  if (label && SOFTWARE_INDUSTRY.test(label)) return false;
+  return true;
+}
 
 /** Maps `computeRatios()` human-readable names → camelCase keys used in UI health maps. */
 export const RATIO_NAME_TO_KEY: Record<string, string> = {
@@ -211,6 +229,12 @@ export const PILLAR_RATIO_NAMES: Record<HealthPillarId, readonly string[]> = {
   financing: ["Equity Multiplier", "Debt-to-Equity", "Interest Burden", "Tax Burden", "Return on Equity"],
   cash: ["Debtor Days", "Creditor Days", "Working Capital Days", "OCF / EBITDA"],
 };
+
+/** Catalogue size. Marketing copy and the scorecard derive their ratio count from this. */
+export const HEALTH_RATIO_COUNT = (Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).reduce(
+  (sum, id) => sum + PILLAR_RATIO_NAMES[id].length,
+  0,
+);
 
 const ALL_PILLARS: HealthPillarId[] = ["profit", "assets", "financing", "cash"];
 
@@ -369,16 +393,22 @@ export function scorecardHealthFromFinancials(input: {
   cashBalance?: number | null;
   market?: ScoreMarket;
   shortfallWeek?: number | null;
+  /** Industry label. A gross margin above 85% is left unscored outside software. */
+  industry?: string | null;
 }): OverallHealth {
+  const ratios = overviewRatios(input.financials, {
+    fyStartMonth: input.fyStartMonth,
+    periodMonths: input.periodMonths,
+  });
+  const gross = ratios["Gross Margin"];
   return computeOverallHealth({
-    ratios: overviewRatios(input.financials, {
-      fyStartMonth: input.fyStartMonth,
-      periodMonths: input.periodMonths,
-    }),
+    ratios,
     cashRunwayWeeks: input.cashRunwayWeeks,
     cashBalance: input.cashBalance,
     market: input.market,
     shortfallWeek: input.shortfallWeek,
+    grossMarginImplausible:
+      typeof gross === "number" && grossMarginLooksImplausible(gross, input.industry),
   });
 }
 
@@ -528,6 +558,11 @@ export type ComputeOverallHealthInput = {
   shortfallWeek?: number | null;
   /** Sales-per-employee uses a market-specific healthy target. Defaults ZA. */
   market?: ScoreMarket;
+  /**
+   * Gross margin is too high for this industry to score as Healthy.
+   * The ratio stays on the statement; it does not lift the Profit pillar.
+   */
+  grossMarginImplausible?: boolean;
 };
 
 /**
@@ -542,14 +577,17 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
     cash: [],
   };
 
+  const skipGross = input.grossMarginImplausible === true;
   if (input.scoredRatios?.length) {
     for (const r of input.scoredRatios) {
       if (!Number.isFinite(r.score)) continue;
+      if (skipGross && r.name === "Gross Margin") continue;
       const pillar = r.pillar ?? pillarForRatioName(r.name);
       bucket[pillar].push(r.score);
     }
   } else if (input.ratios) {
     for (const [name, val] of Object.entries(input.ratios)) {
+      if (skipGross && name === "Gross Margin") continue;
       const n = toFiniteNumber(val);
       if (n == null) continue;
       const scored = scoreRatio(name, n, input.market);
@@ -603,39 +641,18 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   };
 }
 
-/**
- * Cash pillar follows the 13-week series. A closing under the floor, with a
- * real opening, cannot stay Healthy. A missing opening is not a breach.
- * The score is capped at the critical band so the label and the number agree.
- */
-export function cashPillarFollowsForecast(
-  health: OverallHealth,
-  input: {
-    openingMissing?: boolean;
-    opening?: number | null;
-    closings?: readonly number[] | null;
-    floor?: number | null;
-  },
+function overallFromPillars(
+  pillars: PillarScore[],
+  extras?: { forceCritical?: boolean; flagUnscoredCash?: boolean },
 ): OverallHealth {
-  if (input.openingMissing) return health;
-  const floor = input.floor;
-  if (floor == null || !Number.isFinite(floor)) return health;
-  const openingUnder =
-    input.opening != null && Number.isFinite(input.opening) && input.opening < floor;
-  const closingUnder = (input.closings ?? []).some((n) => Number.isFinite(n) && n < floor);
-  if (!openingUnder && !closingUnder) return health;
-
-  const pillars = health.pillars.map((pillar) => {
-    if (pillar.id !== "cash") return pillar;
-    const score = pillar.score == null ? 25 : Math.min(pillar.score, 25);
-    return { ...pillar, score, status: "critical" as const };
-  });
   const scored = pillars.filter((p) => p.score != null) as Array<PillarScore & { score: number }>;
   const overallRaw = avg(scored.map((p) => p.score));
   const overall = overallRaw == null ? null : Math.round(overallRaw);
   const status = scoreTier(overall);
   const hasCriticalPillar = scored.some((p) => p.status === "critical");
-  const displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  let displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  if (extras?.forceCritical) displayStatus = "critical";
+  else if (extras?.flagUnscoredCash && displayStatus === "healthy") displayStatus = "at_risk";
   const weakestPillar =
     scored.length === 0
       ? null
@@ -649,6 +666,48 @@ export function cashPillarFollowsForecast(
     weakestPillar,
     hasCriticalPillar,
   };
+}
+
+/**
+ * Cash pillar follows the 13-week series. A closing under the floor, with a
+ * real opening, is Critical and capped at 25, and the overall band is Critical
+ * with it. A missing opening is not a breach: Cash is unscored and left out
+ * of the average, and a Healthy overall is flagged down to Watch.
+ */
+export function cashPillarFollowsForecast(
+  health: OverallHealth,
+  input: {
+    openingMissing?: boolean;
+    opening?: number | null;
+    closings?: readonly number[] | null;
+    floor?: number | null;
+  },
+): OverallHealth {
+  if (input.openingMissing) {
+    const pillars = health.pillars.map((pillar) => {
+      if (pillar.id !== "cash") return pillar;
+      return {
+        ...pillar,
+        score: null,
+        status: "at_risk" as const,
+        note: CASH_OPENING_UNSCORED,
+      };
+    });
+    return overallFromPillars(pillars, { flagUnscoredCash: true });
+  }
+  const floor = input.floor;
+  if (floor == null || !Number.isFinite(floor)) return health;
+  const openingUnder =
+    input.opening != null && Number.isFinite(input.opening) && input.opening < floor;
+  const closingUnder = (input.closings ?? []).some((n) => Number.isFinite(n) && n < floor);
+  if (!openingUnder && !closingUnder) return health;
+
+  const pillars = health.pillars.map((pillar) => {
+    if (pillar.id !== "cash") return pillar;
+    const score = pillar.score == null ? 25 : Math.min(pillar.score, 25);
+    return { ...pillar, score, status: "critical" as const, note: null };
+  });
+  return overallFromPillars(pillars, { forceCritical: true });
 }
 
 /** Score (0-100) from a flat financials object shaped like `clients.financials`. */

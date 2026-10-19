@@ -171,6 +171,9 @@ export type StrategicMoveLite = {
   ratioName: string;
   impactLine?: string;
   health: number;
+  /** Canonical pillar. The number next to it is the pillar score, not this ratio. */
+  pillarLabel?: string | null;
+  pillarScore?: number | null;
 };
 
 interface Props {
@@ -2049,6 +2052,14 @@ function GoalHeader({
   );
 }
 
+const RATIO_DRIVER_LABEL: Record<string, string> = {
+  "Profit Power": "Operating margin",
+  "Bottom-Line Strength": "Net margin",
+  "Asset Productivity": "Return on assets",
+  "Asset Engine": "Asset turnover",
+  "Fixed Asset Productivity": "Fixed asset use",
+};
+
 // ═══ Drivers strip ═══════════════════════════════════════════════════════════
 function DriversStrip({
   moves,
@@ -2060,7 +2071,15 @@ function DriversStrip({
   return (
     <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
       {moves.map((m) => {
-        const score = driverHealthLabel(m.health);
+        const pillarScore =
+          m.pillarLabel && m.pillarScore != null && Number.isFinite(m.pillarScore)
+            ? Math.round(m.pillarScore)
+            : null;
+        const score = pillarScore ?? driverHealthLabel(m.health);
+        const label = m.pillarLabel || m.ratioName;
+        const driverName = RATIO_DRIVER_LABEL[m.ratioName] ?? m.ratioName;
+        const driver =
+          m.pillarLabel && driverName && driverName !== m.pillarLabel ? driverName : null;
         const tone =
           score == null
             ? "#94a3b8"
@@ -2076,7 +2095,7 @@ function DriversStrip({
             className="group rounded-xl border border-[#DBEAFE] bg-white px-3.5 py-3 text-left transition-colors hover:border-[#0B5FFF]/40 dark:border-slate-800 dark:bg-slate-900/50"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className={LABEL_CLS}>{m.ratioName}</span>
+              <span className={LABEL_CLS}>{label}</span>
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
             </div>
             <div className="mt-1 text-lg font-extrabold tabular-nums tracking-tight text-slate-950 dark:text-white">
@@ -2089,6 +2108,9 @@ function DriversStrip({
                 <span className="text-slate-400">—</span>
               )}
             </div>
+            {driver ? (
+              <div className="mt-0.5 text-[10px] font-medium text-slate-500">{driver}</div>
+            ) : null}
             <div className="mt-0.5 flex items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-[#102A43] dark:group-hover:text-[#0B5FFF]">
               View full analysis <ChevronRight className="h-3 w-3" />
             </div>

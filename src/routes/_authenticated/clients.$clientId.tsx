@@ -89,6 +89,7 @@ import {
   ratioScoreBand,
   overviewRatioInputs,
   overviewRatios,
+  CASH_OPENING_UNSCORED,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   cashPillarFollowsForecast,
@@ -260,7 +261,7 @@ import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/li
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary, StatementFigures } from "@/components/client-brain-summary";
 import { StrategicMovesPanel } from "@/components/strategic-moves-panel";
-import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
+import { attachPillarScore, rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
 import { periodProfitBridge, statementGrossMarginFraction } from "@/lib/period-profit";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import {
@@ -1308,6 +1309,10 @@ function ClientView() {
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
+  const healthIndustry = clientIndustryDisplay(
+    client?.name,
+    parseOperatingProfile(client?.operating_profile),
+  );
   const overallHealth: OverallHealth = cashPillarFollowsForecast(
     scorecardHealthFromFinancials({
       financials,
@@ -1317,6 +1322,7 @@ function ClientView() {
       cashBalance: cashKnown ? cashBalance : null,
       market: clientMarket,
       shortfallWeek: cashOutlook.shortfallWeek,
+      industry: healthIndustry,
     }),
     {
       openingMissing,
@@ -1435,12 +1441,16 @@ function ClientView() {
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
   });
 
+  const pillarNotes = Object.fromEntries(
+    overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", string | null>;
   const simplifiedSections = [
     {
       id: "profit",
       label: PILLAR_LABELS.profit,
       health: pillarHealths.profit,
       status: pillarStatus.profit,
+      unscoredLabel: pillarNotes.profit,
       series: [] as number[],
     },
     {
@@ -1448,6 +1458,7 @@ function ClientView() {
       label: PILLAR_LABELS.assets,
       health: pillarHealths.assets,
       status: pillarStatus.assets,
+      unscoredLabel: pillarNotes.assets,
       series: [] as number[],
     },
     {
@@ -1455,6 +1466,7 @@ function ClientView() {
       label: PILLAR_LABELS.financing,
       health: pillarHealths.financing,
       status: pillarStatus.financing,
+      unscoredLabel: pillarNotes.financing,
       series: [] as number[],
     },
     {
@@ -1462,6 +1474,7 @@ function ClientView() {
       label: PILLAR_LABELS.cash,
       health: pillarHealths.cash,
       status: pillarStatus.cash,
+      unscoredLabel: pillarNotes.cash ?? (openingMissing ? CASH_OPENING_UNSCORED : null),
       series: [] as number[],
     },
   ];
@@ -1581,6 +1594,7 @@ function ClientView() {
     suppressKeys: clientProfitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
     debtorDays: Number.isFinite(debtorDaysForMoves) ? debtorDaysForMoves : null,
     financingHealth: pillarHealths.financing,
+    weakestPillar: overallHealth.weakestPillar?.id ?? null,
   });
   const cashRunwayHeadline = hasFigures
     ? forecastRunwayHeadlineShared({
@@ -2801,6 +2815,7 @@ function ClientView() {
         periodMonths: periodMonthsOf(financials),
         partMonth,
         cashFlowKnown: cashFlowKnown(financials),
+        industry: healthIndustry,
       },
     );
     const clientFirmName =
@@ -2817,6 +2832,7 @@ function ClientView() {
         accountantProfile: profile,
         cashRunwayWeeks: effectiveRunway,
         overallHealth,
+        operatingProfile: parseOperatingProfile(client.operating_profile),
         reviewSignoff: financialsStamp,
         sample: Boolean(client.is_demo),
         market: clientMarket,
@@ -2837,6 +2853,7 @@ function ClientView() {
     firmId,
     effectiveRunway,
     overallHealth,
+    healthIndustry,
     overviewScorecardPeriodLabel,
   ]);
 
@@ -4122,7 +4139,7 @@ function ClientView() {
                             const labels: Record<string, string> = PILLAR_LABELS;
                             return {
                               title: `Improve ${labels[worst[0]] ?? worst[0]}`,
-                              description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
+                              description: `This pillar scores ${Math.round(worst[1])} — your highest-impact area right now.`,
                             };
                           })()}
                         />
@@ -4153,6 +4170,9 @@ function ClientView() {
                           onOpenEvidence={(id) => {
                             const evidence = evidenceForPillar(id);
                             if (!evidence) return;
+                            if (id === "assets" || id === "financing") {
+                              setHealthDrill({ token: Date.now(), pillarId: id });
+                            }
                             openCoach(evidence);
                           }}
                         />
@@ -4879,13 +4899,18 @@ function ClientView() {
                                 ? search.filter
                                 : undefined
                           }
-                          moves={strategicMoves.map((move) => ({
-                            key: move.key,
-                            title: move.title,
-                            ratioName: move.ratioName,
-                            impactLine: move.impactLine,
-                            health: Number.isFinite(move.health) ? move.health : Number.NaN,
-                          }))}
+                          moves={strategicMoves.map((move) =>
+                            attachPillarScore(
+                              {
+                                key: move.key,
+                                title: move.title,
+                                ratioName: move.ratioName,
+                                impactLine: move.impactLine,
+                                health: Number.isFinite(move.health) ? move.health : Number.NaN,
+                              },
+                              overallHealth.pillars,
+                            ),
+                          )}
                           focusMoveKey={planFocusMove}
                           onFocusHandled={() => setPlanFocusMove(null)}
                           onAnswer={onPlanAnswer}
@@ -5268,14 +5293,23 @@ function ClientView() {
               const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                scorecardHealthFromFinancials({
-                  financials: draftedFinancials,
-                  fyStartMonth,
-                  periodMonths: periodMonthsOf(draftedFinancials),
-                  cashRunwayWeeks: effectiveRunway,
-                  market: clientMarket,
-                  shortfallWeek: cashOutlook.shortfallWeek,
-                }).overall,
+                cashPillarFollowsForecast(
+                  scorecardHealthFromFinancials({
+                    financials: draftedFinancials,
+                    fyStartMonth,
+                    periodMonths: periodMonthsOf(draftedFinancials),
+                    cashRunwayWeeks: effectiveRunway,
+                    market: clientMarket,
+                    shortfallWeek: cashOutlook.shortfallWeek,
+                    industry: healthIndustry,
+                  }),
+                  {
+                    openingMissing,
+                    opening: cashOutlook.opening,
+                    closings: cashOutlook.closing,
+                    floor: cashOutlook.floor,
+                  },
+                ).overall,
               );
               toast.success(
                 annualised

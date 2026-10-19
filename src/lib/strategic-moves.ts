@@ -4,6 +4,7 @@
  * Rank once here so Moves and Plan cannot drift.
  */
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { PILLAR_LABELS, type HealthPillarId } from "@/lib/health-score";
 import { profilePriorityWeight } from "@/lib/profile-signals";
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
@@ -342,6 +343,61 @@ export const STRATEGIC_MOVE_CATALOG: readonly StrategicMoveEntry[] = [
 
 const PAY_FASTER_MAX_DAYS = 30;
 
+/** Collections advice. Debtor days already at or under 30 do not need it. */
+const COLLECTIONS_ADVICE =
+  /pay faster|collect earlier|shorten debtor|reduce debtor|invoice faster|invoice same-day|collect more aggressively|speed up receivables|tighten receivables/i;
+
+const MOVE_PILLAR: Record<string, HealthPillarId> = {
+  operatingMargin: "profit",
+  netMargin: "profit",
+  grossMargin: "profit",
+  directCostsRatio: "profit",
+  fixedCostRatio: "profit",
+  dol: "profit",
+  gpToLabor: "profit",
+  customerConcentration: "profit",
+  revenueGrowth: "profit",
+  assetTurnover: "assets",
+  roa: "assets",
+  inventoryDays: "assets",
+  salesPerEmployee: "assets",
+  fixedCapitalUtilization: "assets",
+  assetReinvestmentRatio: "assets",
+  capexIntensity: "assets",
+  taxBurden: "financing",
+  interestBurden: "financing",
+  equityMultiplier: "financing",
+  roe: "financing",
+  fundingStructure: "financing",
+  debtToEquity: "financing",
+  debtToAssets: "financing",
+  debtorDays: "cash",
+  creditorDays: "cash",
+  workingCapitalDays: "cash",
+  workingCapitalUtilization: "cash",
+  workingCapitalFunding: "cash",
+  ocfToEbitda: "cash",
+  currentRatio: "cash",
+};
+
+export function strategicMovePillar(key: string): HealthPillarId | null {
+  return MOVE_PILLAR[key] ?? null;
+}
+
+/** Pillar name and the shared pillar score, so a ratio nickname is not the pillar. */
+export function attachPillarScore<T extends { key: string }>(
+  move: T,
+  pillars: readonly { id: HealthPillarId; score: number | null }[] | null | undefined,
+): T & { pillarLabel: string | null; pillarScore: number | null } {
+  const id = strategicMovePillar(move.key);
+  const pillar = id ? pillars?.find((row) => row.id === id) : undefined;
+  return {
+    ...move,
+    pillarLabel: id ? PILLAR_LABELS[id] : null,
+    pillarScore: pillar?.score ?? null,
+  };
+}
+
 const NO_STOCK_TEMPLATES = new Set([
   "hospitality_rooms",
   "services_hours",
@@ -406,21 +462,24 @@ export function rankStrategicMoves(input: {
   entries?: readonly StrategicMoveEntry[];
   /** Drop moves that would be ranked on a figure the bridge does not trust. */
   suppressKeys?: readonly string[];
-  /** Stored debtor days. At or under 30, "pay faster" is not suggested. */
+  /** Stored debtor days. At or under 30, collections advice is not suggested. */
   debtorDays?: number | null;
   /** Financing pillar score. Leverage Level uses this one figure. */
   financingHealth?: number | null;
+  /** Shared weakest pillar. Moves in that pillar rank first. */
+  weakestPillar?: HealthPillarId | null;
   limit?: number;
 }): RankedStrategicMove[] {
   const suppressed = new Set(input.suppressKeys ?? []);
   const debtorsAlreadyQuick =
     input.debtorDays != null && Number.isFinite(input.debtorDays) && input.debtorDays <= PAY_FASTER_MAX_DAYS;
-  const payFaster = /pay faster/i;
   const keepStock = stockSittingApplies(input.profile);
   const entries = (input.entries ?? STRATEGIC_MOVE_CATALOG).filter((entry) => {
     if (suppressed.has(entry.key)) return false;
     if (!keepStock && entry.key === "inventoryDays") return false;
-    if (debtorsAlreadyQuick && payFaster.test(entry.title)) return false;
+    if (debtorsAlreadyQuick && (entry.key === "debtorDays" || COLLECTIONS_ADVICE.test(entry.title))) {
+      return false;
+    }
     return true;
   });
   const healthByKey = input.healthByKey ?? {};
@@ -434,9 +493,12 @@ export function rankStrategicMoves(input: {
       const raw = entry.key === "equityMultiplier" && financing != null ? financing : healthByKey[entry.key];
       const health = typeof raw === "number" && Number.isFinite(raw) ? raw : Number.NaN;
       const urgency = Number.isFinite(health) ? 100 - health : 50;
-      const score = urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName);
+      const inWeakest =
+        input.weakestPillar != null && strategicMovePillar(entry.key) === input.weakestPillar ? 4 : 1;
+      const score =
+        urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName) * inWeakest;
       const actions = debtorsAlreadyQuick
-        ? entry.actions.filter((action) => !payFaster.test(action))
+        ? entry.actions.filter((action) => !COLLECTIONS_ADVICE.test(action))
         : [...entry.actions];
       return {
         ...entry,

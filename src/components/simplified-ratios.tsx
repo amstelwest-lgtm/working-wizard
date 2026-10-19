@@ -22,11 +22,14 @@ interface SimplifiedRatiosProps {
   onOpenPillar?: (pillarId: string) => void;
   /** Same floor line as the Health ring. Cash only. */
   cashFloorCue?: string | null;
+  /** Shown in place of a band when the pillar has no score. */
+  unscoredLabel?: string | null;
   /** Opens the Financial Manager. The rest of the card still drills. */
   onCashFloor?: () => void;
 }
 
-function statusLabel(health: number, status?: HealthTier): string {
+function statusLabel(health: number, status?: HealthTier, unscoredLabel?: string | null): string {
+  if (unscoredLabel) return unscoredLabel;
   if (!isFinite(health)) return "No data";
   return healthBandLabel(status ?? scoreTier(health));
 }
@@ -60,7 +63,11 @@ export function SimplifiedRatios({
       {sections.map((card) => {
         const color = statusColor(card.health, card.status);
         const trend = trendDir(card.series);
-        const displayHealth = isFinite(card.health) ? `${Math.round(card.health)}%` : "—";
+        const displayHealth = card.unscoredLabel
+          ? "—"
+          : isFinite(card.health)
+            ? `${Math.round(card.health)}`
+            : "—";
         const evidence =
           onOpenEvidence && pillarIsWeak(card.health) ? evidenceForPillar(card.id) : null;
         const trendSlot =
@@ -89,7 +96,7 @@ export function SimplifiedRatios({
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{ background: color }}
               />
-              {statusLabel(card.health, card.status)}
+              {statusLabel(card.health, card.status, card.unscoredLabel)}
             </span>
             {card.series.length >= 2 ? trendSlot : null}
           </>

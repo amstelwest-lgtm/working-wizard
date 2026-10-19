@@ -187,22 +187,33 @@ function cell(
   };
 }
 
-/** Category rows × month. Actuals stay blank where the month has none. */
-export function budgetTableRows(doc: BudgetDocument, views: readonly BudgetMonthView[]): BudgetTableRow[] {
+/**
+ * Category rows × month. Actuals stay blank where the month has none.
+ * `revenueLabel` only renames or hides a revenue line. Amounts stay on the stored line.
+ */
+export function budgetTableRows(
+  doc: BudgetDocument,
+  views: readonly BudgetMonthView[],
+  revenueLabel?: (name: string, index: number) => string | null,
+): BudgetTableRow[] {
   const months = fyMonths(doc.fyStart);
   const viewByMonth = new Map(views.map((row) => [row.month, row]));
   const ordered = months.map((month) => viewByMonth.get(month)).filter((row): row is BudgetMonthView => Boolean(row));
 
-  const revenueLines = doc.revenueLines.map((line) => ({
-    id: `rev-${line.id}`,
-    label: line.name.trim() || "Revenue line",
-    kind: "line" as const,
-    higherIsBetter: true,
-    cells: ordered.map((row) => {
-      const raw = line.months[row.month] ?? { volume: 0, price: 0 };
-      return cell(raw.volume * raw.price, null, "revenue", line.name, true);
-    }),
-  }));
+  const revenueLines = doc.revenueLines.flatMap((line, index) => {
+    const label = revenueLabel ? revenueLabel(line.name, index) : line.name.trim() || "Revenue line";
+    if (!label) return [];
+    return [{
+      id: `rev-${line.id}`,
+      label,
+      kind: "line" as const,
+      higherIsBetter: true,
+      cells: ordered.map((row) => {
+        const raw = line.months[row.month] ?? { volume: 0, price: 0 };
+        return cell(raw.volume * raw.price, null, "revenue", line.name, true);
+      }),
+    }];
+  });
 
   const overheadLines = doc.overheads.map((line) => ({
     id: `oh-${line.id}`,

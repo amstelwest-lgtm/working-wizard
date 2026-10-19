@@ -28,8 +28,9 @@ function withCoda(
   profile: NarrativeProfile,
   kind: ReportNarrativeKind,
   market: MoneyMarket = ZA_MARKET,
+  businessName?: string | null,
 ): string {
-  const coda = reportProfileCoda(profile, kind, market);
+  const coda = reportProfileCoda(profile, kind, market, businessName);
   return coda ? `${base} ${coda}` : base;
 }
 
@@ -114,6 +115,8 @@ export function healthNarrative(
   market: MoneyMarket = ZA_MARKET,
   /** Display band from `computeOverallHealth`. The raw score must not pick a different band. */
   overallTier?: HealthTier | null,
+  /** Business name. A hotel stored on a labour kit is still a hotel. */
+  businessName?: string | null,
 ): string {
   const strongest = pickPillarExtreme(pillars, "strongest");
   const weakest = pickPillarExtreme(pillars, "weakest");
@@ -124,6 +127,7 @@ export function healthNarrative(
       profile,
       "health",
       market,
+      businessName,
     );
   }
   const overallBand = healthBandLabel(tier);
@@ -133,7 +137,7 @@ export function healthNarrative(
     `${strongest.label} is the strongest pillar (${Math.round(strongest.score)}), ` +
     `while ${weakest.label} is ${weakBand} at ${Math.round(weakest.score)}. ` +
     dupont.sentence;
-  return withCoda(base, profile, "health", market);
+  return withCoda(base, profile, "health", market, businessName);
 }
 
 export function profitabilityNarrative(
