@@ -3,6 +3,8 @@
  * Amounts come from the current statement and the previous month on file.
  * A missing month or a missing amount stays empty. Nothing here is estimated.
  * The chase button opens the shared chase draft. This file does not write one.
+ * The cash floor line is the same sentence as the owner home card: balance and
+ * gap, worded as a floor alert so it does not fight the health Watch band.
  */
 import type { ChaseDraftInput } from "./chase-draft.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";

@@ -80,7 +80,7 @@ assert(brief.chase?.actions[0]?.overdue === true, "overdue actions mark the shar
 assert(brief.drafts[0]?.title === "Advisory note", "draft title is the stored title");
 assert(
   brief.cashFloorLine ===
-    `Cash is ${money(40000)}, ${money(15000)} under the ${money(55000)} floor.`,
+    `Cash ${money(40000)}, ${money(15000)} below your ${money(55000)} minimum.`,
   brief.cashFloorLine ?? "missing cash floor line",
 );
 assert(

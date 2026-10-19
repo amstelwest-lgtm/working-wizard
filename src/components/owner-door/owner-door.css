@@ -1098,6 +1098,34 @@ html.dark .owner-status.is-attention {
   min-height: calc(100dvh - 150px);
 }
 
+@media (min-width: 768px) {
+  .owner-door[data-screen="chat"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  .owner-door[data-screen="chat"] .client-workspace {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .owner-door[data-screen="chat"] .deliverable-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--pp-canvas);
+  }
+
+  .owner-door[data-screen="chat"] .owner-pane[data-owner-chat="true"] {
+    flex: 1 1 auto;
+    min-height: 0;
+    background: var(--pp-canvas);
+  }
+}
+
 .owner-door[data-screen="chat"] .owner-composer {
   margin-top: auto;
 }

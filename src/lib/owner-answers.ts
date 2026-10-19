@@ -9,11 +9,7 @@ import {
 } from "@/lib/cash-runway";
 import { formatMoney, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import {
-  CASH_BELOW_FLOOR_STATUS,
-  OPENING_BALANCE_MISSING,
-  cashOutlookIsCritical,
-} from "@/lib/cash-forecast-parity";
+import { OPENING_BALANCE_MISSING, cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
 import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
 
 export type OwnerHomeLines = Record<AgentKey, readonly string[]>;
@@ -193,8 +189,8 @@ function cashHomeLine(sentence: string): string {
     return `Cash stays above your ${floor} minimum. The low point is ${low}.`;
   }
   if (sentence.includes("under the") && amounts.length >= 3) {
-    const [, under, floor] = amounts;
-    return `Cash is ${under} below your ${floor} minimum.`;
+    const [balance, under, floor] = amounts;
+    return `Cash ${balance}, ${under} below your ${floor} minimum.`;
   }
   return guardOwnerLine(sentence);
 }
@@ -240,9 +236,15 @@ function forecastLow(books: OwnerBooks): number | null {
 }
 
 /**
+ * Floor alert on an agent card. The health pillar keeps its own band
+ * (Watch, Healthy), so this chip does not say Critical.
+ */
+export const CASH_FLOOR_ALERT = "Below your minimum";
+
+/**
  * A chip only when the card's figures are a problem.
- * Cash under the 13-week floor is Critical. A profit decline, or overdue
- * debtors above zero, is Attention. The stronger tone wins on the analyst card.
+ * Cash under the floor is a floor alert, not the health band word.
+ * A profit decline, or overdue debtors above zero, is Attention.
  */
 function outlookUnderFloor(books: OwnerBooks): boolean | null {
   if (books.openingMissing) return false;
@@ -257,7 +259,7 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
   const floor = cashComfortThreshold(books.market.currency);
   const cash: OwnerCardStatus | null =
     (fromOutlook != null ? fromOutlook : low != null && low < floor)
-      ? { tone: "critical", word: CASH_BELOW_FLOOR_STATUS }
+      ? { tone: "attention", word: CASH_FLOOR_ALERT }
       : null;
 
   const gross =
@@ -276,20 +278,46 @@ export function ownerCardStatuses(books: OwnerBooks): Record<AgentKey, OwnerCard
   return { financial_manager: cash, analyst, advisor: null };
 }
 
+const HOME_ANSWER_ON_MANAGER = new Set([
+  "Nothing is waiting on you.",
+  "Checking action points.",
+  "Open actions aren't available yet.",
+]);
+
 /** One or two short lines under each bot. Sign-off stays off this page. */
 export function ownerHomeLines(
   tiles: readonly OwnerTile[],
   topMove: string | null,
+  assignedAgent: AgentKey | null = null,
 ): OwnerHomeLines {
   const sentence = (id: OwnerTileId) => tiles.find((tile) => tile.id === id)?.sentence ?? "";
   const cash = sentence("cash");
   const move = topMove?.replace(/\s+/g, " ").trim() ?? "";
+  const answer = guardOwnerLine(sentence("answer"));
+  const routed =
+    assignedAgent &&
+    assignedAgent !== "financial_manager" &&
+    answer.length > 0 &&
+    !HOME_ANSWER_ON_MANAGER.has(answer)
+      ? assignedAgent
+      : null;
+  const financialManager = [cashHomeLine(cash)].filter((line) => line.length > 0);
+  const analyst = [profitHomeLine(sentence("profit")), guardOwnerLine(sentence("owes"))].filter(
+    (line) => line.length > 0,
+  );
+  const advisor = [guardOwnerLine(move || (cash === CONNECT ? CONNECT : "No next move yet."))].filter(
+    (line) => line.length > 0,
+  );
+  if (answer) {
+    if (routed === "analyst") analyst.push(answer);
+    else if (routed === "advisor") {
+      if (!advisor.includes(answer)) advisor.push(answer);
+    } else financialManager.push(answer);
+  }
   return {
-    financial_manager: [cashHomeLine(cash), guardOwnerLine(sentence("answer"))].filter((line) => line.length > 0),
-    analyst: [profitHomeLine(sentence("profit")), guardOwnerLine(sentence("owes"))].filter(
-      (line) => line.length > 0,
-    ),
-    advisor: [guardOwnerLine(move || (cash === CONNECT ? CONNECT : "No next move yet."))],
+    financial_manager: financialManager,
+    analyst,
+    advisor,
   };
 }
 
@@ -304,7 +332,7 @@ export function cashFloorSentence(input: {
   const dip = input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0;
   const gap = Math.abs(floor - opening);
   if (opening < floor) {
-    return `Cash is ${money(opening)}, ${money(gap)} under the ${money(floor)} floor.`;
+    return `Cash ${money(opening)}, ${money(gap)} below your ${money(floor)} minimum.`;
   }
   if (dip) {
     return `Cash is ${money(opening)}. It dips under the ${money(floor)} floor.`;

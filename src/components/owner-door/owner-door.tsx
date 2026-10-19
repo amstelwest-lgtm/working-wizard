@@ -33,7 +33,8 @@ import {
   parseOwnerNumber,
   type OwnerBooks,
 } from "@/lib/owner-answers";
-import { ownerPresence, type OwnerTalk } from "@/lib/owner-presence";
+import { ownerPresence, steerAssignedWork, type OwnerTalk } from "@/lib/owner-presence";
+import { loadActionHandoffRuns, loadLatestHandoffAgents } from "@/lib/owner-handoff-client";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
@@ -124,6 +125,7 @@ export function OwnerDoor({
   bot = null,
   onBotChange,
   sampleNotice = null,
+  planTick = 0,
 }: {
   clientId: string | null;
   businessName: string;
@@ -176,6 +178,8 @@ export function OwnerDoor({
   onBotChange?: (agent: AgentKey | null, mode: "push" | "replace") => void;
   /** Implausible sample figures. Shown on Home, same note as the client file. */
   sampleNotice?: string | null;
+  /** Bumps when an action is handed off, so Home refetches without a reload. */
+  planTick?: number;
 }) {
   const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
@@ -209,6 +213,8 @@ export function OwnerDoor({
   const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
   const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
   const [openAction, setOpenAction] = useState<string | null>(null);
+  const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
+  const [assignedRun, setAssignedRun] = useState<{ agent: AgentKey; status: string } | null>(null);
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
@@ -327,6 +333,8 @@ export function OwnerDoor({
   useEffect(() => {
     setLedger(null);
     setOpenAction(null);
+    setAssignedAgent(null);
+    setAssignedRun(null);
     setActionsReady(false);
     setActionRows([]);
     setActionsUnavailable(false);
@@ -365,7 +373,7 @@ export function OwnerDoor({
         .eq("client_id", clientId)
         .in("status", ["draft", "ready"])
         .limit(20),
-    ]).then(([qbo, xero, actions, drafts]) => {
+    ]).then(async ([qbo, xero, actions, drafts]) => {
       if (cancelled) return;
       const qboRow = qbo.error ? null : (qbo.data?.[0] ?? null);
       const xeroRow = xero.error ? null : (xero.data?.[0] ?? null);
@@ -395,24 +403,40 @@ export function OwnerDoor({
       }
       if (actions.error) {
         setOpenAction(null);
+        setAssignedAgent(null);
+        setAssignedRun(null);
         setActionRows([]);
         setActionsUnavailable(true);
         setActionsReady(true);
         return;
       }
-      const rows = (actions.data ?? []).flatMap((row) => {
+      const openRows = (actions.data ?? []).flatMap((row) => {
         const title = row.title?.trim() ?? "";
         if (!title || !row.id) return [];
-        return [{ title, email: row.owner_email }];
+        return [{ id: row.id, title, email: row.owner_email }];
       });
-      setActionRows(rows);
-      setOpenAction(rows[0]?.title ?? null);
+      const firstId = openRows[0]?.id ?? null;
+      let agent: AgentKey | null = null;
+      let run: { agent: AgentKey; status: string } | null = null;
+      if (firstId) {
+        const [notes, runs] = await Promise.all([
+          loadLatestHandoffAgents([firstId]),
+          loadActionHandoffRuns([firstId]),
+        ]);
+        if (cancelled) return;
+        run = runs.get(firstId) ?? null;
+        agent = notes.get(firstId) ?? run?.agent ?? null;
+      }
+      setActionRows(openRows.map(({ title, email }) => ({ title, email })));
+      setOpenAction(openRows[0]?.title ?? null);
+      setAssignedAgent(agent);
+      setAssignedRun(run);
       setActionsReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [clientId, market]);
+  }, [clientId, market, planTick]);
 
   useEffect(() => {
     setFirmName(null);
@@ -509,7 +533,7 @@ export function OwnerDoor({
       market,
     ],
   );
-  const presence = ownerPresence(activity, talk);
+  const presence = steerAssignedWork(ownerPresence(activity, talk), assignedAgent, assignedRun);
   const runState = useMemo(() => {
     const latest = latestRunByAgent(activity.runs);
     const out: Partial<Record<AgentKey, OwnerRunPhase>> = {};
@@ -725,7 +749,7 @@ export function OwnerDoor({
         <OwnerHome
           variant="character"
           presence={presence}
-          lines={ownerHomeLines(tiles, topMove)}
+          lines={ownerHomeLines(tiles, topMove, assignedAgent)}
           status={ownerCardStatuses(books)}
           marketCountry={market.country}
           audience="owner"

@@ -77,10 +77,13 @@ const below = books({
   cashOutlook: { opening: 30000, closing: [30000], floor: 36900, dipsBelowFloorWeek: null },
 });
 const belowLine = ownerHomeLines(ownerAnswerTiles(below), null).financial_manager[0] ?? "";
-assert(belowLine.includes("under") && belowLine.includes("36,900"), `a shortfall names the floor (${belowLine})`);
 assert(
-  ownerCardStatuses(below).financial_manager?.word === "Critical: cash below floor",
-  "cash under the floor is Critical",
+  belowLine.includes("30,000") && belowLine.includes("below") && belowLine.includes("36,900"),
+  `a shortfall names the balance and the floor (${belowLine})`,
+);
+assert(
+  ownerCardStatuses(below).financial_manager?.word === "Below your minimum",
+  "cash under the floor is a floor alert",
 );
 assert(!belowLine.includes("▸"), "the cash line has no stray marker");
 

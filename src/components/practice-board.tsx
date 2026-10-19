@@ -899,9 +899,7 @@ function AddClientDialog({
                     fontFamily: "inherit",
                     fontSize: 14,
                   }}
-                  placeholder={
-                    draftMarket.country === "US" ? "owner@business.com" : "owner@business.co.za"
-                  }
+                  placeholder="you@business.com"
                 />
                 <p
                   style={{

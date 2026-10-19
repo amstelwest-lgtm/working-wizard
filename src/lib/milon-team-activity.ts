@@ -251,6 +251,7 @@ function correctQuotedFigures(entries: { key: string; value: number }[]): { key:
 }
 
 function formatFigure(key: string, value: number, market: MoneyMarket): string {
+  if (skipFigureKey(key)) return String(Math.round(value));
   const compact = key.toLowerCase().replace(/[\s_-]+/g, "");
   const spec = metricDirection(key) ?? metricDirection(compact);
   if (spec) return formatSnapshotRatio(spec.name, value);
@@ -278,7 +279,18 @@ function applyReplacements(text: string, replacements: { raw: string; formatted:
   const list = [...chosen.entries()].sort((a, b) => b[0].length - a[0].length);
   if (!list.length) return text;
   const pattern = list.map(([raw]) => raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  return text.replace(new RegExp(`(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match) => chosen.get(match) ?? match);
+  return text.replace(new RegExp(`(?<![\\d.])(?:${pattern})(?!\\d)(?!\\.\\d)`, "g"), (match, offset: number) => {
+    const after = text.slice(offset + match.length, offset + match.length + 20);
+    if (/^\s+out of\s+100\b/i.test(after) || /^\s*\/\s*100\b/.test(after)) return match;
+    return chosen.get(match) ?? match;
+  });
+}
+
+/** A score is never money, even when a draft already wrote $70 out of 100. */
+function stripScoreCurrency(text: string): string {
+  return text
+    .replace(/(?:\$|R[\u00a0 ])(\d[\d,]*(?:\.\d+)?)(?=\s+out of\s+100\b)/gi, "$1")
+    .replace(/(?:\$|R[\u00a0 ])(\d[\d,]*(?:\.\d+)?)(?=\s*\/\s*100\b)/gi, "$1");
 }
 
 function figureEntries(
@@ -334,6 +346,7 @@ function scrubRawDecimals(
       return `${pct.toFixed(1)}%`;
     }
     if (/equity|ratio|turnover|multiple/.test(window)) return formatSnapshotRatio("Debt-to-Equity", n);
+    if (/pillar|score|out of\s+100|\/\s*100/.test(window)) return String(Math.round(n));
     if (Math.abs(n) >= 100) return formatMoney(n, market);
     return n.toFixed(2);
   });
@@ -352,7 +365,7 @@ export function formatFindingProse(
 ): string {
   const corrected = correctQuotedFigures(figureEntries(figures));
   return rewriteSavedMonthStamp(
-    tidyRatioPercent(scrubRawDecimals(text, corrected, market)).replace(/\s+/g, " ").trim(),
+    stripScoreCurrency(tidyRatioPercent(scrubRawDecimals(text, corrected, market))).replace(/\s+/g, " ").trim(),
   );
 }
 
@@ -383,7 +396,7 @@ function isMetricDump(text: string): boolean {
 
 function skipFigureKey(key: string): boolean {
   const compact = key.toLowerCase().replace(/[\s_:-]+/g, "");
-  if (compact.startsWith("pillar") || compact.startsWith("score")) return true;
+  if (compact.includes("pillar") || compact.includes("score")) return true;
   return /^(hasupload|connectedledgers|lowestweek|horizonweeks|cashrunwayweeks|overall|storedscore|liveoverall|invoices|snapshotid|draft)$/.test(
     compact,
   );

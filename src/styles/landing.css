@@ -1151,9 +1151,9 @@ html[data-landing="1"] body{font-family:"Noto Sans","Noto Sans Fallback",sans-se
     flex-shrink:0;
     background:transparent;
     background-image:none;
-    border:1px solid var(--gold);
-    color:var(--gold-ink);
-    -webkit-text-fill-color:var(--gold-ink);
+    border:1px solid var(--cobalt);
+    color:var(--cobalt);
+    -webkit-text-fill-color:var(--cobalt);
     box-shadow:none;
   }
   html[data-landing="1"] nav#topnav .links a.nav-trial::after{
@@ -1161,12 +1161,12 @@ html[data-landing="1"] body{font-family:"Noto Sans","Noto Sans Fallback",sans-se
     display:none;
   }
   html[data-landing="1"] nav#topnav .links a.nav-trial:hover{
-    background:color-mix(in srgb,var(--gold) 12%,transparent);
+    background:rgba(11,95,255,.08);
     background-image:none;
     background-position:0 center;
-    border:1px solid var(--gold);
-    color:var(--gold-ink);
-    -webkit-text-fill-color:var(--gold-ink);
+    border:1px solid #2563eb;
+    color:#2563eb;
+    -webkit-text-fill-color:#2563eb;
     box-shadow:none;
     transform:none;
   }
@@ -1515,8 +1515,27 @@ html[data-landing="1"] .reg-owner-link:hover{
   transform:none;
 }
 
-/* Rebrand: white and blue. Gold stays on the wordmark and the trial CTAs
-   (.btn-gold, .nav-trial, .logo-word). Decorative gold below is cobalt. */
+/* Rebrand: white and blue. One gold primary is the hero trial button.
+   The header trial button, the wordmark, and decorative gold stay distinct:
+   header trial is cobalt, the MILŌN wordmark stays gold. */
+html[data-landing="1"] a.btn-gold.nav-trial{
+  background:transparent;
+  background-image:none;
+  border:1px solid var(--cobalt);
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+  box-shadow:none;
+}
+html[data-landing="1"] a.btn-gold.nav-trial::after{content:none;display:none}
+html[data-landing="1"] a.btn-gold.nav-trial:hover{
+  background:rgba(11,95,255,.08);
+  background-image:none;
+  border-color:#2563eb;
+  color:#2563eb;
+  -webkit-text-fill-color:#2563eb;
+  box-shadow:none;
+  transform:none;
+}
 html[data-landing="1"]:not(.dark) #landing-sky{display:none}
 html[data-landing="1"] ::selection{background:rgba(11,95,255,.22)}
 html[data-landing="1"] #atmos .g1{background:radial-gradient(circle,rgba(11,95,255,.16),transparent 65%)}
@@ -1778,15 +1797,23 @@ html[data-landing="1"] .dash-stage::before{
 }
 html[data-landing="1"] .pill-row.warn .nm,
 html[data-landing="1"] .pill-row.warn .num{
-  color:var(--warn);
-  -webkit-text-fill-color:var(--warn);
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
 }
-html[data-landing="1"] .pill-row.warn .bar,
 html[data-landing="1"] .pill-row.warn .bar i{
-  background:var(--warn);
+  background:linear-gradient(90deg,#2563eb,var(--cobalt));
 }
 html[data-landing="1"] .pill-row.warn .bar{
-  background:rgba(183,121,31,.16);
+  background:rgba(11,95,255,.16);
+}
+html[data-landing="1"] .dip-dot{
+  fill:var(--cobalt);
+  filter:drop-shadow(0 0 6px rgba(11,95,255,.45));
+}
+html[data-landing="1"] .dip-ring{stroke:var(--cobalt)}
+html[data-landing="1"] .alert-chip b{
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
 }
 html[data-landing="1"] .alert-chip{
   border:1px solid var(--pale);
@@ -1798,9 +1825,9 @@ html[data-landing="1"] .alert-chip .attention-chip{
   align-items:center;
   gap:6px;
   flex:none;
-  color:var(--warn);
-  -webkit-text-fill-color:var(--warn);
-  border:1px solid var(--warn);
+  color:var(--cobalt);
+  -webkit-text-fill-color:var(--cobalt);
+  border:1px solid var(--cobalt);
   border-radius:999px;
   padding:3px 8px;
   font-size:11px;
