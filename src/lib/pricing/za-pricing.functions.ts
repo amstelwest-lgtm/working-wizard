@@ -12,7 +12,7 @@ export type FirmBillingQuote = {
 
 function quoteArgs(input: unknown): { plan: FirmCheckoutBand; interval: FirmInterval } {
   const raw = (input ?? {}) as { plan?: unknown; interval?: unknown };
-  const plan = typeof raw.plan === "string" && isFirmCheckoutBand(raw.plan) ? raw.plan : "solo";
+  const plan = typeof raw.plan === "string" && isFirmCheckoutBand(raw.plan) ? raw.plan : "starter";
   const interval: FirmInterval = raw.interval === "year" ? "year" : "month";
   return { plan, interval };
 }

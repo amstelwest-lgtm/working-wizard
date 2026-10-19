@@ -115,8 +115,8 @@ export function FirmBandUpgrade({
   }, [selected, interval]);
 
   const currentIdx = currentBand ? FIRM_BAND_IDS.indexOf(currentBand) : -1;
-  const soloLeads = currentBand == null && selected === "solo";
-  const startHereBand = currentBand ?? (soloLeads ? "solo" : null);
+  const starterLeads = currentBand == null && selected === "starter";
+  const startHereBand = currentBand ?? (starterLeads ? "starter" : null);
   const voucherApplied = Boolean(voucherPreview && voucherChecked);
   const saFirm = saDiscount || zaLabels != null || priceCurrency.toLowerCase() === "zar";
 
@@ -216,7 +216,7 @@ export function FirmBandUpgrade({
             <label
               key={band.id}
               aria-current={isCurrent ? "true" : undefined}
-              data-funnel={band.id === "solo" && soloLeads ? FUNNEL_SOLO_FIRST : undefined}
+              data-funnel={band.id === "starter" && starterLeads ? FUNNEL_SOLO_FIRST : undefined}
               className={
                 selectable
                   ? "firm-band-row firm-band-row--pick text-foreground"
@@ -370,9 +370,9 @@ export function FirmBandUpgrade({
   );
 }
 
-/** The plan the Start here badge names. No current plan leads with Solo. */
+/** The plan the Start here badge names. No current plan leads with Starter. */
 export function startHerePlanId(currentBand: FirmBandId | null): FirmBandId {
-  return currentBand ?? "solo";
+  return currentBand ?? "starter";
 }
 
 export function FirmStartHereBadge({

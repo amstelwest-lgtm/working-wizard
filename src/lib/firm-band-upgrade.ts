@@ -176,7 +176,7 @@ export function nextBandUp(
   current: FirmBandId | null,
   clientCount?: number | null,
 ): FirmCheckoutBand | null {
-  const start = current ? FIRM_BAND_IDS.indexOf(current) + 1 : FIRM_BAND_IDS.indexOf("solo");
+  const start = current ? FIRM_BAND_IDS.indexOf(current) + 1 : FIRM_BAND_IDS.indexOf("starter");
   for (let i = Math.max(start, 0); i < FIRM_BAND_IDS.length; i += 1) {
     const id = FIRM_BAND_IDS[i];
     if (!isFirmCheckoutBand(id)) continue;

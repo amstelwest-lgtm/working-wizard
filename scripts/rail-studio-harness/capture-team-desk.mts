@@ -129,7 +129,11 @@ await shot("desk-desktop-1280-approved", 1280, 1200, "/milon-team-desk?fixture=p
   await page.locator("[data-approve='board']").click();
   await page.getByText("Draft ready. Nothing was sent.").waitFor();
   await page.getByRole("link", { name: "Open" }).waitFor();
-  await page.getByRole("region", { name: "Add a card to start your 14-day free trial" }).waitFor();
+  await page
+    .getByRole("region", {
+      name: "A card is required at signup. 14-day free trial · up to 5 clients on Starter.",
+    })
+    .waitFor();
   await page.locator("[data-desk-jobs='true']").evaluate((el) => {
     el.scrollIntoView({ block: "center", inline: "nearest" });
   });

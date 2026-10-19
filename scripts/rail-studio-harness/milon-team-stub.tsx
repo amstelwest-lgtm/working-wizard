@@ -307,7 +307,11 @@ export function useMilonTeamFeedStub(clientId: string): MilonTeamFeedApi {
       const job = jobs.find((item) => item.id === id);
       if (!job) return { ok: false, reason: "error", message: "That job is not on the desk." };
       if (!job.canApprove || job.blockedReason === "precard_cap") {
-        return { ok: false, reason: "precard_cap", message: "Add a card to start your 14-day free trial" };
+        return {
+          ok: false,
+          reason: "precard_cap",
+          message: "A card is required at signup. 14-day free trial · up to 5 clients on Starter.",
+        };
       }
       const href = `#draft-${id}`;
       setJobs((current) =>

@@ -310,7 +310,11 @@ assert(card.includes('brand="sage"'), "card uses the shared connect button");
 assert(card.includes("Email"), "card asks for email");
 assert(card.includes("Password"), "card asks for password");
 assert(card.includes("Company ID"), "card asks for Company ID");
-assert(card.includes("Coming soon"), "an unconfigured Sage card says Coming soon");
+assert(card.includes("SAGE_CONNECTION_UNAVAILABLE"), "an unconfigured Sage card uses the generic message");
+assert(
+  read("src/lib/sage.ts").includes('SAGE_CONNECTION_UNAVAILABLE = "Sage connection not available yet"'),
+  "the generic Sage message does not name an environment variable",
+);
 assert(!card.includes("SAGE_SA_API_KEY"), "the customer card does not name the API key");
 assert(!card.includes("SAGE_SA_PASSWORD_KEY"), "the customer card does not name the password key");
 assert(card.includes('id="sage-empty-sync"'), "empty sync has a visible state");

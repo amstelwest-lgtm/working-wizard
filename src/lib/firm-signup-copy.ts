@@ -1,19 +1,19 @@
 import { COMPANY_ADDRESS, LEGAL_ENTITY } from "@/lib/legal";
-import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_LINE, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 
 /**
- * After #366: the first client's figures need no card. Adding a card starts
- * the 14-day trial. Keep this sentence on landing, register, pricing, and footer.
+ * Card at signup, then the Starter trial. Keep this sentence on landing,
+ * register, pricing, and the firm form. It does not name a rand amount.
  */
-export const FIRM_CARD_TIMING =
-  "See your first client's figures with no card. Add a card to start a 14-day free trial (up to 3 clients).";
+export const FIRM_CARD_TIMING = FIRM_TRIAL_CARD_LINE;
 
 /**
  * Paid-plan sentence on the homepage #register firm form.
  * Auth Create Firm must use this helper so the two surfaces cannot drift.
+ * The trial is Starter even when a larger band is selected for after day 14.
  */
-export function firmSignupTrialReminder(planLabel: string): string {
-  return `You will start on ${planLabel}. ${FIRM_CARD_TIMING} After day 14 the paid band bills automatically.`;
+export function firmSignupTrialReminder(_planLabel: string): string {
+  return `Starter. ${FIRM_CARD_TIMING} After day 14 the paid band bills automatically.`;
 }
 
 /** Accountant nav / hero label. Firms need a card, so this is not "Start free". */
@@ -23,9 +23,9 @@ export const FIRM_TRIAL_CTA_LABEL = "Start 14-day trial";
 export const FIRM_ROLE_PROMPT = "I am an";
 export const FIRM_ROLE_LABEL = "Accountant / Advisory firm";
 
-/** Create Firm tab with Solo preselected — not the Sign in default at /auth. */
+/** Create Firm tab with Starter preselected — not the Sign in default at /auth. */
 export function firmSignupHref(
-  plan: FirmCheckoutBand = "solo",
+  plan: FirmCheckoutBand = "starter",
   interval: FirmInterval = "month",
 ): string {
   const q = new URLSearchParams({

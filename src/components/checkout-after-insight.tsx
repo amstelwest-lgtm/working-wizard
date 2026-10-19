@@ -10,11 +10,11 @@ import {
   registerLabelForPlan,
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
-import { FIRM_TRIAL_SENTENCE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_CARD_LINE, firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 
 /**
  * Shown once figures are on screen. Entitled firms see nothing.
- * Unpaid firms get one Checkout action for the stashed band (Solo by default).
+ * Unpaid firms get one Checkout action for the stashed band (Starter by default).
  */
 export function CheckoutAfterInsight() {
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
@@ -51,9 +51,9 @@ export function CheckoutAfterInsight() {
     >
       <p className="kicker">Next · {planName}</p>
       <h3>The figures stay on this client.</h3>
-      <p>A card starts the {FIRM_TRIAL_SENTENCE}.</p>
+      <p>{FIRM_TRIAL_CARD_LINE}</p>
       <Link to="/billing/start" search={billingStartSearch(pending)} className="btn gold">
-        Add a card to start your 14-day free trial
+        Add a card
       </Link>
     </section>
   );
