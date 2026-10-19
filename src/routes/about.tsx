@@ -87,7 +87,7 @@ function AboutPage() {
         actions with their clients.
       </p>
       <p>
-        QuickBooks Online and Xero, plug-and-play. Sage connects the same way. Milōn Financial
+        QuickBooks Online and Xero, plug-and-play. Sage is coming soon. Milōn Financial
         Manager, Milōn Analyst and Milōn Advisor prepare the work. The accountant reviews and
         signs off.
       </p>

@@ -57,7 +57,7 @@ export function WalkthroughPreview() {
         </button>
       </section>
       <footer className="mk-foot" style={{ marginTop: 28 }}>
-        <span>QuickBooks Online, Xero and Sage.</span>
+        <span>QuickBooks Online and Xero. Sage coming soon.</span>
       </footer>
     </div>
   );

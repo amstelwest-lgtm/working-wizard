@@ -188,6 +188,20 @@ export type FirmPlanStatusCopy = {
   trialEndsOn: string | null;
 };
 
+/**
+ * Settings billing line. Only a real trial end date is shown.
+ * Missing subscription data returns null so the page does not invent a date.
+ */
+export function firmTrialStatusLine(input: {
+  phase: FirmSubscriptionPhase | null | undefined;
+  trialEndsOn: string | null | undefined;
+}): string | null {
+  if (input.phase !== "trialing") return null;
+  const date = input.trialEndsOn?.trim();
+  if (!date) return null;
+  return `Free trial · ends ${date}`;
+}
+
 /** Date label for a Stripe trial end. Null when the timestamp is missing. */
 export function trialEndDateLabel(trialEndIso: string | null | undefined): string | null {
   if (!trialEndIso) return null;

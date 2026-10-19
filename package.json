@@ -162,6 +162,7 @@
     "test:smart-landing": "vite-node --config scripts/vite-test.config.ts scripts/smart-landing-test.mts",
     "test:funnel-timing": "vite-node --config scripts/vite-test.config.ts scripts/funnel-timing-test.mts",
     "test:firm-band-upgrade": "vite-node --config scripts/vite-test.config.ts scripts/firm-band-upgrade-test.mts",
+    "test:region-settings": "vite-node --config scripts/vite-test.config.ts scripts/region-settings-test.mts",
     "test:firm-voucher": "vite-node --config scripts/vite-test.config.ts scripts/firm-voucher-test.mts",
     "test:starter-trial-generation": "vite-node --config scripts/vite-test.config.ts scripts/starter-trial-generation-test.mts",
     "test:precard-cap": "vite-node --config scripts/vite-test.config.ts scripts/precard-cap-test.mts",

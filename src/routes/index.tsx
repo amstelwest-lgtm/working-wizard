@@ -1971,7 +1971,7 @@ function LandingPage() {
             <ul className="integrations-chips" id="integrations" aria-label="Works with">
               <li>QuickBooks Online</li>
               <li>Xero</li>
-              <li>Sage</li>
+              <li>Sage · coming soon</li>
             </ul>
             <div className="hero-cta">
               <a
@@ -2333,7 +2333,7 @@ function LandingPage() {
               <span className="n">01</span>
               <h3>Bring in the financials</h3>
               <p>
-                Connect QuickBooks, Xero or Sage, or upload the P&amp;L and balance sheet you
+                Connect QuickBooks or Xero. Sage is coming soon. Or upload the P&amp;L and balance sheet you
                 already have as a PDF, Excel file, or CSV — or simply upload a bank statement.
               </p>
             </div>
@@ -2764,7 +2764,7 @@ function LandingPage() {
             </button>
           </nav>
           <div className="copy">
-            <span>QuickBooks Online, Xero and Sage.</span>
+            <span>QuickBooks Online and Xero. Sage coming soon.</span>
             <span>
               © {new Date().getFullYear()} {MARKETING_COPYRIGHT_ENTITY}. All rights reserved.
             </span>

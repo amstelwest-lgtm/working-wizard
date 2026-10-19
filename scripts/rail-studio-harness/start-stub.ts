@@ -170,6 +170,17 @@ function fixtureFor(id: string): Promise<unknown> {
     return Promise.resolve(LISTING);
   }
   if (id.includes("loadFirmPlanDisplay")) {
+    if (typeof location !== "undefined" && location.search.includes("band=starter")) {
+      return Promise.resolve({
+        ...PLAN,
+        phase: "active",
+        band: "starter",
+        headline: "Starter",
+        detail: "Up to 5 active clients",
+        clientLimit: 5,
+        usageLabel: "2 of 5 clients",
+      });
+    }
     if (typeof location !== "undefined" && location.search.includes("walkthrough=trial")) {
       const now = new Date();
       const end = new Date(now.getTime() + 9 * 86_400_000);

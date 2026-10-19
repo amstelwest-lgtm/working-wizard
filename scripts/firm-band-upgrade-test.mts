@@ -31,6 +31,7 @@ import {
   readSubscriptionPrice,
   shouldCancelReplacedSubscription,
   shouldRevertBlockedDowngrade,
+  currentPlanLabel,
   upgradeButtonLabel,
   upgradeSuccessMessage,
 } from "../src/lib/firm-band-upgrade";
@@ -734,7 +735,27 @@ assert(
   cancelled.outcome === "cancelled" && cancelled.sessionId === null,
   "cancel return has no session",
 );
-assert(upgradeButtonLabel("solo") === "Upgrade to Solo", "button names the chosen band");
+assert(
+  upgradeButtonLabel("solo") === `Upgrade to Solo (up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients)`,
+  "button names the chosen band and its catalog client cap",
+);
+assert(currentPlanLabel("starter") === "Current plan: Starter", "upgrade names the plan the firm is on");
+const fromStarter = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "month",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 1,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(fromStarter.includes("Current plan: Starter"), "the upgrade list names the current Starter plan");
+assert(
+  fromStarter.includes(`Upgrade to Solo (up to ${FIRM_BAND_CATALOG.solo.clientLimit} clients)`),
+  "the upgrade button names Solo and the catalog client cap",
+);
+assert(!/>Upgrade to Solo</.test(fromStarter), "the upgrade button is not a bare Upgrade to Solo");
 assert(
   upgradeSuccessMessage("solo").includes("Up to 15 active clients"),
   "success names the new limit",
