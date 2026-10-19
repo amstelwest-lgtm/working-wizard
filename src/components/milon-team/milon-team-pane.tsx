@@ -24,6 +24,7 @@ export function MilonTeamPane({
   onSelectAgent,
   marketCountry = null,
   audience = "accountant",
+  sampleClient = false,
 }: {
   clientId: string;
   /** Home Ask opens this agent's thread. The feed stays off the card stage. */
@@ -36,8 +37,11 @@ export function MilonTeamPane({
   onInvite?: () => void;
   /** Landing cards and the stage switcher both land here. */
   onSelectAgent?: (agent: AgentKey) => void;
+  /** Same market OwnerHome uses for the ZA subtitle and to hide the hand-off strip. */
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
+  /** clients.is_demo. Passed through to the team-row chip. */
+  sampleClient?: boolean;
 }) {
   const feed = useMilonTeamFeed(clientId);
   const live = useAgentActivity(clientId);
@@ -70,6 +74,7 @@ export function MilonTeamPane({
       onRefreshDrafts={live.refresh}
       marketCountry={marketCountry}
       audience={audience}
+      sampleClient={sampleClient}
     />
   );
   if (!agent) return desk;

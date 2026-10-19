@@ -3966,6 +3966,7 @@ function Index() {
           )}
           <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
             {showOwnerDoor ? (
+              // Demo clients keep the sample card. Real clients get the preview card.
               <OwnerDoor
                 bot={oauthReturn.bot ?? null}
                 planTick={planTick}

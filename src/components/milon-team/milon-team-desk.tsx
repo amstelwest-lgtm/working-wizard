@@ -68,6 +68,7 @@ export function MilonTeamDesk({
   presentation = "team",
   marketCountry = null,
   audience = "accountant",
+  sampleClient = false,
 }: {
   feed: MilonTeamFeedApi;
   now?: Date;
@@ -83,6 +84,8 @@ export function MilonTeamDesk({
   presentation?: "team" | "agent";
   marketCountry?: string | null;
   audience?: "owner" | "accountant";
+  /** clients.is_demo. A demo keeps the sample chip. A real client gets the preview chip. */
+  sampleClient?: boolean;
 }) {
   const clock = now ?? new Date();
   const [filter, setFilter] = useState<FilterKey>(initialFilter);
@@ -265,7 +268,12 @@ export function MilonTeamDesk({
                     </button>
                   );
                 })}
-                <TaxSpecialistSlot country={marketCountry} variant="desk" audience={audience} />
+                <TaxSpecialistSlot
+                  country={marketCountry}
+                  variant="desk"
+                  audience={audience}
+                  sampleClient={sampleClient}
+                />
               </div>
             </div>
             )}
