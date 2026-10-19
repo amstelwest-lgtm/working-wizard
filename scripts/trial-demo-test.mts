@@ -17,8 +17,10 @@ import { TrySampleBoards } from "../src/components/try-sample-boards";
 import { TrySamplePack } from "../src/components/try-sample-pack";
 import { TryScreen } from "../src/components/try-demo";
 import { cashYDomainIncludingFloor } from "../src/lib/cash-forecast-view";
+import { formatMoneyChartTick, formatMoneyCompact } from "../src/lib/market/format";
+import { ZA_MARKET } from "../src/lib/market/resolve";
 import { firmSignupHref } from "../src/lib/firm-signup-copy";
-import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
+import { FIRM_BAND_CATALOG } from "../src/lib/stripe-plans";
 import { SAMPLE_BUSINESS_NAME } from "../src/lib/sample-business";
 import {
   buildTrialBoard,
@@ -32,6 +34,7 @@ import {
   ipSessionAllowed,
   sessionRunAllowed,
   trialAnalystMode,
+  trialMarketForVisitor,
   validateTrialGate,
   verifyTurnstileToken,
 } from "../src/lib/trial-demo";
@@ -49,6 +52,7 @@ import {
   TRIAL_CTA_LABEL,
   TRIAL_SIGNUP_HREF,
   TRIAL_SIGNUP_SENTENCE,
+  trialSignupHref,
   TURNSTILE_TEST_SECRET_KEY,
   TURNSTILE_TEST_TOKEN,
   resetTurnstileUnsetWarning,
@@ -384,6 +388,19 @@ const zaSeries = trialCashSeries("ZA", new Date("2026-10-14T00:00:00Z"));
 assert(zaSeries.floor === 433846, `ZA runway floor is four weeks of payments, got ${zaSeries.floor}`);
 assert(zaSeries.opening > zaSeries.floor, "opening cash sits above the runway floor");
 assert(zaSeries.low === zaSeries.opening, "the chart series low point is the opening");
+assert(zaText.includes("Opens at the sample bank balance on file."), "findings name the sample opening balance");
+assert(formatMoneyCompact(656_000, ZA_MARKET) === "R 656k", "ZA abbreviations keep a space");
+assert(
+  formatMoneyCompact(656_000, { currency: "USD", locale: "en-US" }) === "$656k",
+  "US abbreviations stay unspaced",
+);
+assert(formatMoneyChartTick(656_000) === "R656k", "owner axis ticks stay unspaced");
+assert(
+  readFileSync(join(resolve("."), "src/components/try-sample-boards.tsx"), "utf8").includes(
+    "spacedChartTicks",
+  ),
+  "the try chart keeps the rand gap on axis abbreviations",
+);
 const [belowLo, belowHi] = cashYDomainIncludingFloor(0, 200_000, zaSeries.floor);
 assert(belowHi > zaSeries.floor, "a floor above the line stays inside the y-domain");
 assert(belowLo < 0, "the domain still starts below a zero opening");
@@ -463,8 +480,8 @@ assert(boardsHtml.includes("Enlarge cash flow graph"), "cash chip has the graph 
 assert(boardsHtml.includes("Enlarge cash flow table"), "cash chip has the table enlarge control");
 assert(boardsHtml.includes("13-week cash model"), "cash chip renders the 13-week table");
 assert(
-  boardsHtml.includes("stays the balance on file"),
-  "cash chip says opening cash stays the balance on file",
+  boardsHtml.includes("Opens at the sample bank balance on file."),
+  "cash chip says the forecast opens at the sample bank balance",
 );
 assert(!boardsHtml.includes("Export PDF"), "sample chips have no export control");
 assert(!boardsHtml.includes("Upload bank statements"), "sample chips have no upload control");
@@ -493,8 +510,27 @@ assert(html.includes("muted"), "avatar clips are muted");
 assert(!html.includes("<audio"), "the page has no audio element");
 
 // ── The Financial Manager conversation after the reveal ────────────────
-assert(TRIAL_SIGNUP_HREF === firmSignupHref(), "the trial CTA is the accountant signup route");
-assert(TRIAL_SIGNUP_SENTENCE === FIRM_TRIAL_SENTENCE, "the trial sentence matches the catalog");
+assert(TRIAL_SIGNUP_HREF === firmSignupHref("starter"), "the trial CTA opens Starter monthly");
+assert(!TRIAL_SIGNUP_HREF.includes("plan=solo"), "the trial CTA is not Solo");
+assert(
+  TRIAL_SIGNUP_SENTENCE ===
+    `14-day free trial · up to ${FIRM_BAND_CATALOG.starter.clientLimit} clients`,
+  "the trial sentence uses Starter's catalog client limit",
+);
+assert(
+  trialSignupHref("?utm_source=email&utm_campaign=qa&plan=solo") ===
+    "/auth?signup=true&plan=starter&interval=month&utm_source=email&utm_campaign=qa",
+  "the trial CTA keeps utm params and stays on Starter",
+);
+assert(trialMarketForVisitor("US", "ZA") === "US", "a US visitor stays on the dollar sample");
+assert(trialMarketForVisitor("US", "us") === "US", "a US visitor with ?market=us stays on dollars");
+assert(trialMarketForVisitor("ZA", null) === "ZA", "a ZA visitor without ?market= stays on rand");
+assert(trialMarketForVisitor("ZA", "us") === "US", "?market=us opens the US sample for a ZA visitor");
+assert(trialMarketForVisitor("ZA", "US") === "US", "?market=US opens the US sample for a ZA visitor");
+assert(
+  trialMarketForVisitor("ZA", "country") === "ZA",
+  "?country= and ?region= are not a market override",
+);
 
 const talk = renderToStaticMarkup(
   createElement(TryScreen, { phase: "findings", board: us, findings, picks: [] }),
@@ -590,7 +626,14 @@ assert(!signedPack.includes("Approved by you"), "a signed pack has no approval s
 const cashTalk = renderToStaticMarkup(
   createElement(TryScreen, { phase: "findings", board: us, findings, picks: ["cash"] }),
 );
-assert(cashTalk.includes("Opening cash stays the balance on file."), "the cash copy names the balance on file");
+assert(
+  cashTalk.includes("Opens at the sample bank balance on file."),
+  "the cash copy names the sample bank balance",
+);
+assert(
+  !cashTalk.includes("Opening cash stays the balance on file"),
+  "the cash copy does not use the old opening line",
+);
 assert(!cashTalk.includes("opens at zero") && !cashTalk.includes("no bank balance"), "cash copy does not open at zero");
 const tryCss = readFileSync(join(resolve("."), "src/styles/try.css"), "utf8");
 assert(!tryCss.includes("min(1100px"), "opening a report does not widen the column");
@@ -637,6 +680,11 @@ assert(
 assert(
   !/from\s+["']@\/components\/profitability-waterfall["']/.test(demoSource),
   "try-demo does not statically import the waterfall",
+);
+assert(demoSource.includes("readRequestedMarket"), "the page sends ?market= when the sample starts");
+assert(
+  readFileSync(join(root, "src/lib/trial-demo.functions.ts"), "utf8").includes("trialMarketForVisitor"),
+  "starting the sample uses the landing market override",
 );
 
 function specsIn(text: string): { spec: string; typeOnly: boolean }[] {

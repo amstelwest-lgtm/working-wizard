@@ -19,11 +19,15 @@ import {
   type GoogleCalendarConfig,
 } from "../src/lib/google-calendar";
 import { SAMPLE_BUSINESS_NAME } from "../src/lib/sample-business";
+import { TrySchedule } from "../src/components/try-schedule";
 import {
   CALL_CLOSE_MINUTES,
   CALL_OPEN_MINUTES,
   callSlots,
+  displaySlotZone,
+  formatSlotButton,
   formatSlotClock24,
+  formatSlotZoneLong,
   isOfferedSlot,
 } from "../src/lib/trial-call-slots";
 import {
@@ -120,6 +124,62 @@ assert(
   formatSlotClock24(mondaySlots[0]!.start, "America/New_York") === "10:30",
   "a US visitor sees 10:30",
 );
+assert(displaySlotZone("America/New_York", "US") === "America/New_York", "a US clock stays local");
+assert(
+  displaySlotZone("America/Los_Angeles", "US") === "America/Los_Angeles",
+  "a Pacific clock stays local on the US sample",
+);
+assert(
+  displaySlotZone("Africa/Johannesburg", "US") === "America/New_York",
+  "a US sample does not keep the Johannesburg clock",
+);
+assert(
+  displaySlotZone("Africa/Johannesburg", "ZA") === "Africa/Johannesburg",
+  "a ZA sample keeps the local Johannesburg clock",
+);
+assert(
+  formatSlotButton(mondaySlots[0]!.start, "America/New_York") === "10:30 AM EDT",
+  "a US slot is labelled in local time",
+);
+assert(
+  formatSlotZoneLong(mondaySlots[0]!.start, "America/New_York") === "Eastern Time",
+  "the US lead names Eastern Time",
+);
+assert(
+  formatSlotButton(mondaySlots[0]!.start, "Africa/Johannesburg") === "4:30 PM SAST",
+  "a Johannesburg slot is labelled SAST",
+);
+const usSchedule = renderToStaticMarkup(
+  createElement(TrySchedule, {
+    now: mondayMorning,
+    timeZone: "America/New_York",
+    market: "US",
+  }),
+);
+assert(usSchedule.includes("10:30 AM EDT"), "US slots render in Eastern time");
+assert(usSchedule.includes("Eastern Time"), "US slots name the local zone");
+assert(!usSchedule.includes("Johannesburg"), "US slots are not labelled Johannesburg");
+assert(!usSchedule.includes("SAST"), "US slots are not labelled SAST");
+const usFromJohannesburg = renderToStaticMarkup(
+  createElement(TrySchedule, {
+    now: mondayMorning,
+    timeZone: "Africa/Johannesburg",
+    market: "US",
+  }),
+);
+assert(
+  usFromJohannesburg.includes("10:30 AM EDT") && usFromJohannesburg.includes("Eastern Time"),
+  "market=us from a Johannesburg clock still shows Eastern time",
+);
+assert(!usFromJohannesburg.includes("SAST"), "market=us does not label SAST");
+const zaSchedule = renderToStaticMarkup(
+  createElement(TrySchedule, {
+    now: mondayMorning,
+    timeZone: "Africa/Johannesburg",
+    market: "ZA",
+  }),
+);
+assert(zaSchedule.includes("4:30 PM SAST"), "ZA slots render in local SAST");
 
 const draft: CallDraft = {
   name: "Ada Firm",

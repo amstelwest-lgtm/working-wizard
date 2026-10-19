@@ -16,9 +16,9 @@ import { derivePeriodWaterfallFallback, type WaterfallFallback } from "@/lib/wee
 
 /**
  * Shown with the cash chart, the Financial Manager, and the findings.
- * The opening is the sample bank balance, so this line is true.
+ * The opening is the labelled SAMPLE bank balance.
  */
-export const TRIAL_CASH_OPENING_LINE = "Opening cash stays the balance on file.";
+export const TRIAL_CASH_OPENING_LINE = "Opens at the sample bank balance on file.";
 
 /** Display state so a US sample formats as dollars. Tax is not shown on these chips. */
 export const TRIAL_US_STATE: UsStateCode = "NY";
