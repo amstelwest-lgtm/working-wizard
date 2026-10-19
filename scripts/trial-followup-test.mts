@@ -171,7 +171,7 @@ assert(
   "a detected zone may say your local time",
 );
 assert(
-  formatSlotButton(mondaySlots[0]!.start, "America/New_York") === "10:30 AM EDT",
+  formatSlotButton(mondaySlots[0]!.start, "America/New_York") === "10:30 AM ET",
   "a US slot is labelled in local time",
 );
 assert(
@@ -193,7 +193,8 @@ const usSchedule = renderToStaticMarkup(
     market: "US",
   }),
 );
-assert(usSchedule.includes("10:30 AM EDT"), "US slots render in Eastern time");
+assert(usSchedule.includes("10:30 AM ET"), "US slots render in Eastern time");
+assert(!usSchedule.includes("EDT"), "US slots use ET, not EDT");
 assert(usSchedule.includes("Eastern Time"), "US slots name the local zone");
 assert(!usSchedule.includes("Johannesburg"), "US slots are not labelled Johannesburg");
 assert(!usSchedule.includes("SAST"), "US slots are not labelled SAST");
@@ -208,7 +209,10 @@ assert(
   usFromJohannesburg.includes("4:30 PM SAST") && usFromJohannesburg.includes("your local time"),
   "market=us from a Johannesburg clock shows that clock",
 );
-assert(!usFromJohannesburg.includes("EDT"), "a Johannesburg clock is not labelled EDT");
+assert(
+  !usFromJohannesburg.includes("EDT") && !usFromJohannesburg.includes(" ET"),
+  "a Johannesburg clock is not labelled ET",
+);
 assert(
   !usFromJohannesburg.includes("Eastern Time"),
   "a Johannesburg clock is not labelled Eastern Time",

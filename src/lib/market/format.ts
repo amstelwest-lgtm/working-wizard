@@ -275,6 +275,16 @@ function zoneLabel(name: string, date: Date, timeZone: string): string {
   return offsetFromZone(date, timeZone);
 }
 
+/** Short zone letters. Mapped zones are SAST, ET, CT, MT, PT, AKT, and HT. Others are UTC+N. */
+export function formatZoneLabel(date: Date, timeZone: string): string {
+  try {
+    const parts = readClock(date, timeZone);
+    return parts.zoneName ? zoneLabel(parts.zoneName, date, timeZone) : offsetFromZone(date, timeZone);
+  } catch {
+    return "UTC";
+  }
+}
+
 function renderDateTime(
   date: Date,
   timeZone: string,
@@ -396,7 +406,7 @@ export function formatNamedDay(
   }
 }
 
-/** ICU zone name. Slot buttons keep this; printed dates use the mapped letters. */
+/** ICU zone name. Slot leads keep the long name; printed dates use the mapped letters. */
 export function icuZoneName(
   date: Date,
   timeZone: string,

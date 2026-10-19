@@ -4,7 +4,7 @@
  * visitor's own time zone.
  */
 
-import { formatClock, formatNamedDay, icuZoneName } from "./market/format.ts";
+import { formatClock, formatNamedDay, formatZoneLabel, icuZoneName } from "./market/format.ts";
 
 export const CALL_ZONE = "Africa/Johannesburg";
 export const CALL_OPEN_MINUTES = 16 * 60 + 30;
@@ -168,11 +168,9 @@ export function slotClockLead(input: {
   return `Pick a time. Shown in ${marketFallbackZoneLabel(input.market)}.`;
 }
 
-/** Short label on each slot. Johannesburg is SAST; US zones stay EDT, PDT, and so on. */
+/** Short label on each slot. Same letters as printed dates: SAST, ET, CT, MT, PT, AKT, HT. */
 export function formatSlotZoneShort(start: Date, timeZone: string): string {
-  const zone = safeTimeZone(timeZone);
-  if (zone === CALL_ZONE) return "SAST";
-  return intlZoneName(start, zone, "short");
+  return formatZoneLabel(start, safeTimeZone(timeZone));
 }
 
 /** Readable zone name from Intl, such as Eastern Time. */

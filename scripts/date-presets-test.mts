@@ -20,7 +20,12 @@ import {
   formatWeekHeader,
 } from "../src/lib/market/format";
 import { formatDecisionWhen, formatIssuedOn } from "../src/lib/source-documents-ui";
-import { formatSlotButton, formatSlotClock, formatSlotDay } from "../src/lib/trial-call-slots";
+import {
+  formatSlotButton,
+  formatSlotClock,
+  formatSlotDay,
+  formatSlotZoneShort,
+} from "../src/lib/trial-call-slots";
 import { dataFreshnessLine } from "../src/lib/workflow-coach";
 import { formatInviteExpiry } from "../src/routes/_authenticated/settings.team";
 
@@ -163,7 +168,19 @@ assert.equal(formatSlotDay(slotInstant, "America/New_York", "US"), "Monday, Oct 
 assert.equal(formatSlotDay(slotInstant, "Africa/Johannesburg", "ZA"), "Monday, 19 Oct 2026");
 assert.equal(formatSlotClock(slotInstant, "America/New_York", "US"), "10:30 AM");
 assert.equal(formatSlotClock(slotInstant, "Africa/Johannesburg", "ZA"), "16:30");
-assert.equal(formatSlotButton(slotInstant, "America/New_York", "US"), "10:30 AM EDT");
+assert.equal(formatSlotZoneShort(slotInstant, "America/New_York"), "ET");
+assert.equal(formatSlotZoneShort(slotInstant, "America/Chicago"), "CT");
+assert.equal(formatSlotZoneShort(slotInstant, "America/Denver"), "MT");
+assert.equal(formatSlotZoneShort(slotInstant, "America/Los_Angeles"), "PT");
+assert.equal(formatSlotZoneShort(slotInstant, "America/Anchorage"), "AKT");
+assert.equal(formatSlotZoneShort(slotInstant, "Pacific/Honolulu"), "HT");
+assert.equal(formatSlotZoneShort(slotInstant, "Africa/Johannesburg"), "SAST");
+assert.equal(formatSlotButton(slotInstant, "America/New_York", "US"), "10:30 AM ET");
+assert.equal(formatSlotButton(slotInstant, "America/Chicago", "US"), "9:30 AM CT");
+assert.equal(formatSlotButton(slotInstant, "America/Denver", "US"), "8:30 AM MT");
+assert.equal(formatSlotButton(slotInstant, "America/Los_Angeles", "US"), "7:30 AM PT");
+assert.equal(formatSlotButton(slotInstant, "America/Anchorage", "US"), "6:30 AM AKT");
+assert.equal(formatSlotButton(slotInstant, "Pacific/Honolulu", "US"), "4:30 AM HT");
 assert.equal(formatSlotButton(slotInstant, "Africa/Johannesburg", "ZA"), "16:30 SAST");
 assert.equal(formatSlotButton(slotInstant, "Africa/Johannesburg", "US"), "4:30 PM SAST");
 
