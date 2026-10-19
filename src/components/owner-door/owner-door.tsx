@@ -34,7 +34,13 @@ import {
   type OwnerBooks,
 } from "@/lib/owner-answers";
 import { ownerPresence, steerAssignedWork, type OwnerTalk } from "@/lib/owner-presence";
-import { loadActionHandoffRuns, loadLatestHandoffAgents } from "@/lib/owner-handoff-client";
+import {
+  ACTION_PLAN_REFRESH_EVENT,
+  loadActionHandoffRuns,
+  loadLatestHandoffAgents,
+  type ActionPlanRefreshDetail,
+} from "@/lib/owner-handoff-client";
+import { handedHomeAction, openPlanTitles } from "@/lib/open-plan-home";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
@@ -210,8 +216,10 @@ export function OwnerDoor({
   const [quickBooks, setQuickBooks] = useState<BooksLink>({ state: "unknown" });
   const [xeroLink, setXeroLink] = useState<BooksLink>({ state: "unknown" });
   const [openAction, setOpenAction] = useState<string | null>(null);
+  const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
   const [assignedRun, setAssignedRun] = useState<{ agent: AgentKey; status: string } | null>(null);
+  const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [visitor, setVisitor] = useState<"za" | "us" | null>(null);
@@ -241,6 +249,10 @@ export function OwnerDoor({
     recRef.current?.stop();
     recRef.current = null;
     setListening(false);
+    pendingHandoff.current = null;
+    setHandedTitle(null);
+    setAssignedAgent(null);
+    setAssignedRun(null);
     setThreads(clientId ? readOwnerThreads(browserThreadStore(), clientId) : emptyOwnerThreads());
     setErrors({});
   }, [clientId]);
@@ -328,10 +340,26 @@ export function OwnerDoor({
   }, []);
 
   useEffect(() => {
+    const onRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
+      if (!detail?.actionItemId || !detail.title || detail.agent === "financial_manager") return;
+      pendingHandoff.current = detail;
+      setHandedTitle(detail.title);
+      setAssignedAgent(detail.agent);
+      setAssignedRun({ agent: detail.agent, status: "queued" });
+      setActionRows((rows) =>
+        rows.some((row) => row.title === detail.title)
+          ? rows
+          : [...rows, { title: detail.title, email: null }],
+      );
+      setActionsReady(true);
+    };
+    window.addEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(ACTION_PLAN_REFRESH_EVENT, onRefresh);
+  }, []);
+
+  useEffect(() => {
     setLedger(null);
-    setOpenAction(null);
-    setAssignedAgent(null);
-    setAssignedRun(null);
     setActionsReady(false);
     setActionRows([]);
     setActionsUnavailable(false);
@@ -412,22 +440,30 @@ export function OwnerDoor({
         if (!title || !row.id) return [];
         return [{ id: row.id, title, email: row.owner_email }];
       });
-      const firstId = openRows[0]?.id ?? null;
-      let agent: AgentKey | null = null;
-      let run: { agent: AgentKey; status: string } | null = null;
-      if (firstId) {
-        const [notes, runs] = await Promise.all([
-          loadLatestHandoffAgents([firstId]),
-          loadActionHandoffRuns([firstId]),
-        ]);
-        if (cancelled) return;
-        run = runs.get(firstId) ?? null;
-        agent = notes.get(firstId) ?? run?.agent ?? null;
-      }
-      setActionRows(openRows.map(({ title, email }) => ({ title, email })));
+      const ids = openRows.map((row) => row.id);
+      const [notes, runs] = ids.length
+        ? await Promise.all([loadLatestHandoffAgents(ids), loadActionHandoffRuns(ids)])
+        : [new Map(), new Map()];
+      if (cancelled) return;
+      const pending = pendingHandoff.current;
+      const handed =
+        handedHomeAction(openRows, notes, runs) ??
+        (pending && pending.agent !== "financial_manager"
+          ? {
+              id: pending.actionItemId,
+              title: pending.title,
+              agent: pending.agent,
+              run: { agent: pending.agent, status: "queued" as const },
+            }
+          : null);
+      if (handed && notes.has(handed.id)) pendingHandoff.current = null;
+      const titles = openPlanTitles(openRows);
+      if (pending && !titles.includes(pending.title)) titles.push(pending.title);
+      setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
-      setAssignedAgent(agent);
-      setAssignedRun(run);
+      setHandedTitle(handed?.title ?? null);
+      setAssignedAgent(handed?.agent ?? null);
+      setAssignedRun(handed?.run ?? null);
       setActionsReady(true);
     });
     return () => {
@@ -746,7 +782,7 @@ export function OwnerDoor({
         <OwnerHome
           variant="character"
           presence={presence}
-          lines={ownerHomeLines(tiles, topMove, assignedAgent)}
+          lines={ownerHomeLines(tiles, topMove, assignedAgent, handedTitle)}
           status={ownerCardStatuses(books)}
           marketCountry={market.country}
           audience="owner"

@@ -1334,6 +1334,8 @@ function formatCopyAmounts(text: string, figures: EvidenceFigures | undefined, m
   }
   return applyCopyReplacements(text, replacements)
     .replace(/\bdays\s+days\b/gi, "days")
+    .replace(/\$\s*\$/g, "$")
+    .replace(/R(?:[\u00a0 ]+)R(?:[\u00a0 ])/g, "R ")
     .replace(/\s+/g, " ")
     .trim();
 }

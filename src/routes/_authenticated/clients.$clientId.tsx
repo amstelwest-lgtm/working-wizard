@@ -279,8 +279,14 @@ import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
 import { ownerPresence, steerAssignedWork } from "@/lib/owner-presence";
-import { loadActionHandoffRuns, loadLatestHandoffAgents } from "@/lib/owner-handoff-client";
-import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
+import {
+  ACTION_PLAN_REFRESH_EVENT,
+  loadActionHandoffRuns,
+  loadLatestHandoffAgents,
+  type ActionPlanRefreshDetail,
+} from "@/lib/owner-handoff-client";
+import { handedHomeAction } from "@/lib/open-plan-home";
+import { cashFloorCopy, ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
@@ -1643,18 +1649,38 @@ function ClientView() {
   const [openPlanTick, setOpenPlanTick] = useState(0);
   const [openActionAgent, setOpenActionAgent] = useState<AgentKey | null>(null);
   const [openActionRun, setOpenActionRun] = useState<{ agent: AgentKey; status: string } | null>(null);
+  const [handedTitle, setHandedTitle] = useState<string | null>(null);
+  const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
   useEffect(() => {
-    const bump = () => setOpenPlanTick((n) => n + 1);
-    window.addEventListener("milon-action-plan-refresh", bump);
-    return () => window.removeEventListener("milon-action-plan-refresh", bump);
+    const bump = (event: Event) => {
+      const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
+      if (detail?.actionItemId && detail.title && detail.agent !== "financial_manager") {
+        pendingHandoff.current = detail;
+        setHandedTitle(detail.title);
+        setOpenActionAgent(detail.agent);
+        setOpenActionRun({ agent: detail.agent, status: "queued" });
+        setOpenPlanTitles((titles) =>
+          titles && titles.includes(detail.title) ? titles : [...(titles ?? []), detail.title],
+        );
+      }
+      setOpenPlanTick((n) => n + 1);
+    };
+    window.addEventListener(ACTION_PLAN_REFRESH_EVENT, bump);
+    return () => window.removeEventListener(ACTION_PLAN_REFRESH_EVENT, bump);
   }, []);
+  const seenPlanClient = useRef<string | null>(null);
   useEffect(() => {
     if (!clientId) return;
     let cancelled = false;
-    setOpenPlanTitles(null);
+    if (seenPlanClient.current !== clientId) {
+      seenPlanClient.current = clientId;
+      pendingHandoff.current = null;
+      setOpenPlanTitles(null);
+      setHandedTitle(null);
+      setOpenActionAgent(null);
+      setOpenActionRun(null);
+    }
     setOpenPlanUnavailable(false);
-    setOpenActionAgent(null);
-    setOpenActionRun(null);
     void (async () => {
       const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
@@ -1670,6 +1696,7 @@ function ClientView() {
         setOpenPlanOverdue(0);
         setOpenActionAgent(null);
         setOpenActionRun(null);
+        setHandedTitle(null);
         return;
       }
       const rows = (data ?? []) as { id?: string | null; title?: string | null; due_date?: string | null }[];
@@ -1677,23 +1704,37 @@ function ClientView() {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
       });
-      const firstId = rows.find((row) => row.title?.trim() && row.id)?.id ?? null;
-      let agent: AgentKey | null = null;
-      let run: { agent: AgentKey; status: string } | null = null;
-      if (firstId) {
-        const [notes, runs] = await Promise.all([
-          loadLatestHandoffAgents([firstId]),
-          loadActionHandoffRuns([firstId]),
-        ]);
-        if (cancelled) return;
-        run = runs.get(firstId) ?? null;
-        agent = notes.get(firstId) ?? run?.agent ?? null;
-      }
+      const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
+      const [notes, runs] = ids.length
+        ? await Promise.all([loadLatestHandoffAgents(ids), loadActionHandoffRuns(ids)])
+        : [new Map(), new Map()];
+      if (cancelled) return;
+      const pending = pendingHandoff.current;
+      const handed =
+        handedHomeAction(
+          rows.flatMap((row) => {
+            const title = row.title?.trim() ?? "";
+            return row.id && title ? [{ id: row.id, title }] : [];
+          }),
+          notes,
+          runs,
+        ) ??
+        (pending && pending.agent !== "financial_manager"
+          ? {
+              id: pending.actionItemId,
+              title: pending.title,
+              agent: pending.agent,
+              run: { agent: pending.agent, status: "queued" as const },
+            }
+          : null);
+      if (handed && notes.has(handed.id)) pendingHandoff.current = null;
+      if (pending && !titles.includes(pending.title)) titles.push(pending.title);
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
       setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
-      setOpenActionAgent(agent);
-      setOpenActionRun(run);
+      setHandedTitle(handed?.title ?? null);
+      setOpenActionAgent(handed?.agent ?? null);
+      setOpenActionRun(handed?.run ?? null);
     })();
     return () => {
       cancelled = true;
@@ -3046,8 +3087,8 @@ function ClientView() {
     clientProfitBridge.ebit,
   ]);
   const homeLines = useMemo(
-    () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent),
-    [homeBooks, strategicMoves, openActionAgent],
+    () => ownerHomeLines(ownerAnswerTiles(homeBooks), strategicMoves[0]?.title ?? null, openActionAgent, handedTitle),
+    [homeBooks, strategicMoves, openActionAgent, handedTitle],
   );
   const homeStatus = useMemo(() => ownerCardStatuses(homeBooks), [homeBooks]);
   // Declared before the memo. A const after the loading return is still in
@@ -3904,6 +3945,31 @@ function ClientView() {
                           displayStatus={bookStatusCritical ? "critical" : overallHealth.displayStatus}
                           statusLabel={bookStatusCritical ? bookStatusWord : null}
                           pillars={spherePillars}
+                          cashFloorCue={
+                            Number.isFinite(cashOutlook.opening) && Number.isFinite(cashOutlook.floor)
+                              ? cashFloorCopy({
+                                  opening: cashOutlook.opening,
+                                  floor: cashOutlook.floor,
+                                  dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+                                  money: (amount) => formatMoney(amount, clientMarket),
+                                  market: clientMarket,
+                                }).healthCue
+                              : null
+                          }
+                          onCashFloor={() => {
+                            setActiveTab("overview");
+                            void navigate({
+                              to: "/clients/$clientId",
+                              params: { clientId },
+                              search: (prev) => accountantClientTabSearch(prev, "overview"),
+                            });
+                            window.setTimeout(() => {
+                              document.querySelector("[data-fm-brief]")?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                              });
+                            }, 80);
+                          }}
                           queryCounts={ratioQueryCounts}
                           drillTo={healthDrill}
                           onDriverClick={(key) => openDrawerFromUiKey(key)}

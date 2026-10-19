@@ -7,7 +7,7 @@ import {
   closingBalancesFromCashflow,
   type SavedCashflowLike,
 } from "@/lib/cash-runway";
-import { formatMoney, type MoneyMarket } from "@/lib/market/format";
+import { formatMoney, formatMoneyCompact, type MoneyMarket } from "@/lib/market/format";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import { OPENING_BALANCE_MISSING, cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
 import { periodProfitBridge, statedNetIsUsable } from "@/lib/period-profit";
@@ -289,16 +289,17 @@ export function ownerHomeLines(
   tiles: readonly OwnerTile[],
   topMove: string | null,
   assignedAgent: AgentKey | null = null,
+  handedTitle: string | null = null,
 ): OwnerHomeLines {
   const sentence = (id: OwnerTileId) => tiles.find((tile) => tile.id === id)?.sentence ?? "";
   const cash = sentence("cash");
   const move = topMove?.replace(/\s+/g, " ").trim() ?? "";
   const answer = guardOwnerLine(sentence("answer"));
+  const handed = guardOwnerLine(handedTitle ?? "");
   const routed =
     assignedAgent &&
     assignedAgent !== "financial_manager" &&
-    answer.length > 0 &&
-    !HOME_ANSWER_ON_MANAGER.has(answer)
+    (handed.length > 0 || (answer.length > 0 && !HOME_ANSWER_ON_MANAGER.has(answer)))
       ? assignedAgent
       : null;
   const financialManager = [cashHomeLine(cash)].filter((line) => line.length > 0);
@@ -308,9 +309,11 @@ export function ownerHomeLines(
   const advisor = [guardOwnerLine(move || (cash === CONNECT ? CONNECT : "No next move yet."))].filter(
     (line) => line.length > 0,
   );
-  if (answer) {
-    if (routed === "analyst") analyst.push(answer);
-    else if (routed === "advisor") {
+  if (handed && routed === "analyst" && !analyst.includes(handed)) analyst.push(handed);
+  else if (handed && routed === "advisor" && !advisor.includes(handed)) advisor.push(handed);
+  if (answer && answer !== handed) {
+    if (!handed && routed === "analyst") analyst.push(answer);
+    else if (!handed && routed === "advisor") {
       if (!advisor.includes(answer)) advisor.push(answer);
     } else financialManager.push(answer);
   }
@@ -321,6 +324,53 @@ export function ownerHomeLines(
   };
 }
 
+/** $50.0k and R 50.0k read as $50k and R 50k on the short health line. */
+export function shortFloorAmount(amount: number, market: MoneyMarket): string {
+  return formatMoneyCompact(amount, market).replace(/\.0(?=[km])/i, "");
+}
+
+export type CashFloorCopy = {
+  sentence: string;
+  /** The agent-card chip. Null when cash is not under the minimum and the forecast does not dip. */
+  chip: string | null;
+  /**
+   * One line under the Health cash pillar when cash is below the minimum now.
+   * A projected dip keeps the sentence and the chip, and leaves this null.
+   */
+  healthCue: string | null;
+};
+
+/**
+ * One cash-floor reading for the owner home, the accountant brief, and Health.
+ * Below the minimum names the balance and the gap. A dip while cash is still
+ * above the minimum says the forecast crosses it. The health score is untouched.
+ */
+export function cashFloorCopy(input: {
+  opening: number;
+  floor: number;
+  dipsBelowFloorWeek?: number | null;
+  money: (amount: number) => string;
+  market?: MoneyMarket;
+}): CashFloorCopy {
+  const { opening, floor, money } = input;
+  const dip = input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0;
+  const belowNow = opening < floor;
+  const gap = Math.abs(floor - opening);
+  const sentence = belowNow
+    ? `Cash ${money(opening)}, ${money(gap)} below your ${money(floor)} minimum.`
+    : dip
+      ? `Cash ${money(opening)}. The forecast dips under your ${money(floor)} minimum.`
+      : `Cash is ${money(opening)}, above the ${money(floor)} floor.`;
+  return {
+    sentence,
+    chip: belowNow || dip ? CASH_FLOOR_ALERT : null,
+    healthCue:
+      belowNow && input.market
+        ? `Below your ${shortFloorAmount(floor, input.market)} minimum · see FM`
+        : null,
+  };
+}
+
 /** Same cash-floor sentence on the owner home and the accountant client brief. */
 export function cashFloorSentence(input: {
   opening: number;
@@ -328,16 +378,7 @@ export function cashFloorSentence(input: {
   dipsBelowFloorWeek?: number | null;
   money: (amount: number) => string;
 }): string {
-  const { opening, floor, money } = input;
-  const dip = input.dipsBelowFloorWeek != null && input.dipsBelowFloorWeek > 0;
-  const gap = Math.abs(floor - opening);
-  if (opening < floor) {
-    return `Cash ${money(opening)}, ${money(gap)} below your ${money(floor)} minimum.`;
-  }
-  if (dip) {
-    return `Cash is ${money(opening)}. It dips under the ${money(floor)} floor.`;
-  }
-  return `Cash is ${money(opening)}, above the ${money(floor)} floor.`;
+  return cashFloorCopy(input).sentence;
 }
 
 function cashTile(books: OwnerBooks, money: (n: number) => string, booksSource: string): OwnerTile {

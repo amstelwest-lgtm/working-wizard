@@ -258,7 +258,7 @@ function installLandingQuiz(): QuizApi {
     const cta =
       qRole === "accountant"
         ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
-          <button class="btn btn-gold" type="button" onclick="window.__mq_firmSignup()">Create firm account ✦</button>
+          <button class="btn btn-cobalt" type="button" onclick="window.__mq_firmSignup()">Create firm account ✦</button>
           <a class="btn btn-ghost" href="#pricing">See firm pricing</a>
           <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
         </div>`

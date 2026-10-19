@@ -294,5 +294,18 @@ assert(
     "The weakest pillar is at 70 out of 100.",
   "a stored score dollar sign is removed",
 );
+assert(
+  formatFindingProse(
+    "The opening balance of $0 is on file.",
+    [{ key: "openingBalance", value: 0 }],
+    US,
+  ) === "The opening balance of $0 is on file.",
+  "an amount that already has a symbol does not gain a second one",
+);
+assert(
+  formatFindingProse("The opening balance of $$0 is on file.", [], US) ===
+    "The opening balance of $0 is on file.",
+  "a doubled dollar sign collapses",
+);
 
 console.log("agent-draft-decision-client: ok");
