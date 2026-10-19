@@ -98,6 +98,13 @@
   font-size: 13px;
 }
 
+.fm-brief-progress {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .fm-brief button[data-hand-to-trigger],
 .fm-brief button[data-hand-to-trigger] .hand-to-assignee {
   color: #ffffff;

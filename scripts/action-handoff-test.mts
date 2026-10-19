@@ -5,7 +5,9 @@
 import { readFileSync } from "node:fs";
 import {
   agentKeyFromAssignee,
+  botPickupCaption,
   handoffButtonLabel,
+  handoffClock,
   handoffProgressCaption,
 } from "../src/lib/action-handoff.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
@@ -33,9 +35,24 @@ assert(
   handoffProgressCaption("analyst", "running") === "Analyst picked this up",
   "a running run is a pickup",
 );
+const finishedAt = "2026-10-19T18:31:22.000Z";
 assert(
-  handoffProgressCaption("financial_manager", "succeeded") === "Financial Manager finished a pass",
+  handoffProgressCaption("financial_manager", "succeeded") === "Financial Manager finished",
   "a finished run stays on the action",
+);
+assert(
+  handoffProgressCaption("financial_manager", "succeeded", {
+    at: finishedAt,
+    result: "Drafts are recorded.",
+  }) === `Financial Manager finished · ${handoffClock(finishedAt)} — Drafts are recorded.`,
+  "a finished run names the time and the result",
+);
+assert(
+  botPickupCaption({
+    assignee: "theo",
+    run: { agent: "advisor", status: "queued", at: finishedAt },
+  }) === null,
+  "a person row drops the queued bot line",
 );
 assert(
   handoffProgressCaption("advisor", "failed") === null,
@@ -58,6 +75,14 @@ assert(menu.includes("ActionHandoffButtons"), "Hand to lists the bots");
 assert(menu.includes("data-hand-to-trigger"), "the control is labelled Hand to");
 assert(menu.includes("Hand to"), "the button says Hand to");
 assert(menu.includes("data-hand-to-person"), "Hand to lists team members");
+assert(menu.includes("Assigning…"), "the button shows a pending state");
+assert(menu.includes('aria-pressed={current}'), "the current person is marked");
+assert(menu.includes(" ✓"), "the current person gets the same check as a bot");
+const runBody = menu.slice(menu.indexOf("const run = async"));
+assert(
+  runBody.indexOf("setOpen(false)") < runBody.indexOf("await work()"),
+  "the menu closes before the hand-off returns",
+);
 assert(menu.includes("MoveHandTo"), "a Next move can be handed off");
 const moves = readFileSync("src/components/strategic-moves-panel.tsx", "utf8");
 assert(moves.includes("MoveHandTo"), "accountant Next moves include Hand to");

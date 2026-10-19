@@ -169,6 +169,9 @@ assert(briefCss.includes(".fm-brief-actions li div span"), "the reason colour do
 assert(briefCss.includes(".hand-to-assignee"), "the assignee name on the button stays readable");
 assert(src.includes("<HandToMenu"), "Act on these hands off through the shared menu");
 assert(src.includes("commitActionHandoff"), "Hand to writes the assignment");
+assert(src.includes("toast.success"), "an accountant assign toasts");
+assert(src.includes("data-assignment-note") || src.includes("<AssignmentNotes"), "Act on these shows the latest note");
+assert(src.includes("data-agent-pickup"), "a finished run names itself on the row");
 assert(!src.includes("onHandToBot"), "Hand to does not navigate to the Financial Manager");
 assert(src.includes("Draft chase"), "chase button");
 assert(src.includes("Open"), "open button");
@@ -178,7 +181,8 @@ assert(!/supabase|sendEmail|mailto/i.test(src), "the brief does not send");
 
 const page = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(page.includes("<FinancialManagerBrief"), "client Home renders the brief");
-assert(page.includes("handoffs={openPlanHandoffs}"), "Act on these uses the open action rows");
+assert(page.includes("handoffs={shownHandoffs}"), "Act on these uses the open action rows");
+assert(page.includes("openPlanHandoffs.map"), "the shown rows start from the stored actions");
 assert(
   !page.includes('onHandToBot={() => openHomeAgent("financial_manager")}'),
   "the home hand control does not open the Financial Manager page",

@@ -126,6 +126,16 @@ export function handoffDraftIsDuplicate(actionTitle: string, existingTitles: rea
   });
 }
 
+/** Drop the team prefix so the finish note uses the short role. */
+function finishedRole(displayName: string): string {
+  const short = displayName.replace(/^Milōn\s+/u, "").trim();
+  return short || displayName.trim() || "Milōn";
+}
+
+/**
+ * The note a finished run leaves. It does not repeat "Handed to …".
+ * The result is the sentence after the colon.
+ */
 export function handoffResultNote(
   displayName: string,
   summary: string,
@@ -133,8 +143,31 @@ export function handoffResultNote(
   figures?: Record<string, number>,
 ): string {
   const polished = polishAgentCopy({ text: summary, role: "summary", market, figures });
-  const extra = polished.ok ? ` ${polished.text}` : "";
-  return `Handed to ${displayName}.${extra}`.slice(0, 500);
+  const body = (polished.ok ? polished.text : summary).replace(/\s+/g, " ").trim();
+  const note = body ? `${finishedRole(displayName)} finished: ${body}` : `${finishedRole(displayName)} finished.`;
+  return note.slice(0, 500);
+}
+
+/** The result sentence inside a finish note. An older "Handed to" note has none. */
+export function handoffResultText(note: string | null | undefined): string | null {
+  if (!note) return null;
+  const mark = " finished: ";
+  const at = note.indexOf(mark);
+  if (at < 0) return null;
+  const body = note.slice(at + mark.length).trim();
+  return body || null;
+}
+
+/** Newest finish note on one action. Assignment notes are left for the assignee. */
+export function latestHandoffResult(
+  notes: readonly { note: string | null; at: string }[],
+): { text: string; at: string } | null {
+  const ordered = [...notes].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  for (const row of ordered) {
+    const text = handoffResultText(row.note);
+    if (text) return { text, at: row.at };
+  }
+  return null;
 }
 
 export function handoffFinding(input: {

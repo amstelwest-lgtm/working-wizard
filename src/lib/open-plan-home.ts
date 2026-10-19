@@ -157,6 +157,63 @@ export function rowAssignment(input: {
   return { id: input.id, assigneeName: stored.name, agent: stored.agent, open };
 }
 
+export type LiveHandoffRun = {
+  actionItemId?: string | null;
+  agent: AgentKey;
+  status: string;
+  at?: string;
+};
+
+/**
+ * A live run settles the optimistic Working flag.
+ * No live run yet keeps the row as it was. A finished run for that bot drops Working.
+ */
+export function applyLiveRuns(
+  rows: readonly RowAssignment[],
+  runs: readonly LiveHandoffRun[],
+): RowAssignment[] {
+  const latest = new Map<string, { agent: AgentKey; status: string }>();
+  const ordered = [...runs].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+  for (const run of ordered) {
+    const id = run.actionItemId ?? "";
+    if (!id || latest.has(id)) continue;
+    latest.set(id, { agent: run.agent, status: run.status });
+  }
+  return rows.map((row) => {
+    if (!row.open || !row.agent) return row;
+    const run = latest.get(row.id);
+    if (!run || run.agent !== row.agent) return row;
+    if (ACTIVE.has(run.status)) return row;
+    return { ...row, open: false };
+  });
+}
+
+/** Rows whose assignee is a person, so a leftover bot run must not paint Working. */
+export function personOwnedActionIds(rows: readonly RowAssignment[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (row.agent || !row.assigneeName?.trim()) continue;
+    if (agentKeyFromAssignee(row.assigneeName)) continue;
+    ids.add(row.id);
+  }
+  return ids;
+}
+
+/**
+ * A queued bot run on a person-owned row is not that bot's current work.
+ * It stays out of the card. The hand-off function cancels the stored row.
+ */
+export function withoutPersonQueuedRuns<T extends { action_item_id?: string | null; status: string }>(
+  runs: readonly T[],
+  personActions: ReadonlySet<string>,
+): T[] {
+  if (personActions.size === 0) return [...runs];
+  return runs.filter((run) => {
+    if (!run.action_item_id || !personActions.has(run.action_item_id)) return true;
+    return !ACTIVE.has(run.status);
+  });
+}
+
 /** Bots that own a not-finished hand-off on at least one row. */
 export function openHandoffAgents(rows: readonly Pick<RowAssignment, "agent" | "open">[]): AgentKey[] {
   const seen = new Set<AgentKey>();
