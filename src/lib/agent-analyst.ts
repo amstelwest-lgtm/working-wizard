@@ -321,8 +321,8 @@ export function analystRunCostUsd(
 }
 
 /**
- * The stored score wins when one is on file. live_overall stays labeled as a
- * recalculation, so a finding cannot treat it as the saved score.
+ * A finding quotes the live floor-applied score. The stored row stays on the
+ * payload so a later comparison can see it, and it does not replace overall.
  */
 export function labelHealthScore(input: {
   liveOverall: number | null;
@@ -335,26 +335,21 @@ export function labelHealthScore(input: {
   live_overall: number | null;
   live_overall_label: string;
   stored_score: number | null;
+  stored_as_of: string | null;
   pillars_basis: "live";
 } {
-  if (input.storedScore != null) {
-    return {
-      overall: input.storedScore,
-      overall_as_of: input.storedAsOf,
-      overall_basis: "stored",
-      live_overall: input.liveOverall,
-      live_overall_label: "Recalculated from the current books. Not the stored score.",
-      stored_score: input.storedScore,
-      pillars_basis: "live",
-    };
-  }
+  const storedNote =
+    input.storedScore != null
+      ? "Live score from the current books, with the cash floor applied. stored_score is the older snapshot and is not the score to quote."
+      : "Live score from the current books, with the cash floor applied. No stored score is on file.";
   return {
     overall: input.liveOverall,
     overall_as_of: null,
     overall_basis: "live",
     live_overall: input.liveOverall,
-    live_overall_label: "Recalculated from the current books. No stored score is on file.",
-    stored_score: null,
+    live_overall_label: storedNote,
+    stored_score: input.storedScore,
+    stored_as_of: input.storedScore != null ? input.storedAsOf : null,
     pillars_basis: "live",
   };
 }

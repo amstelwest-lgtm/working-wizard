@@ -406,6 +406,8 @@ export function cashFloorCopy(input: {
  * The cash reading the owner Financial Manager card shows.
  * Health calls this with the same outlook and, when the card has no outlook,
  * the same cashflow. The pillar band does not clear the health line.
+ * The "Showing 3 of N" count lives on the accountant Act on these list.
+ * Owner Home states the full open count under What needs you.
  */
 export function cashFloorForHome(input: {
   openingMissing?: boolean;

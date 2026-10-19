@@ -1168,14 +1168,18 @@ function toClientRow(
     const fyStartMonth =
       parseOperatingProfile(c.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
     const openingMissing = storedOpeningIsMissing(c.cashflow);
+    const cashBalance = assessed.cash.amount;
+    const cashKnown = cashBalance != null;
     const scored = cashPillarFollowsForecast(
       scorecardHealthFromFinancials({
         financials: c.financials,
         fyStartMonth,
         periodMonths: periodMonthsOf(c.financials),
-        cashRunwayWeeks: runwayWeeks,
+        cashRunwayWeeks: cashKnown ? runwayWeeks : null,
+        cashBalance: cashKnown ? cashBalance : null,
         market: clientMarket,
         shortfallWeek: assessed.outlook.shortfallWeek,
+        industry: clientIndustryDisplay(c.name, parseOperatingProfile(c.operating_profile)),
       }),
       {
         openingMissing,

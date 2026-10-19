@@ -3788,6 +3788,7 @@ function Index() {
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
     dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
+    driverNotes: grossImplausible ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE } : undefined,
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -4062,6 +4063,11 @@ function Index() {
                 cashRunwayWeeks={cashBalance != null ? effectiveRunway : null}
                 cashDebtorScore={Number.isFinite(healthMap.debtorDays) ? healthMap.debtorDays : null}
                 cashBurnScore={Number.isFinite(healthMap.ocfToEbitda) ? healthMap.ocfToEbitda : null}
+                liveHealth={{
+                  overall: overallHealth.overall,
+                  weakestLabel: overallHealth.weakestPillar?.label ?? null,
+                  weakestScore: overallHealth.weakestPillar?.score ?? null,
+                }}
                 market={boardMarket}
                 marketCountry={parseMarketSelection(workspaceMarket)?.country ?? null}
                 signoffs={Object.values(reviewSignoffs).flatMap((row) =>

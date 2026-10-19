@@ -16,6 +16,7 @@ import {
   PROPOSE_RATE_LIMIT,
   applyDraftBrainPatches,
   dropOverclaimingSteps,
+  MAX_NEW_STEPS_PER_CALL,
   MAX_OPEN_PROPOSED_STEPS,
   trackRecordLines,
   filterNewProposedSteps,
@@ -40,8 +41,15 @@ import {
   payablesPromptBlock,
   readPayablesSnapshot,
 } from "./payables.ts";
+import { adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import { formatSnapshotRatio } from "../../../src/lib/advisory-narrative.ts";
-import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
+import { assessClientMetrics, persistedRunwayWeeks, storedOpeningIsMissing } from "../../../src/lib/client-metrics.ts";
+import {
+  cashPillarFollowsForecast,
+  scorecardHealthFromFinancials,
+} from "../../../src/lib/health-score.ts";
+import { stepPillarFromTitle, weakestPillarLead } from "../../../src/lib/move-pillars.ts";
+import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 import {
   formatStatementMargin,
   isStatementMarginName,
@@ -211,7 +219,7 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     userClient
       .from("clients")
       .select(
-        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at, cashflow, financials, financials_updated_at, market",
+        "name, business_type, firm_id, market, operating_profile, brain_summary, brain_summary_updated_at, cashflow, financials, financials_updated_at",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -431,6 +439,52 @@ async function handleBrainPropose(req: Request): Promise<Response> {
       typeof client?.financials_updated_at === "string" ? client.financials_updated_at : null,
   });
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
+  const liveFinancials =
+    client?.financials && typeof client.financials === "object" && !Array.isArray(client.financials)
+      ? (client.financials as Record<string, unknown>)
+      : null;
+  const operating = client?.operating_profile;
+  const templateId =
+    operating && typeof operating === "object" && !Array.isArray(operating)
+      ? (operating as { templateId?: unknown }).templateId
+      : null;
+  const industry = adviceIndustryLabel({
+    clientName: typeof client?.name === "string" ? client.name : null,
+    templateId: typeof templateId === "string" ? templateId : null,
+    businessType: typeof client?.business_type === "string" ? client.business_type : null,
+  });
+  const cashKnown = assessed.cash.amount != null;
+  const healthScored = scorecardHealthFromFinancials({
+    financials: liveFinancials,
+    periodMonths: periodMonthsOf(liveFinancials),
+    cashRunwayWeeks: cashKnown ? runwayWeeks : null,
+    cashBalance: cashKnown ? assessed.cash.amount : null,
+    shortfallWeek: assessed.outlook.shortfallWeek,
+    industry,
+  });
+  const liveHealth =
+    healthScored.overall == null
+      ? healthScored
+      : cashPillarFollowsForecast(healthScored, {
+          openingMissing: storedOpeningIsMissing(client?.cashflow),
+          opening: assessed.outlook.opening,
+          closings: assessed.outlook.closing,
+          floor: assessed.outlook.floor,
+        });
+  if (liveHealth.overall != null) {
+    const pillarLine = liveHealth.pillars
+      .map((pillar) => `${pillar.label} ${pillar.score == null ? "unscored" : pillar.score}`)
+      .join(", ");
+    const weakest = liveHealth.weakestPillar;
+    contextLines.push(
+      `Live health: ${liveHealth.overall} ${liveHealth.displayLabel}. ${pillarLine}.`,
+    );
+    if (weakest?.label) {
+      contextLines.push(
+        `${weakest.label} is the weakest pillar at ${weakest.score}. The first next step must target ${weakest.label}.`,
+      );
+    }
+  }
   const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks);
   if (payablesBlock) contextLines.push(payablesBlock);
 
@@ -493,7 +547,28 @@ async function handleBrainPropose(req: Request): Promise<Response> {
   // Statement-depth only: anything claiming invoice/customer-level knowledge
   // is dropped before it can reach either seat.
   const { kept: depthSafe, dropped: stepsDropped } = dropOverclaimingSteps(payload.next_steps);
-  const toInsert = filterNewProposedSteps(depthSafe, existingSteps);
+  const ordered = [...depthSafe].sort((a, b) => {
+    const weakestId = liveHealth.weakestPillar?.id ?? null;
+    const aWeak = weakestId && stepPillarFromTitle(a.title) === weakestId ? 1 : 0;
+    const bWeak = weakestId && stepPillarFromTitle(b.title) === weakestId ? 1 : 0;
+    return bWeak - aWeak;
+  });
+  const toInsert = filterNewProposedSteps(ordered, existingSteps);
+  const weakestId = liveHealth.weakestPillar?.id ?? null;
+  if (weakestId) {
+    const openCount = existingSteps.filter(
+      (step) => step.status === "proposed" || step.status === "edited",
+    ).length;
+    const already = [...existingSteps, ...toInsert].some(
+      (step) => stepPillarFromTitle(step.title) === weakestId,
+    );
+    if (!already && openCount < MAX_OPEN_PROPOSED_STEPS) {
+      const lead = weakestPillarLead(weakestId);
+      toInsert.unshift({ title: lead.title, rationale: lead.rationale, assumptions: [] });
+      const room = Math.min(MAX_NEW_STEPS_PER_CALL, MAX_OPEN_PROPOSED_STEPS - openCount);
+      toInsert.splice(room);
+    }
+  }
   let stepsInserted = 0;
   if (toInsert.length) {
     const baseRows = toInsert.map((step) => ({

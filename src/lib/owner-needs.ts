@@ -52,12 +52,14 @@ export function homeActionNeeds(input: {
   const lines = titles.slice(0, HOME_ACTION_PREVIEW);
   const overdueNote = input.overdue > 0 ? `, ${input.overdue} overdue` : "";
   const heading =
-    lines.length < titles.length
-      ? `Showing ${lines.length} of ${titles.length}${overdueNote}`
-      : input.overdue > 0
-        ? `${titles.length} open${overdueNote}`
-        : `${titles.length} open`;
+    input.overdue > 0 ? `${titles.length} open${overdueNote}` : `${titles.length} open`;
   return { heading, lines };
+}
+
+/** Under Act on these, when the brief shows a short list of a longer plan. */
+export function actionPreviewLine(shown: number, total: number): string | null {
+  if (!Number.isFinite(shown) || !Number.isFinite(total) || total <= shown) return null;
+  return `Showing ${shown} of ${total}`;
 }
 
 /** Same open-action sentence the Financial Manager card and the hub count. */
@@ -183,11 +185,9 @@ export function ownerNeedsView(input: {
     ? "Open actions"
     : input.actionsUnavailable
       ? "Open actions"
-      : assigned.length > shownActions.length
-        ? `Showing ${shownActions.length} of ${assigned.length}`
-        : assigned.length
-          ? countPhrase(assigned.length, "open action", "open actions")
-          : "Open actions";
+      : assigned.length
+        ? countPhrase(assigned.length, "open action", "open actions")
+        : "Open actions";
   const actionLines = !input.actionsReady
     ? ["Checking open actions."]
     : input.actionsUnavailable

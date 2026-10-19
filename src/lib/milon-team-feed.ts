@@ -13,7 +13,12 @@
 import { advisorySignoffGrounding, type AdvisorySignoffState } from "./advisory-signoff";
 import { parseBrainSummary } from "./client-brain";
 import { draftKindLabel } from "./client-brain-deliverable";
-import { assessClientMetrics, persistedRunwayWeeks, runwayDisplayLabel } from "./client-metrics";
+import {
+  assessClientMetrics,
+  persistedRunwayWeeks,
+  runwayDisplayLabel,
+  storedOpeningIsMissing,
+} from "./client-metrics";
 import {
   cashComfortThreshold,
   closingBalancesFromCashflow,
@@ -21,6 +26,7 @@ import {
 } from "./cash-runway";
 import {
   RATIO_NAME_TO_KEY,
+  cashPillarFollowsForecast,
   overviewRatios,
   scorecardHealthFromFinancials,
   scoreRatio,
@@ -122,6 +128,12 @@ export interface MilonTeamFeed {
   activity: TeamActivityEvent[];
   agents: Record<AgentKey, TeamAgentStatus>;
   signoffLine: string | null;
+  /** Live floor-applied score. Stored findings quote this on screen. */
+  healthQuote: {
+    overall: number | null;
+    weakestLabel: string | null;
+    weakestScore: number | null;
+  } | null;
   precard: PrecardState;
   loading: boolean;
   error: string | null;
@@ -319,6 +331,8 @@ export type TeamDiagnosis = {
     label: string;
     tier: "healthy" | "at_risk" | "critical";
     asOf: string | null;
+    weakestLabel?: string | null;
+    weakestScore?: number | null;
   } | null;
   ratios: TeamDiagnosisRatio[];
   brain: {
@@ -970,6 +984,7 @@ export function emptyMilonTeamFeed(): MilonTeamFeed {
     activity: [],
     agents: emptyAgentStatuses(),
     signoffLine: null,
+    healthQuote: null,
     precard: { capped: false, remaining: null, limit: null },
     loading: false,
     error: null,
@@ -1017,6 +1032,14 @@ export function buildMilonTeamFeed(input: {
     activity,
     agents: agentStatusesFromActivity(activity),
     signoffLine,
+    healthQuote:
+      input.diagnosis.health == null
+        ? null
+        : {
+            overall: input.diagnosis.health.score,
+            weakestLabel: input.diagnosis.health.weakestLabel ?? null,
+            weakestScore: input.diagnosis.health.weakestScore ?? null,
+          },
     precard: input.precard,
     loading: input.loading === true,
     error: input.error ?? null,
@@ -1035,6 +1058,8 @@ export type WorkspaceDiagnosisInput = {
   brainSummaryUpdatedAt: string | null;
   snapshotAsOf: string | null;
   proposals: TeamDiagnosisProposal[];
+  /** Industry label. A hotel gross margin above 85% stays out of Profit. */
+  industry?: string | null;
 };
 
 /**
@@ -1057,7 +1082,7 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
   const cashBalance = assessed.cash.amount;
   const cashKnown = cashBalance != null;
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
-  const healthRaw = scorecardHealthFromFinancials({
+  const healthScored = scorecardHealthFromFinancials({
     financials,
     fyStartMonth: input.fyStartMonth,
     periodMonths,
@@ -1065,7 +1090,18 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
     cashBalance: cashKnown ? cashBalance : null,
     market,
     shortfallWeek: assessed.outlook.shortfallWeek,
+    industry: input.industry,
   });
+  // An empty book has no overall. The forecast floor must not invent one from a zero opening.
+  const healthRaw =
+    healthScored.overall == null
+      ? healthScored
+      : cashPillarFollowsForecast(healthScored, {
+          openingMissing: storedOpeningIsMissing(input.cashflow),
+          opening: assessed.outlook.opening,
+          closings: assessed.outlook.closing,
+          floor: assessed.outlook.floor,
+        });
 
   const ratioMap = overviewRatios(financials, {
     fyStartMonth: input.fyStartMonth,
@@ -1127,6 +1163,7 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
       ? { outstanding, debtorDays, asOf }
       : null;
 
+  const weakest = healthRaw.weakestPillar;
   const health =
     healthRaw.overall == null
       ? null
@@ -1135,6 +1172,8 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
           label: healthRaw.displayLabel,
           tier: healthRaw.displayStatus,
           asOf,
+          weakestLabel: weakest?.label ?? null,
+          weakestScore: weakest?.score ?? null,
         };
 
   return {

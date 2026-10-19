@@ -100,6 +100,8 @@ import {
   overviewRatioInputs,
   overviewRatios,
   CASH_OPENING_UNSCORED,
+  GROSS_MARGIN_MAPPING_NOTE,
+  grossMarginLooksImplausible,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
   cashPillarFollowsForecast,
@@ -1533,6 +1535,12 @@ function ClientView() {
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
     dayCounts: cashDriverDayFigures(financials),
+    driverNotes: grossMarginLooksImplausible(
+      statementGrossMarginFraction(financials) ?? ratios["Gross Margin"] ?? Number.NaN,
+      healthIndustry,
+    )
+      ? { grossMargin: GROSS_MARGIN_MAPPING_NOTE }
+      : undefined,
   });
   const simplifiedSections = [
     {
@@ -3475,8 +3483,16 @@ function ClientView() {
     [homeActivity.runs, settledRows, workingRows],
   );
   const homePresence = useMemo(
-    () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
-    [homeActivity, homeCardRuns, openAgents],
+    () =>
+      steerOpenHandoffs(
+        ownerPresence({ ...homeActivity, runs: homeCardRuns }, null, {
+          overall: overallHealth.overall,
+          weakestLabel: overallHealth.weakestPillar?.label ?? null,
+          weakestScore: overallHealth.weakestPillar?.score ?? null,
+        }),
+        openAgents,
+      ),
+    [homeActivity, homeCardRuns, openAgents, overallHealth],
   );
   const shownHandoffs = useMemo(
     () =>

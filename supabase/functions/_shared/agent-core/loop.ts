@@ -926,7 +926,7 @@ export function agentClaudeTools(): ClaudeTool[] {
     {
       name: "get_health",
       description:
-        "Health pillars and priority moves from the existing ratio scorer. Includes stored cash runway weeks.",
+        "Health pillars and the overall score from the current books, with the cash floor applied. Quote these numbers. Do not recompute them.",
       input_schema: EMPTY,
     },
     {

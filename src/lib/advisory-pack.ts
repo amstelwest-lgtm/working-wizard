@@ -47,6 +47,7 @@ import {
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { humanizeInternalFieldNames } from "./client-brain-questions.ts";
 import { formatMoney, formatMoneyCompact } from "./market/format.ts";
+import { canonicalScoreProse } from "./score-prose.ts";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
@@ -546,6 +547,8 @@ export function livePackMetrics(input: {
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
       ? assessed.runway.weeks
       : null;
+  const cashBalance = assessed.cash.amount;
+  const cashKnown = cashBalance != null;
   // Same cover and helper as the scorecard PDF and Overview. A year-span
   // annualisation (unlocked 12 read as January–September) scores different
   // inventory and working-capital days than `periodMonthsOf`.
@@ -556,23 +559,25 @@ export function livePackMetrics(input: {
     fyStartMonth: input.fyStartMonth,
     periodMonths,
   });
-  const health = cashPillarFollowsForecast(
-    scorecardHealthFromFinancials({
-      financials: input.financials,
-      fyStartMonth: input.fyStartMonth,
-      periodMonths,
-      cashRunwayWeeks: runwayWeeks,
-      market: input.market ?? undefined,
-      shortfallWeek: assessed.outlook.shortfallWeek,
-      industry: input.industry,
-    }),
-    {
-      openingMissing: storedOpeningIsMissing(input.cashflow),
-      opening: assessed.outlook.opening,
-      closings: assessed.outlook.closing,
-      floor: assessed.outlook.floor,
-    },
-  );
+  const healthScored = scorecardHealthFromFinancials({
+    financials: input.financials,
+    fyStartMonth: input.fyStartMonth,
+    periodMonths,
+    cashRunwayWeeks: cashKnown ? runwayWeeks : null,
+    cashBalance: cashKnown ? cashBalance : null,
+    market: input.market ?? undefined,
+    shortfallWeek: assessed.outlook.shortfallWeek,
+    industry: input.industry,
+  });
+  const health =
+    healthScored.overall == null
+      ? healthScored
+      : cashPillarFollowsForecast(healthScored, {
+          openingMissing: storedOpeningIsMissing(input.cashflow),
+          opening: assessed.outlook.opening,
+          closings: assessed.outlook.closing,
+          floor: assessed.outlook.floor,
+        });
   const opening = assessed.outlook.opening;
   const runwayLabel = runwayDisplayLabel(assessed.runway);
   return {
@@ -688,7 +693,7 @@ export function mergePackDataGaps(
   const extra: PackGapSeed[] = [];
   const receivables = gaps?.receivables;
   if (
-    gaps?.hasAgedDebtors === false &&
+    gaps?.hasAgedDebtors !== true &&
     receivables != null &&
     Number.isFinite(receivables) &&
     receivables > 0 &&
@@ -703,7 +708,7 @@ export function mergePackDataGaps(
   }
   const payables = gaps?.payables;
   if (
-    gaps?.hasAgedCreditors === false &&
+    gaps?.hasAgedCreditors !== true &&
     payables != null &&
     Number.isFinite(payables) &&
     payables > 0 &&
@@ -828,6 +833,44 @@ export function alignPackFloorCopy(
   return next;
 }
 
+const RECEIVABLE_KEYS = ["receivables", "debtors", "accountsReceivable", "tradeReceivables", "tradeDebtors"];
+const PAYABLE_KEYS = ["payables", "creditors", "accountsPayable", "tradePayables", "tradeCreditors"];
+
+function firstStatementAmount(
+  financials: Record<string, unknown> | null | undefined,
+  keys: readonly string[],
+): number | null {
+  if (!financials) return null;
+  for (const key of keys) {
+    const raw = financials[key];
+    const parsed =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim()
+          ? Number(raw.replace(/,/g, ""))
+          : Number.NaN;
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+/** Receivables or payables, including the statement keys an upload stores beside the canonical name. */
+export function packStatementAmount(
+  financials: Record<string, unknown> | null | undefined,
+  kind: "receivables" | "payables",
+): number | null {
+  return firstStatementAmount(financials, kind === "receivables" ? RECEIVABLE_KEYS : PAYABLE_KEYS);
+}
+
+/** Pack body only. Waterfall copy keeps the words "cash flow". */
+export function packScoreProse(text: string): string {
+  let next = canonicalScoreProse(text);
+  next = next.replace(/\bCash Flow\b(?=\s*\()/g, "Cash");
+  next = next.replace(/\b((?:Strongest pillar|Weakest):\s*)Cash Flow\b/g, "$1Cash");
+  next = next.replace(/\bCash Flow\b(?=\s+is the weakest)/g, "Cash");
+  return next;
+}
+
 /** Same compact form as the cash-tab floor and lowest-point tiles. */
 function packCompact(n: number, currency: string | null | undefined): string {
   return formatMoneyCompact(
@@ -856,9 +899,11 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
     /** Cash-tab floor. Replaces a stored $50,000 comfort line at display time. */
     liveFloor?: number | null;
     currency?: string | null;
+    /** Missing aged lists and the opening, from the books on file now. */
+    liveGaps?: readonly { title: string; severity: string }[] | null;
   },
 ): T[] {
-  const align = (text: string) => alignPackFloorCopy(text, opts?.liveFloor, opts?.currency);
+  const align = (text: string) => packScoreProse(alignPackFloorCopy(text, opts?.liveFloor, opts?.currency));
   return sections
     .filter((section) => {
       const recommendations = section.key === "recommendations" || section.title === "Recommendations";
@@ -871,12 +916,36 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
         opts?.signed && nextStep && /reviews this pack first/i.test(section.body)
           ? signedPackNextStep(opts.firmName)
           : align(section.body);
-      return {
-        ...section,
-        body,
-        bullets: section.bullets?.map(align),
-      };
+      return overlayStillNeeds(
+        {
+          ...section,
+          body,
+          bullets: section.bullets?.map(align),
+        },
+        opts?.liveGaps,
+      );
     });
+}
+
+function overlayStillNeeds<T extends { key?: string; title: string; body: string; bullets?: string[] }>(
+  section: T,
+  liveGaps: readonly { title: string; severity: string }[] | null | undefined,
+): T {
+  const isGaps = section.key === "data_gaps" || section.title === "What MILŌN still needs";
+  if (!isGaps || !liveGaps?.length) return section;
+  const hay = `${section.body}\n${(section.bullets ?? []).join("\n")}`;
+  const missing = liveGaps.filter((gap) => gap.title.trim() && !hay.includes(gap.title.trim()));
+  if (!missing.length) return section;
+  const bullets = [...(section.bullets ?? [])];
+  for (const gap of missing) {
+    const rank =
+      gap.severity === "critical" ? "Blocking" : gap.severity === "important" ? "Needed" : "Helpful";
+    bullets.push(`${rank} · ${gap.title.trim()}`);
+  }
+  const body = /Nothing outstanding/i.test(section.body)
+    ? `${bullets.length} open request${bullets.length === 1 ? "" : "s"}. Until these land, treat the affected sections as provisional.`
+    : section.body;
+  return { ...section, body, bullets };
 }
 
 export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {

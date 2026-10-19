@@ -65,6 +65,8 @@ export type FinancialManagerBrief = {
   movements: BriefMovement[];
   movementEmpty: string | null;
   actions: BriefAction[];
+  /** Open rows before the Act on these preview. */
+  actionCount: number;
   actionEmpty: string | null;
   drafts: BriefDraft[];
   draftEmpty: string | null;
@@ -317,6 +319,7 @@ export function buildFinancialManagerBrief(input: {
     priorLabel,
     movements,
     movementEmpty,
+    actionCount: actions.length,
     actions: actions.slice(0, 3),
     actionEmpty:
       input.actionsReady === false

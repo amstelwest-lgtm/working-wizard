@@ -12,6 +12,7 @@
 
 import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
 import {
+  cashPillarFollowsForecast,
   computeOverallHealth,
   scorecardHealthFromFinancials,
   type ScoreMarket,
@@ -306,6 +307,14 @@ export function buildOverviewBrief(input: {
   periodLabel?: string | null;
   figuresAsOf?: string | null;
   brainSummary?: unknown;
+  /** Industry label. A gross margin above 85% stays out of Profit outside software. */
+  industry?: string | null;
+  /** Blank opening. Cash is left unscored. */
+  openingMissing?: boolean;
+  /** 13-week opening and closings. A close under the floor caps Cash at 25. */
+  cashOpening?: number | null;
+  cashClosings?: readonly number[] | null;
+  cashFloor?: number | null;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
   const market = input.market ?? marketFromCopyPack(copyPack);
@@ -329,7 +338,7 @@ export function buildOverviewBrief(input: {
   // Same pillar math as Overview / the scorecard. A year-span health score
   // (creditor days 28) must not sit next to the stored-cover days (37).
   const cashOnFile = input.cash !== undefined ? input.cash : asNumber(financials?.cash);
-  const scored = financials
+  const raw = financials
     ? scorecardHealthFromFinancials({
         financials,
         fyStartMonth,
@@ -338,6 +347,7 @@ export function buildOverviewBrief(input: {
         cashBalance: cashOnFile,
         shortfallWeek: input.shortfallWeek,
         market,
+        industry: input.industry,
       })
     : computeOverallHealth({
         ratios,
@@ -345,6 +355,15 @@ export function buildOverviewBrief(input: {
         shortfallWeek: input.shortfallWeek,
         market,
       });
+  const scored =
+    raw.overall == null
+      ? raw
+      : cashPillarFollowsForecast(raw, {
+          openingMissing: input.openingMissing === true,
+          opening: input.cashOpening,
+          closings: input.cashClosings,
+          floor: input.cashFloor,
+        });
   const pillars: OverviewPillar[] = scored.pillars.map((pillar) => ({
     id: pillar.id,
     label: pillar.label,
