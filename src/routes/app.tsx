@@ -3633,7 +3633,8 @@ function Index() {
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
   // Same reading as the Financial Manager card. An outlook uses its stored
   // floor. With no outlook, the card's cashflow is included so Health cannot
-  // drop the line the card already shows.
+  // drop the line the card already shows. A missing opening is not cash under
+  // the floor, so this line stays off.
   const ownerDoorOutlook =
     cashBalance != null
       ? {

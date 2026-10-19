@@ -5,12 +5,14 @@ import { readFileSync } from "node:fs";
 import { agentDisplayName } from "../src/lib/milon-team.ts";
 import {
   callerMayHandOff,
+  handoffAgainInputs,
   handoffAssigneeName,
   handoffDecision,
   handoffDraftIsDuplicate,
   handoffDraftTitle,
   handoffFinding,
   handoffInputs,
+  handoffNeedsFreshRun,
   handoffRequestNote,
   handoffResultNote,
   runnerEnabled,
@@ -112,6 +114,15 @@ assert(fn.includes("callerMayHandOff"), "the access decision is the shared check
 assert(fn.includes("action.client_id !== clientId"), "the action must belong to that client");
 assert(fn.includes('rpc("agent_invoke"'), "the runner is triggered with the service role");
 assert(fn.includes("decision.runner"), "the invoke target is the resolved runner");
+assert(handoffNeedsFreshRun("succeeded") && handoffNeedsFreshRun("partial") && handoffNeedsFreshRun("failed"), "a finished run is not the current hand-off");
+assert(!handoffNeedsFreshRun("queued") && !handoffNeedsFreshRun("running"), "an open run stays the current hand-off");
+assert(
+  handoffAgainInputs("f6446efd-568b-477a-9f6b-f055a7d4a5e4", "run-advisor") ===
+    "action_item:f6446efd-568b-477a-9f6b-f055a7d4a5e4:again:run-advisor",
+  "handing the same action back uses a new idempotency material",
+);
+assert(fn.includes("handoffNeedsFreshRun"), "a finished run starts another hand-off");
+assert(fn.includes("handoffAgainInputs"), "the repeat run does not reuse the finished key");
 assert(fn.includes("decision.settingKey"), "each bot checks its own flag");
 assert(!fn.includes("no_runner"), "a known bot is not rejected for a missing runner");
 assert(!fn.includes("GRANT INSERT"), "the function does not grant client writes");

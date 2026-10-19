@@ -68,6 +68,19 @@ export function handoffInputs(actionItemId: string): string {
   return `action_item:${actionItemId}`;
 }
 
+/** A queued or running hand-off is the current one. A finished run is not. */
+export function handoffNeedsFreshRun(status: string | null | undefined): boolean {
+  return status !== "queued" && status !== "running";
+}
+
+/**
+ * Idempotency material for handing the same action to the same bot again.
+ * The previous run id keeps a double-click on an open re-queue from starting two.
+ */
+export function handoffAgainInputs(actionItemId: string, previousRunId: string): string {
+  return `${handoffInputs(actionItemId)}:again:${previousRunId}`;
+}
+
 /** Newest hand-off note. A later sentence after the name stays out of the assignee label. */
 export function handoffAssigneeName(note: string | null | undefined): string | null {
   if (!note?.startsWith("Handed to ")) return null;

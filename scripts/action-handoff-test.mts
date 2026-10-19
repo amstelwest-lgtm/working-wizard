@@ -108,6 +108,7 @@ assert(
   clientPage.includes("onOpen={openHomeAgent}") && clientPage.includes("onAsk={openHomeAgent}"),
   "landing cards open the agent",
 );
+assert(clientPage.includes("preferPendingHandoff"), "the accountant home keeps the latest hand-off");
 
 const pane = readFileSync("src/components/milon-team/milon-team-pane.tsx", "utf8");
 assert(pane.includes("<AgentStage"), "an open agent uses the stage, not only the desk");

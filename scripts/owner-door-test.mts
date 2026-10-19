@@ -516,6 +516,38 @@ const confirmed = preferPendingHandoff(
   new Map([["newer", { agent: "advisor" }]]),
 );
 assert(confirmed?.agent === "advisor", "a stored note keeps the new assignee");
+const finished = handedHomeAction(
+  [{ id: "move", title: "Move fixed contracts to variable / usage-based pricing" }],
+  new Map([["move", { agent: "analyst", at: "2026-10-19T15:17:00.000Z" }]]),
+  new Map([["move", { agent: "analyst", status: "succeeded", at: "2026-10-19T15:16:50.000Z" }]]),
+);
+assert(
+  finished?.agent === "analyst" && finished.run?.status === "succeeded",
+  "a finished hand-off keeps the run status after reload",
+);
+const finishedCards = steerAssignedWork(ownerPresence(activity({})), "analyst", finished?.run ?? null);
+assert(
+  finishedCards.agents.find((agent) => agent.agent === "analyst")?.motion !== "working",
+  "a finished run does not paint Working on reload",
+);
+const handedBack = handedHomeAction(
+  [{ id: "move", title: "Move fixed contracts to variable / usage-based pricing" }],
+  new Map([["move", { agent: "advisor", at: "2026-10-19T16:20:00.000Z" }]]),
+  new Map([["move", { agent: "analyst", status: "succeeded", at: "2026-10-19T15:16:50.000Z" }]]),
+);
+assert(
+  handedBack?.agent === "advisor" && handedBack.run?.status === "queued",
+  "the stored assignee wins over the previous bot's finished run",
+);
+const reloaded = steerAssignedWork(foundAdvisor, "advisor", handedBack?.run ?? null);
+assert(
+  reloaded.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
+  "the stored assignee is Working after reload",
+);
+assert(
+  reloaded.agents.find((agent) => agent.agent === "analyst")?.motion !== "working",
+  "the previous assignee drops Working after reload",
+);
 const floorMarket = { currency: "USD" as const, locale: "en-US" };
 const comfortCue = cashFloorForHome({
   cashOutlook: null,
@@ -757,6 +789,8 @@ assert(video.includes('"ended"'), "the next clip starts when the current one end
 assert(video.includes("avatarClipAtEnd"), "the swap uses the file's own last frame");
 assert(video.includes("incoming.loop = false"), "a clip ends so the next one can start");
 assert(video.includes('agent === "tax_specialist" && desired === "idle"'), "tax opens on a moving flourish");
+assert(video.includes('"curious"'), "the tax sheet opens on the curious clip");
+assert(video.includes('restOnIntro && playing === "curious"'), "the tax flourish plays once and then holds");
 assert(video.includes("holdLastFrame"), "the last frame stays up so the hand-off is not blank");
 assert(!video.includes("currentTime < 0.15"), "clips do not switch mid-play");
 assert(!video.includes("121"), "the player does not assume a 121-frame clip");

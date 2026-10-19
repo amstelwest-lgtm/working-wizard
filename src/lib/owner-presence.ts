@@ -137,10 +137,14 @@ export function steerAssignedWork(
 ): OwnerPresence {
   if (!assignee || assignee === "financial_manager") return presence;
   const active = run != null && WORKING.has(run.status);
+  // No run yet means the assignment is stored and the runner has not queued.
+  // A finished run keeps the card's own state, which is what a reload must show.
+  const open = run == null || active;
   return {
     ...presence,
     agents: presence.agents.map((card) => {
       if (card.agent === assignee) {
+        if (!open) return card;
         if (card.motion === "working" && card.sentence === "Working…") return card;
         return { ...card, motion: "working", sentence: "Working…" };
       }
