@@ -946,6 +946,51 @@ body:has(#pane-ask.on) #wizard-notes-pin {
   margin-top: auto;
 }
 
+/* Ask FM fills the viewport. The navy frame is the shell, not an empty band. */
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .client-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+  align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main,
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) #pane-ask.on,
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-host,
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .deliverable-main {
+  background: var(--pp-canvas, #f4f6fa);
+}
+
+.accountant-portal:has(#pane-ask.on):has(.agent-stage) .milon-desk-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 /* The share and notes buttons are hidden on this pane, so the phone pad
    that clears them would leave the footer short of the page bottom. */
 @media (max-width: 767px) {

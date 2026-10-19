@@ -30,9 +30,9 @@ export function ActionHandoffButtons({
             data-handoff-state={waiting ? "coming-soon" : assigned ? "assigned" : "ready"}
             data-handoff-agent={agent}
             className={
-              assigned
-                ? "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#0B5FFF] px-2.5 py-2 text-[12px] font-semibold text-white sm:w-auto"
-                : "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-white px-2.5 py-2 text-[12px] font-semibold text-[#0B5FFF] hover:bg-[#0B5FFF]/10 disabled:cursor-default disabled:opacity-80 dark:bg-transparent"
+              waiting
+                ? "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-white px-2.5 py-2 text-[12px] font-semibold text-[#0B5FFF] disabled:cursor-default disabled:opacity-80 dark:bg-transparent sm:w-auto"
+                : "inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#0B5FFF] px-2.5 py-2 text-[12px] font-semibold text-white hover:bg-[#2563EB] sm:w-auto"
             }
             onClick={() => {
               if (!waiting) onHandOff(agent);

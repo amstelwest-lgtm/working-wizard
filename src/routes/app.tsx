@@ -2114,6 +2114,12 @@ function Index() {
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
+  const [planTick, setPlanTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setPlanTick((n) => n + 1);
+    window.addEventListener("milon-action-plan-refresh", bump);
+    return () => window.removeEventListener("milon-action-plan-refresh", bump);
+  }, []);
   const [bankLedgerBlocked, setBankLedgerBlocked] = useState(false);
   const [rejectedBankFile, setRejectedBankFile] = useState<File | null>(null);
   const [pendingCashBankFile, setPendingCashBankFile] = useState<File | null>(null);
@@ -3908,6 +3914,7 @@ function Index() {
             {showOwnerDoor ? (
               <OwnerDoor
                 bot={oauthReturn.bot ?? null}
+                planTick={planTick}
                 onBotChange={(next, mode) => {
                   void navigate({
                     to: "/app",

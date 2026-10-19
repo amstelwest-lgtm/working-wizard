@@ -864,16 +864,20 @@ html.dark .health-summary-card:hover .dig-cue {
   background: #163654;
   border-color: #2563eb;
 }
-/* Hand to stays cobalt on both portals, including owner moves buttons. */
-[data-hand-to-trigger] {
-  color: #0b5fff !important;
+/* Hand to is solid brand cobalt on both portals, including owner moves buttons.
+   Light mode paints every rounded bordered control white. This selector is
+   heavier than that rule so the fill stays cobalt. */
+html:not(.dark) button[data-hand-to-trigger][class*="rounded-"],
+html.dark button[data-hand-to-trigger] {
+  color: #ffffff !important;
   border-color: #0b5fff !important;
-  background: #ffffff;
+  background-color: #0b5fff !important;
+  background-image: none !important;
 }
-html.dark [data-hand-to-trigger] {
-  color: #9ec1ff !important;
-  border-color: #3b82f6 !important;
-  background: transparent;
+html:not(.dark) button[data-hand-to-trigger][class*="rounded-"]:hover,
+html.dark button[data-hand-to-trigger]:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
 }
 .dig-leaf {
   display: flex;

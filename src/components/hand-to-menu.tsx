@@ -9,7 +9,11 @@ import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { recordHandoffAssignment, requestOwnerHandoff } from "@/lib/owner-handoff-client";
+import {
+  dispatchActionPlanRefresh,
+  recordHandoffAssignment,
+  requestOwnerHandoff,
+} from "@/lib/owner-handoff-client";
 
 export type HandToPerson = { id: string; name: string; email: string | null };
 
@@ -117,14 +121,14 @@ export function HandToMenu({
       <TaxSpecialistSlot country={country} variant="host" audience={audience} />
       <button
         type="button"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#0B5FFF] hover:bg-[#0B5FFF]/10 disabled:opacity-70 dark:bg-transparent"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-[#0B5FFF] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-[#2563EB] disabled:opacity-70"
         data-hand-to-trigger
         aria-expanded={open}
         disabled={busy}
         onClick={() => setOpen((value) => !value)}
       >
         Hand to
-        {assignee ? <span className="font-medium text-[#102A43] dark:text-[#F4F7FB]">{assignee}</span> : null}
+        {assignee ? <span className="font-medium text-white">{assignee}</span> : null}
       </button>
       {open ? (
         <div
@@ -215,6 +219,7 @@ export function MoveHandTo({
           return;
         }
         toast.success(`Assigned to ${agentShortName(agent)}`);
+        dispatchActionPlanRefresh();
       }}
       onAssignPerson={async (person) => {
         const actionItemId = await ensure();
@@ -236,6 +241,7 @@ export function MoveHandTo({
           note: `Assigned to ${person.name}`,
         });
         toast.success(`Assigned to ${person.name}`);
+        dispatchActionPlanRefresh();
       }}
     />
   );

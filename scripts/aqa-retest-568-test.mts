@@ -112,8 +112,8 @@ const books: OwnerBooks = {
   market: ZA_MARKET,
 };
 assert(
-  ownerCardStatuses(books).financial_manager?.word === "Critical: cash below floor",
-  "the Financial Manager card is Critical on the same outlook",
+  ownerCardStatuses(books).financial_manager?.word === "Below your minimum",
+  "the Financial Manager card is a floor alert on the same outlook",
 );
 assert(
   clientListStatusWord({
