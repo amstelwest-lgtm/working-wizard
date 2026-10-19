@@ -202,6 +202,7 @@ import {
   shouldShowOwnerProfileFunnel,
 } from "@/lib/first-run";
 import { markOnboardingDone, OWNER_TOUR_KEY } from "@/lib/onboarding";
+import { rewriteSavedMonthStamp } from "@/lib/statement-period";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
@@ -4062,7 +4063,11 @@ function Index() {
                     window.location.href = "/";
                   });
                 }}
-                topMove={showScoredBoard ? (nextSteps[0]?.title ?? null) : null}
+                topMove={
+                  showScoredBoard && nextSteps[0]?.title
+                    ? rewriteSavedMonthStamp(nextSteps[0].title)
+                    : null
+                }
                 boards={(go) => ({
                   health: (
                     <section className="owner-pane" data-owner-page="health">
@@ -4201,7 +4206,7 @@ function Index() {
                             )}
                             moves={nextSteps.map((s) => ({
                               key: s.key,
-                              title: s.title,
+                              title: rewriteSavedMonthStamp(s.title),
                               ratioName: s.ratioName,
                               impactLine: s.impactLine,
                               health: Number.isFinite(s.health) ? s.health : Number.NaN,
@@ -4288,7 +4293,7 @@ function Index() {
                             ownerView
                             moves={nextSteps.map((s) => ({
                               key: s.key,
-                              title: s.title,
+                              title: rewriteSavedMonthStamp(s.title),
                               ratioName: s.ratioName,
                               impactLine: s.impactLine,
                               health: Number.isFinite(s.health) ? s.health : Number.NaN,
@@ -5944,7 +5949,7 @@ function Index() {
                             )}
                             moves={nextSteps.map((s) => ({
                               key: s.key,
-                              title: s.title,
+                              title: rewriteSavedMonthStamp(s.title),
                               ratioName: s.ratioName,
                               impactLine: s.impactLine,
                               health: Number.isFinite(s.health) ? s.health : Number.NaN,

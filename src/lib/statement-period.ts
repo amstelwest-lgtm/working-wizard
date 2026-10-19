@@ -407,7 +407,8 @@ export function rewriteSavedMonthStamp(text: string): string {
     .replace(
       new RegExp(`\\b${monthYear}\\s+(?:books|statement|snapshot)\\b`, "gi"),
       FULL_YEAR_ON_FILE,
-    );
+    )
+    .replace(new RegExp(monthYear, "gi"), FULL_YEAR_ON_FILE);
 }
 
 function snapshotIsMonthStamp(label: string): boolean {

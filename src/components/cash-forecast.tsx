@@ -55,7 +55,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { OwnerSignoffMark } from "@/components/owner-signoff-mark";
+import { OwnerSignoffMark, ownerSignoffDate } from "@/components/owner-signoff-mark";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
@@ -2184,6 +2184,10 @@ export function CashForecastPanel({
     />
   );
 
+  const forecastUpdatedLabel = lastForecastAt
+    ? `Updated ${ownerSignoffDate(lastForecastAt, market.timezone)}`
+    : null;
+
   const answerSentence =
     !loaded || forecastEmpty
       ? null
@@ -2210,6 +2214,11 @@ export function CashForecastPanel({
         ) : !simplified && answerSentence ? (
           <p className="answer-strip__sentence" data-answer-sentence>
             {answerSentence}
+          </p>
+        ) : null}
+        {forecastUpdatedLabel ? (
+          <p className="answer-strip__sentence" data-forecast-updated>
+            {forecastUpdatedLabel}
           </p>
         ) : null}
       </div>
@@ -2697,6 +2706,11 @@ export function CashForecastPanel({
             <p className="text-sm font-semibold text-[#102A43] dark:text-[#F4F7FB]" data-cash-period>
               {cashCopy.range || "Next 13 weeks"}
             </p>
+            {forecastUpdatedLabel ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-forecast-updated>
+                {forecastUpdatedLabel}
+              </p>
+            ) : null}
             {simplified && cashCopy.ownerRollLine ? (
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400" data-cash-roll>
                 {cashCopy.ownerRollLine}

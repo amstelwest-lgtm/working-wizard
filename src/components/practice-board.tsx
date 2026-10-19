@@ -42,7 +42,7 @@ import {
   type FirmClientCreateAllowance,
 } from "@/lib/firm-client-cap";
 import { browserAppOrigin } from "@/lib/app-origin";
-import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { FirmBandUpgrade, FirmStartHereBadge } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { FirmStarterTrialBanner } from "@/components/firm-starter-trial-banner";
@@ -1965,6 +1965,10 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
         {view === "practice" ? (
           <>
         {/* ===== GREETING ===== */}
+        <FirmStartHereBadge
+          band={trialAllowance?.upgrade?.band ?? null}
+          pending={trialAllowance == null}
+        />
         <PageHeader
           compact
           className="dash-hero"

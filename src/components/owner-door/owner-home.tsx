@@ -7,6 +7,7 @@ import type { OwnerMotion, OwnerPresence } from "@/lib/owner-presence";
 import type { OwnerNeedsView } from "@/lib/owner-needs";
 import { AgentChipIcon } from "@/components/chrome-icons";
 import { TaxSpecialistSlot } from "@/components/tax-specialist/tax-specialist-slot";
+import { FirmStartHereLoader } from "@/components/firm-band-upgrade";
 import { OwnerInviteNudge } from "@/components/owner-invite-nudge";
 import { ChatIcon, HandoffBeam, OwnerAvatar, type AvatarVariant } from "./owner-avatar";
 import "./owner-door.css";
@@ -146,6 +147,7 @@ export function OwnerHome({
   title = "Your finance team",
   lede = "Three agents watching the books — ask them anything, any time.",
   showInvite = true,
+  firmId = null,
 }: {
   variant: AvatarVariant;
   presence: OwnerPresence;
@@ -177,6 +179,8 @@ export function OwnerHome({
   audience?: "owner" | "accountant";
   /** clients.is_demo. Real clients do not get the sample tax card. */
   sampleClient?: boolean;
+  /** Firm whose current plan carries the Start here badge. */
+  firmId?: string | null;
 }) {
   const handoff = presence.handoff;
   const sampleAudience = audience ?? (showInvite ? "owner" : "accountant");
@@ -194,6 +198,7 @@ export function OwnerHome({
         <p className="owner-eyebrow">Home</p>
         <h1 className="owner-title">{title}</h1>
         <p className="owner-lede">{lede}</p>
+        <FirmStartHereLoader firmId={firmId} />
         {notice ? (
           <p className="owner-lede" role="status" data-sample-notice="">
             {notice}
@@ -253,7 +258,7 @@ export function OwnerHome({
                       </span>
                     ))}
                   </span>
-                  {runState?.[card.agent] ? (
+                  {runState?.[card.agent] && runState[card.agent] !== "done" ? (
                     <span className="owner-run-state" data-run-state={runState[card.agent]}>
                       {ownerRunPhaseLabel(runState[card.agent]!)}
                     </span>

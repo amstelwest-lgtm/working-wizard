@@ -184,6 +184,7 @@ import {
   preferStatementPeriod,
   readStatementMeta,
   reportDataPeriodLabel,
+  rewriteSavedMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
 import {
@@ -3175,7 +3176,7 @@ function ClientView() {
       : homeActivity.error
         ? ["Drafts aren't available yet."]
         : waiting.length
-          ? [waiting[0]?.title ?? "A draft is waiting."]
+          ? [rewriteSavedMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
           : ["No draft waiting."];
     const linkOf = (link: { lastSyncedAt?: string | null } | null, checked: boolean): BooksLink => {
       if (!checked) return { state: "unknown" };
@@ -3438,6 +3439,7 @@ function ClientView() {
                     audience="accountant"
                     marketCountry={clientMarket.country}
                     sampleClient={Boolean(client.is_demo)}
+                    firmId={client.firm_id ?? null}
                     presence={homePresence}
                     lines={homeLines}
                     status={homeStatus}

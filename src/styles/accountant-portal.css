@@ -2024,6 +2024,23 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
 @media (max-width:420px){
   .accountant-portal{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom))}
 }
+@media (max-width:390px){
+  .accountant-portal:not(.owner-door) .deliverable-main{
+    padding-left:12px;
+    padding-right:12px;
+  }
+  .accountant-portal .topbar .firm-chip{
+    min-width:0;
+    max-width:100%;
+  }
+  .accountant-portal .topbar .firm-chip b{
+    display:block;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+}
 @media (max-width:767px){
   .share-fab{right:auto;left:max(1rem, env(safe-area-inset-left))}
   .notes-fab{

@@ -15,6 +15,7 @@ import { useTrack } from "@/hooks/use-track";
 import { fmtDelta, isAutoMeasurable, METRIC_READERS } from "@/lib/outcomes";
 import { getOutcomesOverview, measureOutcomes } from "@/lib/outcomes.functions";
 import { impactMetricLabel, type OutcomeVerdict, type Recommendation } from "@/lib/recommendations";
+import { rewriteSavedMonthStamp } from "@/lib/statement-period";
 import { recordRecommendationOutcome } from "@/lib/recommendations.functions";
 import type { OutcomesOverview } from "@/lib/outcomes.functions";
 
@@ -165,7 +166,7 @@ export function OutcomesPanel({ clientId, audience, onChanged, refreshKey, class
                     {s.verdictLabel}
                   </span>
                   <p className="mt-1 text-[13px] leading-relaxed text-slate-800 dark:text-slate-100/90">
-                    {s.sentence}
+                    {rewriteSavedMonthStamp(s.sentence)}
                   </p>
                 </div>
                 {needsManual && !isRecording ? (
