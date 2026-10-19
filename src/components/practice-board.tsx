@@ -1816,7 +1816,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   // ── Render ────────────────────────────────────────────────────────────────
   if (!portalReady) {
     return (
-      <div className="accountant-portal">
+      <div className="accountant-portal premium-shell">
         <main className="shell milon-page-enter">
           <DashboardSkeleton className="min-h-screen py-8" />
         </main>
@@ -1825,7 +1825,7 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
   }
 
   return (
-    <div className={`accountant-portal practice-home milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
+    <div className={`accountant-portal premium-shell practice-home milon-page-enter${mobileNavOpen ? " nav-open" : ""}`}>
       <WalkthroughWizard
         variant={clientRows.length > 0 ? "accountant-dashboard" : "accountant-dashboard-empty"}
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}

@@ -278,6 +278,11 @@ export function AccountantNav({
       aria-label={label}
       onKeyDown={onKeyDown}
     >
+      <div className="rail-brand" data-shell-wordmark="milon" aria-hidden="true">
+        <span className="brand">
+          <span className="gold-text">MILŌN</span>
+        </span>
+      </div>
       {onNavigate ? <DrawerCloseButton onClose={onNavigate} /> : null}
       {back ? (
         <NavLink

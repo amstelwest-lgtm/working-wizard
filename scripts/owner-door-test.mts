@@ -842,8 +842,9 @@ const ownerApp = readFileSync("src/routes/app.tsx", "utf8");
 assert(sphere.includes("onOrbOpen"), "the orb can open Health instead of drilling in place");
 assert(sphere.includes("owner-pillar-score"), "pillar numbers carry a status class");
 assert(
-  ownerApp.includes('caption="Tap to see what\'s behind your score"'),
-  "the owner health orb uses the plain tap caption",
+  ownerApp.includes("HEALTH_RING_CAPTION") &&
+    sphere.includes('export const HEALTH_RING_CAPTION = "Tap to see what\'s behind your score"'),
+  "the owner health ring uses the plain tap caption",
 );
 assert(sphere.includes("onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}"), "the health orb stays a button");
 assert(sphere.includes("bg-white"), "the pillar card is white");

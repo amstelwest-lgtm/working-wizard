@@ -5,6 +5,7 @@
  * The chase button opens the shared chase draft. This file does not write one.
  */
 import type { ChaseDraftInput } from "./chase-draft.ts";
+import { cashFloorSentence } from "./owner-answers.ts";
 
 export type BriefMoneyField = {
   key: string;
@@ -60,6 +61,8 @@ export type FinancialManagerBrief = {
   draftEmpty: string | null;
   /** Shared chase draft. Null when there is no balance and no overdue action. */
   chase: ChaseDraftInput | null;
+  /** Opening and floor, in the same words as the owner home. Null when either amount is missing. */
+  cashFloorLine: string | null;
 };
 
 function numField(fin: Record<string, unknown> | null | undefined, key: string): number | null {
@@ -139,6 +142,9 @@ export function buildFinancialManagerBrief(input: {
   openActionTitles?: readonly string[] | null;
   overdueActions?: number;
   cashDipWeek?: number | null;
+  /** Opening cash and the 13-week floor. Both are required before the brief quotes them. */
+  cashOpening?: number | null;
+  cashFloor?: number | null;
   receivables?: number | null;
   drafts?: readonly BriefDraft[];
   draftsReady?: boolean;
@@ -197,11 +203,25 @@ export function buildFinancialManagerBrief(input: {
       tab: null,
     });
   }
+  const cashOpening = input.cashOpening;
+  const cashFloor = input.cashFloor;
+  const cashFloorLine =
+    cashOpening != null &&
+    cashFloor != null &&
+    Number.isFinite(cashOpening) &&
+    Number.isFinite(cashFloor)
+      ? cashFloorSentence({
+          opening: cashOpening,
+          floor: cashFloor,
+          dipsBelowFloorWeek: input.cashDipWeek ?? null,
+          money: input.formatMoney,
+        })
+      : null;
   if (input.actionsReady !== false && input.cashDipWeek != null && input.cashDipWeek > 0) {
     actions.push({
       id: "cash-floor",
       title: `Cash goes under the floor in week ${input.cashDipWeek}`,
-      reason: "From the 13-week forecast already on file.",
+      reason: cashFloorLine ?? "From the 13-week forecast already on file.",
       button: "open",
       tab: "cash",
     });
@@ -240,5 +260,6 @@ export function buildFinancialManagerBrief(input: {
           ? null
           : "No draft is waiting for review.",
     chase,
+    cashFloorLine,
   };
 }

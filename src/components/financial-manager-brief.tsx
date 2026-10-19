@@ -31,6 +31,11 @@ export function FinancialManagerBrief({
     <section className="fm-brief" aria-label="Financial Manager brief" data-fm-brief="true">
       <p className="fm-brief-kicker">Financial Manager</p>
       <h2 className="fm-brief-title">What changed {since}</h2>
+      {brief.cashFloorLine ? (
+        <p className="fm-brief-cash" data-cash-floor-line>
+          {brief.cashFloorLine}
+        </p>
+      ) : null}
       {brief.movements.length > 0 ? (
         <ol className="fm-brief-moves">
           {brief.movements.map((row) => (
