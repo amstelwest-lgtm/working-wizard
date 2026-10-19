@@ -8,6 +8,7 @@
  * deliverable_drafts. Writes status=draft only. Never ready / sent / discarded.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { authenticateEdgeUser } from "../_shared/edge-auth.ts";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 import {
   finishPrecardAttempt,
@@ -296,8 +297,9 @@ async function handleBrainDeliverableDraft(req: Request): Promise<Response> {
   });
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
+  const authResult = await authenticateEdgeUser({ token, auth: userClient.auth });
+  if (!authResult.ok) return respond(authResult.body, authResult.status);
+  const user = authResult.user;
 
   let body: { clientId?: string };
   try {

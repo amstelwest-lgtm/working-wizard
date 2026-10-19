@@ -39,6 +39,8 @@ import { billingStartPath, peekPendingCheckout } from "./pending-checkout.ts";
 import { firmSignupCheckoutIntent } from "./stripe-plans.ts";
 import { botSignoffCtas, botSignoffDestination, botSignoffStateLine } from "./bot-signoff-path.ts";
 import { stripMilonProjection } from "./milon-projection.ts";
+import { supabase } from "../integrations/supabase/client.ts";
+import { authRetryPlanFromResponse } from "./edge-auth-retry.ts";
 
 export {
   routeMilonIntent,
@@ -188,6 +190,8 @@ export function mountAskAi(container, options) {
     // Small line under the header, e.g. "answers get more relevant once your
     // figures are in". Omit / null to hide.
     note = null,
+    // Called on a 401 before the single automatic retry. Absent mounts refresh here.
+    refreshSession = null,
     // Accountant studio: open the deliverable this answer is about, with coach intent.
     onOpenDeliverable = null,
     onPersistedCreate = null,
@@ -938,7 +942,7 @@ export function mountAskAi(container, options) {
     const controller = new AbortController();
     let timer = 0;
     const pending = (async () => {
-      const token = await getToken();
+      let token = await getToken();
       if (!token) throw new Error("Not signed in — please reload and try again.");
 
       const clientId =
@@ -953,46 +957,66 @@ export function mountAskAi(container, options) {
       const useBot = (useAgent || useCreate || pendingIntent === "milon-bot") && botEndpoint;
       const url = useBot ? botEndpoint : endpoint;
       const prior = priorTurns(turnId);
-      return fetch(url, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(
-          useCreate
+      const agent = currentAgent();
+      const body = JSON.stringify(
+        useCreate
+          ? {
+              clientId,
+              mode: "create",
+              message: q,
+              turnId,
+              audience: accountant ? "accountant" : "owner",
+            }
+          : useAgent
+          ? {
+              clientId,
+              mode: "agent",
+              objective,
+              turnId,
+              audience: accountant ? "accountant" : "owner",
+            }
+          : useBot
             ? {
                 clientId,
-                mode: "create",
                 message: q,
                 turnId,
+                history: prior,
                 audience: accountant ? "accountant" : "owner",
+                agent,
               }
-            : useAgent
-            ? {
+            : {
                 clientId,
-                mode: "agent",
-                objective,
+                question: q,
                 turnId,
-                audience: accountant ? "accountant" : "owner",
-              }
-            : useBot
-              ? {
-                  clientId,
-                  message: q,
-                  turnId,
-                  history: prior,
-                  audience: accountant ? "accountant" : "owner",
-                }
-              : {
-                  clientId,
-                  question: q,
-                  turnId,
-                  ...(accountant ? { audience: "accountant" } : {}),
-                },
-        ),
-      });
+                agent,
+                ...(accountant ? { audience: "accountant" } : {}),
+              },
+      );
+      const send = (bearer) =>
+        fetch(url, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${bearer}`,
+          },
+          body,
+        });
+      let res = await send(token);
+      const plan = await authRetryPlanFromResponse(res);
+      if (!plan) return res;
+      if (plan === "refresh") {
+        try {
+          const next =
+            typeof refreshSession === "function"
+              ? await refreshSession()
+              : (await supabase.auth.refreshSession()).data?.session?.access_token;
+          if (next) token = next;
+        } catch {
+          /* the one retry still goes out with the token we have */
+        }
+      }
+      return send(token);
     })();
     pending.catch(() => {});
     const timeout = new Promise((_, reject) => {
