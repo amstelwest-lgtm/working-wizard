@@ -137,7 +137,7 @@ export function ownerNeedsView(input: {
     : input.actionsUnavailable
       ? ["Open actions aren't available yet."]
       : assigned.length
-        ? assigned.slice(0, 2)
+        ? assigned
         : ["No open actions."];
 
   const draftsHeading = !input.draftsReady

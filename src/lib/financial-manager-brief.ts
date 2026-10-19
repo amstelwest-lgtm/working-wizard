@@ -10,6 +10,7 @@ import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
+import type { MoneyMarket } from "./market/format.ts";
 
 export type BriefMoneyField = {
   key: string;
@@ -69,6 +70,8 @@ export type FinancialManagerBrief = {
   cashFloorLine: string | null;
   /** Same chip as the owner Financial Manager card. Null when cash is not a floor alert. */
   cashFloorChip: string | null;
+  /** Short Health cash line. Same reading as the chip, so the pillar matches this brief. */
+  healthCue: string | null;
 };
 
 function numField(fin: Record<string, unknown> | null | undefined, key: string): number | null {
@@ -151,6 +154,10 @@ export function buildFinancialManagerBrief(input: {
   /** Opening cash and the 13-week floor. Both are required before the brief quotes them. */
   cashOpening?: number | null;
   cashFloor?: number | null;
+  /** Week closings. The line quotes the low point when the forecast goes under the floor. */
+  cashClosing?: readonly number[] | null;
+  /** Market for the short Health line. The sentence still uses formatMoney. */
+  market?: MoneyMarket;
   /** A blank opening is not R0 under the floor. */
   openingMissing?: boolean;
   receivables?: number | null;
@@ -223,7 +230,9 @@ export function buildFinancialManagerBrief(input: {
           opening: cashOpening,
           floor: cashFloor,
           dipsBelowFloorWeek: input.cashDipWeek ?? null,
+          closing: input.cashClosing,
           money: input.formatMoney,
+          market: input.market,
         })
       : null;
   const cashFloorLine = input.openingMissing ? `${OPENING_BALANCE_MISSING}.` : (cashCopy?.sentence ?? null);
@@ -278,5 +287,6 @@ export function buildFinancialManagerBrief(input: {
     chase,
     cashFloorLine,
     cashFloorChip,
+    healthCue: input.openingMissing ? null : (cashCopy?.healthCue ?? null),
   };
 }

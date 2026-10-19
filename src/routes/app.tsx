@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate, ClientOnly } from "@tanstack/react-router";
 import { founderPortalLinks } from "@/styles/app-route-styles";
 import { OwnerDoor } from "@/components/owner-door/owner-door";
-import { cashFloorCopy } from "@/lib/owner-answers";
+import { cashFloorForHome } from "@/lib/owner-answers";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
@@ -3616,18 +3616,6 @@ function Index() {
       ? ownerMetrics.runway.weeks
       : null;
   const ownerOutlook = ownerMetrics.outlook;
-  const ownerCashFloorCue =
-    ownerMetrics.cash.amount != null &&
-    Number.isFinite(ownerOutlook.opening) &&
-    Number.isFinite(ownerOutlook.floor)
-      ? cashFloorCopy({
-          opening: ownerOutlook.opening,
-          floor: ownerOutlook.floor,
-          dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
-          money: (amount) => formatMoney(amount, boardMarket),
-          market: boardMarket,
-        }).healthCue
-      : null;
   const openOwnerFm = () => {
     void navigate({
       to: "/app",
@@ -3636,6 +3624,22 @@ function Index() {
   };
   const cashBalance = ownerMetrics.cash.amount;
   const ownerOpeningMissing = storedOpeningIsMissing(clientMeta?.cashflow);
+  // Same floor the forecast already resolved (forecastMinimumCash on the outlook).
+  const ownerCashFloorCue =
+    cashFloorForHome({
+      openingMissing: ownerOpeningMissing,
+      cashOutlook:
+        cashBalance != null
+          ? {
+              opening: ownerOutlook.opening,
+              closing: ownerOutlook.closing,
+              floor: ownerOutlook.floor,
+              dipsBelowFloorWeek: ownerOutlook.dipsBelowFloorWeek,
+            }
+          : null,
+      market: boardMarket,
+      money: (amount) => formatMoney(amount, boardMarket),
+    })?.healthCue ?? null;
   const overallHealth = cashPillarFollowsForecast(
     computeOverallHealth({
       ratios: computedRatios as Record<string, number>,

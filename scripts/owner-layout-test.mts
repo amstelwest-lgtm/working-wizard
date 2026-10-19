@@ -213,6 +213,61 @@ assert(cash.includes('label="cash flow table"'), "the table enlarge button stays
 assert(cash.indexOf("data-cash-period") < cash.indexOf('aria-label="Graph"'), "the period is above the graph");
 assert(cash.includes("simplified ? null : kpiTiles"), "the owner graph does not keep the KPI row");
 
+const { cashFloorCopy } = await import("../src/lib/owner-answers");
+const ownerFloor = cashFloorCopy({
+  opening: 4335,
+  floor: 50000,
+  dipsBelowFloorWeek: 2,
+  closing: [4335],
+  money: (amount) => `$${amount}`,
+  market: { currency: "USD", locale: "en-US" },
+});
+const accountantFloor = cashFloorCopy({
+  opening: 44480,
+  floor: 32688,
+  dipsBelowFloorWeek: 4,
+  closing: [30000],
+  money: (amount) => `R ${amount}`,
+  market: { currency: "ZAR", locale: "en-ZA" },
+});
+assert(ownerFloor.chip === "Below your minimum" && ownerFloor.healthCue != null, "the owner card and health share the floor line");
+assert(
+  accountantFloor.sentence.startsWith("Cash R 30000, R 2688 below your "),
+  accountantFloor.sentence,
+);
+assert(accountantFloor.healthCue != null && accountantFloor.chip === ownerFloor.chip, "the accountant brief uses the same chip");
+
+function healthPillars(cashScore: number, status: "at_risk" | "critical") {
+  return [
+    { id: "profit" as const, label: "Profit", health: 80, drivers: [] },
+    { id: "assets" as const, label: "Assets", health: 70, drivers: [] },
+    { id: "financing" as const, label: "Financing", health: 60, drivers: [] },
+    { id: "cash" as const, label: "Cash", health: cashScore, status, drivers: [] },
+  ];
+}
+
+async function expectCashLine(cashScore: number, status: "at_risk" | "critical", band: string, cue: string) {
+  const stop = await mount(
+    createElement(SphereHero, {
+      variant: "ring",
+      overallHealth: cashScore,
+      pillars: healthPillars(cashScore, status),
+      cashFloorCue: cue,
+    }),
+  );
+  const cash = [...document.querySelectorAll("button")].find((button) =>
+    button.getAttribute("aria-label")?.startsWith("Cash score"),
+  );
+  assert(cash instanceof HTMLButtonElement, "the cash pillar is the health card");
+  assert(cash.querySelector(".health-pillar-figure")?.textContent === String(cashScore), "the cash score stays");
+  assert(cash.querySelector(".health-pillar-band")?.textContent?.includes(band) === true, `the cash band stays ${band}`);
+  assert(cash.querySelector("[data-cash-floor-cue]")?.textContent === cue, "the floor line sits under the cash pillar");
+  await stop();
+}
+
+await expectCashLine(71, "at_risk", "Watch", ownerFloor.healthCue!);
+await expectCashLine(25, "critical", "Critical", accountantFloor.healthCue!);
+
 const heroSrc = readFileSync("src/components/sphere-hero.tsx", "utf8");
 assert(heroSrc.includes('variant === "orb" && level < 3'), "the big orb is not forced onto the owner ring drill");
 assert(heroSrc.includes('variant !== "ring"'), "the pillar sphere is not on the owner driver page");

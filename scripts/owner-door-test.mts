@@ -472,6 +472,15 @@ assert(
   workingHand.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
   "a new hand-off shows Working on the advisor even when an older finding is found",
 );
+const openAssignment = steerAssignedWork(foundAdvisor, "advisor", null);
+assert(
+  openAssignment.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
+  "an open assigned action shows Working ahead of found something",
+);
+assert(
+  openAssignment.agents.find((agent) => agent.agent === "advisor")?.sentence === "Working…",
+  "the assigned card says Working",
+);
 const picked = handedHomeAction(
   [
     { id: "old", title: "Collect the two largest invoices" },
@@ -495,13 +504,18 @@ const dipCopy = cashFloorCopy({
   opening: 44480,
   floor: 32688,
   dipsBelowFloorWeek: 4,
+  closing: [30000],
   money: (amount) => `R ${amount}`,
+  market: { currency: "ZAR", locale: "en-ZA" },
 });
 assert(
-  dipCopy.sentence === "Cash R 44480. The forecast dips under your R 32688 minimum.",
+  dipCopy.sentence === "Cash R 30000, R 2688 below your R 32688 minimum.",
   dipCopy.sentence,
 );
-assert(dipCopy.healthCue === null, "a projected dip does not change the cash pillar");
+assert(
+  dipCopy.healthCue?.includes("minimum · see FM") === true,
+  dipCopy.healthCue ?? "a dip that the card flags also lines the cash pillar",
+);
 assert(dipCopy.chip === "Below your minimum", "a projected dip keeps the floor chip");
 
 const speaking = ownerPresence(emptyAgentActivity(), {
@@ -1198,9 +1212,9 @@ const filledNeeds = ownerNeedsView({
   when: () => "2 Oct 2026",
 });
 assert(filledNeeds.actionsHeading === "3 open actions", "the strip counts the owner's open actions");
-assert(filledNeeds.actionLines.length === 2, "the strip shows the top two actions");
+assert(filledNeeds.actionLines.length === 3, "the strip lists every open action it counts");
 assert(filledNeeds.actionLines[0] === "Approve the payroll run.", "the first owner action leads");
-assert(!filledNeeds.actionLines.join(" ").includes("Send the supplier"), "the third action stays off the strip");
+assert(filledNeeds.actionLines[2] === "Send the supplier statement.", "the third action is on the strip");
 assert(filledNeeds.draftsHeading === "1 draft needs your OK", "a draft that needs an OK is counted");
 assert(filledNeeds.deliverablesHeading === "2 deliverables awaiting review", "unsigned deliverables are counted");
 assert(filledNeeds.syncHeading === "QuickBooks", "the sync names the ledger");
