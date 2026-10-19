@@ -2,11 +2,10 @@
  * Pure rules for the public sample at /try.
  * Health and ratios come from health-score.ts and ratios.ts.
  * Profitability uses the period bridge the waterfall already uses.
- * The 13-week line uses resolveThirteenWeekForecast.
+ * The 13-week line is the same series the cash chart plots.
  * Nothing here talks to a ledger.
  */
 
-import { resolveThirteenWeekForecast } from "@/lib/client-metrics";
 import {
   overviewRatios,
   scorecardHealthFromFinancials,
@@ -15,7 +14,14 @@ import {
 } from "@/lib/health-score";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { currentRatioValue, healthBandLabel } from "@/lib/ratios";
+import { formatMoney } from "@/lib/market/format";
+import { resolveMarket } from "@/lib/market/resolve";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
+import {
+  TRIAL_CASH_OPENING_LINE,
+  trialCashSeries,
+  trialMarketSelection,
+} from "@/lib/trial-sample-view";
 import type { MarketId } from "@/lib/market/types";
 import {
   TRIAL_DISCLAIMER,
@@ -284,11 +290,9 @@ function scoreMarket(market: TrialMarketId): ScoreMarket {
   return market === "US" ? { country: "US", copyPack: "us" } : { country: "ZA", copyPack: "za" };
 }
 
+/** Same formatter as the charts and tables on /try. */
 function money(n: number, market: TrialMarketId): string {
-  if (!Number.isFinite(n)) return "—";
-  const sign = n < 0 ? "-" : "";
-  const body = Math.round(Math.abs(n)).toLocaleString("en-US");
-  return market === "US" ? `${sign}$${body}` : `${sign}R ${body}`;
+  return formatMoney(n, resolveMarket(trialMarketSelection(market)));
 }
 
 function ratioDisplay(name: string, value: number): string {
@@ -412,12 +416,12 @@ export function deterministicTrialFindings(board: TrialBoard, now = new Date()):
     });
   }
 
-  if (reading.cashOpening && reading.cashClose) {
+  if (reading.cashOpening && reading.cashClose && reading.cashLow) {
     findings.push({
       kind: "liquidity",
       severity: "watch",
-      title: "Cash runway is not measured, because the sample has no cash balance.",
-      detail: `The 13-week estimate opens at ${reading.cashOpening} and closes week 13 at ${reading.cashClose}. The low point is ${reading.cashLow}. It follows the monthly run-rate, and it is not a bank balance.`,
+      title: `The 13-week cash line opens at ${reading.cashOpening}.`,
+      detail: `The low point is ${reading.cashLow}. Week 13 closes at ${reading.cashClose}. ${TRIAL_CASH_OPENING_LINE} The weeks follow the monthly run-rate, estimated from the profit and loss.`,
     });
   }
 
@@ -463,25 +467,16 @@ export function buildTrialProfit(market: TrialMarketId): TrialProfit {
 }
 
 export function buildTrialCash(market: TrialMarketId, now = new Date()): TrialCash {
-  const financials = sampleFinancialsFor(market);
-  const forecast = resolveThirteenWeekForecast({
-    financials,
-    openingCash: null,
-    now,
-  });
-  const low = forecast.closing.reduce(
-    (min, value) => (value < min ? value : min),
-    forecast.closing[0] ?? forecast.opening,
-  );
+  const series = trialCashSeries(market, now);
   return {
-    openingDisplay: money(forecast.opening, market),
-    weeks: forecast.weekDates.map((date, index) => ({
+    openingDisplay: money(series.opening, market),
+    weeks: series.closing.map((close, index) => ({
       week: index + 1,
-      date,
-      closeDisplay: money(forecast.closing[index] ?? 0, market),
+      date: series.weekDates[index] ?? "",
+      closeDisplay: money(close, market),
     })),
-    lowDisplay: money(low, market),
-    note: "The sample has no cash balance, so this line opens at zero and follows the monthly run-rate. Estimated from the P&L. Not a bank balance.",
+    lowDisplay: money(series.low, market),
+    note: `${TRIAL_CASH_OPENING_LINE} The weeks follow the monthly run-rate, estimated from the profit and loss.`,
   };
 }
 

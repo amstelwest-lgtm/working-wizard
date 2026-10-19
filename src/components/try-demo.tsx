@@ -1,11 +1,11 @@
 /**
- * Public sample. Gold is the Start free trial CTA and the demo Sign off
- * button. Every other step is cobalt. Avatars stay muted and silent.
+ * Public sample. Gold is the sticky Start free trial bar. The in-conversation
+ * trial link and Sign off are cobalt. Avatars stay muted and silent.
  * Sign off stays in the browser.
  */
 import { Fragment, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { TrySamplePack } from "@/components/try-sample-pack";
+import { TryAdvisorySample } from "@/components/try-sample-pack";
 import { TrySchedule, type TryCallInput, type TryCallResult } from "@/components/try-schedule";
 import { TrySignoff } from "@/components/try-signoff";
 import {
@@ -23,6 +23,7 @@ const TrySampleBoards = lazy(() =>
 );
 import { AGENT_DISPLAY_NAME } from "@/lib/milon-team-names";
 import { SAMPLE_BUSINESS_NAME } from "@/lib/sample-business";
+import { TRIAL_CASH_OPENING_LINE } from "@/lib/trial-sample-view";
 import {
   TRIAL_CTA_LABEL,
   TRIAL_DISCLAIMER,
@@ -62,7 +63,7 @@ const TOPIC_USER_LINE: Record<TryTopic, string> = {
 
 const TOPIC_FM_REPLY: Record<TryTopic, string> = {
   profit: `Here it is — ${SAMPLE_BUSINESS_NAME}'s revenue walked down to net profit, step by step. I hold the profit bridge; the Analyst reads the margins.`,
-  cash: `Here's the 13-week cash line. The sample has no bank balance, so it opens at zero and follows the monthly run-rate — an estimate, not a bank balance.`,
+  cash: `Here's the 13-week cash line. ${TRIAL_CASH_OPENING_LINE} The weeks follow the monthly run-rate, estimated from the profit and loss.`,
   advisory: `Here's the advisory pack for ${SAMPLE_BUSINESS_NAME}, labelled SAMPLE. The Advisor turned this diagnosis into moves. Sign it off here — nothing is written to a live client.`,
 };
 
@@ -243,9 +244,10 @@ function FmPortrait({ large }: { large?: boolean }) {
   );
 }
 
-function TrialCta({ className }: { className?: string }) {
+function TrialCta({ className, quiet }: { className?: string; quiet?: boolean }) {
+  const classes = ["try-cta", quiet ? "try-cta-quiet" : "", className].filter(Boolean).join(" ");
   return (
-    <a className={className ? `try-cta ${className}` : "try-cta"} href={TRIAL_SIGNUP_HREF}>
+    <a className={classes} href={TRIAL_SIGNUP_HREF}>
       {TRIAL_CTA_LABEL}
     </a>
   );
@@ -315,8 +317,7 @@ function TryConversation({
             <FmBubble>{TOPIC_FM_REPLY[topic]}</FmBubble>
             {topic === "advisory" && board ? (
               <div className="try-chat-board">
-                <TrySamplePack board={board} />
-                <TrySignoff />
+                <TryAdvisorySample board={board} />
               </div>
             ) : topic === "advisory" ? null : (
               <div className="try-chat-board">
@@ -360,7 +361,7 @@ function TryConversation({
       <div className="try-chat-close">
         {remaining.length === 0 ? <p className="try-chat-close-line">{FM_CLOSING}</p> : null}
         <p className="try-value">{TRIAL_VALUE_PROP}</p>
-        <TrialCta className="try-cta-close" />
+        <TrialCta quiet className="try-cta-close" />
         <p className="try-trial-terms">{TRIAL_SIGNUP_SENTENCE}</p>
       </div>
     </section>
