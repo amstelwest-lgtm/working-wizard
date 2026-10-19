@@ -433,8 +433,24 @@ export async function shouldOpenItInbox(userId: string): Promise<boolean> {
   return firms.length === 0;
 }
 
-/** Accountant portal may keep practice accounts — never business-client credentials. */
-export async function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
+const accountantStayChecks = new Map<string, Promise<boolean>>();
+
+/**
+ * Accountant portal may keep practice accounts — never business-client credentials.
+ * One cold load shares a single check. A cancelled render used to start another
+ * read while the first still held the auth lock, and the second never fired.
+ */
+export function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
+  const existing = accountantStayChecks.get(userId);
+  if (existing) return existing;
+  const pending = resolveAccountantStay(userId).finally(() => {
+    accountantStayChecks.delete(userId);
+  });
+  accountantStayChecks.set(userId, pending);
+  return pending;
+}
+
+async function resolveAccountantStay(userId: string): Promise<boolean> {
   if (await isMilonItMember(userId)) return true;
   const force = peekForcePortal();
   const [portal, practiceSignup] = await Promise.all([
