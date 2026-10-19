@@ -18,6 +18,7 @@ import {
   budgetTableRows,
   budgetYtdSentence,
   budgetYtdSignal,
+  budgetYtdWithStatement,
   revenueYtd,
   type BudgetActualMonth,
   type BudgetLens,
@@ -54,6 +55,7 @@ export function BudgetChartTable({
   lens,
   onLensChange,
   actualMonths,
+  statementActuals = null,
   readOnly = false,
   signed = false,
 }: {
@@ -63,6 +65,8 @@ export function BudgetChartTable({
   onLensChange?: (next: BudgetLens) => void;
   /** Harness preview. Production leaves this empty and reads stored month actuals. */
   actualMonths?: readonly BudgetActualMonth[];
+  /** Statement comparison already on the verdict strip. Used when month rows are empty. */
+  statementActuals?: { chip?: string | null; revenue?: number | null; budgetRevenue?: number | null } | null;
   /** Owner view hides a $0 draft instead of drawing an empty axis. */
   readOnly?: boolean;
   /** Owner door uses one unicode minus. The accountant table keeps its formatter. */
@@ -108,7 +112,7 @@ export function BudgetChartTable({
   const views = useMemo(() => budgetMonthViews(doc, loaded), [doc, loaded]);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const through = currentBudgetMonth(months);
-  const ytd = revenueYtd(views, through);
+  const ytd = budgetYtdWithStatement(revenueYtd(views, through), statementActuals);
   const sentence = budgetYtdSentence({ ...ytd, money });
   const ytdTone = tone(budgetYtdSignal(ytd));
 

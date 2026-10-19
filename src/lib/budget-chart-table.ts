@@ -107,6 +107,21 @@ export function overviewBudgetTileFigure(input: {
 }
 
 /** Revenue year-to-date. Months without actuals stay out of the comparison. */
+/** Month rows win. A stored statement figure fills YTD when those rows are empty. */
+export function budgetYtdWithStatement(
+  ytd: { budget: number; actual: number | null },
+  statement?: { chip?: string | null; revenue?: number | null; budgetRevenue?: number | null } | null,
+): { budget: number; actual: number | null } {
+  if (ytd.actual != null) return ytd;
+  if (!statement || !statement.chip || statement.chip === "None") return ytd;
+  if (typeof statement.revenue !== "number" || !Number.isFinite(statement.revenue)) return ytd;
+  const budget =
+    typeof statement.budgetRevenue === "number" && Number.isFinite(statement.budgetRevenue)
+      ? statement.budgetRevenue
+      : ytd.budget;
+  return { budget, actual: statement.revenue };
+}
+
 export function budgetYtdSentence(input: {
   budget: number;
   actual: number | null;

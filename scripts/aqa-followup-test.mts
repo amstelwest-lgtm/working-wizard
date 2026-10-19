@@ -79,7 +79,12 @@ const suggested = planAutomation(
   [],
   "2026-10-15",
 );
-assert(suggested.rows[0]?.dueDate === null && suggested.rows[0]?.dueSuggested === false, "a past created+14 is not attached");
+assert(
+  suggested.rows[0]?.dueDate === "2026-10-29" && suggested.rows[0]?.dueSuggested === true,
+  "a past created+14 is replaced by today plus 14 days",
+);
+assert(suggested.rows[0]?.overdue === false, "the suggested date is not overdue");
+assert(suggested.rows[0]?.owner?.name === "Financial Manager", "an unowned action suggests the Financial Manager");
 
 const underFloor = Array.from({ length: 13 }, () => -35100);
 const chatFacts = forecastChatFacts({ closings: underFloor, floor: 50000, plCashGenerative: true });

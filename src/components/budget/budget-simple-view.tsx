@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import type { BudgetActuals, BudgetDocument, BudgetTemplateId } from "@/lib/budget.types";
-import { budgetVolumeLabel } from "@/lib/budget-industry";
+import { budgetPriceLabel, budgetVolumeLabel, hotelTemplateRows } from "@/lib/budget-industry";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
   plainBudgetWindowHeading,
@@ -158,6 +158,8 @@ export function BudgetSimpleView({
   const shownTpl = displayTemplateId ? BUDGET_TEMPLATES[displayTemplateId] : tpl;
   const line = doc.revenueLines[0];
   const volumeLabel = budgetVolumeLabel(doc.templateId, shownTpl.id, line?.volumeLabel);
+  const priceLabel = budgetPriceLabel(doc.templateId, shownTpl.id, line?.priceLabel);
+  const hotelRows = hotelTemplateRows(shownTpl.id);
   const cell = line?.months[focusMonth] ?? { volume: 0, price: 0 };
   const focusIdx = months.indexOf(focusMonth);
 
@@ -264,6 +266,7 @@ export function BudgetSimpleView({
         lens={lens}
         onLensChange={onLensChange}
         actualMonths={actualMonths}
+        statementActuals={compared}
         readOnly={readOnly}
         signed={role === "owner"}
       />
@@ -285,7 +288,24 @@ export function BudgetSimpleView({
       </p>
       )}
 
-      <OwnerHowBuilt readOnly={readOnly}>
+      <OwnerHowBuilt
+        readOnly={readOnly}
+        summary={
+          hotelRows ? (
+            <ul data-hotel-template="" className="mt-3 space-y-1 text-[13px] text-[#3D5270]">
+              {hotelRows.map((row) => (
+                <li key={row.name}>
+                  <span className="font-semibold text-[#102A43] dark:text-slate-100">{row.name}</span>
+                  {" · "}
+                  {row.detail}
+                  {" · "}
+                  {row.value}
+                </li>
+              ))}
+            </ul>
+          ) : null
+        }
+      >
       {/* Month engine — volume × price, then margin and overheads */}
       <section
         id="wizard-budget-month-engine"
@@ -354,7 +374,7 @@ export function BudgetSimpleView({
           <DriverPad
             kicker="How many"
             label={localizeCopy(volumeLabel, market)}
-            hint={line?.name ? `${line.name}` : "Units they move this month"}
+            hint={hotelRows ? "Rooms" : line?.name ? `${line.name}` : "Units they move this month"}
           >
             {readOnly ? (
               <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--ink)]">{cell.volume}</p>
@@ -372,7 +392,7 @@ export function BudgetSimpleView({
           <EquationOp symbol="×" label="times" />
           <DriverPad
             kicker="At what price"
-            label={localizeCopy(line?.priceLabel ?? "Price", market)}
+            label={localizeCopy(priceLabel, market)}
             hint={`Per unit, ${symbol}`}
           >
             <div className="mt-2 flex items-baseline gap-1.5">
@@ -383,7 +403,7 @@ export function BudgetSimpleView({
               <Input
                 type="number"
                 inputMode="decimal"
-                aria-label={localizeCopy(line?.priceLabel ?? "Price", market)}
+                aria-label={localizeCopy(priceLabel, market)}
                 className="budget-driver-input h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
                 value={cell.price}
                 onChange={(e) => patchFocus({ price: parseFloat(e.target.value) || 0 })}
@@ -403,6 +423,19 @@ export function BudgetSimpleView({
             </p>
           </DriverPad>
         </div>
+        {!readOnly && hotelRows ? (
+          <ul data-hotel-template="" className="mt-4 space-y-1 pl-3 text-[13px] text-[#3D5270] sm:pl-4">
+            {hotelRows.map((row) => (
+              <li key={row.name}>
+                <span className="font-semibold text-[#102A43] dark:text-slate-100">{row.name}</span>
+                {" · "}
+                {row.detail}
+                {" · "}
+                {row.value}
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         <div className="mt-4 space-y-0 overflow-hidden rounded-xl border border-[#DBEAFE] bg-white/70 pl-3 dark:bg-slate-950/40 sm:pl-4">
           <CascadeRow
@@ -478,7 +511,7 @@ export function BudgetSimpleView({
         title="Year detail"
         subtitle={
           trough
-            ? `Cash trough ${monthLabel(trough.month)} ${money(trough.closingCash)}`
+            ? `Budget-year cash trough ${monthLabel(trough.month)} ${money(trough.closingCash)} · budget year, not the 13-week forecast`
             : "Twelve months, closed until you need the grid"
         }
         defaultOpen={false}
@@ -662,7 +695,15 @@ export function BudgetSimpleView({
   );
 }
 
-function OwnerHowBuilt({ readOnly, children }: { readOnly: boolean; children: ReactNode }) {
+function OwnerHowBuilt({
+  readOnly,
+  children,
+  summary = null,
+}: {
+  readOnly: boolean;
+  children: ReactNode;
+  summary?: ReactNode;
+}) {
   if (!readOnly) return children;
   return (
     <section data-budget-how="short" className="space-y-2">
@@ -670,6 +711,7 @@ function OwnerHowBuilt({ readOnly, children }: { readOnly: boolean; children: Re
       <p className="max-w-xl text-sm leading-relaxed text-[#3D5270] dark:text-slate-300">
         Your accountant built this from last year's actuals plus the growth you agreed.
       </p>
+      {summary}
       <details>
         <summary className="w-fit cursor-pointer text-sm font-semibold text-[#0B5FFF]">
           More

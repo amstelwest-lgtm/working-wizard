@@ -5,7 +5,7 @@
  */
 import { buildDraftLinesFromExtract } from "./cash-from-banks.pattern.ts";
 import type { CashBankExtract, CashBucket, CashForecastDraftLine } from "./cash-from-banks.types.ts";
-import { displayForecastFrequency } from "./cash-forecast-rows.ts";
+import { isRecurringPayee, projectForecastFrequency, recurringPayeeFrequency } from "./cash-recurring-payees.ts";
 import { distributeForecastLine } from "./client-metrics.ts";
 
 export type SuggestedOnceOffLine = {
@@ -51,15 +51,19 @@ export function onceOffSaveEnabled(input: { dirty: boolean; staged: number }): b
  * Bank-tagged grid rows that land in a single week. The amount is that
  * week's figure, which is already on the line. Recurring rows are left out.
  */
-export function onceOffsOnBankForecast(lines: readonly ForecastGridLine[]): SuggestedOnceOffLine[] {
+export function onceOffsOnBankForecast(
+  lines: readonly ForecastGridLine[],
+  recurring?: ReadonlyMap<string, "recurring-monthly" | "recurring-weekly"> | null,
+): SuggestedOnceOffLine[] {
   const out: SuggestedOnceOffLine[] = [];
   for (const line of lines) {
     const name = line.name.trim();
     if (!name || !line.id) continue;
+    if (isRecurringPayee(name, recurring)) continue;
     const vals = distributeForecastLine(
       {
         amount: line.amount,
-        frequency: displayForecastFrequency(line.name, line.frequency),
+        frequency: projectForecastFrequency(line.name, line.frequency, recurring),
         startWeek: line.startWeek,
         splitCount: line.splitCount,
         weekOverrides: line.weekOverrides ?? undefined,
@@ -212,8 +216,9 @@ export function suggestOnceOffRows(input: {
   forecastLines?: readonly ForecastGridLine[];
   bankSourced?: boolean;
 }): OnceOffSuggestResult {
-  const onGrid = input.bankSourced ? onceOffsOnBankForecast(input.forecastLines ?? []) : [];
-  const history = draftLinesFromHistory(input.bankDraft);
+  const recurring = recurringPayeeFrequency(input.bankDraft);
+  const onGrid = input.bankSourced ? onceOffsOnBankForecast(input.forecastLines ?? [], recurring) : [];
+  const history = draftLinesFromHistory(input.bankDraft).filter((row) => !isRecurringPayee(row.name, recurring));
   const names = new Set<string>();
   const used = new Set<string>();
   const lines: SuggestedOnceOffLine[] = [];

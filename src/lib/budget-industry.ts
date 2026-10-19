@@ -26,6 +26,10 @@ export function industryBudgetTemplate(
   return INDUSTRY_BUDGET_TEMPLATE[industry] ?? null;
 }
 
+const SERVICE_VOLUME = new Set(["Days / shifts", "Hours", "Jobs", "Volume"]);
+const SERVICE_PRICE = new Set(["Day rate", "Avg rate", "Avg ticket", "Price"]);
+const SERVICE_DRIVER = /day\s*\/\s*shift labour|billable work|jobs\s*\/\s*call-?outs/i;
+
 export function budgetVolumeLabel(
   storedTemplate: BudgetTemplateId,
   displayTemplate: BudgetTemplateId,
@@ -33,6 +37,54 @@ export function budgetVolumeLabel(
 ): string {
   const storedSeed = BUDGET_TEMPLATES[storedTemplate]?.revenueSeeds[0]?.volumeLabel ?? "Volume";
   const displaySeed = BUDGET_TEMPLATES[displayTemplate]?.revenueSeeds[0]?.volumeLabel ?? storedSeed;
+  if (displayTemplate === "hospitality_rooms" && (!lineLabel || lineLabel === storedSeed || SERVICE_VOLUME.has(lineLabel))) {
+    return "Room-nights";
+  }
   if (displayTemplate !== storedTemplate && (!lineLabel || lineLabel === storedSeed)) return displaySeed;
   return lineLabel || displaySeed;
+}
+
+export function budgetPriceLabel(
+  storedTemplate: BudgetTemplateId,
+  displayTemplate: BudgetTemplateId,
+  lineLabel: string | null | undefined,
+): string {
+  const storedSeed = BUDGET_TEMPLATES[storedTemplate]?.revenueSeeds[0]?.priceLabel ?? "Price";
+  const displaySeed = BUDGET_TEMPLATES[displayTemplate]?.revenueSeeds[0]?.priceLabel ?? storedSeed;
+  if (displayTemplate === "hospitality_rooms" && (!lineLabel || lineLabel === storedSeed || SERVICE_PRICE.has(lineLabel))) {
+    return "ADR";
+  }
+  if (displayTemplate !== storedTemplate && (!lineLabel || lineLabel === storedSeed)) return displaySeed;
+  return lineLabel || displaySeed;
+}
+
+export function serviceDriverName(name: string | null | undefined): boolean {
+  return SERVICE_DRIVER.test(name ?? "");
+}
+
+export type HotelTemplateRow = {
+  name: string;
+  detail: string;
+  value: string;
+};
+
+/** Hotel drivers. Occupancy, food and beverage, housekeeping and rent stay blank when no figure is stored. */
+export function hotelTemplateRows(displayTemplate: BudgetTemplateId | null | undefined): HotelTemplateRow[] | null {
+  if (displayTemplate !== "hospitality_rooms") return null;
+  return [
+    { name: "Rooms", detail: "Room-nights × ADR × Occupancy", value: "Occupancy —" },
+    { name: "Food & beverage", detail: "Food & beverage", value: "—" },
+    { name: "Housekeeping and staff", detail: "Housekeeping and staff", value: "—" },
+    { name: "Rent", detail: "Rent", value: "—" },
+  ];
+}
+
+export function hotelLineDisplayName(
+  displayTemplate: BudgetTemplateId | null | undefined,
+  name: string,
+  index: number,
+): string | null {
+  if (displayTemplate !== "hospitality_rooms" || !serviceDriverName(name)) return name;
+  if (index === 0) return "Rooms";
+  return null;
 }

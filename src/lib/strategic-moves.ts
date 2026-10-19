@@ -5,7 +5,6 @@
  */
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profilePriorityWeight } from "@/lib/profile-signals";
-import { metricDirection } from "@/lib/ratios";
 
 export type StrategicCynefin = "Clear" | "Complicated" | "Complex" | "Chaotic";
 export type StrategicEisenhower = "Do" | "Decide" | "Delegate" | "Delete";
@@ -321,10 +320,10 @@ export const STRATEGIC_MOVE_CATALOG: readonly StrategicMoveEntry[] = [
   },
   {
     key: "debtToEquity",
-    title: "Target a D/E below 1× for conservative businesses, below 2× for growth",
+    title: "Bring debt-to-equity under the target",
     ratioName: "Debt-to-Equity",
     icon: "🏦",
-    actions: ["Target a D/E below 1× for conservative businesses, below 2× for growth", "Redirect free cash flow to debt repayment before paying dividends", "Refinance short-term debt into longer-term facilities to reduce pressure"],
+    actions: ["Bring debt-to-equity under the target", "Target a D/E below 1× for conservative businesses, below 2× for growth", "Redirect free cash flow to debt repayment before paying dividends", "Refinance short-term debt into longer-term facilities to reduce pressure"],
     impact: 8,
     impactLine: "Excessive debt erodes flexibility and signals distress to lenders — every extra rand of equity de-risks the business.",
     cynefin: "Complicated",
@@ -340,6 +339,53 @@ export const STRATEGIC_MOVE_CATALOG: readonly StrategicMoveEntry[] = [
     cynefin: "Complicated",
   },
 ];
+
+const PAY_FASTER_MAX_DAYS = 30;
+
+const NO_STOCK_TEMPLATES = new Set([
+  "hospitality_rooms",
+  "services_hours",
+  "day_labour",
+  "services_projects",
+  "retainer_contracts",
+  "professional_wip",
+]);
+
+/** Hotels and services, and any profile with no stock, do not get a stock action. */
+export function stockSittingApplies(
+  profile: { inventoryIntensity?: string | null; templateId?: string | null } | null | undefined,
+): boolean {
+  if (!profile) return true;
+  if (profile.inventoryIntensity === "none") return false;
+  if (profile.templateId && NO_STOCK_TEMPLATES.has(profile.templateId)) return false;
+  return true;
+}
+
+const UNSET_GOAL = /^(?:not set|n\/a|none|unset|tbd|goal not set|—|-)?$/i;
+const DEBT_GUIDANCE = /target a d\/e below 1/i;
+
+/** Stored guidance and lowercase titles render as an action title. */
+export function actionDisplayTitle(title: string | null | undefined): string {
+  const text = (title ?? "").trim();
+  if (!text) return "";
+  if (DEBT_GUIDANCE.test(text)) return "Bring debt-to-equity under the target";
+  const first = text.charAt(0);
+  if (first >= "a" && first <= "z") return first.toUpperCase() + text.slice(1);
+  return text;
+}
+
+/** A goal that is blank or still a placeholder is not overdue, even with a past date. */
+export function planGoalIsOverdue(
+  goal: string | null | undefined,
+  targetDate: string | null | undefined,
+  today: string,
+): boolean {
+  const text = (goal ?? "").replace(/\s+/g, " ").trim();
+  if (!text || UNSET_GOAL.test(text)) return false;
+  const day = (targetDate ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return false;
+  return day < today;
+}
 
 function eisenhowerOf(health: number, impact: number): StrategicEisenhower {
   const urgent = Number.isFinite(health) && health < 60;
@@ -360,28 +406,32 @@ export function rankStrategicMoves(input: {
   entries?: readonly StrategicMoveEntry[];
   /** Drop moves that would be ranked on a figure the bridge does not trust. */
   suppressKeys?: readonly string[];
-  /** Stored debtor days. At or under the healthy max, "pay faster" is not suggested. */
+  /** Stored debtor days. At or under 30, "pay faster" is not suggested. */
   debtorDays?: number | null;
+  /** Financing pillar score. Leverage Level uses this one figure. */
+  financingHealth?: number | null;
   limit?: number;
 }): RankedStrategicMove[] {
   const suppressed = new Set(input.suppressKeys ?? []);
-  const debtorMax = metricDirection("debtorDays")?.healthyMax;
   const debtorsAlreadyQuick =
-    input.debtorDays != null &&
-    Number.isFinite(input.debtorDays) &&
-    debtorMax != null &&
-    input.debtorDays <= debtorMax;
+    input.debtorDays != null && Number.isFinite(input.debtorDays) && input.debtorDays <= PAY_FASTER_MAX_DAYS;
   const payFaster = /pay faster/i;
+  const keepStock = stockSittingApplies(input.profile);
   const entries = (input.entries ?? STRATEGIC_MOVE_CATALOG).filter((entry) => {
     if (suppressed.has(entry.key)) return false;
+    if (!keepStock && entry.key === "inventoryDays") return false;
     if (debtorsAlreadyQuick && payFaster.test(entry.title)) return false;
     return true;
   });
   const healthByKey = input.healthByKey ?? {};
   const limit = input.limit ?? 10;
+  const financing =
+    typeof input.financingHealth === "number" && Number.isFinite(input.financingHealth)
+      ? input.financingHealth
+      : null;
   return entries
     .map((entry) => {
-      const raw = healthByKey[entry.key];
+      const raw = entry.key === "equityMultiplier" && financing != null ? financing : healthByKey[entry.key];
       const health = typeof raw === "number" && Number.isFinite(raw) ? raw : Number.NaN;
       const urgency = Number.isFinite(health) ? 100 - health : 50;
       const score = urgency * entry.impact * profilePriorityWeight(input.profile, entry.ratioName);
