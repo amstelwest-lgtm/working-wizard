@@ -100,6 +100,7 @@ function Worksheet({
   rows: Array<{ label: string; amount: string; note?: string; total?: boolean }>;
 }) {
   return (
+    <div className="tax-sample-table">
     <table>
       <caption className="tax-sample-kicker">{caption}</caption>
       <thead>
@@ -120,6 +121,7 @@ function Worksheet({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 
@@ -228,11 +230,16 @@ function Workspace({
 
   useEffect(() => {
     closeRef.current?.focus();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKey);
+    };
   }, [onClose]);
 
   const who =
@@ -301,6 +308,7 @@ function Workspace({
           Statutory last day, before a weekend or public-holiday shift. Compared with{" "}
           {formatSampleDate(SAMPLE_COMPANY.asOf)}.
         </p>
+        <div className="tax-sample-table">
         <table data-tax-deadlines="true">
           <caption className="tax-sample-kicker">SAMPLE deadlines</caption>
           <thead>
@@ -334,6 +342,7 @@ function Workspace({
             ))}
           </tbody>
         </table>
+        </div>
         <div className="tax-sample-actions">
           <button type="button" className="tax-sample-primary" onClick={() => openTaxSample(true)}>
             Hand to Tax Specialist

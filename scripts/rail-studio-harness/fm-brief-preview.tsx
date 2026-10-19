@@ -37,6 +37,8 @@ const brief = buildFinancialManagerBrief({
   openActionTitle: "Chase the March invoices",
   overdueActions: 2,
   cashDipWeek: 6,
+  cashOpening: 40000,
+  cashFloor: 55000,
   receivables: 15000,
   drafts: [{ id: "d1", title: "Advisory note for February" }],
   formatMoney: money,

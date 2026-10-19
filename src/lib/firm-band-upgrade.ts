@@ -6,7 +6,7 @@
 
 import type { FirmCouponDiscount } from "./firm-sa-market";
 import { isOwnerCatalogPrice } from "./owner-price";
-import { parseZaLookupKey } from "./pricing/za-ladder";
+import { annualZarCents, isZaCheckoutBand, parseZaLookupKey, perClientRands, ZA_MONTHLY_RANDS } from "./pricing/za-ladder";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_IDS,
@@ -448,6 +448,37 @@ export function firmUpgradePriceCurrency(input: {
     return typeof amount === "number";
   });
   return complete ? "zar" : "USD";
+}
+
+const VAT_PHRASE = /\b(?:excl\.?|incl\.?|excluding|including)\s+vat\b|\bvat\b/gi;
+
+/**
+ * Display line for a South African practice. Uses a stored rand label when
+ * one is already on the row, otherwise the published ZA ladder. Charge
+ * currency and Checkout routing stay on the existing path.
+ */
+export function saFirmDisplayPrice(
+  band: FirmBandId,
+  interval: FirmInterval,
+  zaLabel?: string | null,
+): string {
+  const cleaned = (zaLabel ?? "")
+    .replace(VAT_PHRASE, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+·/g, " ·")
+    .trim();
+  if (cleaned && !cleaned.includes("$")) return cleaned;
+  if (!isZaCheckoutBand(band)) return cleaned || "—";
+  const monthly = ZA_MONTHLY_RANDS[band];
+  const entry = FIRM_BAND_CATALOG[band];
+  if (interval === "year") {
+    const cents = annualZarCents(monthly * 100, entry.yearlyUsdCents ?? 0, entry.monthlyUsdCents ?? 0);
+    const rands = Math.round(cents / 100);
+    return `R${rands.toLocaleString("en-ZA")}/yr`;
+  }
+  const per = entry.clientLimit ? perClientRands(monthly, entry.clientLimit) : 0;
+  const head = `R${monthly.toLocaleString("en-ZA")}/mo`;
+  return per > 0 ? `${head} · about R${per} per client` : head;
 }
 
 export function firmBandPriceLabel(

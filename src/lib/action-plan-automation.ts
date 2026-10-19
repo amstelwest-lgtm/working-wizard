@@ -1,7 +1,8 @@
 /**
  * Suggested owner, due date, follow-up, and duplicate/contradiction checks.
  * Suggestions are labelled for the accountant to confirm. Nothing is dropped
- * until they say so. Dates come from the action's stored created date.
+ * until they say so. A missing due date is the created date plus 14 days,
+ * or today plus 14 days when that created date is missing or already past.
  */
 
 export type AutomationStatus = "not_started" | "in_progress" | "done" | "blocked" | string;
@@ -112,9 +113,9 @@ export function planAutomation(
     const hasOwner = Boolean(item.ownerId || item.ownerName?.trim());
     const owner = hasOwner ? null : suggestOwner(item.title, team);
     const dueSuggested = !item.dueDate;
-    const suggestedDue = dueSuggested ? addDays(item.createdAt, 14) : null;
-    // A created-date plus 14 that is already past is not a due the row has.
-    const dueDate = item.dueDate ?? (suggestedDue && suggestedDue >= today ? suggestedDue : null);
+    const fromCreated = dueSuggested ? addDays(item.createdAt, 14) : null;
+    const fromToday = dueSuggested ? addDays(today, 14) : null;
+    const dueDate = item.dueDate ?? (fromCreated && fromCreated >= today ? fromCreated : fromToday);
     let followUp: FollowUpState = "none";
     if (item.status === "done") followUp = "done";
     else if (item.dueDate && item.dueDate < today) followUp = "overdue";

@@ -71,21 +71,34 @@
 .tax-sample-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  overflow: auto;
-  padding: 24px 16px 48px;
-  background: rgba(16, 42, 67, 0.46);
+  z-index: 100002;
+  display: flex;
+  justify-content: center;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: #ffffff;
 }
 
 .tax-sample-sheet {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 22px 22px 28px;
-  border: 1px solid #dbeafe;
-  border-radius: 16px;
+  box-sizing: border-box;
+  width: min(920px, 100%);
+  height: 100%;
+  max-height: 100dvh;
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding:
+    max(22px, env(safe-area-inset-top))
+    max(22px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom))
+    max(22px, env(safe-area-inset-left));
+  border: 0;
+  border-radius: 0;
   background: #ffffff;
   color: #102a43;
-  box-shadow: 0 24px 60px rgba(16, 42, 67, 0.18);
+  box-shadow: none;
 }
 
 .tax-sample-sheet h2,
@@ -188,4 +201,27 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .tax-sample-sheet {
+    padding:
+      max(16px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-right))
+      max(28px, env(safe-area-inset-bottom))
+      max(14px, env(safe-area-inset-left));
+  }
+
+  .tax-sample-head {
+    flex-wrap: wrap;
+  }
+
+  .tax-sample-sheet h2 {
+    font-size: 24px;
+  }
+}
+
+.tax-sample-table {
+  max-width: 100%;
+  overflow-x: auto;
 }
