@@ -1,8 +1,8 @@
 /**
  * Last painted All clients list, kept only for a known user and firm.
  * A null firm is not a key. An empty list is a real result.
- * Adding, removing, or archiving a client drops the key so the next
- * visit loads instead of painting the previous book.
+ * Only adding a client invalidates the book today. Removing or
+ * archiving a client does not.
  */
 
 const paintedBooks = new Map<string, readonly unknown[]>();
