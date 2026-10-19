@@ -2120,6 +2120,8 @@ function Index() {
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
   const [planTick, setPlanTick] = useState(0);
+  // Owner Home reloads each action row from this event. The assignee and the
+  // Working card come from that stored hand-off, the same read as client Home.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);
     window.addEventListener("milon-action-plan-refresh", bump);

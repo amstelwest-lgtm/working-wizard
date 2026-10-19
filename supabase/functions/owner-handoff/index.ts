@@ -15,6 +15,7 @@ import {
   handoffInputs,
   handoffNeedsFreshRun,
   handoffRequestNote,
+  personAssignmentNote,
   runnerEnabled,
 } from "../../../src/lib/owner-handoff.ts";
 
@@ -33,6 +34,36 @@ function json(body: unknown, status = 200) {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+type AdminClient = ReturnType<typeof createClient>;
+
+/** Stores this row's assignee and appends a note. Older notes are left in place. */
+async function writeAssignment(
+  admin: AdminClient,
+  input: {
+    clientId: string;
+    actionItemId: string;
+    ownerId: string | null;
+    actorType: "system" | "owner_app";
+    actorLabel: string;
+    note: string;
+  },
+): Promise<string | null> {
+  const { error: ownerError } = await admin
+    .from("action_items")
+    .update({ owner_id: input.ownerId, sent_at: null })
+    .eq("id", input.actionItemId);
+  if (ownerError) return "assignee_not_stored";
+  const { error: noteError } = await admin.from("action_updates").insert({
+    action_item_id: input.actionItemId,
+    client_id: input.clientId,
+    actor_type: input.actorType,
+    actor_label: input.actorLabel,
+    note: input.note,
+  });
+  if (noteError) return "note_not_written";
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -58,7 +89,7 @@ Deno.serve(async (req) => {
   } = await userClient.auth.getUser();
   if (authErr || !user) return json({ error: "unauthorised" }, 401);
 
-  let body: { clientId?: unknown; actionItemId?: unknown; agent?: unknown };
+  let body: { clientId?: unknown; actionItemId?: unknown; agent?: unknown; personId?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -67,11 +98,19 @@ Deno.serve(async (req) => {
   const clientId = typeof body.clientId === "string" ? body.clientId : "";
   const actionItemId = typeof body.actionItemId === "string" ? body.actionItemId : "";
   const agent = typeof body.agent === "string" ? body.agent : "";
+  const personId = typeof body.personId === "string" ? body.personId : "";
   if (!isUuid(clientId) || !isUuid(actionItemId)) return json({ error: "client_and_action_required" }, 400);
+  if (personId && !isUuid(personId)) return json({ error: "person_required" }, 400);
 
-  const decision = handoffDecision(agent);
-  if (!decision.ok) {
-    return json({ error: decision.error, missing: decision.missing }, 400);
+  const decision = personId ? null : handoffDecision(agent);
+  if (!personId && (!decision || !decision.ok)) {
+    return json(
+      {
+        error: decision && !decision.ok ? decision.error : "unknown_agent",
+        missing: decision && !decision.ok ? decision.missing : "That is not one of the three bots.",
+      },
+      400,
+    );
   }
 
   const { data: client, error: clientError } = await admin
@@ -108,6 +147,32 @@ Deno.serve(async (req) => {
   if (!action) return json({ error: "action_not_found" }, 404);
   if (action.client_id !== clientId) return json({ error: "action_client_mismatch" }, 403);
 
+  if (personId) {
+    const { data: employee, error: employeeError } = await admin
+      .from("client_employees")
+      .select("id, name, client_id")
+      .eq("id", personId)
+      .maybeSingle();
+    if (employeeError) return json({ error: "person_lookup_failed" }, 500);
+    if (!employee || employee.client_id !== clientId) return json({ error: "person_not_on_file" }, 400);
+    const actor = user.email?.split("@")[0]?.trim() || "Accountant";
+    const name = typeof employee.name === "string" && employee.name.trim() ? employee.name.trim() : "Team member";
+    const failed = await writeAssignment(admin, {
+      clientId,
+      actionItemId,
+      ownerId: personId,
+      actorType: "owner_app",
+      actorLabel: actor,
+      note: personAssignmentNote(name),
+    });
+    if (failed) return json({ error: failed }, 500);
+    return json({ ok: true, noted: true, status: "person", assignee: name });
+  }
+
+  if (!decision || !decision.ok) {
+    return json({ error: "unknown_agent", missing: "That is not one of the three bots." }, 400);
+  }
+
   const { data: setting, error: settingError } = await admin
     .from("agent_settings")
     .select("value")
@@ -115,16 +180,18 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (settingError) return json({ error: "runner_check_failed" }, 500);
   if (!runnerEnabled(setting?.value)) {
-    const { error: parkedError } = await admin.from("action_updates").insert({
-      action_item_id: actionItemId,
-      client_id: clientId,
-      actor_type: "system",
-      actor_label: decision.displayName,
+    const failed = await writeAssignment(admin, {
+      clientId,
+      actionItemId,
+      ownerId: null,
+      actorType: "system",
+      actorLabel: decision.displayName,
       note: handoffRequestNote(decision.displayName),
     });
-    if (parkedError) return json({ error: "note_not_written" }, 500);
+    if (failed) return json({ error: failed }, 500);
     return json({
       ok: true,
+      noted: true,
       assigned: true,
       dispatched: false,
       status: "assigned",
@@ -182,6 +249,19 @@ Deno.serve(async (req) => {
     // The first run for this action and bot already exists. Reuse it while it
     // is still queued or running. A finished run is not the current assignment:
     // handing the action over again starts a new queued run and a new note.
+    // Either way the note and the row assignee are written.
+    if (runId && !handoffNeedsFreshRun(status)) {
+      const failed = await writeAssignment(admin, {
+        clientId,
+        actionItemId,
+        ownerId: null,
+        actorType: "system",
+        actorLabel: decision.displayName,
+        note: handoffRequestNote(decision.displayName),
+      });
+      if (failed) return json({ error: failed }, 500);
+      return json({ ok: true, noted: true, runId, status, already: true, runner: decision.runner });
+    }
     let guard = 0;
     while (runId && handoffNeedsFreshRun(status) && guard < 5) {
       guard += 1;
@@ -229,7 +309,16 @@ Deno.serve(async (req) => {
       runId = existingAgain.id as string;
       status = existingAgain.status as string;
       if (!handoffNeedsFreshRun(status)) {
-        return json({ ok: true, runId, status, already: true, runner: decision.runner });
+        const failed = await writeAssignment(admin, {
+          clientId,
+          actionItemId,
+          ownerId: null,
+          actorType: "system",
+          actorLabel: decision.displayName,
+          note: handoffRequestNote(decision.displayName),
+        });
+        if (failed) return json({ error: failed }, 500);
+        return json({ ok: true, noted: true, runId, status, already: true, runner: decision.runner });
       }
     }
     if (!created) return json({ error: "run_not_queued" }, 500);
@@ -256,14 +345,15 @@ Deno.serve(async (req) => {
     return json({ error: "runner_not_triggered", missing: invokeError.message }, 502);
   }
 
-  const { error: noteError } = await admin.from("action_updates").insert({
-    action_item_id: actionItemId,
-    client_id: clientId,
-    actor_type: "system",
-    actor_label: decision.displayName,
+  const failed = await writeAssignment(admin, {
+    clientId,
+    actionItemId,
+    ownerId: null,
+    actorType: "system",
+    actorLabel: decision.displayName,
     note: handoffRequestNote(decision.displayName),
   });
-  if (noteError) return json({ error: "note_not_written", runId }, 500);
+  if (failed) return json({ error: failed, runId }, 500);
 
-  return json({ ok: true, runId, status: "queued", runner: decision.runner });
+  return json({ ok: true, noted: true, runId, status: "queued", runner: decision.runner });
 });

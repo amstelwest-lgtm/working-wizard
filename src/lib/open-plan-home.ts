@@ -1,8 +1,11 @@
 /**
  * Home and the action plan read the same open rows.
- * A hand-off paints the assigned agent's card from that list.
+ * Each row keeps its own assignee. A bot card shows Working only while
+ * that bot has a stored, not-finished hand-off on at least one row.
  */
+import { agentKeyFromAssignee } from "@/lib/action-handoff";
 import type { AgentKey } from "@/lib/milon-team-feed";
+import { handoffAssigneeName, personAssignmentName } from "@/lib/owner-handoff";
 
 const ACTIVE = new Set(["queued", "running"]);
 
@@ -97,6 +100,100 @@ export function handedHomeAction(
     agent: best.agent,
     run: best.run,
   };
+}
+
+export type StoredAssignment =
+  | { kind: "bot"; agent: AgentKey; name: string; at: string }
+  | { kind: "person"; name: string; at: string };
+
+export type AssignmentNote = { note: string | null; at: string };
+
+/**
+ * The newest assignment note on one action.
+ * A progress note is not an assignment, so it does not hide the one before it.
+ * Older notes stay in the log.
+ */
+export function latestStoredAssignment(notes: readonly AssignmentNote[]): StoredAssignment | null {
+  const ordered = [...notes].sort((a, b) => stamp(b.at) - stamp(a.at));
+  for (const row of ordered) {
+    const botName = handoffAssigneeName(row.note);
+    const agent = agentKeyFromAssignee(botName);
+    if (agent && botName) return { kind: "bot", agent, name: botName, at: row.at };
+    const person = personAssignmentName(row.note);
+    if (person) return { kind: "person", name: person, at: row.at };
+  }
+  return null;
+}
+
+export type RowAssignment = {
+  id: string;
+  assigneeName: string | null;
+  agent: AgentKey | null;
+  /** This row's bot hand-off is stored and has not finished. */
+  open: boolean;
+};
+
+/**
+ * One row's button label and whether its bot is still Working.
+ * The person on the action is the assignee only when no later hand-off note names a bot.
+ * A finished run for that bot keeps the name and drops Working.
+ */
+export function rowAssignment(input: {
+  id: string;
+  ownerName?: string | null;
+  notes: readonly AssignmentNote[];
+  run?: { agent: AgentKey; status: string; at?: string } | null;
+}): RowAssignment {
+  const stored = latestStoredAssignment(input.notes);
+  if (!stored) {
+    const owner = input.ownerName?.trim() || null;
+    return { id: input.id, assigneeName: owner, agent: null, open: false };
+  }
+  if (stored.kind === "person") {
+    return { id: input.id, assigneeName: stored.name, agent: null, open: false };
+  }
+  const matched = input.run && input.run.agent === stored.agent ? input.run : null;
+  const open = matched == null || ACTIVE.has(matched.status);
+  return { id: input.id, assigneeName: stored.name, agent: stored.agent, open };
+}
+
+/** Bots that own a not-finished hand-off on at least one row. */
+export function openHandoffAgents(rows: readonly Pick<RowAssignment, "agent" | "open">[]): AgentKey[] {
+  const seen = new Set<AgentKey>();
+  const out: AgentKey[] = [];
+  for (const row of rows) {
+    if (!row.open || !row.agent || seen.has(row.agent)) continue;
+    seen.add(row.agent);
+    out.push(row.agent);
+  }
+  return out;
+}
+
+/**
+ * A hand-off that just landed stays on that row until its note is stored.
+ * Other rows keep the assignees already on file.
+ */
+export function withPendingAssignment(
+  rows: readonly RowAssignment[],
+  pending: { id: string; agent: AgentKey | null; assigneeName: string } | null,
+  stored: StoredAssignment | null,
+): RowAssignment[] {
+  if (!pending) return [...rows];
+  const landed =
+    stored?.kind === "bot"
+      ? stored.agent === pending.agent
+      : stored?.kind === "person"
+        ? pending.agent == null && stored.name === pending.assigneeName
+        : false;
+  if (landed) return [...rows];
+  const next = {
+    id: pending.id,
+    assigneeName: pending.assigneeName,
+    agent: pending.agent,
+    open: pending.agent != null,
+  };
+  if (!rows.some((row) => row.id === pending.id)) return [...rows, next];
+  return rows.map((row) => (row.id === pending.id ? next : row));
 }
 
 /**

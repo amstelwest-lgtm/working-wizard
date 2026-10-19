@@ -164,6 +164,9 @@ assert(empty.chase == null, "no balance and no overdue means no chase draft");
 assert(empty.draftEmpty === "No draft is waiting for review.", empty.draftEmpty ?? "");
 
 const src = readFileSync(resolve("src/components/financial-manager-brief.tsx"), "utf8");
+const briefCss = readFileSync(resolve("src/components/financial-manager-brief.css"), "utf8");
+assert(briefCss.includes(".fm-brief-actions li div span"), "the reason colour does not paint the Hand to name");
+assert(briefCss.includes(".hand-to-assignee"), "the assignee name on the button stays readable");
 assert(src.includes("<HandToMenu"), "Act on these hands off through the shared menu");
 assert(src.includes("commitActionHandoff"), "Hand to writes the assignment");
 assert(!src.includes("onHandToBot"), "Hand to does not navigate to the Financial Manager");

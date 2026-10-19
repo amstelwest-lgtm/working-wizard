@@ -52,8 +52,15 @@ import {
   nextFmClip,
   nextFmIdleLoops,
 } from "../src/lib/fm-avatar-state.ts";
-import { ownerPresence, steerAssignedWork } from "../src/lib/owner-presence.ts";
-import { handedHomeAction, preferPendingHandoff } from "../src/lib/open-plan-home.ts";
+import { ownerPresence, steerAssignedWork, steerOpenHandoffs } from "../src/lib/owner-presence.ts";
+import {
+  handedHomeAction,
+  latestStoredAssignment,
+  openHandoffAgents,
+  preferPendingHandoff,
+  rowAssignment,
+  withPendingAssignment,
+} from "../src/lib/open-plan-home.ts";
 import type { AgentKey } from "../src/lib/milon-team-feed.ts";
 
 function assert(cond: unknown, msg: string) {
@@ -412,6 +419,42 @@ assert(
   "the sender looks across",
 );
 assert(
+  handoff.agents.find((agent) => agent.agent === "advisor")?.motion !== "working",
+  "a hand-off message does not paint Working without an open action",
+);
+const hiddenByLaterNote = ownerPresence(
+  activity({
+    messages: [
+      {
+        id: "msg-old",
+        client_id: "c",
+        from_agent: "advisor",
+        to_agent: "financial_manager",
+        type: "handoff",
+        payload: { text: "Profit Drivers is the weakest pillar." },
+        created_at: "2026-10-02T00:00:00.000Z",
+      },
+      {
+        id: "msg-new",
+        client_id: "c",
+        from_agent: "analyst",
+        to_agent: "advisor",
+        type: "status",
+        payload: { text: "Run finished." },
+        created_at: "2026-10-03T00:00:00.000Z",
+      },
+    ],
+  }),
+);
+assert(
+  hiddenByLaterNote.handoff?.sentence.includes("Profit Drivers is the weakest pillar"),
+  "a later non-assignment message does not drop the hand-off note",
+);
+assert(
+  hiddenByLaterNote.agents.find((agent) => agent.agent === "financial_manager")?.motion !== "working",
+  "the financial manager is not Working with no open action",
+);
+assert(
   handoff.agents.find((agent) => agent.agent === "analyst")?.fmClip === "handoff" &&
     handoff.agents.find((agent) => agent.agent === "advisor")?.fmClip === "handoff",
   "both ends of a hand-off play the handoff clip",
@@ -547,6 +590,75 @@ assert(
 assert(
   reloaded.agents.find((agent) => agent.agent === "analyst")?.motion !== "working",
   "the previous assignee drops Working after reload",
+);
+const analystRow = rowAssignment({
+  id: "row-1",
+  notes: [
+    { note: "Status moved to in progress.", at: "2026-10-19T16:00:00.000Z" },
+    { note: "Handed to Milōn Analyst.", at: "2026-10-19T15:00:00.000Z" },
+  ],
+  run: { agent: "analyst", status: "succeeded", at: "2026-10-19T15:10:00.000Z" },
+});
+const advisorRow = rowAssignment({
+  id: "row-2",
+  notes: [{ note: "Handed to Milōn Advisor.", at: "2026-10-19T14:00:00.000Z" }],
+  run: { agent: "advisor", status: "queued", at: "2026-10-19T14:01:00.000Z" },
+});
+assert(
+  analystRow.assigneeName === "Milōn Analyst" && analystRow.open === false,
+  "a finished hand-off keeps the row label and is not Working",
+);
+assert(advisorRow.assigneeName === "Milōn Advisor" && advisorRow.open, "an open hand-off on another row stays Working");
+assert(
+  openHandoffAgents([analystRow, advisorRow]).join(",") === "advisor",
+  "Working is the bots that still have an open hand-off",
+);
+const reassignedRow = rowAssignment({
+  id: "row-1",
+  notes: [
+    { note: "Assigned to theo.", at: "2026-10-19T17:00:00.000Z" },
+    { note: "Handed to Milōn Advisor.", at: "2026-10-19T14:00:00.000Z" },
+  ],
+  run: { agent: "advisor", status: "queued", at: "2026-10-19T14:01:00.000Z" },
+  ownerName: "theo",
+});
+assert(
+  reassignedRow.assigneeName === "theo" && reassignedRow.agent === null && reassignedRow.open === false,
+  "assigning one row to a person clears that row's bot",
+);
+assert(
+  openHandoffAgents([reassignedRow, advisorRow]).join(",") === "advisor",
+  "the other row's advisor hand-off is still Working",
+);
+const personReload = rowAssignment({
+  id: "row-1",
+  ownerName: "theo",
+  notes: [{ note: "Assigned to theo.", at: "2026-10-19T17:00:00.000Z" }],
+  run: null,
+});
+assert(personReload.assigneeName === "theo" && personReload.open === false, "a person assignment is still the row label after reload");
+const pendingRows = withPendingAssignment(
+  [advisorRow],
+  { id: "row-1", agent: "analyst", assigneeName: "Milōn Analyst" },
+  null,
+);
+assert(
+  pendingRows.find((row) => row.id === "row-2")?.open === true &&
+    pendingRows.find((row) => row.id === "row-1")?.agent === "analyst",
+  "a new hand-off does not clear the other row",
+);
+const bothOpen = steerOpenHandoffs(ownerPresence(activity({})), openHandoffAgents(pendingRows));
+assert(
+  bothOpen.agents.find((agent) => agent.agent === "analyst")?.motion === "working" &&
+    bothOpen.agents.find((agent) => agent.agent === "advisor")?.motion === "working",
+  "two open hand-offs show Working on both bots",
+);
+assert(
+  latestStoredAssignment([
+    { note: "Advisor → Financial Manager: Profit Drivers is the weakest pillar.", at: "2026-10-19T18:00:00.000Z" },
+    { note: "Handed to Milōn Analyst.", at: "2026-10-19T15:00:00.000Z" },
+  ])?.kind === "bot",
+  "a later sentence that is not an assignment does not drop the hand-off note",
 );
 const floorMarket = { currency: "USD" as const, locale: "en-US" };
 const comfortCue = cashFloorForHome({

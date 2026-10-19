@@ -885,6 +885,11 @@ html.dark button[data-hand-to-trigger] {
   background-color: #0b5fff !important;
   background-image: none !important;
 }
+html:not(.dark) button[data-hand-to-trigger][class*="rounded-"] span,
+html.dark button[data-hand-to-trigger] span,
+button[data-hand-to-trigger] .hand-to-assignee {
+  color: #ffffff !important;
+}
 html:not(.dark) button[data-hand-to-trigger][class*="rounded-"]:hover,
 html.dark button[data-hand-to-trigger]:hover {
   background-color: #2563eb !important;

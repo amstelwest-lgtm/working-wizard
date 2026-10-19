@@ -283,14 +283,14 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { ownerPresence, steerAssignedWork } from "@/lib/owner-presence";
+import { ownerPresence, steerOpenHandoffs } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   loadActionHandoffRuns,
-  loadLatestHandoffAgents,
+  loadLatestAssignments,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { handedHomeAction, preferPendingHandoff } from "@/lib/open-plan-home";
+import { openHandoffAgents, rowAssignment, withPendingAssignment, type RowAssignment } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
 import { booksSyncCopy, homeActionNeeds, openActionSentence, type BooksLink } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
@@ -1672,30 +1672,57 @@ function ClientView() {
   const [openPlanUnavailable, setOpenPlanUnavailable] = useState(false);
   const [openPlanTick, setOpenPlanTick] = useState(0);
   const [openActionAgent, setOpenActionAgent] = useState<AgentKey | null>(null);
-  const [openActionRun, setOpenActionRun] = useState<{ agent: AgentKey; status: string } | null>(null);
+  const [openAgents, setOpenAgents] = useState<AgentKey[]>([]);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
+  const paintAssignments = (
+    rows: readonly { id: string; title: string; assigneeName: string | null }[],
+    assigned: readonly RowAssignment[],
+  ) => {
+    const open = openHandoffAgents(assigned);
+    const first = assigned.find((row) => row.open);
+    setOpenPlanHandoffs(
+      rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        assignee: assigned.find((item) => item.id === row.id)?.assigneeName ?? row.assigneeName,
+      })),
+    );
+    setOpenAgents(open);
+    setOpenActionAgent(first?.agent ?? null);
+    setHandedTitle(first ? (rows.find((row) => row.id === first.id)?.title ?? null) : null);
+  };
   useEffect(() => {
     const bump = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
-      if (detail?.actionItemId && detail.title) {
-        const name = agentDisplayName(detail.agent);
-        setOpenPlanHandoffs((rows) => {
-          const found = rows.some((row) => row.id === detail.actionItemId);
-          const next = rows.map((row) =>
-            row.id === detail.actionItemId ? { ...row, assignee: name } : row,
-          );
-          return found ? next : [...next, { id: detail.actionItemId, title: detail.title, assignee: name }];
-        });
-      }
-      if (detail?.actionItemId && detail.title && detail.agent !== "financial_manager") {
-        pendingHandoff.current = detail;
-        setHandedTitle(detail.title);
-        setOpenActionAgent(detail.agent);
-        setOpenActionRun({ agent: detail.agent, status: "queued" });
-        setOpenPlanTitles((titles) =>
-          titles && titles.includes(detail.title) ? titles : [...(titles ?? []), detail.title],
-        );
+      if (detail?.actionItemId) {
+        const agent = detail.agent ?? null;
+        const name = detail.assigneeName ?? (agent ? agentDisplayName(agent) : null);
+        if (name) {
+          pendingHandoff.current = { ...detail, agent, assigneeName: name };
+          setOpenPlanHandoffs((rows) => {
+            const found = rows.some((row) => row.id === detail.actionItemId);
+            const next = rows.map((row) =>
+              row.id === detail.actionItemId ? { ...row, assignee: name } : row,
+            );
+            return found
+              ? next
+              : [...next, { id: detail.actionItemId, title: detail.title, assignee: name }];
+          });
+          setOpenAgents((current) => {
+            if (!agent) return current;
+            return current.includes(agent) ? current : [...current, agent];
+          });
+          if (agent) {
+            setOpenActionAgent(agent);
+            setHandedTitle(detail.title);
+          }
+          if (detail.title) {
+            setOpenPlanTitles((titles) =>
+              titles && titles.includes(detail.title) ? titles : [...(titles ?? []), detail.title],
+            );
+          }
+        }
       }
       setOpenPlanTick((n) => n + 1);
     };
@@ -1713,14 +1740,14 @@ function ClientView() {
       setOpenPlanHandoffs([]);
       setHandedTitle(null);
       setOpenActionAgent(null);
-      setOpenActionRun(null);
+      setOpenAgents([]);
     }
     setOpenPlanUnavailable(false);
     void (async () => {
       const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
-        .from("action_items")
-        .select("id, title, due_date, status")
+        .from("action_items_v")
+        .select("id, title, due_date, status, owner_name")
         .eq("client_id", clientId)
         .neq("status", "done")
         .order("seq");
@@ -1731,65 +1758,88 @@ function ClientView() {
         setOpenPlanHandoffs([]);
         setOpenPlanOverdue(0);
         setOpenActionAgent(null);
-        setOpenActionRun(null);
+        setOpenAgents([]);
         setHandedTitle(null);
         return;
       }
-      const rows = (data ?? []) as { id?: string | null; title?: string | null; due_date?: string | null }[];
+      const rows = (data ?? []) as {
+        id?: string | null;
+        title?: string | null;
+        due_date?: string | null;
+        owner_name?: string | null;
+      }[];
       const titles = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
       });
       const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
-      const [notes, runs] = ids.length
-        ? await Promise.all([loadLatestHandoffAgents(ids), loadActionHandoffRuns(ids)])
+      const [assignments, runs] = ids.length
+        ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
       const openRows = rows.flatMap((row) => {
         const title = row.title?.trim() ?? "";
-        return row.id && title ? [{ id: row.id, title }] : [];
+        return row.id && title
+          ? [{ id: row.id, title, ownerName: row.owner_name?.trim() || null }]
+          : [];
       });
-      const handed = preferPendingHandoff(
-        handedHomeAction(
-          openRows,
-          notes,
-          runs,
-        ),
-        pending && pending.agent !== "financial_manager"
-          ? { id: pending.actionItemId, title: pending.title, agent: pending.agent }
-          : null,
-        notes,
-      );
-      if (pending && notes.get(pending.actionItemId)?.agent === pending.agent) {
-        pendingHandoff.current = null;
-      }
-      if (pending && !titles.includes(pending.title)) titles.push(pending.title);
-      const handoffs = openRows.map((row) => {
-        const noteAgent = notes.get(row.id)?.agent ?? null;
-        const pendingAgent =
-          pending && pending.actionItemId === row.id && noteAgent !== pending.agent ? pending.agent : null;
-        const agent = pendingAgent ?? noteAgent;
-        return {
+      const assigned = openRows.map((row) => {
+        const stored = assignments.get(row.id) ?? null;
+        return rowAssignment({
           id: row.id,
-          title: row.title,
-          assignee: agent ? agentDisplayName(agent) : null,
-        };
+          ownerName: row.ownerName,
+          notes: stored
+            ? [
+                {
+                  note:
+                    stored.kind === "bot"
+                      ? `Handed to ${stored.name}.`
+                      : `Assigned to ${stored.name}.`,
+                  at: stored.at,
+                },
+              ]
+            : [],
+          run: runs.get(row.id) ?? null,
+        });
       });
-      if (pending && !handoffs.some((row) => row.id === pending.actionItemId)) {
-        handoffs.push({
+      const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
+      const merged = withPendingAssignment(
+        assigned,
+        pending?.assigneeName
+          ? {
+              id: pending.actionItemId,
+              agent: pending.agent ?? null,
+              assigneeName: pending.assigneeName,
+            }
+          : null,
+        pendingStored,
+      );
+      const pendingLanded =
+        pending?.assigneeName != null &&
+        (pendingStored?.kind === "bot"
+          ? pendingStored.agent === pending.agent
+          : pendingStored?.kind === "person" &&
+            pending.agent == null &&
+            pendingStored.name === pending.assigneeName);
+      if (pendingLanded) pendingHandoff.current = null;
+      if (pending?.title && !titles.includes(pending.title)) titles.push(pending.title);
+      const labelled = openRows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        assigneeName: row.ownerName,
+      }));
+      if (pending?.title && pending.assigneeName && !labelled.some((row) => row.id === pending.actionItemId)) {
+        labelled.push({
           id: pending.actionItemId,
           title: pending.title,
-          assignee: agentDisplayName(pending.agent),
+          assigneeName: pending.assigneeName,
         });
       }
       setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
-      setOpenPlanHandoffs(handoffs);
       setOpenPlanOverdue(rows.filter((row) => Boolean(row.due_date && row.due_date < today)).length);
-      setHandedTitle(handed?.title ?? null);
-      setOpenActionAgent(handed?.agent ?? null);
-      setOpenActionRun(handed?.run ?? null);
+      paintAssignments(labelled, merged);
     })();
     return () => {
       cancelled = true;
@@ -3063,8 +3113,8 @@ function ClientView() {
 
   const homeActivity = useAgentActivity(clientId);
   const homePresence = useMemo(
-    () => steerAssignedWork(ownerPresence(homeActivity), openActionAgent, openActionRun),
-    [homeActivity, openActionAgent, openActionRun],
+    () => steerOpenHandoffs(ownerPresence(homeActivity), openAgents),
+    [homeActivity, openAgents],
   );
   const homeAgent: AgentKey | null =
     search.agent === "financial_manager" || search.agent === "analyst" || search.agent === "advisor"

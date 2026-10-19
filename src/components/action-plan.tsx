@@ -30,7 +30,8 @@ import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
 import { DRAFT_NEEDS_OWNER, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { OwnerDraftCard } from "@/components/owner-draft-card";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
-import { commitActionHandoff, loadActionHandoffRuns } from "@/lib/owner-handoff-client";
+import { assignActionToPerson, commitActionHandoff, loadActionHandoffRuns } from "@/lib/owner-handoff-client";
+import { latestStoredAssignment } from "@/lib/open-plan-home";
 import { type AgentKey } from "@/lib/milon-team-feed";
 import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
@@ -614,27 +615,26 @@ export default function ActionPlanPanel({
             list.map((item) => item.id),
           )
           .order("created_at", { ascending: false });
-        const applied = new Set<string>();
-        const names = new Map<string, string>();
-        for (const row of (notes ?? []) as { action_item_id?: string; note?: string | null }[]) {
+        const grouped = new Map<string, { note: string | null; at: string }[]>();
+        for (const row of (notes ?? []) as {
+          action_item_id?: string;
+          note?: string | null;
+          created_at?: string;
+        }[]) {
           const id = row.action_item_id;
-          if (!id || applied.has(id)) continue;
-          applied.add(id);
-          const name = handoffAssignee(row.note);
-          if (name) names.set(id, name);
+          if (!id) continue;
+          const bucket = grouped.get(id) ?? [];
+          bucket.push({ note: row.note ?? null, at: row.created_at ?? "" });
+          grouped.set(id, bucket);
         }
-        if (names.size) {
-          shown = list.map((item) =>
-            names.has(item.id)
-              ? {
-                  ...item,
-                  owner_id: null,
-                  owner_name: names.get(item.id) ?? item.owner_name,
-                  owner_email: null,
-                }
-              : item,
-          );
-        }
+        shown = list.map((item) => {
+          const stored = latestStoredAssignment(grouped.get(item.id) ?? []);
+          if (stored?.kind === "bot") {
+            return { ...item, owner_id: null, owner_name: stored.name, owner_email: null };
+          }
+          if (stored?.kind === "person") return { ...item, owner_name: stored.name };
+          return item;
+        });
       }
       setItems(shown);
       if (list.length) {
@@ -1577,6 +1577,18 @@ export default function ActionPlanPanel({
                 })()}
                 suggestion={automationById.get(it.id) ?? null}
                 onHandOff={isOwner ? (agent) => void assignToAgent(it, agent) : undefined}
+                onAssignPerson={(person) => {
+                  void assignActionToPerson({
+                    clientId,
+                    actionItemId: it.id,
+                    personId: person.id,
+                    personName: person.name,
+                    title: it.title,
+                  }).then((result) => {
+                    if (!result.ok) toast.error(result.error);
+                    else toast.success(`Assigned to ${person.name}`);
+                  });
+                }}
               />
             ))}
           </div>
@@ -2104,6 +2116,7 @@ function ItemRow({
   onAddEmployee,
   onManageTeam,
   onHandOff,
+  onAssignPerson,
   comingSoon,
   pickupLabel,
   focused,
@@ -2128,6 +2141,7 @@ function ItemRow({
   onManageTeam?: () => void;
   /** Owner and accountant. Asks owner-handoff. The browser does not insert agent_runs. */
   onHandOff?: (agent: AgentKey) => void;
+  onAssignPerson?: (person: { id: string; name: string; email: string | null }) => void;
   /** Agents whose hand-off came back 409 no_runner. */
   comingSoon?: Partial<Record<AgentKey, true>>;
   /** Set when a queued run for this action has started or finished. */
@@ -2403,7 +2417,11 @@ function ItemRow({
             comingSoon={comingSoon}
             audience={isOwner ? "owner" : "accountant"}
             onAssignAgent={onHandOff}
-            onAssignPerson={(person) =>
+            onAssignPerson={(person) => {
+              if (onAssignPerson) {
+                onAssignPerson(person);
+                return;
+              }
               onPatch(
                 {
                   owner_id: person.id,
@@ -2412,8 +2430,8 @@ function ItemRow({
                   sent_at: null,
                 },
                 { note: `Assigned to ${person.name}` },
-              )
-            }
+              );
+            }}
           />
           {pickupLabel ? (
             <p className="mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>

@@ -93,6 +93,18 @@ export function handoffRequestNote(displayName: string): string {
   return `Handed to ${displayName}.`;
 }
 
+/** A person on the Hand to menu. The assignee is in the text. The author is the signed-in actor. */
+export function personAssignmentNote(name: string): string {
+  return `Assigned to ${name}.`;
+}
+
+export function personAssignmentName(note: string | null | undefined): string | null {
+  if (!note?.startsWith("Assigned to ")) return null;
+  const rest = note.slice("Assigned to ".length).trim();
+  const name = rest.split(/[.\n]/)[0]?.trim() ?? "";
+  return name || null;
+}
+
 /** The draft a finished hand-off may leave for a person. The action title is the label. */
 export function handoffDraftTitle(actionTitle: string): string {
   const title = actionTitle.replace(/\s+/g, " ").trim();
