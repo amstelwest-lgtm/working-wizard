@@ -94,7 +94,6 @@ import {
 import type { HealthTier } from "@/lib/ratios";
 import {
   scoreRatio,
-  computeOverallHealth,
   healthMapFromRatios,
   ratioScoreBand,
   overviewRatioInputs,
@@ -104,8 +103,7 @@ import {
   grossMarginLooksImplausible,
   PILLAR_LABELS,
   PILLAR_SHORT_LABELS,
-  cashPillarFollowsForecast,
-  scorecardHealthFromFinancials,
+  liveHealthFromBooks,
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
@@ -1397,31 +1395,21 @@ function ClientView() {
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
-  const cashBalance = assessed.cash.amount;
-  const cashKnown = cashBalance != null;
   const openingMissing = storedOpeningIsMissing(client?.cashflow);
   const healthIndustry = clientIndustryDisplay(
     client?.name,
     parseOperatingProfile(client?.operating_profile),
   );
-  const overallHealth: OverallHealth = cashPillarFollowsForecast(
-    scorecardHealthFromFinancials({
-      financials,
-      fyStartMonth,
-      periodMonths: statementMonths,
-      cashRunwayWeeks: cashKnown ? effectiveRunway : null,
-      cashBalance: cashKnown ? cashBalance : null,
-      market: clientMarket,
-      shortfallWeek: cashOutlook.shortfallWeek,
-      industry: healthIndustry,
-    }),
-    {
-      openingMissing,
-      opening: cashOutlook.opening,
-      closings: cashOutlook.closing,
-      floor: cashOutlook.floor,
-    },
-  );
+  const overallHealth: OverallHealth = liveHealthFromBooks({
+    financials: financials as Record<string, unknown>,
+    cashflow: client?.cashflow,
+    financialsUpdatedAt: client?.financials_updated_at ?? null,
+    priorFinancials: priorSnapshot?.financials ?? null,
+    fyStartMonth,
+    market: clientMarket,
+    industry: healthIndustry,
+    timeZone: clientMarket.timezone,
+  });
   const bookStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,
@@ -2943,11 +2931,15 @@ function ClientView() {
 
       await recordScoreHistory(
         clientId,
-        computeOverallHealth({
-          ratios: ratiosOut,
-          cashRunwayWeeks: effectiveRunway,
+        liveHealthFromBooks({
+          financials: blob as Record<string, unknown>,
+          cashflow: client?.cashflow,
+          financialsUpdatedAt,
+          priorFinancials: priorSnapshot?.financials ?? null,
+          fyStartMonth,
           market: clientMarket,
-          shortfallWeek: cashOutlook.shortfallWeek,
+          industry: healthIndustry,
+          timeZone: clientMarket.timezone,
         }).overall,
       );
 
@@ -5802,26 +5794,18 @@ function ClientView() {
                 financials: merged,
                 source: "upload",
               });
-              const draftedFinancials = { ...financials, ...asStrings } as Record<string, unknown>;
               await recordScoreHistory(
                 clientId,
-                cashPillarFollowsForecast(
-                  scorecardHealthFromFinancials({
-                    financials: draftedFinancials,
-                    fyStartMonth,
-                    periodMonths: periodMonthsOf(draftedFinancials),
-                    cashRunwayWeeks: effectiveRunway,
-                    market: clientMarket,
-                    shortfallWeek: cashOutlook.shortfallWeek,
-                    industry: healthIndustry,
-                  }),
-                  {
-                    openingMissing,
-                    opening: cashOutlook.opening,
-                    closings: cashOutlook.closing,
-                    floor: cashOutlook.floor,
-                  },
-                ).overall,
+                liveHealthFromBooks({
+                  financials: merged as Record<string, unknown>,
+                  cashflow: client?.cashflow,
+                  financialsUpdatedAt,
+                  priorFinancials: priorSnapshot?.financials ?? null,
+                  fyStartMonth,
+                  market: clientMarket,
+                  industry: healthIndustry,
+                  timeZone: clientMarket.timezone,
+                }).overall,
               );
               toast.success(
                 annualised

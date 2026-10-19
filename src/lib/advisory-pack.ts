@@ -25,16 +25,14 @@ import {
   RUNWAY_INSUFFICIENT_LABEL,
   RUNWAY_PROFITABLE_LABEL,
   runwayDisplayLabel,
-  storedOpeningIsMissing,
 } from "./client-metrics.ts";
 import {
   type HealthPillarId,
   type OverallHealth,
   type ScoreMarket,
-  cashPillarFollowsForecast,
+  liveHealthFromBooks,
   overviewRatios,
   pillarForRatioName,
-  scorecardHealthFromFinancials,
   scoreRatio,
 } from "./health-score.ts";
 import { periodMonthsOf } from "./ratios.ts";
@@ -47,7 +45,7 @@ import {
 import { cashComfortThreshold } from "./cash-runway.ts";
 import { humanizeInternalFieldNames } from "./client-brain-questions.ts";
 import { formatMoney, formatMoneyCompact } from "./market/format.ts";
-import { canonicalScoreProse } from "./score-prose.ts";
+import { canonicalScoreProse, overlayLiveHealthProse, type LiveHealthQuote } from "./score-prose.ts";
 import {
   STATEMENT_DEPTH_DISCLOSURE,
   expectedImpactLabel,
@@ -547,8 +545,6 @@ export function livePackMetrics(input: {
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
       ? assessed.runway.weeks
       : null;
-  const cashBalance = assessed.cash.amount;
-  const cashKnown = cashBalance != null;
   // Same cover and helper as the scorecard PDF and Overview. A year-span
   // annualisation (unlocked 12 read as January–September) scores different
   // inventory and working-capital days than `periodMonthsOf`.
@@ -559,25 +555,17 @@ export function livePackMetrics(input: {
     fyStartMonth: input.fyStartMonth,
     periodMonths,
   });
-  const healthScored = scorecardHealthFromFinancials({
+  const health = liveHealthFromBooks({
     financials: input.financials,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+    priorFinancials: input.priorFinancials ?? null,
     fyStartMonth: input.fyStartMonth,
-    periodMonths,
-    cashRunwayWeeks: cashKnown ? runwayWeeks : null,
-    cashBalance: cashKnown ? cashBalance : null,
     market: input.market ?? undefined,
-    shortfallWeek: assessed.outlook.shortfallWeek,
     industry: input.industry,
+    timeZone: input.timeZone,
+    now: input.now,
   });
-  const health =
-    healthScored.overall == null
-      ? healthScored
-      : cashPillarFollowsForecast(healthScored, {
-          openingMissing: storedOpeningIsMissing(input.cashflow),
-          opening: assessed.outlook.opening,
-          closings: assessed.outlook.closing,
-          floor: assessed.outlook.floor,
-        });
   const opening = assessed.outlook.opening;
   const runwayLabel = runwayDisplayLabel(assessed.runway);
   return {
@@ -901,9 +889,15 @@ export function packSectionsForPdf<T extends { key?: string; title: string; body
     currency?: string | null;
     /** Missing aged lists and the opening, from the books on file now. */
     liveGaps?: readonly { title: string; severity: string }[] | null;
+    /** Live floor-applied score. Replaces the overall and weakest baked into the body. */
+    liveHealth?: LiveHealthQuote | null;
   },
 ): T[] {
-  const align = (text: string) => packScoreProse(alignPackFloorCopy(text, opts?.liveFloor, opts?.currency));
+  const align = (text: string) =>
+    overlayLiveHealthProse(
+      packScoreProse(alignPackFloorCopy(text, opts?.liveFloor, opts?.currency)),
+      opts?.liveHealth,
+    );
   return sections
     .filter((section) => {
       const recommendations = section.key === "recommendations" || section.title === "Recommendations";

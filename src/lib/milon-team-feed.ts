@@ -13,12 +13,7 @@
 import { advisorySignoffGrounding, type AdvisorySignoffState } from "./advisory-signoff";
 import { parseBrainSummary } from "./client-brain";
 import { draftKindLabel } from "./client-brain-deliverable";
-import {
-  assessClientMetrics,
-  persistedRunwayWeeks,
-  runwayDisplayLabel,
-  storedOpeningIsMissing,
-} from "./client-metrics";
+import { assessClientMetrics, persistedRunwayWeeks, runwayDisplayLabel } from "./client-metrics";
 import {
   cashComfortThreshold,
   closingBalancesFromCashflow,
@@ -26,9 +21,8 @@ import {
 } from "./cash-runway";
 import {
   RATIO_NAME_TO_KEY,
-  cashPillarFollowsForecast,
+  liveHealthFromBooks,
   overviewRatios,
-  scorecardHealthFromFinancials,
   scoreRatio,
   type ScoreMarket,
 } from "./health-score";
@@ -1079,29 +1073,16 @@ export function diagnosisFromWorkspace(input: WorkspaceDiagnosisInput): TeamDiag
     fyStartMonth: input.fyStartMonth,
     timeZone: input.timeZone,
   });
-  const cashBalance = assessed.cash.amount;
-  const cashKnown = cashBalance != null;
   const runwayWeeks = persistedRunwayWeeks(assessed.runway);
-  const healthScored = scorecardHealthFromFinancials({
+  const healthRaw = liveHealthFromBooks({
     financials,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt,
     fyStartMonth: input.fyStartMonth,
-    periodMonths,
-    cashRunwayWeeks: cashKnown ? runwayWeeks : null,
-    cashBalance: cashKnown ? cashBalance : null,
     market,
-    shortfallWeek: assessed.outlook.shortfallWeek,
     industry: input.industry,
+    timeZone: input.timeZone,
   });
-  // An empty book has no overall. The forecast floor must not invent one from a zero opening.
-  const healthRaw =
-    healthScored.overall == null
-      ? healthScored
-      : cashPillarFollowsForecast(healthScored, {
-          openingMissing: storedOpeningIsMissing(input.cashflow),
-          opening: assessed.outlook.opening,
-          closings: assessed.outlook.closing,
-          floor: assessed.outlook.floor,
-        });
 
   const ratioMap = overviewRatios(financials, {
     fyStartMonth: input.fyStartMonth,

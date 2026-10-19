@@ -14,6 +14,7 @@ import { parseOperatingProfile } from "../../../src/lib/client-profile.ts";
 import {
   cashPillarFollowsForecast,
   computeOverallHealth,
+  liveHealthFromBooks,
   scorecardHealthFromFinancials,
   type ScoreMarket,
 } from "../../../src/lib/health-score.ts";
@@ -315,6 +316,15 @@ export function buildOverviewBrief(input: {
   cashOpening?: number | null;
   cashClosings?: readonly number[] | null;
   cashFloor?: number | null;
+  /**
+   * When the books' cashflow is passed, health comes from `liveHealthFromBooks`
+   * and the explicit floor fields are not a second score.
+   */
+  cashflow?: unknown;
+  financialsUpdatedAt?: string | null;
+  priorFinancials?: Record<string, unknown> | null;
+  timeZone?: string | null;
+  now?: Date;
 }): OverviewBrief {
   const copyPack = input.copyPack ?? "za";
   const market = input.market ?? marketFromCopyPack(copyPack);
@@ -338,25 +348,42 @@ export function buildOverviewBrief(input: {
   // Same pillar math as Overview / the scorecard. A year-span health score
   // (creditor days 28) must not sit next to the stored-cover days (37).
   const cashOnFile = input.cash !== undefined ? input.cash : asNumber(financials?.cash);
-  const raw = financials
-    ? scorecardHealthFromFinancials({
-        financials,
-        fyStartMonth,
-        periodMonths,
-        cashRunwayWeeks: runway,
-        cashBalance: cashOnFile,
-        shortfallWeek: input.shortfallWeek,
-        market,
-        industry: input.industry,
-      })
-    : computeOverallHealth({
-        ratios,
-        cashRunwayWeeks: runway,
-        shortfallWeek: input.shortfallWeek,
-        market,
-      });
-  const scored =
-    raw.overall == null
+  const fromBooks =
+    financials && input.cashflow !== undefined
+      ? liveHealthFromBooks({
+          financials,
+          cashflow: input.cashflow,
+          financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+          priorFinancials: input.priorFinancials ?? null,
+          fyStartMonth,
+          market,
+          industry: input.industry,
+          timeZone: input.timeZone,
+          now: input.now,
+        })
+      : null;
+  const raw =
+    fromBooks ??
+    (financials
+      ? scorecardHealthFromFinancials({
+          financials,
+          fyStartMonth,
+          periodMonths,
+          cashRunwayWeeks: runway,
+          cashBalance: cashOnFile,
+          shortfallWeek: input.shortfallWeek,
+          market,
+          industry: input.industry,
+        })
+      : computeOverallHealth({
+          ratios,
+          cashRunwayWeeks: runway,
+          shortfallWeek: input.shortfallWeek,
+          market,
+        }));
+  const scored = fromBooks
+    ? fromBooks
+    : raw.overall == null
       ? raw
       : cashPillarFollowsForecast(raw, {
           openingMissing: input.openingMissing === true,

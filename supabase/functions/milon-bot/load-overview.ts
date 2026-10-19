@@ -97,6 +97,9 @@ export async function loadOverviewBrief(
       clientName,
       templateId: typeof templateId === "string" ? templateId : null,
     }),
+    cashflow: (row as { cashflow?: unknown } | null)?.cashflow,
+    financialsUpdatedAt:
+      (row as { financials_updated_at?: string | null } | null)?.financials_updated_at ?? null,
     openingMissing: storedOpeningIsMissing((row as { cashflow?: unknown } | null)?.cashflow),
     cashOpening: metrics.outlook.opening,
     cashClosings: metrics.outlook.closing,

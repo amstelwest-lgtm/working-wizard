@@ -487,6 +487,8 @@ export async function executeAgentTool(
           clientName,
           templateId: typeof templateId === "string" ? templateId : null,
         }),
+        cashflow: clientRes.data?.cashflow,
+        financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
         openingMissing: storedOpeningIsMissing(clientRes.data?.cashflow),
         cashOpening: healthMetrics.outlook.opening,
         cashClosings: healthMetrics.outlook.closing,

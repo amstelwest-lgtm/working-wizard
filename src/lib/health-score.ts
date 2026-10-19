@@ -5,6 +5,7 @@ import {
   bandedPillarStatus,
   computeRatios,
   healthBandLabel,
+  periodMonthsOf,
   scoreTier,
   type HealthTier,
   type RatioInputs,
@@ -12,10 +13,13 @@ import {
 import { salesPerEmployeeHealthy } from "./market/benchmarks.ts";
 import type { ResolvedMarket } from "./market/types.ts";
 import {
+  assessClientMetrics,
+  persistedRunwayWeeks,
   scoreCreditorDays,
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
   scoreWorkingCapitalFunding,
+  storedOpeningIsMissing,
 } from "./client-metrics.ts";
 
 export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
@@ -391,6 +395,56 @@ export function scorecardHealthFromFinancials(input: {
     shortfallWeek: input.shortfallWeek,
     grossMarginImplausible:
       typeof gross === "number" && grossMarginLooksImplausible(gross, input.industry),
+  });
+}
+
+/**
+ * The score Home, the client list, notes, Analyst chat, an agent run, and
+ * the pack all quote. Industry, the cash floor, and a missing opening are
+ * applied here. An empty book stays unscored: the floor must not invent one.
+ */
+export function liveHealthFromBooks(input: {
+  financials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+  financialsUpdatedAt?: string | null;
+  priorFinancials?: Record<string, unknown> | null;
+  fyStartMonth?: number | null;
+  market?: ScoreMarket;
+  industry?: string | null;
+  timeZone?: string | null;
+  now?: Date;
+}): OverallHealth {
+  const financials =
+    input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
+      ? input.financials
+      : null;
+  const assessed = assessClientMetrics({
+    financials,
+    cashflow: input.cashflow,
+    financialsUpdatedAt: input.financialsUpdatedAt ?? null,
+    priorFinancials: input.priorFinancials ?? null,
+    now: input.now,
+    timeZone: input.timeZone,
+    fyStartMonth: input.fyStartMonth,
+  });
+  const cashBalance = assessed.cash.amount;
+  const cashKnown = cashBalance != null;
+  const healthScored = scorecardHealthFromFinancials({
+    financials,
+    fyStartMonth: input.fyStartMonth,
+    periodMonths: financials ? periodMonthsOf(financials) : null,
+    cashRunwayWeeks: cashKnown ? persistedRunwayWeeks(assessed.runway) : null,
+    cashBalance: cashKnown ? cashBalance : null,
+    market: input.market,
+    shortfallWeek: assessed.outlook.shortfallWeek,
+    industry: input.industry,
+  });
+  if (healthScored.overall == null) return healthScored;
+  return cashPillarFollowsForecast(healthScored, {
+    openingMissing: storedOpeningIsMissing(input.cashflow),
+    opening: assessed.outlook.opening,
+    closings: assessed.outlook.closing,
+    floor: assessed.outlook.floor,
   });
 }
 

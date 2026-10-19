@@ -396,6 +396,8 @@ export async function buildContext(
           figuresAsOf: snapDate,
           brainSummary,
           industry: profile?.operating?.industry ?? null,
+          cashflow,
+          financialsUpdatedAt,
           openingMissing: storedOpeningIsMissing(cashflow),
           cashOpening: metrics?.outlook.opening,
           cashClosings: metrics?.outlook.closing,

@@ -44,6 +44,10 @@ export type LiveHealthQuote = {
   overall: number | null;
   weakestLabel: string | null;
   weakestScore: number | null;
+  /** Chip word. The pack body uses it in "scores 54 (critical)". */
+  label?: string | null;
+  /** Pillar lines such as "Cash (93)" take these scores. */
+  pillars?: readonly { label: string; score: number | null }[] | null;
 };
 
 const PILLAR_WORD =
@@ -86,6 +90,46 @@ export function preferLiveHealthProse(text: string, live?: LiveHealthQuote | nul
   }
   if (rewroteWeakest) {
     next = next.replace(/,?\s*tied with\s+[A-Za-z][A-Za-z &/]*\s+at\s+\d{1,3}\b/gi, "");
+  }
+  return next.replace(/\s{2,}/g, " ").replace(/\s+([,.])/g, "$1").trim();
+}
+
+/**
+ * Pack body. The stored section keeps its words. The overall and the weakest
+ * pillar take the live score. A two-period sentence stays as it was written.
+ */
+export function overlayLiveHealthProse(text: string, live?: LiveHealthQuote | null): string {
+  if (!text || !live || isHistoricalScoreNote(text)) return text;
+  let next = preferLiveHealthProse(text, live);
+  if (live.overall != null && Number.isFinite(live.overall)) {
+    const n = String(Math.round(live.overall));
+    const band = (live.label ?? "").trim().toLowerCase();
+    if (band === "critical" || band === "watch" || band === "healthy") {
+      next = next.replace(
+        /\bscores\s+\d{1,3}\s*\((?:critical|watch|healthy)\)/gi,
+        `scores ${n} (${band})`,
+      );
+      next = next.replace(/\b(?:critical|watch|healthy) at\s+\d{1,3}\b/gi, `${band} at ${n}`);
+    }
+    next = next.replace(/\bscores\s+\d{1,3}\b/gi, `scores ${n}`);
+  }
+  if (live.weakestLabel && live.weakestScore != null && Number.isFinite(live.weakestScore)) {
+    const score = String(Math.round(live.weakestScore));
+    const label = live.weakestLabel;
+    next = next.replace(
+      new RegExp(`\\bWeakest:\\s*(?:${PILLAR_WORD})\\s*\\(\\d{1,3}\\)`, "gi"),
+      `Weakest: ${label} (${score})`,
+    );
+    next = next.replace(
+      new RegExp(`\\b(?:${PILLAR_WORD})\\s+is the weakest pillar\\b`, "gi"),
+      `${label} is the weakest pillar`,
+    );
+  }
+  for (const pillar of live.pillars ?? []) {
+    if (pillar.score == null || !Number.isFinite(pillar.score) || !pillar.label.trim()) continue;
+    const score = String(Math.round(pillar.score));
+    const label = pillar.label.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    next = next.replace(new RegExp(`\\b${label}\\s*\\(\\d{1,3}\\)`, "gi"), `${pillar.label.trim()} (${score})`);
   }
   return next.replace(/\s{2,}/g, " ").replace(/\s+([,.])/g, "$1").trim();
 }

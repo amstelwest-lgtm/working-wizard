@@ -115,10 +115,9 @@ import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
-  cashPillarFollowsForecast,
-  computeOverallHealth,
   grossMarginLooksImplausible,
   healthMapFromRatios,
+  liveHealthFromBooks,
   scoreRatio,
 } from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
@@ -3639,7 +3638,7 @@ function Index() {
         : NaN,
   };
 
-  // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
+  // Overall + pillars — liveHealthFromBooks, the same call as the accountant Health page.
   // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
   const ownerPrior = useMemo(
     () =>
@@ -3657,10 +3656,6 @@ function Index() {
     timeZone: boardMarket.timezone,
     fyStartMonth,
   });
-  const effectiveRunway =
-    ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
-      ? ownerMetrics.runway.weeks
-      : null;
   const ownerOutlook = ownerMetrics.outlook;
   const openOwnerFm = () => {
     void navigate({
@@ -3692,22 +3687,16 @@ function Index() {
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
   const grossImplausible = grossMarginLooksImplausible(grossMarginRatio, industryLabel);
-  const overallHealth = cashPillarFollowsForecast(
-    computeOverallHealth({
-      ratios: computedRatios as Record<string, number>,
-      cashRunwayWeeks: cashBalance != null ? effectiveRunway : null,
-      cashBalance,
-      market: boardMarket,
-      shortfallWeek: ownerOutlook.shortfallWeek,
-      grossMarginImplausible: grossImplausible,
-    }),
-    {
-      openingMissing: ownerOpeningMissing,
-      opening: ownerOutlook.opening,
-      closings: ownerOutlook.closing,
-      floor: ownerOutlook.floor,
-    },
-  );
+  const overallHealth = liveHealthFromBooks({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    priorFinancials: ownerPrior?.financials ?? null,
+    fyStartMonth,
+    market: boardMarket,
+    industry: industryLabel,
+    timeZone: boardMarket.timezone,
+  });
   const ownerStatusWord = clientListStatusWord({
     healthLabel: overallHealth.displayLabel,
     healthOverall: overallHealth.overall,

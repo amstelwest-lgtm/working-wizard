@@ -43,13 +43,9 @@ import {
 } from "./payables.ts";
 import { adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import { formatSnapshotRatio } from "../../../src/lib/advisory-narrative.ts";
-import { assessClientMetrics, persistedRunwayWeeks, storedOpeningIsMissing } from "../../../src/lib/client-metrics.ts";
-import {
-  cashPillarFollowsForecast,
-  scorecardHealthFromFinancials,
-} from "../../../src/lib/health-score.ts";
+import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
+import { liveHealthFromBooks } from "../../../src/lib/health-score.ts";
 import { stepPillarFromTitle, weakestPillarLead } from "../../../src/lib/move-pillars.ts";
-import { periodMonthsOf } from "../../../src/lib/ratios.ts";
 import {
   formatStatementMargin,
   isStatementMarginName,
@@ -453,24 +449,13 @@ async function handleBrainPropose(req: Request): Promise<Response> {
     templateId: typeof templateId === "string" ? templateId : null,
     businessType: typeof client?.business_type === "string" ? client.business_type : null,
   });
-  const cashKnown = assessed.cash.amount != null;
-  const healthScored = scorecardHealthFromFinancials({
+  const liveHealth = liveHealthFromBooks({
     financials: liveFinancials,
-    periodMonths: periodMonthsOf(liveFinancials),
-    cashRunwayWeeks: cashKnown ? runwayWeeks : null,
-    cashBalance: cashKnown ? assessed.cash.amount : null,
-    shortfallWeek: assessed.outlook.shortfallWeek,
+    cashflow: client?.cashflow,
+    financialsUpdatedAt:
+      typeof client?.financials_updated_at === "string" ? client.financials_updated_at : null,
     industry,
   });
-  const liveHealth =
-    healthScored.overall == null
-      ? healthScored
-      : cashPillarFollowsForecast(healthScored, {
-          openingMissing: storedOpeningIsMissing(client?.cashflow),
-          opening: assessed.outlook.opening,
-          closings: assessed.outlook.closing,
-          floor: assessed.outlook.floor,
-        });
   if (liveHealth.overall != null) {
     const pillarLine = liveHealth.pillars
       .map((pillar) => `${pillar.label} ${pillar.score == null ? "unscored" : pillar.score}`)
