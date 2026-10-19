@@ -85,7 +85,7 @@ import type {
 } from "@/lib/cash-from-banks.types";
 import { periodMonthsOf } from "@/lib/ratios";
 import { balanceSheetCashAsOf } from "@/lib/statement-parse";
-import { formatCalendarDay, formatMoneyChartTick } from "@/lib/market/format";
+import { formatCalendarDay, formatMoneyChartTick, formatMoneyCompact } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
@@ -111,7 +111,7 @@ import {
   weekDatesFrom,
   type ClientRunway,
 } from "@/lib/client-metrics";
-import { groupSmallForecastRows } from "@/lib/cash-forecast-rows";
+import { forecastRowLabel, groupSmallForecastRows, isAssumedMonthlyLine } from "@/lib/cash-forecast-rows";
 import {
   isProjectedOnceOff,
   projectForecastFrequency,
@@ -216,11 +216,15 @@ const EXPENSE_PRESETS = [
 const DEFAULT_EXPENSES: LineItem[] = EXPENSE_PRESETS.map((n) => makeLine(n));
 const DEFAULT_OTHER: LineItem[] = [makeLine("Other expenses")];
 
-function distribute(line: LineItem, recurring?: ReadonlyMap<string, RecurringFrequency> | null): number[] {
+function distribute(
+  line: LineItem,
+  side: "revenue" | "expenses" | "other",
+  recurring?: ReadonlyMap<string, RecurringFrequency> | null,
+): number[] {
   return distributeForecastLine(
     {
       ...line,
-      frequency: projectForecastFrequency(line.name, line.frequency, recurring) as LineItem["frequency"],
+      frequency: projectForecastFrequency(line.name, line.frequency, recurring, { side }) as LineItem["frequency"],
     },
     WEEKS,
   );
@@ -417,17 +421,21 @@ function LineEditor({
   onChange,
   onRemove,
   tone,
+  side,
 }: {
   line: LineItem;
   onChange: (l: LineItem) => void;
   onRemove?: () => void;
   tone: "revenue" | "expense";
+  side?: "revenue" | "expenses" | "other";
 }) {
   const { market } = useMarketFormat();
   const cur = currencySymbol(market);
   const accent =
     tone === "revenue" ? "border-l-[3px] border-l-[#4caf82]" : "border-l-[3px] border-l-[#e05c5c]";
   const showSplit = line.frequency === "split-weeks" || line.frequency === "split-months";
+  const sideForLabel = side ?? (tone === "revenue" ? "revenue" : "expenses");
+  const assumed = isAssumedMonthlyLine(line.name, line.frequency, { side: sideForLabel });
   return (
     <div
       className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
@@ -466,6 +474,11 @@ function LineEditor({
             ))}
           </SelectContent>
         </Select>
+        {assumed ? (
+          <p className="mt-1 text-[11px] text-slate-500" data-assumed-monthly="">
+            recurring (assumed monthly)
+          </p>
+        ) : null}
       </div>
       <div className="md:col-span-2">
         <Label className={LABEL_CLS}>Start week</Label>
@@ -577,6 +590,7 @@ export function CashForecastPanel({
   onInvite,
   preview = null,
   includeFloorInDomain = false,
+  spacedChartTicks = false,
 }: {
   clientId?: string;
   clientName?: string;
@@ -619,6 +633,12 @@ export function CashForecastPanel({
    * charts, where the auto domain is unchanged.
    */
   includeFloorInDomain?: boolean;
+  /**
+   * Keep the R gap in abbreviated axis ticks (R 656k). Off on owner and
+   * accountant charts, which stay on the unspaced tick so the label cannot wrap.
+   * US abbreviations stay $656k either way.
+   */
+  spacedChartTicks?: boolean;
   preview?: {
     startDate: string;
     openingBalance: string;
@@ -1348,10 +1368,10 @@ export function CashForecastPanel({
       revenue.map((l) => ({
         id: l.id,
         bucket: "revenue" as const,
-        name: l.name,
-        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees),
+        name: forecastRowLabel(l.name, l.frequency, { side: "revenue" }),
+        onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, { side: "revenue" }),
         vals: applyWeekOverrides(
-          shiftVals(distribute(l, recurringPayees).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+          shiftVals(distribute(l, "revenue", recurringPayees).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
           l.weekOverrides,
         ),
       })),
@@ -1359,10 +1379,10 @@ export function CashForecastPanel({
     const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
       id: l.id,
       bucket,
-      name: l.name,
-      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees),
+      name: forecastRowLabel(l.name, l.frequency, { side: bucket }),
+      onceOff: isProjectedOnceOff(l.name, l.frequency, recurringPayees, { side: bucket }),
       vals: applyWeekOverrides(
-        distribute(l, recurringPayees).map((v) => v * opts.eMul),
+        distribute(l, bucket, recurringPayees).map((v) => v * opts.eMul),
         l.weekOverrides,
       ),
     });
@@ -1885,8 +1905,14 @@ export function CashForecastPanel({
             fontSize={tickSize}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => sign(formatMoneyChartTick(v, market))}
-            width={enlarged ? 76 : 68}
+            tickFormatter={(v) =>
+              sign(
+                spacedChartTicks
+                  ? formatMoneyCompact(v, market)
+                  : formatMoneyChartTick(v, market),
+              )
+            }
+            width={spacedChartTicks ? 84 : enlarged ? 76 : 68}
             tick={{ fill: "#94a3b8", fontSize: tickSize }}
             domain={
               includeFloorInDomain
@@ -2481,6 +2507,37 @@ export function CashForecastPanel({
   });
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
+  // A balance-sheet date, or any non-zero opening on screen, is a real amount.
+  // Only a stored blank with no date and no amount is missing.
+  const openingTilesMissing =
+    loaded &&
+    storedOpeningIsMissing(loadedCashflowRef.current) &&
+    !openingAsOf &&
+    Math.abs(baseCalc.opening) < 0.5;
+  const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
+  const lowestTileValue =
+    openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
+  const lowestTileSub = openingTilesMissing
+    ? "missing"
+    : emptyPresentation.lowestBlank
+      ? "Add an opening balance"
+      : lowPoint.week === 0
+        ? "Opening balance"
+        : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`;
+  const lowestPointSub = openingTilesMissing
+    ? "missing"
+    : emptyPresentation.lowestBlank
+      ? "Add an opening balance"
+      : lowPoint.week === 0
+        ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
+        : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`;
+  const weeksBelowValue = openingTilesMissing ? "—" : weeksBelow.value;
+  const weeksBelowSub = openingTilesMissing ? "missing" : weeksBelow.sub;
+  const weeksBelowTone = openingTilesMissing || forecastEmpty
+    ? "neutral"
+    : floorPos.weeksBelow > 0 || floorPos.opensBelow
+      ? "bad"
+      : "good";
 
   const kpiTiles = (
       <div
@@ -2509,23 +2566,17 @@ export function CashForecastPanel({
             />
             <Stat
               label="Lowest balance"
-              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
+              value={lowestTileValue}
               icon={ShieldCheck}
-              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={
-                emptyPresentation.lowestBlank
-                  ? "Add an opening balance"
-                  : lowPoint.week === 0
-                    ? "Opening balance"
-                    : `Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`
-              }
+              tone={openingTilesMissing || emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+              sub={lowestTileSub}
             />
             <Stat
               label="Weeks below floor"
-              value={weeksBelow.value}
+              value={weeksBelowValue}
               icon={CalendarDays}
-              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
-              sub={weeksBelow.sub}
+              tone={weeksBelowTone}
+              sub={weeksBelowSub}
             />
             <Stat
               label="Net cash · next 4 weeks"
@@ -2539,24 +2590,22 @@ export function CashForecastPanel({
           </>
         ) : (
           <>
-            <Stat label="Opening bank" value={fmtCompact(baseCalc.opening)} sub={openingLabel} />
+            {openingTilesMissing ? (
+              <Stat label="Opening bank" value={openingTileValue} sub="missing" />
+            ) : (
+              <Stat label="Opening bank" value={openingTileValue} sub={openingLabel} />
+            )}
             <Stat
               label="Lowest point"
-              value={emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal)}
-              tone={emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
-              sub={
-                emptyPresentation.lowestBlank
-                  ? "Add an opening balance"
-                  : lowPoint.week === 0
-                    ? `Opening · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-                    : `Week ${lowestWeek} · ${lowestUnderFloor ? fmtCompact(minimumCash - lowestBal) + " under the floor" : fmtCompact(lowestBal - minimumCash) + " above the floor"}`
-              }
+              value={lowestTileValue}
+              tone={openingTilesMissing || emptyPresentation.lowestBlank ? "neutral" : lowestUnderFloor ? "bad" : "good"}
+              sub={lowestPointSub}
             />
             <Stat
               label="Weeks below floor"
-              value={weeksBelow.value}
-              tone={forecastEmpty ? "neutral" : floorPos.weeksBelow > 0 || floorPos.opensBelow ? "bad" : "good"}
-              sub={weeksBelow.sub}
+              value={weeksBelowValue}
+              tone={weeksBelowTone}
+              sub={weeksBelowSub}
             />
           </>
         )}
@@ -2886,6 +2935,7 @@ export function CashForecastPanel({
                 key={l.id}
                 line={l}
                 tone="expense"
+                side="other"
                 onChange={(n) => updateAt(other, setOther, i, n)}
                 onRemove={
                   other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined

@@ -44,6 +44,8 @@ export type InterventionPriorityPDFProps = {
   sample?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
+  /** Cash series is under the floor. The narrative must not call that prevention. */
+  cashBelowFloor?: boolean;
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ export function InterventionPriorityPDF({
   reviewSignoff,
   operatingProfile,
   market,
+  cashBelowFloor,
 }: InterventionPriorityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const mkt = market ?? ZA_MARKET;
@@ -118,6 +121,7 @@ export function InterventionPriorityPDF({
       critical: critical.length,
       atRisk: atRisk.length,
       total: interventions.length,
+      cashBelowFloor,
     },
     operatingProfile,
     market ?? ZA_MARKET,

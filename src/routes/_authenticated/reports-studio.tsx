@@ -59,16 +59,20 @@ import {
 } from "@/lib/equity-coherence";
 import { reportNumber } from "@/lib/report-catalog";
 import {
+  cashPillarFollowsForecast,
   scorecardHealthFromFinancials,
   scoreRatio,
   type OverallHealth,
 } from "@/lib/health-score";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
+  budgetSignoffIsStale,
   reviewFiguresChanged,
   signedHealthFromHistory,
   type SignoffPeriodSnapshot,
 } from "@/lib/signoff-status";
+import { budgetSignedFiguresChanged } from "@/lib/budget.bridges";
+import { cashOutlookIsCritical } from "@/lib/cash-forecast-parity";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
@@ -76,6 +80,7 @@ import {
   resolveThirteenWeekForecast,
   runwayDisplayLabel,
   scoreWorkingCapitalFunding,
+  storedOpeningIsMissing,
   type ClientRunway,
 } from "@/lib/client-metrics";
 import {
@@ -1167,6 +1172,10 @@ type ClientReportData = {
   signoffSnapshots: SignoffPeriodSnapshot[];
   /** Scores on file. The row on or before the sign-off day is the signed health. */
   scoreHistory: { period_date: string; score: number }[];
+  /** 13-week cash is under the floor and the opening is on file. */
+  cashBelowFloor: boolean;
+  /** Signed budget figures from content_snapshot. Null when that sign-off stored none. */
+  budgetSignedSnapshot: unknown;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -1213,6 +1222,8 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   isSample: false,
   signoffSnapshots: [],
   scoreHistory: [],
+  cashBelowFloor: false,
+  budgetSignedSnapshot: null,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -2076,7 +2087,10 @@ async function loadBudgetActualsForPdf(clientId: string): Promise<BudgetPdfActua
   return out;
 }
 
-async function loadBudgetWorkflowStatus(clientId: string): Promise<BudgetReviewWorkflow | null> {
+async function loadBudgetWorkflow(clientId: string): Promise<{
+  status: BudgetReviewWorkflow | null;
+  snapshot: unknown;
+}> {
   const loose = supabase as unknown as {
     from: (t: string) => {
       select: (c: string) => {
@@ -2089,7 +2103,7 @@ async function loadBudgetWorkflowStatus(clientId: string): Promise<BudgetReviewW
             v: string,
           ) => {
             maybeSingle: () => Promise<{
-              data: { status?: string } | null;
+              data: { status?: string; content_snapshot?: unknown } | null;
               error: { message: string } | null;
             }>;
           };
@@ -2100,16 +2114,17 @@ async function loadBudgetWorkflowStatus(clientId: string): Promise<BudgetReviewW
   try {
     const { data, error } = await loose
       .from("client_deliverable_states")
-      .select("status")
+      .select("status, content_snapshot")
       .eq("client_id", clientId)
       .eq("scope", "budget")
       .maybeSingle();
-    if (error) return null;
+    if (error) return { status: null, snapshot: null };
     const status = data?.status;
-    if (status === "draft" || status === "ready_for_review" || status === "signed_off") return status;
-    return null;
+    const workflow =
+      status === "draft" || status === "ready_for_review" || status === "signed_off" ? status : null;
+    return { status: workflow, snapshot: data?.content_snapshot ?? null };
   } catch {
-    return null;
+    return { status: null, snapshot: null };
   }
 }
 
@@ -2215,7 +2230,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     clientRow?.financials && typeof clientRow.financials === "object"
       ? (clientRow.financials as Record<string, unknown>)
       : null;
-  const budgetWorkflowStatus = await loadBudgetWorkflowStatus(clientId);
+  const budgetWorkflow = await loadBudgetWorkflow(clientId);
+  const budgetWorkflowStatus = budgetWorkflow.status;
   const budget = storedBudget
     ? publishBudgetDocument(
         storedBudget,
@@ -2261,6 +2277,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budgetActuals,
     budgetUpdatedAt,
     budgetWorkflowStatus,
+    budgetSignedSnapshot: budgetWorkflow.snapshot,
     dataPeriodLabel,
     periodMonth: periodParts?.month ?? null,
     periodYear: periodParts?.year ?? null,
@@ -2363,14 +2380,29 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     assessed.runway.kind === "cash_generative" &&
     cashForecast != null &&
     forecastIsCashGenerative(forecastReceipts, forecastPayments);
-  const overallHealth = scorecardHealthFromFinancials({
-    financials: rawFin as Record<string, unknown>,
-    fyStartMonth,
-    periodMonths,
-    cashRunwayWeeks: healthWeeks,
-    market,
-    shortfallWeek: assessed.outlook.shortfallWeek,
+  const reportOpeningMissing = storedOpeningIsMissing(clientRow.cashflow);
+  const cashBelowFloor = cashOutlookIsCritical({
+    opening: assessed.outlook.opening,
+    floor: assessed.outlook.floor,
+    dipsBelowFloorWeek: assessed.outlook.dipsBelowFloorWeek,
+    openingMissing: reportOpeningMissing,
   });
+  const overallHealth = cashPillarFollowsForecast(
+    scorecardHealthFromFinancials({
+      financials: rawFin as Record<string, unknown>,
+      fyStartMonth,
+      periodMonths,
+      cashRunwayWeeks: healthWeeks,
+      market,
+      shortfallWeek: assessed.outlook.shortfallWeek,
+    }),
+    {
+      openingMissing: reportOpeningMissing,
+      opening: assessed.outlook.opening,
+      closings: assessed.outlook.closing,
+      floor: assessed.outlook.floor,
+    },
+  );
 
   return {
     hasData: true,
@@ -2414,13 +2446,16 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     isSample: Boolean(clientRow.is_demo),
     signoffSnapshots,
     scoreHistory,
+    cashBelowFloor,
+    budgetSignedSnapshot: budgetWorkflow.snapshot,
   };
 }
 
 /**
- * A missing sign-off is not stamped. Budget staleness is the plan's own
- * timestamp. Health, profitability, and cash also go stale when a later
- * statement period or a different health score is on file.
+ * A missing sign-off is not stamped. Budget staleness compares the signed
+ * figure snapshot with the plan on file. Health, profitability, and cash
+ * also go stale when a later statement period or a different health score
+ * is on file.
  */
 function isSignoffStale(
   signoff: ClientReviewSignoff | null,
@@ -2430,8 +2465,11 @@ function isSignoffStale(
 ): boolean {
   if (!signoff) return true;
   if (scope === "budget") {
-    if (!freshAt) return false;
-    return new Date(freshAt).getTime() > new Date(signoff.signed_off_at).getTime();
+    return budgetSignoffIsStale(
+      signoff,
+      freshAt,
+      budgetSignedFiguresChanged(cd?.budgetSignedSnapshot, cd?.budget),
+    );
   }
   return reviewFiguresChanged({
     signedOffAt: signoff.signed_off_at,
@@ -2634,6 +2672,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         reviewSignoff: financialsStamp,
         operatingProfile,
         market,
+        cashBelowFloor: Boolean(cd?.cashBelowFloor),
       });
     },
     forecast: async (s, p) => {

@@ -391,6 +391,25 @@ export function figuresPeriodLabelFrom(
 /** Label for a statement that has amounts and no from/to dates. */
 export const FULL_YEAR_ON_FILE = "Full year on file";
 
+const SAVED_MONTH =
+  "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+
+/**
+ * A saved finding that names the file month ("Sep 2026 books", "full Sep 2026
+ * statement") is the snapshot stamp, not the period. A dated day ("8 Sep 2026")
+ * stays. Display only — the stored finding is not rewritten.
+ */
+export function rewriteSavedMonthStamp(text: string): string {
+  const monthYear = `(?<!\\d\\s)(?:${SAVED_MONTH})\\s+\\d{4}`;
+  return text
+    .replace(new RegExp(`\\bfull\\s+${monthYear}\\s+statement\\b`, "gi"), FULL_YEAR_ON_FILE)
+    .replace(new RegExp(`\\b${monthYear}\\s+books\\s+on\\s+file\\b`, "gi"), FULL_YEAR_ON_FILE)
+    .replace(
+      new RegExp(`\\b${monthYear}\\s+(?:books|statement|snapshot)\\b`, "gi"),
+      FULL_YEAR_ON_FILE,
+    );
+}
+
 function snapshotIsMonthStamp(label: string): boolean {
   return /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}$/i.test(label.trim());
 }

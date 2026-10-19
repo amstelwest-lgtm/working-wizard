@@ -14,6 +14,7 @@ import {
 } from "@/lib/health-score";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { currentRatioValue, healthBandLabel } from "@/lib/ratios";
+import { marketingPackForGeo } from "@/lib/geo-country";
 import { formatMoney } from "@/lib/market/format";
 import { resolveMarket } from "@/lib/market/resolve";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -119,8 +120,15 @@ export function deliverTrialFindings(input: {
   return { ok: true, findings, delivered: "model" };
 }
 
-export function trialMarketFromCountry(country: string | null | undefined): TrialMarketId {
-  return (country ?? "").trim().toUpperCase() === "ZA" ? "ZA" : "US";
+/**
+ * Same rule as the landing pages: a non-ZA edge stays on the US sample, and
+ * a ZA edge may pass ?market=us. ?country= and ?region= are not an override.
+ */
+export function trialMarketForVisitor(
+  geoCountry: string | null | undefined,
+  requestedMarket: string | null | undefined,
+): TrialMarketId {
+  return marketingPackForGeo(geoCountry, requestedMarket) === "za" ? "ZA" : "US";
 }
 
 export function validateTrialGate(

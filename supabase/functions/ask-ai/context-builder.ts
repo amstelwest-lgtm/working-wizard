@@ -24,7 +24,7 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket, overviewFyStartMonth } from "./overview-brief.ts";
-import { adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
+import { adviceChatProductName, adviceChatVolumeUnit, adviceIndustryLabel } from "../../../src/lib/advice-industry.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 import { benchmarkBusinessType } from "../../../src/lib/benchmark-sector.ts";
 import { peerMedian } from "../../../src/lib/ratios.ts";
@@ -155,7 +155,12 @@ export async function buildContext(
                   templateId: typeof op.templateId === "string" ? op.templateId : "",
                   businessType: typeof data.business_type === "string" ? data.business_type : null,
                 }),
-                volumeUnit: String(op.volumeUnit ?? ""),
+                volumeUnit: adviceChatVolumeUnit({
+                  clientName,
+                  templateId: typeof op.templateId === "string" ? op.templateId : "",
+                  businessType: typeof data.business_type === "string" ? data.business_type : null,
+                  volumeUnit: String(op.volumeUnit ?? ""),
+                }),
                 debtorDaysDefault: Number(op.debtorDaysDefault ?? 0),
                 costShape: String(op.costShape ?? ""),
                 seasonality: String(op.seasonality ?? ""),
@@ -279,8 +284,25 @@ export async function buildContext(
     tier === "none" || !financials
       ? null
       : summarizeWaterfall(extractWaterfallFigures(financials));
+  const opRecord =
+    operatingProfile && typeof operatingProfile === "object"
+      ? (operatingProfile as Record<string, unknown>)
+      : null;
+  const chatTemplateId = typeof opRecord?.templateId === "string" ? opRecord.templateId : "";
+  const chatBusinessType = profile?.business_type ?? null;
   const productLines =
-    tier === "none" || !financials ? [] : summarizeProductLines(financials.productMix);
+    tier === "none" || !financials
+      ? []
+      : summarizeProductLines(financials.productMix).map((line, index) => ({
+          ...line,
+          name: adviceChatProductName({
+            clientName,
+            templateId: chatTemplateId,
+            businessType: chatBusinessType,
+            index,
+            name: line.name,
+          }),
+        }));
   const metrics =
     tier === "none"
       ? null

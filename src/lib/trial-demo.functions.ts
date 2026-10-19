@@ -43,7 +43,7 @@ import {
   TRIAL_RUNS_PER_SESSION,
   trialAnalystMode,
   trialDailyCap,
-  trialMarketFromCountry,
+  trialMarketForVisitor,
   turnstileEnabled,
   turnstileSecret,
   turnstileSiteKey,
@@ -311,37 +311,52 @@ export const readTrialPublicConfig = createServerFn({ method: "GET" }).handler(a
   };
 });
 
-export const startTrialSample = createServerFn({ method: "POST" }).handler(async () => {
-  if (!storeReady()) return { ok: false as const, error: "The sample isn't available right now." };
-  const req = requestOf();
-  const headers = req?.headers ?? new Headers();
-  const country = trialMarketFromCountry(
-    headers.get("x-vercel-ip-country") || (devRuntime() ? process.env.MILON_DEV_GEO : "") || "",
-  );
-  const ipHash = hashIp(clientIpFromHeaders(headers));
-  const since = startOfUtcDay(new Date()).toISOString();
-  const existing = await countSessions(ipHash, since);
-  if (!ipSessionAllowed(existing)) {
-    return {
-      ok: false as const,
-      error: "This network has already started three samples today. Try again tomorrow.",
+export const startTrialSample = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => {
+    const raw =
+      input && typeof input === "object" ? (input as { market?: unknown }).market : null;
+    return { market: typeof raw === "string" ? raw.slice(0, 16) : null };
+  })
+  .handler(async ({ data }) => {
+    if (!storeReady()) return { ok: false as const, error: "The sample isn't available right now." };
+    const req = requestOf();
+    const headers = req?.headers ?? new Headers();
+    const geo =
+      headers.get("x-vercel-ip-country") || (devRuntime() ? process.env.MILON_DEV_GEO : "") || "";
+    let requested = data.market;
+    if (req?.url) {
+      try {
+        const fromUrl = new URL(req.url).searchParams.get("market");
+        if (fromUrl) requested = fromUrl;
+      } catch {
+        // A relative function URL still uses the market the page sent.
+      }
+    }
+    const country = trialMarketForVisitor(geo, requested);
+    const ipHash = hashIp(clientIpFromHeaders(headers));
+    const since = startOfUtcDay(new Date()).toISOString();
+    const existing = await countSessions(ipHash, since);
+    if (!ipSessionAllowed(existing)) {
+      return {
+        ok: false as const,
+        error: "This network has already started three samples today. Try again tomorrow.",
+      };
+    }
+    const now = new Date();
+    const token = newToken();
+    const row: SessionRow = {
+      id: crypto.randomUUID(),
+      token_hash: hashToken(token),
+      ip_hash: ipHash,
+      country,
+      created_at: now.toISOString(),
+      expires_at: new Date(now.getTime() + TRIAL_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
     };
-  }
-  const now = new Date();
-  const token = newToken();
-  const row: SessionRow = {
-    id: crypto.randomUUID(),
-    token_hash: hashToken(token),
-    ip_hash: ipHash,
-    country,
-    created_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + TRIAL_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-  };
-  const saved = await insertSession(row);
-  if (!saved) return { ok: false as const, error: "The sample isn't available right now." };
-  writeSessionCookie(token);
-  return { ok: true as const, country };
-});
+    const saved = await insertSession(row);
+    if (!saved) return { ok: false as const, error: "The sample isn't available right now." };
+    writeSessionCookie(token);
+    return { ok: true as const, country };
+  });
 
 type LeadBody = {
   name?: string;

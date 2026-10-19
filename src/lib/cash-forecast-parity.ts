@@ -161,7 +161,10 @@ export function clientListRunwayHeadline(input: {
   cashGenerative?: boolean;
   /** Null when the row has no health score. */
   healthOverall?: number | null;
+  /** Blank or zero opening with no source. Not a dip under the floor. */
+  openingMissing?: boolean;
 }): string {
+  if (input.openingMissing) return OPENING_BALANCE_MISSING;
   const unscoredSketch = input.source !== "stored" && input.healthOverall == null;
   if (
     unscoredSketch ||
@@ -176,6 +179,7 @@ export function clientListRunwayHeadline(input: {
     floor: input.floor,
     runwayLabel: input.runwayLabel,
     cashGenerative: input.cashGenerative,
+    openingMissing: input.openingMissing,
   }).headline;
 }
 

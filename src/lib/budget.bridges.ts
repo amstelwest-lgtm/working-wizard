@@ -291,6 +291,28 @@ function exceedsMultiple(budget: number, actual: number | null, multiple: number
  * cost of sales more than about 3× the annualised actual. Callers prompt.
  * An order-of-magnitude gap is rebuilt by {@link reseedBudgetIfScaleBroken}.
  */
+function amountsNearBlank(amounts: readonly unknown[]): boolean {
+  return amounts.every((amount) => amount == null || Math.abs(Number(amount)) < 0.5);
+}
+
+/**
+ * Blank overheads, or a people line that is still labour ÷ 12.
+ * A typed rent or a people amount that is not that seed is a real edit.
+ */
+function overheadSeedOnly(doc: BudgetDocument, annualLabor: number | null): boolean {
+  const laborMonth = annualLabor != null && annualLabor > 0 ? annualLabor / 12 : null;
+  return doc.overheads.every((line) => {
+    const amounts = Object.values(line.months);
+    if (line.bucket !== "people") return amountsNearBlank(amounts);
+    if (amountsNearBlank(amounts)) return true;
+    if (laborMonth == null) return false;
+    return amounts.every((amount) => {
+      const n = Number(amount) || 0;
+      return Math.abs(n) < 0.5 || Math.abs(n - laborMonth) < 1;
+    });
+  });
+}
+
 /**
  * Display copy of an untouched template. Gross margin and operating expenses
  * come from the statement bridge. Rent is not invented when the statement
@@ -304,19 +326,16 @@ export function statementBudgetRead(
   const template = BUDGET_TEMPLATES[doc.templateId];
   if (!template) return { doc, fromStatement: false };
   if (Math.abs(doc.gpPct - template.defaultGpPct) > 0.05) return { doc, fromStatement: false };
-  const overheadsBlank = doc.overheads.every((line) =>
-    Object.values(line.months).every((amount) => amount == null || Math.abs(Number(amount)) < 0.5),
+  const labor = presentNumber(
+    periodFinancials.laborCost as string | number | null | undefined,
+    periodFinancials.labourCost as string | number | null | undefined,
   );
-  if (!overheadsBlank) return { doc, fromStatement: false };
+  if (!overheadSeedOnly(doc, labor)) return { doc, fromStatement: false };
   const bridge = periodProfitBridge(periodFinancials);
   if (!(bridge.revenue > 0)) return { doc, fromStatement: false };
   const gpPct = Math.round((bridge.grossProfit / bridge.revenue) * 1000) / 10;
   const annualOpex = bridge.operatingExpenses + bridge.depreciation;
   const monthlyOpex = annualOpex / 12;
-  const labor = presentNumber(
-    periodFinancials.laborCost as string | number | null | undefined,
-    periodFinancials.labourCost as string | number | null | undefined,
-  );
   let people = 0;
   let ops = monthlyOpex;
   if (labor != null && labor > 0 && annualOpex > labor) {
@@ -826,6 +845,23 @@ export function budgetPlanFiguresChanged(before: BudgetDocument, after: BudgetDo
   return (
     JSON.stringify(stablePlanValue(budgetPlanSnapshot(before))) !==
     JSON.stringify(stablePlanValue(budgetPlanSnapshot(after)))
+  );
+}
+
+/**
+ * True when a signed budget snapshot and the plan now on file differ.
+ * A missing snapshot is not a change — the clock alone cannot say the figures moved.
+ */
+export function budgetSignedFiguresChanged(
+  signedSnapshot: unknown,
+  doc: BudgetDocument | null | undefined,
+): boolean {
+  if (!doc || !signedSnapshot || typeof signedSnapshot !== "object") return false;
+  const figures = (signedSnapshot as { budgetFigures?: unknown }).budgetFigures;
+  if (figures == null || typeof figures !== "object") return false;
+  return (
+    JSON.stringify(stablePlanValue(figures)) !==
+    JSON.stringify(stablePlanValue(budgetPlanSnapshot(doc)))
   );
 }
 

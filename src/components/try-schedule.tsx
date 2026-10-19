@@ -1,10 +1,17 @@
 /**
- * Schedule a call on the public sample. Slots are 16:30–22:00 SAST and the
- * labels use the visitor's time zone. Booking goes through a server function
- * the page passes in.
+ * Schedule a call on the public sample. The offered instants stay on the
+ * SAST window. The buttons show the visitor's local time, labelled with
+ * that zone. Booking goes through a server function the page passes in.
  */
 import { useEffect, useMemo, useState } from "react";
-import { callSlots, formatSlotClock, formatSlotDay, type CallSlot } from "@/lib/trial-call-slots";
+import {
+  callSlots,
+  displaySlotZone,
+  formatSlotButton,
+  formatSlotDay,
+  formatSlotZoneLong,
+  type CallSlot,
+} from "@/lib/trial-call-slots";
 
 export type TryCallResult =
   | { ok: true; status: "saved" | "booked"; meetUrl?: string | null }
@@ -30,23 +37,33 @@ function groupByDay(slots: CallSlot[], timeZone: string): { day: string; slots: 
   return groups;
 }
 
+function pageMarket(): "US" | "ZA" | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("market")?.trim().toUpperCase();
+  return raw === "US" || raw === "ZA" ? raw : null;
+}
+
 export function TrySchedule({
   now,
   timeZone,
+  market,
   onBook,
 }: {
   now?: Date;
   timeZone?: string;
+  /** A US sample is not labelled with the SAST window. */
+  market?: "US" | "ZA" | null;
   onBook?: (input: TryCallInput) => Promise<TryCallResult>;
 }) {
   // Slot labels depend on the visitor's zone. The server render stays blank
   // so it matches the first client render, then the effect fills the times.
   const [frozenNow, setFrozenNow] = useState<Date | null>(now ?? null);
-  const [zone, setZone] = useState(timeZone ?? "");
+  const [zone, setZone] = useState(timeZone ? displaySlotZone(timeZone, market ?? null) : "");
   useEffect(() => {
+    const browser = timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
     setFrozenNow(now ?? new Date());
-    setZone(timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC");
-  }, [now, timeZone]);
+    setZone(displaySlotZone(browser, market ?? pageMarket()));
+  }, [now, timeZone, market]);
   const groups = useMemo(
     () => (frozenNow ? groupByDay(callSlots(frozenNow), zone || "UTC") : []),
     [frozenNow, zone],
@@ -67,7 +84,8 @@ export function TrySchedule({
     <section className="try-card try-schedule" aria-label="Schedule a call" data-try-schedule>
       <h2 className="try-kicker">Schedule a call</h2>
       <p className="try-schedule-lead">
-        Pick a time. It is shown in your time zone{zone ? ` (${zone})` : ""}.
+        Pick a time. Shown in your local time
+        {zone && frozenNow ? ` (${formatSlotZoneLong(frozenNow, zone)})` : ""}.
       </p>
       {!frozenNow ? <p className="try-status">Loading times.</p> : null}
       {done ? (
@@ -123,7 +141,7 @@ export function TrySchedule({
                       aria-pressed={selected === iso}
                       onClick={() => setSelected(iso)}
                     >
-                      {formatSlotClock(slot.start, zone)}
+                      {formatSlotButton(slot.start, zone)}
                     </button>
                   );
                 })}

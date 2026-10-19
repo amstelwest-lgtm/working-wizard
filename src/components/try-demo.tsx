@@ -29,6 +29,7 @@ import {
   TRIAL_DISCLAIMER,
   TRIAL_SIGNUP_HREF,
   TRIAL_SIGNUP_SENTENCE,
+  trialSignupHref,
   TRIAL_VALUE_PROP,
   TRIAL_VALUE_PROP_SHORT,
   TURNSTILE_TEST_SITE_KEY,
@@ -246,8 +247,12 @@ function FmPortrait({ large }: { large?: boolean }) {
 
 function TrialCta({ className, quiet }: { className?: string; quiet?: boolean }) {
   const classes = ["try-cta", quiet ? "try-cta-quiet" : "", className].filter(Boolean).join(" ");
+  const [href, setHref] = useState(TRIAL_SIGNUP_HREF);
+  useEffect(() => {
+    setHref(trialSignupHref(window.location.search));
+  }, []);
   return (
-    <a className={classes} href={TRIAL_SIGNUP_HREF}>
+    <a className={classes} href={href}>
       {TRIAL_CTA_LABEL}
     </a>
   );
@@ -723,6 +728,11 @@ export function TryScreen(props: TryScreenProps) {
   );
 }
 
+function readRequestedMarket(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("market");
+}
+
 function readUtm(): Record<string, string> {
   if (typeof window === "undefined") return {};
   const params = new URLSearchParams(window.location.search);
@@ -799,7 +809,7 @@ export function TryDemo() {
       onUseSample={() => {
         setBusy(true);
         setError(null);
-        void start()
+        void start({ data: { market: readRequestedMarket() } })
           .then((result) => {
             if (!result.ok) {
               setError(result.error);

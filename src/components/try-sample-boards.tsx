@@ -50,6 +50,7 @@ export function TrySampleBoards({
               readOnly
               hideReadOnlyStamp
               includeFloorInDomain
+              spacedChartTicks
               preview={preview}
             />
           </div>

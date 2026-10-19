@@ -7,6 +7,7 @@
  * gap, worded as a floor alert so it does not fight the health Watch band.
  */
 import type { ChaseDraftInput } from "./chase-draft.ts";
+import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
 
@@ -181,7 +182,7 @@ export function buildFinancialManagerBrief(input: {
         ? [input.openActionTitle]
         : []
   )
-    .map((title) => title.trim())
+    .map((title) => actionDisplayTitle(title))
     .filter(Boolean);
   const openTitles = [...new Set(titled)];
   if (input.actionsReady !== false) {

@@ -3,6 +3,7 @@
  * Counts come from the caller. Empty stays empty. Nothing here is invented.
  */
 import { DRAFT_NEEDS_ACCOUNTANT, DRAFT_NEEDS_OWNER, draftFindingKindLabel, draftFindingLabel } from "@/hooks/owner-agent-ui";
+import { actionDisplayTitle } from "@/lib/strategic-moves";
 import { isVisibleAgentFinding, type AgentFindingRow } from "@/lib/milon-team-activity";
 import { openPlanTitles } from "@/lib/open-plan-home";
 
@@ -36,7 +37,7 @@ export function homeActionNeeds(input: {
 }): { heading: string; lines: string[] } {
   if (!input.known) return { heading: "Action plan", lines: ["Checking the action plan."] };
   if (input.unavailable) return { heading: "Action plan", lines: ["Open actions aren't available yet."] };
-  const titles = input.titles.map((title) => title.trim()).filter(Boolean);
+  const titles = input.titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
   if (titles.length === 0) return { heading: "Action plan", lines: ["No open work."] };
   const heading =
     input.overdue > 0 ? `${titles.length} open, ${input.overdue} overdue` : `${titles.length} open`;
@@ -45,7 +46,7 @@ export function homeActionNeeds(input: {
 
 /** Same open-action sentence the Financial Manager card and the hub count. */
 export function openActionSentence(titles: readonly string[]): string | null {
-  const clean = titles.map((title) => title.trim()).filter(Boolean);
+  const clean = titles.map((title) => actionDisplayTitle(title)).filter(Boolean);
   if (clean.length === 0) return null;
   if (clean.length === 1) return clean[0]!;
   return `${clean.length} open actions.`;

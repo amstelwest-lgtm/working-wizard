@@ -1629,7 +1629,7 @@ export default function ActionPlanPanel({
                 key={move.key}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-900/10 bg-white/60 px-3 py-3 dark:border-slate-800 dark:bg-slate-900/50"
               >
-                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{move.title}</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{actionDisplayTitle(move.title)}</span>
                 <span className="flex flex-wrap items-center gap-2">
                   <MoveHandTo
                     clientId={clientId}
