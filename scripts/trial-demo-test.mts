@@ -14,7 +14,9 @@ import {
 } from "@tanstack/react-router";
 import { ANALYST_READ_TOOLS } from "../src/lib/agent-analyst";
 import { TrySampleBoards } from "../src/components/try-sample-boards";
+import { TrySamplePack } from "../src/components/try-sample-pack";
 import { TryScreen } from "../src/components/try-demo";
+import { cashYDomainIncludingFloor } from "../src/lib/cash-forecast-view";
 import { firmSignupHref } from "../src/lib/firm-signup-copy";
 import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
 import { SAMPLE_BUSINESS_NAME } from "../src/lib/sample-business";
@@ -33,6 +35,7 @@ import {
   validateTrialGate,
   verifyTurnstileToken,
 } from "../src/lib/trial-demo";
+import { trialCashSeries } from "../src/lib/trial-sample-view";
 import {
   TRIAL_ANALYST_MAX_TOKENS,
   executeTrialAnalystGate,
@@ -275,9 +278,10 @@ assert(
   "fallback uses debtor and creditor days",
 );
 assert(
-  /cash runway/i.test(findingText) && /no cash balance/i.test(findingText),
-  "fallback uses the cash runway",
+  /13-week cash line opens at/.test(findingText) && /low point is/.test(findingText),
+  "fallback quotes the cash line and its low point",
 );
+assert(!/no cash balance/i.test(findingText), "fallback does not say the sample has no cash");
 assert(!/health score/i.test(findingText), "fallback does not restate the health score");
 const withoutMoney = findingText.replace(/(?:\$|R)\s?[\d,]+(?:\.\d+)?/g, "");
 assert(
@@ -290,8 +294,11 @@ assert(
   "US margins come from the sample",
 );
 assert(
-  reading.cashOpening === "$0" && reading.cashClose.startsWith("$"),
-  "US cash line is in dollars",
+  reading.cashOpening.startsWith("$") &&
+    reading.cashOpening !== "$0" &&
+    reading.cashLow === reading.cashOpening &&
+    reading.cashClose.startsWith("$"),
+  "US cash opens at the sample bank balance, and the low point is that same line",
 );
 assert(
   findingRestatesScore({
@@ -349,14 +356,39 @@ assert(
 const analystMessage = trialAnalystUserMessage(us);
 assert(!analystMessage.includes("health score"), "the analyst call is not given the health score");
 assert(
-  analystMessage.includes("60.0%") && analystMessage.includes("not measurable"),
-  "the analyst call gets margins and runway",
+  analystMessage.includes("60.0%") && analystMessage.includes("cash_low"),
+  "the analyst call gets margins and the cash line",
+);
+assert(
+  !analystMessage.includes("no cash balance") && !analystMessage.includes("not measurable"),
+  "the analyst call does not deny the sample bank balance",
 );
 const profit = buildTrialProfit("US");
 assert(profit.steps[0]?.display === "$1,150,000", "US revenue uses dollars");
 const cash = buildTrialCash("US", new Date("2026-10-14T00:00:00Z"));
 assert(cash.weeks.length === 13, "cash line is 13 weeks");
-assert(cash.openingDisplay === "$0", "sample cash opens at zero");
+assert(cash.openingDisplay === "$82,000", "US sample cash opens at the balance-sheet residual");
+assert(cash.lowDisplay === cash.openingDisplay, "the quoted low point is the opening of this series");
+assert(!cash.openingDisplay.includes("R"), "US cash display has no rand");
+
+const za = buildTrialBoard("ZA");
+const zaFindings = deterministicTrialFindings(za, new Date("2026-10-14T00:00:00Z"));
+const zaText = zaFindings.map((finding) => `${finding.title} ${finding.detail}`).join(" ");
+assert(zaText.includes("R 6 400 000"), "ZA findings use the shared spaced rand format");
+assert(!zaText.includes("R 6,400,000"), "ZA findings do not use comma grouping");
+assert(zaText.includes("R 450 000"), "ZA findings open at the sample bank balance");
+assert(!/no cash balance/i.test(zaText), "ZA findings do not deny the bank balance");
+const zaCash = buildTrialCash("ZA", new Date("2026-10-14T00:00:00Z"));
+assert(zaCash.openingDisplay === "R 450 000" && zaCash.lowDisplay === "R 450 000", "ZA low point matches the opening");
+const zaSeries = trialCashSeries("ZA", new Date("2026-10-14T00:00:00Z"));
+assert(zaSeries.floor === 433846, `ZA runway floor is four weeks of payments, got ${zaSeries.floor}`);
+assert(zaSeries.opening > zaSeries.floor, "opening cash sits above the runway floor");
+assert(zaSeries.low === zaSeries.opening, "the chart series low point is the opening");
+const [belowLo, belowHi] = cashYDomainIncludingFloor(0, 200_000, zaSeries.floor);
+assert(belowHi > zaSeries.floor, "a floor above the line stays inside the y-domain");
+assert(belowLo < 0, "the domain still starts below a zero opening");
+const [nearLo, nearHi] = cashYDomainIncludingFloor(zaSeries.opening, zaSeries.closing[12] ?? zaSeries.opening, zaSeries.floor);
+assert(nearLo < zaSeries.floor && nearHi > zaSeries.opening, "the floor stays on the axis beside the opening");
 
 const sampleNow = new Date("2026-10-14T15:00:00Z");
 const boardsRoute = createRootRoute({
@@ -432,7 +464,7 @@ assert(boardsHtml.includes("Enlarge cash flow table"), "cash chip has the table 
 assert(boardsHtml.includes("13-week cash model"), "cash chip renders the 13-week table");
 assert(
   boardsHtml.includes("stays the balance on file"),
-  "cash chip keeps opening cash on file across the date gap",
+  "cash chip says opening cash stays the balance on file",
 );
 assert(!boardsHtml.includes("Export PDF"), "sample chips have no export control");
 assert(!boardsHtml.includes("Upload bank statements"), "sample chips have no upload control");
@@ -529,6 +561,42 @@ assert(
   advisoryTalk.includes("Want the profit report or the cash forecast next?"),
   "advisory still re-offers the real reports",
 );
+assert(
+  advisoryTalk.includes("sample supply and distribution business"),
+  "the pack describes a supply business",
+);
+assert(!advisoryTalk.includes("sample services business"), "the pack does not call it a services business");
+assert(
+  advisoryTalk.includes("Cut or reprice one operating cost"),
+  "the margin move is an action",
+);
+assert(
+  !advisoryTalk.includes("The gap is the cost of running the business."),
+  "the margin line is no longer only an observation",
+);
+assert(advisoryTalk.includes("try-cta-quiet"), "the in-conversation trial link is not the gold primary");
+assert(advisoryTalk.includes("try-ctabar-btn"), "the sticky trial link stays");
+assert(
+  advisoryTalk.includes("Not reviewed by an accountant") &&
+    !advisoryTalk.includes("Signed off by you"),
+  "an unsigned pack does not claim a sign-off",
+);
+const signedPack = renderToStaticMarkup(createElement(TrySamplePack, { board: us, signed: true }));
+assert(
+  signedPack.includes("Signed off by you · sample, not reviewed by an accountant"),
+  "a signed pack says who signed and that an accountant has not",
+);
+assert(!signedPack.includes("Approved by you"), "a signed pack has no approval stamp");
+const cashTalk = renderToStaticMarkup(
+  createElement(TryScreen, { phase: "findings", board: us, findings, picks: ["cash"] }),
+);
+assert(cashTalk.includes("Opening cash stays the balance on file."), "the cash copy names the balance on file");
+assert(!cashTalk.includes("opens at zero") && !cashTalk.includes("no bank balance"), "cash copy does not open at zero");
+const tryCss = readFileSync(join(resolve("."), "src/styles/try.css"), "utf8");
+assert(!tryCss.includes("min(1100px"), "opening a report does not widen the column");
+assert(tryCss.includes("#0b5fff") && tryCss.includes(".try-signoff-btn"), "Sign off is cobalt");
+const signoffRule = tryCss.slice(tryCss.indexOf(".try-signoff-btn {"), tryCss.indexOf(".try-signoff-btn:disabled"));
+assert(!signoffRule.includes("#d4af37") && signoffRule.includes("#0b5fff"), "the Sign off button is not gold");
 
 const doneTalk = renderToStaticMarkup(
   createElement(TryScreen, {

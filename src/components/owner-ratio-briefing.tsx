@@ -15,7 +15,7 @@ import { COLLAPSIBLE_GOLD_RULE } from "@/components/primitives/collapsible-gold-
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
 import { getPlaybookSteps, type PlaybookStep } from "@/lib/playbook.functions";
-import { healthBandLabel, scoreTier } from "@/lib/ratios";
+import { ratioScoreBand } from "@/lib/health-score";
 import type { RatioInputs } from "@/lib/ratios";
 import {
   fallbackMove,
@@ -64,7 +64,8 @@ type Props = {
 
 function MiniHealth({ health }: { health: number }) {
   const w = Number.isFinite(health) ? Math.max(2, Math.min(100, health)) : 0;
-  const tier = scoreTier(health);
+  const band = ratioScoreBand(health);
+  const tier = band.tier;
   const tone = !Number.isFinite(health)
     ? "bg-slate-300"
     : tier === "healthy"
@@ -72,7 +73,7 @@ function MiniHealth({ health }: { health: number }) {
       : tier === "at_risk"
         ? "bg-amber-400"
         : "bg-rose-500";
-  const label = !Number.isFinite(health) ? "—" : healthBandLabel(tier);
+  const label = !Number.isFinite(health) ? "—" : band.label;
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -112,7 +113,7 @@ export function OwnerRatioBriefing({
   const [askBusy, setAskBusy] = useState(false);
   const briefingMarket: BriefingMarket = market;
   const playbookKey = ratioKey ? ratioPlaybookKey(ratioKey) : "";
-  const tier = scoreTier(health);
+  const tier = ratioScoreBand(health).tier;
 
   useEffect(() => {
     if (!open || !playbookKey) {

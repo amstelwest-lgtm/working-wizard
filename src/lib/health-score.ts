@@ -126,6 +126,20 @@ export function healthMapFromRatios(
   return map;
 }
 
+/**
+ * Band for one ratio score. The driver card and the ratio drawer both call
+ * this, so a score of 60 is Watch on both and a score under 40 is Critical.
+ */
+export function ratioScoreBand(score: number): {
+  score: number;
+  tier: HealthTier;
+  label: ReturnType<typeof healthBandLabel>;
+} {
+  const rounded = Number.isFinite(score) ? Math.round(score) : Number.NaN;
+  const tier = scoreTier(rounded);
+  return { score: rounded, tier, label: healthBandLabel(tier) };
+}
+
 /** Catalogue keys that share a scored ratio under another name. */
 const PLAYBOOK_RATIO_ALIAS: Record<string, string> = {
   wipDays: "inventoryDays",

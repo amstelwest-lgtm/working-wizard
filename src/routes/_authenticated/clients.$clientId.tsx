@@ -86,6 +86,7 @@ import {
   scoreRatio,
   computeOverallHealth,
   healthMapFromRatios,
+  ratioScoreBand,
   overviewRatioInputs,
   overviewRatios,
   PILLAR_LABELS,
@@ -2801,7 +2802,7 @@ function ClientView() {
 
   const openDrawer = useCallback(
     (ratioName: string, score: number) => {
-      const tier = scoreTier(score);
+      const tier = ratioScoreBand(score).tier;
       const key = playbookKeyForRatioName(ratioName);
       const actual = ratioActualLine(ratioName, ratioInputs, (n) =>
         formatMoneyCompact(n, clientMarket),
@@ -2834,11 +2835,14 @@ function ClientView() {
   const openDrawerFromUiKey = useCallback(
     (uiKey: string) => {
       const name = ratioQueryLabel(uiKey);
+      const mapped = healthMap[uiKey];
       const val = (ratios as Record<string, number>)[name];
-      const score = Math.round(ratioHealthScore(name, val as number, clientMarket));
+      const fromCard = typeof mapped === "number" && Number.isFinite(mapped) ? mapped : Number.NaN;
+      const rescored = Math.round(ratioHealthScore(name, val as number, clientMarket));
+      const score = Number.isFinite(fromCard) ? fromCard : rescored;
       openDrawer(name, Number.isFinite(score) ? score : 0);
     },
-    [openDrawer, ratios, clientMarket],
+    [openDrawer, ratios, clientMarket, healthMap],
   );
 
   useEffect(() => {
@@ -3312,6 +3316,7 @@ function ClientView() {
                     showInvite={false}
                     audience="accountant"
                     marketCountry={clientMarket.country}
+                    sampleClient={Boolean(client.is_demo)}
                     presence={homePresence}
                     lines={homeLines}
                     status={homeStatus}

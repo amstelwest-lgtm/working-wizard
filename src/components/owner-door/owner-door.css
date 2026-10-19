@@ -1459,6 +1459,9 @@ html.dark .owner-status.is-attention {
 .owner-presence.is-advisor {
   --accent: var(--ice);
 }
+.owner-presence.is-tax_specialist {
+  --accent: var(--cobalt);
+}
 
 .owner-presence-svg {
   width: 100%;

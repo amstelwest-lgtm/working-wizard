@@ -427,10 +427,12 @@ assert(callRateAllowed(2) && !callRateAllowed(3), "three calls a day is the cap"
 const open = renderToStaticMarkup(createElement(TrySignoffMark, { signed: false }));
 const signed = renderToStaticMarkup(createElement(TrySignoffMark, { signed: true }));
 assert(open.includes("Sign off") && open.includes("try-signoff-arrow"), "Sign off has an arrow");
-assert(!open.includes("Approved by you"), "the stamp waits for the click");
-assert(signed.includes("Approved by you"), "signing shows the stamp");
+assert(open.includes(">Sign off<"), "the button starts as Sign off");
+assert(!open.includes("Approved by you"), "there is no approval stamp before the click");
+assert(!signed.includes("Approved by you"), "signing does not stamp Approved by you");
+assert(signed.includes(">Signed off<"), "the button reads Signed off");
 assert(signed.includes("try-signature-stroke"), "signing draws the signature");
-assert(signed.includes("try-signoff-btn"), "the gold button stays on the page");
+assert(signed.includes("try-signoff-btn"), "the sign-off button stays on the page");
 
 const signoffSource = readFileSync(join(root, "src/components/try-signoff.tsx"), "utf8");
 assert(!signoffSource.includes("createServerFn"), "demo sign-off has no server function");

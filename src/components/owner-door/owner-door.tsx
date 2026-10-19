@@ -119,6 +119,7 @@ export function OwnerDoor({
   focusSigned = false,
   onSignOut,
   topMove = null,
+  sampleClient = false,
   boards,
   bot = null,
   onBotChange,
@@ -166,6 +167,8 @@ export function OwnerDoor({
   onSignOut: () => void;
   /** Top ranked next move. Empty stays an honest line under the advisor. */
   topMove?: string | null;
+  /** clients.is_demo. The sample tax card stays off a real business. */
+  sampleClient?: boolean;
   boards?: (
     go: (screen: OwnerScreen) => void,
   ) => Partial<Record<"health" | "cash" | "budget" | "tasks" | "profit" | "moves", ReactNode>>;
@@ -726,6 +729,7 @@ export function OwnerDoor({
           status={ownerCardStatuses(books)}
           marketCountry={market.country}
           audience="owner"
+          sampleClient={sampleClient}
           onOpen={openChat}
           onAsk={openChat}
           runState={runState}

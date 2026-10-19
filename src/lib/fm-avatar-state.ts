@@ -1,7 +1,7 @@
 /**
- * Which clip the Financial Manager, Analyst, and Advisor play.
+ * Which clip each character face plays.
  * Runs, findings, and hand-off messages are the signals the owner and
- * accountant homes already load. The same mapping applies to all three.
+ * accountant homes already load. The same mapping applies to every face.
  * Surprised is a real clip, and nothing in those signals means surprise,
  * so it stays unmapped. Calm, curious, and pleased are idle flourishes.
  */
@@ -35,6 +35,7 @@ export const AVATAR_FOLDERS = {
   financial_manager: "fm",
   analyst: "analyst",
   advisor: "advisor",
+  tax_specialist: "tax",
 } as const;
 
 export type AvatarFace = keyof typeof AVATAR_FOLDERS;
