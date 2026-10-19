@@ -40,7 +40,8 @@ export type FeatureDestination =
   | { kind: "owner"; tab: OwnerTab }
   | { kind: "dashboard" }
   | { kind: "clients" }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "section"; to: "/dashboard" | "/clients" | "/practice"; hash: string };
 
 export type FeatureResult = {
   id: string;
@@ -84,7 +85,11 @@ type FeatureDef = {
   practiceWhenNoClient?: "dashboard";
   studio?: StudioTarget;
   ownerTab?: OwnerTab;
-  practice?: "dashboard" | "clients" | "settings";
+  practice?:
+    | "dashboard"
+    | "clients"
+    | "settings"
+    | { to: "/dashboard" | "/clients" | "/practice"; hash: string };
 };
 
 function coachTarget(id: CoachStepId): StudioTarget {
@@ -308,6 +313,16 @@ const FEATURES: readonly FeatureDef[] = [
     studio: { ...DATA, onboard: "1" },
   },
   {
+    id: "practice-home",
+    label: "Home",
+    hint: "Practice home",
+    order: 190,
+    scope: "practice",
+    synonyms: ["practice home", "team home"],
+    audiences: ["accountant"],
+    practice: "dashboard",
+  },
+  {
     id: "clients",
     label: "Clients",
     hint: "Practice list",
@@ -316,6 +331,66 @@ const FEATURES: readonly FeatureDef[] = [
     synonyms: ["practice", "portfolio", "firm dashboard", "dashboard", "client list"],
     audiences: ["accountant"],
     practice: "clients",
+  },
+  {
+    id: "open-queries",
+    label: "Open queries",
+    hint: "Client list",
+    order: 201,
+    scope: "practice",
+    synonyms: ["open queries", "unresolved notes"],
+    audiences: ["accountant"],
+    practice: { to: "/clients", hash: "wizard-dash-queries" },
+  },
+  {
+    id: "needs-attention",
+    label: "Needs attention",
+    hint: "Practice",
+    order: 202,
+    scope: "practice",
+    synonyms: ["needs attention", "attention"],
+    audiences: ["accountant"],
+    practice: { to: "/practice", hash: "needs-attention" },
+  },
+  {
+    id: "follow-up",
+    label: "Follow up",
+    hint: "Practice",
+    order: 203,
+    scope: "practice",
+    synonyms: ["follow up", "chase"],
+    audiences: ["accountant"],
+    practice: { to: "/practice", hash: "follow-up" },
+  },
+  {
+    id: "portfolio-insights",
+    label: "Insights",
+    hint: "Practice",
+    order: 204,
+    scope: "practice",
+    synonyms: ["insights", "portfolio insights"],
+    audiences: ["accountant"],
+    practice: { to: "/practice", hash: "portfolio-insights" },
+  },
+  {
+    id: "marketplace",
+    label: "Marketplace",
+    hint: "Practice",
+    order: 205,
+    scope: "practice",
+    synonyms: ["marketplace", "inbox"],
+    audiences: ["accountant"],
+    practice: { to: "/practice", hash: "marketplace" },
+  },
+  {
+    id: "playbooks",
+    label: "Playbooks",
+    hint: "Practice",
+    order: 206,
+    scope: "practice",
+    synonyms: ["playbooks", "playbook library"],
+    audiences: ["accountant"],
+    practice: { to: "/practice", hash: "playbooks" },
   },
   {
     id: "billing",
@@ -387,6 +462,9 @@ function destinationFor(def: FeatureDef, ctx: FeatureFinderContext): FeatureDest
   if (def.practice === "dashboard") return { kind: "dashboard" };
   if (def.practice === "clients") return { kind: "clients" };
   if (def.practice === "settings") return { kind: "settings" };
+  if (def.practice && typeof def.practice === "object") {
+    return { kind: "section", to: def.practice.to, hash: def.practice.hash };
+  }
   if (ctx.audience === "owner" && def.ownerTab) return { kind: "owner", tab: def.ownerTab };
   if (ctx.audience === "accountant" && def.studio) {
     const clientId = ctx.clientId?.trim();
@@ -403,6 +481,7 @@ export function featureHref(dest: FeatureDestination): string {
   if (dest.kind === "dashboard") return "/dashboard";
   if (dest.kind === "clients") return "/clients";
   if (dest.kind === "settings") return "/settings";
+  if (dest.kind === "section") return `${dest.to}#${dest.hash}`;
   if (dest.kind === "owner") return `/app?tab=${encodeURIComponent(dest.tab)}`;
   const params = new URLSearchParams();
   params.set("tab", dest.search.tab);

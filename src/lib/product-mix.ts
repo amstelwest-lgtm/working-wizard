@@ -100,7 +100,17 @@ export function marginBandFromPct(pct: number | null): ProductMarginBand {
 
 export function formatRand(n: number | undefined, market: MoneyMarket = ZA_MARKET): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  return formatMoney(n, market, { maximumFractionDigits: 2 });
+  return formatMoney(n, market, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Stored placeholders such as "product 1" are not a real product line. */
+export function isPlaceholderProductName(name: string): boolean {
+  return /^product\s*\d+$/i.test(name.trim());
+}
+
+/** Lines the product card may draw. The stored mix is left as saved. */
+export function visibleProductLines(mix: ProductMix): ProductMixLine[] {
+  return mix.lines.filter((line) => line.name.trim() && !isPlaceholderProductName(line.name));
 }
 
 export function formatMarginPct(pct: number | null | undefined): string {

@@ -103,7 +103,7 @@ assert(
     "the Health figures link sits above the waterfall",
   );
   assert(
-    /build revenue and net profit per product line/i.test(profitPane),
+    /build revenue and gross profit per product line/i.test(profitPane),
     "product-line incentive copy is on the Profit tab",
   );
 }

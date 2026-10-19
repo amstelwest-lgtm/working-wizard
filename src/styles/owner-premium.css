@@ -1135,7 +1135,7 @@ html:not(.dark) .premium-shell .deliverable-main {
   background: var(--pp-canvas, #f4f6fa);
 }
 html:not(.dark) .premium-shell .accountant-nav .nav-heading.is-page > .nav-row,
-html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[aria-current="page"],
+html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[data-nav-current="page"],
 html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"] {
   background: var(--op-active);
   background-image: var(--op-active);
@@ -1144,7 +1144,7 @@ html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"
 }
 html:not(.dark) .premium-shell .accountant-nav .nav-heading.is-page > .nav-row .nav-label,
 html:not(.dark) .premium-shell .accountant-nav .nav-heading.is-page > .nav-row .nav-chev,
-html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[aria-current="page"],
+html:not(.dark) .premium-shell .accountant-nav .nav-sub-link[data-nav-current="page"],
 html:not(.dark) .premium-shell .accountant-nav .nav-settings[aria-current="page"] {
   color: #ffffff;
   background: transparent;

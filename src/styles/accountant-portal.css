@@ -1723,7 +1723,7 @@ html.nav-drawer-open body{overflow:hidden}
   color:#102a43;
 }
 .accountant-nav .nav-heading.is-page > .nav-row .nav-label,
-.accountant-nav .nav-sub-link[aria-current="page"],
+.accountant-nav .nav-sub-link[data-nav-current="page"],
 .accountant-nav .nav-settings[aria-current="page"]{
   background:var(--pale,#eef4ff);
   color:#102a43;

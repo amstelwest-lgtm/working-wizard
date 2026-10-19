@@ -41,7 +41,7 @@ const SECTIONS: NavSection[] = [
         to: clients(),
         items: [
           { id: "all", label: "All clients", to: clients("clients-table") },
-          { id: "queries", label: "Open queries", to: practice("wizard-dash-open-queries") },
+          { id: "queries", label: "Open queries", to: clients("wizard-dash-queries") },
           { id: "add", label: "Add client", to: clients("wizard-add-client") },
         ],
       },
@@ -53,7 +53,7 @@ const SECTIONS: NavSection[] = [
           { id: "attention", label: "Needs attention", to: practice("needs-attention") },
           { id: "follow", label: "Follow up", to: practice("follow-up") },
           { id: "insights", label: "Insights", to: practice("portfolio-insights") },
-          { id: "marketplace", label: "Marketplace", to: practice("accountant-inbox") },
+          { id: "marketplace", label: "Marketplace", to: practice("marketplace") },
           { id: "playbooks", label: "Playbooks", to: practice("playbooks") },
         ],
       },
@@ -64,6 +64,7 @@ const SECTIONS: NavSection[] = [
 const CLIENT_HASH: Record<string, string> = {
   "clients-table": "all",
   "wizard-add-client": "add",
+  "wizard-dash-queries": "queries",
 };
 
 const PRACTICE_HASH: Record<string, string> = {
@@ -71,6 +72,7 @@ const PRACTICE_HASH: Record<string, string> = {
   "follow-up": "follow",
   "portfolio-insights": "insights",
   "accountant-inbox": "marketplace",
+  marketplace: "marketplace",
   playbooks: "playbooks",
 };
 

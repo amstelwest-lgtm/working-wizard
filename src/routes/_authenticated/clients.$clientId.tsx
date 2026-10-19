@@ -2707,13 +2707,13 @@ function ClientView() {
   // ── Deliverables bar actions ──────────────────────────────────────────────
 
   const writeAccountantTab = useCallback(
-    (tab: ActiveTab, filter?: string) => {
+    (tab: ActiveTab, filter?: string, section?: string) => {
       setActiveTab(tab);
       void navigate({
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => {
-          const next = accountantClientTabSearch(prev, tab);
+          const next = accountantClientTabSearch(prev, tab, section ? { section } : undefined);
           if (filter) (next as { filter?: string }).filter = filter;
           return next;
         },
@@ -3731,7 +3731,10 @@ function ClientView() {
                         market={client.market}
                         businessType={client.business_type}
                         onOpenUpload={() => setUploadOpen(true)}
-                        onOpenTab={(tab) => setActiveTab(tab)}
+                        onOpenTab={(tab) => {
+                          const resolved = resolveAccountantTab(tab);
+                          if (resolved) writeAccountantTab(resolved);
+                        }}
                         onAnswerProfile={() => setProfileOpen(true)}
                         figureFacts={statementFigureFacts}
                         renderFrame={({ inputs, body }) => (
@@ -4284,7 +4287,7 @@ function ClientView() {
                         {
                           id: "lines",
                           label: "Product lines",
-                          detail: "Revenue and net profit by product line.",
+                          detail: "Revenue and gross profit by product line.",
                           search: (prev) => accountantClientTabSearch(prev, "profit", { section: "lines" }),
                         },
                       ]}
@@ -4295,7 +4298,7 @@ function ClientView() {
                       id="lines"
                       eyebrow="Profit"
                       title="Product lines"
-                      subtitle="Revenue and net profit by product line, so you can see which lines actually make the money."
+                      subtitle="Revenue and gross profit by product line, so you can see which lines actually make the money."
                     >
                       <ProductMixPanel
                         totalRevenue={
@@ -4303,7 +4306,7 @@ function ClientView() {
                             preferPeriod: preferStatementPeriod(financials),
                           }).revenue
                         }
-                        incentive="Answer these to build revenue and net profit per product line."
+                        incentive="Answer these to build revenue and gross profit per product line."
                       />
                     </ClientSubpageFrame>
                   ) : null}
@@ -4811,6 +4814,7 @@ function ClientView() {
                                   : undefined
                               }
                               embedded
+                              figuresOnFile={hasFigures}
                               sourceChip={healthChip}
                               inputs={
                                 <DeliverableInputConfig
@@ -5033,7 +5037,9 @@ function ClientView() {
               onNotesChanged={() => setQueriesRefresh((n) => n + 1)}
               onNeedTab={(next) => {
                 const resolved = resolveAccountantTab(next);
-                if (resolved) setActiveTab(resolved);
+                if (!resolved) return;
+                const section = typeof next === "object" ? next.section : undefined;
+                writeAccountantTab(resolved, undefined, section);
               }}
             />
           )}

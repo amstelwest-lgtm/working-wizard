@@ -98,6 +98,7 @@ function NavLink({
       data-bot-rail={bot ? "true" : undefined}
       tabIndex={tabIndex}
       aria-current={ariaCurrent}
+      data-nav-current={ariaCurrent === "page" ? "page" : undefined}
       onClick={onClick}
     >
       {children}

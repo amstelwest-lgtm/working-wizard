@@ -115,6 +115,23 @@ assert(
 assert(href("clients", studio) === "/clients", "Clients opens the client list");
 assert(href("billing", studio) === "/settings", "Billing opens Settings");
 assert(href("stripe", firm) === "/settings", "Billing is available without a client");
+const firmEmpty = searchFeatures("", firm).results.map((row) => row.label);
+for (const label of [
+  "Home",
+  "Clients",
+  "Open queries",
+  "Needs attention",
+  "Follow up",
+  "Insights",
+  "Marketplace",
+  "Playbooks",
+  "Billing",
+]) {
+  assert(firmEmpty.includes(label), `empty practice search lists ${label}`);
+}
+assert(href("open queries", firm) === "/clients#wizard-dash-queries", "Open queries opens the client list");
+assert(href("marketplace", firm) === "/practice#marketplace", "Marketplace opens its practice section");
+assert(href("playbooks", firm) === "/practice#playbooks", "Playbooks opens its practice section");
 
 assert(ids("health", firm).length === 0, "Health is hidden on the firm dashboard");
 assert(searchFeatures("health", firm).needsClient, "Health without a client explains why");
@@ -152,6 +169,13 @@ for (const id of [
   "upload",
   "clients",
   "billing",
+  "practice-home",
+  "open-queries",
+  "needs-attention",
+  "follow-up",
+  "portfolio-insights",
+  "marketplace",
+  "playbooks",
 ]) {
   assert(accountantIds.includes(id), `indexed ${id}`);
 }

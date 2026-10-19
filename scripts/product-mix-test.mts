@@ -19,7 +19,9 @@ import {
   canSaveUnitMix,
   declinedProductMix,
   emptyProductMix,
+  formatRand,
   hasProductMixAnswer,
+  isPlaceholderProductName,
   linesFromNames,
   marginBandFromPct,
   overlayProductMix,
@@ -28,6 +30,7 @@ import {
   rankProductLines,
   shareContrastLabel,
   unitMarginPct,
+  visibleProductLines,
 } from "../src/lib/product-mix";
 
 function assert(cond: boolean, msg: string) {
@@ -37,6 +40,23 @@ function assert(cond: boolean, msg: string) {
 assert(parseProductMix(null).lines.length === 0, "null mix is empty");
 assert(parseProductMix({ lines: "nope" }).active === false, "bad lines ignored");
 assert(!hasProductMixAnswer(emptyProductMix()), "empty mix is unanswered");
+assert(formatRand(43.9) === "R 43,90", `unit cost keeps cents, got ${formatRand(43.9)}`);
+assert(isPlaceholderProductName("product 1"), "product 1 is a placeholder");
+assert(isPlaceholderProductName("Product 4"), "product 4 is a placeholder");
+assert(!isPlaceholderProductName("Chilli sauce"), "a real line name stays");
+const placeholders = parseProductMix({
+  version: 3,
+  confirmedAt: "2026-09-04",
+  active: true,
+  totalRevenue: 10000,
+  lines: [
+    { id: "p1", name: "product 1", unitCost: 43.9, sellPrice: 100 },
+    { id: "p2", name: "product 2" },
+  ],
+});
+assert(hasProductMixAnswer(placeholders), "a confirmed placeholder mix is still stored as answered");
+assert(visibleProductLines(placeholders).length === 0, "placeholder names do not render as lines");
+assert(placeholders.lines.length === 2, "the stored lines stay on the mix");
 
 const declined = declinedProductMix("2026-09-04T00:00:00.000Z");
 assert(declined.active === false, "Q1 no → inactive");

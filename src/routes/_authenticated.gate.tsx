@@ -21,11 +21,10 @@ import {
   isMilonItMember,
 } from "@/lib/user-roles";
 import { FirmBillingAccessProvider } from "@/contexts/firm-billing-access";
+import { BootSkeleton } from "@/components/primitives/skeleton-blocks";
 
 function FirmShellLoading() {
-  return (
-    <div className="min-h-screen grid place-items-center bg-background text-foreground">Loading…</div>
-  );
+  return <BootSkeleton />;
 }
 
 export function AuthGate() {

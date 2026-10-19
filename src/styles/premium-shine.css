@@ -292,7 +292,7 @@ html:not(.dark) .accountant-portal .rail-settings {
 }
 /* Active item: a quiet gold pill with a 1px gold outline. */
 html:not(.dark) .accountant-portal .deliverable-rail .tab.on,
-html:not(.dark) .accountant-nav .nav-sub-link[aria-current="page"],
+html:not(.dark) .accountant-nav .nav-sub-link[data-nav-current="page"],
 html:not(.dark) .accountant-nav .nav-settings[aria-current="page"] {
   color: #f5edd6;
   background: var(--pp-gold-pill);

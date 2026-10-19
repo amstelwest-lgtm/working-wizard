@@ -3,6 +3,21 @@
  * Display copy only. It does not draft, send, or score a report.
  */
 
+/**
+ * One name list for every reports strip.
+ * A loaded list wins, including an empty one. While the catalogue is still
+ * loading, figures already on the file use the full catalogue so Health and
+ * All reports do not disagree.
+ */
+export function reportStripNames(input: {
+  loadedNames: readonly string[] | null;
+  figuresOnFile: boolean;
+  catalogueNames: readonly string[];
+}): string[] {
+  const source = input.loadedNames ?? (input.figuresOnFile ? input.catalogueNames : []);
+  return source.map((name) => name.trim()).filter(Boolean);
+}
+
 export function reportsAnswerSentence(input: {
   readyNames: readonly string[];
   periodLabel?: string | null;

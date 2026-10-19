@@ -186,6 +186,31 @@ export function clientListRunwayHeadline(input: {
 }
 
 /**
+ * Clients-table cell. A counted runway is weeks. Anything else is an em dash,
+ * with the existing headline kept for the tooltip only.
+ */
+export function clientListRunwayCell(input: {
+  weeks: number | null;
+  reason: string | null;
+}): { value: string; title?: string } {
+  const reason = input.reason?.trim() ?? "";
+  if (reason === OPENING_BALANCE_MISSING) {
+    return { value: "—", title: OPENING_BALANCE_MISSING };
+  }
+  const below = reason.match(/^(\d+) weeks? below$/i);
+  if (below) {
+    const weeks = Number(below[1]);
+    return { value: weeks === 1 ? "1 week" : `${weeks} weeks` };
+  }
+  if (input.weeks != null && Number.isFinite(input.weeks)) {
+    const weeks = Number.isInteger(input.weeks) ? input.weeks : Math.round(input.weeks);
+    return { value: weeks === 1 ? "1 week" : `${weeks} weeks` };
+  }
+  if (reason && reason !== "—") return { value: "—", title: reason };
+  return { value: "—" };
+}
+
+/**
  * Clients-table status. Cash under the floor uses the Financial Manager word.
  * An unscored row stays blank, including when the empty series sits under the
  * fallback floor.
