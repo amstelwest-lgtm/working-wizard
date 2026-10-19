@@ -513,8 +513,11 @@ assert(collections.length === 1, `collections ${collections.length}`);
 assert(jumps.some((row) => row.label === "Collections") === false, "the bare label stays a different row");
 
 const picker = src("src/components/firm-band-upgrade.tsx");
-assert(picker.includes("currentBand ?? (soloLeads ? \"solo\" : null)"), "Start here sits on the current plan");
-assert(picker.includes("startHerePlanId"), "no current plan still leads with Solo");
+assert(
+  picker.includes('currentBand ?? (starterLeads ? "starter" : null)'),
+  "Start here sits on the current plan, and a practice with no plan leads with Starter",
+);
+assert(picker.includes("startHerePlanId"), "no current plan still leads with Starter");
 assert(picker.includes("FirmStartHereLoader"), "home loads the current plan for the badge");
 assert(picker.includes("Start here"), "the badge copy stays");
 assert(src("src/components/owner-door/owner-home.tsx").includes("FirmStartHereLoader"), "client home shows Start here");

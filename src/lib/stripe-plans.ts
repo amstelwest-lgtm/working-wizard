@@ -16,19 +16,17 @@
 import { isOwnerLookupKey } from "@/lib/owner-price";
 import { parseZaLookupKey } from "@/lib/pricing/za-ladder";
 
+export {
+  FIRM_TRIAL_CARD_LINE,
+  FIRM_TRIAL_CLIENT_LIMIT,
+  FIRM_TRIAL_DAYS,
+  FIRM_TRIAL_SENTENCE,
+} from "./starter-trial-constants";
+
 export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 
 export const FOUNDING_COUPON_ID = "FOUNDING50";
 export const FOUNDING_PROMO_CODE = "FOUNDING";
-
-/**
- * Locked commercial sentence. The trial is Starter for every band.
- * Never rewrite this as a free-client offer, and do not put a smaller cap on the trial.
- */
-export const FIRM_TRIAL_DAYS = 14;
-export const FIRM_TRIAL_CLIENT_LIMIT = 5;
-export const FIRM_TRIAL_SENTENCE = `${FIRM_TRIAL_DAYS}-day free trial · up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
-export const FIRM_TRIAL_CARD_LINE = `A card is required at signup. ${FIRM_TRIAL_SENTENCE} on Starter.`;
 
 export const FIRM_INTERVALS = ["month", "year"] as const;
 export type FirmInterval = (typeof FIRM_INTERVALS)[number];

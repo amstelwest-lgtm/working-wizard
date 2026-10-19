@@ -4,7 +4,7 @@
  * A trialing or paid subscription is not capped. Figures stay outside this.
  */
 
-import { FIRM_TRIAL_CARD_LINE } from "./stripe-plans";
+import { FIRM_TRIAL_CARD_LINE } from "./starter-trial-constants.ts";
 
 export const PRECARD_CAP_CODE = "precard_cap" as const;
 export const PRECARD_CAP_MESSAGE = FIRM_TRIAL_CARD_LINE;

@@ -989,7 +989,7 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
     assert(card?.find((el) => el.className.includes("precard-cap-button"))?.textContent === "Add a card", "the card has Add a card");
     const href = String((card?.find((el) => el.className.includes("precard-cap-button")) as { href?: string } | null)?.href ?? "");
     assert(
-      href.includes("/billing/start?plan=solo&interval=month&market=us"),
+      href.includes("/billing/start?plan=starter&interval=month&market=us"),
       `Add a card opens Checkout, got ${href}`,
     );
 
