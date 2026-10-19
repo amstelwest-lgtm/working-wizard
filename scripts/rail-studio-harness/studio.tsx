@@ -457,6 +457,7 @@ function BriefingPane() {
           showInvite={false}
           audience="accountant"
           marketCountry="ZA"
+          sampleClient={new URLSearchParams(window.location.search).get("demo") === "1"}
           presence={ownerPresence(emptyAgentActivity())}
           lines={ownerHomeLines(ownerAnswerTiles(books), harnessMoves()[0]?.title ?? null)}
           status={ownerCardStatuses(books)}

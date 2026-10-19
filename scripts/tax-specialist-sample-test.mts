@@ -4,7 +4,7 @@
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { taxSampleEnabled } from "../src/lib/tax-specialist/enabled.ts";
+import { taxSampleCardVisible, taxSampleEnabled } from "../src/lib/tax-specialist/enabled.ts";
 import {
   COMPANY_TAX_NUMERATOR,
   companyTaxDeadlines,
@@ -25,6 +25,9 @@ assert(taxSampleEnabled("ZA") === true, "ZA shows the sample");
 assert(taxSampleEnabled("US") === false, "US hides the sample");
 assert(taxSampleEnabled(null) === false, "a missing market hides the sample");
 assert(taxSampleEnabled("za") === false, "only the resolved ZA code turns it on");
+assert(taxSampleCardVisible("ZA", true) === true, "a demo client can show the home card");
+assert(taxSampleCardVisible("ZA", false) === false, "a real ZA client hides the home card");
+assert(taxSampleCardVisible("US", true) === false, "a US demo still hides the home card");
 
 const sample = sampleCompanyTax();
 assert(sample.taxableIncomeCents === 182_850_000, "sample taxable income is R 1 828 500.00");
@@ -198,6 +201,46 @@ assert(menu.includes('audience="accountant"'), "accountant next moves use the ac
 assert(
   readFileSync("src/components/owner-door/owner-home.tsx", "utf8").includes('variant="fm-handoff"'),
   "the home shows Hand to from the Financial Manager",
+);
+const homeSrc = readFileSync("src/components/owner-door/owner-home.tsx", "utf8");
+assert(homeSrc.includes("sampleClient={sampleClient}"), "the home card follows the demo flag");
+assert(
+  readFileSync("src/components/owner-door/owner-door.tsx", "utf8").includes("sampleClient={sampleClient}"),
+  "the owner door passes the demo flag",
+);
+assert(
+  readFileSync("src/routes/app.tsx", "utf8").includes("sampleClient={Boolean(clientMeta?.is_demo)}"),
+  "the owner home uses clients.is_demo",
+);
+assert(
+  readFileSync("src/routes/_authenticated/clients.$clientId.tsx", "utf8").includes(
+    "sampleClient={Boolean(client.is_demo)}",
+  ),
+  "a real client file does not force the sample card",
+);
+assert(
+  readFileSync("src/components/practice-board.tsx", "utf8").includes("sampleClient={false}"),
+  "practice home is not a sample client",
+);
+const slotSrc = readFileSync("src/components/tax-specialist/tax-specialist-slot.tsx", "utf8");
+assert(slotSrc.includes("taxSampleCardVisible"), "the home card has its own gate");
+assert(
+  slotSrc.includes('variant === "card"'),
+  "only the home card checks the demo flag",
+);
+assert(sampleSrc.includes("SAMPLE demo · Harbour & Co"), "the demo card names Harbour & Co");
+assert(sampleSrc.includes("Open sample"), "the demo card opens the sample");
+assert(sampleSrc.includes("money(result.taxCents)"), "the demo card can show the sample tax");
+assert(sampleSrc.includes('agent="tax_specialist"'), "the sample uses the shared tax face");
+assert(sampleSrc.includes("fmAvatarClip"), "the sample uses the shared clip mapping");
+assert(sampleSrc.includes('variant="character"'), "the sample uses the character avatar");
+assert(sampleSrc.includes('place="card"'), "the home card shows the face");
+assert(sampleSrc.includes('place="desk"'), "the team card shows the face");
+assert(sampleSrc.includes('place="menu"'), "Hand to shows the face");
+assert(sampleSrc.includes('place="stage"'), "the team stage shows the face");
+assert(
+  !readFileSync("src/lib/fm-avatar-state.ts", "utf8").includes("Tax Specialist"),
+  "the shared avatar map does not name Tax Specialist",
 );
 
 console.log("tax-specialist-sample ok");

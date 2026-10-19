@@ -23,19 +23,16 @@ function useDigPulse(id: string): boolean {
   return pulse;
 }
 
+/** Identical hint on every drillable health level, owner and accountant. */
+export const HEALTH_DRILL_CUE = "Tap to see more";
+
 function CueCopy() {
-  return (
-    <span className="dig-cue__copy">
-      <span className="dig-cue__verb dig-cue__verb--click">Click</span>
-      <span className="dig-cue__verb dig-cue__verb--tap">Tap</span>
-      {" to see more"}
-    </span>
-  );
+  return <span className="dig-cue__copy">{HEALTH_DRILL_CUE}</span>;
 }
 
 /**
  * Premium cue for a health-score control that opens a real next level.
- * "Click" on a fine pointer, "Tap" on a coarse (touch) pointer.
+ * The same words on a mouse and on a touch screen.
  * Pass onClick when the cue is its own control. Inside an existing button,
  * omit onClick so the chip stays presentational.
  */
@@ -43,7 +40,7 @@ export function DigCue({
   id,
   compact = false,
   onClick,
-  label = "See more",
+  label = HEALTH_DRILL_CUE,
 }: {
   id: string;
   compact?: boolean;

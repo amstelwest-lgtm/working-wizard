@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
-import { displayFmClip, type FmAvatarClip } from "@/lib/fm-avatar-state";
+import { displayFmClip, type AvatarFace, type FmAvatarClip } from "@/lib/fm-avatar-state";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { OwnerMotion } from "@/lib/owner-presence";
 import { FmVideoAvatar } from "./fm-video-avatar";
@@ -35,7 +35,7 @@ export function OwnerAvatar({
   share = false,
   fmClip = null,
 }: {
-  agent: AgentKey;
+  agent: AvatarFace;
   variant: AvatarVariant;
   motion: OwnerMotion;
   size?: AvatarSize;
@@ -124,7 +124,7 @@ export function OwnerAvatar({
                 <svg viewBox="0 0 80 80" className="owner-presence-svg">
                   <circle className="stage" cx="40" cy="40" r="30" />
                   <circle className="shimmer" cx="40" cy="40" r="30" />
-                  {variant === "orb" ? <OrbSigil agent={agent} /> : null}
+                  {variant === "orb" && agent !== "tax_specialist" ? <OrbSigil agent={agent} /> : null}
                   <g className="work-spin">
                     <circle className="work-arc" cx="40" cy="40" r="33" />
                   </g>

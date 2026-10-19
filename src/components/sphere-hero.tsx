@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
-import { DigCue, DigLeaf } from "@/components/health-drill-cue";
+import { DigCue, DigLeaf, HEALTH_DRILL_CUE } from "@/components/health-drill-cue";
 
 /**
  * SphereHero — the morphing 3-level health drill-down.
@@ -61,8 +61,8 @@ export type SpherePillar = {
   drivers: SphereDriver[];
 };
 
-/** Caption under the health ring on both the owner and accountant score. */
-export const HEALTH_RING_CAPTION = "Tap to see what's behind your score";
+/** Caption under the health ring. Same words as the pillar cards, both sides. */
+export const HEALTH_RING_CAPTION = HEALTH_DRILL_CUE;
 
 export type SphereHeroProps = {
   /**
@@ -702,7 +702,7 @@ export function SphereHero({
               onClick={() => (onOrbOpen ? onOrbOpen() : go(level === 1 ? 2 : 1))}
               ariaLabel={
                 onOrbOpen
-                  ? `${statusLabel?.trim() || caption || "Tap to see what's behind your score"}. Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
+                  ? `${statusLabel?.trim() || caption || HEALTH_DRILL_CUE}. Business Health Score ${fmtScore(overallHealth)}. Dig deeper.`
                   : level === 1
                     ? `Business Health Score ${fmtScore(overallHealth)}${statusLabel?.trim() ? `, ${statusLabel.trim()}` : ""}. Dig deeper.`
                     : `Business Health Score ${fmtScore(overallHealth)}. Back to overview.`
@@ -720,7 +720,7 @@ export function SphereHero({
 
           {hideCaption || (tapCaption && level === 1) ? null : onOrbOpen && level === 1 ? (
             <button type="button" className="sphere-caption" onClick={onOrbOpen}>
-              {caption ?? "Tap to see what's behind your score"}
+              {caption ?? HEALTH_DRILL_CUE}
             </button>
           ) : (
           <p

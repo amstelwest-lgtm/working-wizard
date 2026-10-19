@@ -2562,6 +2562,7 @@ function Index() {
     operating_profile?: ClientOperatingProfile | null;
     /** P1: a firm attached means the accountant seat signs off the advisory pack. */
     firm_id?: string | null;
+    is_demo?: boolean | null;
   } | null>(null);
   const [onboardingGateReady, setOnboardingGateReady] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("today");
@@ -2655,9 +2656,9 @@ function Index() {
     let cancelled = false;
     const loadMeta = async () => {
       const fullSelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id, is_demo";
       const legacySelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id, is_demo";
       let res = await supabase
         .from("clients")
         .select(fullSelect)
@@ -2685,6 +2686,7 @@ function Index() {
           financial_year_start_month?: number | null;
           market?: unknown;
           firm_id?: string | null;
+          is_demo?: boolean | null;
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
@@ -2706,6 +2708,7 @@ function Index() {
                 budget_updated_at: data.budget_updated_at,
                 operating_profile: profile,
                 firm_id: data.firm_id ?? null,
+                is_demo: Boolean(data.is_demo),
               }
             : null,
         );
@@ -3957,6 +3960,7 @@ function Index() {
                     : [],
                 )}
                 firmId={clientMeta?.firm_id ?? null}
+                sampleClient={Boolean(clientMeta?.is_demo)}
                 workspaces={ownerWorkspaces}
                 onSwitch={switchOwnerWorkspace}
                 onConnect={() => setShowFinData(true)}
