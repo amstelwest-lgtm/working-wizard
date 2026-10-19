@@ -184,6 +184,9 @@ export function clientListRunwayHeadline(input: {
   ) {
     return "—";
   }
+  if (firstClosingBelow(input.closings, 0) === 1) return "Below zero now";
+  const later = firstClosingBelow(input.closings, 0);
+  if (later != null && later > 1) return `Below zero in week ${later}`;
   return forecastRunwayHeadlineShared({
     opening: input.opening,
     closings: input.closings,
@@ -206,6 +209,9 @@ export function clientListRunwayCell(input: {
   if (reason === OPENING_BALANCE_MISSING) {
     return { value: "—", title: OPENING_BALANCE_MISSING };
   }
+  if (/^below zero now$/i.test(reason)) return { value: "Below zero now", title: reason };
+  const laterZero = reason.match(/^below zero in week (\d+)$/i);
+  if (laterZero) return { value: reason, title: reason };
   const below = reason.match(/^(\d+) weeks? below$/i);
   if (below) {
     const weeks = Number(below[1]);
@@ -451,8 +457,18 @@ export function forecastStatusSentence(input: {
   runwayLabel?: string | null;
   cashGenerative?: boolean;
   openingMissing?: boolean;
+  /** When set, a closing under zero replaces the floor wording. */
+  formatAmount?: (amount: number) => string;
 }): string {
   if (input.openingMissing) return OPENING_BALANCE_MISSING;
+  if (input.formatAmount) {
+    const week = firstClosingBelow(input.closings, 0);
+    if (week != null) {
+      const low = forecastLowestPoint(Number.POSITIVE_INFINITY, input.closings);
+      const lowWeek = low.week > 0 ? low.week : week;
+      return `Cash is below zero from week ${week} — lowest ${input.formatAmount(low.amount)} in week ${lowWeek}`;
+    }
+  }
   const story = forecastRunwayHeadlineShared(input);
   const weeks = input.closings.length > 0 ? input.closings.length : 13;
   if (story.note === "above the floor") {

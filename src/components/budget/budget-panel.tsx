@@ -649,6 +649,7 @@ export function BudgetPanel({
         </div>
       )}
       <BudgetWorkspace
+        onBuild={readOnly ? undefined : rebuildFromActuals}
         doc={shownDoc}
         onChange={(next) => {
           budgetDirty.current = true;

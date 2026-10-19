@@ -153,7 +153,7 @@ const scoredUnderFloor = clientListRunwayHeadline({
   totalOutflow: 12000,
   healthOverall: 67,
 });
-assert(scoredUnderFloor === "13 weeks below", scoredUnderFloor);
+assert(scoredUnderFloor === "Below zero now", scoredUnderFloor);
 const emptySketch = clientListRunwayHeadline({
   source: "derived",
   opening: 0,

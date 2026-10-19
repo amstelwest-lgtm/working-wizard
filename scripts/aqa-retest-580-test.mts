@@ -270,7 +270,7 @@ const listRunway = clientListRunwayHeadline({
   openingMissing: false,
 });
 assert(listStatus === CASH_BELOW_FLOOR_STATUS, listStatus);
-assert(listRunway.includes("below"), listRunway);
+assert(/below/i.test(listRunway), listRunway);
 
 const karooCash = { openingBalance: "0", forecastLinesSource: "pl-estimate" };
 assert(storedOpeningIsMissing(karooCash), "Karoo opening is missing");

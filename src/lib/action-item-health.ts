@@ -4,7 +4,7 @@
  * progress, while the target is still ahead, is Not started — that is not
  * On track.
  */
-import { actionIsOverdue } from "./action-plan-counts.ts";
+import { actionIsOverdue, actionOverdueInput } from "./action-plan-counts.ts";
 
 export type ActionItemHealth =
   | "on_track"
@@ -27,7 +27,15 @@ export function deriveActionHealth(
   if (it.status === "done") return "complete";
   if (
     actionIsOverdue(
-      { status: it.status, dueDate: it.due_date, planTarget: it.plan_target ?? null },
+      actionOverdueInput(
+        {
+          status: it.status,
+          dueDate: it.due_date,
+          createdAt: it.created_at,
+          planTarget: it.plan_target ?? null,
+        },
+        now,
+      ),
       now,
     )
   ) {

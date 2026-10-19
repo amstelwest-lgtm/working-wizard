@@ -1215,6 +1215,20 @@ function reclose(opening: number, inflow: number[], outflow: number[]): number[]
   return closing;
 }
 
+/** Monthly amount from the weekly run-rate. 52/12 turns a week back into a month. */
+function monthlyFromWeekly(weekly: number): number {
+  return weekly * (52 / 12);
+}
+
+/** A monthly amount lands on the cadence weeks, not in every week. */
+function landMonthlyRunRate(weekly: number, weeks: number): number[] {
+  const out = new Array(weeks).fill(0);
+  if (!(weekly > 0)) return out;
+  const amount = monthlyFromWeekly(weekly);
+  for (const index of monthlyOccurrenceWeeks(0, weeks)) out[index] = amount;
+  return out;
+}
+
 function derivedLines(weeklyInflow: number, weeklyOutflow: number): {
   revenue: ForecastLineSeed[];
   expenses: ForecastLineSeed[];
@@ -1224,8 +1238,8 @@ function derivedLines(weeklyInflow: number, weeklyOutflow: number): {
       {
         id: "derived-collections",
         name: "Collections (monthly revenue)",
-        amount: moneyString(weeklyInflow),
-        frequency: "recurring-weekly",
+        amount: moneyString(monthlyFromWeekly(weeklyInflow)),
+        frequency: "recurring-monthly",
         startWeek: 1,
         splitCount: 1,
       },
@@ -1234,13 +1248,29 @@ function derivedLines(weeklyInflow: number, weeklyOutflow: number): {
       {
         id: "derived-operating",
         name: "Operating payments (monthly costs)",
-        amount: moneyString(weeklyOutflow),
-        frequency: "recurring-weekly",
+        amount: moneyString(monthlyFromWeekly(weeklyOutflow)),
+        frequency: "recurring-monthly",
         startWeek: 1,
         splitCount: 1,
       },
     ],
   };
+}
+
+/** A stored P&L estimate that still pays the weekly rate every week. */
+function plEstimateSpreadWeekly(cf: Record<string, unknown> | null): boolean {
+  if (!cf || cf.forecastLinesSource !== "pl-estimate") return false;
+  const lines = [...asForecastLines(cf.revenue), ...asForecastLines(cf.expenses)];
+  return lines.some((line) => {
+    const id = typeof line.id === "string" ? line.id : "";
+    const name = line.name ?? "";
+    const freq = line.frequency ?? "";
+    const derived =
+      id.startsWith("derived-") ||
+      /collections \(monthly/i.test(name) ||
+      /operating payments \(monthly/i.test(name);
+    return derived && (freq === "recurring-weekly" || freq === "weekly");
+  });
 }
 
 /**
@@ -1293,8 +1323,8 @@ export function resolveThirteenWeekForecast(input: {
   }
 
   const buildDerived = (): ThirteenWeekForecast => {
-    const inflow = new Array(weeks).fill(rate.weeklyInflow);
-    const outflow = new Array(weeks).fill(rate.weeklyOutflow);
+    const inflow = landMonthlyRunRate(rate.weeklyInflow, weeks);
+    const outflow = landMonthlyRunRate(rate.weeklyOutflow, weeks);
     const closing = reclose(opening, inflow, outflow);
     const totals = seriesTotals(inflow, outflow, closing);
     const suppress = runway.kind === "cash_generative" && totals.structural;
@@ -1358,6 +1388,9 @@ export function resolveThirteenWeekForecast(input: {
     rolled.outflow.every((n) => Math.abs(n) < 0.5);
   const plHasRate = rate.weeklyInflow > 1 || rate.weeklyOutflow > 1;
   if (storedCurrent && blankSeries && plHasRate && !protectedLines) storedCurrent = false;
+  // A weekly P&L smear (the monthly figure in every week) is not the cadence.
+  // Bank-seeded lines stay. The cash screen reloads the monthly lines.
+  if (storedCurrent && plEstimateSpreadWeekly(cf) && !protectedLines) storedCurrent = false;
 
   if (storedCurrent && rolled) {
     const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);

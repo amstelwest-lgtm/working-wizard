@@ -32,10 +32,16 @@ export type BriefingWorkflow = {
   inputsHash: string;
 };
 
+const SNAPSHOT_VALUE_MAX = 160;
+
+function clipText(max: number) {
+  return (value: unknown) => (typeof value === "string" ? clipSnapshotHint(value, max) : value);
+}
+
 const MetricSchema = z.object({
   key: z.enum(SNAPSHOT_METRIC_KEYS),
-  label: z.string().max(60),
-  value: z.string().max(60),
+  label: z.preprocess(clipText(60), z.string().max(60)),
+  value: z.preprocess(clipText(SNAPSHOT_VALUE_MAX), z.string().max(SNAPSHOT_VALUE_MAX)),
   delta: z
     .object({
       text: z.string().max(20),
@@ -56,8 +62,8 @@ export function parseWorkflowSnapshot(snapshot: unknown) {
 }
 
 const ChipSchema = z.object({
-  key: z.string().max(20),
-  label: z.string().max(60),
+  key: z.string().max(40),
+  label: z.preprocess(clipText(80), z.string().max(80)),
   current: z.number().nullable(),
   prior: z.number().nullable(),
   delta: z.number().nullable(),
@@ -74,7 +80,7 @@ const InputSchema = z.object({
     profile: z.unknown().nullable(),
     businessType: z.string().max(80).nullable(),
     healthScore: z.number().nullable(),
-    healthLabel: z.string().max(40).nullable(),
+    healthLabel: z.preprocess(clipText(40), z.string().max(40).nullable()),
     snapshot: z.array(MetricSchema).max(8),
     chips: z.array(ChipSchema).max(12),
     cashRunwayWeeks: z.number().nullable(),
@@ -83,7 +89,10 @@ const InputSchema = z.object({
     /** Ratios debtor days. Absent on older clients; the template default must not fill it. */
     debtorDays: z.number().nullable().optional(),
     /** Forecast and P&L fingerprint. A change regenerates the cached briefing. */
-    forecastKey: z.string().max(40).nullable().optional(),
+    forecastKey: z.preprocess(
+      (value) => (typeof value === "string" ? clipSnapshotHint(value, 40) : value),
+      z.string().max(40).nullable().optional(),
+    ),
   }),
 });
 

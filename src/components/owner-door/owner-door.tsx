@@ -499,6 +499,10 @@ export function OwnerDoor({
         return [{ id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null }];
       });
       const ids = openRows.map((row) => row.id);
+      const earlyTitles = openPlanTitles(openRows);
+      setActionRows(earlyTitles.map((title) => ({ title, email: null })));
+      setOpenAction(earlyTitles[0] ?? openRows[0]?.title ?? null);
+      setActionsReady(true);
       const [assignments, runs] = ids.length
         ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
