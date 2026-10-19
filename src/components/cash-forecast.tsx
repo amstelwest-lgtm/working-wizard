@@ -2468,7 +2468,13 @@ export function CashForecastPanel({
   });
   const runwayAside =
     !forecastEmpty && publishedStory.note === "above the floor" ? publishedStory.headline : null;
-  const openingTilesMissing = loaded && storedOpeningIsMissing(loadedCashflowRef.current);
+  // A balance-sheet date, or any non-zero opening on screen, is a real amount.
+  // Only a stored blank with no date and no amount is missing.
+  const openingTilesMissing =
+    loaded &&
+    storedOpeningIsMissing(loadedCashflowRef.current) &&
+    !openingAsOf &&
+    Math.abs(baseCalc.opening) < 0.5;
   const openingTileValue = openingTilesMissing ? "—" : fmtCompact(baseCalc.opening);
   const lowestTileValue =
     openingTilesMissing || emptyPresentation.lowestBlank ? "—" : fmtCompact(lowestBal);
