@@ -55,7 +55,7 @@ function ForAccountantsPage() {
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
           history rather than help. {saPricing?.accountantsLead ??
-            "Management accounts, 13-week cash and advisory drafts from QuickBooks, Xero or Sage."}
+            "Management accounts, 13-week cash and advisory drafts from QuickBooks or Xero. Sage is coming soon."}
         </>
       }
       heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: FIRM_SIGNUP_HREF }}
@@ -76,9 +76,9 @@ function ForAccountantsPage() {
     >
       <h2>Works with QuickBooks Online and Xero</h2>
       <p>
-        Connect QuickBooks Online or Xero for a client. Sage connects the same way. Milōn reads the
+        Connect QuickBooks Online or Xero for a client. Sage is coming soon. Milōn reads the
         profit and loss and balance sheet into the same workspace as an upload, and you review and
-        sign off. The books stay in QuickBooks, Xero or Sage — Milōn is not a ledger.
+        sign off. The books stay in QuickBooks or Xero — Milōn is not a ledger.
       </p>
       <div className="mk-grid">
         <div className="mk-card">
@@ -122,8 +122,8 @@ function ForAccountantsPage() {
         </li>
         <li>
           <strong>Source documents, with your approval.</strong> Clients can send invoices, bills
-          and receipts. A named person approves before anything is posted to QuickBooks, Xero or
-          Sage. Nothing posts on its own.
+          and receipts. A named person approves before anything is posted to QuickBooks or Xero.
+          Sage is coming soon. Nothing posts on its own.
         </li>
       </ul>
 

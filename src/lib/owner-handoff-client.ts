@@ -138,7 +138,7 @@ export async function recordHandoffAssignment(input: {
     action_item_id: input.actionItemId,
     client_id: input.clientId,
     actor_type: "owner_app",
-    actor_label: name,
+    actor_label: await signedInActorLabel(),
     note: handoffRequestNote(name),
   });
   if (error) return { ok: false, error: error.message };
@@ -161,11 +161,12 @@ export async function commitActionHandoff(input: {
 }): Promise<ActionHandoffCommit> {
   const since = new Date().toISOString();
   const assigneeName = agentDisplayName(input.agent);
+  const actorLabel = await signedInActorLabel();
   const note = {
     note: handoffRequestNote(assigneeName),
     at: since,
-    actorLabel: assigneeName,
-    actorType: "system",
+    actorLabel,
+    actorType: "owner_app",
   };
   const detail: ActionPlanRefreshDetail = {
     actionItemId: input.actionItemId,

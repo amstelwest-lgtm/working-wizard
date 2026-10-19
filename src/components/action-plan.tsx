@@ -25,7 +25,7 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { agentDisplayName, agentShortName } from "@/lib/milon-team";
 import { handoffAssigneeName, latestHandoffResult } from "@/lib/owner-handoff";
-import { botPickupCaption } from "@/lib/action-handoff";
+import { botPickupCaption, handoffCostStopped, handoffCouldNotFinish } from "@/lib/action-handoff";
 import { AssignmentNotes, type AssignmentNoteRow } from "@/components/assignment-notes";
 import { HandoffRunStatus } from "@/components/handoff-run-status";
 import { HandToMenu, MoveHandTo } from "@/components/hand-to-menu";
@@ -49,10 +49,12 @@ import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
 import { formatCalendarDay } from "@/lib/market/format";
 import {
+  actionOverdueInput,
   countActionPlan,
   currentQuarterLabel,
   defaultTargetDate,
   displayedPlanPeriod,
+  displayedPlanTarget,
   formatActionPlanCounts,
 } from "@/lib/action-plan-counts";
 import { planConfidenceDisplay, planConfidencePercent, planPaceGapPoints } from "@/lib/plan-confidence-display";
@@ -515,6 +517,35 @@ const PLAN_DAY: Intl.DateTimeFormatOptions = {
 };
 
 export { defaultTargetDate };
+
+function PlanDateField({
+  value,
+  onChange,
+  market,
+  overdue = false,
+}: {
+  value: string | null;
+  onChange: (next: string | null) => void;
+  market: ReturnType<typeof useMarketFormat>["market"];
+  overdue?: boolean;
+}) {
+  return (
+    <label className="relative block" onClick={(e) => e.stopPropagation()}>
+      <span
+        className={`block px-1 py-1 text-xs font-medium tabular-nums ${overdue ? "font-bold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}`}
+      >
+        {value ? formatCalendarDay(value, market, PLAN_DAY) : "—"}
+      </span>
+      <input
+        type="date"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="absolute inset-0 cursor-pointer opacity-0"
+        aria-label="Due date"
+      />
+    </label>
+  );
+}
 
 function isoDay(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -1283,11 +1314,14 @@ export default function ActionPlanPanel({
   const planCounts = useMemo(
     () =>
       countActionPlan(
-        items.map((item) => ({
-          status: item.status,
-          dueDate: item.due_date,
-          planTarget: plan?.target_date ?? null,
-        })),
+        items.map((item) =>
+          actionOverdueInput({
+            status: item.status,
+            dueDate: item.due_date,
+            createdAt: item.created_at,
+            planTarget: plan?.target_date ?? null,
+          }),
+        ),
       ),
     [items, plan?.target_date],
   );
@@ -1756,6 +1790,7 @@ export default function ActionPlanPanel({
                       ? { text: live.summary.trim(), at: live.at }
                       : null;
                   const result = storedResult ?? liveResult;
+                  if (handoffCostStopped(result?.text) && run?.agent) return handoffCouldNotFinish(run.agent);
                   return botPickupCaption({
                     assignee: it.owner_name,
                     run,
@@ -2024,9 +2059,13 @@ function GoalHeader({
     [plan],
   );
 
+  const shownTarget = displayedPlanTarget(
+    plan.target_date,
+    stripMilonProjection(plan.outcome_goal),
+  );
   const goalOverdue = planGoalIsOverdue(
     stripMilonProjection(plan.outcome_goal),
-    plan.target_date,
+    shownTarget,
     isoDay(new Date()),
   );
   const { metric_start: s, metric_target: t, metric_current: c } = plan;
@@ -2078,7 +2117,7 @@ function GoalHeader({
                 ) : null}
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   <CalendarDays className="mr-1 inline h-3.5 w-3.5" />
-                  Target {formatCalendarDay(plan.target_date, market, PLAN_DAY)}
+                  Target {formatCalendarDay(shownTarget, market, PLAN_DAY)}
                   {goalOverdue ? (
                     <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Target date has passed</span>
                   ) : null}
@@ -2097,11 +2136,10 @@ function GoalHeader({
                   </div>
                   <div>
                     <div className={LABEL_CLS}>Target date</div>
-                    <Input
-                      className={INPUT_CLS}
-                      type="date"
+                    <PlanDateField
                       value={draft.target_date}
-                      onChange={(e) => setDraft({ ...draft, target_date: e.target.value })}
+                      market={market}
+                      onChange={(next) => setDraft({ ...draft, target_date: next ?? "" })}
                     />
                   </div>
                 </div>
@@ -2360,7 +2398,7 @@ function ItemRow({
   onRetry?: () => void;
   notes?: readonly AssignmentNoteRow[];
 }) {
-  const { date, market } = useMarketFormat();
+  const { market } = useMarketFormat();
   const h = healthMeta(item.health);
   const overdue = item.health === "overdue";
   const [editTitle, setEditTitle] = useState(false);
@@ -2544,12 +2582,11 @@ function ItemRow({
             {item.due_date ? formatCalendarDay(item.due_date, market, PLAN_DAY) : "—"}
           </span>
         ) : (
-          <input
-            type="date"
-            value={item.due_date ?? ""}
-            onChange={(e) => onPatch({ due_date: e.target.value || null } as any)}
-            onClick={(e) => e.stopPropagation()}
-            className={`w-full cursor-pointer rounded-md border-0 bg-transparent px-1 py-1 text-xs font-medium tabular-nums ${overdue ? "font-bold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}`}
+          <PlanDateField
+            value={item.due_date}
+            market={market}
+            overdue={overdue}
+            onChange={(next) => onPatch({ due_date: next } as any)}
           />
         )}
       </div>
@@ -2592,7 +2629,7 @@ function ItemRow({
           {lastNudge ? (
             <span
               className={`inline-flex items-center gap-1 text-[10px] font-semibold dark:text-[#F4F7FB] ${lastNudge.email_type === "nudge" ? "text-[#102A43]" : "text-[#C43D4B]"}`}
-              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? date(lastNudge.sent_at, PLAN_DAY) : ""}`}
+              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY) : ""}`}
             >
               <Mail className="h-3 w-3" />
               {lastNudge.email_type === "nudge" ? "Nudged" : "Overdue"}
@@ -2608,7 +2645,7 @@ function ItemRow({
           ) : null}
           {lastNudge?.sent_at && (
             <span className="text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-              {date(lastNudge.sent_at, PLAN_DAY)}
+              {formatCalendarDay(lastNudge.sent_at, market, PLAN_DAY)}
             </span>
           )}
         </div>

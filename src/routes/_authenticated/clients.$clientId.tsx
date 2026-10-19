@@ -286,7 +286,7 @@ import { buildFinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useAgentActivity } from "@/hooks/use-agent-activity";
 import { DRAFT_NEEDS_ACCOUNTANT, draftFindingLabel } from "@/hooks/owner-agent-ui";
 import { isVisibleAgentFinding } from "@/lib/milon-team-activity";
-import { ownerPresence, steerOpenHandoffs } from "@/lib/owner-presence";
+import { ownerPresence, steerOpenHandoffs, withCardHandoffRuns } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   clearOptimisticHandoff,
@@ -308,13 +308,14 @@ import {
   type RowAssignment,
 } from "@/lib/open-plan-home";
 import { ownerAnswerTiles, ownerCardStatuses, ownerHomeLines, type OwnerBooks } from "@/lib/owner-answers";
-import { countActionPlan } from "@/lib/action-plan-counts";
+import { actionOverdueInput, countActionPlan } from "@/lib/action-plan-counts";
 import { homeActionNeeds, openActionSentence } from "@/lib/owner-needs";
 import type { AgentKey } from "@/lib/milon-team-feed";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { EmptyState, ClientWorkspaceSkeleton } from "@/components/primitives";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { bankAccountsFromDraft, ratiosStatementFigures } from "@/lib/deliverable-input-config";
+import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel<ReportsStudioProps>(
@@ -1481,6 +1482,7 @@ function ClientView() {
     healthMap,
     ratioMeta: sphereRatioMeta,
     inventoryApplies: stockSittingApplies(parseOperatingProfile(client?.operating_profile)),
+    dayCounts: cashDriverDayFigures(financials),
   });
   const simplifiedSections = [
     {
@@ -1848,10 +1850,12 @@ function ClientView() {
     }
     setOpenPlanUnavailable(false);
     void (async () => {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const [itemsRes, planRes] = await Promise.all([
         supabase
           .from("action_items_v")
-          .select("id, title, due_date, status, owner_name")
+          .select("id, title, due_date, status, owner_name, created_at")
           .eq("client_id", clientId)
           .neq("status", "done")
           .order("seq"),
@@ -1863,8 +1867,8 @@ function ClientView() {
           .order("created_at", { ascending: false })
           .limit(1),
       ]);
-      const { data, error } = itemsRes;
       if (cancelled) return;
+      const { data, error } = itemsRes;
       if (error) {
         setOpenPlanUnavailable(true);
         setOpenPlanTitles([]);
@@ -1880,6 +1884,7 @@ function ClientView() {
         title?: string | null;
         due_date?: string | null;
         status?: string | null;
+        created_at?: string | null;
         owner_name?: string | null;
       }[];
       const planTarget =
@@ -1888,6 +1893,8 @@ function ClientView() {
         const title = row.title?.trim() ?? "";
         return title ? [title] : [];
       });
+      setOpenPlanUnavailable(false);
+      setOpenPlanTitles(titles);
       const ids = rows.flatMap((row) => (row.id && row.title?.trim() ? [row.id] : []));
       const [assignments, runs, noteLog] = ids.length
         ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids), loadActionNotes(ids)])
@@ -1966,7 +1973,6 @@ function ClientView() {
           assigneeName: pending.assigneeName,
         });
       }
-      setOpenPlanUnavailable(false);
       setOpenPlanTitles(titles);
       setOpenPlanOverdue(
         countActionPlan(
@@ -1974,13 +1980,18 @@ function ClientView() {
             const title = row.title?.trim() ?? "";
             if (!title) return [];
             return [
-              {
-                status: row.status,
-                dueDate: row.due_date,
-                planTarget,
-              },
+              actionOverdueInput(
+                {
+                  status: row.status,
+                  dueDate: row.due_date,
+                  createdAt: row.created_at ?? null,
+                  planTarget,
+                },
+                today,
+              ),
             ];
           }),
+          today,
         ).overdue,
       );
       paintAssignments(labelled, merged, paintedNotes, paintedRuns);
@@ -3273,16 +3284,17 @@ function ClientView() {
     [assignmentRows, homeActivity.runs],
   );
   const openAgents = useMemo(() => openHandoffAgents(settledRows), [settledRows]);
-  const homePresence = useMemo(
+  const homeCardRuns = useMemo(
     () =>
-      steerOpenHandoffs(
-        ownerPresence({
-          ...homeActivity,
-          runs: withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
-        }),
-        openAgents,
+      withCardHandoffRuns(
+        withoutPersonQueuedRuns(homeActivity.runs, personOwnedActionIds(settledRows)),
+        settledRows,
       ),
-    [homeActivity, settledRows, openAgents],
+    [homeActivity.runs, settledRows],
+  );
+  const homePresence = useMemo(
+    () => steerOpenHandoffs(ownerPresence({ ...homeActivity, runs: homeCardRuns }), openAgents),
+    [homeActivity, homeCardRuns, openAgents],
   );
   const shownHandoffs = useMemo(
     () =>

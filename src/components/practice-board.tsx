@@ -21,7 +21,7 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { periodMonthsOf } from "@/lib/ratios";
-import { actionIsOverdue } from "@/lib/action-plan-counts";
+import { actionIsOverdue, actionOverdueInput } from "@/lib/action-plan-counts";
 import {
   buildAttentionItems,
   buildFollowUpQueue,
@@ -1102,6 +1102,25 @@ const UNSCORED_HEALTH: OverallHealth = {
   hasCriticalPillar: false,
 };
 
+/** First paint. Runway and health fill in once the books and the plan load. */
+function lightClientRow(c: Client): ClientRow {
+  return {
+    ...c,
+    financials: c.financials ?? null,
+    score: null,
+    health: UNSCORED_HEALTH,
+    trendDelta: null,
+    scoreSeries: [],
+    chaseActions: [],
+    runwayWeeks: c.cash_runway_weeks,
+    runwayLabel: null,
+    openQueries: 0,
+    openActions: 0,
+    overdueActions: 0,
+    revenue: null,
+  };
+}
+
 /** One book row. A scoring throw still leaves the client on the list. */
 function toClientRow(
   c: Client,
@@ -1457,7 +1476,9 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
     // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
     // IT members have master access — list every client they can read.
-    let query = supabase.from("clients").select("*").order("created_at", { ascending: false });
+    const listColumns =
+      "id, name, business_type, operating_profile, client_code, contact_email, cash_runway_weeks, last_forecast_at, last_login_at, firm_id, owner_user_id, financials_updated_at, created_at, reports_issued_count, market";
+    let query = supabase.from("clients").select(listColumns).order("created_at", { ascending: false });
     if (!isIt) {
       if (activeFirmId) {
         query = query.or(
@@ -1469,94 +1490,77 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
     }
     const { data: cs, error } = await query;
     if (error) toast.error(error.message);
-    let rawClients = (cs ?? []) as Client[];
-    try {
-      const displayNames = await loadClientDisplayNames(
-        supabase as never,
-        rawClients,
-        viewerName,
-      );
-      rawClients = rawClients.map((client) => {
-        const name = displayNames.get(client.id);
-        return name && name !== client.name ? { ...client, name } : client;
-      });
-    } catch {
-      /* keep the stored name when the lookup cannot run */
-    }
-    rawClients = collapseDuplicateClientShells(rawClients);
+    let rawClients = collapseDuplicateClientShells((cs ?? []) as Client[]);
+    const clientIds = rawClients.map((c) => c.id);
 
-    // Attach legacy null-firm practice clients to the active firm so they stay visible.
-    if (!isIt && activeFirmId && rawClients.some((c) => !c.firm_id)) {
-      const orphanIds = rawClients.filter((c) => !c.firm_id).map((c) => c.id);
-      const linked: string[] = [];
-      for (const id of orphanIds) {
+    // Names, books, and orphan attaches used to run before the first paint,
+    // and each row then built a 13-week forecast. The list paints from the
+    // slim columns; those three continue together with history and actions.
+    const namesPromise = loadClientDisplayNames(supabase as never, rawClients, viewerName).catch(
+      () => new Map<string, string>(),
+    );
+    const figuresPromise = clientIds.length
+      ? supabase.from("clients").select("id, financials, cashflow").in("id", clientIds)
+      : Promise.resolve({ data: [] as { id: string; financials: Client["financials"]; cashflow: unknown }[], error: null });
+    const orphanIds =
+      !isIt && activeFirmId ? rawClients.filter((c) => !c.firm_id).map((c) => c.id) : [];
+    const orphansPromise = Promise.all(
+      orphanIds.map(async (id) => {
         const { error: attachErr } = await supabase.rpc(
           "link_own_client_to_firm" as never,
           { p_client_id: id, p_firm_id: activeFirmId } as never,
         );
-        if (!attachErr) linked.push(id);
-      }
-      if (linked.length) {
-        rawClients = rawClients.map((c) =>
-          linked.includes(c.id) ? { ...c, firm_id: activeFirmId } : c,
-        );
-      }
-    }
+        return attachErr ? null : id;
+      }),
+    );
 
-    // Show the book as soon as the client query returns. Score history, open
-    // actions, and notes enrich the rows afterwards. A hung secondary query
-    // used to leave Home on "0 clients on the book." and Clients empty.
     if (gen !== loadGen.current) return;
-    setClientRows(rawClients.map((c) => toClientRow(c, [], 0, 0, 0)));
+    setClientRows(rawClients.map((c) => lightClientRow(c)));
     if (rawClients.length === 0) setCountsReady(true);
     setLoading(false);
 
-    // Score history — query defensively; the table may not exist yet
-    const historyMap: Record<string, ScoreHistoryPoint[]> = {};
-    try {
-      // NOTE: client_score_history is added by migration 20260802000000_score_history_and_reports_count.sql
-      // which may not have run yet against the live database — query defensively.
-      const { data: hist, error: histErr } = await supabase
-        .from("client_score_history")
-        .select("client_id, score, is_estimated, period_date")
-        .in(
-          "client_id",
-          rawClients.map((c) => c.id),
-        )
-        .order("period_date", { ascending: true });
-
-      if (histErr) {
-        // Only silently ignore "relation does not exist" (table not migrated yet)
-        const msg = histErr.message ?? "";
-        if (!msg.includes("does not exist") && !msg.includes("relation")) {
-          console.error("score history error:", histErr);
-        }
-      } else if (hist) {
-        for (const row of hist) {
-          historyMap[row.client_id] = historyMap[row.client_id] ?? [];
-          historyMap[row.client_id].push({
-            score: row.score,
-            is_estimated: row.is_estimated,
-            period_date: row.period_date,
-          });
-        }
-      }
-    } catch {
-      // table doesn't exist — silently ignore
-    }
-
-    // Open action-plan items (non-fatal if RLS/table missing)
-    const openActionsMap: Record<string, number> = {};
-    const overdueActionsMap: Record<string, number> = {};
-    const chaseActionsMap: Record<string, { title: string; overdue: boolean }[]> = {};
-    if (rawClients.length > 0) {
+    const historyPromise = (async () => {
+      const historyMap: Record<string, ScoreHistoryPoint[]> = {};
+      if (clientIds.length === 0) return historyMap;
       try {
-        const today = new Date().toISOString().slice(0, 10);
-        const clientIds = rawClients.map((c) => c.id);
+        const { data: hist, error: histErr } = await supabase
+          .from("client_score_history")
+          .select("client_id, score, is_estimated, period_date")
+          .in("client_id", clientIds)
+          .order("period_date", { ascending: true });
+        if (histErr) {
+          const msg = histErr.message ?? "";
+          if (!msg.includes("does not exist") && !msg.includes("relation")) {
+            console.error("score history error:", histErr);
+          }
+        } else if (hist) {
+          for (const row of hist) {
+            historyMap[row.client_id] = historyMap[row.client_id] ?? [];
+            historyMap[row.client_id].push({
+              score: row.score,
+              is_estimated: row.is_estimated,
+              period_date: row.period_date,
+            });
+          }
+        }
+      } catch {
+        // table doesn't exist — silently ignore
+      }
+      return historyMap;
+    })();
+
+    const actionsPromise = (async () => {
+      const openActionsMap: Record<string, number> = {};
+      const overdueActionsMap: Record<string, number> = {};
+      const chaseActionsMap: Record<string, { title: string; overdue: boolean }[]> = {};
+      if (clientIds.length === 0) return { openActionsMap, overdueActionsMap, chaseActionsMap };
+      try {
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
         const [{ data: actions, error: actErr }, { data: plans }] = await Promise.all([
           supabase
             .from("action_items")
-            .select("client_id, status, due_date, title")
+            .select("client_id, status, due_date, created_at, title")
             .in("client_id", clientIds)
             .neq("status", "done"),
           supabase
@@ -1573,11 +1577,15 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
           for (const a of actions) {
             openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
             const overdue = actionIsOverdue(
-              {
-                status: a.status,
-                dueDate: a.due_date,
-                planTarget: targetByClient.get(a.client_id) ?? null,
-              },
+              actionOverdueInput(
+                {
+                  status: a.status,
+                  dueDate: a.due_date,
+                  createdAt: a.created_at,
+                  planTarget: targetByClient.get(a.client_id) ?? null,
+                },
+                today,
+              ),
               today,
             );
             if (overdue) {
@@ -1593,17 +1601,41 @@ export function PracticeBoard({ view }: { view: PracticeView }) {
       } catch {
         // non-fatal
       }
-    }
+      return { openActionsMap, overdueActionsMap, chaseActionsMap };
+    })();
 
-    // Compute per-client enriched rows. A failure here keeps the clients
-    // already on screen; it does not put the book back to zero.
-    let openQueriesMap: Record<string, number> = {};
-    try {
-      openQueriesMap = await countOpenQueriesByClient(rawClients.map((c) => c.id));
-    } catch (err) {
+    const queriesPromise = countOpenQueriesByClient(clientIds).catch((err) => {
       console.error("open queries:", err);
-    }
+      return {} as Record<string, number>;
+    });
+
+    const [historyMap, actionMaps, openQueriesMap, displayNames, figures, linkedIds] = await Promise.all([
+      historyPromise,
+      actionsPromise,
+      queriesPromise,
+      namesPromise,
+      figuresPromise,
+      orphansPromise,
+    ]);
+    const { openActionsMap, overdueActionsMap, chaseActionsMap } = actionMaps;
     if (gen !== loadGen.current) return;
+    const linked = new Set(linkedIds.filter((id): id is string => Boolean(id)));
+    const books = new Map(
+      ((figures.data ?? []) as { id: string; financials: Client["financials"]; cashflow: unknown }[]).map(
+        (row) => [row.id, row],
+      ),
+    );
+    rawClients = rawClients.map((client) => {
+      const name = displayNames.get(client.id);
+      const book = books.get(client.id);
+      return {
+        ...client,
+        name: name && name !== client.name ? name : client.name,
+        firm_id: linked.has(client.id) ? activeFirmId : client.firm_id,
+        financials: book?.financials ?? client.financials ?? null,
+        cashflow: book?.cashflow ?? client.cashflow,
+      };
+    });
     setClientRows(
       rawClients.map((c) =>
         toClientRow(

@@ -139,6 +139,12 @@ assert(
 );
 assert(fn.includes("handoffNeedsFreshRun"), "a finished run starts another hand-off");
 assert(fn.includes("handoffAgainInputs"), "the repeat run does not reuse the finished key");
+assert(fn.includes("const handoffActor = user.email"), "the hand-off note is written by the signed-in person");
+assert(!fn.includes("actorLabel: decision.displayName"), "a hand-off note is not authored by the bot");
+assert(
+  (fn.match(/actorLabel: handoffActor/g) ?? []).length >= 4,
+  "person and bot hand-offs name the signed-in person",
+);
 assert(fn.includes("writeAssignment"), "every hand-off stores the assignee and a note");
 assert(fn.includes("noted: true"), "the client can tell the note was stored");
 assert(fn.includes("personId"), "a person hand-off uses the same function");
@@ -175,6 +181,20 @@ assert(
   commit.indexOf("dispatchActionPlanRefresh") < commit.indexOf("requestOwnerHandoff"),
   "Working is painted before the hand-off function returns",
 );
+const commitBody = handoffClient.slice(
+  handoffClient.indexOf("export async function commitActionHandoff"),
+  handoffClient.indexOf("async function writePersonAssignment"),
+);
+assert(commitBody.includes("signedInActorLabel"), "the optimistic hand-off note uses the signed-in person");
+assert(commitBody.includes('actorType: "owner_app"'), "the optimistic hand-off note is a person, not the bot");
+assert(!commitBody.includes("actorLabel: assigneeName"), "the bot is not the hand-off author");
+assert(!commitBody.includes('actorType: "system"'), "the optimistic hand-off is not stored as the system actor");
+const fallback = handoffClient.slice(
+  handoffClient.indexOf("export async function recordHandoffAssignment"),
+  handoffClient.indexOf("export type ActionHandoffCommit"),
+);
+assert(fallback.includes("signedInActorLabel"), "the offline note is also the signed-in person");
+assert(!fallback.includes("actor_label: name"), "the offline note does not name the bot as the author");
 assert(commit.includes("since"), "the click time travels with the optimistic row");
 const person = handoffClient.slice(handoffClient.indexOf("export async function assignActionToPerson"));
 assert(

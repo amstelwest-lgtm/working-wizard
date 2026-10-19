@@ -11,7 +11,12 @@ export type AssignmentNoteRow = {
 function noteLine(row: AssignmentNoteRow): string {
   const text = row.note?.trim() ?? "";
   if (!text) return "";
-  return formatAssignmentNote({ note: text, at: row.at, actorLabel: row.actorLabel });
+  return formatAssignmentNote({
+    note: text,
+    at: row.at,
+    actorLabel: row.actorLabel,
+    actorType: row.actorType,
+  });
 }
 
 /** Latest note on the row, with earlier notes behind one control. */

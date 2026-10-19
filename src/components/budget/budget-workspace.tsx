@@ -85,6 +85,7 @@ export function BudgetWorkspace({
   displayTemplateId = null,
   statementAligned = false,
   forecastRent = null,
+  onBuild,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -115,6 +116,7 @@ export function BudgetWorkspace({
   statementAligned?: boolean;
   /** Rent already in the 13-week forecast. Blank premises follows it. */
   forecastRent?: ForecastRent | null;
+  onBuild?: () => void;
 }) {
   const variance = (
     <BudgetVariancePanel
@@ -151,6 +153,7 @@ export function BudgetWorkspace({
           displayTemplateId={displayTemplateId}
           statementAligned={statementAligned}
           forecastRent={forecastRent}
+          onBuild={onBuild}
         />
       </div>
     );
@@ -180,6 +183,7 @@ export function BudgetWorkspace({
       displayTemplateId={displayTemplateId}
       statementAligned={statementAligned}
       forecastRent={forecastRent}
+      onBuild={onBuild}
     />
   );
 }
@@ -297,6 +301,7 @@ function BudgetComplexWorkspace({
   displayTemplateId = null,
   statementAligned = false,
   forecastRent = null,
+  onBuild,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -320,6 +325,7 @@ function BudgetComplexWorkspace({
   displayTemplateId?: BudgetTemplateId | null;
   statementAligned?: boolean;
   forecastRent?: ForecastRent | null;
+  onBuild?: () => void;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const { market } = useMarket();
@@ -406,6 +412,7 @@ function BudgetComplexWorkspace({
         canSign={canSign}
         onSignoffChange={onSignoffChange}
         signoffKnown={signoffKnown}
+        onBuild={onBuild}
         extraActions={
           <BudgetPdfExportButton
             quiet
@@ -734,9 +741,11 @@ function BudgetComplexWorkspace({
             </Button>
           )}
         </div>
-        {hotelTemplateRows(shownTpl.id) ? (
-          <ul data-hotel-template="" className="space-y-1 text-xs text-slate-600">
-            {hotelTemplateRows(shownTpl.id)!.map((row) => (
+        {hotelTemplateRows(shownTpl.id)?.some((row) => row.section === "revenue") ? (
+          <ul data-hotel-template="" data-hotel-section="revenue" className="space-y-1 text-xs text-slate-600">
+            {hotelTemplateRows(shownTpl.id)!
+              .filter((row) => row.section === "revenue")
+              .map((row) => (
               <li key={row.name}>
                 {row.name} · {row.detail} · {row.value}
               </li>
@@ -886,6 +895,17 @@ function BudgetComplexWorkspace({
             Fixed overheads
           </h3>
           {rentHint ? <p className="mt-1 text-[11px] text-slate-500">{rentHint}</p> : null}
+          {hotelTemplateRows(shownTpl.id)?.some((row) => row.section === "cost") ? (
+            <ul data-hotel-template="" data-hotel-section="cost" className="mt-2 space-y-1 text-xs text-slate-600">
+              {hotelTemplateRows(shownTpl.id)!
+                .filter((row) => row.section === "cost")
+                .map((row) => (
+                  <li key={row.name}>
+                    {row.name} · {row.detail} · {row.value}
+                  </li>
+                ))}
+            </ul>
+          ) : null}
         </div>
         <ScrollableTable className="rounded-lg border border-[#DBEAFE] dark:border-slate-800">
           <table className="milon-data-table w-full min-w-[640px] text-xs text-[#0f172a] dark:text-slate-100">

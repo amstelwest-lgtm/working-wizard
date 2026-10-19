@@ -18,7 +18,7 @@ import {
 } from "../src/lib/portfolio-dashboard";
 import { clientMarketDraftFromFirm } from "../src/lib/market";
 import { detectImportPeriod, importPeriodFromParts } from "../src/lib/import-period";
-import { formatFirmPlanStatus, trialDaysRemaining } from "../src/lib/firm-client-cap";
+import { firmTrialStatusLine, formatFirmPlanStatus, trialDaysRemaining } from "../src/lib/firm-client-cap";
 import { FIRM_BAND_CATALOG, FIRM_TRIAL_CLIENT_LIMIT } from "../src/lib/stripe-plans";
 import type { OverallHealth } from "../src/lib/health-score";
 
@@ -195,6 +195,23 @@ const trial = formatFirmPlanStatus({
   now,
 });
 assert(trial.headline === "Trial — 9 days left", "trial headline counts days");
+assert(
+  firmTrialStatusLine({ phase: "trialing", trialEndsOn: trial.trialEndsOn }) ===
+    `Free trial · ends ${trial.trialEndsOn}`,
+  "settings trial line uses the real trial end date",
+);
+assert(
+  firmTrialStatusLine({ phase: "trialing", trialEndsOn: null }) == null,
+  "a trial with no end date shows no status line",
+);
+assert(
+  firmTrialStatusLine({ phase: "trialing", trialEndsOn: "   " }) == null,
+  "a blank trial end is not invented into a date",
+);
+assert(
+  firmTrialStatusLine({ phase: "active", trialEndsOn: trial.trialEndsOn }) == null,
+  "a paid plan does not show a free-trial line",
+);
 assert(trial.detail === "Up to 3 clients · Solo after the trial", "trial detail uses the trial cap");
 assert(!trial.detail?.includes(String(soloLimit)), "trial copy does not advertise the paid cap");
 const active = formatFirmPlanStatus({ phase: "active", band: "solo", now });

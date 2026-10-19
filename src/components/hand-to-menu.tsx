@@ -79,7 +79,6 @@ export function HandToMenu({
   const boundCountry = useBoundMarketCountry();
   const country = marketCountry ?? boundCountry;
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [team, setTeam] = useState<readonly HandToPerson[]>(employees ?? []);
   const [teamReady, setTeamReady] = useState(Boolean(employees));
   const [menuBox, setMenuBox] = useState<{ top: number; left: number } | null>(null);
@@ -165,15 +164,9 @@ export function HandToMenu({
     };
   }, [open]);
 
-  const run = async (work: () => void | Promise<void>) => {
-    if (busy) return;
+  const run = (work: () => void | Promise<void>) => {
     setOpen(false);
-    setBusy(true);
-    try {
-      await work();
-    } finally {
-      setBusy(false);
-    }
+    void work();
   };
 
   return (
@@ -190,11 +183,10 @@ export function HandToMenu({
         className="inline-flex items-center gap-1.5 rounded-lg border border-[#0B5FFF] bg-[#0B5FFF] px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-[#2563EB] disabled:opacity-70"
         data-hand-to-trigger
         aria-expanded={open}
-        disabled={busy}
         onClick={() => setOpen((value) => !value)}
       >
-        {busy ? "Assigning…" : "Hand to"}
-        {!busy && assignee ? <span className="hand-to-assignee">{assignee}</span> : null}
+        Hand to
+        {assignee ? <span className="hand-to-assignee">{assignee}</span> : null}
       </button>
       {open && menuBox
         ? createPortal(

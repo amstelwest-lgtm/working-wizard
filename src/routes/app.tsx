@@ -108,6 +108,7 @@ import {
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
 import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
+import { cashDriverDayFigures } from "@/lib/cash-driver-label";
 import {
   GROSS_MARGIN_MAPPING_NOTE,
   PILLAR_LABELS,
@@ -122,7 +123,7 @@ import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics, runwayDisplayLabel, storedOpeningIsMissing } from "@/lib/client-metrics";
 import { forecastPlFingerprint } from "@/lib/cash-forecast-rows";
-import { cashOutlookIsCritical, clientListStatusWord } from "@/lib/cash-forecast-parity";
+import { cashOutlookIsCritical, clientListRunwayHeadline, clientListStatusWord } from "@/lib/cash-forecast-parity";
 import { IMPLAUSIBLE_SAMPLE_NOTE, statementSampleImplausible } from "@/lib/operating-profit-display";
 import { resolvePriorSnapshot } from "@/lib/prior-period";
 import { yearMoneyFromFinancials } from "@/lib/budget-year-compare";
@@ -2131,6 +2132,8 @@ function Index() {
   // Owner Home reloads each action row from this event. Hand to flips the card
   // to Working on the click. A run that started before that click does not clear
   // it. The stored run settles it once it is newer than the click, the same read as client Home.
+  // While any run for this client is queued or running, Home polls and reloads the notes, then stops.
+  // A queued or running run on a card beats Found something. Same runs as the row.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);
     window.addEventListener("milon-action-plan-refresh", bump);
@@ -3761,6 +3764,7 @@ function Index() {
     healthMap,
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
+    dayCounts: cashDriverDayFigures(v as unknown as Record<string, unknown>),
   });
 
   // Same ranker as the accountant Moves tab and Action Plan import.
@@ -5827,7 +5831,18 @@ function Index() {
                       refreshKey={`${activeTab}|${advisoryBump}`}
                       onChanged={() => setAdvisoryBump((n) => n + 1)}
                       currentFigures={{
-                        runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
+                        runwayLabel: clientListRunwayHeadline({
+                          source: ownerOutlook.source,
+                          opening: ownerOutlook.opening,
+                          closings: ownerOutlook.closing,
+                          floor: ownerOutlook.floor,
+                          totalInflow: ownerOutlook.totalInflow,
+                          totalOutflow: ownerOutlook.totalOutflow,
+                          runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
+                          cashGenerative: ownerMetrics.runway.kind === "cash_generative",
+                          healthOverall: overallHealth.overall,
+                          openingMissing: ownerOpeningMissing,
+                        }),
                         cash: ownerOutlook.opening,
                         healthScore: overallHealth.overall,
                       }}

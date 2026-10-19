@@ -382,6 +382,8 @@ export function budgetIsImplausible(
   if (!periodFinancials) return false;
   const actual = annualisedActuals(periodFinancials);
   const budget = budgetYearTotals(doc);
+  // An empty plan is "not built", not a variance against a zero budget.
+  if (budget.revenue < 1 && budget.cogs < 1) return false;
   if (actual.cogs != null && actual.cogs > 0 && budget.cogs <= 0.5) return true;
   if (exceedsMultiple(budget.revenue, actual.revenue, BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE))
     return true;

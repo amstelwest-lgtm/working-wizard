@@ -15,6 +15,7 @@ export function HandoffRunStatus({
   onRetry?: () => void;
 }) {
   const active = run?.status === "queued" || run?.status === "running";
+  const stopped = Boolean(caption?.includes("couldn't finish this one"));
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
@@ -22,9 +23,25 @@ export function HandoffRunStatus({
     return () => window.clearInterval(timer);
   }, [active, run?.at]);
   const slow = active && handoffIsSlow(run?.status, run?.at, now);
-  if (!slow && !caption && !active) return null;
+  if (!slow && !caption && !active && !stopped) return null;
   return (
     <>
+      {stopped && !active ? (
+        <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-stopped>
+          {caption} ·{" "}
+          <button
+            type="button"
+            className="font-semibold text-[#0B5FFF] underline"
+            data-handoff-retry
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetry?.();
+            }}
+          >
+            Retry
+          </button>
+        </p>
+      ) : null}
       {active && !slow ? (
         <p className="mt-1 text-[12px] font-semibold text-[#0B5FFF]" data-handoff-working>
           Working
@@ -45,7 +62,7 @@ export function HandoffRunStatus({
             Retry
           </button>
         </p>
-      ) : caption ? (
+      ) : caption && !stopped ? (
         <p className="fm-brief-progress mt-1 text-[11px] font-semibold text-[#0B5FFF]" data-agent-pickup>
           {caption}
         </p>
