@@ -20,6 +20,8 @@
  *   pnpm run test:ask-ai-client-switch
  */
 
+import { readFileSync } from "node:fs";
+
 // ── Minimal DOM shim ──────────────────────────────────────────────────────────
 // ask-ai.js uses: document.createElement, container.innerHTML="", appendChild,
 // addEventListener, .dataset, requestAnimationFrame, window.location.search
@@ -990,7 +992,13 @@ await test("Scenario 14: the first capped reply is the full card, and a remount 
     const href = String((card?.find((el) => el.className.includes("precard-cap-button")) as { href?: string } | null)?.href ?? "");
     assert(
       href.includes("/billing/start?plan=starter&interval=month&market=us"),
-      `Add a card opens Checkout, got ${href}`,
+      `Add a card opens the Starter Checkout entry, got ${href}`,
+    );
+    const billingStart = readFileSync("src/routes/billing.start.tsx", "utf8");
+    assert(billingStart.includes("createStripeCheckout"), "that page creates a Stripe Checkout session");
+    assert(
+      billingStart.includes("window.location.href = url"),
+      "that page sends the browser to the Stripe Checkout URL",
     );
 
     const second = makeContainer("cap-client");
