@@ -141,6 +141,12 @@ export function pillarBreakdownFromRatios(
  * `clients.financials` does not yield a ratio — a saved snapshot can still
  * show the old year-span creditor days (28) after Overview moved to 37.
  */
+const NON_FINITE_DAY_KEYS = new Set([
+  "Creditor Days",
+  "Inventory Days",
+  "Working Capital Days",
+]);
+
 export function resolveRatioRecord(
   snapshotRatios: Record<string, unknown> | null | undefined,
   financials: Record<string, unknown> | null | undefined,
@@ -151,7 +157,15 @@ export function resolveRatioRecord(
   for (const [k, v] of Object.entries(derived)) {
     if (Number.isFinite(v)) live[k] = v;
   }
-  if (Object.keys(live).length > 0) return live;
+  if (Object.keys(live).length > 0) {
+    // A tiny cost of sales makes these days NaN. Keep that, so a saved
+    // snapshot cannot put the old 248-day figure back.
+    for (const key of NON_FINITE_DAY_KEYS) {
+      const value = derived[key];
+      if (typeof value === "number" && Number.isNaN(value)) live[key] = value;
+    }
+    return live;
+  }
 
   const fromSnap: Record<string, number> = {};
   if (snapshotRatios && typeof snapshotRatios === "object" && !Array.isArray(snapshotRatios)) {

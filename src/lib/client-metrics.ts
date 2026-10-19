@@ -7,6 +7,7 @@
  */
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
+import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
 import {
@@ -137,21 +138,49 @@ export function resolveClientCash(input: ResolveCashInput): ResolvedCash {
   return { amount: period, source: "period" };
 }
 
-/** Operating outflows for one period: COGS plus overheads, without double-counting labour inside fixed costs. */
+function fieldPresent(fin: Record<string, unknown>, key: string): boolean {
+  const value = fin[key];
+  return value != null && String(value).trim() !== "";
+}
+
+/**
+ * Operating outflows for one period, from the same bridge as the waterfall:
+ * cost of sales plus operating expenses plus depreciation.
+ * Labour that already sits inside the residual to EBIT is not added again.
+ */
 export function periodOperatingOutflows(
   financials: Record<string, unknown> | null | undefined,
 ): number | null {
   const fin = asRecord(financials);
   if (!fin) return null;
-  const cogs = finiteNum(fin.cogs);
-  const fixed = finiteNum(fin.fixedCosts);
-  const labor = finiteNum(fin.laborCost);
-  if (cogs == null && fixed == null && labor == null) return null;
-  const fixedN = fixed ?? 0;
-  const laborN = labor ?? 0;
-  const opex = laborN > 0 && fixedN >= laborN ? fixedN : fixedN + laborN;
-  const total = (cogs ?? 0) + opex;
+  if (
+    !fieldPresent(fin, "cogs") &&
+    !fieldPresent(fin, "fixedCosts") &&
+    !fieldPresent(fin, "ebit") &&
+    !fieldPresent(fin, "ebitda") &&
+    !fieldPresent(fin, "laborCost")
+  ) {
+    return null;
+  }
+  const bridge = periodProfitBridge(fin);
+  const total = bridge.cogs + bridge.operatingExpenses + bridge.depreciation;
   return total > 0 ? total : null;
+}
+
+/**
+ * A stored opening of blank or 0 with no source and no bank publish is missing.
+ * It is not a real zero sitting under the floor.
+ */
+export function storedOpeningIsMissing(cashflow: unknown): boolean {
+  const cf = asRecord(cashflow);
+  if (!cf) return false;
+  const source = typeof cf.openingBalanceSource === "string" ? cf.openingBalanceSource.trim() : "";
+  const seeded = typeof cf.seededFromBanksAt === "string" ? cf.seededFromBanksAt.trim() : "";
+  if (source || seeded) return false;
+  const raw = cf.openingBalance;
+  if (raw == null || String(raw).trim() === "") return true;
+  const opening = finiteNum(raw);
+  return opening == null || Math.abs(opening) < 0.5;
 }
 
 function weeksInPeriod(periodMonths: number | null | undefined): number {
@@ -318,6 +347,18 @@ export function assessClientMetrics(input: {
       totalInflow: outlook.totalInflow,
       totalOutflow: outlook.totalOutflow,
     });
+  }
+  const openingMissing = storedOpeningIsMissing(cf);
+  const weeksBelow = outlook.closing.filter((balance) => balance < outlook.floor).length;
+  const opensBelow =
+    !openingMissing && Number.isFinite(outlook.opening) && outlook.opening < outlook.floor;
+  if ((weeksBelow > 0 || opensBelow) && runway.kind === "cash_generative") {
+    runway = {
+      weeks: null,
+      kind: "unknown",
+      label:
+        weeksBelow === 1 ? "1 week below" : weeksBelow > 1 ? `${weeksBelow} weeks below` : "Below floor",
+    };
   }
   return { cash, runway, forecastNet, outlook };
 }

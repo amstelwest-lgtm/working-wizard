@@ -24,7 +24,7 @@ import {
   peerMedian,
   periodMonthsOf,
 } from "../../../src/lib/ratios.ts";
-import { statementGrossMarginFraction } from "../../../src/lib/period-profit.ts";
+import { statementGrossMarginFraction, statedNetIsUsable } from "../../../src/lib/period-profit.ts";
 import { formatStatementMargin } from "../../../src/lib/statement-margin.ts";
 import {
   figuresPeriodLabelFrom,
@@ -129,13 +129,18 @@ function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Wat
   return healthBandLabel(status);
 }
 
+const NON_FINITE_DAY_KEYS = new Set(["Creditor Days", "Inventory Days", "Working Capital Days"]);
+
 function finiteDisplayRatios(raw: Record<string, number> | null | undefined): Record<string, number> {
   const out: Record<string, number> = {};
   if (!raw) return out;
   for (const [key, val] of Object.entries(raw)) {
-    if (!Number.isFinite(val)) continue;
     const display = DISPLAY_TO_CAMEL[key] ? key : CAMEL_TO_DISPLAY[key];
     if (!display) continue;
+    if (!Number.isFinite(val)) {
+      if (NON_FINITE_DAY_KEYS.has(display) && Number.isNaN(val)) out[display] = Number.NaN;
+      continue;
+    }
     out[display] = val;
   }
   return out;
@@ -342,6 +347,9 @@ export function buildOverviewBrief(input: {
   const weakest = scored.weakestPillar;
 
   const statement = financials ? readStatementMeta(financials) : null;
+  const operatingProfit = asNumber(financials?.ebit);
+  const statedNet = asNumber(financials?.netIncome);
+  const netUsable = operatingProfit == null || statedNetIsUsable(operatingProfit, statedNet);
   const liabilities = resolveTotalLiabilities(financials);
   const currentAssets = asNumber(financials?.currentAssets);
   const currentLiabilities = asNumber(financials?.currentLiabilities);
@@ -387,11 +395,11 @@ export function buildOverviewBrief(input: {
       statementGrossMarginFraction(financials) ??
       (Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null),
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
-    netMargin: Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
+    netMargin: netUsable && Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
     grossProfit: asNumber(financials?.grossProfit),
-    operatingProfit: asNumber(financials?.ebit),
+    operatingProfit,
     profitBeforeTax: asNumber(financials?.ebt),
-    netProfit: asNumber(financials?.netIncome),
+    netProfit: netUsable ? statedNet : null,
     equity: asNumber(financials?.equity),
     totalAssets: asNumber(financials?.totalAssets),
     totalLiabilities: liabilities?.amount ?? null,
@@ -454,6 +462,8 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push(
       `Creditor days: ${days(brief.creditorDays, "Creditor Days")} (healthy band ${band.min}–${band.max} days)`,
     );
+  } else if (Number.isNaN(brief.ratioValues["Creditor Days"])) {
+    lines.push("Creditor days: not meaningful");
   }
   if (brief.inventoryDays != null) {
     const where = [
@@ -467,6 +477,11 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
         ? `Inventory days: ${days(brief.inventoryDays, "Inventory Days")} (${where})`
         : `Inventory days: ${days(brief.inventoryDays, "Inventory Days")}`,
     );
+  } else if (Number.isNaN(brief.ratioValues["Inventory Days"])) {
+    lines.push("Inventory days: not meaningful");
+  }
+  if (Number.isNaN(brief.ratioValues["Working Capital Days"])) {
+    lines.push("Working Capital Days: not meaningful");
   }
   if (brief.currentRatio != null) {
     lines.push(formatOverviewRatio("Current Ratio", brief.currentRatio, brief.copyPack));

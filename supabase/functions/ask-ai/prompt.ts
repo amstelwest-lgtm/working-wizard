@@ -49,7 +49,7 @@ for (const [display, camel] of Object.entries(DISPLAY_TO_CAMEL)) {
   CAMEL_TO_DISPLAY[camel] = display;
 }
 
-function formatRatio(
+export function formatRatio(
   r: {
     key: string;
     value: number | null;
@@ -61,6 +61,10 @@ function formatRatio(
   copyPack: "za" | "us" = "za",
 ): string {
   if (r.value === null) return `${r.key}: n/a`;
+  if (!Number.isFinite(r.value)) {
+    const label = CAMEL_TO_DISPLAY[r.key] ?? r.key;
+    return `${label}: not meaningful`;
+  }
 
   // computeRatios() stores pct values as fractions (e.g. 0.15 = 15%).
   // industry_benchmarks stores pct values as whole percentages (e.g. 15).

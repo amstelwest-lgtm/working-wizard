@@ -231,8 +231,10 @@ export async function buildContext(
         const camelKey = DISPLAY_TO_CAMEL[displayKey];
         if (!camelKey) continue;
         if (MONETARY_DERIVED_KEYS.has(camelKey)) continue;
-        if (!isFinite(Number(rawVal))) continue;
-        entries.push({ displayKey, camelKey, value: Number(rawVal) });
+        const numeric = Number(rawVal);
+        const dayCount = camelKey === "creditorDays" || camelKey === "inventoryDays" || camelKey === "workingCapitalDays";
+        if (!isFinite(numeric) && !(dayCount && Number.isNaN(numeric))) continue;
+        entries.push({ displayKey, camelKey, value: numeric });
       }
 
       if (entries.length > 0) {

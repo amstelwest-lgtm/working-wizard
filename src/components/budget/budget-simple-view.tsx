@@ -115,6 +115,7 @@ export function BudgetSimpleView({
   priorYearLabel = null,
   priorYearMonths = null,
   displayTemplateId = null,
+  statementAligned = false,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -139,6 +140,8 @@ export function BudgetSimpleView({
   priorYearMonths?: number | null;
   /** Industry template when it disagrees with the stored labour kit. */
   displayTemplateId?: BudgetTemplateId | null;
+  /** Statement has operating expenses and no rent line. */
+  statementAligned?: boolean;
 }) {
   const { market } = useMarket();
   const money = (n: number) => {
@@ -442,7 +445,11 @@ export function BudgetSimpleView({
           <CascadeRow
             kicker="Then pay"
             label="Fixed overheads"
-            hint="Rent, salaries, keep-the-lights-on this month"
+            hint={
+              statementAligned
+                ? "Operating expenses from the statement. Rent is not on the statement."
+                : "Rent, salaries, keep-the-lights-on this month"
+            }
           >
             {readOnly ? (
               <span className="text-lg font-semibold tabular-nums text-[var(--ink)]">

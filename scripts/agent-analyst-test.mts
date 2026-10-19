@@ -1642,7 +1642,10 @@ const DAY = 24 * 60 * 60 * 1000;
     figuresPeriodLabelFrom({ periodEnd: "2026-09-30" }, "Oct 2026") === "Sep 2026",
     "a period end without a month count still beats the snapshot label",
   );
-  assert(figuresPeriodLabelFrom({}, "Oct 2026") === "Oct 2026", "the snapshot label is only the fallback when there is no period end");
+  assert(
+    figuresPeriodLabelFrom({}, "Oct 2026") === "Full year on file",
+    "a month stamp with no dates is the full statement on file",
+  );
   assert(
     ANALYST_SYSTEM.includes("September versus October is not an inconsistency"),
     "the prompt tells the model that two periods are not a data-quality conflict",

@@ -9,7 +9,8 @@ import {
   profileNeedsCompletion,
   type ClientOperatingProfile,
 } from "./client-profile.ts";
-import { periodMonthsOf } from "./ratios.ts";
+import { costMagnitude } from "./period-profit.ts";
+import { costDaysNotMeaningful, periodMonthsOf } from "./ratios.ts";
 import type { BudgetSeasonality } from "./budget.types.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import type { StatementWorkingCapital } from "./collections.ts";
@@ -213,12 +214,17 @@ export function computedDaysAr(financials: DayCoverFinancials): number | null {
 
 export function computedDaysAp(financials: DayCoverFinancials): number | null {
   const pay = num(financials?.payables);
-  const cogs = num(financials?.cogs);
+  const revenue = num(financials?.revenue);
+  const rawCogs = num(financials?.cogs);
+  const cogs = revenue > 0 ? costMagnitude(rawCogs) : rawCogs;
   if (cogs <= 0) return null;
   const months = periodMonthsOf(financials as Record<string, unknown> | null);
   const annualCogs = months > 0 && months < 12 ? cogs * (12 / months) : cogs;
+  const annualRevenue = months > 0 && months < 12 ? revenue * (12 / months) : revenue;
   if (annualCogs <= 0) return null;
-  return Math.round((pay / annualCogs) * 365);
+  const days = Math.round((pay / annualCogs) * 365);
+  if (costDaysNotMeaningful({ revenue: annualRevenue, cogs: annualCogs, days })) return null;
+  return days;
 }
 
 /** Blank stocks stay off the tile. A real zero is kept. Same parser as the day formulas. */
