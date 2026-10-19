@@ -107,6 +107,7 @@ import {
   plBankDisagreement,
   runwayDisplayLabel,
   resolveClientCash,
+  reanchoredForecastPatch,
   resolveCashScreenForecast,
   blankForecastLines,
   weekDatesFrom,
@@ -986,18 +987,6 @@ export function CashForecastPanel({
         (Boolean(bankAt) && !budgetNamed) ||
           ledgerOpeningIsCashEvidence(cf as Record<string, unknown> | null),
       );
-      if (seededOpening && cf && clientId) {
-        const corrected = runwayFromOpening(seededOpening, finRecord, {
-          hasBankCashflow: Boolean(bankAt),
-        });
-        void supabase
-          .from("clients")
-          .update({
-            cashflow: { ...cf, openingBalance: seededOpening } as never,
-            cash_runway_weeks: persistedRunwayWeeks(corrected),
-          })
-          .eq("id", clientId);
-      }
       setBankSeeded(Boolean(bankAt));
       const loadedProfile = parseOperatingProfileUnknown(data?.operating_profile);
       const outlook = resolveCashScreenForecast({
@@ -1010,6 +999,28 @@ export function CashForecastPanel({
       });
       setForecastCycleNote(outlook.cycleNote);
       setStartDate(outlook.startDate);
+      const withOpening =
+        seededOpening && cf ? { ...(cf as Record<string, unknown>), openingBalance: seededOpening } : cf;
+      const reanchored = reanchoredForecastPatch(withOpening as Record<string, unknown> | null, outlook);
+      if (cf && clientId && (seededOpening || reanchored)) {
+        const next = reanchored ?? (withOpening as Record<string, unknown>);
+        loadedCashflowRef.current = next;
+        const forecastUpdatedAt = new Date().toISOString();
+        const corrected = seededOpening
+          ? runwayFromOpening(seededOpening, finRecord, { hasBankCashflow: Boolean(bankAt) })
+          : null;
+        void supabase
+          .from("clients")
+          .update({
+            cashflow: next as never,
+            ...(reanchored ? { last_forecast_at: forecastUpdatedAt } : {}),
+            ...(corrected ? { cash_runway_weeks: persistedRunwayWeeks(corrected) } : {}),
+          })
+          .eq("id", clientId)
+          .then(({ error }) => {
+            if (!error && reanchored) setLastForecastAt(forecastUpdatedAt);
+          });
+      }
       setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
       if (outlook.estimateLabel) {
         setXeroBankNote(outlook.estimateLabel);
