@@ -15,6 +15,8 @@ import {
   handoffNeedsFreshRun,
   handoffRequestNote,
   handoffResultNote,
+  personAssignmentName,
+  personAssignmentNote,
   runnerEnabled,
 } from "../src/lib/owner-handoff.ts";
 
@@ -67,6 +69,9 @@ assert(
 );
 assert(handoffAssigneeName("Assigned to Ada") === null, "a person assignment is not a bot hand-off");
 assert(handoffRequestNote("Milōn Analyst") === "Handed to Milōn Analyst.", "the queued note names the bot");
+assert(personAssignmentNote("theo") === "Assigned to theo.", "a person note names the assignee");
+assert(personAssignmentName("Assigned to theo.") === "theo", "reload reads the person from the note");
+assert(personAssignmentName("Assigned to theo. Sent the pack.") === "theo", "a later sentence stays out of the name");
 assert(
   handoffResultNote("Milōn Analyst", "Cash is the lever.").startsWith("Handed to Milōn Analyst."),
   "the finished note starts with the bot",
@@ -123,6 +128,12 @@ assert(
 );
 assert(fn.includes("handoffNeedsFreshRun"), "a finished run starts another hand-off");
 assert(fn.includes("handoffAgainInputs"), "the repeat run does not reuse the finished key");
+assert(fn.includes("writeAssignment"), "every hand-off stores the assignee and a note");
+assert(fn.includes("noted: true"), "the client can tell the note was stored");
+assert(fn.includes("personId"), "a person hand-off uses the same function");
+assert(fn.includes("personAssignmentNote"), "the person note names the assignee");
+const openRun = fn.slice(fn.indexOf("!handoffNeedsFreshRun(status)"), fn.indexOf("!handoffNeedsFreshRun(status)") + 700);
+assert(openRun.includes("writeAssignment"), "an open run still writes the hand-off note");
 assert(fn.includes("decision.settingKey"), "each bot checks its own flag");
 assert(!fn.includes("no_runner"), "a known bot is not rejected for a missing runner");
 assert(!fn.includes("GRANT INSERT"), "the function does not grant client writes");
@@ -142,6 +153,9 @@ const handoffClient = readFileSync("src/lib/owner-handoff-client.ts", "utf8");
 assert(plan.includes("commitActionHandoff"), "the owner button commits the hand-off");
 assert(handoffClient.includes("requestOwnerHandoff"), "the commit calls the function");
 assert(handoffClient.includes("recordHandoffAssignment"), "a finished or offline run still writes the note");
+assert(handoffClient.includes("!result.noted"), "the client writes the note when the server has not confirmed it");
+assert(handoffClient.includes("signedInActorLabel"), "a person note is written by the signed-in actor");
+assert(plan.includes("assignActionToPerson"), "the owner action plan uses the same person assignment");
 assert(handoffClient.includes("dispatchActionPlanRefresh"), "home hears the assignment");
 assert(!plan.includes('.from("agent_runs")'), "the owner view does not insert a run");
 

@@ -91,11 +91,16 @@
   gap: 2px;
 }
 
-.fm-brief-actions li span,
+.fm-brief-actions li div span,
 .fm-brief-empty,
 .fm-brief-draft p {
   color: #3d5270;
   font-size: 13px;
+}
+
+.fm-brief button[data-hand-to-trigger],
+.fm-brief button[data-hand-to-trigger] .hand-to-assignee {
+  color: #ffffff;
 }
 
 .fm-brief-draft textarea {

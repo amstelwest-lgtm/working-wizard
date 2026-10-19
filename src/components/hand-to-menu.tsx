@@ -9,13 +9,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureStrategicMoveItem } from "@/lib/ensure-plan-item";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import {
-  assignActionToPerson,
-  commitActionHandoff,
-  dispatchActionPlanRefresh,
-} from "@/lib/owner-handoff-client";
+import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-client";
 
 export type HandToPerson = { id: string; name: string; email: string | null };
+
+const HAND_TO_OPEN = "milon-hand-to-open";
+const teamCache = new Map<string, HandToPerson[]>();
+const teamLoads = new Map<string, Promise<HandToPerson[]>>();
 
 async function loadHandToTeam(clientId: string): Promise<HandToPerson[]> {
   const plan = await import("@/components/action-plan");
@@ -35,6 +35,23 @@ async function loadHandToTeam(clientId: string): Promise<HandToPerson[]> {
     practice = [];
   }
   return plan.mergeActionPlanTeam((emps ?? []) as Parameters<typeof plan.mergeActionPlanTeam>[0], practice);
+}
+
+function loadHandToTeamOnce(clientId: string): Promise<HandToPerson[]> {
+  const cached = teamCache.get(clientId);
+  if (cached && cached.length > 0) return Promise.resolve(cached);
+  const pending = teamLoads.get(clientId);
+  if (pending) return pending;
+  const request = loadHandToTeam(clientId)
+    .then((rows) => {
+      if (rows.length > 0) teamCache.set(clientId, rows);
+      return rows;
+    })
+    .finally(() => {
+      teamLoads.delete(clientId);
+    });
+  teamLoads.set(clientId, request);
+  return request;
 }
 
 /**
@@ -64,19 +81,42 @@ export function HandToMenu({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [team, setTeam] = useState<readonly HandToPerson[]>(employees ?? []);
+  const [teamReady, setTeamReady] = useState(Boolean(employees));
   const [menuBox, setMenuBox] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useRef(`hand-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
-    if (employees) setTeam(employees);
+    if (employees) {
+      setTeam(employees);
+      setTeamReady(true);
+    }
   }, [employees]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onOther = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (id !== menuId.current) setOpen(false);
+    };
+    window.addEventListener(HAND_TO_OPEN, onOther);
+    window.dispatchEvent(new CustomEvent(HAND_TO_OPEN, { detail: menuId.current }));
+    return () => window.removeEventListener(HAND_TO_OPEN, onOther);
+  }, [open]);
 
   useEffect(() => {
     if (!open || employees || !clientId) return;
     let cancelled = false;
-    void loadHandToTeam(clientId).then((rows) => {
-      if (!cancelled) setTeam(rows);
+    const cached = teamCache.get(clientId);
+    if (cached && cached.length > 0) {
+      setTeam(cached);
+      setTeamReady(true);
+    }
+    void loadHandToTeamOnce(clientId).then((rows) => {
+      if (cancelled) return;
+      setTeam((current) => (rows.length === 0 && current.length > 0 ? current : rows));
+      setTeamReady(true);
     });
     return () => {
       cancelled = true;
@@ -154,7 +194,7 @@ export function HandToMenu({
         onClick={() => setOpen((value) => !value)}
       >
         Hand to
-        {assignee ? <span className="font-medium text-white">{assignee}</span> : null}
+        {assignee ? <span className="hand-to-assignee">{assignee}</span> : null}
       </button>
       {open && menuBox
         ? createPortal(
@@ -184,7 +224,7 @@ export function HandToMenu({
           </p>
           {team.length === 0 ? (
             <p className="px-1 py-1 text-[12px] text-slate-500" data-hand-to-empty-team>
-              No team members on this file yet.
+              {teamReady ? "No team members on this file yet." : "Loading team…"}
             </p>
           ) : (
             <div className="max-h-40 overflow-auto">
@@ -253,13 +293,13 @@ export function MoveHandTo({
           actionItemId,
           personId: person.id,
           personName: person.name,
+          title,
         });
         if (!result.ok) {
           toast.error(result.error);
           return;
         }
         toast.success(`Assigned to ${person.name}`);
-        dispatchActionPlanRefresh();
       }}
     />
   );

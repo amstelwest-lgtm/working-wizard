@@ -11,11 +11,7 @@ import type { FinancialManagerBrief } from "@/lib/financial-manager-brief";
 import { useMarketFormat } from "@/contexts/market";
 import { agentShortName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import {
-  assignActionToPerson,
-  commitActionHandoff,
-  dispatchActionPlanRefresh,
-} from "@/lib/owner-handoff-client";
+import { assignActionToPerson, commitActionHandoff } from "@/lib/owner-handoff-client";
 import { actionDisplayTitle } from "@/lib/strategic-moves";
 import "./financial-manager-brief.css";
 
@@ -74,13 +70,13 @@ function BriefHandControl({
           actionItemId: item.id,
           personId: person.id,
           personName: person.name,
+          title: item.title,
         });
         if (!result.ok) {
           toast.error(result.error);
           return;
         }
         toast.success(`Assigned to ${person.name}`);
-        dispatchActionPlanRefresh();
       }}
     />
   );

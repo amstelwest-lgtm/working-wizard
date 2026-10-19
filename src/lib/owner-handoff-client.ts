@@ -1,7 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
-import { agentKeyFromAssignee } from "@/lib/action-handoff";
 import { handoffComingOnline } from "@/hooks/owner-agent-ui";
-import { handoffAssigneeName, handoffNeedsFreshRun, handoffRequestNote } from "@/lib/owner-handoff";
+import { handoffRequestNote, personAssignmentNote } from "@/lib/owner-handoff";
+import {
+  latestStoredAssignment,
+  type AssignmentNote,
+  type StoredAssignment,
+} from "@/lib/open-plan-home";
 import { agentDisplayName } from "@/lib/milon-team";
 import type { AgentKey } from "@/lib/milon-team-feed";
 
@@ -11,7 +15,8 @@ export const ACTION_PLAN_REFRESH_EVENT = "milon-action-plan-refresh";
 export type ActionPlanRefreshDetail = {
   actionItemId: string;
   title: string;
-  agent: AgentKey;
+  agent?: AgentKey | null;
+  assigneeName?: string;
 };
 
 export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): void {
@@ -20,7 +25,7 @@ export function dispatchActionPlanRefresh(detail?: ActionPlanRefreshDetail): voi
 }
 
 export type OwnerHandoffResult =
-  | { ok: true; runId: string | null; status: string; dispatched: boolean }
+  | { ok: true; runId: string | null; status: string; dispatched: boolean; noted: boolean }
   | { ok: false; error: string };
 
 export async function requestOwnerHandoff(input: {
@@ -51,20 +56,33 @@ export async function requestOwnerHandoff(input: {
     status?: string;
     error?: string;
     missing?: string;
+    noted?: boolean;
   } | null;
   if (body?.missing) return { ok: false, error: body.missing };
   if (!res.ok || !body?.ok) {
     return { ok: false, error: body?.missing || body?.error || "The hand-off did not start." };
   }
+  const noted = body.noted === true;
   if (!body.runId) {
     return {
       ok: true,
       runId: null,
       status: body.status ?? "assigned",
       dispatched: false,
+      noted,
     };
   }
-  return { ok: true, runId: body.runId, status: body.status ?? "queued", dispatched: true };
+  return { ok: true, runId: body.runId, status: body.status ?? "queued", dispatched: true, noted };
+}
+
+async function signedInActorLabel(): Promise<string> {
+  const { data } = await supabase.auth.getUser();
+  const local = data.user?.email?.split("@")[0]?.trim() ?? "";
+  return local || "Accountant";
+}
+
+async function clearActionOwner(actionItemId: string): Promise<void> {
+  await supabase.from("action_items").update({ owner_id: null, sent_at: null }).eq("id", actionItemId);
 }
 
 /** Persists the assignee when the runner is off. Does not insert agent_runs. */
@@ -107,22 +125,26 @@ export async function commitActionHandoff(input: {
   if (!result.ok && handoffComingOnline(result.error)) {
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return { ok: false, error: saved.error, comingSoon: true };
+    await clearActionOwner(input.actionItemId);
   } else if (!result.ok) {
     return { ok: false, error: result.error };
-  } else if (result.runId && handoffNeedsFreshRun(result.status)) {
+  } else if (!result.noted) {
+    // The deployed function has not confirmed the note yet. Write it here so
+    // reload still sees the assignee. A function that returns noted does this itself.
     const saved = await recordHandoffAssignment(input);
     if (!saved.ok) return saved;
+    await clearActionOwner(input.actionItemId);
   }
   dispatchActionPlanRefresh({
     actionItemId: input.actionItemId,
     title: input.title,
     agent: input.agent,
+    assigneeName: agentDisplayName(input.agent),
   });
   return { ok: true };
 }
 
-/** A person on the Hand to menu. Does not start a bot run. */
-export async function assignActionToPerson(input: {
+async function writePersonAssignment(input: {
   clientId: string;
   actionItemId: string;
   personId: string;
@@ -137,11 +159,89 @@ export async function assignActionToPerson(input: {
     action_item_id: input.actionItemId,
     client_id: input.clientId,
     actor_type: "owner_app",
-    actor_label: input.personName,
-    note: `Assigned to ${input.personName}`,
+    actor_label: await signedInActorLabel(),
+    note: personAssignmentNote(input.personName),
   });
   if (noteError) return { ok: false, error: noteError.message };
   return { ok: true };
+}
+
+/** A person on the Hand to menu. Does not start a bot run. The note author is the signed-in actor. */
+export async function assignActionToPerson(input: {
+  clientId: string;
+  actionItemId: string;
+  personId: string;
+  personName: string;
+  title?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const server = await requestPersonAssignment(input);
+  if (server.ok && server.noted) {
+    dispatchActionPlanRefresh({
+      actionItemId: input.actionItemId,
+      title: input.title ?? "",
+      assigneeName: input.personName,
+    });
+    return { ok: true };
+  }
+  if (server.ok && !server.noted) {
+    const saved = await writePersonAssignment(input);
+    if (!saved.ok) return saved;
+  } else if (!personAssignNeedsClient(server.ok ? "" : server.error)) {
+    return server;
+  } else {
+    const saved = await writePersonAssignment(input);
+    if (!saved.ok) return saved;
+  }
+  dispatchActionPlanRefresh({
+    actionItemId: input.actionItemId,
+    title: input.title ?? "",
+    assigneeName: input.personName,
+  });
+  return { ok: true };
+}
+
+function personAssignNeedsClient(error: string): boolean {
+  return (
+    error === "unknown_agent" ||
+    error === "That is not one of the three bots." ||
+    error === "client_and_action_required" ||
+    error === "The hand-off did not start."
+  );
+}
+
+async function requestPersonAssignment(input: {
+  clientId: string;
+  actionItemId: string;
+  personId: string;
+}): Promise<{ ok: true; noted: boolean } | { ok: false; error: string }> {
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) return { ok: false, error: "Not signed in." };
+  const base = import.meta.env.VITE_SUPABASE_URL;
+  if (!base) return { ok: false, error: "Supabase URL is not configured." };
+  const res = await fetch(`${base}/functions/v1/owner-handoff`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      clientId: input.clientId,
+      actionItemId: input.actionItemId,
+      personId: input.personId,
+    }),
+  });
+  const body = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    error?: string;
+    missing?: string;
+    noted?: boolean;
+  } | null;
+  if (body?.missing) return { ok: false, error: body.missing };
+  if (!res.ok || !body?.ok) {
+    return { ok: false, error: body?.missing || body?.error || "The hand-off did not start." };
+  }
+  return { ok: true, noted: body.noted === true };
 }
 
 export type ActionHandoffRun = { agent: AgentKey; status: string; at: string };
@@ -199,28 +299,50 @@ export async function loadActionHandoffRuns(
   return out;
 }
 
-/** Newest "Handed to …" note per action, when it names one of the three bots. */
-export async function loadLatestHandoffAgents(actionIds: string[]): Promise<Map<string, HandoffAgentNote>> {
-  const out = new Map<string, HandoffAgentNote>();
+async function loadAssignmentNotes(actionIds: string[]): Promise<Map<string, AssignmentNote[]>> {
+  const grouped = new Map<string, AssignmentNote[]>();
   const ids = actionIds.filter(Boolean);
-  if (!ids.length) return out;
+  if (!ids.length) return grouped;
   const { data, error } = await supabase
     .from("action_updates")
     .select("action_item_id,note,created_at")
     .in("action_item_id", ids)
     .order("created_at", { ascending: false });
-  if (error || !Array.isArray(data)) return out;
-  const seen = new Set<string>();
+  if (error || !Array.isArray(data)) return grouped;
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
     const record = row as { action_item_id?: unknown; note?: unknown; created_at?: unknown };
     const id = typeof record.action_item_id === "string" ? record.action_item_id : "";
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    const note = typeof record.note === "string" ? record.note : null;
-    const agent = agentKeyFromAssignee(handoffAssigneeName(note));
-    const at = typeof record.created_at === "string" ? record.created_at : "";
-    if (agent) out.set(id, { agent, at });
+    if (!id) continue;
+    const notes = grouped.get(id) ?? [];
+    notes.push({
+      note: typeof record.note === "string" ? record.note : null,
+      at: typeof record.created_at === "string" ? record.created_at : "",
+    });
+    grouped.set(id, notes);
+  }
+  return grouped;
+}
+
+/** Newest bot or person assignment per action. Other notes stay in the log and do not hide it. */
+export async function loadLatestAssignments(
+  actionIds: string[],
+): Promise<Map<string, StoredAssignment>> {
+  const out = new Map<string, StoredAssignment>();
+  const grouped = await loadAssignmentNotes(actionIds);
+  for (const [id, notes] of grouped) {
+    const stored = latestStoredAssignment(notes);
+    if (stored) out.set(id, stored);
+  }
+  return out;
+}
+
+/** Newest "Handed to …" note per action, when a later person assignment has not replaced it. */
+export async function loadLatestHandoffAgents(actionIds: string[]): Promise<Map<string, HandoffAgentNote>> {
+  const out = new Map<string, HandoffAgentNote>();
+  const assignments = await loadLatestAssignments(actionIds);
+  for (const [id, stored] of assignments) {
+    if (stored.kind === "bot") out.set(id, { agent: stored.agent, at: stored.at });
   }
   return out;
 }

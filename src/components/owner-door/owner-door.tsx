@@ -33,14 +33,15 @@ import {
   parseOwnerNumber,
   type OwnerBooks,
 } from "@/lib/owner-answers";
-import { ownerPresence, steerAssignedWork, type OwnerTalk } from "@/lib/owner-presence";
+import { agentDisplayName } from "@/lib/milon-team";
+import { ownerPresence, steerOpenHandoffs, type OwnerTalk } from "@/lib/owner-presence";
 import {
   ACTION_PLAN_REFRESH_EVENT,
   loadActionHandoffRuns,
-  loadLatestHandoffAgents,
+  loadLatestAssignments,
   type ActionPlanRefreshDetail,
 } from "@/lib/owner-handoff-client";
-import { handedHomeAction, openPlanTitles, preferPendingHandoff } from "@/lib/open-plan-home";
+import { openHandoffAgents, openPlanTitles, rowAssignment, withPendingAssignment } from "@/lib/open-plan-home";
 import { resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import type { SavedCashflowLike } from "@/lib/cash-runway";
 import { runBotTransition, ownerBotKey } from "./owner-bot-motion";
@@ -227,7 +228,7 @@ export function OwnerDoor({
   const [openAction, setOpenAction] = useState<string | null>(null);
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
-  const [assignedRun, setAssignedRun] = useState<{ agent: AgentKey; status: string } | null>(null);
+  const [openAgents, setOpenAgents] = useState<AgentKey[]>([]);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
   const [actionsReady, setActionsReady] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
@@ -261,7 +262,7 @@ export function OwnerDoor({
     pendingHandoff.current = null;
     setHandedTitle(null);
     setAssignedAgent(null);
-    setAssignedRun(null);
+    setOpenAgents([]);
     setThreads(clientId ? readOwnerThreads(browserThreadStore(), clientId) : emptyOwnerThreads());
     setErrors({});
   }, [clientId]);
@@ -351,11 +352,16 @@ export function OwnerDoor({
   useEffect(() => {
     const onRefresh = (event: Event) => {
       const detail = (event as CustomEvent<ActionPlanRefreshDetail | undefined>).detail;
-      if (!detail?.actionItemId || !detail.title || detail.agent === "financial_manager") return;
-      pendingHandoff.current = detail;
-      setHandedTitle(detail.title);
-      setAssignedAgent(detail.agent);
-      setAssignedRun({ agent: detail.agent, status: "queued" });
+      if (!detail?.actionItemId || !detail.title) return;
+      const agent = detail.agent ?? null;
+      const name = detail.assigneeName ?? (agent ? agentDisplayName(agent) : null);
+      if (!name) return;
+      pendingHandoff.current = { ...detail, agent, assigneeName: name };
+      if (agent) {
+        setHandedTitle(detail.title);
+        setAssignedAgent(agent);
+        setOpenAgents((current) => (current.includes(agent) ? current : [...current, agent]));
+      }
       setActionRows((rows) =>
         rows.some((row) => row.title === detail.title)
           ? rows
@@ -396,7 +402,7 @@ export function OwnerDoor({
         .limit(1),
       supabase
         .from("action_items_v")
-        .select("id, title, status, owner_email, seq")
+        .select("id, title, status, owner_email, owner_name, seq")
         .eq("client_id", clientId)
         .neq("status", "done")
         .order("seq", { ascending: true })
@@ -438,7 +444,7 @@ export function OwnerDoor({
       if (actions.error) {
         setOpenAction(null);
         setAssignedAgent(null);
-        setAssignedRun(null);
+        setOpenAgents([]);
         setActionRows([]);
         setActionsUnavailable(true);
         setActionsReady(true);
@@ -447,32 +453,55 @@ export function OwnerDoor({
       const openRows = (actions.data ?? []).flatMap((row) => {
         const title = row.title?.trim() ?? "";
         if (!title || !row.id) return [];
-        return [{ id: row.id, title, email: row.owner_email }];
+        return [{ id: row.id, title, email: row.owner_email, ownerName: row.owner_name?.trim() || null }];
       });
       const ids = openRows.map((row) => row.id);
-      const [notes, runs] = ids.length
-        ? await Promise.all([loadLatestHandoffAgents(ids), loadActionHandoffRuns(ids)])
+      const [assignments, runs] = ids.length
+        ? await Promise.all([loadLatestAssignments(ids), loadActionHandoffRuns(ids)])
         : [new Map(), new Map()];
       if (cancelled) return;
       const pending = pendingHandoff.current;
-      const handed = preferPendingHandoff(
-        handedHomeAction(openRows, notes, runs),
-        pending
-          ? { id: pending.actionItemId, title: pending.title, agent: pending.agent }
+      const assigned = openRows.map((row) => {
+        const stored = assignments.get(row.id) ?? null;
+        return rowAssignment({
+          id: row.id,
+          ownerName: row.ownerName,
+          notes: stored
+            ? [
+                {
+                  note:
+                    stored.kind === "bot"
+                      ? `Handed to ${stored.name}.`
+                      : `Assigned to ${stored.name}.`,
+                  at: stored.at,
+                },
+              ]
+            : [],
+          run: runs.get(row.id) ?? null,
+        });
+      });
+      const pendingStored = pending ? (assignments.get(pending.actionItemId) ?? null) : null;
+      const merged = withPendingAssignment(
+        assigned,
+        pending?.assigneeName
+          ? { id: pending.actionItemId, agent: pending.agent ?? null, assigneeName: pending.assigneeName }
           : null,
-        notes,
+        pendingStored,
       );
-      if (pending && notes.get(pending.actionItemId)?.agent === pending.agent) {
-        pendingHandoff.current = null;
-      }
+      const pendingLanded =
+        pending?.assigneeName != null &&
+        (pendingStored?.kind === "bot"
+          ? pendingStored.agent === pending.agent
+          : pendingStored?.kind === "person" && pending.agent == null && pendingStored.name === pending.assigneeName);
+      if (pendingLanded) pendingHandoff.current = null;
+      const firstOpen = merged.find((row) => row.open);
       const titles = openPlanTitles(openRows);
       if (pending && !titles.includes(pending.title)) titles.push(pending.title);
       setActionRows(titles.map((title) => ({ title, email: null })));
       setOpenAction(openRows[0]?.title ?? null);
-      setHandedTitle(handed?.title ?? null);
-      setAssignedAgent(handed?.agent ?? null);
-      // The run status is the stored row. Finished work must not come back as Working.
-      setAssignedRun(handed?.run ?? null);
+      setHandedTitle(firstOpen ? (openRows.find((row) => row.id === firstOpen.id)?.title ?? null) : null);
+      setAssignedAgent(firstOpen?.agent ?? null);
+      setOpenAgents(openHandoffAgents(merged));
       setActionsReady(true);
     });
     return () => {
@@ -579,7 +608,7 @@ export function OwnerDoor({
       market,
     ],
   );
-  const presence = steerAssignedWork(ownerPresence(activity, talk), assignedAgent, assignedRun);
+  const presence = steerOpenHandoffs(ownerPresence(activity, talk), openAgents);
   const runState = useMemo(() => {
     const latest = latestRunByAgent(activity.runs);
     const out: Partial<Record<AgentKey, OwnerRunPhase>> = {};

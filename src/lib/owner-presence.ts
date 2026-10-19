@@ -85,9 +85,10 @@ export function ownerPresence(
   talk: OwnerTalk = null,
 ): OwnerPresence {
   const runs = latestRunByAgent(activity.runs);
-  const newestMessage = [...activity.messages].sort(
-    (a, b) => stamp(b.created_at) - stamp(a.created_at),
-  )[0];
+  const newestMessage =
+    [...activity.messages]
+      .filter((row) => handoffLine(row, agentShortName))
+      .sort((a, b) => stamp(b.created_at) - stamp(a.created_at))[0] ?? null;
   const handoffText = newestMessage ? handoffLine(newestMessage, agentShortName) : null;
   const handoff =
     newestMessage && handoffText && newestMessage.to_agent
@@ -106,7 +107,8 @@ export function ownerPresence(
       if (talk.mode === "listening") sentence = "Listening.";
     } else if (handoff && (agent === handoff.from || agent === handoff.to)) {
       lookAt = agent === handoff.from ? handoff.to : handoff.from;
-      if (agent === handoff.to && motion === "idle") motion = "working";
+      // A message between bots is not an action assignment. Working comes from
+      // a stored hand-off that has not finished.
       if (agent === handoff.from && motion === "idle") motion = "found";
     }
     const fmClip = fmAvatarClip({
@@ -130,6 +132,26 @@ export function ownerPresence(
  * found-something. A queued run aimed at someone else must not leave
  * Working… on the Financial Manager while the Advisor holds the action.
  */
+/**
+ * Each open action hand-off shows Working on that bot.
+ * A bot with no open hand-off keeps its own run or finding.
+ * A message aimed at the Financial Manager does not paint Working by itself.
+ */
+export function steerOpenHandoffs(
+  presence: OwnerPresence,
+  openAgents: readonly AgentKey[],
+): OwnerPresence {
+  const open = new Set(openAgents);
+  return {
+    ...presence,
+    agents: presence.agents.map((card) => {
+      if (!open.has(card.agent)) return card;
+      if (card.motion === "working" && card.sentence === "Working…") return card;
+      return { ...card, motion: "working", sentence: "Working…" };
+    }),
+  };
+}
+
 export function steerAssignedWork(
   presence: OwnerPresence,
   assignee: AgentKey | null,
