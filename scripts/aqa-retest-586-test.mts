@@ -50,7 +50,7 @@ import { ZA_MARKET } from "../src/lib/market/index.ts";
 import { ownerAnswerTiles, ownerCardStatuses, type OwnerBooks } from "../src/lib/owner-answers.ts";
 import { cashSignoffIsStale } from "../src/lib/signoff-status.ts";
 import { alignBrainFigureCopy } from "../src/lib/statement-margin.ts";
-import { FULL_YEAR_ON_FILE, rewriteSavedMonthStamp } from "../src/lib/statement-period.ts";
+import { FULL_YEAR_ON_FILE, rewriteDraftMonthStamp, rewriteSavedMonthStamp } from "../src/lib/statement-period.ts";
 import { interventionNarrative } from "../src/reports/narrative.ts";
 import {
   extractWaterfallFigures,
@@ -398,7 +398,7 @@ const draft = alignBrainFigureCopy("See the full Sep 2026 statement and the Sep 
 assert(draft.includes(FULL_YEAR_ON_FILE), draft);
 assert(!/Sep 2026 (books|statement)/.test(draft), draft);
 assert(alignBrainFigureCopy("due 8 Sep 2026", {}) === "due 8 Sep 2026", "a due date stays");
-assert(src("src/lib/milon-team-feed.ts").includes("rewriteSavedMonthStamp"), "team jobs rewrite the draft");
+assert(src("src/lib/milon-team-feed.ts").includes("rewriteDraftMonthStamp"), "team jobs rewrite the draft");
 assert(src("supabase/functions/brain-deliverable-draft/index.ts").includes("rewriteSavedMonthStamp"), "generation rewrites the draft");
 
 const plan = interventionNarrative({ critical: 2, atRisk: 1, total: 3, cashBelowFloor: true });
@@ -517,25 +517,30 @@ assert(src("src/components/owner-door/owner-home.tsx").includes('!== "done"'), "
 assert(src("src/components/cash-forecast.tsx").includes("data-forecast-updated"), "the forecast prints its updated stamp");
 assert(src("src/components/cash-forecast.tsx").includes("lastForecastAt"), "the stamp uses the saved forecast time");
 assert(
-  rewriteSavedMonthStamp("Sep 2026 accounts") === "Full year on file accounts",
+  rewriteDraftMonthStamp("Sep 2026 accounts") === "Full year on file accounts",
   "a bare month stamp is rewritten",
 );
 assert(
-  rewriteSavedMonthStamp("Based on Sep 2026 snapshot") === `Based on ${FULL_YEAR_ON_FILE}`,
+  rewriteDraftMonthStamp("Based on Sep 2026 snapshot") === `Based on ${FULL_YEAR_ON_FILE}`,
   "a snapshot phrase is the full-year stamp",
 );
-assert(rewriteSavedMonthStamp("due 8 Sep 2026") === "due 8 Sep 2026", "a dated day stays");
+assert(rewriteDraftMonthStamp("due 8 Sep 2026") === "due 8 Sep 2026", "a dated day stays");
+assert(rewriteSavedMonthStamp("Sep 2026") === "Sep 2026", "a cited period stays on the narrow stamp");
 assert(
-  src("src/components/recommendations-panel.tsx").includes("rewriteSavedMonthStamp"),
+  src("src/components/recommendations-panel.tsx").includes("rewriteDraftMonthStamp"),
   "stored recommendations show the stamp",
 );
 assert(
-  src("src/components/advisory-pack-panel.tsx").includes("rewriteSavedMonthStamp"),
+  src("src/components/advisory-pack-panel.tsx").includes("rewriteDraftMonthStamp"),
   "stored packs show the stamp",
 );
 assert(
-  src("src/components/advisory-drafter.tsx").includes("rewriteSavedMonthStamp"),
+  src("src/components/advisory-drafter.tsx").includes("rewriteDraftMonthStamp"),
   "the drafter shows the stamp",
+);
+assert(
+  src("src/components/client-brain-drafts.tsx").includes("rewriteDraftMonthStamp"),
+  "stored brain drafts show the stamp",
 );
 
 console.log("aqa-retest-586 ok");

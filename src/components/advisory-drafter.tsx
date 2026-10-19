@@ -34,7 +34,7 @@ import {
   drafterAnswerSentence,
   plainSentDate,
 } from "@/lib/reports-drafter-copy";
-import { rewriteSavedMonthStamp } from "@/lib/statement-period";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 
 type Kind = "client_email" | "meeting_agenda" | "exec_summary";
 
@@ -168,8 +168,8 @@ export function AdvisoryDrafter({
     try {
       const logged = await logShare("copy", result);
       const text = result.subject
-        ? `Subject: ${rewriteSavedMonthStamp(result.subject)}\n\n${rewriteSavedMonthStamp(logged.body)}`
-        : rewriteSavedMonthStamp(logged.body);
+        ? `Subject: ${rewriteDraftMonthStamp(result.subject)}\n\n${rewriteDraftMonthStamp(logged.body)}`
+        : rewriteDraftMonthStamp(logged.body);
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
@@ -183,9 +183,9 @@ export function AdvisoryDrafter({
     if (!result) return;
     const logged = await logShare("mailto", result);
     const subject = encodeURIComponent(
-      rewriteSavedMonthStamp(result.subject ?? `${clientName ?? "Client"} — advisory`),
+      rewriteDraftMonthStamp(result.subject ?? `${clientName ?? "Client"} — advisory`),
     );
-    const body = encodeURIComponent(rewriteSavedMonthStamp(logged.body));
+    const body = encodeURIComponent(rewriteDraftMonthStamp(logged.body));
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
@@ -193,8 +193,8 @@ export function AdvisoryDrafter({
     if (!result) return;
     const logged = await logShare("whatsapp", result);
     const text = result.subject
-      ? `*${rewriteSavedMonthStamp(result.subject)}*\n\n${rewriteSavedMonthStamp(logged.body)}`
-      : rewriteSavedMonthStamp(logged.body);
+      ? `*${rewriteDraftMonthStamp(result.subject)}*\n\n${rewriteDraftMonthStamp(logged.body)}`
+      : rewriteDraftMonthStamp(logged.body);
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
@@ -337,11 +337,11 @@ export function AdvisoryDrafter({
           </div>
           {result.subject && (
             <p className="mb-2 text-sm font-semibold text-amber-100">
-              {rewriteSavedMonthStamp(result.subject)}
+              {rewriteDraftMonthStamp(result.subject)}
             </p>
           )}
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-            {rewriteSavedMonthStamp(result.body)}
+            {rewriteDraftMonthStamp(result.body)}
           </p>
           <p className="mt-3 border-t border-slate-800 pt-2 text-[11px] text-slate-500">
             Grounded in {result.grounding.currentPeriod}

@@ -10,7 +10,7 @@ import type { ChaseDraftInput } from "./chase-draft.ts";
 import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { cashFloorCopy, ownerCashStatusChip } from "./owner-answers.ts";
-import { rewriteSavedMonthStamp } from "./statement-period.ts";
+import { rewriteDraftMonthStamp } from "./statement-period.ts";
 import type { MoneyMarket } from "./market/format.ts";
 
 export type BriefMoneyField = {
@@ -271,7 +271,7 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    return [{ id: row.id, title: rewriteSavedMonthStamp(title) }];
+    return [{ id: row.id, title: rewriteDraftMonthStamp(title) }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =

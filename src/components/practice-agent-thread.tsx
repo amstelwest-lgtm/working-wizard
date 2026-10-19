@@ -3,7 +3,7 @@ import { AgentStage } from "@/components/milon-team/agent-stage";
 import { portalButtonClass } from "@/lib/client-chrome";
 import { supabase } from "@/integrations/supabase/client";
 import type { AgentKey } from "@/lib/milon-team-feed";
-import { rewriteSavedMonthStamp } from "@/lib/statement-period";
+import { rewriteDraftMonthStamp } from "@/lib/statement-period";
 import "./milon-team/milon-team-desk.css";
 import "./practice-agent-thread.css";
 
@@ -85,7 +85,7 @@ export function PracticeAgentThread({
       </button>
       <AgentStage
         agent={agent}
-        finding={rewriteSavedMonthStamp(finding)}
+        finding={rewriteDraftMonthStamp(finding)}
         onSelect={onSelectAgent}
         marketCountry={marketCountry}
         audience="accountant"

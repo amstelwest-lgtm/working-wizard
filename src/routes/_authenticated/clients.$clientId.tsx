@@ -184,7 +184,7 @@ import {
   preferStatementPeriod,
   readStatementMeta,
   reportDataPeriodLabel,
-  rewriteSavedMonthStamp,
+  rewriteDraftMonthStamp,
   statementYearLine,
 } from "@/lib/statement-period";
 import {
@@ -3176,7 +3176,7 @@ function ClientView() {
       : homeActivity.error
         ? ["Drafts aren't available yet."]
         : waiting.length
-          ? [rewriteSavedMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
+          ? [rewriteDraftMonthStamp(waiting[0]?.title ?? "A draft is waiting.")]
           : ["No draft waiting."];
     const linkOf = (link: { lastSyncedAt?: string | null } | null, checked: boolean): BooksLink => {
       if (!checked) return { state: "unknown" };

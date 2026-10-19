@@ -36,7 +36,7 @@ import {
   precardUsageFromRow,
 } from "./precard-cap";
 import { periodMonthsOf, scoreTier } from "./ratios";
-import { rewriteSavedMonthStamp } from "./statement-period";
+import { rewriteDraftMonthStamp } from "./statement-period";
 
 export type AgentKey = "financial_manager" | "analyst" | "advisor";
 
@@ -659,8 +659,8 @@ export function buildTeamJobs(input: {
     if (!status) continue;
     const kind = draft.kind;
     const agent = agentFor("deliverable", kind);
-    const title = rewriteSavedMonthStamp(draftKindLabel(kind));
-    const body = rewriteSavedMonthStamp(
+    const title = rewriteDraftMonthStamp(draftKindLabel(kind));
+    const body = rewriteDraftMonthStamp(
       (draft.body ?? "").replace(/^\s*SUBJECT:\s*.+\n+/i, "").trim(),
     );
     jobs.push({
