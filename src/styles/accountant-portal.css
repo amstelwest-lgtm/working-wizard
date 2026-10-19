@@ -565,6 +565,20 @@ html[data-theme="light"] .accountant-portal .deliverable-rail .rail-kicker{
 .accountant-portal .cf-note .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
 .accountant-portal .cf-note b{color:var(--warn-ink)}
 
+/* Phone: the outcome goal and the confidence figure stack, so the title
+   and the period line use the full row. */
+@media (max-width: 640px) {
+  #wizard-action-goal .action-goal-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #wizard-action-goal .action-goal-copy {
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+}
+
 /* Action Plan uses shadcn `--card`. Portal `--card` is near-transparent glass
    and must not leak in, or titles sit on cream with no fill. */
 .accountant-portal #wizard-action-plan{
@@ -697,7 +711,7 @@ html.dark .accountant-portal .milon-metric-tile__foot .attention-mix{color:#f4f7
 .accountant-portal .ph-scatter-head{margin-bottom:4px}
 .accountant-portal .ph-kicker{font-size:11px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--ink)}
 .accountant-portal .ph-sub{font-size:12.5px;color:var(--ink-dim);margin-top:2px}
-.accountant-portal .ph-scatter-chart{flex:1;min-height:280px;width:100%}
+.accountant-portal .ph-scatter-chart{flex:none;height:280px;min-height:280px;width:100%}
 .accountant-portal .ph-empty{display:grid;place-items:center;height:100%;min-height:240px;color:var(--ink-dim);font-size:13.5px;text-align:center;padding:24px}
 .accountant-portal .ph-legend{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;margin-top:8px;padding-top:12px;border-top:1px solid var(--line-soft)}
 .accountant-portal .ph-legend-title{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;width:100%}
@@ -1677,6 +1691,8 @@ html[data-theme="light"] .accountant-portal .data-fresh{
 .accountant-portal .nav-settings svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8}
 html.nav-drawer-open,
 html.nav-drawer-open body{overflow:hidden}
+/* Scroll-up at the top of a page must not walk browser history. */
+html:has(.accountant-portal:not(.owner-door)){overscroll-behavior-y:contain}
 .accountant-nav .nav-back,
 .accountant-nav .nav-label,
 .accountant-nav .nav-sub-link{
@@ -2092,8 +2108,9 @@ html.dark .settings-portal .milon-section-card__eyebrow{color:#f4f7fb}
     right:auto;
     width:min(320px,88vw);
     max-width:88vw;
-    height:auto;
-    max-height:none;
+    height:100dvh;
+    max-height:100dvh;
+    overscroll-behavior:contain;
     display:flex;
     flex-direction:column;
     flex-wrap:nowrap;

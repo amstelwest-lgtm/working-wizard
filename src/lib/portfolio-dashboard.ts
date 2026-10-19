@@ -128,7 +128,7 @@ export function trendDelta30d(
   }
 
   const scores = history.map((h) => h.score).filter((s) => Number.isFinite(s));
-  if (scores.length < 2) return 0;
+  if (scores.length < 2) return null;
   return Math.round(scores[scores.length - 1] - scores[0]);
 }
 
@@ -482,16 +482,15 @@ export function firmOpenQueriesClient(
 }
 
 /**
- * Practice list for the Open queries tile. Null when no client has an
- * unresolved note — the tile must not pretend to be a link.
- * The list is the book. The accountant picks a row. The tile does not
+ * Open queries page. Null when no client has an unresolved note — the tile
+ * must not pretend to be a link. The page lists those notes. It does not
  * open a client file.
  */
 export function firmOpenQueriesDestination(
   rows: readonly { id: string; name?: string | null; openQueries: number }[],
-): { to: "/clients"; hash: "clients-table" } | null {
+): { to: "/clients/queries" } | null {
   if (!firmOpenQueriesClient(rows)) return null;
-  return { to: "/clients", hash: "clients-table" };
+  return { to: "/clients/queries" };
 }
 
 /** Rule-based portfolio insight chips. */
@@ -506,12 +505,15 @@ export function buildPortfolioInsights(
   const scored = rows.filter((r) => r.score != null);
   const insights: PortfolioInsight[] = [];
 
-  if (scored.length > 0) {
-    const improved = scored.filter((r) => (r.trendDelta ?? 0) > 0).length;
+  const trended = scored.filter(
+    (r) => r.trendDelta != null && Number.isFinite(r.trendDelta),
+  );
+  if (trended.length > 0) {
+    const improved = trended.filter((r) => (r.trendDelta as number) > 0).length;
     insights.push({
       id: "improved",
       kind: "trend",
-      text: `${improved} of ${scored.length} client${scored.length === 1 ? "" : "s"} improved their health this month.`,
+      text: `${improved} of ${trended.length} client${trended.length === 1 ? "" : "s"} with a stored trend improved their health this month.`,
     });
   }
 
@@ -538,9 +540,12 @@ export function buildPortfolioInsights(
     });
   }
 
-  const improving = scored
-    .filter((r) => (r.trendDelta ?? 0) > 0 && r.score != null)
-    .sort((a, b) => (b.trendDelta ?? 0) - (a.trendDelta ?? 0) || (b.score ?? 0) - (a.score ?? 0));
+  const improving = trended
+    .filter((r) => (r.trendDelta as number) > 0 && r.score != null)
+    .sort(
+      (a, b) =>
+        (b.trendDelta as number) - (a.trendDelta as number) || (b.score ?? 0) - (a.score ?? 0),
+    );
   if (improving[0]) {
     insights.push({
       id: "star",

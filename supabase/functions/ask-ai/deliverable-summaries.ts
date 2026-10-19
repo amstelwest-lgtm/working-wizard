@@ -5,6 +5,7 @@
  */
 
 import { forecastChatFacts } from "../../../src/lib/cash-forecast-parity.ts";
+import { moveFactorLabel } from "../../../src/lib/move-pillars.ts";
 import { periodProfitBridge } from "../../../src/lib/period-profit.ts";
 import {
   baseCashflow,
@@ -528,7 +529,7 @@ export function rankNextSteps(ratios: RatioRow[], limit = 5): NextStepSummary[] 
       return {
         key: r.key,
         title: RATIO_FIRST_STEP[r.key],
-        ratioName: RATIO_FRIENDLY[r.key] ?? r.key,
+        ratioName: moveFactorLabel({ key: r.key, ratioName: RATIO_FRIENDLY[r.key] ?? r.key }),
         score,
       };
     })

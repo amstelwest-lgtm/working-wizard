@@ -9,7 +9,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useMarketFormat } from "@/contexts/market";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import { hotelLineDisplayName } from "@/lib/budget-industry";
 import { fmtBudgetMoney } from "@/lib/budget.compute";
+import type { BudgetTemplateId } from "@/lib/budget.types";
 import { ownerMinus } from "@/lib/owner-money";
 import {
   budgetChartDomain,
@@ -58,6 +60,7 @@ export function BudgetChartTable({
   statementActuals = null,
   readOnly = false,
   signed = false,
+  displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   clientId?: string;
@@ -71,6 +74,8 @@ export function BudgetChartTable({
   readOnly?: boolean;
   /** Owner door uses one unicode minus. The accountant table keeps its formatter. */
   signed?: boolean;
+  /** Industry kit. Labour line names on a hotel render as the hotel drivers. */
+  displayTemplateId?: BudgetTemplateId | null;
 }) {
   const { market } = useMarketFormat();
   const money = (n: number) => {
@@ -159,7 +164,13 @@ export function BudgetChartTable({
           Month by month
         </summary>
         <div className="mt-3">
-          <BudgetMonthTable doc={doc} views={views} money={money} locale={market.locale} />
+          <BudgetMonthTable
+            doc={doc}
+            views={views}
+            money={money}
+            locale={market.locale}
+            displayTemplateId={displayTemplateId}
+          />
         </div>
       </details>
     </section>
@@ -341,13 +352,17 @@ function BudgetMonthTable({
   views,
   money,
   locale,
+  displayTemplateId = null,
 }: {
   doc: BudgetDocument;
   views: BudgetMonthView[];
   money: (n: number) => string;
   locale: string;
+  displayTemplateId?: BudgetTemplateId | null;
 }) {
-  const rows = budgetTableRows(doc, views);
+  const rows = budgetTableRows(doc, views, (name, index) =>
+    hotelLineDisplayName(displayTemplateId, name, index),
+  );
   const months = views.map((row) => row.month);
   return (
     <div className="mt-4 min-w-0">

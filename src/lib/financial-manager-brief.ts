@@ -11,6 +11,7 @@ import { actionDisplayTitle } from "./strategic-moves.ts";
 import { OPENING_BALANCE_MISSING } from "./cash-forecast-parity.ts";
 import { storedSeriesReading } from "./client-metrics.ts";
 import { cashFloorCopy } from "./owner-answers.ts";
+import { canonicalScoreProse } from "./score-prose.ts";
 import { rewriteDraftMonthStamp } from "./statement-period.ts";
 import type { SavedCashflowLike } from "./cash-runway.ts";
 import type { MoneyMarket } from "./market/format.ts";
@@ -289,7 +290,7 @@ export function buildFinancialManagerBrief(input: {
   const drafts = (input.drafts ?? []).flatMap((row) => {
     const title = row.title.trim();
     if (!row.id || !title) return [];
-    return [{ id: row.id, title: rewriteDraftMonthStamp(title) }];
+    return [{ id: row.id, title: canonicalScoreProse(rewriteDraftMonthStamp(title)) }];
   });
   const chaseAction = actions.find((action) => action.button === "chase");
   const chase: ChaseDraftInput | null =

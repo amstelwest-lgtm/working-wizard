@@ -1428,6 +1428,61 @@ html[data-theme="light"] .accountant-portal .firm-band-upgrade .text-muted-foreg
   color: #ffffff;
   -webkit-text-fill-color: #ffffff;
 }
+/* One band per row. The name column keeps a real min-content width so a long
+   price cannot crush "Solo" or "Growing" into a letter stack. */
+.firm-band-upgrade [role="radiogroup"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.firm-band-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--border, var(--line, rgba(0, 0, 0, 0.08)));
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.firm-band-row--pick {
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+}
+.firm-band-row__copy,
+.firm-band-row__price {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.firm-band-row__price {
+  text-align: right;
+}
+@media (max-width: 767px) {
+  .firm-band-row,
+  .firm-band-row--pick {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+  .firm-band-row--pick {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .firm-band-row__copy,
+  .firm-band-row__price,
+  .firm-band-row strong {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .firm-band-row__price {
+    grid-column: 1 / -1;
+    justify-self: start;
+    text-align: left;
+  }
+}
 .firm-band-upgrade .firm-voucher-label {
   display: block;
   margin: 10px 0 6px;

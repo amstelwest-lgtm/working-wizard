@@ -54,6 +54,8 @@ export type SpherePillar = {
    * when every component ratio is Watch or Critical).
    */
   status?: HealthTier;
+  /** Shown instead of a band when the pillar has no confident score. */
+  note?: string | null;
   /** Period-over-period change in score, e.g. +8 / -5. Omit to hide. */
   delta?: number;
   /** One-line blurb shown on the pillar card at level 2. */
@@ -191,6 +193,11 @@ const PILLAR_ICON: Record<SpherePillar["id"], LucideIcon> = {
 
 function fmtScore(h: number): string {
   return isFinite(h) ? String(Math.round(h)) : "—";
+}
+
+function pillarBandLabel(pillar: SpherePillar, tier: Tier): string {
+  if (pillar.note && !isFinite(pillar.health)) return pillar.note;
+  return TIER_LABEL[tier];
 }
 
 // ── Metallic "klink" — synthesized, no asset ────────────────────────────────
@@ -621,7 +628,7 @@ export function SphereHero({
                         <TakeawayIcon direction={direction} />
                       </span>
                       <span>
-                        {p.label}: {TIER_LABEL[t]}
+                        {p.label}: {pillarBandLabel(p, t)}
                         {isFinite(p.health) ? ` (${fmtScore(p.health)})` : ""}
                       </span>
                     </li>
@@ -670,7 +677,7 @@ export function SphereHero({
                     {fmtScore(p.health)}
                   </span>
                   <span className={`health-pillar-band ${TIER_TEXT[t]}`}>
-                    {TIER_LABEL[t]}
+                    {pillarBandLabel(p, t)}
                     {typeof p.delta === "number" && p.delta !== 0 ? (
                       <span className={p.delta > 0 ? "text-emerald-600" : "text-rose-600"}>
                         {" "}
@@ -871,6 +878,7 @@ export function SphereHero({
                     score={p.health}
                     tier={t}
                     label={p.label}
+                    bandLabel={p.note && !isFinite(p.health) ? p.note : undefined}
                     delta={p.delta}
                     size={132}
                     fit

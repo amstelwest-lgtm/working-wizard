@@ -13,7 +13,7 @@
  */
 import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
 import { reportScalarInputs } from "@/lib/equity-coherence";
-import { pillarForRatioName, scoreRatio } from "@/lib/health-score";
+import { PILLAR_RATIO_NAMES, pillarForRatioName, scoreRatio, type HealthPillarId } from "@/lib/health-score";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { computeRatios, periodMonthsOf, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
 import { presentScorecardRatio } from "@/lib/report-coherence";
@@ -90,20 +90,11 @@ export function buildScorecardRatioResults(
     periodMonths?: number | null;
     partMonth?: boolean;
     cashFlowKnown?: boolean;
+    industry?: string | null;
   },
 ): ScorecardRatioRow[] {
   const rows: ScorecardRatioRow[] = [];
-  for (const [name, val] of Object.entries(rawRatios)) {
-    const presented = presentScorecardRatio({
-      name,
-      value: val,
-      equity: context?.equity,
-      currency: market.currency,
-      periodMonths: context?.periodMonths,
-      partMonth: context?.partMonth,
-      cashFlowKnown: context?.cashFlowKnown,
-    });
-    if (!presented.include) continue;
+  const pushRow = (name: string, val: number, presented: ReturnType<typeof presentScorecardRatio>) => {
     const scoredValue = presented.scoredValue;
     const score =
       presented.unscored || scoredValue == null
@@ -120,6 +111,35 @@ export function buildScorecardRatioResults(
       annotation: presented.note,
       unscored: presented.unscored || undefined,
     });
+  };
+  for (const [name, val] of Object.entries(rawRatios)) {
+    const presented = presentScorecardRatio({
+      name,
+      value: val,
+      equity: context?.equity,
+      currency: market.currency,
+      periodMonths: context?.periodMonths,
+      partMonth: context?.partMonth,
+      cashFlowKnown: context?.cashFlowKnown,
+      industry: context?.industry,
+    });
+    if (!presented.include) continue;
+    pushRow(name, val, presented);
+  }
+  const printed = new Set(rows.map((row) => row.ratio_name));
+  const seen = new Set(Object.keys(rawRatios));
+  for (const id of Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]) {
+    for (const name of PILLAR_RATIO_NAMES[id]) {
+      if (printed.has(name) || seen.has(name)) continue;
+      pushRow(name, Number.NaN, {
+        include: true,
+        text: "Not scored",
+        headline: "Not scored",
+        scoredValue: null,
+        note: null,
+        unscored: true,
+      });
+    }
   }
   return rows;
 }

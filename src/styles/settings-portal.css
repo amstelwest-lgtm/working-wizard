@@ -169,6 +169,14 @@
     min-width: 0;
     max-width: 100%;
   }
+
+  /* Plan names wrap on words. anywhere/break-all let the price column shrink
+     "Solo" and "Growing" to one letter. */
+  .settings-portal .firm-band-upgrade label,
+  .settings-portal .firm-band-upgrade label * {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
 }
 
 /* Settings is the one accountant page without .premium-shell, so the shared

@@ -41,7 +41,7 @@ const SECTIONS: NavSection[] = [
         to: clients(),
         items: [
           { id: "all", label: "All clients", to: clients("clients-table") },
-          { id: "queries", label: "Open queries", to: clients("wizard-dash-queries") },
+          { id: "queries", label: "Open queries", to: { to: "/clients/queries" } },
           { id: "add", label: "Add client", to: clients("wizard-add-client") },
         ],
       },
@@ -50,11 +50,11 @@ const SECTIONS: NavSection[] = [
         label: "Practice",
         to: practice(),
         items: [
-          { id: "attention", label: "Needs attention", to: practice("needs-attention") },
-          { id: "follow", label: "Follow up", to: practice("follow-up") },
-          { id: "insights", label: "Insights", to: practice("portfolio-insights") },
-          { id: "marketplace", label: "Marketplace", to: practice("marketplace") },
-          { id: "playbooks", label: "Playbooks", to: practice("playbooks") },
+          { id: "attention", label: "Needs attention", to: { to: "/practice/needs-attention" } },
+          { id: "follow", label: "Follow up", to: { to: "/practice/follow-up" } },
+          { id: "insights", label: "Insights", to: { to: "/practice/insights" } },
+          { id: "marketplace", label: "Marketplace", to: { to: "/practice/marketplace" } },
+          { id: "playbooks", label: "Playbooks", to: { to: "/practice/playbooks" } },
         ],
       },
     ],
@@ -64,16 +64,14 @@ const SECTIONS: NavSection[] = [
 const CLIENT_HASH: Record<string, string> = {
   "clients-table": "all",
   "wizard-add-client": "add",
-  "wizard-dash-queries": "queries",
 };
 
-const PRACTICE_HASH: Record<string, string> = {
-  "needs-attention": "attention",
-  "follow-up": "follow",
-  "portfolio-insights": "insights",
-  "accountant-inbox": "marketplace",
-  marketplace: "marketplace",
-  playbooks: "playbooks",
+const PRACTICE_PATH: Record<string, string> = {
+  "/practice/needs-attention": "attention",
+  "/practice/follow-up": "follow",
+  "/practice/insights": "insights",
+  "/practice/marketplace": "marketplace",
+  "/practice/playbooks": "playbooks",
 };
 
 function barePath(pathname: string): string {
@@ -87,14 +85,17 @@ function practiceSelection(pathname: string, hash: string) {
   if (path === "/settings" || pathname.startsWith("/settings/")) {
     return { headingId: null, subId: null, settings: true };
   }
+  if (path === "/clients/queries") {
+    return { headingId: "clients", subId: "queries", settings: false };
+  }
   if (path === "/clients") {
     return { headingId: "clients", subId: CLIENT_HASH[bare] ?? "all", settings: false };
   }
+  if (PRACTICE_PATH[path]) {
+    return { headingId: "practice", subId: PRACTICE_PATH[path], settings: false };
+  }
   if (path === "/practice") {
-    if (bare === "wizard-dash-open-queries") {
-      return { headingId: "clients", subId: "queries", settings: false };
-    }
-    return { headingId: "practice", subId: PRACTICE_HASH[bare] ?? null, settings: false };
+    return { headingId: "practice", subId: null, settings: false };
   }
   if (path === "/dashboard" || path === "/desk") {
     const subId = practiceAgentFromHash(bare);

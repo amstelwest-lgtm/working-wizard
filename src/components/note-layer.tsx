@@ -12,6 +12,7 @@ import {
 import { useNotes, type NoteCollaborator } from "@/contexts/notes";
 import { useMarketFormat } from "@/contexts/market";
 import { destinationTab, noteTabsMatch, type NotesWorkspace } from "@/lib/notes-tabs";
+import { noteShowsFloatingPin } from "@/lib/note-pin";
 
 type NoteLayerProps = {
   clientId: string | null | undefined;
@@ -300,7 +301,7 @@ export function NoteLayer({
   }, []);
 
   const tabNotes = clientId ? getNotesForTab(tab) : [];
-  const pinNotes = tabNotes.filter((n) => !n.ratioKey);
+  const pinNotes = tabNotes.filter((n) => noteShowsFloatingPin(n));
   const initials = getInitials(authorName);
 
   function handleCrosshairClick(e: React.MouseEvent<HTMLDivElement>) {

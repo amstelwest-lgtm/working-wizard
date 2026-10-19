@@ -107,8 +107,16 @@ import {
   scoreTier,
 } from "@/lib/ratios";
 import { benchmarkBusinessType } from "@/lib/benchmark-sector";
-import { withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
-import { cashPillarFollowsForecast, computeOverallHealth, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
+import { ratiosStatementFigures, withCanonicalDebtorCreditorDays } from "@/lib/deliverable-input-config";
+import {
+  GROSS_MARGIN_MAPPING_NOTE,
+  PILLAR_LABELS,
+  cashPillarFollowsForecast,
+  computeOverallHealth,
+  grossMarginLooksImplausible,
+  healthMapFromRatios,
+  scoreRatio,
+} from "@/lib/health-score";
 import { effectivePeriodMonths } from "@/lib/equity-coherence";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
@@ -186,8 +194,8 @@ import {
   stampProfileProvenance,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
-import { profileIndustryLabel } from "@/lib/profile-signals";
-import { rankStrategicMoves, stockSittingApplies } from "@/lib/strategic-moves";
+import { clientIndustryDisplay, profileIndustryLabel } from "@/lib/profile-signals";
+import { attachPillarScore, rankStrategicMoves, stockSittingApplies, strategicMovePillar } from "@/lib/strategic-moves";
 import { periodProfitBridge } from "@/lib/period-profit";
 import { statementKindFromMetadata, type StatementMeta } from "@/lib/statement-parse";
 import { prefsToRemember } from "@/lib/auto-populate";
@@ -2121,7 +2129,10 @@ function Index() {
   const [showFinData, setShowFinData] = useState(false);
   const [planTick, setPlanTick] = useState(0);
   // Owner Home reloads each action row from this event. Hand to flips the card
-  // to Working immediately, then the stored run settles it, the same read as client Home.
+  // to Working on the click. A run that started before that click does not clear
+  // it. The stored run settles it once it is newer than the click, the same read as client Home.
+  // While any run for this client is queued or running, Home polls and reloads the notes, then stops.
+  // A queued or running run on a card beats Found something. Same runs as the row.
   useEffect(() => {
     const bump = () => setPlanTick((n) => n + 1);
     window.addEventListener("milon-action-plan-refresh", bump);
@@ -3189,10 +3200,11 @@ function Index() {
     ? (BUSINESS_TYPES.find((b) => b.id === businessTypeId) ?? null)
     : null;
   const model: ModelTuning = businessType ? MODEL_TUNING[businessType.model] : MODEL_TUNING.hybrid;
-  const industryLabel = profileIndustryLabel(
+  const industryLabel = clientIndustryDisplay(
+    actingClientName,
     operatingProfile,
-    businessType?.label ?? "General SME",
-  );
+    businessTypeId ?? businessType?.label ?? null,
+  ) || profileIndustryLabel(operatingProfile, businessType?.label ?? "General SME");
   // Marks real financials so autosave and the scored view activate after first user edit
   const markRealFinancials = () => setHasRealFinancials(true);
   const set = (k: keyof Inputs) => (val: string) => {
@@ -3655,6 +3667,7 @@ function Index() {
       market: boardMarket,
       money: (amount) => formatMoney(amount, boardMarket),
     })?.healthCue ?? null;
+  const grossImplausible = grossMarginLooksImplausible(grossMarginRatio, industryLabel);
   const overallHealth = cashPillarFollowsForecast(
     computeOverallHealth({
       ratios: computedRatios as Record<string, number>,
@@ -3662,6 +3675,7 @@ function Index() {
       cashBalance,
       market: boardMarket,
       shortfallWeek: ownerOutlook.shortfallWeek,
+      grossMarginImplausible: grossImplausible,
     }),
     {
       openingMissing: ownerOpeningMissing,
@@ -3743,6 +3757,9 @@ function Index() {
     overallHealth: avgHealth,
     pillarHealths,
     pillarStatus,
+    pillarNotes: Object.fromEntries(
+      overallHealth.pillars.map((pillar) => [pillar.id, pillar.note ?? null]),
+    ),
     healthMap,
     ratioMeta: RATIO_META,
     inventoryApplies: stockSittingApplies(operatingProfile),
@@ -3754,8 +3771,9 @@ function Index() {
     healthByKey: healthMap,
     profile: operatingProfile,
     suppressKeys: profitBridge.interestBurdenUsable ? undefined : ["interestBurden"],
-    debtorDays,
+    debtorDays: ratiosStatementFigures(v as unknown as Record<string, unknown>).debtorDays,
     financingHealth: pillarHealths.financing,
+    weakestPillar: overallHealth.weakestPillar?.id ?? null,
   }).map((step) => ({ ...step, key: step.key as RatioKey }));
 
   const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
@@ -4203,13 +4221,19 @@ function Index() {
                               actionPlanSignoff,
                               clientMeta?.financials_updated_at ?? null,
                             )}
-                            moves={nextSteps.map((s) => ({
-                              key: s.key,
-                              title: rewriteDraftMonthStamp(s.title),
-                              ratioName: s.ratioName,
-                              impactLine: s.impactLine,
-                              health: Number.isFinite(s.health) ? s.health : Number.NaN,
-                            }))}
+                            pillars={overallHealth.pillars}
+                            moves={nextSteps.map((s) =>
+                              attachPillarScore(
+                                {
+                                  key: s.key,
+                                  title: rewriteDraftMonthStamp(s.title),
+                                  ratioName: s.ratioName,
+                                  impactLine: s.impactLine,
+                                  health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                                },
+                                overallHealth.pillars,
+                              ),
+                            )}
                             onViewAnalysis={() => go("health")}
                           />
                         ) : (
@@ -4290,13 +4314,19 @@ function Index() {
                             isOwner={userRole !== "client_member"}
                             cashBelowFloor={ownerCashBelowFloor}
                             ownerView
-                            moves={nextSteps.map((s) => ({
-                              key: s.key,
-                              title: rewriteDraftMonthStamp(s.title),
-                              ratioName: s.ratioName,
-                              impactLine: s.impactLine,
-                              health: Number.isFinite(s.health) ? s.health : Number.NaN,
-                            }))}
+                            pillars={overallHealth.pillars}
+                            moves={nextSteps.map((s) =>
+                              attachPillarScore(
+                                {
+                                  key: s.key,
+                                  title: rewriteDraftMonthStamp(s.title),
+                                  ratioName: s.ratioName,
+                                  impactLine: s.impactLine,
+                                  health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                                },
+                                overallHealth.pillars,
+                              ),
+                            )}
                             onViewAnalysis={() => go("health")}
                             onInviteAccountant={() => go("accountant")}
                             ownerSignoff={actionPlanSignoff}
@@ -5246,7 +5276,17 @@ function Index() {
                                             description:
                                               nextSteps[0].key === "debtorDays"
                                                 ? "Cash conversion is your biggest constraint."
-                                                : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
+                                                : (() => {
+                                                    const pillarId = strategicMovePillar(nextSteps[0].key);
+                                                    const pillar = pillarId
+                                                      ? overallHealth.pillars.find((row) => row.id === pillarId)
+                                                      : null;
+                                                    const lever =
+                                                      pillar?.score != null
+                                                        ? `${pillar.label} ${Math.round(pillar.score)}`
+                                                        : (pillar?.label ?? "Profit");
+                                                    return `${lever} is your highest-impact lever right now.`;
+                                                  })(),
                                             actions: nextSteps[0].actions,
                                             impactLabel: nextMoveImpactLabel,
                                           }
@@ -5426,7 +5466,7 @@ function Index() {
                             [
                               {
                                 id: "profit",
-                                title: "Profit Drivers",
+                                title: PILLAR_LABELS.profit,
                                 desc: "How your business converts sales into profit",
                                 rows: [
                                   { sub: "Revenue" },
@@ -5447,7 +5487,7 @@ function Index() {
                               },
                               {
                                 id: "asset",
-                                title: "Asset Productivity",
+                                title: PILLAR_LABELS.assets,
                                 desc: "How efficiently assets generate revenue and return",
                                 rows: [
                                   { sub: "Returns" },
@@ -5466,7 +5506,7 @@ function Index() {
                               },
                               {
                                 id: "leverage",
-                                title: "Leverage & Finance",
+                                title: PILLAR_LABELS.financing,
                                 desc: "Capital structure and shareholder return",
                                 rows: [
                                   { sub: "Funding Structure" },
@@ -5480,7 +5520,7 @@ function Index() {
                               },
                               {
                                 id: "cash",
-                                title: "Cash Flow",
+                                title: PILLAR_LABELS.cash,
                                 desc: "Working capital cycle and cash quality",
                                 rows: [
                                   { sub: "Working Capital Cycle" },
@@ -5674,10 +5714,18 @@ function Index() {
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                           <div className={`text-sm font-bold tabular-nums ${hCls}`}>
-                                            {isFinite(health) ? `${Math.round(health)}%` : "—"}
+                                            {k === "grossMargin" && grossImplausible
+                                              ? "—"
+                                              : isFinite(health)
+                                                ? `${Math.round(health)}`
+                                                : "—"}
                                           </div>
                                           <div className={`text-[10px] ${hLabelCls}`}>
-                                            {isFinite(health) ? healthBandLabel(healthTier) : "—"}
+                                            {k === "grossMargin" && grossImplausible
+                                              ? GROSS_MARGIN_MAPPING_NOTE
+                                              : isFinite(health)
+                                                ? healthBandLabel(healthTier)
+                                                : "—"}
                                           </div>
                                         </td>
                                       </tr>
@@ -5957,13 +6005,19 @@ function Index() {
                               actionPlanSignoff,
                               clientMeta?.financials_updated_at ?? null,
                             )}
-                            moves={nextSteps.map((s) => ({
-                              key: s.key,
-                              title: rewriteDraftMonthStamp(s.title),
-                              ratioName: s.ratioName,
-                              impactLine: s.impactLine,
-                              health: Number.isFinite(s.health) ? s.health : Number.NaN,
-                            }))}
+                            pillars={overallHealth.pillars}
+                            moves={nextSteps.map((s) =>
+                              attachPillarScore(
+                                {
+                                  key: s.key,
+                                  title: rewriteDraftMonthStamp(s.title),
+                                  ratioName: s.ratioName,
+                                  impactLine: s.impactLine,
+                                  health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                                },
+                                overallHealth.pillars,
+                              ),
+                            )}
                             onViewAnalysis={() => {
                               setViewMode("complex");
                               setActiveTab("today");

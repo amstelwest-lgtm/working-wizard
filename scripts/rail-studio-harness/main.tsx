@@ -42,6 +42,7 @@ import { FinalWalkPreview } from "./final-walk-preview";
 import { Retest578Preview } from "./retest-578-preview";
 import { AqaFollowupPreview } from "./aqa-followup-preview";
 import { AqaRetest573Preview } from "./aqa-retest-573-preview";
+import { AqaPracticePreview } from "./aqa-practice-preview";
 import { WalkthroughPreview } from "./walkthrough-preview";
 import { Route as DashboardRoute } from "@/routes/_authenticated/dashboard";
 import { Route as ClientsIndexRoute } from "@/routes/_authenticated/clients.index";
@@ -556,6 +557,21 @@ const finalWalkRoute = createRoute({
   },
 });
 
+const aqaPracticeNavRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/aqa-practice-nav",
+  validateSearch: (search: Record<string, unknown>) => ({
+    shot: typeof search.shot === "string" ? search.shot : "after-nav",
+    closed: search.closed === "1" || search.closed === 1 ? ("1" as const) : undefined,
+  }),
+  component: function AqaPracticeNavHarness() {
+    const search = useSearch({ strict: false }) as { shot?: string; closed?: "1" };
+    return (
+      <AqaPracticePreview shot={search.shot ?? "after-nav"} closed={search.closed === "1"} />
+    );
+  },
+});
+
 const aqaFollowupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/aqa-followup",
@@ -625,6 +641,7 @@ const routeTree = rootRoute.addChildren([
   cashOnceOffRoute,
   retest568Route,
   aqaFollowupRoute,
+  aqaPracticeNavRoute,
   finalWalkRoute,
   retest578Route,
   aqaRetest573Route,

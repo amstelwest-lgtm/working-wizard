@@ -10,6 +10,7 @@ import { readSaPricingCopy } from "@/lib/pricing/za-pricing.functions";
 import { visitorMarketBootScript } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { HEALTH_RATIO_COUNT } from "@/lib/health-catalogue";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -177,7 +178,7 @@ function ForAccountantsPage() {
           <div>
             <h3>Figures in, score out</h3>
             <p>
-              Connect QuickBooks Online or Xero, or upload the statements. Nineteen ratios, four
+              Connect QuickBooks Online or Xero, or upload the statements. {HEALTH_RATIO_COUNT} ratios, four
               pillars, one score, and a 13-week cash forecast — computed the same way for every
               client, every month.
             </p>

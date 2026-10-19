@@ -1,7 +1,13 @@
 import type { AgentKey } from "@/lib/milon-team-feed";
 
 export type AgentWorkLink = {
-  to: "/dashboard" | "/practice" | "/clients" | "/clients/$clientId";
+  to:
+    | "/dashboard"
+    | "/practice"
+    | "/practice/insights"
+    | "/practice/follow-up"
+    | "/clients"
+    | "/clients/$clientId";
   params?: { clientId: string };
   hash?: string;
   search?: Record<string, unknown>;
@@ -76,7 +82,7 @@ export function practiceAgentWork(
             id: "insights",
             title: "Health trend",
             detail: "No client needs attention.",
-            link: { to: "/practice", hash: "portfolio-insights" },
+            link: { to: "/practice/insights" },
           },
         ],
       };
@@ -108,7 +114,7 @@ export function practiceAgentWork(
           id: "follow-up",
           title: "Follow up",
           detail: "No follow-up waiting.",
-          link: { to: "/practice", hash: "follow-up" },
+          link: { to: "/practice/follow-up" },
         },
       ],
     };

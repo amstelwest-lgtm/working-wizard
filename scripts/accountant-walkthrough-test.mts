@@ -179,7 +179,7 @@ const quietBook = practiceAgentWork("advisor", {
   attention: [],
   followUps: [],
 });
-assert(quietBook.items[0]?.link.hash === "follow-up", "an empty advisor page links to follow up");
+assert(quietBook.items[0]?.link.to === "/practice/follow-up", "an empty advisor page links to follow up");
 const loadingBook = practiceAgentWork("analyst", {
   loading: true,
   clients: [],

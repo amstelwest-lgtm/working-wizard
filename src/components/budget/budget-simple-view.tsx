@@ -270,6 +270,7 @@ export function BudgetSimpleView({
             clientName={clientName}
             signoff={signoff}
             isStale={isStale}
+            displayTemplateId={displayTemplateId}
           />
         }
       />
@@ -282,6 +283,7 @@ export function BudgetSimpleView({
         statementActuals={compared}
         readOnly={readOnly}
         signed={role === "owner"}
+        displayTemplateId={displayTemplateId}
       />
       {readOnly ? null : <>{drawer}</>}
       {readOnly ? (
