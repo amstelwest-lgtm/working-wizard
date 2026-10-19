@@ -7,6 +7,7 @@
  */
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
+import { bankHistoryIsSingleMonth, displayForecastFrequency } from "./cash-forecast-rows.ts";
 import { periodProfitBridge } from "./period-profit.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
 import { isQboBalanceSheetHoldNote } from "./xero-opening.ts";
@@ -348,10 +349,11 @@ export function assessClientMetrics(input: {
       totalOutflow: outlook.totalOutflow,
     });
   }
-  // A stored series that actually closes under the floor is not "cash generative".
-  // A derived P&L sketch under the fallback floor keeps the P&L runway.
+  // A stored series that closes under the floor uses that count everywhere.
+  // A burn-week label ("7 weeks") or "Cash generative" would disagree with
+  // the Cash page. A derived P&L sketch under the fallback floor keeps its runway.
   const weeksBelow = outlook.closing.filter((balance) => balance < outlook.floor).length;
-  if (outlook.source === "stored" && weeksBelow > 0 && runway.kind === "cash_generative") {
+  if (outlook.source === "stored" && weeksBelow > 0) {
     runway = {
       weeks: null,
       kind: "unknown",
@@ -1057,13 +1059,33 @@ export function rollForwardForecast(
 
   const inflow = new Array(weeks).fill(0);
   const outflow = new Array(weeks).fill(0);
+  // Same display cadence as the Cash page: category outflows, and receipts
+  // when this file is only one month. The stored frequency is not rewritten.
+  const singleMonth = bankHistoryIsSingleMonth({
+    seededFromBanksAt: cf.seededFromBanksAt,
+    bankDraft: cf.bankDraft ?? cf.cashflow_bank_draft,
+  });
+  const screenLine = (
+    line: StoredForecastLine,
+    side: "revenue" | "expenses" | "other",
+  ): StoredForecastLine => ({
+    ...line,
+    frequency: displayForecastFrequency(line.name ?? "", line.frequency, { side, singleMonth }),
+  });
   for (const line of revenue) {
-    shiftVals(distributeForecastLine(line, weeks).map((v) => v * revAdj)).forEach((v, i) => {
+    shiftVals(distributeForecastLine(screenLine(line, "revenue"), weeks).map((v) => v * revAdj)).forEach((v, i) => {
       inflow[i] += v * growthMul(i);
     });
   }
-  for (const line of [...expenses, ...other]) {
-    distributeForecastLine(line, weeks)
+  for (const line of expenses) {
+    distributeForecastLine(screenLine(line, "expenses"), weeks)
+      .map((v) => v * expAdj)
+      .forEach((v, i) => {
+        outflow[i] += v;
+      });
+  }
+  for (const line of other) {
+    distributeForecastLine(screenLine(line, "other"), weeks)
       .map((v) => v * expAdj)
       .forEach((v, i) => {
         outflow[i] += v;
@@ -1539,6 +1561,7 @@ export function resolveCashScreenForecast(input: {
     periodUpdatedAt: input.financialsUpdatedAt ?? null,
   });
   const runwayCash = resolved.amount ?? finiteNum(cf?.openingBalance);
+  const screenCashflow = cf ? baseCashflow(cf) : input.cashflow;
   const runway = clientRunway({
     cash: runwayCash,
     netIncome: finiteNum(fin?.netIncome),
@@ -1549,7 +1572,7 @@ export function resolveCashScreenForecast(input: {
   });
   return resolveThirteenWeekForecast({
     financials: input.financials,
-    cashflow: input.cashflow,
+    cashflow: screenCashflow,
     openingCash: resolved.amount,
     runway,
     now: input.now,

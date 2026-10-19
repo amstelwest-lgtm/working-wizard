@@ -19,7 +19,7 @@ export function Retest578Preview() {
   return (
     <div className="min-h-screen bg-[#F4F7FB] p-4 text-[#102A43]">
       <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#3D5270]">
-        Local build — one month on file. Rent, staff and Fuji are assumed monthly.
+        Local build — one month on file. Rent and staff are assumed monthly. Fuji stays a purchase. Receipts repeat.
       </p>
       <section id="sa-plan" className="max-w-xl">
         <FirmBandUpgrade
@@ -53,12 +53,14 @@ export function Retest578Preview() {
               line("dlamini", "R Dlamini", "6000"),
               line("petersen", "B Petersen", "4500"),
               line("chem", "Dis-Chem", "392"),
+              line("santam", "Santam", "2200"),
               { ...line("city", "City of Cape Town", "2947.5"), frequency: "recurring-monthly" as const, startWeek: 2 },
             ],
             other: [line("mokoena", "T Mokoena", "25000")],
             note: null,
             cycleNote: null,
             financials: null,
+            singleMonth: true,
           }}
         />
       </section>

@@ -82,6 +82,8 @@ const InputSchema = z.object({
     openQueries: z.number().int().nullable().optional(),
     /** Ratios debtor days. Absent on older clients; the template default must not fill it. */
     debtorDays: z.number().nullable().optional(),
+    /** Forecast and P&L fingerprint. A change regenerates the cached briefing. */
+    forecastKey: z.string().max(40).nullable().optional(),
   }),
 });
 

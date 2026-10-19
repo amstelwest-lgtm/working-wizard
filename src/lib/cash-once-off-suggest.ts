@@ -55,17 +55,21 @@ export function onceOffSaveEnabled(input: { dirty: boolean; staged: number }): b
 export function onceOffsOnBankForecast(
   lines: readonly ForecastGridLine[],
   recurring?: ReadonlyMap<string, "recurring-monthly" | "recurring-weekly"> | null,
+  singleMonth = false,
 ): SuggestedOnceOffLine[] {
   const out: SuggestedOnceOffLine[] = [];
   for (const line of lines) {
     const name = line.name.trim();
     if (!name || !line.id) continue;
     if (isRecurringPayee(name, recurring)) continue;
-    if (assumedMonthlyPayee(name, { side: line.side })) continue;
+    if (assumedMonthlyPayee(name, { side: line.side, singleMonth })) continue;
     const vals = distributeForecastLine(
       {
         amount: line.amount,
-        frequency: projectForecastFrequency(line.name, line.frequency, recurring, { side: line.side }),
+        frequency: projectForecastFrequency(line.name, line.frequency, recurring, {
+          side: line.side,
+          singleMonth,
+        }),
         startWeek: line.startWeek,
         splitCount: line.splitCount,
         weekOverrides: line.weekOverrides ?? undefined,
@@ -217,13 +221,18 @@ export function suggestOnceOffRows(input: {
   /** Lines already on the 13-week grid. Used when those rows are the bank source. */
   forecastLines?: readonly ForecastGridLine[];
   bankSourced?: boolean;
+  /** One month of bank history. Receipts are then assumed monthly, not staged. */
+  singleMonth?: boolean;
 }): OnceOffSuggestResult {
   const recurring = recurringPayeeFrequency(input.bankDraft);
-  const onGrid = input.bankSourced ? onceOffsOnBankForecast(input.forecastLines ?? [], recurring) : [];
+  const singleMonth = input.singleMonth === true;
+  const onGrid = input.bankSourced
+    ? onceOffsOnBankForecast(input.forecastLines ?? [], recurring, singleMonth)
+    : [];
   const history = draftLinesFromHistory(input.bankDraft).filter((row) => {
     if (isRecurringPayee(row.name, recurring)) return false;
     const side = row.side === "inflow" ? "revenue" : "expenses";
-    return !assumedMonthlyPayee(row.name, { side, bucket: row.bucket });
+    return !assumedMonthlyPayee(row.name, { side, bucket: row.bucket, singleMonth });
   });
   const names = new Set<string>();
   const used = new Set<string>();
