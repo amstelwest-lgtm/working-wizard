@@ -15,11 +15,25 @@ import {
   handoffProgressCaption,
 } from "../src/lib/action-handoff.ts";
 import { agentDisplayName } from "../src/lib/milon-team.ts";
+import { pollAfterTick } from "../src/lib/agent-activity-poll.ts";
 import { deskSignoffText } from "../src/lib/milon-team-activity.ts";
 
 function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
 }
+
+const running = { status: "running" };
+const finished = { status: "succeeded" };
+assert(pollAfterTick([running, running]) === "continue", "two open runs keep the poll armed");
+assert(
+  pollAfterTick([finished, running]) === "continue",
+  "the poll continues after the first of two staggered runs finishes",
+);
+assert(pollAfterTick([finished, finished]) === "stop", "the poll stops after the second run finishes");
+assert(
+  pollAfterTick([finished], true) === "continue",
+  "a hand-off still on the page keeps the poll alive until a fresh snapshot settles it",
+);
 
 assert(agentKeyFromAssignee("Milōn Analyst") === "analyst", "the assignee label names the analyst");
 assert(agentKeyFromAssignee("Analyst") === "analyst", "the short name is the same agent");
@@ -208,8 +222,13 @@ assert(door.includes("cardRunsByAgent"), "a queued run beats Found something on 
 const activityHook = readFileSync("src/hooks/use-agent-activity.ts", "utf8");
 assert(activityHook.includes("ACTIVE_POLL_MS = 5000"), "home polls every 5 seconds while a run is open");
 assert(activityHook.includes("dispatchActionPlanRefresh"), "the poll reloads notes when a run is open");
+assert(activityHook.includes("pollAfterTick"), "each tick decides from the fresh snapshot");
+assert(!activityHook.includes("wasActive"), "a finish does not clear the timer from stale render state");
+assert(clientPage.includes("useAgentActivity(clientId, pageOpen)"), "accountant Home polls while a row is open");
+assert(door.includes("useAgentActivity(clientId ?? \"\", pageOpen)"), "owner Home uses the same poll");
+const poll = readFileSync("src/lib/agent-activity-poll.ts", "utf8");
 assert(
-  activityHook.includes('status === "queued"') && activityHook.includes('status === "running"'),
+  poll.includes('status === "queued"') && poll.includes('status === "running"'),
   "the poll watches queued and running runs",
 );
 

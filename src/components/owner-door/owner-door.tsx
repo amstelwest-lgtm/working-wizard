@@ -204,7 +204,6 @@ export function OwnerDoor({
   /** Bumps when an action is handed off, so Home refetches without a reload. */
   planTick?: number;
 }) {
-  const activity = useAgentActivity(clientId ?? "");
   const openedBot = ownerBotKey(bot);
   const [screen, setScreen] = useState<OwnerScreen>(
     openedBot
@@ -239,6 +238,8 @@ export function OwnerDoor({
   const [handedTitle, setHandedTitle] = useState<string | null>(null);
   const [assignedAgent, setAssignedAgent] = useState<AgentKey | null>(null);
   const [assignmentRows, setAssignmentRows] = useState<RowAssignment[]>([]);
+  const pageOpen = assignmentRows.some((row) => row.open);
+  const activity = useAgentActivity(clientId ?? "", pageOpen);
   const pendingHandoff = useRef<ActionPlanRefreshDetail | null>(null);
   const assignmentRowsRef = useRef(assignmentRows);
   assignmentRowsRef.current = assignmentRows;

@@ -3260,7 +3260,8 @@ function ClientView() {
     [clientId, hasFigures, navigate],
   );
 
-  const homeActivity = useAgentActivity(clientId);
+  const pageOpen = assignmentRows.some((row) => row.open);
+  const homeActivity = useAgentActivity(clientId, pageOpen);
   const settledRows = useMemo(
     () =>
       applyLiveRuns(
